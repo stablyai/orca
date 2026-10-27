@@ -450,3 +450,36 @@ describe('wrapped terminal HTTP link provider', () => {
     }
   })
 })
+
+describe('wrapped terminal HTTP link provider sibling underlines (#33553)', () => {
+  it('underlines the other rows of a hard-wrapped link on hover and clears on leave', async () => {
+    const terminal = new Terminal({ cols: 40, rows: 4, allowProposedApi: true })
+    const url = `https://example.com/${'a'.repeat(50)}`
+    await new Promise<void>((resolve) =>
+      terminal.write([` ${url.slice(0, 38)} `, ` ${url.slice(38)} `].join('\r\n'), resolve)
+    )
+    const underline = vi.fn()
+    const clear = vi.fn()
+    const provider = createWrappedTerminalHttpLinkProvider(
+      terminal,
+      { activate: vi.fn(), hover: vi.fn(), leave: vi.fn() },
+      { underline, clear }
+    )
+    const links = await new Promise<ILink[] | undefined>((resolve) =>
+      provider.provideLinks(1, resolve)
+    )
+    try {
+      expect(links).toBeDefined()
+      expect(links).toHaveLength(1)
+      const hover = links![0]!.hover
+      hover?.({} as MouseEvent, url)
+      expect(underline).toHaveBeenCalledTimes(1)
+      // The sibling row is row 2; the hovered row (1) must not be double-underlined.
+      expect(underline).toHaveBeenCalledWith([{ y: 2, startX: 2, endX: 32 }])
+      links![0]!.leave?.({} as MouseEvent, url)
+      expect(clear).toHaveBeenCalledTimes(1)
+    } finally {
+      terminal.dispose()
+    }
+  })
+})

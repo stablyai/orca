@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import type { ILink, ITerminalOptions } from '@xterm/xterm'
 import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
+import { createSiblingLinkUnderliner } from '../../components/terminal-pane/terminal-hover-link-sibling-underline'
 import { TERMINAL_HTTP_URL_REGEX } from '../../components/terminal-pane/terminal-http-url-extraction'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
@@ -99,7 +100,13 @@ export function createPaneDOM(
     }
   } satisfies Pick<ILink, 'activate' | 'hover' | 'leave'>
   if (options.onLinkClick) {
-    terminal.registerLinkProvider(createWrappedTerminalHttpLinkProvider(terminal, linkHandlers))
+    terminal.registerLinkProvider(
+      createWrappedTerminalHttpLinkProvider(
+        terminal,
+        linkHandlers,
+        createSiblingLinkUnderliner(terminal)
+      )
+    )
   }
   const webLinksAddon = new WebLinksAddon(options.onLinkClick ? linkHandlers.activate : undefined, {
     ...linkHandlers,

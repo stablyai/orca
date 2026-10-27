@@ -1,5 +1,9 @@
 import { rangeForParsedLinkOnRow } from './terminal-link-row-range'
-import type { ILink, ILinkProvider, Terminal } from '@xterm/xterm'
+import {
+  linkRowSegmentsFromRanges,
+  type SiblingLinkUnderliner
+} from './terminal-hover-link-sibling-underline'
+import type { IBufferRange, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import { buildTerminalHttpLogicalLines, hasHardWrappedRows } from './terminal-http-logical-lines'
 import { extractTerminalHttpLinks } from './terminal-http-url-extraction'
 import { rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
@@ -7,7 +11,10 @@ import { terminalLogicalLinkHasOscLink } from './terminal-osc-link-cells'
 
 export function createWrappedTerminalHttpLinkProvider(
   terminal: Pick<Terminal, 'buffer'>,
-  handlers: Pick<ILink, 'activate' | 'hover' | 'leave'>
+  handlers: Pick<ILink, 'activate' | 'hover' | 'leave'>,
+  // #33553: when set, hovering one hard-wrapped row also underlines the URL's other
+  // rows (xterm only underlines the hovered link's own range).
+  siblingUnderliner?: SiblingLinkUnderliner
 ): ILinkProvider {
   return {
     provideLinks(bufferLineNumber, callback) {
@@ -43,10 +50,38 @@ export function createWrappedTerminalHttpLinkProvider(
           if (!rowRange) {
             return []
           }
+          // Per-row hit ranges stay (padding must not become clickable); the sibling
+          // rows only gain the hover underline.
+          const siblingRanges: IBufferRange[] =
+            siblingUnderliner === undefined
+              ? []
+              : logicalLine.rows
+                  .filter((row) => row.y + 1 !== bufferLineNumber)
+                  .flatMap((row) => {
+                    const siblingRange = rangeForParsedLinkOnRow(
+                      logicalLine,
+                      parsed.startIndex,
+                      parsed.endIndex,
+                      row.y + 1
+                    )
+                    return siblingRange ? [siblingRange] : []
+                  })
           const link = {
             text: parsed.url,
             range: rowRange,
             ...handlers,
+            ...(siblingUnderliner !== undefined
+              ? {
+                  hover: (event: MouseEvent, uri: string) => {
+                    siblingUnderliner.underline(linkRowSegmentsFromRanges(siblingRanges))
+                    return handlers.hover?.(event, uri)
+                  },
+                  leave: (event: MouseEvent, uri: string) => {
+                    siblingUnderliner.clear()
+                    return handlers.leave?.(event, uri)
+                  }
+                }
+              : {}),
             isBufferValid: () =>
               logicalLine.rows.every((row) => {
                 const line = terminal.buffer.active.getLine(row.y)
