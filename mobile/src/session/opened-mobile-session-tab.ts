@@ -3,6 +3,17 @@ export type OpenedMobileSessionTabCandidate = {
   type: string
   mode?: unknown
   relativePath?: unknown
+  filePath?: unknown
+}
+
+function matchesTabPath(candidate: unknown, target: string): boolean {
+  if (typeof candidate !== 'string') {
+    return false
+  }
+  if (candidate === target) {
+    return true
+  }
+  return candidate.replace(/\\/g, '/').toLowerCase() === target.replace(/\\/g, '/').toLowerCase()
 }
 
 export type OpenedMobileSessionTabActivationState = {
@@ -22,7 +33,10 @@ export function findOpenedMobileSessionTab<T extends OpenedMobileSessionTabCandi
   options: { preferMode?: 'diff' | 'edit' } = {}
 ): T | null {
   const matches = tabs.filter(
-    (tab) => tab.type !== 'browser' && tab.type !== 'terminal' && tab.relativePath === relativePath
+    (tab) =>
+      tab.type !== 'browser' &&
+      tab.type !== 'terminal' &&
+      (matchesTabPath(tab.relativePath, relativePath) || matchesTabPath(tab.filePath, relativePath))
   )
   if (matches.length === 0) {
     return null

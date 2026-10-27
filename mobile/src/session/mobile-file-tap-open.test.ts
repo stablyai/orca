@@ -23,7 +23,7 @@ function activeTerminalState(activated: boolean) {
 }
 
 describe('openMobileFileTap', () => {
-  it('opens absolute terminal artifacts through the grant-backed preview route', async () => {
+  it('opens absolute terminal artifacts as session tabs when the host editor is available', async () => {
     const client = createClient([
       ok({
         worktree: 'wt-1',
@@ -37,7 +37,61 @@ describe('openMobileFileTap', () => {
           absolutePath: '/tmp/result.json',
           grantId: 'grant-1'
         }
-      })
+      }),
+      ok({ opened: true })
+    ])
+    const scheduleDelayedAction = vi.fn((callback: () => void) => callback())
+    const openedTab = { id: 'tab-ext', relativePath: '/tmp/result.json' }
+    const switchSessionTab = vi.fn()
+    const pushPreviewRoute = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: '/tmp/result.json',
+      terminalHandle: 'terminal-1',
+      line: 12,
+      column: 3,
+      pushPreviewRoute,
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [openedTab],
+      getActiveSessionTabId: () => 'terminal-tab',
+      getActivationState: activeTerminalState,
+      switchSessionTab,
+      scheduleDelayedAction
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'files.open',
+      { worktree: 'id:wt-1', relativePath: '/tmp/result.json', line: 12, column: 3 },
+      { timeoutMs: 15_000 }
+    )
+    expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
+    expect(pushPreviewRoute).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the grant-backed preview route when the desktop renderer is unavailable', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: '/tmp/result.json',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          provider: 'local',
+          absolutePath: '/tmp/result.json',
+          grantId: 'grant-1'
+        }
+      }),
+      { id: 'rpc', ok: false, error: { code: 'renderer_unavailable', message: 'renderer_unavailable' } }
     ])
     const pushPreviewRoute = vi.fn()
     const triggerOpenFeedback = vi.fn()
@@ -60,6 +114,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
+    await Promise.resolve()
     await Promise.resolve()
 
     expect(client.sendRequest).toHaveBeenCalledWith(
@@ -87,7 +142,6 @@ describe('openMobileFileTap', () => {
       })
     })
     expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
-    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
   })
 
   it('preserves the worktree-contained files.open flow', async () => {
