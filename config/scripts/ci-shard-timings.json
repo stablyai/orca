@@ -8352,7 +8352,6 @@
       "src/renderer/src/components/right-sidebar/AiVaultSearchEvidence.test.tsx": 2230,
       "src/renderer/src/components/right-sidebar/AiVaultSessionActionMenuItems.test.tsx": 663,
       "src/renderer/src/components/right-sidebar/AiVaultSessionHistoryDialog.test.tsx": 1929,
-      "src/renderer/src/components/right-sidebar/AiVaultSessionListBar.test.tsx": 516,
       "src/renderer/src/components/right-sidebar/AiVaultSessionRow.structured-title.test.tsx": 2357,
       "src/renderer/src/components/right-sidebar/AiVaultSessionRow.test.tsx": 1504,
       "src/renderer/src/components/right-sidebar/AiVaultSessionSubagents.test.tsx": 1926,
