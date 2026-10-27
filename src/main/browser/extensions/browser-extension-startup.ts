@@ -110,13 +110,8 @@ function installBrowserExtensionSupport(): void {
     }
   })
   startBrowserExtensionUpdateChecks()
-  app.on('web-contents-created', (_event, contents) => {
-    queueMicrotask(() => {
-      if (!contents.isDestroyed()) {
-        observeExtensionContents(contents)
-      }
-    })
-  })
+  // Why synchronous: loadURL right after construction emits did-start-loading before a microtask runs.
+  app.on('web-contents-created', (_event, contents) => observeExtensionContents(contents))
 }
 
 const observedContents = new WeakSet<Electron.WebContents>()
