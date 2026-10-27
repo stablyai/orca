@@ -122,6 +122,18 @@ def selector_present(args):
     return False
 
 
+def worker_limit(args, names):
+    limit = 2
+    for index, arg in enumerate(args):
+        name, _, inline = arg.partition('=')
+        if name not in names:
+            continue
+        value = inline if '=' in arg else (args[index + 1] if index + 1 < len(args) else '')
+        if value.isdigit() and int(value) > 0:
+            limit = min(limit, int(value))
+    return limit
+
+
 def bounded_options(args, runner):
     if any(arg.split('=', 1)[0] in ('--ui', '--debug', '--inspect', '--inspect-brk') for arg in args):
         raise ValueError('interactive UI/debug mode is not a bounded test run; select test files for this entrypoint')
@@ -132,20 +144,23 @@ def bounded_options(args, runner):
             args.insert(1, 'run')
         if 'bench' in args:
             raise ValueError('benchmarks use the repository manual performance entrypoint')
+        workers = worker_limit(args, ('--maxWorkers',))
         args = remove_options(args, ('--maxWorkers', '--minWorkers'), with_value=True)
         args = remove_options(args, ('--fileParallelism', '--file-parallelism'))
         # Supported by Vitest 2–4; also avoids v2 minThreads > maxThreads on big Macs.
-        args.extend(['--maxWorkers=2', '--no-file-parallelism'])
+        args.extend([f'--maxWorkers={workers}', '--no-file-parallelism'])
     elif runner == 'jest':
+        workers = worker_limit(args, ('--maxWorkers', '-w'))
         args = remove_options(args, ('--maxWorkers', '-w'), with_value=True)
         if '--runInBand' not in args and '-i' not in args:
-            args.append('--maxWorkers=2')
+            args.append(f'--maxWorkers={workers}')
         args.append('--watch=false')
     elif runner == 'playwright':
         if len(args) < 2 or args[1] != 'test':
             raise ValueError('playwright entrypoint requires the test subcommand')
+        workers = worker_limit(args, ('--workers', '-j'))
         args = remove_options(args, ('--workers', '-j'), with_value=True)
-        args.append('--workers=2')
+        args.append(f'--workers={workers}')
     return args
 
 

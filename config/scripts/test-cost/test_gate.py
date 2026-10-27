@@ -48,7 +48,7 @@ def append_log(path, record):
 
 
 def report(path, as_json=False):
-    totals = collections.defaultdict(lambda: {"runs": 0, "seconds": 0, "max_seconds": 0, "over_budget": 0, "containers_observed": 0, "docker_unmeasured_runs": 0})
+    totals = collections.defaultdict(lambda: {"runs": 0, "seconds": 0, "max_seconds": 0, "over_budget": 0, "containers_observed": 0, "resource_unmeasured_runs": 0})
     if path.exists():
         for line in path.read_text().splitlines():
             try:
@@ -63,14 +63,14 @@ def report(path, as_json=False):
             item["max_seconds"] = max(item["max_seconds"], row["seconds"])
             item["over_budget"] += int(row.get("over_budget", False))
             item["containers_observed"] += row.get("containers_observed") or 0
-            item["docker_unmeasured_runs"] += int(row.get("containers_observed") is None)
+            item["resource_unmeasured_runs"] += int(row.get("containers_observed") is None)
     rows = sorted((dict(repo=repo, **data) for repo, data in totals.items()), key=lambda row: row["seconds"], reverse=True)
     if as_json:
         print(json.dumps(rows, ensure_ascii=False, indent=2))
     else:
-        print("seconds\truns\tmax_s\tover_budget\tcontainers_observed\tdocker_unmeasured_runs\trepo")
+        print("seconds\truns\tmax_s\tover_budget\tcontainers_observed\tresource_unmeasured_runs\trepo")
         for row in rows:
-            print(f'{row["seconds"]:.2f}\t{row["runs"]}\t{row["max_seconds"]:.2f}\t{row["over_budget"]}\t{row["containers_observed"]}\t{row["docker_unmeasured_runs"]}\t{row["repo"]}')
+            print(f'{row["seconds"]:.2f}\t{row["runs"]}\t{row["max_seconds"]:.2f}\t{row["over_budget"]}\t{row["containers_observed"]}\t{row["resource_unmeasured_runs"]}\t{row["repo"]}')
     return 0
 
 
@@ -111,7 +111,21 @@ def guarded_package_command(argv, cwd=None):
             return False
         while words and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0], re.DOTALL):
             words.pop(0)
-        if len(words) < 4 or Path(words[0]).name not in ("python3", "python"):
+        if len(words) < 3:
+            return False
+        if Path(words[0]).name == "node":
+            dispatcher = (directory / words[1]).resolve()
+            if dispatcher.name != "test-cost-entry.mjs" or not dispatcher.is_file():
+                return False
+            runtime = dispatcher.parent / "test-cost"
+            if not all((runtime / name).is_file() for name in ("affected_tests.py", "test_gate.sh", "test_gate.py")):
+                return False
+            tail = words[2:]
+            if tail and tail[0].startswith("--native-runtime="):
+                if tail.pop(0) not in ("--native-runtime=node", "--native-runtime=electron"):
+                    return False
+            return bool(tail and tail[0] in ("vitest", "jest", "playwright"))
+        if Path(words[0]).name not in ("python3", "python"):
             return False
         helper = (directory / words[1]).resolve()
         if helper.name != "affected_tests.py" or not helper.is_file():
