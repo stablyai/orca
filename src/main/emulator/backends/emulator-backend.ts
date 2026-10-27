@@ -38,7 +38,17 @@ export type EmulatorTargetOpts = {
   worktreeId?: string
 }
 
-// The bridge owns active-workspace state; backends own device, helper, and input operations.
+export type EmulatorHelperStopOptions = {
+  helperPid?: number
+  includeOrphaned?: boolean
+  ownedOnly?: boolean
+}
+
+// One emulator platform (iOS serve-sim today, Android scrcpy next). The
+// EmulatorBridge router owns the session registry and per-worktree active
+// state; a backend owns only device/helper/input mechanics for its platform.
+// All device-facing methods take an opaque device id/selector that the backend
+// resolves to its native id via resolveDeviceId.
 export type EmulatorBackend = {
   readonly kind: EmulatorBackendKind
   readonly streamCodec: EmulatorStreamCodec
@@ -54,11 +64,10 @@ export type EmulatorBackend = {
 
   startSession(deviceId: string): Promise<EmulatorSessionInfo>
   // Stop the helper for a device without powering it off.
-  stopHelperForDevice(
-    deviceId: string,
-    options?: { helperPid?: number; includeOrphaned?: boolean }
-  ): Promise<void>
-  shutdownDevice(deviceId: string): Promise<void>
+  stopHelperForDevice(deviceId: string, options?: EmulatorHelperStopOptions): Promise<void>
+  // Power off the underlying device/AVD.
+  shutdownDevice(deviceId: string, options?: { ownedOnly?: boolean }): Promise<void>
+  // Whether an active session can be reused (stream reachable + helper alive).
   isSessionReusable(info: EmulatorSessionInfo): Promise<boolean>
 
   tap(deviceId: string, x: number, y: number): Promise<void>

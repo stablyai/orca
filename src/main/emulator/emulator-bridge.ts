@@ -20,6 +20,7 @@ import type {
   EmulatorDevice,
   EmulatorTargetOpts
 } from './backends/emulator-backend'
+import { EmulatorBridgeShutdown } from './emulator-bridge-shutdown'
 
 export class EmulatorBridge {
   private readonly sessionRegistry = new EmulatorSessionRegistry()
@@ -27,12 +28,18 @@ export class EmulatorBridge {
   private readonly backends: EmulatorBackend[]
   private readonly iosBackend: IosEmulatorBackend
   private readonly androidBackend: AndroidEmulatorBackend
+  private readonly shutdownCoordinator: EmulatorBridgeShutdown
 
   constructor(options: EmulatorBridgeOptions = {}) {
     this.iosBackend = new IosEmulatorBackend(options)
     this.androidBackend = new AndroidEmulatorBackend()
     // Register all backends so explicit targets reach their own host-support errors.
     this.backends = [this.iosBackend, this.androidBackend]
+    this.shutdownCoordinator = new EmulatorBridgeShutdown({
+      sessionRegistry: this.sessionRegistry,
+      startLeases: this.startLeases,
+      backends: this.backends
+    })
   }
 
   listBackends(): EmulatorBackend[] {
@@ -60,6 +67,7 @@ export class EmulatorBridge {
     info: EmulatorSessionInfo,
     options: { managed?: boolean; backend?: EmulatorBackendKind } = {}
   ): void {
+    this.shutdownCoordinator.assertNotShuttingDown()
     this.sessionRegistry.registerActive(worktreeId, info, options)
   }
 
@@ -140,6 +148,7 @@ export class EmulatorBridge {
       (info) => this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid),
       {
         includeOrphaned: !options.managedOnly,
+        ownedOnly: options.managedOnly,
         shutdownDevice: options.shutdownDevice
       }
     )
@@ -227,6 +236,11 @@ export class EmulatorBridge {
   }
 
   async acquireHelperForDevice(device: string): Promise<EmulatorStartLease> {
+    this.shutdownCoordinator.assertNotShuttingDown()
+    return this.shutdownCoordinator.trackHelperAcquire(this.acquireHelperForDeviceInternal(device))
+  }
+
+  private async acquireHelperForDeviceInternal(device: string): Promise<EmulatorStartLease> {
     const backend = await this.backendForDevice(device)
     return this.startLeases.acquire(backend, device, (info) =>
       this.sessionRegistry.hasActiveWorktreeForSession(info.deviceUdid)
@@ -258,25 +272,12 @@ export class EmulatorBridge {
     return this.sessionRegistry.pruneGoneManagedSessions((kind) => this.backendForKind(kind))
   }
 
-  async destroyAllSessions(): Promise<void> {
-    const promises: Promise<unknown>[] = []
-    for (const session of this.sessionRegistry.listSessions()) {
-      if (!session.managed) {
-        continue
-      }
-      const backend = this.backendForKind(session.backend)
-      if (!backend) {
-        continue
-      }
-      promises.push(
-        backend
-          .stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
-          .catch(() => {})
-          .then(() => backend.shutdownDevice(session.deviceUdid).catch(() => {}))
-      )
-    }
-    await Promise.allSettled(promises)
-    this.sessionRegistry.clear()
+  destroyAllSessions(): Promise<void> {
+    return this.shutdownCoordinator.destroyAllSessions()
+  }
+
+  async onAppQuit(): Promise<void> {
+    await this.shutdownCoordinator.destroyAllSessions()
   }
 
   private async resolveTarget(

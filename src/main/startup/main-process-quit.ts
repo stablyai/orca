@@ -197,7 +197,7 @@ function installWillQuitHandler(): void {
     const beginSshShutdownAndFinalSave = () => {
       // Mark SSH leases detached synchronously immediately before final flush; no await may separate mutation from save.
       const sshShutdown = beginSshShutdown()
-      killAllPty()
+      const ptyShutdown = killAllPty()
       const watcherShutdown = shutdownWatchersOnce()
       const storeFlush = (async () => {
         if (!finalStore) {
@@ -212,13 +212,14 @@ function installWillQuitHandler(): void {
           console.error('[persistence] Failed to finalize profile state:', error)
         }
       })()
-      return { sshShutdown, watcherShutdown, storeFlush }
+      return { sshShutdown, ptyShutdown, watcherShutdown, storeFlush }
     }
     // Flush pending pane grids first (bounded at 1s); without one, begin final save synchronously.
     const finalSaves = paneGridFlush
       ? paneGridFlush.then(beginSshShutdownAndFinalSave)
       : beginSshShutdownAndFinalSave()
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
+    const ptyShutdown = Promise.resolve(finalSaves).then((saves) => saves.ptyShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)
     // Capture queued usage writes before awaiting teardown or quit can lose the last enabled/scan snapshot.
@@ -263,6 +264,7 @@ function installWillQuitHandler(): void {
       { name: 'browser-client-hosts', promise: browserClientHostShutdown },
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
+      { name: 'local-ptys', promise: ptyShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },

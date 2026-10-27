@@ -163,8 +163,9 @@ export class RuntimeEmulatorCommands {
             'The workspace changed while the emulator was starting. Reattach the emulator.'
           )
         }
+        bridge.registerActiveEmulator(worktreeId, info, { managed: true })
       } catch (error) {
-        // Workspaces can disappear during slow Android boots; release their lease.
+        // Workspaces or the app can disappear during slow Android boots; release their lease.
         await lease.release({ cleanupIfUnused: true }).catch(() => {})
         if (error instanceof Error && error.message === 'selector_not_found') {
           throw new EmulatorError(
@@ -174,7 +175,6 @@ export class RuntimeEmulatorCommands {
         }
         throw error
       }
-      bridge.registerActiveEmulator(worktreeId, info, { managed: true })
       await lease.release()
       this.notifyRendererEmulatorAutoAttach(worktreeId, info)
       if (params.focus) {

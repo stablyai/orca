@@ -95,7 +95,9 @@ export class EmulatorSessionRegistry {
           live = live || this.sessions.has(session.deviceUdid)
         } else {
           this.clearSessionAndWorktrees(session.deviceUdid)
-          void backend?.stopHelperForDevice(session.deviceUdid).catch(() => {})
+          void backend
+            ?.stopHelperForDevice(session.deviceUdid, { helperPid: session.pid, ownedOnly: true })
+            .catch(() => {})
         }
       }
     }

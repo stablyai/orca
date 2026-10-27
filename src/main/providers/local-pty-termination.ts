@@ -10,6 +10,7 @@ import {
   disposePtyExitListener,
   disposePtyListeners,
   ptyAgentSessionIds,
+  ptyExitCallbacksSuppressed,
   ptyForceKillTimers,
   ptyPhysicalExits,
   ptyProcesses,
@@ -130,6 +131,18 @@ function requestPtyTermination(id: string, proc: pty.IPty): void {
   destroyPtyProcess(proc, { alreadyKilled: true })
 }
 
+function requestPlainPosixAppQuitTermination(id: string, proc: pty.IPty): void {
+  runPtyCleanup(id)
+  disposePtyListeners(id)
+  disposePtyExitListener(id)
+  try {
+    proc.kill()
+  } catch {
+    /* Process may already be dead. */
+  }
+  destroyPtyProcess(proc, { alreadyKilled: true })
+}
+
 function requestTrackedPtyShutdown(id: string, proc: pty.IPty, immediate: boolean): void {
   const previousMode = ptyTerminationMode.get(id)
   // Bare ConPTY kill closes the pseudoconsole; Windows has no graceful-signal phase.
@@ -233,28 +246,70 @@ export function killOrphanedLocalPtys(currentGeneration: number): { id: string }
   return killed
 }
 
-export function killAllLocalPtys(): void {
-  cancelAllPendingLocalPtySpawns()
-  for (const [id, proc] of ptyProcesses) {
-    runPtyCleanup(id)
-    disposePtyListeners(id)
-    disposePtyExitListener(id)
-    if (!(process.platform === 'win32' && ptyTerminationMode.has(id))) {
-      try {
-        if (ptyAgentSessionIds.has(id) && process.platform !== 'win32') {
-          // Synchronous quit must sweep agent groups before releasing node-pty or OMP workers can survive.
-          forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'))
-        } else {
-          proc.kill()
-        }
-      } catch {
-        /* Process may already be dead. */
+async function shutdownPtyForAppQuit(id: string, proc: pty.IPty): Promise<void> {
+  if (ptyProcesses.get(id) !== proc) {
+    return
+  }
+  const killRoot = (): void => {
+    // A natural exit can win while the descendant snapshot is in flight.
+    if (ptyProcesses.get(id) === proc) {
+      requestPtyTermination(id, proc)
+      if (ptyProcesses.get(id) === proc && ptyTerminationMode.get(id) !== 'force') {
+        // App exit is the final native-handle boundary even when signalling fails.
+        destroyPtyProcess(proc, { alreadyKilled: true })
       }
     }
-    // App exit is the final ownership boundary; NAPI callbacks cannot survive FreeEnvironment.
-    destroyPtyProcess(proc, { alreadyKilled: true })
-    // Resolve overlapping shutdown waiters at the app-exit boundary replacing node-pty onExit.
-    ptyPhysicalExits.get(id)?.markExited()
-    clearPtyState(id)
+  }
+  try {
+    // Stop delayed startup commands before the asynchronous descendant snapshot.
+    runPtyCleanup(id)
+    disposePtyListeners(id)
+    if (ptyAgentSessionIds.has(id) || process.platform === 'win32') {
+      await killWithDescendantSweep(proc.pid, killRoot, {
+        ownsRoot: () => ptyProcesses.get(id) === proc,
+        terminateOwnedTree: () => terminatePtyJob(proc),
+        terminateDescendants: async (snapshot) => {
+          const verdict = await terminateShutdownDescendants(snapshot)
+          if (verdict !== 'exited') {
+            console.warn('[pty] app-quit descendant cleanup incomplete', { id, verdict })
+          }
+        },
+        awaitEscalation: true
+      })
+    } else {
+      requestPlainPosixAppQuitTermination(id, proc)
+    }
+  } finally {
+    if (ptyProcesses.get(id) === proc) {
+      disposePtyExitListener(id)
+      ptyPhysicalExits.get(id)?.markExited()
+      clearPtyState(id)
+    }
+  }
+}
+
+let appQuitShutdown: Promise<void> | undefined
+
+export function killAllLocalPtys(): Promise<void> {
+  // Update prep can start the sweep before will-quit joins it, after the root has exited.
+  appQuitShutdown ??= killAllLocalPtysInternal().finally(() => {
+    appQuitShutdown = undefined
+  })
+  return appQuitShutdown
+}
+
+async function killAllLocalPtysInternal(): Promise<void> {
+  cancelAllPendingLocalPtySpawns()
+  const entries = [...ptyProcesses.entries()]
+  for (const [id] of entries) {
+    ptyExitCallbacksSuppressed.add(id)
+  }
+  const results = await Promise.allSettled(
+    entries.map(([id, proc]) => shutdownPtyForAppQuit(id, proc))
+  )
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error('[pty] failed to terminate a local PTY during app quit', result.reason)
+    }
   }
 }

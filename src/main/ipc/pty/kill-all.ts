@@ -1,9 +1,12 @@
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
 import { localProvider } from './provider/registry'
 
-/** Kill in-process PTYs while daemon-backed sessions survive disconnect. */
-export function killAllPty(): void {
+/**
+ * Kill in-process local PTYs. Daemon-backed PTYs are preserved by daemon disconnect.
+ */
+export function killAllPty(): Promise<void> {
   if (localProvider instanceof LocalPtyProvider) {
-    localProvider.killAll()
+    return localProvider.killAll()
   }
+  return Promise.resolve()
 }
