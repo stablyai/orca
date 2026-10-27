@@ -11,8 +11,7 @@ type DeleteWithPermanentFallbackParams = {
   beforePermanentDelete: () => void
 }
 
-// Trash can be unavailable (e.g. Recycle Bin disabled for the drive); let the user opt into permanent delete.
-// Returns null when the user declines; otherwise whether the delete bypassed Trash.
+// Null means cancellation; only a failed local Trash operation permits the permanent retry.
 export async function deleteWithPermanentFallback({
   name,
   isRemote,
@@ -43,7 +42,9 @@ export async function deleteWithPermanentFallback({
         ),
     description: translate('fileExplorer.trashFailed.description', 'This cannot be undone.'),
     confirmLabel: translate('fileExplorer.trashFailed.confirm', 'Delete Permanently'),
-    confirmVariant: 'destructive'
+    confirmVariant: 'destructive',
+    cancelVariant: 'ghost',
+    surface: 'security'
   })
   if (!confirmed) {
     return null

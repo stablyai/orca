@@ -23,6 +23,51 @@ import {
 installRuntimeFileClientEnvironment()
 
 describe('runtime file client', () => {
+  it('sends the confirmed permanent-delete option only to the local filesystem', async () => {
+    await deleteRuntimePath(
+      { target: { kind: 'local' }, worktreeId: 'wt-1', worktreePath: '/repo' },
+      '/repo/file.txt',
+      false,
+      { permanent: true }
+    )
+    expect(fsDeletePath).toHaveBeenCalledWith({
+      targetPath: '/repo/file.txt',
+      connectionId: undefined,
+      expectedExecutionHostId: 'local',
+      recursive: false,
+      permanent: true
+    })
+
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    await deleteRuntimePath(
+      {
+        target: { kind: 'environment', environmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      '/remote/repo/file.txt',
+      false,
+      { permanent: true }
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'files.delete',
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'file.txt',
+        recursive: false,
+        expectedExecutionHostId: 'local'
+      },
+      timeoutMs: 15_000
+    })
+    expect(fsDeletePath).toHaveBeenCalledTimes(1)
+  })
+
   it('uses local filesystem reads when no remote runtime is active', async () => {
     const localResult: RuntimeReadableFileContent = { content: 'hello', isBinary: false }
     fsReadFile.mockResolvedValue(localResult)

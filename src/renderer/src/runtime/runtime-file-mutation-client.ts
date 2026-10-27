@@ -219,7 +219,7 @@ export async function deleteRuntimePath(
         targetPath,
         connectionId: context.connectionId,
         recursive,
-        permanent: options?.permanent
+        ...(options?.permanent === true ? { permanent: true } : {})
       })
     )
     return
