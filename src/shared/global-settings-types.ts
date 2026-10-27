@@ -432,8 +432,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   androidSdkPath?: string | null
   /** Phone-fit PTY restore delay after the last mobile subscriber: null holds indefinitely; finite values clamp to 5s–60min. See docs/mobile-fit-hold.md. */
   mobileAutoRestoreFitMs: number | null
-  /** New QR pairing: absent/automatic allows Relay + local; local-only restricts to same network. */
-  mobilePairingConnectionMode?: 'automatic' | 'local-only'
+  /** New QR pairing: absent/automatic allows Relay + local; local-only restricts to same network; iroh is LAN + experimental iroh, no Relay. */
+  mobilePairingConnectionMode?: 'automatic' | 'local-only' | 'iroh'
   /** Explicit custom address restored when generating future mobile pairing codes. */
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */

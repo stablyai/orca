@@ -1,4 +1,5 @@
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
+import { IrohTransport } from '../rpc/iroh-transport'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../terminal/adoption/unshown-live-terminal-placement'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
@@ -30,6 +31,13 @@ import { errorMessage } from '../../../shared/error-message'
 import { loadHostDescriptor, publishHostDescriptor } from '../host-descriptor'
 
 export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
+  private shouldStartIrohTransport(): boolean {
+    // Why: iroh is on by default; ORCA_DISABLE_IROH=1 is the emergency kill switch.
+    // An injected test bind always starts (vitest sets the kill switch globally
+    // so unfaked servers never open real UDP or touch the public relay).
+    return this.irohBindEndpoint !== undefined || process.env.ORCA_DISABLE_IROH !== '1'
+  }
+
   async start(): Promise<void> {
     if (this.activeTransports.length > 0) {
       return
@@ -93,6 +101,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.pairingInitializationFailure = null
         this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
         publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
+        let webSocketStarted = false
+        let irohStarted = false
         try {
           const host = this.resolveInitialWebSocketBindHost()
           const { transport, endpoint } = await this.startWebSocketTransport({
@@ -110,15 +120,44 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           }
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
+          webSocketStarted = true
         } catch (error) {
-          // WS is supplementary; keep Unix transport serving if it fails.
+          // WS is supplementary; keep Unix transport (and iroh below, which needs no WS listener) serving.
           console.error('[runtime] Failed to start WebSocket transport:', error)
-          this.mobileSocketWiring?.dispose()
-          this.mobileSocketWiring = null
+          // A pinned port is a hard requirement, so fail the whole start instead of serving iroh alone.
           if (error instanceof PinnedPortUnavailableError) {
+            this.mobileSocketWiring?.dispose()
+            this.mobileSocketWiring = null
             await socketTransport.stop().catch(() => {})
             throw error
           }
+        }
+
+        // Why: iroh is independent of the WS listener; each transport fails alone.
+        if (this.mobileSocketWiring && this.shouldStartIrohTransport()) {
+          let irohTransport: IrohTransport | null = null
+          try {
+            irohTransport = new IrohTransport({
+              userDataPath: this.userDataPath,
+              ...(this.irohBindEndpoint ? { bindEndpoint: this.irohBindEndpoint } : {})
+            })
+            await irohTransport.start()
+            this.mobileSocketWiring.attachTransport(irohTransport)
+            this.irohTransport = irohTransport
+            // Why: include in activeTransports so stop() closes the endpoint; not advertised as CLI bootstrap.
+            activeTransports.push(irohTransport)
+            irohStarted = true
+          } catch (irohError) {
+            console.error('[runtime] Failed to start iroh transport:', irohError)
+            this.irohTransport = null
+            // Why: a throw after start() leaves a bound endpoint + accept loop behind.
+            await irohTransport?.stop().catch(() => {})
+          }
+        }
+        // Why: the wiring only serves mobile transports; with neither WebSocket nor iroh up, release it.
+        if (!webSocketStarted && !irohStarted) {
+          this.mobileSocketWiring?.dispose()
+          this.mobileSocketWiring = null
         }
       }
     }

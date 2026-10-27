@@ -1,3 +1,8 @@
+// React Native's native WebSocket crashes the app on other schemes (iroh://) instead of throwing.
+export function isWebSocketEndpoint(endpoint: string): boolean {
+  return /^wss?:\/\//i.test(endpoint)
+}
+
 // Normalize Edit Host input to a websocket authority without requiring re-pairing.
 
 export type NormalizeHostEndpointResult =

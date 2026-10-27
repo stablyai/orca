@@ -1,6 +1,7 @@
 import type { PairedE2EEFramingPolicy } from '../../../src/shared/paired-e2ee-framing-policy'
 import { createDirectE2EEFramingPolicy } from './direct-e2ee-framing-policy'
 import { publicKeyFromBase64 } from './e2ee'
+import { isWebSocketEndpoint } from './host-endpoint'
 import { RpcClientSocketSession } from './rpc-client-socket-session'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
@@ -23,6 +24,7 @@ type SocketFactoryOptions = {
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
   onClosed: (session: RpcClientSocketSession, closeCode?: number) => void
   onForcedClose: (session: RpcClientSocketSession) => void
+  createSocket?: (endpoint: string) => WebSocket
 }
 
 export class RpcClientSocketFactory {
@@ -35,6 +37,10 @@ export class RpcClientSocketFactory {
   constructor(private readonly options: SocketFactoryOptions) {
     // Why: an invalid pairing key fails construction, not every dial.
     publicKeyFromBase64(options.serverPublicKeyB64)
+    // Injected sockets (native iroh) own their endpoint; only the default WebSocket needs ws(s).
+    if (!options.createSocket && !isWebSocketEndpoint(options.endpoint)) {
+      throw new Error(`Unsupported WebSocket endpoint: ${redactSocketEndpoint(options.endpoint)}`)
+    }
     this.framingPolicy = createDirectE2EEFramingPolicy(options.serverPublicKeyB64)
   }
 
@@ -59,6 +65,7 @@ export class RpcClientSocketFactory {
       redactSocketEndpoint(this.options.endpoint)
     )
     return new RpcClientSocketSession({
+      ...(this.options.createSocket ? { createSocket: this.options.createSocket } : {}),
       endpoint: this.options.endpoint,
       deviceToken: this.options.deviceToken,
       serverPublicKeyB64: this.options.serverPublicKeyB64,

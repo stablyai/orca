@@ -1,3 +1,4 @@
+import type { IrohTransportOptions } from '../rpc/iroh-transport'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcAnyMethodDeclaration } from '../rpc/core'
 import type { DeviceRegistry } from '../device-registry'
@@ -44,6 +45,8 @@ export type OrcaRuntimeRpcServerOptions = {
   /** Explicit address pins govern the whole process: override startup exposure and reconnect defaults, and refuse pairing-time widening. Loopback must survive pairing and restart. */
   pinnedBindHost?: string
   webClientRoot?: string
+  // Tests inject a fake bind so CI never loads the native module or opens UDP.
+  irohBindEndpoint?: IrohTransportOptions['bindEndpoint']
   // Test-only timing overrides; production keeps design §3.1 defaults.
   keepaliveIntervalMs?: number
   longPollCap?: number
@@ -60,6 +63,7 @@ export type PairingOfferUnavailableReason =
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
   | 'network_exposure_failed'
+  | 'iroh_unavailable'
 
 export type PairingOfferUnavailable = {
   available: false

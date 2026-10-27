@@ -1,3 +1,5 @@
+import type { PairingIroh } from '../../../shared/mobile-relay-pairing-offer'
+import { isMobilePairingRelayDisabled } from '../../../shared/mobile-pairing-connection-mode'
 import type { RuntimeDeviceGrant } from '../rpc/rpc-caller-scope'
 import type { DeviceRegistry, DeviceScope, TokenDeviceEntry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
@@ -29,6 +31,25 @@ import {
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
+  getIrohEndpointId(): string | null {
+    return this.irohTransport?.endpointId ?? null
+  }
+
+  protected getIrohPairingTarget(): PairingIroh | null {
+    const endpointId = this.irohTransport?.endpointId
+    if (!endpointId) {
+      return null
+    }
+    const hints = this.irohTransport?.endpointDialHints() ?? null
+    return {
+      endpointId,
+      ...(hints?.relayUrl ? { relayUrl: hints.relayUrl } : {}),
+      ...(hints && hints.directAddresses.length > 0
+        ? { directAddresses: hints.directAddresses }
+        : {})
+    }
+  }
+
   getDeviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistry
   }
@@ -55,9 +76,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
     const current = this.deviceRegistry?.getDevice(deviceId)
+    const pairingMode = this.deviceRegistry?.getMobilePairingConnectionMode(deviceId)
     if (
       current?.scope !== 'mobile' ||
-      this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+      (pairingMode != null && isMobilePairingRelayDisabled(pairingMode))
     ) {
       return false
     }
@@ -140,6 +162,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     name?: string
     rotate?: boolean
     scope?: DeviceScope
+    // Only iroh-mode mobile offers carry the iroh dial target; a local-only QR with it would reach off-LAN via the public relay.
+    includeIroh?: boolean
     // Persist local-only policy on grants so reconnect cannot expose every interface; other callers default to network reach (STA-2370).
     reach?: RuntimePairingReach
     // Grant administrative permissions only at pairing, never as later device upgrades.
@@ -156,12 +180,29 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
     }
+    const iroh = args.includeIroh ? this.getIrohPairingTarget() : null
+    if (args.includeIroh && !iroh) {
+      return pairingUnavailable(
+        'iroh_unavailable',
+        'Iroh pairing is unavailable. Restart Orca or inspect the Iroh transport logs.'
+      )
+    }
     const rawEndpoint = this.getWebSocketEndpoint()
-    if (!rawEndpoint) {
+    let endpoint: string
+    // Iroh offers dial by key; a LAN address here would point at a WS listener iroh mode never exposes.
+    if (iroh) {
+      endpoint = `iroh://${iroh.endpointId}`
+    } else if (!rawEndpoint) {
       return pairingUnavailable(
         'websocket_unavailable',
         'WebSocket pairing is unavailable. Inspect preceding runtime errors and choose an unused --port if the listener failed.'
       )
+    } else {
+      const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
+      if (!advertised.ok) {
+        return pairingUnavailable(advertised.reason, advertised.guidance)
+      }
+      endpoint = advertised.endpoint
     }
     if (!this.deviceRegistry) {
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
@@ -171,11 +212,6 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       return pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
     }
 
-    const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
-    if (!advertised.ok) {
-      return pairingUnavailable(advertised.reason, advertised.guidance)
-    }
-    const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
     let device: TokenDeviceEntry
@@ -197,6 +233,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       publicKeyB64,
       pairedDeviceId: device.deviceId,
       scope,
+      ...(iroh ? { iroh } : {}),
       // Runtime clients pin host identity; mobile does not need these extra QR bytes.
       ...(hostDescriptor && scope === 'runtime' ? { hostDescriptor } : {})
     })

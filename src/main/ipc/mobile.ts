@@ -83,12 +83,15 @@ export function registerMobileHandlers(
       }
     ) => {
       // Explicit interfaces support overlay networks unreachable through the default LAN candidate.
+      // Iroh dials by key, so a LAN address would only put a stale endpoint into its QR.
       const ip =
-        args?.address ??
-        (await getDefaultPairingAddress(
-          rpcServer.getNetworkExposureBindHost(),
-          getDefaultRouteInterfaceNames
-        ))
+        args?.connectionMode === 'iroh'
+          ? null
+          : (args?.address ??
+            (await getDefaultPairingAddress(
+              rpcServer.getNetworkExposureBindHost(),
+              getDefaultRouteInterfaceNames
+            )))
       // Relay works without a direct candidate; LAN-only must refuse when none is usable.
       if (!ip && args?.connectionMode === 'local-only') {
         return {
@@ -235,6 +238,14 @@ export function registerMobileHandlers(
       return { revoked: false }
     }
     return { revoked: rpcServer.revokeRuntimeAccess(args.deviceId) }
+  })
+
+  ipcMain.handle('mobile:getIrohStatus', () => {
+    const endpointId = rpcServer.getIrohEndpointId()
+    return {
+      bound: endpointId != null,
+      endpointId
+    }
   })
 
   ipcMain.handle('mobile:getWindowsFirewallStatus', (_event, args?: { address?: string }) => {

@@ -51,11 +51,14 @@ export function MobilePairingSetupSection({
   onGenerateQr
 }: MobilePairingSetupSectionProps): React.JSX.Element {
   const usingRelay = connectionMode === 'automatic'
+  const usingIroh = connectionMode === 'iroh'
   const [addressDisclosureOpen, setAddressDisclosureOpen] = useState(false)
   // Render search/custom-address pickers outright; a collapse trigger cannot close pinned-open state.
   const addressDisclosurePinned = addressDisclosureForcedOpen || selectedAddressIsCustom
   // Relay can use main’s default LAN endpoint; LAN-only requires an explicit reachable address.
-  const generateDisabled = loading || !canGenerate || (!usingRelay && !selectedAddress)
+  // Iroh dials by public key, so an unpicked LAN address must not block its QR either.
+  const generateDisabled =
+    loading || !canGenerate || (!usingRelay && !usingIroh && !selectedAddress)
   // Present Relay’s direct path as additive; the phone races both and favors direct on ties.
   const relayAddressLabel = translate(
     'auto.components.settings.MobilePairingSetupSection.step2RelayDisclosure',
@@ -135,7 +138,8 @@ export function MobilePairingSetupSection({
         {connectionPathControl}
       </div>
 
-      {usingRelay && addressDisclosurePinned ? (
+      {/* Why: iroh dials by public key — there is no address for the user to pick. */}
+      {usingIroh ? null : usingRelay && addressDisclosurePinned ? (
         <div className="space-y-2">
           <p className="text-xs font-medium text-foreground">{relayAddressLabel}</p>
           <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3">

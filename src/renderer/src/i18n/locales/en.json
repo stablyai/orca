@@ -12292,6 +12292,9 @@
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
           "retrying": "Retrying",
           "relayCell": "Relay cell",
+          "irohTitle": "Iroh",
+          "irohDescription": "Phone can be on cellular or any Wi‑Fi. No sign-in, no address setup. Direct P2P (hole-punched) with public relay fallback.",
+          "irohUnavailable": "Transport failed to bind. Restart Orca, or check logs.",
           "relaySignInDetail": "Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account."
         },
         "MobilePairingSetupSection": {

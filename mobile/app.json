@@ -82,6 +82,7 @@
       "expo-router",
       "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
+      "./plugins/android-drop-iroh-desktop-natives.js",
       [
         "expo-splash-screen",
         {
@@ -107,7 +108,8 @@
         "expo-build-properties",
         {
           "ios": {
-            "buildReactNativeFromSource": true
+            "buildReactNativeFromSource": true,
+            "deploymentTarget": "17.5"
           },
           "android": {
             "usesCleartextTraffic": true

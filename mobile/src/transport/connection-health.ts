@@ -42,7 +42,7 @@ const RELAY_HOST_COPY: Record<
 }
 
 export type ConnectionVerdict =
-  | { kind: 'normal'; label: string }
+  | { kind: 'normal'; label: string; hint?: string } // hint: optional iroh diagnostic
   | { kind: 'warning'; label: string; hint?: string; detail?: string }
   | {
       kind: 'unreachable'
@@ -61,6 +61,8 @@ export function classifyConnection(args: {
   lastConnectedAt: number | null
   // A pinned endpoint enables Tailscale-specific hints.
   endpoint?: string | null
+  // Compact iroh diagnostic when candidate (attempting/failed/skipped).
+  irohHint?: string | null
   pendingPath?: MobileConnectionPath | null
   // Credential refusal needs re-pairing and outranks connecting state.
   pairingRejected?: boolean
@@ -72,7 +74,8 @@ export function classifyConnection(args: {
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
   const now = args.nowMs ?? Date.now()
-  const hint = isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined
+  const tailscaleHint = isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined
+  const hint = mergeHints(tailscaleHint, args.irohHint)
   const host = args.hostName?.trim() || 'Host'
   const staleReason = lastConnectedAt == null ? 'never-connected' : 'stale'
 
@@ -108,7 +111,11 @@ export function classifyConnection(args: {
   }
 
   if (state === 'disconnected') {
-    return { kind: 'normal', label: 'Disconnected' }
+    return {
+      kind: 'normal',
+      label: 'Disconnected',
+      ...(args.irohHint ? { hint: args.irohHint } : {})
+    }
   }
 
   // Apply escalation through every redial state so failures cannot revert to Connecting during each attempt.
@@ -135,7 +142,18 @@ export function classifyConnection(args: {
     return { kind: 'warning', label: "Can't connect", hint }
   }
 
-  return { kind: 'normal', label: state === 'reconnecting' ? 'Reconnecting…' : 'Connecting…' }
+  return {
+    kind: 'normal',
+    label: state === 'reconnecting' ? 'Reconnecting…' : 'Connecting…',
+    ...(args.irohHint ? { hint: args.irohHint } : {})
+  }
+}
+
+function mergeHints(a?: string, b?: string | null): string | undefined {
+  if (a && b) {
+    return `${a}; ${b}`
+  }
+  return a ?? b ?? undefined
 }
 
 // Retries the user should hear about; auth-failed has its own re-pair remedy.
@@ -151,7 +169,9 @@ export function isConnectionDialing(verdict: ConnectionVerdict): boolean {
 }
 
 export function verdictDisplayLabel(verdict: ConnectionVerdict): string {
-  if (isConnectionOutage(verdict) && verdict.hint) {
+  // Iroh attempt/fail lines also help while still dialing, not only on outages.
+  const irohDialHint = verdict.kind === 'normal' && verdict.hint?.startsWith('Iroh')
+  if (verdict.hint && (isConnectionOutage(verdict) || irohDialHint)) {
     return `${verdict.label} — ${verdict.hint}`
   }
   return verdict.label

@@ -23,6 +23,7 @@ const requireFromProject = createRequire(join(projectDir, 'package.json'))
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
   '@linear/sdk',
+  '@number0/iroh',
   '@orca/process-host',
   '@parcel/watcher',
   'electron-updater',
@@ -198,13 +199,14 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
     visit(packageName)
   }
 
-  // @parcel/watcher loads native optional subpackages absent from dependency traversal; include installed target variants, then afterPack prunes foreign binaries.
-  const parcelWatcherDir = packages.get('@parcel/watcher')
-  if (parcelWatcherDir) {
-    const parcelWatcherPackage = JSON.parse(
-      readFileSync(join(parcelWatcherDir, 'package.json'), 'utf8')
-    )
-    for (const optionalName of Object.keys(parcelWatcherPackage.optionalDependencies ?? {})) {
+  // napi packages load native optional subpackages absent from dependency traversal; include installed target variants, then afterPack prunes foreign binaries.
+  for (const napiRootName of ['@parcel/watcher', '@number0/iroh']) {
+    const napiRootDir = packages.get(napiRootName)
+    if (!napiRootDir) {
+      continue
+    }
+    const napiRootPackage = JSON.parse(readFileSync(join(napiRootDir, 'package.json'), 'utf8'))
+    for (const optionalName of Object.keys(napiRootPackage.optionalDependencies ?? {})) {
       try {
         visit(optionalName)
       } catch {
@@ -501,6 +503,39 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electron
   }
 }
 
+const IROH_NAPI_PLATFORM_PREFIX_BY_PLATFORM = {
+  darwin: 'iroh-darwin-',
+  linux: 'iroh-linux-',
+  win32: 'iroh-win32-'
+}
+
+function prunePackagedIrohNapi(resourcesDir, electronPlatformName, electronArch) {
+  const scopeDir = join(resourcesDir, 'node_modules', '@number0')
+  if (!existsSync(scopeDir)) {
+    return
+  }
+  // Why: mirrors prunePackagedParcelWatcher — every installed platform
+  // subpackage ships in the copy step; each build only needs its own.
+  const keepPrefix = IROH_NAPI_PLATFORM_PREFIX_BY_PLATFORM[electronPlatformName]
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const targetPrefix = keepPrefix ? `${keepPrefix}${architecture}` : null
+  for (const entry of readdirSync(scopeDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === 'iroh') {
+      continue
+    }
+    if (!entry.name.startsWith('iroh-')) {
+      continue
+    }
+    if (
+      targetPrefix &&
+      (entry.name === targetPrefix || entry.name.startsWith(`${targetPrefix}-`))
+    ) {
+      continue
+    }
+    rmSync(join(scopeDir, entry.name), { recursive: true, force: true })
+  }
+}
+
 // Declarations are compile-only; dependency maps embed unused sources (megabytes for Linear). Orca main maps ship separately.
 function isPrunableTypeOrSourceMapArtifact(filename) {
   return TYPE_DECLARATION_ARTIFACT_RE.test(filename) || JS_SOURCE_MAP_ARTIFACT_RE.test(filename)
@@ -628,6 +663,7 @@ function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, ele
   adoptPackagedNativeBuildEntries(resourcesDir, electronPlatformName, architecture)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
+  prunePackagedIrohNapi(resourcesDir, electronPlatformName, architecture)
   // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
   prunePackagedZodSources(resourcesDir)
   prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
@@ -655,6 +691,7 @@ module.exports = {
   isPackagedExternalSpecifier,
   normalizeNodePtyWindowsArch,
   packageNameFromSpecifier,
+  prunePackagedIrohNapi,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedRuntimeNodeModules,

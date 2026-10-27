@@ -11861,6 +11861,9 @@
           "localTitle": "局域网",
           "retrying": "重试",
           "relayCell": "中继单元",
+          "irohTitle": "Iroh",
+          "irohDescription": "手机可使用蜂窝数据或任意 Wi‑Fi。无需登录、无需选择地址。直接 P2P（打洞直连），公共中继兜底。",
+          "irohUnavailable": "传输层绑定失败。请重启 Orca 或查看日志。",
           "relaySignInDetail": "将此桌面登录到 Orca，并通过 Orca 的服务器路由手机。LAN 无需账户。"
         },
         "MobilePairingSetupSection": {

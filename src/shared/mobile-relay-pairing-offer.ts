@@ -11,6 +11,8 @@ export const PAIRING_OFFER_VERSION = 2
 const PairingScopeSchema = z.enum(['mobile', 'runtime'])
 const BASE64URL_16_PATTERN = /^[A-Za-z0-9_-]{16}$/
 const BASE64URL_43_PATTERN = /^[A-Za-z0-9_-]{43}$/
+// Why: iroh 1.1.0 EndpointId.toString() is 64-char lowercase hex (32-byte ed25519 public key).
+const IROH_ENDPOINT_ID_PATTERN = /^[0-9a-f]{64}$/
 const MAX_INVITE_TTL_MS = 10 * 60 * 1000
 // Cell-stamped expiry needs skew leeway or an ahead cell clock invalidates every invite (as with host-proof freshness).
 const INVITE_EXPIRY_CLOCK_SKEW_MS = 30 * 1000
@@ -66,6 +68,14 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
     e2eeFraming: z.literal(2)
   })
 
+  const irohSchema = z.object({
+    endpointId: z.string().regex(IROH_ENDPOINT_ID_PATTERN),
+    // Why: dial hints let same-LAN peers connect without the discovery service
+    // (offline LAN) and skip the discovery round-trip. Bounded to keep QR small.
+    relayUrl: z.string().min(1).max(PAIRING_RELAY_URL_MAX_CHARACTERS).optional(),
+    directAddresses: z.array(z.string().min(1).max(64)).max(8).optional()
+  })
+
   return z
     .object({
       v: z.literal(PAIRING_OFFER_VERSION),
@@ -76,6 +86,8 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       pairedDeviceId: z.string().min(1).max(128).optional(),
       scope: PairingScopeSchema.optional(),
       relay: relaySchema.optional(),
+      // Why: optional iroh dial target; unknown to older clients and stripped only if invalid.
+      iroh: irohSchema.optional(),
       // Why catch: a descriptor this build cannot read is dropped, never a reason to refuse pairing.
       hostDescriptor: RuntimeHostDescriptorSchema.optional().catch(undefined)
     })
@@ -102,3 +114,4 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
 export const PairingOfferSchema = createPairingOfferSchema()
 export type PairingOffer = z.infer<typeof PairingOfferSchema>
 export type PairingRelay = NonNullable<PairingOffer['relay']>
+export type PairingIroh = NonNullable<PairingOffer['iroh']>

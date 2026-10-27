@@ -40,7 +40,7 @@ export type RpcResponse = RpcSuccess | RpcFailure
 
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
-export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
+export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay' | 'iroh'
 
 export type ConnectionDiagnosticCode =
   | 'client-session-started'
@@ -94,6 +94,16 @@ export type ConnectionState =
   | 'reconnecting'
   | 'auth-failed'
 
+// Why: 64-char hex EndpointId from iroh (same pin as desktop pairing offers).
+const IrohEndpointIdSchema = z.string().regex(/^[0-9a-f]{64}$/)
+
+export type HostIrohEndpoint = {
+  endpointId: string
+  // Why: pairing-time dial hints — offline-LAN connect + skip discovery RTT.
+  relayUrl?: string
+  directAddresses?: string[]
+}
+
 // Attention nudges probe healthy relays; only a network change justifies replacing the socket.
 export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
 
@@ -112,6 +122,8 @@ export type HostProfile = {
   lastConnected: number
   /** Relay routing, joined from the overlay; only `setRelayRouting` and pairing write it. */
   relay?: MobileRelayEndpoint
+  // Why: optional iroh dial target from pairing offers; reconnects reuse it.
+  iroh?: HostIrohEndpoint
 }
 
 export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
@@ -140,7 +152,16 @@ export const HostProfileSchema = z.object({
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
-  relay: MobileRelayEndpointSchema.optional()
+  relay: MobileRelayEndpointSchema.optional(),
+  iroh: z
+    .object({
+      endpointId: IrohEndpointIdSchema,
+      // Why: 2048 matches the desktop offer's PAIRING_RELAY_URL_MAX_CHARACTERS —
+      // a stricter stored cap would drop valid dial hints on restore.
+      relayUrl: z.string().min(1).max(2048).optional(),
+      directAddresses: z.array(z.string().min(1).max(64)).max(8).optional()
+    })
+    .optional()
 })
 
 // Never persist deviceToken in AsyncStorage; join it from Keychain when loading the host.
@@ -150,7 +171,14 @@ export const StoredHostProfileSchema = z.object({
   ...hostNameIdentityFields,
   endpoint: z.string().min(1),
   publicKeyB64: z.string().min(1),
-  lastConnected: z.number().finite()
+  lastConnected: z.number().finite(),
+  iroh: z
+    .object({
+      endpointId: IrohEndpointIdSchema,
+      relayUrl: z.string().min(1).max(2048).optional(),
+      directAddresses: z.array(z.string().min(1).max(64)).max(8).optional()
+    })
+    .optional()
 })
 
 export type StoredHostProfile = z.infer<typeof StoredHostProfileSchema>

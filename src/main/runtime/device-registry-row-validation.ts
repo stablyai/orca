@@ -2,6 +2,7 @@ import type { DeviceScope } from '../../shared/runtime-types'
 import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
 import type { DeviceEntry } from './device-registry'
 import { parseMobilePushRegistration } from '../../shared/mobile-push-contract'
+import { parseMobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import { isDevicePublicKeyB64 } from '../../shared/device-key-proof'
 import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from './rpc/rpc-method-permission'
 import { isRecord } from '../../shared/agent-status-child-work-value-guards'
@@ -68,8 +69,9 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
     grants: validGrants(device.grants, device.scope === 'runtime' ? 'runtime' : 'mobile'),
     relayBinding: validRelayBinding(device.relayBinding, device.deviceId),
-    mobilePairingConnectionMode:
-      device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
+    mobilePairingConnectionMode: parseMobilePairingConnectionMode(
+      device.mobilePairingConnectionMode
+    ),
     // Older grants reached the network; preserve all-interface binding on reconnect.
     pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
     // Bad push metadata must not fail registry load and strand all devices.

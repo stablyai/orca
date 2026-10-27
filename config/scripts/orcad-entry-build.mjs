@@ -30,7 +30,15 @@ export function orcadChildOutputFilename(entryPoint) {
   return basename(entryPoint).replace(/\.ts$/, '.js')
 }
 
-export const ORCAD_EXTERNAL_MODULES = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
+export const ORCAD_EXTERNAL_MODULES = [
+  'electron',
+  'node-pty',
+  '@parcel/watcher',
+  'fsevents',
+  // napi-rs reaches its addon via a bare platform package whose `main` IS the .node
+  // file, so the specifier never matches externalNativeAddons' /\.node$/ filter.
+  '@number0/iroh'
+]
 
 // Bundled ESM resolves from the deployed bundle, like CommonJS __filename.
 export const ORCAD_COMMONJS_MODULE_OPTIONS = {
