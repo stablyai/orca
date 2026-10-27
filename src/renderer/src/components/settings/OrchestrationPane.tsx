@@ -18,6 +18,7 @@ import { useAppStore } from '../../store'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
+import { useAgentSkillHostScope } from './use-agent-skill-host-scope'
 import { SkillUsageExamplesSection } from './SkillUsageExamplesSection'
 import { translate } from '@/i18n/i18n'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -60,6 +61,7 @@ export function OrchestrationPane({
   })
   const showOrchestration = matchesSettingsSearch(searchQuery, searchEntries)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const skillHost = useAgentSkillHostScope(activeSkillRuntime)
 
   const {
     installed: orchestrationSkillDetected,
@@ -79,6 +81,7 @@ export function OrchestrationPane({
         <OrchestrationSkillAgentCoverage
           embedded
           plan={plan}
+          host={skillHost}
           skills={discoveredSkills}
           sources={discoveredSkillSources}
           loading={orchestrationSkillLoading}
@@ -88,7 +91,8 @@ export function OrchestrationPane({
       activeSkillRuntime.agentRuntime,
       discoveredSkills,
       discoveredSkillSources,
-      orchestrationSkillLoading
+      orchestrationSkillLoading,
+      skillHost
     ]
   )
 

@@ -121,7 +121,7 @@ async function renderPane(
 
 describe('OrchestrationPane', () => {
   beforeEach(() => {
-    useAppStore.setState({ settingsSearchQuery: '' })
+    useAppStore.setState({ settingsSearchQuery: '', runtimeEnvironmentCatalogSettled: false })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -181,6 +181,15 @@ describe('OrchestrationPane', () => {
     }
     expect(markup).toMatch(/<button\b[^>]*>[\s\S]*?Update[\s\S]*?<\/button>/)
     expect(markup).toContain('Re-check')
+  })
+
+  it('names the machine whose skills the agent coverage reflects', async () => {
+    useAppStore.setState({ runtimeEnvironmentCatalogSettled: true, runtimeEnvironments: [] })
+
+    const text = (await renderPane()).textContent ?? ''
+    const coverage = text.slice(text.indexOf('Agent coverage'), text.indexOf('Missing'))
+
+    expect(coverage).toContain('This machine')
   })
 
   it('renders nested worker depth as an unbounded positive whole-number input', () => {

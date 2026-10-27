@@ -1,7 +1,9 @@
 import type { BundledSkillObserved, BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
 import type { OrchestrationSkillAgentStatus } from '@/lib/orchestration-skill-coverage'
+import type { AgentSkillHostScope } from './use-agent-skill-host-scope'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { HostRowIcon } from '@/components/host-row-icon'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import {
   getOrchestrationSkillAgentStatuses,
@@ -106,10 +108,12 @@ export function OrchestrationSkillAgentCoverage(props: {
   skills: readonly DiscoveredSkill[]
   sources: readonly SkillDiscoverySource[]
   loading: boolean
+  /** Where the skill folders were read; omitted keeps the unscoped header. */
+  host?: AgentSkillHostScope | null
   embedded?: boolean
   className?: string
 }): React.JSX.Element {
-  const { skills, sources, loading: skillsLoading, embedded = false, className } = props
+  const { skills, sources, loading: skillsLoading, host, embedded = false, className } = props
   const { detectedIds, isLoading: agentsLoading } = useDetectedAgents(
     props.plan ? undefined : { kind: 'local' }
   )
@@ -164,12 +168,21 @@ export function OrchestrationSkillAgentCoverage(props: {
       )}
     >
       <div className="space-y-1">
-        <h3 className="text-sm font-medium text-foreground">
-          {translate(
-            'auto.components.settings.OrchestrationSkillAgentCoverage.6dec5ce2d2',
-            'Agent coverage'
-          )}
-        </h3>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <h3 className="text-sm font-medium text-foreground">
+            {translate(
+              'auto.components.settings.OrchestrationSkillAgentCoverage.6dec5ce2d2',
+              'Agent coverage'
+            )}
+          </h3>
+          {host ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span aria-hidden>·</span>
+              <HostRowIcon hostId={host.hostId} className="size-3.5 shrink-0" />
+              <span className="truncate">{host.label}</span>
+            </span>
+          ) : null}
+        </div>
         <p className="text-xs leading-relaxed text-muted-foreground">{summary}</p>
       </div>
 
