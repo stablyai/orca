@@ -3,10 +3,8 @@ import {
   TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES,
   columnForTerminalFileLinkTap
 } from '../../../src/shared/terminal-file-link-conformance'
-import { matchFilePathAtColumn as documentMatchFilePathAtColumn } from './document/path-tap'
-import { matchFilePathAtColumn, parsePathWithOptionalLineColumn } from './terminal-path-tap'
-
-type InjectedPathMatcher = typeof matchFilePathAtColumn
+import { filePathCandidatesAtColumn } from './document/path-tap'
+import { parsePathWithOptionalLineColumn } from './terminal-path-tap'
 
 function colOf(line: string, needle: string, offset = 0): number {
   return line.indexOf(needle) + offset
@@ -37,91 +35,53 @@ describe('parsePathWithOptionalLineColumn', () => {
   })
 })
 
-describe('matchFilePathAtColumn', () => {
+// Taps offer every reading, longest first; the host opens the first that exists.
+describe('filePathCandidatesAtColumn', () => {
   it.each(TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES)(
-    'matches shared terminal file-link tap case: $name',
+    'offers shared terminal file-link tap case: $name',
     (testCase) => {
-      expect(
-        matchFilePathAtColumn(testCase.lineText, columnForTerminalFileLinkTap(testCase))
-      ).toEqual(testCase.expected)
-    }
-  )
-
-  it('matches a spaced path when an earlier directory segment contains a dot', () => {
-    const line = 'wrote /tmp/v1.2 reports/result.json for you'
-    expect(matchFilePathAtColumn(line, colOf(line, 'v1.2'))).toEqual({
-      pathText: '/tmp/v1.2 reports/result.json',
-      line: null,
-      column: null
-    })
-    expect(matchFilePathAtColumn(line, colOf(line, 'reports'))).toEqual({
-      pathText: '/tmp/v1.2 reports/result.json',
-      line: null,
-      column: null
-    })
-    expect(matchFilePathAtColumn(line, colOf(line, 'result'))).toEqual({
-      pathText: '/tmp/v1.2 reports/result.json',
-      line: null,
-      column: null
-    })
-  })
-
-  it('matches a path whose final filename contains a space', () => {
-    const line = 'wrote /tmp/final report.json for you'
-    expect(matchFilePathAtColumn(line, colOf(line, 'final'))).toEqual({
-      pathText: '/tmp/final report.json',
-      line: null,
-      column: null
-    })
-
-    expect(matchFilePathAtColumn(line, colOf(line, 'report'))).toEqual({
-      pathText: '/tmp/final report.json',
-      line: null,
-      column: null
-    })
-  })
-
-  it('returns null when the tap is not on a path', () => {
-    const line = 'just some prose with no path here'
-    expect(matchFilePathAtColumn(line, colOf(line, 'prose'))).toBeNull()
-  })
-
-  it('returns null when the tap is left of the path span', () => {
-    const line = 'prefix /tmp/x.ts'
-    expect(matchFilePathAtColumn(line, 0)).toBeNull()
-  })
-
-  it('returns null when the tap is immediately after the path span', () => {
-    const line = 'prefix /tmp/x.ts next'
-    expect(matchFilePathAtColumn(line, line.indexOf(' next'))).toBeNull()
-  })
-
-  it('matches a bare filename with an extension (no slash)', () => {
-    // Agents often print bare filenames; host existence checks reject false positives.
-    const line = '• Here you go: README.md'
-    const result = matchFilePathAtColumn(line, colOf(line, 'README'))
-    expect(result?.pathText).toBe('README.md')
-  })
-
-  it('does not match a plain word without an extension', () => {
-    const line = '• Here you go: README.md'
-    expect(matchFilePathAtColumn(line, colOf(line, 'Here'))).toBeNull()
-  })
-})
-
-describe('injected matchFilePathAtColumn', () => {
-  const matcher = createInjectedPathMatcher()
-
-  it.each(TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES)(
-    'matches shared terminal file-link tap case: $name',
-    (testCase) => {
-      expect(matcher(testCase.lineText, columnForTerminalFileLinkTap(testCase))).toEqual(
-        testCase.expected
+      const candidates = filePathCandidatesAtColumn(
+        testCase.lineText,
+        columnForTerminalFileLinkTap(testCase)
       )
+      if (testCase.expected) {
+        expect(candidates).toContainEqual(testCase.expected)
+      } else {
+        expect(candidates).toEqual([])
+      }
     }
   )
-})
 
-function createInjectedPathMatcher(): InjectedPathMatcher {
-  return documentMatchFilePathAtColumn
-}
+  it('tries a spaced reading before the plain path it extends', () => {
+    const line = 'wrote /tmp/v1.2 reports/result.json for you'
+    expect(filePathCandidatesAtColumn(line, colOf(line, 'v1.2'))[0]?.pathText).toBe(
+      '/tmp/v1.2 reports/result.json'
+    )
+  })
+
+  it('offers the plain path when prose with a separator follows it', () => {
+    const line = 'Wrote ~/notes/plan.md. It covers setup and/or teardown.'
+    expect(filePathCandidatesAtColumn(line, colOf(line, 'plan'))).toEqual([
+      { pathText: '~/notes/plan.md', line: null, column: null }
+    ])
+  })
+
+  it('leaves taps on prose after a path to the terminal', () => {
+    const prompt = 'me@host:~/proj$ git status'
+    expect(filePathCandidatesAtColumn(prompt, colOf(prompt, 'git'))).toEqual([])
+    const line = 'ls /tmp/My Folder then done'
+    expect(filePathCandidatesAtColumn(line, colOf(line, 'done'))).toEqual([])
+  })
+
+  it('offers nothing beside the path span', () => {
+    expect(filePathCandidatesAtColumn('prefix /tmp/x.ts', 0)).toEqual([])
+    const line = 'prefix /tmp/x.ts next'
+    expect(filePathCandidatesAtColumn(line, line.indexOf(' next'))).toEqual([])
+  })
+
+  it('offers a bare filename with an extension but not a plain word', () => {
+    const line = '• Here you go: README.md'
+    expect(filePathCandidatesAtColumn(line, colOf(line, 'README'))[0]?.pathText).toBe('README.md')
+    expect(filePathCandidatesAtColumn(line, colOf(line, 'Here'))).toEqual([])
+  })
+})

@@ -3,6 +3,13 @@ import type { RpcResponse } from '../transport/types'
 import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
 import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
 
+// Why: a tap resolves its readings in parallel before opening, which spans several microtasks.
+async function flushAsyncWork(): Promise<void> {
+  for (let tick = 0; tick < 10; tick += 1) {
+    await Promise.resolve()
+  }
+}
+
 function ok(result: unknown): RpcResponse {
   return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
@@ -58,7 +65,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -91,7 +98,7 @@ describe('openMobileNativeChatFileTap', () => {
       pathText: '~/orca-plans/result.html',
       nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
     })
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -120,7 +127,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts:120:7' })
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -153,8 +160,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'gone/missing.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
     expect(options.pushPreviewRoute).not.toHaveBeenCalled()
@@ -168,8 +174,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
   })

@@ -1,4 +1,5 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
 import type { TerminalFitDimensions } from './terminal-grid-fit'
@@ -74,7 +75,12 @@ export type TerminalSelectionEvents = {
   onTerminalInput?: (bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply?: (bytes: string) => void
   onTerminalTap?: () => void
-  onFileTap?: (pathText: string, line: number | null, column: number | null) => void
+  onFileTap?: (
+    pathText: string,
+    line: number | null,
+    column: number | null,
+    longerCandidates: readonly ParsedFileLinkLocation[]
+  ) => void
   onOpenUrl?: (url: string) => void
   // Persist snapped text-size presets so Settings and other panes follow terminal pinches.
   onTextScaleChange?: (scale: number) => void

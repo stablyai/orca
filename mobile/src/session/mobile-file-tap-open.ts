@@ -3,6 +3,7 @@ import type {
   RuntimeTerminalPathResolution
 } from '../../../src/shared/runtime-types'
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
@@ -26,6 +27,8 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   nativeChatContext?: RuntimeNativeChatFileContext | null
   line: number | null
   column: number | null
+  /** Longer readings of the tapped text, longest first; the first the host finds wins over pathText. */
+  longerCandidates?: readonly ParsedFileLinkLocation[]
   pushPreviewRoute: (href: ReturnType<typeof createMobileFilePreviewHref>) => void
   openBrowser: (url: string) => void
   triggerOpenFeedback: () => void
@@ -69,15 +72,15 @@ function reportOpenFailure<T extends FileTapSessionTab>(
   }
 }
 
-async function openMobileFileTapAsync<T extends FileTapSessionTab>(
-  options: OpenMobileFileTapOptions<T>
-): Promise<void> {
-  const worktree = `id:${options.worktreeId}`
+async function resolveExistingFileTap<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  pathText: string
+): Promise<RuntimeTerminalPathResolution | null> {
   const response = await fileTapPathResolve.request(
     options.client,
     {
-      worktree,
-      pathText: options.pathText,
+      worktree: `id:${options.worktreeId}`,
+      pathText,
       // Why: opts into sibling-workspace resolutions; this caller honors resolved.worktree.
       crossWorkspace: true,
       ...(options.terminalHandle && options.terminalHandle.trim().length > 0
@@ -90,15 +93,31 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   )
   const accepted = fileTapPathResolve.interpret(response)
   if (!accepted.accepted) {
-    reportOpenFailure(options)
-    return
+    return null
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const resolved = accepted.value as RuntimeTerminalPathResolution
-  if (!resolved.exists || resolved.isDirectory) {
-    reportOpenFailure(options)
+  return resolved.exists && !resolved.isDirectory ? resolved : null
+}
+
+async function openMobileFileTapAsync<T extends FileTapSessionTab>(
+  tapOptions: OpenMobileFileTapOptions<T>
+): Promise<void> {
+  const readings = [...(tapOptions.longerCandidates ?? []), tapOptions]
+  // Why parallel: each missing spaced guess would otherwise add a host round trip before the real path opens.
+  const resolutions = await Promise.all(
+    readings.map((reading) =>
+      resolveExistingFileTap(tapOptions, reading.pathText).catch(() => null)
+    )
+  )
+  const index = resolutions.findIndex((resolution) => resolution !== null)
+  const resolved = resolutions[index]
+  if (!resolved) {
+    reportOpenFailure(tapOptions)
     return
   }
+  const { pathText, line, column } = readings[index]
+  const options = { ...tapOptions, pathText, line, column }
   // Not a failure: the user moved off the source tab mid-resolve.
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
     return

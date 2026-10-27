@@ -1,3 +1,4 @@
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import {
   parseTerminalKeyboardAvoidanceMetrics,
   type TerminalSelectionEvents
@@ -62,7 +63,7 @@ export function dispatchTerminalWebViewNotification(
     if (pathText.length > 0) {
       const line = typeof msg.line === 'number' ? msg.line : null
       const column = typeof msg.column === 'number' ? msg.column : null
-      handlers.onFileTap?.(pathText, line, column)
+      handlers.onFileTap?.(pathText, line, column, parseFileTapCandidates(msg.longerCandidates))
     }
   } else if (msg.type === 'open-url') {
     const url = typeof msg.url === 'string' ? msg.url : ''
@@ -84,4 +85,29 @@ export function dispatchTerminalWebViewNotification(
   } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
     console.warn('[mobile-clip] selection cancelled by pinch')
   }
+}
+
+// Bounded: one tap names at most a handful of spaced readings, each a host lookup.
+const MAX_FILE_TAP_CANDIDATES = 12
+
+function parseFileTapCandidates(value: unknown): ParsedFileLinkLocation[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const candidates: ParsedFileLinkLocation[] = []
+  for (const item of value.slice(0, MAX_FILE_TAP_CANDIDATES)) {
+    if (typeof item !== 'object' || item === null) {
+      continue
+    }
+    const pathText = 'pathText' in item && typeof item.pathText === 'string' ? item.pathText : ''
+    if (pathText.length === 0) {
+      continue
+    }
+    candidates.push({
+      pathText,
+      line: 'line' in item && typeof item.line === 'number' ? item.line : null,
+      column: 'column' in item && typeof item.column === 'number' ? item.column : null
+    })
+  }
+  return candidates
 }

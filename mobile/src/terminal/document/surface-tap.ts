@@ -6,7 +6,7 @@ import {
   isClickMouseTrackingMode
 } from './mouse-input-encoding'
 import { oscLinkAtViewportPoint, resolveTerminalFileUrlTap } from './osc-link-tap'
-import { filePathAtViewportPoint } from './path-tap'
+import { filePathCandidatesAtViewportPoint } from './path-tap'
 import { fileUrlAtViewportPoint, urlAtViewportPoint } from './url-tap'
 
 export function notifyTerminalSurfaceTap(
@@ -44,13 +44,17 @@ export function notifyTerminalSurfaceTap(
     notify(scope, { type: 'open-url', url: tappedUrl })
     return
   }
-  const tappedPath = filePathAtViewportPoint(scope, originX, originY)
+  const tappedPaths = filePathCandidatesAtViewportPoint(scope, originX, originY)
+  // Why slice: the WebView targets Chrome 74, which lacks Array.prototype.at.
+  const [tappedPath] = tappedPaths.slice(-1)
   if (tappedPath) {
     notify(scope, {
       type: 'terminal-file-tap',
       pathText: tappedPath.pathText,
       line: tappedPath.line,
-      column: tappedPath.column
+      column: tappedPath.column,
+      // Why: longer spaced readings are tried first; the host opens whichever exists.
+      longerCandidates: tappedPaths.slice(0, -1)
     })
     return
   }

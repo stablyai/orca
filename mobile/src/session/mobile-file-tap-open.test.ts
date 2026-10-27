@@ -3,6 +3,13 @@ import type { RpcResponse } from '../transport/types'
 import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
 import { openMobileFileTap } from './mobile-file-tap-open'
 
+// Why: a tap resolves its readings in parallel before opening, which spans several microtasks.
+async function flushAsyncWork(): Promise<void> {
+  for (let tick = 0; tick < 10; tick += 1) {
+    await Promise.resolve()
+  }
+}
+
 type SendRequest = UnvalidatedRpcRequestPort['sendRequest']
 
 function ok(result: unknown): RpcResponse {
@@ -78,7 +85,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -146,8 +153,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab,
       scheduleDelayedAction
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
     await vi.advanceTimersByTimeAsync(0)
 
     expect(client.sendRequest).toHaveBeenCalledWith(
@@ -193,8 +199,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(pushPreviewRoute).toHaveBeenCalledWith({
       pathname: '/h/[hostId]/files/preview/[worktreeId]',
@@ -245,7 +250,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(pushPreviewRoute).toHaveBeenCalledWith({
       pathname: '/h/[hostId]/files/preview/[worktreeId]',
@@ -298,7 +303,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(openBrowser).toHaveBeenCalledWith('file:///repo/public/report%20%231%3F.html')
     expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
@@ -341,7 +346,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -392,8 +397,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(openBrowser).not.toHaveBeenCalled()
     expect(client.sendRequest).toHaveBeenCalledWith(
@@ -454,10 +458,56 @@ describe('openMobileFileTap', () => {
         }
       })
     )
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(pushPreviewRoute).not.toHaveBeenCalled()
+  })
+
+  it('opens the tapped path when a longer spaced reading does not exist', async () => {
+    const client = createClient([
+      ok({ worktree: 'wt-1', relativePath: null, absolutePath: null, exists: false }),
+      ok({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: '/tmp/plan.md',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          provider: 'local',
+          absolutePath: '/tmp/plan.md',
+          grantId: 'grant-1'
+        }
+      })
+    ])
+    const pushPreviewRoute = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: '/tmp/plan.md',
+      longerCandidates: [{ pathText: '/tmp/plan.md. It covers and/or', line: null, column: null }],
+      line: null,
+      column: null,
+      pushPreviewRoute,
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: activeTerminalState,
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn()
+    })
+    await flushAsyncWork()
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(2)
+    expect(pushPreviewRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ absolutePath: '/tmp/plan.md', pathText: '/tmp/plan.md' })
+      })
+    )
   })
 
   it('reports a failed files.open through onOpenFailed', async () => {
@@ -497,9 +547,7 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(onOpenFailed).toHaveBeenCalledTimes(1)
   })
@@ -542,9 +590,7 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction,
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(onOpenFailed).toHaveBeenCalledTimes(1)
     expect(scheduleDelayedAction).not.toHaveBeenCalled()
@@ -583,8 +629,7 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(onOpenFailed).not.toHaveBeenCalled()
   })
@@ -628,8 +673,7 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(onOpenFailed).not.toHaveBeenCalled()
   })
@@ -675,10 +719,9 @@ describe('openMobileFileTap', () => {
       switchSessionTab,
       scheduleDelayedAction: (callback) => callbacks.push(callback)
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushAsyncWork()
     callbacks.forEach((callback) => callback())
-    await Promise.resolve()
+    await flushAsyncWork()
 
     expect(switchSessionTab).not.toHaveBeenCalled()
   })

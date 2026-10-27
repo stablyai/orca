@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { triggerSelection } from '../platform/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
@@ -31,7 +32,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     handle: string,
     pathText: string,
     line: number | null,
-    column: number | null
+    column: number | null,
+    longerCandidates: readonly ParsedFileLinkLocation[]
   ) => void
   handleNativeChatFileTap: (pathText: string) => void
 } {
@@ -96,7 +98,13 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   ])
 
   const handleFileTap = useCallback(
-    (handle: string, pathText: string, line: number | null, column: number | null) => {
+    (
+      handle: string,
+      pathText: string,
+      line: number | null,
+      column: number | null,
+      longerCandidates: readonly ParsedFileLinkLocation[]
+    ) => {
       const current = optionsRef.current
       if (handle !== current.activeHandleRef.current || !current.client) {
         return
@@ -112,6 +120,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         cwd: current.terminalCwdRef.current.get(handle) ?? null,
         line,
         column,
+        longerCandidates,
         pushPreviewRoute: (href) => routerRef.current.push(href),
         openBrowser: current.openBrowser,
         triggerOpenFeedback: triggerSelection,
