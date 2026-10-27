@@ -20,8 +20,16 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
 
   async refreshIfStale(): Promise<RateLimitState> {
     // Reconnecting mobile needs fresh data, but subscription replay must not force redundant fetches.
-    const plan = this.getActiveWindowRefreshPlan(Date.now())
-    await this.runActiveWindowRefreshPlan(plan)
+    await this.runWithFetchAbortSignal(async (signal) => {
+      if (this.state.codex && !(await this.refreshCodexAfterAuthChange())) {
+        return
+      }
+      if (signal.aborted) {
+        return
+      }
+      const plan = this.getActiveWindowRefreshPlan(Date.now())
+      await this.runActiveWindowRefreshPlan(plan)
+    })
     return this.getState()
   }
 
