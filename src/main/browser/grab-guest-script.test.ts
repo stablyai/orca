@@ -7,7 +7,7 @@ import { clampGrabPayload } from './browser-grab-payload'
 
 describe('buildGuestOverlayScript', () => {
   it.each([
-    ['arm', '2b4bb8331018087804f77f652cac36ddcf1d3cb639d4f03d65ff5398ae85b91e'],
+    ['arm', '8bb80a5da3957a0f73f5a303f0752bbb9cd47b0dae78ec9abf6aa0149a16c211'],
     ['awaitClick', '4e7c30a9382cd18bf6286fbdbdfa70f7571cdddfc4914a9d9ffd4f9b0e430adb'],
     ['finalize', '91bd9836b0536c9579e0d4648d30679c0b4a5893d9a43110a70e67d6804fd291'],
     ['extractHover', 'cf0ee3ac61669daefa7db9389233c1abfe9f0fb9e7257300c761987aac914b02'],

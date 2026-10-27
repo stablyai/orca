@@ -127,22 +127,16 @@ ${SHADOW_ROOTS_ABOVE_SCRIPT}
     scrollY: toNumber(window.scrollY, toNumber(window.pageYOffset, 0))
   });
 
-  const findMarked = (root, found) => {
-    for (const candidate of root.querySelectorAll('[' + selectedAttribute + ']')) {
-      if (candidate.getAttribute(selectedAttribute) === selectionId) found.push(candidate);
-    }
-    return found;
-  };
+  const findMarked = (root) =>
+    Array.from(root.querySelectorAll('[' + selectedAttribute + ']')).filter(
+      (candidate) => candidate.getAttribute(selectedAttribute) === selectionId
+    );
 
   // Document queries stop at shadow roots, so open ones are walked when the light DOM has no match.
-  const findMarkedInShadowRoots = (root, found) => {
-    for (const element of root.querySelectorAll('*')) {
-      if (!element.shadowRoot) continue;
-      findMarked(element.shadowRoot, found);
-      findMarkedInShadowRoots(element.shadowRoot, found);
-    }
-    return found;
-  };
+  const findMarkedInShadowRoots = (root) =>
+    Array.from(root.querySelectorAll('*')).flatMap((element) =>
+      element.shadowRoot ? findMarked(element.shadowRoot).concat(findMarkedInShadowRoots(element.shadowRoot)) : []
+    );
 
   // Why: the card must follow the element itself, not a click-time copy; the grab overlay
   // marks it in the shared DOM because this world cannot see the page's objects.
@@ -150,13 +144,15 @@ ${SHADOW_ROOTS_ABOVE_SCRIPT}
     const current = state.target;
     let next = null;
     if (emitViewportMessages && selectionId) {
-      let found = findMarked(document, []);
+      let found = findMarked(document);
       if (found.length === 0) {
-        // Reusing a still-marked shadow target keeps scroll frames from walking the whole page.
+        // Reuse a still-marked shadow target and never re-search a lost one, so scroll frames don't walk the page.
         const keep = current && current.isConnected && current.getAttribute(selectedAttribute) === selectionId;
-        found = keep ? [current] : findMarkedInShadowRoots(document, []);
+        if (keep) found = [current];
+        else if (state.foundSelectionId !== selectionId) found = findMarkedInShadowRoots(document);
       }
       next = found.length === 1 ? found[0] : null;
+      if (next) state.foundSelectionId = selectionId;
     }
     if (next !== current) {
       state.target = next;
@@ -295,7 +291,8 @@ ${SHADOW_ROOTS_ABOVE_SCRIPT}
     onBeforeUnload: null,
     target: null,
     targetObserver: null,
-    targetShadowRoots: []
+    targetShadowRoots: [],
+    foundSelectionId: null
   };
 
   state.requestUpdate = () => {
