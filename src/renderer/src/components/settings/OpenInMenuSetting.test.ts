@@ -29,6 +29,21 @@ describe('OpenInMenuSetting presets', () => {
     })
   })
 
+  it('exposes Antigravity as a built-in preset with a bundled icon', () => {
+    const antigravity = requirePreset('antigravity')
+
+    expect(createPresetOpenInApplication(antigravity)).toEqual({
+      id: 'antigravity',
+      label: 'Antigravity',
+      command: 'antigravity'
+    })
+    expect(isOpenInAppPresetAdded([{ command: ' Antigravity ' }], antigravity)).toBe(true)
+    // Bundled asset, not the (unreliable) favicon service for antigravity.google.
+    expect(antigravity.iconUrl).toBeTruthy()
+    const icon = OpenInApplicationIcon({ application: { command: 'antigravity' } })
+    expect(icon.props.src).not.toContain('s2/favicons')
+  })
+
   it('recognizes legacy preset rows by command', () => {
     const cursor = requirePreset('cursor')
 
