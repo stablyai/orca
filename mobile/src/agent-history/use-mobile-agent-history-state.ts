@@ -19,7 +19,10 @@ import type {
   AiVaultSession
 } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
-import { deriveMobileAiVaultScopePaths } from './agent-history-scope-paths'
+import {
+  deriveMobileAiVaultScopePaths,
+  mobileAiVaultScanScopePaths
+} from './agent-history-scope-paths'
 import {
   agentHistoryHostStatusRead,
   agentHistorySessionScan
@@ -176,7 +179,9 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           return
         }
 
-        const scopePaths = deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
+        const scopePaths = mobileAiVaultScanScopePaths(
+          deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
+        )
         const reply = await agentHistorySessionScan.request(client, {
           limit: MOBILE_AI_VAULT_SESSION_LIMIT,
           force: options.force,

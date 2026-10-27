@@ -16,15 +16,16 @@ export function deriveMobileAiVaultScopePaths(
   if (!activeWorktree) {
     return []
   }
-  return (
-    deriveAiVaultScopeSessionPaths(
-      toScopePathWorktree(activeWorktree),
-      liveWorktrees.map(toScopePathWorktree),
-      { scope }
-    )
-      // Older hosts reject oversized scopePaths; hints only widen discovery, so drop the tail.
-      .slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+  return deriveAiVaultScopeSessionPaths(
+    toScopePathWorktree(activeWorktree),
+    liveWorktrees.map(toScopePathWorktree),
+    { scope }
   )
+}
+
+/** The scan hints sent to the host; older hosts reject oversized scopePaths, and hints only widen discovery. */
+export function mobileAiVaultScanScopePaths(scopePaths: readonly string[]): string[] {
+  return scopePaths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT)
 }
 
 function toScopePathWorktree(worktree: ScopeWorktree) {
