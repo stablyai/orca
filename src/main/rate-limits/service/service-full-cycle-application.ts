@@ -3,6 +3,19 @@ import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
 import type { ProviderRateLimits } from './service-types'
 
+function hasKnownProvenanceChange(
+  previous: ProviderRateLimits | null,
+  fresh: ProviderRateLimits
+): boolean {
+  const previousProvenance = previous?.usageMetadata?.authProvenance
+  const freshProvenance = fresh.usageMetadata?.authProvenance
+  return (
+    previousProvenance !== undefined &&
+    freshProvenance !== undefined &&
+    previousProvenance !== freshProvenance
+  )
+}
+
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
     signal: AbortSignal,
@@ -15,6 +28,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const {
       claudeTarget,
       claudeGeneration,
+      antigravityGeneration,
+      antigravityStateBeforeFetch,
       claudeProvenance,
       codexTarget,
       previousState,
@@ -216,12 +231,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
-    const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
-    const cursorAccount = cursor.usageMetadata?.authProvenance
-    const cursorAccountChanged =
-      previousCursorAccount !== undefined &&
-      cursorAccount !== undefined &&
-      previousCursorAccount !== cursorAccount
+    const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
     const zcodeAccount = zcode.usageMetadata?.authProvenance
     const sameZcodeAccount =
@@ -233,7 +243,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
-    this.trackActiveFailureStreak('antigravity', antigravity)
+    const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
+    if (shouldApplyAntigravity) {
+      this.trackActiveFailureStreak('antigravity', antigravity)
+    }
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
@@ -245,7 +258,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
+      // Another runtime's last reading must not stand in for this runtime's failure.
+      antigravity: !shouldApplyAntigravity
+        ? this.state.antigravity
+        : hasKnownProvenanceChange(antigravityStateBeforeFetch, antigravity)
+          ? antigravity
+          : this.applyStalePolicy(antigravity, antigravityStateBeforeFetch)
     })
   }
 }

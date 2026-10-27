@@ -1,4 +1,12 @@
 import { runProcess } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
+import {
+  localAccountRuntimeTargetKey,
+  type LocalAccountRuntimeTarget
+} from '../../shared/local-account-runtime'
+import { listWslDistrosAsync } from '../wsl'
+import { runWslProcess } from '../wsl/wsl-runner'
+import { isWslDistroRunningForBackgroundWork } from '../wsl-background-distro-gate'
 import { hasReachedAppVersion, parseCliVersion } from '../../shared/app-version'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
 import { hostShellEnvironment } from '../runtime/structured-agent-shell-environment'
@@ -37,12 +45,12 @@ const FAILURE_REASONS: Partial<Record<UsageRateLimitFailureKind, string>> = {
 const UNSUPPORTED_USAGE_COMMAND_REASON =
   'Antigravity usage is not available. This version of the Antigravity CLI answers `/usage` as a prompt instead of a command, so Orca stopped asking rather than spend quota on it. Update `agy` and restart Orca.'
 
-// Latch unsupported after any model-turn response: discovering unsupported /usage spends quota, so never retry it for process lifetime.
-let usageCommandUnsupported = false
+// Unsupported /usage spends quota; latch each runtime for the process lifetime.
+const unsupportedUsageRuntimes = new Set<string>()
 
 /** Clears the unsupported latch. Tests only — a live process has no way back. */
 export function resetAntigravityUsageSupportForTests(): void {
-  usageCommandUnsupported = false
+  unsupportedUsageRuntimes.clear()
 }
 
 export type AntigravityUsageDependencies = {
@@ -56,7 +64,15 @@ export type AntigravityUsageDependencies = {
 
 export type FetchAntigravityRateLimitsOptions = AntigravityUsageDependencies & {
   signal?: AbortSignal
+  /** A WSL target reads the agy installed and signed in inside that distro. */
+  target?: LocalAccountRuntimeTarget
 }
+
+type AgyResult = Pick<ProcessResult, 'code' | 'stdout' | 'stderr' | 'timedOut'> & {
+  signal?: ProcessResult['signal']
+  environmentResolved?: boolean
+}
+type AgyRun = (args: readonly string[], timeoutMs: number) => Promise<AgyResult>
 
 function unavailable(
   message: string,
@@ -100,43 +116,99 @@ function failed(
 export async function fetchAntigravityRateLimits(
   options: FetchAntigravityRateLimitsOptions = {}
 ): Promise<ProviderRateLimits> {
+  let target = options.target ?? { runtime: 'host', wslDistro: null }
+  let result: ProviderRateLimits
+  try {
+    if (target.runtime === 'wsl' && !target.wslDistro) {
+      target = { ...target, wslDistro: (await listWslDistrosAsync())[0] ?? null }
+    }
+    result = await readAntigravityUsage(options, target)
+  } catch (error) {
+    result = failed(spawnFailureMessage(error), 'cli-unavailable', (options.now ?? Date.now)())
+  }
+  return {
+    ...result,
+    usageMetadata: { ...result.usageMetadata, authProvenance: localAccountRuntimeTargetKey(target) }
+  }
+}
+
+async function readAntigravityUsage(
+  options: FetchAntigravityRateLimitsOptions,
+  target: LocalAccountRuntimeTarget
+): Promise<ProviderRateLimits> {
+  const wsl = target.runtime === 'wsl' ? target : null
+  const runtimeKey = localAccountRuntimeTargetKey(target)
   const now = options.now ?? Date.now
-  if (usageCommandUnsupported) {
+  if (unsupportedUsageRuntimes.has(runtimeKey)) {
     return unavailable(UNSUPPORTED_USAGE_COMMAND_REASON, 'usage-unavailable', now())
   }
-  const run = options.runCommand ?? runProcess
-  const resolve = options.resolveCommand ?? resolveCommandOnLocalPath
-  const platform = options.platform ?? process.platform
-  const resolveEnvironment = options.resolveEnvironment ?? (() => hostShellEnvironment())
-
-  // Why the env agent launches use: agy lives on the login-shell or saved Windows PATH, not Electron's.
-  const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
   const command = antigravityCommandName()
-  const program = await resolve(command, { platform, env })
-  if (!program) {
-    return unavailable(
-      `Antigravity usage is not available. The Antigravity CLI (\`${command}\`) was not found on this machine.`,
+  const wslLabel = `WSL (${wsl?.wslDistro ?? 'default distro'})`
+  const location = wsl ? `in ${wslLabel}` : 'on this machine'
+  const notFound = (): ProviderRateLimits =>
+    unavailable(
+      `Antigravity usage is not available. The Antigravity CLI (\`${command}\`) was not found ${location}.`,
       'cli-unavailable',
       now()
     )
+
+  let run: AgyRun
+  if (wsl) {
+    // Background quota polling must not start stopped distros.
+    if (!(await isWslDistroRunningForBackgroundWork(wsl.wslDistro))) {
+      return unavailable(
+        `Antigravity usage is not available while ${wslLabel} is not running.`,
+        'cli-unavailable',
+        now()
+      )
+    }
+    run = (args, timeoutMs) =>
+      runWslProcess({
+        distro: wsl.wslDistro ?? undefined,
+        loginPath: 'preferred',
+        program: command,
+        args,
+        env: ANTIGRAVITY_PROBE_ENV,
+        timeoutMs,
+        maxOutputBytes: ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
+        signal: options.signal
+      })
+  } else {
+    const resolve = options.resolveCommand ?? resolveCommandOnLocalPath
+    const platform = options.platform ?? process.platform
+    const resolveEnvironment = options.resolveEnvironment ?? (() => hostShellEnvironment())
+    // Why the env agent launches use: agy lives on the login-shell or saved Windows PATH, not Electron's.
+    const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
+    const program = await resolve(command, { platform, env })
+    if (!program) {
+      return notFound()
+    }
+    const runCommand = options.runCommand ?? runProcess
+    run = (args, timeoutMs) =>
+      runCommand({
+        program,
+        args,
+        env,
+        timeoutMs,
+        maxOutputBytes: ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
+        signal: options.signal
+      })
   }
 
   // Recheck each read: the CLI can be replaced while Orca runs; unsupported reads spend quota.
-  let versionRun: Awaited<ReturnType<typeof runProcess>>
-  try {
-    versionRun = await run({
-      program,
-      args: ANTIGRAVITY_VERSION_ARGS,
-      env,
-      timeoutMs: ANTIGRAVITY_VERSION_TIMEOUT_MS,
-      maxOutputBytes: ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
-      signal: options.signal
-    })
-  } catch (error) {
-    return failed(spawnFailureMessage(error), 'cli-unavailable', now())
+  const versionRun = await run(ANTIGRAVITY_VERSION_ARGS, ANTIGRAVITY_VERSION_TIMEOUT_MS)
+  // Exit 127 proves absence only after the guest login PATH was resolved.
+  if (wsl && versionRun.code === 127) {
+    return versionRun.environmentResolved === false
+      ? failed(
+          `Antigravity usage is not available. The login environment in ${wslLabel} could not be read. Try refreshing again.`,
+          'cli-unavailable',
+          now()
+        )
+      : notFound()
   }
   const version =
-    versionRun.code === 0 && !versionRun.timedOut && versionRun.signal === null
+    versionRun.code === 0 && !versionRun.timedOut && !versionRun.signal
       ? parseCliVersion(versionRun.stdout.trim() ? versionRun.stdout : versionRun.stderr)
       : null
   if (!version || !hasReachedAppVersion(version, ANTIGRAVITY_MIN_USAGE_VERSION)) {
@@ -149,19 +221,7 @@ export async function fetchAntigravityRateLimits(
     )
   }
 
-  let result: Awaited<ReturnType<typeof runProcess>>
-  try {
-    result = await run({
-      program,
-      args: ANTIGRAVITY_USAGE_ARGS,
-      env,
-      timeoutMs: ANTIGRAVITY_USAGE_TIMEOUT_MS,
-      maxOutputBytes: ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
-      signal: options.signal
-    })
-  } catch (error) {
-    return failed(spawnFailureMessage(error), 'cli-unavailable', now())
-  }
+  const result = await run(ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_USAGE_TIMEOUT_MS)
 
   const reading = parseAntigravityUsageStdout(result.stdout)
   // Why: a completed browser sign-in still yields a reading; only a failed read cools down.
@@ -195,7 +255,7 @@ export async function fetchAntigravityRateLimits(
 
   // Check valid reading before model-turn evidence so successful quota response cannot falsely latch unsupported.
   if (!reading && stdoutShowsModelTurn(result.stdout)) {
-    usageCommandUnsupported = true
+    unsupportedUsageRuntimes.add(runtimeKey)
     return unavailable(UNSUPPORTED_USAGE_COMMAND_REASON, 'usage-unavailable', now())
   }
   if (!reading) {

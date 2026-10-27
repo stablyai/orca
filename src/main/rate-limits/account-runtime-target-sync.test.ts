@@ -11,12 +11,14 @@ function createServiceTargets(
   return {
     getState: vi.fn(() => state),
     refreshClaudeForTarget: vi.fn(async () => state),
-    refreshCodexForTarget: vi.fn(async () => state)
+    refreshCodexForTarget: vi.fn(async () => state),
+    setAntigravityFetchTarget: vi.fn(),
+    refresh: vi.fn(async () => state)
   }
 }
 
 describe('createAccountRuntimeTargetSettingsSync', () => {
-  it('retargets only Claude and Codex when auto changes to WSL', async () => {
+  it('retargets Claude and Codex and rereads Antigravity usage when auto changes to WSL', async () => {
     const service = createServiceTargets(
       { runtime: 'host', wslDistro: null },
       { runtime: 'host', wslDistro: null }
@@ -32,16 +34,26 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
       'win32'
     )
 
-    await syncSettings(
+    const targeted = Promise.withResolvers<RateLimitState>()
+    service.refreshClaudeForTarget.mockReturnValueOnce(targeted.promise)
+    const refresh = syncSettings(
       { localWindowsRuntimeDefault: settings.localWindowsRuntimeDefault },
       settings
     )
+    expect(service.setAntigravityFetchTarget).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+    expect(service.refresh).not.toHaveBeenCalled()
+    targeted.resolve(service.getState())
+    await refresh
 
     const expectedTarget = { runtime: 'wsl', wslDistro: 'Ubuntu' }
     expect(service.refreshClaudeForTarget).toHaveBeenCalledOnce()
     expect(service.refreshClaudeForTarget).toHaveBeenCalledWith(expectedTarget)
     expect(service.refreshCodexForTarget).toHaveBeenCalledOnce()
     expect(service.refreshCodexForTarget).toHaveBeenCalledWith(expectedTarget)
+    expect(service.refresh).toHaveBeenCalledOnce()
   })
 
   it('does no work for unrelated settings updates', async () => {
