@@ -3,7 +3,6 @@ import {
   formatSubmodulePushFailureDetail,
   isDivergentPullReconciliationError,
   isNoUpstreamError,
-  MERGE_RECONCILIATION_PULL_ARGS,
   normalizeGitErrorMessage,
   pullArgsSpecifyReconciliation,
   runPullWithDivergenceFallback
@@ -223,7 +222,7 @@ describe('runPullWithDivergenceFallback', () => {
 
     await runPullWithDivergenceFallback([], runPull)
 
-    expect(calls).toEqual([[], [...MERGE_RECONCILIATION_PULL_ARGS]])
+    expect(calls).toEqual([[], ['--no-rebase']])
     expect(runPull).toHaveBeenCalledTimes(2)
   })
 

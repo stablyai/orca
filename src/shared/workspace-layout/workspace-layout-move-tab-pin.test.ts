@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
-/** Terminal tabs A, B and C in one group, A and B pinned. */
 function setup() {
   const ctx = testContext()
   const { model, results } = build(ctx, [

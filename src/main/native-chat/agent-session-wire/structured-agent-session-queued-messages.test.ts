@@ -5,7 +5,7 @@ import {
   type AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
@@ -774,6 +774,14 @@ describe('publication', () => {
   })
 
   it('an idle Stop that takes no effect pauses nothing', async () => {
+    const capabilities = host.deps.agents.capabilities('codex')
+    if (!capabilities) {
+      throw new Error('expected the queued test provider')
+    }
+    vi.spyOn(host.deps.agents, 'capabilities').mockReturnValue({
+      ...capabilities,
+      threadGoal: false
+    })
     const working = await workingSend()
     const first = await send('to be refused', 'queue-if-active').result
     const second = await send('waits behind the card', 'queue-if-active').result

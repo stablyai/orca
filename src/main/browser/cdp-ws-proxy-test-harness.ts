@@ -1,4 +1,5 @@
 import { vi, type Mock } from 'vitest'
+import type { WebContents } from 'electron'
 import WebSocket from 'ws'
 
 type DebuggerListener = (...args: unknown[]) => void
@@ -96,6 +97,12 @@ export function createMockWebContents(): MockWebContents {
       }
     }
   }
+}
+
+export function mockAsWebContents(mock: MockWebContents, id?: number): WebContents {
+  const contents = id === undefined ? mock.webContents : { ...mock.webContents, id }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the CDP proxy and page-input paths call.
+  return contents as unknown as WebContents
 }
 
 export type SendCommandCall = [string, Record<string, unknown>?, string?]

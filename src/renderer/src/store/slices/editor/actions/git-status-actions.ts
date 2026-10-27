@@ -75,7 +75,7 @@ export function createGitStatusActions(
             ? prevOperation
             : status.conflictOperation
 
-        // Why: operation → 'unknown' with zero unresolved means an abort (git merge --abort), not resolution; clear tracked paths instead of marking each "Resolved locally".
+        // Unknown operation with zero conflicts can mean abort; clear tracking instead of calling every path Resolved locally.
         if (
           statusIsComplete &&
           nextOperation === 'unknown' &&

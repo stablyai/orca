@@ -11,8 +11,7 @@ export const ProjectOwnerType = z.enum(['organization', 'user'])
 
 export const ProjectViewTable = z.object({
   owner: requiredString('Missing owner'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
+  // Preserve Enterprise host through Zod parsing so gh requests target the correct host.
   host: OptionalString,
   ownerType: ProjectOwnerType,
   projectNumber: z.number().int().positive(),
@@ -29,15 +28,11 @@ export const ProjectWorkItemDetailsBySlug = SlugRepo.extend({
 
 export const ProjectRef = z.object({
   input: requiredString('Missing project reference'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString
 })
 
 export const ProjectViews = z.object({
   owner: requiredString('Missing owner'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   ownerType: ProjectOwnerType,
   projectNumber: z.number().int().positive()
@@ -45,8 +40,6 @@ export const ProjectViews = z.object({
 
 export const ProjectItemField = z.object({
   projectId: requiredString('Missing project ID'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   itemId: requiredString('Missing item ID'),
   fieldId: requiredString('Missing field ID'),
@@ -55,8 +48,6 @@ export const ProjectItemField = z.object({
 
 export const ClearProjectItemField = z.object({
   projectId: requiredString('Missing project ID'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   itemId: requiredString('Missing item ID'),
   fieldId: requiredString('Missing field ID')
@@ -65,8 +56,6 @@ export const ClearProjectItemField = z.object({
 export const SlugIssueUpdate = z.object({
   owner: requiredString('Missing owner'),
   repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   number: z.number().int().positive(),
   updates: IssueUpdate
@@ -75,8 +64,6 @@ export const SlugIssueUpdate = z.object({
 export const SlugPullRequestUpdate = z.object({
   owner: requiredString('Missing owner'),
   repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   number: z.number().int().positive(),
   updates: z.object({
@@ -89,8 +76,6 @@ export const SlugPullRequestUpdate = z.object({
 export const SlugIssueTypeUpdate = z.object({
   owner: requiredString('Missing owner'),
   repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   number: z.number().int().positive(),
   issueTypeId: z.string().nullable()
@@ -99,8 +84,6 @@ export const SlugIssueTypeUpdate = z.object({
 export const SlugIssueComment = z.object({
   owner: requiredString('Missing owner'),
   repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   number: z.number().int().positive(),
   body: requiredString('Comment body required')
@@ -109,8 +92,6 @@ export const SlugIssueComment = z.object({
 export const SlugIssueCommentEdit = z.object({
   owner: requiredString('Missing owner'),
   repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   commentId: z.number().int().positive(),
   body: requiredString('Comment body required')
@@ -119,8 +100,6 @@ export const SlugIssueCommentEdit = z.object({
 export const SlugIssueCommentDelete = z.object({
   owner: requiredString('Missing owner'),
   repo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
   host: OptionalString,
   commentId: z.number().int().positive()
 })

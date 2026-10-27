@@ -378,7 +378,14 @@ describe('TerminalHost', () => {
   })
 
   describe('kill', () => {
+    function sweepThenSignalRoot(): void {
+      killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+        killRoot()
+      })
+    }
+
     it('kills the session and tombstones it', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -386,12 +393,13 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      host.kill('session-1')
+      await host.kill('session-1')
       expect(lastSubprocess.kill).toHaveBeenCalled()
       expect(host.isKilled('session-1')).toBe(true)
     })
 
-    it('does not tombstone a session when graceful kill admission fails', async () => {
+    it('keeps a session attachable when its graceful kill signal is rejected', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -402,8 +410,7 @@ describe('TerminalHost', () => {
         throw new Error('signal rejected')
       })
 
-      expect(() => host.kill('session-1')).toThrow('signal rejected')
-      expect(host.isKilled('session-1')).toBe(false)
+      await expect(host.kill('session-1')).rejects.toThrow('signal rejected')
       await expect(
         host.createOrAttach({
           sessionId: 'session-1',
@@ -415,6 +422,7 @@ describe('TerminalHost', () => {
     })
 
     it('escalates an already-graceful termination and joins its physical exit', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -771,5 +779,28 @@ describe('TerminalHost', () => {
       lastSubprocess._onDataCb?.('after detach')
       expect(onData).not.toHaveBeenCalled()
     })
+  })
+
+  // The activation gate claims sleeping records by this key, so reattaching must not rewrite it.
+  it('lists the pane key a session was spawned for, not the pane that reattaches it', async () => {
+    const spawn = (paneKey: string) =>
+      host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        env: { ORCA_PANE_KEY: paneKey },
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+    const launchedFor = 'client-tab:11111111-1111-4111-8111-111111111111'
+    const respawnedFor = 'desktop-tab:22222222-2222-4222-8222-222222222222'
+
+    await spawn(launchedFor)
+    await spawn(respawnedFor)
+    expect(host.listSessions().map((session) => session.paneKey)).toEqual([launchedFor])
+
+    lastSubprocess._onExitCb?.(0)
+    await vi.waitFor(() => expect(host.listSessions()).toHaveLength(0))
+    await spawn(respawnedFor)
+    expect(host.listSessions().map((session) => session.paneKey)).toEqual([respawnedFor])
   })
 })

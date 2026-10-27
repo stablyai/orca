@@ -1,5 +1,4 @@
-// The view's painted-restore ack names its pane in the layout-owner build, so main can release
-// the terminal service's copy only for the pane's current terminal.
+// Layout-owner restore acks name the pane so main releases saved output only for its current terminal.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ackColdRestore = vi.fn()
@@ -40,7 +39,8 @@ describe('ackPaintedColdRestore', () => {
   })
 
   it('never acks a paired server’s terminal, whose host owns its restore', async () => {
-    const { toRemoteRuntimePtyId } = await import('../../../../../shared/remote-runtime-pty-id')
+    const { toRemoteRuntimePtyId } =
+      await import('../../../../../shared/remote-runtime/remote-runtime-pty-id')
     await ackWithSwitch(true, toRemoteRuntimePtyId('handle-1', 'env-1'))
     expect(ackColdRestore).not.toHaveBeenCalled()
   })

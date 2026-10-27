@@ -108,7 +108,7 @@ describe('layout-owner build: a start main could not make keeps its pane, showin
     const seen: unknown[] = []
     spawn.mockImplementationOnce(
       committingSpawn(runtime, async ({ tabId, leafId }) => {
-        // The pane is written by now: no frame shows it unbound without a status.
+        // Pane persistence must never expose an unbound start without status.
         expect(session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([tabId])
         seen.push(runtime.startStatusOf(`${tabId}:${leafId}`))
         return { id: 'pty-1' }

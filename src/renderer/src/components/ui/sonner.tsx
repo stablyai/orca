@@ -9,6 +9,12 @@ import type { SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store'
 
+// Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
+export const INLINE_ACTION_CLASS_NAMES = {
+  content: '!basis-0',
+  actionButton: '!m-0 !self-center'
+}
+
 // Why: scope to real modals; Radix menus/selects also set body pointer-events:none.
 function isModalOverlayOpen(element: Element): boolean {
   return (
@@ -56,11 +62,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       <Sonner
         theme={theme as ToasterProps['theme']}
         position="bottom-right"
-        // Why: Orca has persistent bottom chrome, so bottom-right toasts need
-        // breathing room above the status bar instead of sitting on its edge.
-        // mobileOffset keeps that clearance below Sonner's 600px breakpoint
-        // (narrow/resized windows and the web client), which otherwise reverts
-        // to Sonner's default 16px and lets toasts crowd the status bar again.
+        // Reserve status-bar clearance at both normal and sub-600px mobileOffset breakpoints.
         offset={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
         mobileOffset={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
         className="toaster group"

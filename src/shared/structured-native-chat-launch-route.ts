@@ -1,12 +1,4 @@
-/**
- * The one place that answers "should this launch be a structured native chat session?".
- *
- * Both launch surfaces call it. The renderer asks when a user opens an agent tab
- * (`resolveAgentLaunchRoute`); orchestration asks when it dispatches a worker, because the mode is
- * the user's own default rather than a per-call flag. Keeping the two halves — the settings default
- * and the per-launch feasibility — here is what stops the second caller from growing a copy that
- * drifts.
- */
+/** Share settings defaults and per-launch feasibility between renderer tab launches and orchestration workers to prevent drift. */
 
 import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
 import { parseExecutionHostId } from './execution-host'
@@ -28,14 +20,12 @@ export type NativeChatDefaultSettings = Pick<GlobalSettings, 'experimentalNative
 export type StructuredNativeChatBlocker =
   | 'reused-terminal'
   | 'agent-without-structured-session'
-  /** The launch names a start directory outside its workspace, which only a PTY can apply. The
-   *  configured launch command and arguments never decide the surface. */
+  /** Only PTYs apply a start directory outside the workspace; configured command/arguments do not choose the surface. */
   | 'custom-start-directory'
   | 'remote-execution-host'
   | 'project-runtime'
   | 'runtime-capability'
-  /** The owning host has not answered yet. Distinct from `runtime-capability`, which is the
-   *  host saying no: an unestablished answer must not read as a refusal. */
+  /** Unestablished host support is unknown, distinct from an explicit capability refusal. */
   | 'runtime-capability-unknown'
   /** This client does not tell a paired host it can read and launch structured sessions. */
   | 'client-capability'
@@ -47,19 +37,18 @@ export type StructuredNativeChatSupport =
 export type StructuredNativeChatSupportInput = {
   agent: TuiAgent
   executionHostId: string
-  /** Capabilities of the host this launch would run on — a paired server's own, not this
-   *  machine's. `null` = not yet established. */
+  /** Owning host’s capabilities, including paired servers; null means unestablished. */
   hostCapabilities: readonly string[] | null
   /** What this client advertises to a paired host; read only for `runtime:` hosts. */
   clientCapabilities?: readonly string[]
   /** Host-derived. Absent means the kind was never established, which is not evidence of any kind. */
   workspaceKind?: WorkspaceLaunchKind
+  projectExecutionKind?: 'host' | 'ssh'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   startsOutsideWorkspaceRoot?: boolean
   /** An existing PTY agent keeps its execution transport. */
   reusesTerminal?: boolean
-  /** The agents the host listed through `agentSession.agents`. Absent: none learned, so only
-   *  Claude and Codex, which every structured host runs, can be offered. */
+  /** Without host inventory, offer only Claude/Codex, which every structured host supports. */
   hostStructuredAgents?: readonly string[]
 }
 
@@ -88,10 +77,12 @@ function clientChoosesStructuredLaunches(capabilities: readonly string[] | undef
 export function resolveStructuredNativeChatSupport(
   input: StructuredNativeChatSupportInput
 ): StructuredNativeChatSupport {
-  // A paired Orca server runs structured sessions itself and answers for them below. An SSH host
-  // has no Orca runtime of its own to run one.
+  // Paired runtimes execute structured sessions themselves; relay SSH hosts cannot.
   const host = parseExecutionHostId(input.executionHostId)
-  if (host?.kind !== 'local' && host?.kind !== 'runtime') {
+  if (
+    input.projectExecutionKind === 'ssh' ||
+    (host?.kind !== 'local' && host?.kind !== 'runtime')
+  ) {
     return { supported: false, blocker: 'remote-execution-host' }
   }
   if (input.reusesTerminal === true) {
@@ -122,13 +113,11 @@ export function resolveStructuredNativeChatSupport(
     return { supported: false, blocker: 'runtime-capability' }
   }
   if (host.kind === 'runtime') {
-    // An older paired host advertises structured sessions but admits them only with its own chat
-    // setting on, so a chat opened there could never start; it keeps the terminal it always got.
+    // Older paired hosts gate on their own chat setting, so retain terminal launches without client-launch-mode support.
     if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)) {
       return { supported: false, blocker: 'runtime-capability' }
     }
-    // The host refuses a client that did not say it reads structured sessions; that client keeps
-    // the host terminal.
+    // Hosts refuse unadvertised client support; retain terminals for those clients.
     if (!clientChoosesStructuredLaunches(input.clientCapabilities)) {
       return { supported: false, blocker: 'client-capability' }
     }

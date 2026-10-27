@@ -4,8 +4,7 @@ import {
   type StructuredQuestionItem
 } from './mobile-structured-agent-prompts'
 
-/** The shape the host emits for a Claude AskUserQuestion carrying more than one question:
- *  the flat `question`/`options` pair is a placeholder and the real content is in `questions`. */
+// Grouped Claude prompts leave flat question/options as placeholders; real content lives in questions.
 function groupedPrompt(): StructuredQuestionItem {
   return {
     itemId: 'item-1',

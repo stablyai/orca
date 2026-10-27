@@ -27,7 +27,7 @@ import { settleStaleStructuredAgentSessionState } from './structured-agent-sessi
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
+import { structuredAgentSessionAttachPermission } from './structured-agent-session-launch-permission'
 import {
   isStructuredAgentSessionStartupExpired,
   type StructuredAgentSessionStartupAttempt
@@ -240,9 +240,10 @@ async function runAttachUnderAbort(
         return startupAttempts.track(sessionId, startup)
       },
       ...(options.startupOptions ? { startupOptions: options.startupOptions } : {}),
-      launchPermissionMode: async (record) =>
-        (await lock.wait(structuredAgentSessionLaunchPermission(context.deps, record))) ??
-        undefined,
+      launchPermissionMode: structuredAgentSessionAttachPermission(context, options, lock),
+      assertNoTerminalWriter: async (record) => {
+        await lock.wait(Promise.resolve(context.deps.assertNoTerminalWriter?.(record)))
+      },
       ...(options.onAcquisitionFailed ? { onAcquisitionFailed: options.onAcquisitionFailed } : {}),
       openConversation: async (record) => {
         const conversation = await context.openConversation(record.sessionId, { acquisition: true })

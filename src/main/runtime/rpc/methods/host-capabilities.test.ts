@@ -72,8 +72,7 @@ describe('host capability RPC methods', () => {
     })
   })
 
-  // Why: web/mobile clients reach these over the relay, so a sync probe would stall the
-  // desktop main event loop on execFileSync wsl.exe/pwsh.exe for up to 5s per call.
+  // Paired capability reads must not block the main loop with synchronous wsl.exe/pwsh.exe probes (up to 5s).
   it('answers the Windows shell capability methods without a blocking spawn', async () => {
     isPwshAvailableAsync.mockResolvedValue(false)
     isWslAvailableAsync.mockResolvedValue(false)

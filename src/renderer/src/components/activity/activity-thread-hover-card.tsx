@@ -55,10 +55,8 @@ export function ActivityThreadHoverCard({
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const open = detailsHoverControl.hoverOpen && !suppressed
-  const { linkActionRequest, onOpenLink, closeLinkActions } = useWorkspaceReferenceLinkActions(
-    thread.worktree.id,
-    detailsHoverControl.closeHover
-  )
+  const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
+    useWorkspaceReferenceLinkActions(thread.worktree.id, detailsHoverControl)
 
   return (
     <HoverCard
@@ -68,7 +66,7 @@ export function ActivityThreadHoverCard({
       closeDelay={closeDelay}
     >
       <span className="contents" onClick={(event) => event.stopPropagation()}>
-        <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
+        <LinkActionPopover {...linkActionPopoverProps} />
       </span>
       <ActivityThreadHoverCardTrigger
         open={open}
@@ -80,6 +78,7 @@ export function ActivityThreadHoverCard({
         <ActivityThreadHoverCardContent
           thread={thread}
           onOpenLink={onOpenLink}
+          onAuxClickCapture={onAuxClickCapture}
           detailsHoverControl={detailsHoverControl}
           onJumpToWorkspace={onJumpToWorkspace}
           canJumpToWorkspace={canJumpToWorkspace}
@@ -92,12 +91,14 @@ export function ActivityThreadHoverCard({
 function ActivityThreadHoverCardContent({
   thread,
   onOpenLink,
+  onAuxClickCapture,
   detailsHoverControl,
   onJumpToWorkspace,
   canJumpToWorkspace
 }: {
   thread: AgentPaneThread
   onOpenLink: (url: string, event: React.MouseEvent) => void
+  onAuxClickCapture: (event: React.MouseEvent) => void
   detailsHoverControl: ReturnType<typeof useWorktreeCardDetailsHoverControl>
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
   canJumpToWorkspace?: boolean
@@ -222,6 +223,7 @@ function ActivityThreadHoverCardContent({
       {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
+      onAuxClickCapture={onAuxClickCapture}
     >
       <SelectedTextCopyMenu className="space-y-3">
         <ActivityThreadHoverCardSummary

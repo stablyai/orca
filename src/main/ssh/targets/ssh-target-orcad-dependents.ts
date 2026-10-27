@@ -1,7 +1,4 @@
-/**
- * Client state that still references an SSH target. An empty-host claim refuses any of it, since
- * hiding the target would strand it; a migration blocks only on what its manifest can't carry.
- */
+/** Empty-host claims refuse all referencing state; migrations block only state their manifest cannot carry. */
 import type { Store } from '../../persistence'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -88,10 +85,7 @@ const CENSUS_DEPENDENCY_KINDS = ORCAD_MIGRATION_DEPENDENCY_KINDS.filter(
   (kind) => kind !== 'saved-port-forward' && kind !== 'terminal-lease'
 )
 
-/**
- * The export-aware census: only state that references the target and that this manifest cannot
- * carry blocks. A census the store could not take is unverifiable, never an empty one.
- */
+/** Block only untransferred dependencies; an unavailable census is unverifiable, never empty. */
 export function collectUntransferredDependentBlockers(
   store: Pick<Store, 'inspectOrcadMigrationUntransferredDependencies'>,
   manifest: OrcadMigrationManifest
@@ -119,11 +113,7 @@ export function collectUntransferredDependentBlockers(
     : []
 }
 
-/**
- * The projection hands every host each unstamped legacy row, so one counts only when its repo is
- * registered on this host, or it belongs to a project (which can span hosts). An orphan whose repo
- * is gone is no host's state and cannot be cleared in the UI, so it must not block (#31498).
- */
+/** Legacy unstamped metadata projects to every host: count registered repos or cross-host projects, but exclude unmanageable orphan repos (#31498). */
 function hostWorktreeMetadataNames(store: DependentStateStore, hostId: ExecutionHostId): string[] {
   const repos = store.getRepos()
   const projectIds = new Set(store.getProjects().map((project) => project.id))
@@ -138,7 +128,7 @@ function hostWorktreeMetadataNames(store: DependentStateStore, hostId: Execution
     .map(([worktreeId]) => worktreeId)
 }
 
-/** Non-default host-owned fields of the host's partition, plus a local session pointed at the host. */
+/** Ignore client-global fields copied into host partitions; include local sessions referencing this host. */
 function workspaceSessionReferences(store: DependentStateStore, hostId: string): string[] {
   const references: string[] = []
   if (store.getWorkspaceSession().activeWorkspaceExecutionHostId === hostId) {
@@ -171,7 +161,6 @@ function isEmptyValue(value: unknown): boolean {
   return typeof value === 'object' && Object.keys(value).length === 0
 }
 
-/** Each blocking dependency with its count and the first names, e.g. `automation ×1 (Nightly)`. */
 export function dependentStateSummary(dependencies: OrcadMigrationDependency[]): string {
   return dependencies
     .map(

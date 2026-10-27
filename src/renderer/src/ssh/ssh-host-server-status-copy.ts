@@ -1,4 +1,4 @@
-/** User-facing words for whether an SSH host's managed server serves it; all go through the catalog. */
+// Translate managed SSH server status through the catalog.
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
@@ -6,11 +6,16 @@ import type {
 } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { compactIpcErrorMessage, extractIpcErrorMessage } from '@/lib/ipc-error'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { launchSessionEndedLine } from './ssh-host-launch-session-copy'
+import { automationsLeftDisabledLine } from './ssh-host-moved-automations-copy'
 import { bridgedTerminalsLine } from './ssh-host-bridged-terminals-copy'
 import { managedUpdateLine, withDetail } from './ssh-host-server-update-copy'
 import { blockedNodeDownload, nodeDownloadBlockedText } from './ssh-host-node-download-copy'
 import { settingUpLabel, sshHostServerReassurance } from './ssh-host-server-setup-copy'
+import { hostFixableUnavailableText } from './ssh-host-fixable-unavailable-copy'
+import { leaveBehindLine, REFUSAL_INLINE_CHARS, refusedLine } from './ssh-host-refused-move-copy'
 
 export type SshHostServerStatusLine = {
   text: string
@@ -49,6 +54,9 @@ export function sshHostServerStatusLine(
   if (status?.kind === 'managed' && status.linked?.length) {
     return linkedProjectsLine(status.linked)
   }
+  if (status?.kind === 'managed' && status.automationsLeftDisabled) {
+    return automationsLeftDisabledLine(status.automationsLeftDisabled)
+  }
   // A healthy managed server is the default; the card stays quiet unless something needs attention.
   if (status?.kind === 'managed' || (!status && target.orcadFence)) {
     return null
@@ -75,13 +83,12 @@ export function sshHostServerStatusLine(
   return null
 }
 
-/** A failed connect's toast: an unserved host's translated reason, else main's message. */
 export function sshConnectFailureText(
   state: Pick<SshConnectionState, 'managedServer'> | undefined,
   fallback: string
 ): string {
   const status = state?.managedServer
-  // Why uncapped: the pane and toast have no "Details", and a refusal's way out comes last.
+  // Uncapped because panes/toasts lack Details and refusal recovery guidance comes last.
   return status?.kind === 'relay' ? unservedLine(status, Number.POSITIVE_INFINITY).text : fallback
 }
 
@@ -90,10 +97,13 @@ export function sshTargetConnectFailureText(
   error: unknown,
   fallback: string
 ): string {
-  return sshConnectFailureText(
-    useAppStore.getState().sshConnectionStates.get(targetId),
-    error instanceof Error ? error.message : fallback
-  )
+  const state = useAppStore.getState().sshConnectionStates.get(targetId)
+  // Main publishes the failure with its next step; the rejection carries only SSH's raw words.
+  const published =
+    state?.status === 'error' || state?.status === 'auth-failed'
+      ? compactIpcErrorMessage(state.error ?? '')
+      : undefined
+  return sshConnectFailureText(state, published || extractIpcErrorMessage(error, fallback))
 }
 
 // Mirror main's ORCAD_TUNNEL_UNAVAILABLE_REASON.
@@ -114,14 +124,9 @@ function unavailableLine(reason: string | undefined): SshHostServerStatusLine {
   if (reason === TUNNEL_UNAVAILABLE) {
     return tunnelUnavailableLine()
   }
-  if (reason === 'runtime_noexec') {
-    return {
-      tone: 'destructive',
-      text: translate(
-        'auto.components.settings.sshHostServer.runtimeNoexec',
-        'This host doesn’t allow running programs from ~/.orca-remote, so Orca can’t start its server there. This usually means the home folder is mounted with noexec. Ask the host’s administrator to allow running programs there, then connect again.'
-      )
-    }
+  const fixable = reason ? hostFixableUnavailableText(reason) : null
+  if (fixable) {
+    return { tone: 'destructive', text: fixable }
   }
   const cause = reason ? unavailableCause(reason) : null
   if (cause) {
@@ -244,33 +249,6 @@ function linkedProjectsLine(
   }
 }
 
-// Why a cap: a refusal can list every blocking tab; the whole text stays behind "Details".
-const REFUSAL_INLINE_CHARS = 280
-
-/** Names what refuses the move; main writes that reason, with the way out, in English. */
-function refusedLine(detail: string | undefined, inlineChars: number): SshHostServerStatusLine {
-  const reason = detail?.trim()
-  if (!reason) {
-    return {
-      tone: 'destructive',
-      text: translate(
-        'auto.components.settings.sshHostServer.refusedBlocked',
-        'Orca isn’t set up on this host yet: something on the host stops the move.'
-      )
-    }
-  }
-  const inline = reason.length > inlineChars ? `${reason.slice(0, inlineChars).trimEnd()}…` : reason
-  return {
-    tone: 'destructive',
-    text: translate(
-      'auto.components.settings.sshHostServer.refusedBlockedReason',
-      'Orca isn’t set up on this host yet. {{reason}}',
-      { reason: inline }
-    ),
-    detail: reason
-  }
-}
-
 function unservedLine(
   status: Extract<NonNullable<SshConnectionState['managedServer']>, { kind: 'relay' }>,
   refusalChars = REFUSAL_INLINE_CHARS
@@ -304,7 +282,10 @@ function unservedLine(
     case 'source_changed':
       return sourceChangedLine()
     case 'refused':
-      return refusedLine(status.detail, refusalChars)
+      // Web clients can't run this desktop's Move anyway, so they keep main's reason.
+      return status.canLeaveBehind && !isWebClientLocation()
+        ? leaveBehindLine(status.detail, refusalChars)
+        : refusedLine(status.detail, refusalChars)
     case 'deferred':
     case 'failed': {
       const blocked = blockedNodeDownload(status)

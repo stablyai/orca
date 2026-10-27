@@ -19,19 +19,7 @@ import {
 import type { AutomationListRow } from './automation-list-row-identity'
 import { createAutomationHostRequestPool } from './automation-host-scheduler-queue'
 
-/**
- * Availability of each automation's *source* host — the host its task provider
- * is authenticated against, which can be a different machine from the one the
- * automation runs on. Provider auth and tooling therefore have to be checked
- * there, not on the run target.
- *
- * Each runtime source host is probed once per mount; the result is remembered
- * even when the probe fails, so a host that could not be reached reads as
- * checked-and-unknown rather than being dialled again on every render.
- *
- * Keyed by row, not by automation ID: two authorities may hold that ID, and
- * their copies can name different source hosts.
- */
+/** Probe provider auth/tooling on each row’s source host, which may differ from its run host. Cache once per mount, including failures; key by row because authority-local IDs collide. */
 export function useAutomationSourceHostAvailability(
   rows: readonly AutomationListRow[]
 ): ReadonlyMap<string, TaskSourceHostAvailability[]> {

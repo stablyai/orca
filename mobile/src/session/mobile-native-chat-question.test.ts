@@ -63,7 +63,6 @@ describe('parseAgentQuestion', () => {
   })
 
   it('returns null for a single bare option with no introducing prompt', () => {
-    // A lone "- item" in prose must not be treated as a question.
     expect(parseAgentQuestion('Here is what I did:\nsome work\n- one stray bullet')).toBeNull()
   })
 

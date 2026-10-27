@@ -4,7 +4,7 @@ import type { BrowserHostCommandLedger } from './browser-host-command-ledger'
 import type { BrowserHostFence, BrowserHostFenceReason } from './browser-host-lease-fence'
 
 const MAX_BROWSER_HOSTS_PER_CONNECTION = 1
-// Why: tolerate brief desktop restart overlap while keeping one paired identity bounded.
+// Allow brief restart overlap while bounding each paired identity.
 const MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE = 4
 
 export type BrowserHostLease = Readonly<{

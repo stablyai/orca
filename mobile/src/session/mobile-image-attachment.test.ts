@@ -95,7 +95,6 @@ describe('attachMobileImageToTerminal', () => {
   })
 
   it('uploads the picked image and pastes its bracketed path into the terminal', async () => {
-    // startImageUpload (method_not_found) falls back to single-frame saveImageAsTempFile.
     const client = clientWithResponses([
       {
         id: 'start',
@@ -120,8 +119,7 @@ describe('attachMobileImageToTerminal', () => {
     const sendCall = client.calls.find((c) => c.method === 'terminal.send')
     expect(sendCall?.params).toEqual({
       terminal: 'term-1',
-      // Trailing space: the user types on this same line next, so a bare
-      // `…\x1b[201~` would arrive as `…pngadd` (STA-4847).
+      // A separator prevents the next keystroke gluing to the pasted image path.
       text: '\x1b[200~/tmp/orca-attach.png\x1b[201~ ',
       enter: false,
       client: { id: 'device-9', type: 'mobile' }
@@ -151,6 +149,28 @@ describe('attachMobileImageToTerminal', () => {
 
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
     expect(saveCall?.params).toEqual({ contentBase64: 'BBBB', connectionId: 'conn-ssh' })
+  })
+
+  it('forwards the picked fileName when attaching from files', async () => {
+    const client = clientWithResponses([
+      ok('start', { uploadId: 'upload-file-1' }),
+      ok('append', { received: 4 }),
+      ok('commit', '/tmp/orca-paste-1/柴静-看见.txt'),
+      ok('send', { send: { accepted: true } })
+    ])
+
+    const sent = await attachMobileImageToTerminal('files', {
+      client,
+      agent: 'claude',
+      terminal: 'term-1',
+      deviceToken: null,
+      getConnectionId: async () => null,
+      pickImage: vi.fn().mockResolvedValue({ base64: 'BBBB', fileName: '柴静-看见.txt' })
+    })
+
+    expect(sent).toBe(true)
+    const startCall = client.calls.find((c) => c.method === 'clipboard.startImageUpload')
+    expect(startCall?.params).toMatchObject({ fileName: '柴静-看见.txt' })
   })
 
   it('does nothing and returns false when the picker is cancelled', async () => {

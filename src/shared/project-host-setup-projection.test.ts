@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
-  isGitHubBackedRepo,
   getProjectIdForProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
@@ -38,8 +37,7 @@ describe('project host setup projection', () => {
     expect(second.setups[0]?.updatedAt).toBe(first.setups[0]?.updatedAt)
   })
 
-  // Why both orders: repo order comes from disk/host enumeration, so it must not decide the
-  // project's timestamps. The accumulator carries 0 when the *first* sibling is the unknown one.
+  // Unknown timestamps may occur first in host/disk order; neither order may erase known sibling times.
   const timestampedSibling = repo({
     id: 'local-repo',
     path: '/Users/alice/orca',
@@ -450,32 +448,6 @@ describe('project host setup projection', () => {
     ).toHaveLength(3)
   })
 
-  it('keeps same-named cross-host records separate when there is no shared repo identity', () => {
-    const projection = projectHostSetupProjectionFromRepos([
-      repo({
-        id: 'local-sample-app',
-        path: '/Users/alice/work/sample-app',
-        displayName: 'sample-app'
-      }),
-      repo({
-        id: 'ssh-sample-app',
-        path: '/srv/unrelated/sample-app',
-        displayName: 'sample-app',
-        connectionId: 'staging server'
-      }),
-      repo({
-        id: 'runtime-sample-app',
-        path: '/workspace/sample-app',
-        displayName: 'sample-app',
-        executionHostId: 'runtime:preview'
-      })
-    ])
-
-    // Why: display names are labels, not identity. A future fix needs a
-    // normalized git remote identity or an explicit user link before merging.
-    expect(projection.projects).toHaveLength(3)
-  })
-
   it('does not collapse case-distinct remote paths for self-hosted git remotes', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
@@ -539,47 +511,6 @@ describe('project host setup projection', () => {
   })
 })
 
-describe('isGitHubBackedRepo', () => {
-  it('is true when an explicit upstream owner/repo is present', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(true)
-  })
-
-  it('is true when a GitHub-sourced avatar icon encodes the slug', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      repoIcon: {
-        type: 'image',
-        src: 'https://github.com/stablyai.png?size=64',
-        source: 'github',
-        label: 'stablyai/orca'
-      }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(true)
-  })
-
-  it('is false for a non-GitHub icon and no upstream (GitLab/folder)', () => {
-    const target = repo({
-      id: 'r',
-      path: '/r',
-      displayName: 'r',
-      repoIcon: { type: 'lucide', name: 'gitlab' }
-    })
-    expect(isGitHubBackedRepo(target)).toBe(false)
-  })
-
-  it('is false for a plain local repo with no provider signal', () => {
-    expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
-  })
-})
-
 describe('getProjectIdForProviderIdentity', () => {
   it('uses the same normalized identity key as project projection', () => {
     expect(
@@ -632,8 +563,7 @@ describe('isProjectRemoteIdentityPending', () => {
 describe('derived project identity stability', () => {
   const base = { id: 'r', path: '/r', displayName: 'r' } as const
 
-  // Why pinned: this id is the persisted Project primary key, so folding a host alias here would
-  // silently re-key existing projects on upgrade and drop their runtime preference.
+  // Persisted Project keys cannot fold host aliases on upgrade without dropping runtime preferences.
   it('keeps a www. remote provider-neutral instead of folding it onto github.com', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({

@@ -7,6 +7,7 @@ import type {
   SensorInstance,
   SensorProps
 } from '@dnd-kit/core'
+import { recordTabDragPointer } from './tab-drag-pointer'
 
 type PointerCoordinates = { x: number; y: number }
 
@@ -112,8 +113,7 @@ export function shouldActivateTabDragFromDistanceSample({
   elapsedMs: number
   overThresholdSampleCount: number
 }): boolean {
-  // Why: one immediate over-threshold sample can be stale/coalesced after
-  // window focus; a second sample or a short grace period confirms real motion.
+  // Require another sample or a short grace period because the first post-focus motion can be stale/coalesced.
   return (
     elapsedMs >= TAB_DRAG_EARLY_MOVE_CONFIRMATION_MS ||
     overThresholdSampleCount >= TAB_DRAG_CONFIRMED_DISTANCE_SAMPLE_COUNT
@@ -154,7 +154,10 @@ export class TabDragPointerSensor implements SensorInstance {
   constructor(props: SensorProps<PointerSensorOptions>) {
     this.props = props
     this.document = getOwnerDocument(props.event.target)
-    this.initialCoordinates = getPointerCoordinates(props.event) ?? DEFAULT_COORDINATES
+    const pointerDownCoordinates = getPointerCoordinates(props.event)
+    this.initialCoordinates = pointerDownCoordinates ?? DEFAULT_COORDINATES
+    // Why: replaces the previous gesture's pointer, which outlives it so onDragEnd can read it.
+    recordTabDragPointer(pointerDownCoordinates)
     this.handleStart = this.handleStart.bind(this)
     this.handleMove = this.handleMove.bind(this)
     this.handleEnd = this.handleEnd.bind(this)
@@ -239,6 +242,7 @@ export class TabDragPointerSensor implements SensorInstance {
     if (!coordinates) {
       return
     }
+    recordTabDragPointer(coordinates)
     const delta = subtractCoordinates(this.initialCoordinates, coordinates)
 
     if (!this.activated && activationConstraint) {

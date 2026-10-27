@@ -1,8 +1,4 @@
-/**
- * The window's layout stream from main ends mid-session and reopens (layout-owner build only).
- * The window keeps working through it: no tab or pane is lost or shown twice, main's own changes
- * show again once the stream is back, the window's later changes apply, and a relaunch keeps them.
- */
+// Layout-owner stream loss/reopen must retain every tab/pane exactly once, catch up main/window changes and persist them across relaunch.
 
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -136,10 +132,7 @@ async function openWorkspace(first: Launched, repoPath: string): Promise<string>
   return worktreeId
 }
 
-/**
- * Ends the stream; while it is down the window opens a tab and main starts a terminal of its own,
- * which shows only once the stream is back. After the reopen, main splits its terminal.
- */
+// While the stream is down, create window and main terminals; after reopen, split main’s terminal.
 async function loseStreamAndChange(
   page: Page,
   worktreeId: string,
@@ -208,7 +201,6 @@ test.describe('the window layout stream ends mid-session', () => {
         stops
       )
 
-      // The window's own changes after the reopen: a close, a new tab and a split.
       await first.page.evaluate((tabId) => window.__store!.getState().closeTab(tabId), duringLoss)
       const afterReopen = await first.page.evaluate((id) => {
         const state = window.__store!.getState()
@@ -247,7 +239,6 @@ test.describe('the window layout stream ends mid-session', () => {
         stops
       )
 
-      // After the reopen: the first tab closes and the tab opened during the loss splits.
       await first.page.evaluate((tabId) => window.__store!.getState().closeTab(tabId), firstTab)
       await first.page.evaluate(
         (tabId) => window.__store!.getState().setActiveTab(tabId),

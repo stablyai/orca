@@ -12,13 +12,13 @@ import {
 } from '../worktree/host-qualified-identity'
 import { listGitWorkspaceRows } from './workspace-rows'
 
-/** Grouping by PR reads GitHub PRs only, so only a row with a GitHub PR carries a fact. */
+/** PR grouping currently admits only GitHub facts. */
 const WorkspaceReviewFactSchema = z.object({
   provider: z.literal('github'),
   reviewState: z.string()
 })
 
-/** Read on demand, so it carries no revision. Keyed by row identity; an absent key has no PR. */
+/** On-demand facts have no revision; absent row key means no PR. */
 export const WorkspaceReviewFactsSnapshotSchema = z.object({
   facts: z.record(z.string(), WorkspaceReviewFactSchema)
 })
@@ -31,7 +31,7 @@ export type PRCacheView = Readonly<
   Record<string, { data: { number?: number; state?: string } | null } | undefined>
 >
 
-/** A worktree's PR as the cache holds it, minus a PR the user unlinked. */
+/** Cached PR excluding one the user unlinked. */
 export function readWorkspaceReviewFact(
   worktree: Pick<Worktree, 'branch' | 'linkedPR' | 'suppressedGitHubPR'>,
   repo: Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> | undefined,
@@ -42,7 +42,7 @@ export function readWorkspaceReviewFact(
     return null
   }
   const keys = getGitHubPRCacheKeyCandidates(repo, branch)
-  // Why: legacy keys carry no host, so only a local repo may read them.
+  // Legacy keys lack host identity; only local repos may use them.
   const lookup = !repo.connectionId && !repo.executionHostId ? keys : keys.slice(0, 1)
   const entry = lookup.map((key) => prCache[key]).find((candidate) => candidate != null)
   const pr = entry?.data
@@ -63,7 +63,7 @@ export function workspaceReviewFactsEqual(
   return a?.provider === b?.provider && a?.reviewState === b?.reviewState
 }
 
-/** Facts for every worktree this host lists with a PR, under its row key and read with its own repo. */
+/** Read each listed worktree with its own repo, keyed by row identity. */
 export function buildWorkspaceReviewFacts(
   worktrees: readonly Pick<
     Worktree,
@@ -82,7 +82,7 @@ export function buildWorkspaceReviewFacts(
   return facts
 }
 
-/** A paired server's rows against this desktop's own cache, under the server's host-scoped keys. */
+/** Read paired-server rows against this desktop’s cache using server-scoped keys. */
 export function buildPairedServerReviewFacts(
   servers: readonly { hostId: string; rows: readonly PairedServerWorkspaceRow[] }[],
   prCache: PRCacheView

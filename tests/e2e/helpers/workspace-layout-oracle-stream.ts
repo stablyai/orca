@@ -1,12 +1,9 @@
-/**
- * Opens the runtime's `layout.subscribe` stream for the oracle: in the window's renderer through
- * the local runtime bridge, or on a headless serve host over its pairing offer.
- */
+// Subscribe through the local renderer bridge or a headless host’s pairing offer.
 
 import type { Page } from '@stablyai/playwright-test'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
 import { decodePairingOffer } from '../../../src/shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
 import type { LiveLayoutFeed } from './workspace-layout-oracle-feed'
 

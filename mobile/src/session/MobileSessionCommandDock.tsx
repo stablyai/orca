@@ -81,7 +81,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        {/* Accessory keys */}
+        {}
         <View ref={accessoryBarKeepsKeyboard} style={styles.accessoryBar}>
           {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
           {keyboardLift > 0 && (
@@ -257,7 +257,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           </ScrollView>
         </View>
 
-        {/* Input bar */}
+        {}
         {liveInputEnabled ? (
           <View style={[styles.inputBar, styles.liveInputBar]}>
             <Pressable

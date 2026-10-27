@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
@@ -45,7 +46,7 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge(floatingWorkspace.open)
 
   useAppShellServices()
-  // Why before the startup chain: its effect runs first, and no startup step can skip the load.
+  // Load drafts before the startup chain so no failed step can skip them.
   useEffect(startNativeChatDraftLoad, [])
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
@@ -54,12 +55,10 @@ function App(): React.JSX.Element {
   useDocumentAppearance()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
-  // Why App, not store creation: the Space window mirrors this store's selection but owns none.
+  // App owns active-selection removal; the Space window only mirrors selection.
   useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
 
-  // Why: the same vars are set inline on .app-layout below, but portaled surfaces
-  // (sheets, dialogs) mount outside it and would otherwise fall back to 0px and
-  // render their controls under the Windows/Linux window-controls overlay.
+  // Portaled sheets/dialogs live outside .app-layout and need root offsets to clear Windows/Linux controls.
   useEffect(() => {
     const root = document.documentElement.style
     root.setProperty('--window-controls-width', WINDOW_CONTROLS_WIDTH)
@@ -70,7 +69,7 @@ function App(): React.JSX.Element {
   const { cancelReturnFocusFrame } = floatingWorkspace
   const setAppRootNode = useCallback(
     (node: HTMLDivElement | null): void => {
-      // Why: these best-effort App chrome cleanups share the App root lifetime.
+      // Cancel chrome cleanup work when the App root unmounts.
       if (!node) {
         cancelReturnFocusFrame()
         clearUnreadDockBadge()
@@ -110,7 +109,10 @@ function App(): React.JSX.Element {
             <BrowserWebAuthnAccountDialog />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
-        <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+        {createPortal(
+          <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />,
+          document.body
+        )}
         <PlainSshTerminalPanels />
       </TooltipProvider>
       <SkillFreshnessNudge />
@@ -118,7 +120,7 @@ function App(): React.JSX.Element {
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
-      {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
+      {/* Electron drag hit-testing follows DOM order, ignoring z-index; render controls last to keep them clickable. */}
       {hasCustomTitleBar && <WindowControls />}
     </div>
   )

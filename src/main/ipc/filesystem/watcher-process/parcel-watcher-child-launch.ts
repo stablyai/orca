@@ -3,10 +3,10 @@ import { writeFileSync } from 'node:fs'
 import {
   createWatcherCanaryDirectory,
   removeWatcherCanaryDirectory
-} from '../../parcel-watcher-canary-directory'
+} from './parcel-watcher-canary-directory'
 import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
 import { registerWatcherChildPhysicalExit } from './parcel-watcher-child-termination'
-import type { WatcherToHostMessage } from '../../parcel-watcher-process-protocol'
+import type { WatcherToHostMessage } from './parcel-watcher-process-protocol'
 
 export type LaunchedWatcherChild = {
   child: ChildProcess

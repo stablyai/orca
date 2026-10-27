@@ -15,7 +15,7 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
 import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState: {
   executionHostId: ExecutionHostId
@@ -42,8 +42,7 @@ vi.mock('@/store', () => {
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
-// Real notice strings, so a copy of the wording here cannot outlive the string
-// users actually read, and a newly added export cannot go missing from the mock.
+// Retain production notices and exports so mocks cannot hide stale wording or new behavior.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
   resolveNativeChatAttachmentHost: () => testState.executionHostId,
@@ -53,7 +52,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
 }))

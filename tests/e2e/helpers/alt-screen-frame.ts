@@ -1,7 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
 
-// Boxed alt-screen TUI frame: enters the alternate buffer, clears it, and paints
-// a marker line carrying a zero-padded frame number.
 export function buildAltScreenFrame(marker: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
   return [
@@ -22,10 +20,8 @@ export type ActiveScreen = {
   rows: string[]
 }
 
-// Why: what the pane shows is the active buffer's viewport. `serializeAddon.serialize()`
-// dumps the whole normal buffer (scrollback included) before the alt frame, so a stale
-// marker there is indistinguishable from the live one (STA-5208). Null on a missing pane
-// because callers poll this and `expect.poll` aborts on a generator throw.
+// Read only the active viewport: serialize() includes stale normal-buffer markers before the live alt frame (STA-5208).
+// Return null during remount because expect.poll aborts on generator throws.
 export async function readActiveScreen(page: Page, tabId: string): Promise<ActiveScreen | null> {
   return page.evaluate(
     ({ tabId }) => {
@@ -45,8 +41,7 @@ export async function readActiveScreen(page: Page, tabId: string): Promise<Activ
   )
 }
 
-// Why the highest match rather than the first: a repaint can leave an older marker line
-// beside the live one, and only the newest frame says which paint landed last.
+// Use the highest frame because a repaint may leave an older marker beside the live one.
 export function findMarkerFrame(text: string, marker: string): number | null {
   // marker is a literal, so escape it rather than letting `[`/`.`/`+` act as regex syntax.
   const pattern = new RegExp(`${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} frame (\\d+)`, 'g')
@@ -58,8 +53,7 @@ export function findMarkerFrame(text: string, marker: string): number | null {
   return latest
 }
 
-// Why: the live-write and the reveal restore paint the same layout, so the frame
-// number is the only thing on screen that says which of the two landed last.
+// Live output and restore paint the same layout; frame number identifies which won.
 export async function readRenderedAltScreenFrame(
   page: Page,
   tabId: string,

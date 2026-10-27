@@ -22,7 +22,7 @@ import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
+import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './native-chat/mobile-native-chat-send'
 
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
@@ -54,23 +54,19 @@ class AgentSessionRpcResponseError extends Error {
   }
 }
 
-/** The refusal a failed read met, from a thrown error or a stream's error frame. */
 export function agentSessionReadFailureRefusal(failure: unknown) {
   return readAgentSessionErrorRefusal(
     typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
   )
 }
 
-/** A host's refusal of a history read, worded as the pane shows it. */
 export function agentSessionReadRefusalText(refusal: AgentSessionRefusalReference): string {
   return agentSessionWriteNoticeEnglish(
     agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
   )
 }
 
-/** A failed read of a chat's history as the pane shows it, from a thrown error or a stream's error
- *  frame (`{ message, error }`): a thrown refusal's message is its bare code, so its words come
- *  from the refusal in the error's data. */
+// Read refusal words from error data: thrown messages contain bare codes, and stream failures nest them under error.
 export function agentSessionReadFailureText(failure: unknown): string {
   const refusal = agentSessionReadFailureRefusal(failure)
   if (refusal) {
@@ -134,7 +130,6 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
   fields: Record<string, unknown>
   clientOperationId?: string
   timeoutMs?: number
-  /** The chat's agent, which a refusal about it names. */
   agentName?: string
 }): Promise<StructuredAgentSessionMutationCallResult<TValue>> {
   const {

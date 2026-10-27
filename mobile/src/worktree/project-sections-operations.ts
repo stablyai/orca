@@ -13,7 +13,6 @@ import type { RpcResponse } from '../transport/types'
 
 export type { ServedProjectSections }
 
-/** The sidebar's Project grouping inputs; null until a desktop window has published them. */
 export const projectSectionsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'mobileRelay.projectSections-or-skip',
@@ -29,7 +28,6 @@ export const projectSectionsRead = bindDeferredRpcOperation(
   })
 )
 
-/** A host's own project groups, which a feed-built list files folder workspaces under. */
 export const hostProjectGroupsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'projectGroup.host-groups-or-skip',
@@ -43,10 +41,7 @@ export const hostProjectGroupsRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The desktop's sidebar catalog: absent (null) on a desktop that predates the read, and left
- * as it was after a transient failure, so a dropped reply never regroups the list.
- */
+// Older hosts return null; transient failure retains grouping so a lost reply cannot regroup the list.
 export function readServedProjectSections(
   reply: RpcResponse | null
 ): { kind: 'answered'; value: ServedProjectSections | null } | { kind: 'kept' } {

@@ -72,7 +72,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     smartSourceSelectionRef
   } = input
 
-  // Why: review routing prefers one provider identity — clear the opposite provider slots so stale hidden fields can't win later.
+  // Clear the other provider’s hidden slots so stale identity cannot win review routing.
   const applyLinkedGitLabWorkItem = useCallback(
     (item: GitLabWorkItem): void => {
       smartSourceSelectionRef.current = null
@@ -183,7 +183,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       lastAutoNameRef.current = ''
     }
     if (removedLinearItem) {
-      // Why: a Linear branch override belongs to its issue; unlinking must not leave it driving a later worktree create.
+      // Unlinking a Linear issue must also release its source-owned branch override.
       setBranchNameOverride(undefined)
       setBranchNameOverridePreservesNameEdits(false)
       branchAutoNameRef.current = ''
@@ -208,7 +208,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       if (nextName !== name && smartSourceSelectionRef.current?.kind === 'github-submit-lookup') {
         smartSourceSelectionRef.current = null
       }
-      // Why: linked items keep refreshing the suggested name only while it's auto-managed; a manual edit stops later picks from clobbering it until cleared.
+      // Manual edits stop source-driven renaming until cleared.
       if (!nextName.trim()) {
         lastAutoNameRef.current = ''
       } else if (name !== lastAutoNameRef.current) {

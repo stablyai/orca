@@ -112,9 +112,13 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       const items: AgentJournalRenderItem[] = []
       // Advance journal sequence so projection caching cannot hide a rename event.
       let sequence = 0
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), the provenance reads and runningTurn() of a journal.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
       const journal = {
         snapshot: () => ({ items, submissions: [] }),
+        context: { floor: () => null },
+        item: ((itemId) =>
+          items.find((item) => item.itemId === itemId) ??
+          null) satisfies AgentSessionJournal['item'],
         stopMarks: { latest: () => null, revision: () => 0 },
         lastActivityAt: () => 1,
         cursor: () => ({ epoch: 1, sequence: (sequence += 1) }),
@@ -148,7 +152,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
             }
           ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1,
         onStatusChanged: observe
       })
@@ -205,24 +209,35 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps, setDisplayName, setRenameError } = makeDeps({
       getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), the provenance reads and runningTurn() of a journal.
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'user-1',
+        sequence: 1,
+        revision: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] }
+      },
+      {
+        itemId: 'turn-1',
+        sequence: 2,
+        revision: 1,
+        observedAt: 1,
+        body: {
+          kind: 'status',
+          text: 'Working',
+          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+        }
+      }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
     const journal = {
       lastActivityAt: () => 1,
+      context: { floor: () => null },
       stopMarks: { latest: () => null, revision: () => 0 },
       cursor: () => ({ epoch: 1, sequence: 1 }),
-      snapshot: () => ({
-        items: [
-          { body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] } },
-          {
-            body: {
-              kind: 'status',
-              text: 'Working',
-              turnLifecycle: { turnId: 'turn-1', state: 'running' }
-            }
-          }
-        ],
-        submissions: []
-      }),
+      snapshot: () => ({ items, submissions: [] }),
+      item: ((itemId) =>
+        items.find((item) => item.itemId === itemId) ?? null) satisfies AgentSessionJournal['item'],
       itemFence: () => undefined,
       wroteBeforeOpen: () => false,
       runningTurn: () => null
@@ -237,7 +252,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const feed = new StructuredAgentSessionStatusFeed({
       logger: createStructuredAgentSessionLogger(),
       sessions: new Map([['session', { journal, params: { location, provider: 'codex' } }]]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1,
       onStatusChanged: (summary, options) => {
         expect(summary.workspaceId).toBe(workspaceId)

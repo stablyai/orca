@@ -47,8 +47,7 @@ export function guardMonacoDiffEditorDispose(
     try {
       originalDispose()
     } catch (error) {
-      // Why: Monaco's DisposableStore throws AggregateError after attempting
-      // teardown; letting it escape React cleanup can crash the renderer.
+      // DisposableStore finishes teardown then throws AggregateError; contain it so React cleanup cannot crash the renderer.
       reportError(error)
     }
   }

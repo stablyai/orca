@@ -263,8 +263,7 @@ describe('BrowserLoadFailureOverlay', () => {
       />
     )
 
-    // externalUrl / onOpenExternal omitted (e.g. a remote loopback failure):
-    // the action is absent and the overlay still renders its other recovery UI.
+    // Remote loopback failures omit the external-open action but retain recovery controls.
     expect(screen.queryByRole('button', { name: 'Open Externally' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
   })

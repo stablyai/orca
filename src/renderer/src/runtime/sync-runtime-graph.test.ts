@@ -9,16 +9,7 @@ import { makeAgentStatusEntry, makeState } from './sync-runtime-graph-test-harne
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 
-// Why: the comparator at `runtimeMobileSessionSyncKeysEqual` checks
-// `terminalLayoutsByTabId`, `runtimePaneTitlesByTabId`, `groupsByWorktree`,
-// `activeGroupIdByWorktree`, `unifiedTabsByWorktree`, `tabBarOrderByWorktree`,
-// `activeFileIdByWorktree`, `openFiles`, and `editorDrafts` by reference, and
-// checks `activeTabId` by scalar equality. `makeState`'s defaults allocate
-// fresh `{}`/`[]` for each collection, so two unrelated `makeState({...})`
-// calls trivially diverge. Tests that want to isolate a single field must
-// share every other reference-checked collection between the two states; this
-// factory produces one `Partial<AppState>` whose fields can be spread into both
-// `makeState` calls.
+// Isolate comparator inputs with one shared Partial<AppState>. makeState defaults allocate fresh collections; separate defaults would make unrelated reference changes mask the intended field. Share every reference-compared map/array while activeTabId compares by value.
 function makeSharedOverrides(): Partial<AppState> {
   return {
     tabsByWorktree: {},
@@ -232,20 +223,9 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     )
   })
 
-  // Why: the old key was a JSON.stringify of `tabsByWorktree` /
-  // `terminalLayoutsByTabId` / `runtimePaneTitlesByTabId`. In workspaces with
-  // hundreds of accumulated tabs this took ~750ms per call and pinned the main
-  // thread on every click that mutated `tabsByWorktree` (e.g. `setActivePane`
-  // → `updateTabTitle`). The new key compares those large maps by reference,
-  // so the equality check is constant-time when the underlying maps are
-  // unchanged. See docs/agent-working-pane-typing-lag.md.
+  // Old JSON map keys cost ~750ms per click with accumulated tabs; unchanged map references now compare in constant time (agent-working-pane-typing-lag.md).
   it('reports equal when underlying state is reference-stable', () => {
-    // Why: build two distinct AppState instances that share the same map
-    // references. If we passed the same state object twice, every map would be
-    // trivially reference-equal and the test would still pass against a
-    // deep-equal comparator, defeating the purpose of pinning down the
-    // by-reference contract. Share every map the comparator inspects by
-    // reference — any unshared default `{}` from `makeState` would diverge.
+    // Use distinct state objects sharing every inspected map; same-object input would let deep-equality regressions pass trivially.
     const sharedOverrides: Partial<AppState> = {
       ...makeSharedOverrides(),
       tabsByWorktree: {
@@ -265,10 +245,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     const stateA = makeState(sharedOverrides)
     const stateB = makeState(sharedOverrides)
 
-    // Why: when the store transitions through a no-op mutation, every relevant
-    // reference is unchanged. Two distinct states sharing the same map
-    // references must report equal so the subscriber early-returns and never
-    // schedules a sync.
+    // No-op store writes retain relevant references; comparator must skip sync despite distinct state wrappers.
     expect(
       runtimeMobileSessionSyncKeysEqual(
         getRuntimeMobileSessionSyncKey(stateA),
@@ -277,16 +254,9 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     ).toBe(true)
   })
 
-  // Why: pins down the by-reference invariant — a future "fix" that swaps `===`
-  // for deep equality on the large maps would silently regress the perf
-  // optimization (see docs/agent-working-pane-typing-lag.md) without breaking
-  // any other test.
+  // Reference replacement must differ even with equal contents; deep equality silently restores large-map cost.
   it('reports not equal when reference-equal-by-content but reference-different maps are passed', () => {
-    // Why: share every other comparator-relevant map by reference so that a
-    // by-reference comparator returns `true` for them, isolating
-    // `terminalLayoutsByTabId` as the ONLY differing field. Without this, the
-    // assertion would still pass under a deep-equal regression because the
-    // defaults from two `makeState({})` calls diverge by reference anyway.
+    // Share every map except terminalLayoutsByTabId so incidental default churn cannot mask deep-equality regression.
     const sharedOverrides = makeSharedOverrides()
     const mapA = {
       'term-1': {
@@ -309,11 +279,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
   })
 
   it('changes when tabsByWorktree title shape changes even if other maps are reference-stable', () => {
-    // Why: the test name promises "other maps are reference-stable", so we
-    // share every comparator-checked map by reference between `before` and
-    // `after`. Only `tabsByWorktree` content varies — proving that the
-    // tabs-projection path drives inequality and not some incidental
-    // reference churn from `makeState`'s defaults.
+    // Share all other comparator maps so only tabsByWorktree projection, not fresh defaults, drives inequality.
     const sharedOverrides = makeSharedOverrides()
 
     const before = getRuntimeMobileSessionSyncKey(
@@ -382,8 +348,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
   })
 
   it('does not skip the App subscriber gate when a launch draft is seeded', () => {
-    // The key is never even built when this gate skips, so the draft-aware key
-    // case above cannot catch a regression here.
+    // Gate skips key construction; draft-aware key tests cannot cover this path.
     const sharedOverrides = makeSharedOverrides()
     const before = makeState({ ...sharedOverrides, nativeChatLaunchDraftByTabId: {} })
     const after = makeState({

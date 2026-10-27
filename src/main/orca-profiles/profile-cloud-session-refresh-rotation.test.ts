@@ -14,7 +14,6 @@ const { refreshMock, selectOrgMock, linkMock, linked, writeFailure, removeFailur
   () => {
     const writeFailure: { code: string | null; onlyFile?: string; times?: number } = { code: null }
     const removeFailure: { code: string | null } = { code: null }
-    // The profile index's cloud link for profile-1.
     const linked: { cloud: unknown } = { cloud: undefined }
     return {
       refreshMock: vi.fn(),
@@ -27,7 +26,7 @@ const { refreshMock, selectOrgMock, linkMock, linked, writeFailure, removeFailur
   }
 )
 
-// Stands in for a session file that cannot be deleted (Windows antivirus holding it open).
+// Simulate Windows antivirus holding a session file open against deletion.
 vi.mock('node:fs', async (importOriginal) => {
   const original = await importOriginal<typeof Fs>()
   return {
@@ -51,7 +50,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-// Stands in for a profile directory that stops accepting writes (disk full, a locked file).
 vi.mock('../../shared/secure-file', async (importOriginal) => {
   const original = await importOriginal<typeof SecureFile>()
   return {
@@ -119,8 +117,7 @@ const cloud = {
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refresh reads only profile.id and profile.cloud.
 const active = { profile: { id: 'profile-1', cloud } } as ActiveOrcaProfileState
 
-// The auth server's rotation contract: the parent token answers 200 for the grace window,
-// after which any reuse revokes the family and every token in it answers 401.
+// Parent tokens return the same child during grace; later reuse revokes the whole family.
 function createRotatingAuthServer(now: () => number, reportedCloud = cloud) {
   let generation = 0
   let current = 'refresh-0'
@@ -169,7 +166,7 @@ function createRotatingAuthServer(now: () => number, reportedCloud = cloud) {
   }
 }
 
-// The relay broker renews on a ~10 s cadence and swallows every failure.
+// Match the relay broker’s renewal cadence and swallowed failures.
 async function runBrokerRenewals(count: number): Promise<void> {
   for (let i = 0; i < count; i++) {
     await readFreshOrcaCloudSession(config, active, userDataPath).catch(() => undefined)
@@ -181,7 +178,6 @@ function signIn(): void {
   signInCloudSession('profile-1', userDataPath, {
     accessToken: 'access-0',
     refreshToken: 'refresh-0',
-    // Already inside the refresh skew, so the first read rotates.
     expiresAt: Date.now() + 1_000,
     organizations: [],
     capabilities: { flags: { 'relay.use': true }, refreshedAt: Date.now() },
@@ -189,7 +185,6 @@ function signIn(): void {
   })
 }
 
-// A restart: fresh modules, so only what reached disk survives.
 async function restart() {
   vi.resetModules()
   return {
@@ -236,7 +231,6 @@ describe('cloud session refresh-token rotation', () => {
     expect(server.sent).toEqual(['refresh-0'])
     const stored = readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
-    // A restart must not read the spent token back from disk.
     expect(existsSync(getOrcaCloudSessionPath('profile-1', userDataPath))).toBe(false)
   })
 
@@ -278,7 +272,6 @@ describe('cloud session refresh-token rotation', () => {
 
     expect(server.sent).toEqual(['refresh-0'])
     expect(readCloudSession('profile-1', userDataPath).status).toBe('missing')
-    // A server reply begun before the revocation must not bring the session back.
     expect(
       commitCloudSessionCapabilities('profile-1', userDataPath, ticketBeforeRevocation, {
         capabilities: { flags: {}, refreshedAt: 1 }
@@ -451,7 +444,6 @@ describe('cloud session refresh-token rotation', () => {
       'ENOSPC'
     )
 
-    // The file still holds refresh-0, which was never spent, so a restart stays signed in.
     expect(existsSync(getOrcaCloudSessionPath('profile-1', userDataPath))).toBe(true)
   })
 
@@ -465,7 +457,6 @@ describe('cloud session refresh-token rotation', () => {
       capabilities: { flags: { 'relay.use': true }, refreshedAt: Date.now() }
     }
     const selecting = selectCloudOrg({ config, active, userDataPath, orgId: 'org-2' })
-    // A capability refresh that reports org-2 relinks first.
     commitCloudSessionCapabilities(
       'profile-1',
       userDataPath,

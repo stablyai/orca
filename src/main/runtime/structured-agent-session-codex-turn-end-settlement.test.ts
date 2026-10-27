@@ -1,10 +1,4 @@
-// A Codex send the turn it went into never took: the Stop that interrupts that turn
-// withdraws it, and nothing reads as working after. A send made while that turn runs, a
-// queued card's Send-now included, goes in as `turn/steer` naming it. A Stop made before Codex
-// opens that turn interrupts it at once; refused before Codex's thread runs it, the Stop waits
-// for it to open and interrupts once more. A send made then waits for it to open.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake,
-// keeping Codex 0.157's turn bookkeeping.
+// Drive real host/journal/adapter with Codex 0.157 turn bookkeeping: Stop settles held sends when their target turn ends, including before turn/started.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,6 +19,7 @@ import type { AgentJournalSubmission } from '../../shared/agent-session-journal-
 import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
 import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
@@ -177,7 +172,6 @@ async function settled(): Promise<{
   const snapshot = await host.journalSnapshot(SESSION)
   return {
     submissions: snapshot.submissions,
-    // The shared rule every surface reads "working" from.
     owesWork: owesStructuredAgentSessionWork(snapshot.items, snapshot.submissions, fence)
   }
 }
@@ -218,10 +212,19 @@ beforeEach(async () => {
   ) => {
     handlers = connectionHandlers
     connections += 1
+    let closed = false
     const connection: CodexAppServerConnection = {
       pid: 4321,
-      closed: false,
+      get closed() {
+        return closed
+      },
+      get closeResult(): CodexAppServerConnection['closeResult'] {
+        return closed ? { root: 'exited', tree: 'exited' } : null
+      },
       request: async (method, params) => {
+        if (method === 'thread/goal/get') {
+          return { goal: null }
+        }
         if (method === 'thread/start' || method === 'thread/resume') {
           return { thread: { id: THREAD } }
         }
@@ -265,6 +268,7 @@ beforeEach(async () => {
           throw new Error('the kill timed out')
         }
         childCloses += 1
+        closed = true
         return true
       }
     }
@@ -336,7 +340,6 @@ describe('a Codex send its turn ended without taking it', () => {
   it('withdraws a follow-up Codex steered into the turn a Stop ends, with no working latch', async () => {
     const opening = await runningTurn()
     const followUp = await send('and check the tests')
-    // Steered into the running turn by name, which fires no second turn/started.
     await vi.waitFor(() => expect(steers).toBe(1))
     expect(answers).toBe(1)
 
@@ -445,7 +448,6 @@ describe('a queued card sent now into the turn a Stop ends', () => {
   it("reads as the stopped turn's unconfirmed message, and nothing sends it again", async () => {
     await runningTurn()
     const { messageId: cardId } = await queueThenSendNow('and check the tests')
-    // Steered into the running turn, with no echo yet.
     await vi.waitFor(() => expect(steers).toBe(1))
     const [steered] = await handoffs(cardId)
     expect(steered?.dispatchState).toBe('pending')
@@ -460,7 +462,7 @@ describe('a queued card sent now into the turn a Stop ends', () => {
         }),
       { timeout: 5_000 }
     )
-    // A drain ignoring the pause re-sends only after the stopped turn ends: watch past that.
+    // Observe beyond turn end, when a drain ignoring the pause could resend.
     await vi.waitFor(() => expect(turns.turnId).toBeNull())
     const clock = createCoordinatorMailObservationClock(() => host, SESSION)
     clock.start()
@@ -519,8 +521,7 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
   })
 
   it('is settled when a Stop ends that turn, on a Codex that names a steered start falsely', async () => {
-    // Before 0.148, a steered turn/start answers with an id no turn opens or ends under,
-    // so only the steer's own answer names the turn whose end settles the send.
+    // Before 0.148, steered turn/start returns an id no turn opens under; only the steer answer identifies the settling turn.
     turns = codexTurnLifecycleFake(
       THREAD,
       () => (method, params) => handlers?.onNotification?.(method, params),
@@ -533,7 +534,6 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
 
     await stop('turn-1')
 
-    // A card's hand-off the agent may have: read as sent, never as refused.
     await vi.waitFor(async () =>
       expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
     )
@@ -546,8 +546,7 @@ describe('a second send made after Codex answered the first, before it opened th
     const opening = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(1))
     const followUp = await send('and check the tests')
-    // Held until that turn opens, so Codex is never asked to steer into a turn it has not started:
-    // the delivery loop goes idle with no wait on turn-1, which a handover would have started.
+    // An unopened target keeps delivery idle; handover would have started a turn-open wait.
     const { loop } = host.collaboratorsForTests().conversationDelivery
     await vi.waitFor(() => expect(loop.isRunning(SESSION)).toBe(false))
     expect(openWaits.turnIds).toEqual([])
@@ -650,8 +649,6 @@ describe('a Stop in that window that the turn never opens for', () => {
     expect(await settledWithin(stopping, 0)).not.toBe('held')
     expect(childCloses).toBe(1)
     expect(interrupts).toBe(1)
-    // Its wait ran out with the turn still able to open, so the Stop ended the child and took the
-    // send back.
     expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
   })
 
@@ -709,7 +706,6 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
       state: 'interrupted',
       outcome: 'cancellation'
     })
-    // Codex's end, after its answer, settles the send.
     await vi.waitFor(async () => expect((await settled()).owesWork).toBe(false))
   })
 
@@ -743,8 +739,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     expect(turnRow((await host.journalSnapshot(SESSION)).items)).toBeUndefined()
   })
 
-  // Codex records a prompt only once its turn starts, so a send whose turn never opened never ran:
-  // the Stop takes it back, and no send in doubt holds the client's queue.
+  // Codex records prompts only at turn start; Stop can withdraw an unopened send without leaving doubt that blocks the queue.
   async function stoppedBeforeItsTurnOpened(): Promise<string> {
     const release = turns.holdNextAnswer()
     const sent = await send('look around')
@@ -785,7 +780,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     await stopWhenItsTurnNeverOpens(release)
 
     expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    expect(await statusRows()).toEqual([AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed])
     expect(turnRow((await host.journalSnapshot(SESSION)).items)).toMatchObject({
       state: 'completed'
     })
@@ -837,7 +832,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
 
     expect(childCloses).toBe(1)
     expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    expect(await statusRows()).toEqual([AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed])
   })
 
   // Handed over once the stopped turn read ended, it started its own turn, however late that

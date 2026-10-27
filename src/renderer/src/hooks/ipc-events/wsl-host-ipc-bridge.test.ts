@@ -53,23 +53,70 @@ describe('selectWslHostsWithVisibleWork', () => {
     expect(selectWslHostsWithVisibleWork(store.getState())).toEqual([WSL_ENV])
   })
 
-  it('names the WSL host of a background workspace that has a terminal tab', () => {
-    const worktreeId = 'wsl-repo::/home/me/app'
-    const store = storeWith({
-      activeWorktreeId: `${TEST_REPO.id}::/repo1`,
-      repos: [
-        { ...TEST_REPO, executionHostId: 'local' },
+  it('boots only the focused host at launch when two hosts have saved tabs', () => {
+    const store = backgroundWslTabs()
+    const debianWorktree = 'debian-repo::/home/me/api'
+    store.setState({
+      runtimeEnvironments: [
+        ...store.getState().runtimeEnvironments,
         {
-          id: 'wsl-repo',
-          path: '/home/me/app',
-          displayName: 'app',
-          badgeColor: '',
-          addedAt: 0,
-          executionHostId: toRuntimeExecutionHostId(WSL_ENV)
+          ...store.getState().runtimeEnvironments[0],
+          id: 'wsl:debian',
+          name: 'Debian (WSL)',
+          orcadDeployment: { kind: 'wsl', distro: 'Debian', localPort: 42001, remotePort: 6768 }
         }
       ],
-      tabsByWorktree: { [worktreeId]: [makeTab({ id: 'tab-1', worktreeId })] }
+      repos: [
+        ...store.getState().repos,
+        {
+          id: 'debian-repo',
+          path: '/home/me/api',
+          displayName: 'api',
+          badgeColor: '',
+          addedAt: 0,
+          executionHostId: toRuntimeExecutionHostId('wsl:debian')
+        }
+      ],
+      activeWorktreeId: debianWorktree,
+      tabsByWorktree: {
+        ...store.getState().tabsByWorktree,
+        [debianWorktree]: [makeTab({ id: 'tab-2', worktreeId: debianWorktree })]
+      }
     })
-    expect(selectWslHostsWithVisibleWork(store.getState())).toEqual([WSL_ENV])
+    expect(selectWslHostsWithVisibleWork(store.getState())).toEqual(['wsl:debian'])
+  })
+
+  it('ignores a background workspace that only has saved tabs, so launch boots the focused host only', () => {
+    const store = backgroundWslTabs()
+    expect(selectWslHostsWithVisibleWork(store.getState())).toEqual([])
+  })
+
+  it('keeps a background workspace focused earlier this session while its tabs stay open', () => {
+    const store = backgroundWslTabs()
+    expect(selectWslHostsWithVisibleWork(store.getState(), new Set([WSL_WORKTREE]))).toEqual([
+      WSL_ENV
+    ])
+    store.setState({ tabsByWorktree: {} })
+    expect(selectWslHostsWithVisibleWork(store.getState(), new Set([WSL_WORKTREE]))).toEqual([])
   })
 })
+
+const WSL_WORKTREE = 'wsl-repo::/home/me/app'
+
+function backgroundWslTabs() {
+  return storeWith({
+    activeWorktreeId: `${TEST_REPO.id}::/repo1`,
+    repos: [
+      { ...TEST_REPO, executionHostId: 'local' },
+      {
+        id: 'wsl-repo',
+        path: '/home/me/app',
+        displayName: 'app',
+        badgeColor: '',
+        addedAt: 0,
+        executionHostId: toRuntimeExecutionHostId(WSL_ENV)
+      }
+    ],
+    tabsByWorktree: { [WSL_WORKTREE]: [makeTab({ id: 'tab-1', worktreeId: WSL_WORKTREE })] }
+  })
+}

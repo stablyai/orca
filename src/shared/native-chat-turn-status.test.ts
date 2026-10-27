@@ -238,9 +238,7 @@ describe('reduceNativeChatTurnTiming', () => {
   })
 
   it('carries the elapsed start across an optimistic echo becoming a transcript row', () => {
-    // The mobile composer renders an accepted send as `pending-N` until the
-    // transcript echo lands under its real id. Without the carry-over the active
-    // turn key flips mid-turn and "Working for 8s" restarts at 0s.
+    // Mobile pending-N ids become transcript ids mid-turn; carry timing so the running clock cannot restart.
     const working = reduceNativeChatTurnTiming(
       {},
       {
@@ -263,8 +261,7 @@ describe('reduceNativeChatTurnTiming', () => {
   })
 
   it('keeps a settled turn visible when the echo is replaced after it finished', () => {
-    // The swap can land after the turn settles. Re-keying (rather than only
-    // carrying a start) is what keeps the "Worked for N" row from vanishing.
+    // Re-key settled timing too or late echo replacement removes the Worked for row.
     const settled: NativeChatTurnTimingByTurn = {
       'pending-1': { startedAt: 1_000, workedSeconds: 12 }
     }

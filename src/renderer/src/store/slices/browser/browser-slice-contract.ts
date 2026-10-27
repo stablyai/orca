@@ -37,6 +37,8 @@ import type { TabSplitTarget } from '../tabs/tabs-slice-contract'
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
+  /** Link-only guard, checked before records and again at the unified-tab mutation. */
+  validateLinkPlacement?: (state: AppState) => void
   activate?: boolean
   browserPageId?: string
   title?: string
@@ -87,20 +89,14 @@ export type ClosedBrowserWorkspaceSnapshot = {
 export type RemoteBrowserPageHandle = {
   environmentId: string
   remotePageId: string
+  /** Profile identity confirmed by the host's current page snapshot. */
+  browserProfileId?: string
   placement?: RuntimeBrowserPlacement
   /** Optimistically staged by this client; the host has not published the page yet. */
   staged?: true
-  /**
-   * This client expects to host the staged page itself. The real placement is minted host-side and
-   * only arrives with the snapshot, so the pane needs this to mount as the right kind of pane from
-   * the first frame instead of swapping components at adoption.
-   */
+  /** Predict client hosting before live placement so staging mounts the correct component without an adoption remount. */
   stagedClientHosted?: true
-  /**
-   * Rebuilt at hydration from the persisted page row rather than observed from a host snapshot. The
-   * page id is real, but nothing has confirmed the host still has it, so the row is exempt from the
-   * absent-from-snapshot cull until the first snapshot that publishes it clears this.
-   */
+  /** Restored IDs are real but host presence is unproven; exempt from omission culling until first republication clears marker. */
   restoredFromSession?: true
   /** The restored page was hosted by this desktop, so it must not restore as a streamed pane. */
   restoredClientHosted?: true
@@ -123,15 +119,14 @@ export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
+  /** May precede the page record (client-hosted pages); main's false on guest teardown clears it. */
+  browserAudiblePageIds: Record<string, true>
+  /** Tab mute lives for the tab's life; each new guest of its pages is muted again. */
+  browserAudioMutedTabIds: Record<string, true>
   browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
   browserAnnotationMarkerIdsByPageId: Record<string, string[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
-  /**
-   * Closes of client-hosted pages their owning runtime never heard, keyed by environment.
-   *
-   * Durable because the runtime persists the pages themselves: a close swallowed while the host
-   * was down would otherwise be undone by that host's next start.
-   */
+  /** Persist undelivered client-page closes by environment or runtime restart restores its persisted pages. */
   clientHostedBrowserCloseIntentsByEnvironment: ClientHostedBrowserCloseIntentsByEnvironment
   recordClientHostedBrowserCloseIntents: (
     closes: readonly PendingClientHostedBrowserClose[]
@@ -175,9 +170,7 @@ export type BrowserSlice = {
     options?: CreateBrowserPageOptions
   ) => BrowserPage | null
   closeBrowserPage: (pageId: string) => void
-  // Why replacement and not mutation: a page's kind (doc vs web) is immutable for its life, so the
-  // address bar converts by replacing the page — fresh id, same workspace row — keeping the two
-  // main-process registry halves disjoint by construction.
+  // Doc/web kinds are immutable; conversion replaces page with fresh ID in surviving workspace to keep main registries disjoint.
   convertBrowserPage: (
     pageId: string,
     target: BrowserPageConversionTarget,
@@ -198,6 +191,8 @@ export type BrowserSlice = {
     pageId: string,
     failure: BrowserCertificateFailure | null
   ) => void
+  setBrowserPageAudible: (pageId: string, audible: boolean) => void
+  setBrowserTabAudioMuted: (tabId: string, muted: boolean) => void
   setBrowserTabUrl: (pageId: string, url: string) => void
   setBrowserPageUrl: (pageId: string, url: string, options?: SetBrowserPageUrlOptions) => void
   setRemoteBrowserPageHandle: (pageId: string, handle: RemoteBrowserPageHandle) => void
@@ -266,8 +261,7 @@ export type BrowserSlice = {
     selectedProfile: string
   }[]
   detectedBrowsersLoaded: boolean
-  // Why: which machine answered detection for a remote environment, so import menus can say where
-  // the import will read and store; null while browser settings target the local host.
+  // Record detector machine for import menus; null while settings target local host.
   detectedBrowsersHost: { machine: 'client' | 'remote'; hostLabel: string } | null
   fetchDetectedBrowsers: () => Promise<void>
   importCookiesFromBrowser: (
@@ -304,6 +298,4 @@ type BrowserStateCreator = StateCreator<AppState, [], [], BrowserSlice>
 export type BrowserSliceSet = Parameters<BrowserStateCreator>[0]
 export type BrowserSliceGet = Parameters<BrowserStateCreator>[1]
 
-// Keep the public slice surface's domain types available to existing consumers while the
-// implementation is split across focused modules.
 export type { BrowserPageConversionLeg, BrowserPageConversionTarget, BrowserSessionProfile }

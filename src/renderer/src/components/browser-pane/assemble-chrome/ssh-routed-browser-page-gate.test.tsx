@@ -187,9 +187,7 @@ describe('SshRoutedBrowserPageGate', () => {
   })
 
   it('unmounts unrouted pages in the SAME render a target appears, and destroys their guests', async () => {
-    // Why (review P1-1): the routed decision lags state by one commit on an
-    // already-mounted instance; a stale 'unrouted' render would mount a
-    // local-egress webview behind the preparing card, and unmount only parks it.
+    // A stale unrouted render could create a local-egress guest behind the card; unmounting only parks it.
     mocks.executionHostId = 'local'
     mocks.prepare.mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
     const view = render(

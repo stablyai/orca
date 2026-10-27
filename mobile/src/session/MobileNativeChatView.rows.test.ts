@@ -31,7 +31,7 @@ vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('./MobileNativeChatComposer', async () => {
+vi.mock('./native-chat/composer/MobileNativeChatComposer', async () => {
   const { composerStub } = await import('./MobileNativeChatView.render-stubs.test-fixture')
   return composerStub()
 })
@@ -39,8 +39,7 @@ vi.mock('./MobileNativeChatComposer', async () => {
 describe('MobileNativeChatView: rows and the streaming bubble', () => {
   installChatViewHooks()
 
-  // The gate that decides `streaming` lives in MobileNativeChatOverlay, which
-  // outlives this view; see MobileNativeChatOverlay.test.ts.
+  // Streaming eligibility is tested in the overlay, which stays mounted across chat-view toggles.
   it('appends the gated streaming bubble after the folded transcript', async () => {
     const folded = [assistantTurn('a1', 'The tests pass.')]
     await render({ folded })

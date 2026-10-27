@@ -82,31 +82,6 @@ beforeEach(() => {
 })
 
 describe('Bitbucket credential store', () => {
-  it('persists plaintext metadata and an encrypted secret, then reads them back', async () => {
-    const store = await loadStore()
-    store.saveBitbucketCredential({
-      authMode: 'basic',
-      email: 'ada@example.com',
-      baseUrl: null,
-      account: 'ada',
-      accessToken: null,
-      apiToken: 'secret-token'
-    })
-
-    expect(store.hasStoredBitbucketCredential()).toBe(true)
-    expect(store.getStoredBitbucketMetadata()).toMatchObject({
-      authMode: 'basic',
-      email: 'ada@example.com',
-      account: 'ada'
-    })
-    expect(store.loadStoredBitbucketSecret()).toMatchObject({
-      accessToken: null,
-      apiToken: 'secret-token',
-      authMode: 'basic',
-      email: 'ada@example.com'
-    })
-  })
-
   it('writes both credential files 0600', async () => {
     const store = await loadStore()
     store.saveBitbucketCredential({

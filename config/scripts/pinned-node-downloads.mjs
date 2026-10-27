@@ -57,12 +57,7 @@ export async function fetchPinnedFile({ url, destination, sha256 }) {
   return destination
 }
 
-/**
- * A node-gyp `--nodedir` for `target`, built from the pinned headers tarball.
- *
- * Why per target: on Windows node-gyp links `<nodedir>/Release/node.lib`, which differs by
- * arch and is not in the headers tarball.
- */
+// Keep --nodedir per target: Windows links architecture-specific Release/node.lib absent from the headers tarball.
 export async function preparePinnedNodeDir({ target, workDir, cacheDir = pinnedNodeCacheDir() }) {
   const { version, headers } = NODE_RUNTIME_PIN
   const tarball = await fetchPinnedFile({

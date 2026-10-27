@@ -8,15 +8,10 @@ import type { SFTPWrapper } from 'ssh2'
 import { latchLateSftpStreamErrors, type SftpStreamErrorLatch } from './sftp-stream-late-error'
 import { sftpSessionClosedError } from './ssh-file-transfer-abort'
 
-// Why: ssh2's WriteStream waits for each chunk's ack before writing the next, so an upload moves
-// one chunk per round trip. Buffering this much lets its _writev keep that many bytes of WRITE
-// requests in flight, as fastPut's default 64 x 32 KiB does.
+// Buffer 2 MiB so ssh2 _writev pipelines requests instead of waiting one RTT per chunk, matching fastPut's 64 × 32 KiB window.
 export const SFTP_UPLOAD_IN_FLIGHT_BYTES = 2 * 1024 * 1024
 
-/**
- * Why: on a dead connection ssh2's write stream waits on a CLOSE reply that never comes; settle on
- * the session's close so the local file handle is closed, not left to garbage collection.
- */
+/** On dead links CLOSE may never reply; session close must settle transfer and close its local file handle. */
 function watchSessionClose(sftp: SFTPWrapper): { closed: Promise<'closed'>; release: () => void } {
   let onClose: () => void = () => {}
   const closed = new Promise<'closed'>((resolve) => {
@@ -33,10 +28,7 @@ function mkdirSftp(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     sftp.mkdir(path, (err) => {
-      // Why: SFTP status code 4 (SSH_FX_FAILURE) is a generic code that
-      // OpenSSH returns for "already exists," but could also cover other
-      // failures (e.g. permission denied on parent). We accept this ambiguity
-      // because the next operation (write/recurse) will surface the real error.
+      // Status 4 can mean already-exists or another failure; allow it and let the next write/recurse expose the actual refusal.
       if (err && ((err as { code?: number }).code !== 4 || options?.allowExisting === false)) {
         reject(err)
       } else {
@@ -77,18 +69,15 @@ export async function uploadFile(
     ) {
       throw new Error(`File changed during upload: ${localPath}`)
     }
-    // Why: rejected local sources must not leave an empty remote file.
+    // Validate local source before creating any remote file.
     writeStream = sftp.createWriteStream(remotePath, {
       flags: options?.exclusive ? 'wx' : 'w',
       highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
-    // Why: the OPEN reply can land after this transfer settles; without a listener that
-    // outlives it, ssh2 throws it synchronously into the socket handler (#15479).
+    // Late OPEN replies can throw from ssh2's parser; keep an error listener beyond settlement (#15479).
     writeStreamErrors = latchLateSftpStreamErrors(writeStream, remotePath)
     readStream = handle.createReadStream({ autoClose: false })
-    // Why: `finished` drops its listeners once the read ends; an abort (a quit's disconnect) that
-    // destroys the ended stream with the signal's reason would then emit an unhandled 'error' that
-    // takes main down mid-shutdown. The transfer's outcome is read from `finished`, not from here.
+    // finished removes read listeners; retain an error sink for abort-after-EOF while finished owns transfer outcome.
     readStream.on('error', () => {})
     const abortTransfer = (): void => {
       const reason =
@@ -203,7 +192,7 @@ export function writeStringViaSftp(
       cleanup()
       reject(err)
     }
-    // Why: prepend so a session error settles this write before a late-error swallower sees it.
+    // Settle this write before the session's late-error swallower sees the error.
     sftp.prependOnceListener('error', onError)
     ws.once('close', onClose)
     ws.once('error', onError)
@@ -219,8 +208,7 @@ export async function uploadDirectory(
   options?: { exclusive?: boolean; signal?: AbortSignal }
 ): Promise<void> {
   options?.signal?.throwIfAborted()
-  // Why resolve the root: entries are compared by realpath, so a root under a symlink, junction or
-  // Windows 8.3 short name (RUNNER~1 in TEMP) would otherwise reject every entry as escaped.
+  // Canonicalize root like entries; symlinks, junctions and Windows 8.3 paths otherwise look escaped.
   await uploadDirectoryWithinRoot(sftp, localDir, remoteDir, await realpath(root), options)
 }
 
@@ -241,10 +229,7 @@ async function uploadDirectoryWithinRoot(
     await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
     const statResult = await lstat(localPath)
 
-    // Why: skip symlinks and special files (sockets, FIFOs, devices) to
-    // prevent following symlinks that could exfiltrate local files to the
-    // remote. The caller's pre-scan catches symlinks up-front, but this
-    // guard closes the TOCTOU gap if one is created between scan and upload.
+    // Reject symlinks/special files again after pre-scan to close replacement races that could upload unrelated local data.
     if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
       continue
     }

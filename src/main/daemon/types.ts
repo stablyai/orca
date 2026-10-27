@@ -6,6 +6,7 @@ import type {
   SystemResolverHealthRequest
 } from './daemon-health-requests'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { SessionInfo } from './daemon-session-info'
 import type {
   ConfirmForegroundProcessRequest,
   ConfirmShellForegroundRequest,
@@ -25,7 +26,6 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {
   AgentSessionExecutionClaim,
-  AgentSessionOwnerBinding,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
@@ -321,27 +321,7 @@ export type SystemResolverHealthResult = {
   health: SystemResolverHealth
 }
 
-export type SessionInfo = {
-  foregroundProcess?: string
-  sessionId: string
-  incarnationId?: string
-  state: SessionState
-  shellState: ShellReadyState
-  isAlive: boolean
-  terminalHandle?: string
-  wslDistro?: string | null
-  pid: number | null
-  cwd: string | null
-  cols: number
-  rows: number
-  createdAt: number
-  agentSessionOwners?: AgentSessionOwnerBinding[]
-}
-
-/** Router/adapter metadata for legacy-session labels; never transmitted on the daemon wire. */
-export type DaemonSessionInfo = SessionInfo & {
-  protocolVersion: number
-}
+export type { DaemonSessionInfo, SessionInfo } from './daemon-session-info'
 
 export type * from './daemon-stream-events'
 

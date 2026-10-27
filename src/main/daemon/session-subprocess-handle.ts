@@ -8,11 +8,13 @@ export type ChildProcessVerdictRead = PtyChildProcessVerdict | Promise<PtyChildP
 export type SubprocessHandle = {
   pid: number
   processNameIsSpawnFile?: boolean
+  /** The job-control shell is the root's only child (macOS login(1) wrapper), not the root itself. */
+  shellIsRootChild?: boolean
   inspectChildProcesses?(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead
   /** cachedOnly must neither query the process nor schedule inspection. */
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
   /** Await process-table evidence captured after this confirmation request. */
-  confirmForegroundProcess?(): Promise<string | null>
+  confirmForegroundProcess?(context?: { decision?: boolean }): Promise<string | null>
   /** Proves a fresh post-boundary PTY process tree contains only the shell. */
   confirmShellForeground?(): Promise<boolean>
   /** Skip stdin command delivery when shell arguments already delivered it. */

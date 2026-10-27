@@ -4,7 +4,7 @@ import {
   LINEAR_CUSTOM_VIEW_MODELS,
   mergeLinearCollectionResults
 } from './task-page-linear-issue-model'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {
@@ -87,7 +87,6 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskResumeApplied,
     taskSource,
@@ -98,7 +97,10 @@ export function useTaskPageLinearCustomViewEffects(model: TaskPageLinearInOrcaEf
     linearRefreshNonce,
     getCachedLinearCustomViews,
     listLinearCustomViews,
-    linearTaskSourceContext
+    linearTaskSourceContext,
+    setLinearCustomViewsError,
+    setLinearCustomViewsLoading,
+    setLinearCustomViewsResult
   ])
   useEffect(() => {
     if (!selectedLinearCustomView?.workspaceId) {

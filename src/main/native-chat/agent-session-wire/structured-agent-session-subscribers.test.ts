@@ -14,7 +14,7 @@ import type {
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimePayload
-} from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import {
   createTrackedJournalOpener,
@@ -256,7 +256,7 @@ describe('AgentSessionSubscribers', () => {
           }
         ]
       ]),
-      getRecord: () => null,
+      getConversation: () => null,
       now: () => 1_000
     })
     const subscribers = new AgentSessionSubscribers({

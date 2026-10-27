@@ -3,22 +3,20 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { MobileComposerCreateSelection } from './mobile-composer-source-types'
 import { worktreeCreateBasePrefetch } from './mobile-workspace-create-operations'
 
-/** The base a create from this selection starts from; null when no prepared checkout can serve it. */
 function worktreeCreatePrefetchBase(
   selection: MobileComposerCreateSelection | null
 ): string | undefined | null {
   if (!selection || selection.kind === 'new-branch') {
     return undefined
   }
-  // Why: reusing an existing branch checks it out as-is, so a prepared checkout is never claimed.
+  // Existing-branch reuse cannot claim a prepared checkout.
   if (selection.kind === 'branch' && selection.reuse) {
     return null
   }
   return selection.baseBranch
 }
 
-// Why: without this the host fetches the base and checks out every file inside worktree.create;
-// desktop's composer warms the same host-side cache on open, which is what makes its create fast.
+// Warm the host checkout cache before create so fetch and checkout do not delay the user’s submission.
 export function useWorktreeCreateBasePrefetch(args: {
   client: RpcClient | null
   repoId: string | null

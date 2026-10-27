@@ -1,7 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 
-// Why: use git decoration tokens so counts follow the documented light/dark status palette.
 export function DiffLineCounts({
   added,
   removed,

@@ -232,7 +232,7 @@ describe('createLocalGitProvider', () => {
     const args = git[fnName].mock.calls[0]
     const options = args.at(-1)
     if (fnName === 'getRemoteFileUrl' || fnName === 'getRemoteCommitUrl') {
-      // These read the Windows-hosted git directly, exactly as the local arm does today.
+      // URL reads require Windows-hosted Git readiness, matching local execution.
       expect(git.awaitWindowsHostGitEnvironmentReady).toHaveBeenCalledWith({ cwd: WT })
       return
     }

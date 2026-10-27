@@ -14,14 +14,12 @@ import type { AgentPromptDelivery } from '../../../shared/agent-session-host-aut
 import { translate } from '@/i18n/i18n'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { AgentTerminalLaunchCompletion } from './structured-agent-session-launch-admission'
-import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
+import {
+  agentPermissionNeedsPreparedCommand,
+  toAgentLaunchPreferences
+} from '../../../shared/agent-launch-preferences'
 
-/**
- * Launch an agent terminal on the web runtime host instead of a local tab.
- *
- * Why: paired web tabs are host-owned, so this path never creates a local tab
- * (callers return tabId: null).
- */
+/** Paired web tabs are host-owned; never create a local tab, and return tabId:null. */
 export function launchAgentInWebHostTab(args: {
   agent: TuiAgent
   worktreeId: string
@@ -55,7 +53,7 @@ export function launchAgentInWebHostTab(args: {
     onPromptDelivered
   } = args
   const hasPrompt = prompt.length > 0
-  const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
+  const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions, agent)
   const structuredPromptDelivery: AgentPromptDelivery =
     promptDelivery === 'draft' ? 'draft' : 'auto-submit'
   const launch = {
@@ -69,6 +67,7 @@ export function launchAgentInWebHostTab(args: {
     agentSessionKind: 'fresh',
     // Why: with or without a prompt, the desktop's launch settings decide args (#31986).
     launchAgent: agent,
+    preparedAgentCommand: agentPermissionNeedsPreparedCommand(agent, startupPlan.sessionOptions),
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
@@ -79,7 +78,11 @@ export function launchAgentInWebHostTab(args: {
     ...(hasPrompt && pastePromptAfterReady === null
       ? { promptDelivery: structuredPromptDelivery }
       : {}),
-    ...(agentArgs !== undefined ? { agentArgs } : {}),
+    ...(launchPreferences?.mode
+      ? { agentArgs: startupPlan.launchConfig.agentArgs }
+      : agentArgs !== undefined
+        ? { agentArgs }
+        : {}),
     ...(launchPreferences ? { launchPreferences } : {})
   } as const
 
@@ -129,8 +132,7 @@ export function launchAgentInWebHostTab(args: {
     }).then(handleCreation)
   }
   if (hasPrompt && promptDelivery === 'draft') {
-    // Why: the draft rode in on the launch command, so no paste runs and
-    // nothing else seeds the chat-composer copy for this host class.
+    // Native launch-command prefill skips paste, so explicitly seed this host class’s chat composer.
     return createWebRuntimeAgentSessionTerminalWithLaunchDraft({
       ...launch,
       agent,

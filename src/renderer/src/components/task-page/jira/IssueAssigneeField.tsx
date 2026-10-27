@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getJiraSelfUser } from '@/components/jira-self-user'
 import { JiraUserPicker, type JiraUserPickerFixedOption } from '@/components/jira-user-picker'
 import { hasJiraAssigneeCreateField } from '@/components/task-page-jira-create-fields'

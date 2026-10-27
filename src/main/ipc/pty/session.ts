@@ -9,14 +9,14 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../../shared/pty-renderer-delivery-health'
 import type { PtyRendererDeliveryDebugSnapshot } from './delivery/debug'
-import { PtyProducerFlowController } from '../pty-producer-flow-control'
-import { PtyPendingDataDrainQueue } from '../pty-pending-data-drain-queue'
-import type { PendingPtyData } from '../pty-pending-data-drain-contract'
+import { PtyProducerFlowController } from './delivery/pty-producer-flow-control'
+import { PtyPendingDataDrainQueue } from './delivery/pty-pending-data-drain-queue'
+import type { PendingPtyData } from './delivery/pty-pending-data-drain-contract'
 import { activeRendererPtys } from './delivery/visibility-state'
 import {
   isHiddenPtyDeliveryGateEnabled,
   shouldDropHiddenRendererPtyData
-} from '../pty-hidden-delivery-gate'
+} from './delivery/pty-hidden-delivery-gate'
 import type { CodexHomePtySpawnedLifecycleArgs, PrepareCodexSessionResume } from './host-env/types'
 import { tryGetProviderForPty } from './provider/registry'
 
@@ -28,6 +28,8 @@ export type PtyDataPayload = {
   transformed?: boolean
   background?: boolean
   droppedOutput?: boolean
+  /** Escape left open by bytes dropped just before this chunk; lets an abandoned restore skip its tail. */
+  gapEscapeState?: string
 }
 
 export type RendererPtyDeliveryAccounting = {

@@ -43,7 +43,7 @@ function requireTarget(claims: TargetClaims, targetId: string): SshTarget & { ge
   return { ...target, generation }
 }
 
-// Why: the code alone gave users nothing to act on, and the host-conversion copy does not fit a link.
+// Give link-specific recovery steps; bare codes and host-conversion wording are unhelpful here.
 function sshAccessBlockerMessage(targetId: string, blocker: OrcadMigrationBlocker): string {
   switch (blocker.code) {
     case 'orcad_migration_dependent_state':
@@ -155,7 +155,7 @@ export function linkRuntimeSshAccess(
       await claims.flush()
       requireAccessOnlyTarget(claims, target.id, environmentId)
       requireFence(claims, environmentId, fence, true)
-      // Why recorded: the durable link intent above names this target and environment.
+      // The durable link intent already binds this target to the environment.
       claims.claim(target.id, environmentId, { ownerRecorded: true })
       await claims.flush()
       let tunnelStarted = false

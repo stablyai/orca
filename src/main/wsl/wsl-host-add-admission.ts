@@ -15,6 +15,10 @@ export function wslHostNotConnectedMessage(distro: string): string {
   return `The WSL host ${distro} isn’t connected. Open one of its projects or connect it in Settings → Remote Orca Servers.`
 }
 
+export function wslHostStoppedMessage(distro: string): string {
+  return `${distro} was stopped. Switch to one of its projects, or reconnect it in Settings → Remote Orca Servers, to start it again.`
+}
+
 /** Why no WSL host may run at all right now; null when they may. */
 export function wslHostRunRefusal(gate: {
   isEnabled: () => boolean
@@ -23,7 +27,7 @@ export function wslHostRunRefusal(gate: {
   if (!gate.isEnabled()) {
     return { ok: false, kind: 'disabled', message: WSL_HOSTS_DISABLED_MESSAGE }
   }
-  // Why before any deploy work: without the packaged template C4 fails deep inside with a raw error.
+  // Reject missing packaged templates before C4 deploy emits an opaque deep failure.
   return gate.hasServerFiles()
     ? null
     : { ok: false, kind: 'server-files-missing', message: WSL_HOST_SERVER_FILES_MISSING_MESSAGE }

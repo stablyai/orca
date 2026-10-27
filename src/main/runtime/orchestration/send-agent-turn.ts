@@ -1,12 +1,4 @@
-/**
- * The one way Orca sends a message into an agent on another agent's behalf.
- *
- * Built only from the paths a user's own message already takes: a structured chat gets
- * `host.send` (the composer's `sendStructuredAgentSessionTurn`, queue decision included) with the
- * composer's own envelope builder, and the host's own settlement waiter; a terminal gets
- * `sendTerminalAgentPrompt`. Callers keep their own reading of the outcome; what they share is the
- * send and the wait.
- */
+/** Use the composer's structured send/envelope/waiter or the terminal prompt writer; callers interpret the shared outcome. */
 
 import type {
   AgentJournalMessageItem,
@@ -23,10 +15,7 @@ import type { StructuredAgentSessionHost } from '../../native-chat/agent-session
 import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
 
-/**
- * `now` hands the message over at once, joining a running turn as a steer. `queue` asks a busy chat
- * to hold it as a draft its queue sends when the turn ends, as the composer does with queueing on.
- */
+/** now steers a running turn; queue holds busy-chat input until its turn ends. */
 export type AgentTurnDelivery = 'queue' | 'now'
 
 /** What a structured send reads of the host. */
@@ -58,11 +47,7 @@ export type StructuredSessionTurnSend = {
   budgetMs?: number
 }
 
-/**
- * What the typed text is, which decides how it is typed. A dispatch preamble leads with the
- * coordinator's task line; no other kind of message may borrow that. An external message is a
- * connector thread's follow-up, typed as the user's own.
- */
+/** Only Dispatch preambles lead with coordinator task text; external messages use the user-input route. */
 export type TerminalTurnPurpose = 'dispatch-preamble' | 'external-message'
 
 /** A terminal has one write: whether a mid-turn prompt waits is the agent TUI's own behaviour. */
@@ -97,11 +82,7 @@ export type TerminalTurnSend<TReceipt> = {
   beforeWrite?: DispatchPreambleSendOptions['beforeWrite']
 } & TerminalTurnWriteOptions
 
-/**
- * `sent` carries the submission as it settled, or as first answered when the wait ran out; it is
- * undefined when the host answered with no submission at all, which proves neither outcome.
- * `queued` carries the draft as the host reported it; a replayed id may report it already settled.
- */
+/** sent may have no proven submission or remain pending; queued reports the host's current draft, including replay settlement. */
 export type StructuredSessionTurnOutcome =
   | { kind: 'refused'; refusal: AgentSessionWireRefusal }
   | { kind: 'queued'; clientMessageId: string; queued: AgentSessionQueuedSendReceipt }
@@ -136,7 +117,7 @@ function terminalTurnOptions(turn: TerminalTurn): DispatchPreambleSendOptions {
     case 'external-message':
       // The writer returning is the whole receipt; the turn is read from hooks, not awaited here.
       return {
-        inputKind: 'driving',
+        inputKind: 'orchestration',
         acceptQueued: true,
         observationTimeoutMs: 0,
         requestId: turn.operationId
@@ -166,15 +147,12 @@ async function sendStructuredSessionTurn(
   if ('queued' in result.value) {
     return { kind: 'queued', clientMessageId, queued: result.value.queued }
   }
-  // Accepted is not delivered: the agent may still be starting. One budget, the caller's, covers
-  // the start and the answer; a start that outlasts it leaves the message held for the agent, and
-  // the answer `pending`, which the caller reports as a turn start nobody observed yet.
+  // Admission is not delivery; one caller budget covers startup and settlement, leaving overdue submissions pending.
   const answered = agentSessionSendSubmission(result.value)
   if (answered?.dispatchState !== 'pending') {
     return { kind: 'sent', clientMessageId, submission: answered }
   }
-  // The submission's own id: a replayed `queue` turn whose draft went out answers with the
-  // hand-off, which the queue sent under a fresh id.
+  // Wait on the answered id: replayed queued drafts may have dispatched under a new id.
   const settled = await send.host
     .waitForSendSettlement(send.sessionId, answered.clientMessageId, {
       budgetMs: send.budgetMs ?? ORCHESTRATION_READINESS_TIMEOUT_MS

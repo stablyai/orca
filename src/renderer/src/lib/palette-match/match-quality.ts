@@ -24,10 +24,7 @@ export function isPrefixOrBoundaryPaletteMatchQuality(quality: PaletteMatchQuali
   return quality === 'field-prefix' || quality === 'word-prefix' || quality === 'boundary-substring'
 }
 
-/**
- * Coarse cross-section strength used only to decide which palette section leads.
- * Kept small on purpose so sections never compare raw domain-specific scores.
- */
+/** Compare sections using coarse shared strengths; raw domain scores are not comparable. */
 export const PALETTE_RESULT_QUALITY_CLASSES = [
   'exact-intent',
   'exact-visible',

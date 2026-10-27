@@ -1,17 +1,9 @@
-/**
- * The web form of the media seam: the page asks the shell to pick, then reads the bytes back.
- *
- * Driven through the real port pair against a shell that stages files, so what this reads is the
- * three verbs leaving the page in order and the bytes being reassembled from what came back — the
- * same path the composer's attach button takes. The pasteboard reaches the same verbs through the
- * clipboard seam, and is `clipboard.web.test.tsx`'s.
- */
+// Drive the real port pair to verify shell-only pick/read/release and byte reconstruction.
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Stub re-exported screen hooks to keep Expo out of this test runtime.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -43,7 +35,6 @@ import {
   type PickedMobileImage
 } from './media-picker-contract'
 
-/** Three chunks: two full ones and a short tail, so the `eof` boundary is not the cap boundary. */
 const THREE_CHUNKS = BRIDGE_MEDIA_READ_MAX_BYTES * 2 + 17
 
 const held: { picker: MediaPicker | null } = { picker: null }
@@ -73,7 +64,7 @@ async function mount(pair: BridgePortPair): Promise<MediaPicker> {
   return picker
 }
 
-/** The pair delivers on microtasks, so a call the page makes needs the lanes drained under it. */
+// Drain microtasks to deliver the port pair’s request/reply lanes.
 async function settle<Value>(pair: BridgePortPair, work: Promise<Value>): Promise<Value> {
   const settled = work.then(
     (value) => () => value,
@@ -115,8 +106,7 @@ function pairFor(shell: MediaTestShell, grants?: readonly string[]): BridgePortP
   })
 }
 
-/** The shell's code, off the rejection the bridge rebuilt: the message is the host's, not the
- *  handler's, so the code is the only part of a refusal a page may read. */
+// Read the refusal code because the bridge replaces handler messages.
 function refusalCode(error: unknown): unknown {
   return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 }
@@ -155,7 +145,6 @@ describe('picking media from inside the shell', () => {
       `read media-2 ${BRIDGE_MEDIA_READ_MAX_BYTES * 2}:17`,
       'release media-2'
     ])
-    // The whole point of the verbs: nothing reached the desktop.
     expect(pair.rpc.requests).toEqual([])
   })
 
@@ -166,9 +155,7 @@ describe('picking media from inside the shell', () => {
     await collect(pair, picker.pickImages('library'))
     expect(shell.released).toEqual(['media-1'])
 
-    // The same handle the seam finished with, asked for again through the page's own client: the
-    // release is a fact about the shell, not bookkeeping this side chose to believe. The code is
-    // what is asserted, because the host replaces a handler's own words on the way out.
+    // Re-read the released handle through the client to prove shell cleanup, not just local bookkeeping.
     const refused = settle(
       pair,
       pair.client.callNativeVerb('native.media.read', {
@@ -181,8 +168,7 @@ describe('picking media from inside the shell', () => {
   })
 
   it('takes the first of a single pick and releases the one it never read', async () => {
-    // `multiple: false` still lets a picker answer more than one item on some providers, and the
-    // seam's one-image caller would otherwise strand every extra handle until the TTL.
+    // Providers may return extras for multiple:false; release them before they occupy capacity until TTL.
     const shell = createMediaTestShell({
       staged: { library: [{ bytes: stagedTestBytes(9) }, { bytes: stagedTestBytes(9) }] }
     })
@@ -207,8 +193,7 @@ describe('picking media from inside the shell', () => {
   })
 
   it('reads an empty staged item once rather than looping on a zero-length read', async () => {
-    // The shell's schema refuses `length: 0`, so an empty file has to be asked for as one byte and
-    // answered `eof` — the one case where the read is not derived from what is left.
+    // The schema refuses length:0, so ask for one byte to receive eof for an empty file.
     const shell = libraryShell(1, 0)
     const pair = pairFor(shell)
     const picker = await mount(pair)
@@ -220,9 +205,7 @@ describe('picking media from inside the shell', () => {
   })
 
   it('reassembles a shell that answers shorter ranges than it was asked for', async () => {
-    // Ten bytes at a time, which is not a whole base64 group: each chunk's own padding would land
-    // in the middle of the file if a reader joined the strings instead of the bytes. The wire
-    // promises `eof` and nothing about the length, so this is a shell within its contract.
+    // Ten-byte chunks have internal base64 padding; joining decoded bytes must still preserve the file.
     const shell = createMediaTestShell({
       staged: { library: [{ bytes: stagedTestBytes(25) }] },
       chunkBytes: 10
@@ -253,7 +236,6 @@ describe('picking media from inside the shell', () => {
     const refused = await settle(pair, picker.pickImage('library')).catch((error: unknown) => error)
 
     expect(String(refused)).toMatch(/answered no bytes for media-1 and did not report the end/)
-    // Named rather than spun on: the loop has no other exit, and the handle still goes back.
     expect(shell.released).toEqual(['media-1'])
   })
 
@@ -271,14 +253,7 @@ describe('picking media from inside the shell', () => {
     expect(shell.released).toEqual(['media-1'])
   })
 
-  /**
-   * Every refusal a pick can answer with, through one path.
-   *
-   * The cap is the registry's, raised before a picker runs; the ceiling is ruling 6c's, raised
-   * once a picked item has been weighed. Both cross as an `error` frame and both have to reach the
-   * caller as a reason it can switch on, because an empty list would have told it the user changed
-   * their mind — and a code outside the seam's vocabulary floors instead of crossing verbatim.
-   */
+  // Refusals must retain named reasons instead of looking like user cancellation; unknown codes fall back to the seam’s vocabulary.
   it.each([
     ['native_media_handle_cap', 'this page is holding every staged item it may'],
     ['native_media_too_large', 'a picked item is 20000000 bytes, over what this shell stages']
@@ -340,6 +315,24 @@ describe('picking files from inside the shell', () => {
       }
     ])
     expect(shell.released).toEqual(['media-1'])
+  })
+
+  it("names a non-image files pick for the terminal upload and leaves an image's to the host", async () => {
+    const shell = createMediaTestShell({
+      staged: {
+        files: [
+          { bytes: stagedTestBytes(3), mime: 'image/png', name: 'diagram.png' },
+          { bytes: stagedTestBytes(3), mime: 'text/plain', name: 'notes.txt' }
+        ]
+      }
+    })
+    const pair = pairFor(shell)
+    const picker = await mount(pair)
+
+    expect(await collect(pair, picker.pickImages('files'))).toEqual([
+      { base64: encodeTestBase64(stagedTestBytes(3)) },
+      { base64: encodeTestBase64(stagedTestBytes(3)), fileName: 'notes.txt' }
+    ])
   })
 
   it('names the file from its type on a shell too old to name it', async () => {

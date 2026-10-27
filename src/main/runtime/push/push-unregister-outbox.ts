@@ -1,6 +1,4 @@
-// Why: a phone that turns background notifications off, or gets unpaired, must
-// have its token deleted at the gateway even if the gateway is unreachable right
-// then. Modelled on relay-revoke-outbox.ts: durable, hardened, drained on start.
+// Persist gateway token deletion across unpairing, disabled notifications and outages; follow relay-revoke-outbox durability.
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'

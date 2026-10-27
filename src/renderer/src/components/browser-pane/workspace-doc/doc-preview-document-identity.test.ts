@@ -28,8 +28,7 @@ describe('buildDocPreviewDocumentIdentity', () => {
     expect(identity.fileName).toBe('index.html')
   })
 
-  // Why: an SSH preview of a file outside the workspace has no relative form, and a bare filename
-  // would strip the only context the reader has for where it came from.
+  // Keep the absolute path for external SSH files; a filename alone loses their location.
   it('falls back to the absolute path when the file sits outside the workspace', () => {
     const identity = buildDocPreviewDocumentIdentity({
       filePath: '/elsewhere/notes/report.html',
@@ -41,8 +40,7 @@ describe('buildDocPreviewDocumentIdentity', () => {
     expect(identity.fileName).toBe('report.html')
   })
 
-  // Why: the path is copied and read as the owning machine spells it, so a Windows host's
-  // backslashes must survive rather than being normalised into a path that host would not accept.
+  // Keep paths spelled for the owning Windows host, including its backslashes.
   it('keeps the owning machine separator on Windows paths', () => {
     const identity = buildDocPreviewDocumentIdentity({
       filePath: 'C:\\repo\\docs\\index.html',

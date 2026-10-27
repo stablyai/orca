@@ -6,9 +6,7 @@
 // - A field step is bounded by the count of distinct values the field holds; a step of 90 on
 //   minutes is one value at :00, never "every 90 minutes" (#15895).
 export type CronParseOptions = {
-  /** Input-time gate: reject a step wider than the field's domain instead of silently
-   *  degenerating to a single value. Off for persisted rows, which must keep running the
-   *  cadence they were saved with rather than start throwing mid-tick. */
+  /** Reject oversized input steps, but preserve stored cadence instead of throwing on legacy rows mid-tick. */
   rejectOversizedStep?: boolean
 }
 
@@ -65,8 +63,7 @@ export function parseCronField(args: {
   field: string
   names?: Record<string, number>
   normalize?: (value: number) => number
-  // Distinct values the field holds, when `normalize` aliases some away — day of week
-  // spans 0-7 but holds seven days, so `*/8` is oversized even though 8 <= 7-0+1.
+  // Bound by distinct values after aliases: weekday 0–7 holds seven days, so */8 is oversized.
   distinctValueCount?: number
   rejectOversizedStep?: boolean
 }): Set<number> {
@@ -137,11 +134,7 @@ export function parseCronField(args: {
   return result
 }
 
-// A day field restricts iff none of its terms ranges over a star, matching what vixie cron
-// and robfig/cron both do. crontab(5) says "restricted (ie, are not *)", which reads as a
-// literal-`*` test, but vixie's own entry.c sets DOM_STAR/DOW_STAR off the field's leading
-// character, so `*/2` is a star there too; we follow the implementations over the prose,
-// because reading `*/2` as restricted flips its day rule to OR and fires it ~8x more.
+// Follow vixie/robfig star restriction, including */2, over ambiguous crontab prose; treating it as restricted flips AND to OR and fires ~8x more.
 export function isCronDayFieldRestricted(field: string): boolean {
   return !field.split(',').some((term) => term.split('/')[0].trim() === '*')
 }

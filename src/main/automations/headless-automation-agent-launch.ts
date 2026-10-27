@@ -7,7 +7,6 @@ import type {
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
@@ -103,6 +102,7 @@ export async function launchHeadlessAutomationAgent(
           agent,
           prompt: startupPrompt ?? '',
           title: run.title,
+          suppressStartupUpdatePrompt: true,
           ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
         })
         terminal = launched
@@ -115,10 +115,7 @@ export async function launchHeadlessAutomationAgent(
         }
       },
       deliverTerminalPrompt: ({ handle, prompt }) =>
-        runtime.deliverStartupFollowup(handle, {
-          expectedProcess: TUI_AGENT_CONFIG[agent].expectedProcess,
-          prompt: prompt.text
-        })
+        runtime.deliverStartupFollowup(handle, { agent, prompt: prompt.text })
     }
   }
   await launchUntilPublished(execution)

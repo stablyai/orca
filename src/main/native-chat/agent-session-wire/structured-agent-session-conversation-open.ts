@@ -1,21 +1,14 @@
-// The one way a conversation's journal becomes open on this host: for a send, for a reader, and
-// for an attach that finds none open.
-//
-// A damaged journal fails the open, which refuses it as unloadable. It marks what an earlier host
-// process handed over and left unanswered as in doubt, and settles what it left running — the
-// crash boundary. That
-// needs no lease, and the doubt is final: whether the provider took such a row is never guessed. A
-// row an earlier process accepted and never handed over (it quit or crashed first) is settled here
-// too, before any reader, command or child sees it: a person's message is kept as a card, the rest
-// rejected (`journal-unsent-send-hold.ts`). The cards then wait for the chat's next turn
-// (`queued-message-pause.ts`). Nothing here starts a provider child.
+// Open and settle the crash boundary before any reader, command or child: damaged journals fail;
+// handed-over sends remain permanently unknown. Unhanded personal text becomes a paused card,
+// other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
+// Settlement needs no lease and starts no provider child.
 
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
   attachFingerprintFields,
   journalIdentityFor,
@@ -35,7 +28,7 @@ export type OpenedStructuredAgentSessionConversation = {
 }
 
 export type StructuredAgentSessionConversationOpenDeps = {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'replacedRuntime'>
+  store: Pick<AgentSessionRecordStore, 'getConversation' | 'replacedRuntime'>
   journalDatabase: JournalHostDatabase
   logger: StructuredAgentSessionHostDeps['logger']
 }
@@ -64,7 +57,7 @@ export async function openStructuredAgentSessionConversation(
   if (open) {
     return open
   }
-  const record = context.deps.store.getRecord(sessionId)
+  const record = context.deps.store.getConversation(sessionId)
   if (!record) {
     return null
   }
@@ -76,22 +69,22 @@ export async function openStructuredAgentSessionConversation(
 /** Caller adopts the unindexed journal; settlement needs store ownership history. */
 export async function openStructuredAgentSessionConversationJournal(
   deps: StructuredAgentSessionConversationOpenDeps,
-  record: AgentSessionRecord,
+  record: AgentSessionConversationView,
   options?: StructuredAgentSessionConversationOpenOptions
 ): Promise<OpenedStructuredAgentSessionConversation>
 export async function openStructuredAgentSessionConversationJournal(
   deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'>,
-  record: AgentSessionRecord,
+  record: AgentSessionConversationView,
   options: { acquisition: true }
 ): Promise<OpenedStructuredAgentSessionConversation>
 export async function openStructuredAgentSessionConversationJournal(
   deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'> &
     Partial<Pick<StructuredAgentSessionConversationOpenDeps, 'store'>>,
-  record: AgentSessionRecord,
+  record: AgentSessionConversationView,
   options: StructuredAgentSessionConversationOpenOptions = {}
 ): Promise<OpenedStructuredAgentSessionConversation> {
   const { sessionId } = record
-  const fence = record.lease.runtimeFence
+  const fence = record.currentFence
   const params = attachParamsForRecord(record, {
     clientOperationId: `read-restore:${sessionId}`,
     expectedRuntimeFence: fence
@@ -134,8 +127,8 @@ export async function resettleOpenStructuredAgentSessionConversation(
   sessionId: string,
   session: StructuredAgentSessionHostSession | undefined
 ): Promise<void> {
-  const record = deps.store.getRecord(sessionId)
-  if (session && record?.lease.deathEvidence) {
+  const record = deps.store.getConversation(sessionId)
+  if (session && record?.ownerObservation.deathEvidence) {
     await settleGoneGeneration(deps, record, session.journal)
   }
 }
@@ -143,16 +136,16 @@ export async function resettleOpenStructuredAgentSessionConversation(
 async function settleGoneGeneration(
   deps: Pick<StructuredAgentSessionConversationOpenDeps, 'logger'> &
     Partial<Pick<StructuredAgentSessionConversationOpenDeps, 'store'>>,
-  record: AgentSessionRecord,
+  record: AgentSessionConversationView,
   journal: AgentSessionJournal
 ): Promise<void> {
   try {
     await settleStaleStructuredAgentSessionState({
       journal,
       sessionId: record.sessionId,
-      fence: record.lease.runtimeFence,
+      fence: record.currentFence,
       acquisitionGeneration: null,
-      deathEvidence: record.lease.deathEvidence ?? null,
+      deathEvidence: record.ownerObservation.deathEvidence ?? null,
       replaced: deps.store?.replacedRuntime(record.sessionId),
       failureTextContext: structuredAgentSessionFailureWordsContext(record)
     })
@@ -167,7 +160,7 @@ async function settleGoneGeneration(
 }
 
 export function attachParamsForRecord(
-  record: AgentSessionRecord,
+  record: Pick<AgentSessionConversationView, 'sessionId' | 'location' | 'provider' | 'accountHome'>,
   input: {
     clientOperationId: string
     expectedRuntimeFence: number

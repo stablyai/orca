@@ -2,13 +2,7 @@ import { createRequire } from 'node:module'
 
 const { PE_MACHINE } = createRequire(import.meta.url)('./windows-pe-machine.cjs')
 
-/**
- * A PE image with nothing in it but a readable `IMAGE_FILE_HEADER.Machine`.
- *
- * Fixtures need this because the Windows addon gates read the binary: one that
- * is not a PE cannot stand in for an addon whose architecture decides whether
- * the app loads it at all.
- */
+// Give fixture real PE machine header: architecture determines whether loader reaches an addon, so arbitrary bytes cannot model it.
 export function peImage({ arch = 'x64', machine, peOffset = 0x80, signature = 'PE\0\0' } = {}) {
   if (machine === undefined && PE_MACHINE[arch] === undefined) {
     throw new Error(`No PE machine value for ${arch}; a fixture must not invent one.`)

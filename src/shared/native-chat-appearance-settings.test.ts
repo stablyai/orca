@@ -47,6 +47,7 @@ describe('native chat appearance normalization', () => {
       })
     ).toBeUndefined()
     expect(resolveNativeChatAppearanceSettings(undefined)).toEqual({
+      fontFamily: '',
       fontSize: 14,
       codeFontSize: 12,
       width: 'comfortable',
@@ -54,8 +55,9 @@ describe('native chat appearance normalization', () => {
       matchTerminalInterface: false
     })
   })
-  it('resets all five known controls while keeping settings from a newer version', () => {
+  it('resets known controls while keeping settings from a newer version', () => {
     const fromNewerVersion = {
+      fontFamily: 'Georgia',
       fontSize: 18,
       codeFontSize: 16,
       width: 'wide' as const,
@@ -72,6 +74,7 @@ describe('native chat appearance normalization', () => {
     expect(
       resolveNativeChatAppearanceSettings({ fontSize: 99, codeFontSize: 0, width: 'full' })
     ).toEqual({
+      fontFamily: '',
       fontSize: 20,
       codeFontSize: 10,
       width: 'full',
@@ -92,6 +95,17 @@ describe('native chat appearance normalization', () => {
       { fontSize: '20' }
     ]) {
       expect(normalizeNativeChatAppearanceSettings(value)).toBeUndefined()
+    }
+  })
+  it('trims family names, preserves explicit Geist, and omits malformed overrides', () => {
+    expect(normalizeNativeChatAppearanceSettings({ fontFamily: '  Georgia  ' })).toEqual({
+      fontFamily: 'Georgia'
+    })
+    expect(normalizeNativeChatAppearanceSettings({ fontFamily: 'Geist' })).toEqual({
+      fontFamily: 'Geist'
+    })
+    for (const fontFamily of ['', '  ', null, 42, ['Georgia']]) {
+      expect(normalizeNativeChatAppearanceSettings({ fontFamily })).toBeUndefined()
     }
   })
 })

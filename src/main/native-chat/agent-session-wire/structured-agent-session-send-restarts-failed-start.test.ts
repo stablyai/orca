@@ -199,13 +199,21 @@ describe('a send into a published session whose child ended before startup', () 
     expect(dispatch).toHaveBeenCalledTimes(2)
   })
 
-  it('retires the held message with the cause when the restarted child exits before proving its start', async () => {
+  it('retires the held message with the cause after five restarted children exit before proving their starts', async () => {
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const rowsBefore = (await journalStatuses()).length
 
     const held = await send('still not signed in', releasedFence)
     await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
-    await exitBeforeProof()
+    for (let attempt = 2; attempt <= 6; attempt++) {
+      await eventually(() => expect(acquire).toHaveBeenCalledTimes(attempt))
+      await eventually(() =>
+        expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+      )
+      expect((await journalStatuses()).length).toBe(rowsBefore)
+      expect((await submission(held))?.dispatchState).toBe('pending')
+      await exitBeforeProof()
+    }
 
     await eventually(async () => expect((await submission(held))?.dispatchState).toBe('rejected'))
     expect((await submission(held))?.handedOverAt).toBeUndefined()
@@ -231,12 +239,12 @@ describe('a send into a published session whose child ended before startup', () 
       ]).filter((id) => shown.includes(id))
     ).toEqual(shown)
     // Acquisition and proven exit each advance the fence.
-    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(releasedFence + 2)
+    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(releasedFence + 10)
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(acquire).toHaveBeenCalledTimes(6)
 
     const retry = await send('signed in now')
-    await eventually(() => expect(acquire).toHaveBeenCalledTimes(3))
+    await eventually(() => expect(acquire).toHaveBeenCalledTimes(7))
     await proveStarted()
     await handedOver(retry)
     expect(dispatch).toHaveBeenCalledOnce()

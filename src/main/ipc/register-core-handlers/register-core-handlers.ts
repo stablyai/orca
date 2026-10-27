@@ -6,9 +6,9 @@ import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
-import { registerFilesystemHandlers } from '../filesystem'
+import { registerFilesystemHandlers } from '../filesystem/filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
-import { registerFilesystemWatcherHandlers } from '../filesystem-watcher-handlers'
+import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
 import { registerUsageProviderHandlers } from '../usage-provider-handlers'
 import { registerGitHubHandlers } from '../github'
 import { registerGitLabHandlers } from '../gitlab'
@@ -97,11 +97,13 @@ import type {
 } from '../../../shared/ai-vault-resume-preparation'
 import {
   getSavedRuntimeAiVaultHostInfos,
+  deleteRuntimeAiVaultSession,
   prepareRuntimeAiVaultSessionResume,
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
 } from '../../ai-vault/runtime-session-scanner'
 import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
+import { configureRuntimeAiVaultSessionDelete } from '../ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
@@ -128,6 +130,7 @@ type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
+  onAfterOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -233,7 +236,8 @@ export function registerCoreHandlers(
   registerOrcaProfileHandlers(store, {
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
     onAuthMutation: lifecycleOptions.onOrcaProfileAuthMutation,
-    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
+    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut,
+    onAfterSignOut: lifecycleOptions.onAfterOrcaProfileSignOut
   })
   registerBrowserHandlers()
   registerShellHandlers(store)
@@ -269,6 +273,7 @@ export function registerCoreHandlers(
     ensureStructuredSessionOwnership
   })
   registerAiVaultHandlers({
+    getUserDataPath: () => app.getPath('userData'),
     ensureStructuredSessionOwnership,
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
@@ -281,6 +286,9 @@ export function registerCoreHandlers(
     prepareRuntimeSessionResume: async (environmentId, args) =>
       prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
   })
+  configureRuntimeAiVaultSessionDelete((environmentId, args) =>
+    deleteRuntimeAiVaultSession(app.getPath('userData'), environmentId, args)
+  )
   registerNativeChatHandlers()
   registerClipboardHandlers(store, {
     localChatAttachmentStore: async () => {

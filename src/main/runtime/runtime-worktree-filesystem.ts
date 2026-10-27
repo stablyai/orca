@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import {
   getLocalWorktreePathAccess,
   toLocalWorktreeRuntimePath

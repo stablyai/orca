@@ -29,6 +29,15 @@ vi.mock('sonner', () => ({
 }))
 
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
+import { saveSourceControlActionRecipe } from '../../../../shared/source-control-ai-recipe-save'
+import { sourceControlActionLaunchOptions } from '../../../../shared/source-control-action-launch-preferences'
+import {
+  resolveAgentLaunchCommand,
+  terminalSessionOptionInputs
+} from '../../../../shared/tui-agent-launch-command'
+import type { Repo } from '../../../../shared/repo-types'
 
 function buildArgs(
   overrides: Partial<Parameters<typeof runSourceControlAgentActionStart>[0]> = {}
@@ -38,7 +47,7 @@ function buildArgs(
     trimmedCommandInput: 'Fix the bug',
     agentArgs: '--model gpt-5',
     agentArgsApply: true,
-    commandTemplate: '{basePrompt}',
+    recipe: { agentId: 'codex', commandInputTemplate: '{basePrompt}', agentArgs: '--model gpt-5' },
     saveTargetValue: 'none',
     actionId: 'resolveComments',
     repoId: null,
@@ -140,8 +149,7 @@ describe('runSourceControlAgentActionStart', () => {
     expect(onLaunchAborted).not.toHaveBeenCalled()
   })
 
-  // Why: onLaunchAccepted only parks launch-scoped state; firing it twice or on a dead
-  // launch would leave a caller believing an agent is running.
+  // Acceptance parks launch state; duplicate or dead-launch callbacks would falsely imply an agent is running.
   it('fires onLaunchAccepted exactly once and only when a tab was created', async () => {
     const onLaunchAccepted = vi.fn()
     mocks.launchAgentInNewTab.mockReturnValue({
@@ -165,8 +173,7 @@ describe('runSourceControlAgentActionStart', () => {
     expect(onLaunchAccepted).not.toHaveBeenCalled()
   })
 
-  // Why: irreversible host writes (fixing replies, thread resolves) hang off onLaunched, so a
-  // launch whose prompt never landed must report the abort and never reach onLaunched.
+  // Failed delivery must abort before onLaunched can post irreversible host replies/resolutions.
   it('aborts an accepted launch when deferred prompt delivery fails', async () => {
     const onLaunchAccepted = vi.fn()
     const onLaunchAborted = vi.fn()
@@ -320,7 +327,7 @@ describe('runSourceControlAgentActionStart', () => {
     expect(mocks.onClose).toHaveBeenCalledTimes(1)
   })
 
-  // Why: the onStart branch never awaits a delivery result, so acceptance is terminal there.
+  // onStart awaits no delivery result, so acceptance is terminal for that route.
   it('accepts an onStart launch and never aborts it', async () => {
     const onLaunchAccepted = vi.fn()
     const onLaunchAborted = vi.fn()
@@ -364,8 +371,7 @@ describe('runSourceControlAgentActionStart', () => {
     expect(onLaunchAborted).not.toHaveBeenCalled()
   })
 
-  // Why: a rejected recipe save after acceptance would otherwise strand the caller with
-  // neither onLaunched nor onLaunchAborted, permanently disabling the action.
+  // Recipe-save rejection after acceptance must still settle callbacks or the action stays disabled indefinitely.
   it('completes the launch when saving the agent default rejects', async () => {
     const onLaunchAborted = vi.fn()
     const originalConsole = console
@@ -399,8 +405,7 @@ describe('runSourceControlAgentActionStart CLI arguments applicability', () => {
     vi.clearAllMocks()
   })
 
-  // Why: `undefined` is what reaches the global Agents arguments; an empty string would beat
-  // that fallback and launch the agent with no arguments at all.
+  // Undefined selects global agent arguments; empty string would suppress that fallback.
   it('omits the per-action arguments so a terminal launch resolves the global setting', async () => {
     mocks.launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'tab-1' }
@@ -431,7 +436,7 @@ describe('runSourceControlAgentActionStart CLI arguments applicability', () => {
     })
   })
 
-  // Why: the field being absent must not rewrite a value the user saved for terminal launches.
+  // Omitting a field must not overwrite saved terminal arguments.
   it('still saves the recipe with the arguments the user had stored', async () => {
     mocks.launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'tab-1' }
@@ -448,3 +453,101 @@ describe('runSourceControlAgentActionStart CLI arguments applicability', () => {
     )
   })
 })
+
+it('executes the actual bound namespace while saving the literal default recipe', async () => {
+  const recipe = {
+    agentId: null,
+    commandInputTemplate: '{basePrompt}',
+    agentArgs: '',
+    launchPreferences: { agentId: 'codex' as const, model: 'chosen' }
+  }
+  const onStart = vi.fn().mockResolvedValue(true)
+  await runSourceControlAgentActionStart(
+    buildArgs({ recipe, onStart, selectedAgent: 'codex', saveTargetValue: 'global' })
+  )
+  expect(onStart).toHaveBeenCalledWith(
+    expect.objectContaining({ sessionOptions: { model: 'chosen' } })
+  )
+  expect(mocks.onSaveAgentDefault).toHaveBeenLastCalledWith(
+    { type: 'global' },
+    'resolveComments',
+    recipe
+  )
+})
+
+// Saved to the repository, the copied choice owns the action there, as on every later launch.
+it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
+  'persists the complete target for changed or unchanged Customize arguments %s',
+  async (agentArgs) => {
+    vi.clearAllMocks()
+    const base = getDefaultSettings('/tmp')
+    const terra = { agentId: 'codex' as const, model: 'gpt-5.6-terra' }
+    const fixCommitFailure = {
+      agentId: null,
+      commandInputTemplate: '{basePrompt}',
+      launchPreferences: terra
+    }
+    const settings = {
+      ...base,
+      sourceControlAi: { ...base.sourceControlAi!, actions: { fixCommitFailure } }
+    }
+    const legacy = { agentArgs: '--model gpt-5.6-sol' }
+    const repo: Pick<Repo, 'id' | 'sourceControlAi'> = {
+      id: 'repo-1',
+      sourceControlAi: { actionOverrides: { fixCommitFailure: legacy } }
+    }
+    const shown = resolveSourceControlActionRecipe({ settings, repo, actionId: 'fixCommitFailure' })
+    mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 't' } })
+    const recipe = { ...shown, agentArgs }
+    mocks.onSaveAgentDefault.mockImplementation((target, actionId, recipe) => {
+      const saved = saveSourceControlActionRecipe({ target, actionId, recipe, settings, repo })
+      if ('update' in saved) {
+        repo.sourceControlAi = saved.update.sourceControlAi ?? undefined
+      }
+    })
+    const args = { recipe, agentArgs, settings, repo, saveTargetValue: 'repo', repoId: 'repo-1' }
+
+    await runSourceControlAgentActionStart(buildArgs({ ...args, actionId: 'fixCommitFailure' }))
+
+    expect(shown.launchPreferencesYieldToAgentArgs).toBe(true)
+    expect(mocks.launchAgentInNewTab.mock.lastCall?.[0]).toMatchObject({
+      agentArgs: `--dangerously-bypass-approvals-and-sandbox ${agentArgs}`,
+      sessionOptions: { model: 'gpt-5.6-terra' }
+    })
+    expect(mocks.launchAgentInNewTab.mock.lastCall?.[0]).not.toHaveProperty(
+      'sessionOptionsYieldToAgentArgs'
+    )
+    expect(repo.sourceControlAi?.actionOverrides?.fixCommitFailure).toEqual({
+      agentId: null,
+      commandInputTemplate: '{basePrompt}',
+      agentArgs,
+      launchPreferences: terra
+    })
+    const next = resolveSourceControlActionRecipe({ settings, repo, actionId: 'fixCommitFailure' })
+    const nextOptions = sourceControlActionLaunchOptions(next, 'codex')
+    expect(nextOptions).toEqual({ sessionOptions: { model: terra.model } })
+    const command = resolveAgentLaunchCommand({
+      agent: 'codex',
+      cmdOverrides: {},
+      platform: 'linux',
+      shell: 'posix',
+      agentArgs,
+      ...terminalSessionOptionInputs({
+        agent: 'codex',
+        agentArgs,
+        shell: 'posix',
+        sessionOptions: nextOptions.sessionOptions,
+        yieldToAgentArgs: nextOptions.sessionOptionsYieldToAgentArgs
+      })
+    })
+    expect(command).toMatchObject({ ok: true, appliedSessionOptions: { model: terra.model } })
+    if (command.ok) {
+      expect(command.command).not.toContain(agentArgs.split(' ')[1])
+    }
+    expect(mocks.onSaveAgentDefault).toHaveBeenCalledTimes(1)
+    await runSourceControlAgentActionStart(
+      buildArgs({ ...args, recipe: next, actionId: 'fixCommitFailure' })
+    )
+    expect(mocks.onSaveAgentDefault).toHaveBeenCalledTimes(1)
+  }
+)

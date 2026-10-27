@@ -72,8 +72,7 @@ function sanitizeProfile() {
   const data = JSON.parse(readFileSync(sourceDataPath, 'utf8'))
   const repo = createSeededRepo(path.join(runRoot, 'fixture-repo'))
 
-  // Why: use the real terminal settings and repo while omitting every persisted
-  // session/automation field that could duplicate work from the live profile.
+  // Reuse real terminal settings/repo but omit persisted sessions/automations that could duplicate live work.
   const profile = {
     settings: { ...data.settings, theme: APPEARANCE },
     onboarding: {

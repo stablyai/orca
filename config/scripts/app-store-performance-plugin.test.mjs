@@ -19,6 +19,10 @@ function lintSources(sources) {
 }
 
 const sources = {
+  escapedImport: String.raw`
+      import { use\u0041ppStore as useStore } from '@/store'
+      export const WholeStore = () => useStore()
+    `,
   subscriptions: `
       import { useAppStore as useStore } from '@/store'
       const WholeStore = () => useStore()
@@ -117,6 +121,12 @@ beforeAll(() => {
 })
 
 describe('app store performance Oxlint plugin', () => {
+  it('resolves an escaped store import through the text prefilter', () => {
+    expect(
+      diagnosticsBySource.get(sources.escapedImport).map((diagnostic) => diagnostic.code)
+    ).toEqual(['app-store-performance(require-selector)'])
+  })
+
   it.each(['lexicalBindings', 'shadowedImports'])('respects lexical bindings in %s', (name) => {
     expect(diagnosticsBySource.get(sources[name])).toEqual([])
   })

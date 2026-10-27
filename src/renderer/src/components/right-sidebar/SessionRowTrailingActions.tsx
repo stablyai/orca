@@ -24,16 +24,12 @@ import {
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
 
-// Why: hover-only actions live on the title row and collapse on hover-capable
-// devices so the prompt keeps the full width until the row is hovered.
-// Layout and animation classes for the hover-reveal group.
+// Collapse hover actions so the prompt keeps full width until hover/focus; touch actions stay visible.
 const HOVER_ACTION_GROUP_BASE = 'flex items-center gap-1 transition-[max-width,margin,opacity]'
 
-// Touch devices: always visible. Hover-capable devices: collapsed until hovered.
 const HOVER_ACTION_GROUP_COLLAPSED =
   'can-hover:max-w-0 can-hover:-ml-1 can-hover:overflow-hidden can-hover:opacity-0 [@media(hover:none)]:opacity-100'
 
-// Revealed state on hover or focus-within.
 const HOVER_ACTION_GROUP_REVEALED =
   'group-hover/session-row:max-w-none group-hover/session-row:ml-0 group-hover/session-row:overflow-visible group-hover/session-row:opacity-100 group-focus-within/session-row:max-w-none group-focus-within/session-row:ml-0 group-focus-within/session-row:overflow-visible group-focus-within/session-row:opacity-100'
 
@@ -89,7 +85,6 @@ export function SessionRowTrailingActions({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
-  // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
   onRequestDelete?: () => void
   /** Only the details toggle shows. */
@@ -163,9 +158,7 @@ export function SessionRowTrailingActions({
                     onResume()
                   }}
                   data-testid="ai-vault-session-resume"
-                  // Why: on touch (no hover) these controls stay visible and
-                  // tappable; on hover-capable devices the session row gates both
-                  // visibility and hit targets until it is hovered.
+                  // Gate hover hit targets with visibility while keeping touch controls tappable.
                   className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
                 >
                   <Play className="size-3.5" />

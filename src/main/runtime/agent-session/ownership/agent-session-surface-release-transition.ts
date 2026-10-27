@@ -1,12 +1,5 @@
-// Releasing the lease when the LAST surface lets go of a session.
-//
-// Every other release in the wire needs a probe, because every other release is about a process
-// somebody else started and nobody watched die. This one is different: the host stopped its own
-// lease-owning provider root through the adapter. Its observed exit is sufficient because the
-// lease follows that root, even when descendants remain `unverifiable`.
-//
-// The fence still moves, so the next owner is a new generation: an attach or settlement still
-// holding the stopped owner's fence is refused as stale rather than acting on its successor.
+// Last-surface close may release this host's provider root on observed exit, even with unverifiable descendants.
+// This proves root exit, not tree death; advance the fence to reject the stopped owner's late effects.
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import {
@@ -19,8 +12,7 @@ import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 
 export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'transitionHandoff'>
 
-/** Whether this record is one THIS host may release on its own proof. A session mid-handoff and a
- *  lease nobody holds are somebody else's transition. */
+/** Only this host's owned lease is releasable; handoffs and free leases use other transitions. */
 export function isSurfaceReleasableAgentSessionRecord(record: AgentSessionRecord): boolean {
   return (
     record.lease.claimStatus === 'live' &&
@@ -35,7 +27,6 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   now: number
   /** Exit receipt can precede a delayed journal settlement and lease release. */
   exitObservedAt?: number
-  /** Why the provider exited, when the host saw it die on its own. */
   exitReason?: string
 }): AgentSessionRecord {
   const { record } = args
@@ -63,7 +54,6 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   })
 }
 
-/** Applied through the store's generic transition, the same way handoff records move. */
 export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
   store: AgentSessionRecordTransitionStore,
   args: {

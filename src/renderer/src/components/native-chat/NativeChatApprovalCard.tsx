@@ -31,11 +31,7 @@ export type NativeChatApprovalCardProps = {
   allowFileUriLinks?: boolean
 }
 
-/**
- * Native renderer for an agent tool-approval (PermissionRequest) as an
- * Allow/Deny card. PTY callers supply literal replies while structured callers
- * supply journal option IDs. The first option gets the primary styling.
- */
+/** PTY options are literal replies; structured options are journal ids. Style the first option as primary. */
 export function NativeChatApprovalCard({
   approval,
   onChoose,
@@ -181,7 +177,7 @@ export function NativeChatApprovalCard({
                     'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
                     i === 0
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                      : 'border border-border bg-background text-foreground hover:bg-accent'
+                      : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                   )}
                 >
                   {opt.label}

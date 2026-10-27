@@ -38,6 +38,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const systemSshProxyConnectionReuse = form.systemSshProxyConnectionReuse ? true : undefined
+  const reconnectOnLaunch = form.reconnectOnLaunch ? undefined : false
 
   const target: SshTargetCreateInput = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost),
@@ -51,7 +52,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
     ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
-    // Why explicit both ways: a server from before the default flip reads an absent value as off.
+    ...(reconnectOnLaunch === false ? { reconnectOnLaunch } : {}),
+    // Send explicit true/false because older servers interpret absence as disabled.
     allowRemoteCliControl: form.allowRemoteCliControl
   }
 
@@ -61,14 +63,14 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
       target,
       updates: {
         ...target,
-        // Why: updateTarget merges partially, so explicit undefined values are
-        // required to clear optional fields inherited from ~/.ssh/config.
+        // Partial updates need explicit undefined to clear fields inherited from SSH config.
         identityFile,
         gssapiAuthentication: form.gssapiAuthentication || undefined,
         proxyCommand,
         jumpHost,
         systemSshConnectionReuse,
         systemSshProxyConnectionReuse,
+        reconnectOnLaunch,
         source: 'manual'
       }
     }

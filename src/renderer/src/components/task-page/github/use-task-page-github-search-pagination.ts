@@ -6,13 +6,13 @@ import {
   resolveEmptyPageOutcome,
   applyWindowPageLimit,
   applyEmptyPageClamp
-} from '@/components/task-page-work-item-pagination'
+} from '@/components/task-page/task-page-work-item-pagination'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { overlayPendingOnTaskPagePages } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 import { scopeGitHubTaskSearch } from '../../../../../shared/task-github-search'
 import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-commit'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProjectionModel) {
   const {
     setTaskResumeState,
@@ -70,10 +70,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
           return
         }
         if (items.length === 0) {
-          // Why: see resolveEmptyPageOutcome — a dead click needs feedback only
-          // when something actually failed; a clean empty probe is end-of-data.
-          // The reason never depends on the count, so it's safe to derive here;
-          // the clamp is not (see applyEmptyPageClamp) and runs in the updater.
+          // Derive the count-independent failure reason now, but clamp against committed count in the updater.
           const { reason } = resolveEmptyPageOutcome({
             target,
             failedCount,
@@ -108,10 +105,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
               }
             )
           } else {
-            // Why: with a real count the clamp is refused, so without feedback
-            // the click would look dead — the count over-advertised; nothing
-            // failed, so the copy stays neutral. The ref carries the committed
-            // count, immune to the click-time closure race.
+            // Real counts block speculative clamps; use the committed-count ref to explain clean empty clicks without a false failure.
             const committedCount = countedTotalPagesRef.current
             if (committedCount !== null && committedCount > 0) {
               toast(

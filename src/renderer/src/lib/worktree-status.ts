@@ -25,6 +25,8 @@ export type WorktreeStatus =
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
+  /** An awake chat tab has no PTY until its first message, but the user sees an open session. */
+  hasStructuredChat?: boolean
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   /** Stale rows suppress Orca's generated permission labels; native title fallback stays live. */
   stalePaneIdsByTabId?: Record<string, ReadonlySet<string>>
@@ -67,8 +69,8 @@ export function getWorktreeStatus(
   if (options.liveAgentStatus === 'monitoring') {
     return 'monitoring'
   }
-  if (liveTabs.length > 0 || browserTabs.length > 0) {
-    // Why: browser-only worktrees (no PTY) are still active from the user's point of view.
+  if (liveTabs.length > 0 || browserTabs.length > 0 || options.hasStructuredChat) {
+    // Why: browser-only and chat-only worktrees (no PTY) are still active from the user's point of view.
     return 'active'
   }
   return 'inactive'
@@ -155,9 +157,7 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
   if (resolveAgentTypeFromTerminalTitle(title) !== null) {
     return true
   }
-  // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
-  // token, #9040); the tab's launch identity supplies it, mirroring the row builder's spinner
-  // fallback (#9647) so the dot and the sidebar row agree.
+  // Spinner proves activity, not provider (Claude titles lack it, #9040); use launch identity like sidebar rows (#9647).
   return containsAgentSpinnerGlyph(title) && Boolean(launchAgent)
 }
 
@@ -176,6 +176,7 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
   browserTabs: readonly { id: string }[]
+  hasStructuredChat?: boolean
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
@@ -198,6 +199,7 @@ export function resolveWorktreeStatus(args: {
     args.ptyIdsByTabId,
     args.runtimePaneTitlesByTabId ?? {},
     {
+      hasStructuredChat: args.hasStructuredChat,
       agentStatusPaneIdsByTabId: args.agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId: args.stalePaneIdsByTabId,
       terminalLayoutsByTabId: args.terminalLayoutsByTabId,
@@ -211,8 +213,7 @@ export function resolveWorktreeStatus(args: {
   if (heuristic === 'permission') {
     return 'permission'
   }
-  // Why: a failure is news, so it outranks live work (a failed main agent's subagents may still
-  // run); only a pending question comes first.
+  // Failure outranks live work, including surviving subagents; only a pending question comes first.
   if (args.hasFailed) {
     return 'failed'
   }

@@ -14,11 +14,7 @@ import {
 } from '@/lib/linear-issue-workspace-attachment'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
-/**
- * Opens the workspace already attached to a Linear issue, or starts a new one.
- * Re-reads worktrees from the store so a workspace created since the last render
- * is still honoured instead of starting a duplicate.
- */
+/** Re-read current workspace attachments at action time so newly created issue workspaces are reused instead of duplicated. */
 export function openLinearIssueWorkspaceOrStart(
   issue: LinearIssueAttachmentRef,
   startWorkspace: () => void

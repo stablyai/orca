@@ -154,7 +154,7 @@ export function shouldApplyDivergedLinkedPRClear(args: {
   )
 }
 
-// Why: a linked PR is branch-scoped; it's stale once the worktree switched branches with neither push target nor HEAD at the PR head, else Checks stays pinned to the old branch's PR.
+// Clear linked PR after branch switch only when neither push target nor HEAD matches its head; otherwise Checks remains pinned to old work.
 export function shouldClearBranchMismatchedLinkedOpenPR(args: {
   pr: PRInfo | null
   linkedPRNumber: number | null

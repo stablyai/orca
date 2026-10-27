@@ -34,9 +34,7 @@ const spawnMock = vi.mocked(spawn)
 
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
 
-// These suites drive fake children down the Windows direct-child path, taskkill included. The POSIX
-// supervised stop with the Codex home lock (generation: timeout, cancel, output limit; discovery:
-// timeout, output limit) is in source-control-local-process.test.ts.
+// Fake Windows direct-child/taskkill paths here; source-control-local-process.test.ts covers supervised POSIX stop and managed-home lock release.
 const hostPlatform = process.platform
 
 afterEach(() => {
@@ -46,7 +44,7 @@ afterEach(() => {
 
 beforeEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-  // Windows resolves a bare agent name on PATH; the host's own installs must not answer it.
+  // Clear PATH so host agent installations cannot answer the fake Windows binary lookup.
   vi.stubEnv('PATH', '')
   terminateWindowsProcessTreeMock.mockClear()
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
@@ -87,8 +85,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
         {
           branch: 'main',
           stagedSummary: 'M\tREADME.md',
-          // Why past 120 KiB and not the Windows 30k: Linux fails on ONE argument
-          // over MAX_ARG_STRLEN, which is far larger than the Windows line budget.
+          // Exceed Linux's per-argument MAX_ARG_STRLEN, not merely Windows' smaller total command budget.
           stagedPatch: `+${'x'.repeat(140_000)}`
         },
         { agentId: 'jcode', model: 'default' },
@@ -105,8 +102,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
 
   it('still spawns on Linux for a prompt that only Windows would refuse', async () => {
     await withPlatform('linux', async () => {
-      // 40k chars trips the Windows line budget but is far under the Linux per-arg cap,
-      // so the guard must not have become a lowest-common-denominator limit.
+      // Stay below Linux argument capacity while exceeding Windows line budget; do not impose one platform's minimum on all.
       await generateCommitMessageFromContext(
         {
           branch: 'main',
@@ -396,8 +392,9 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       expect(outcome).toBe('canceled')
       expect(listeners.has('stdout:data')).toBe(false)
       expect(listeners.has('stderr:data')).toBe(false)
-      expect(listeners.has('error')).toBe(false)
-      expect(listeners.has('close')).toBe(false)
+      expect(listeners.has('error')).toBe(true)
+      expect(listeners.has('close')).toBe(true)
+      listeners.get('close')?.(null)
     } finally {
       vi.useRealTimers()
     }
@@ -441,7 +438,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
   })
 
-  it('releases the Codex home lock when the child exits with a descendant holding its stdio', async () => {
+  it('releases the Codex home on root exit when a descendant holds stdio open', async () => {
     const firstChild = createMockDiscoveryChild()
     const secondChild = createMockDiscoveryChild()
     spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
@@ -459,8 +456,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     await expect(first).resolves.toMatchObject({ canceled: true })
     await expectChildTerminated(firstChild)
 
-    // SIGKILL reaches the codex process but not a grandchild that inherited its
-    // stdout, so 'exit' arrives and 'close' never does.
+    // A grandchild retains stdout after root exit, so close never arrives.
     firstChild.emit('exit', null, 'SIGKILL')
 
     const second = generateCommitMessageFromContext(context, params, {

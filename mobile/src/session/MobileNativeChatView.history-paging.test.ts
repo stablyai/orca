@@ -38,7 +38,7 @@ vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('./MobileNativeChatComposer', async () => {
+vi.mock('./native-chat/composer/MobileNativeChatComposer', async () => {
   const { composerStub } = await import('./MobileNativeChatView.render-stubs.test-fixture')
   return composerStub()
 })
@@ -72,7 +72,6 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
   it('resumes following when the drag that paged in history ends at the tail', async () => {
     vi.useFakeTimers()
     try {
-      // A chat shorter than the screen: its top and its tail are the same place.
       const shortChat = {
         contentOffset: { y: 0 },
         contentSize: { height: 400 },
@@ -113,7 +112,6 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       }
     }
 
-    // The tail pin of a chat barely taller than the screen reports an offset near the top too.
     act(() => list().props.onScroll(nearTop))
     expect(onLoadEarlier).not.toHaveBeenCalled()
 
@@ -147,7 +145,6 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       platform.OS = 'ios'
     })
 
-    // The reader's own scroll to `y`: 0 at the newest message, negative above it.
     function readerScrollsTo(y: number) {
       act(() => {
         pageScroller.scrollTop = y
@@ -163,7 +160,6 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       readerScrollsTo(0)
       expect(jumpControl()).toHaveLength(0)
 
-      // The control jumps to the end through the list, whose own move is not the reader's.
       readerScrollsTo(-600)
       act(() => jumpControl()[0]!.props.onPress())
       expect(pageScroller.scrollTop).toBe(0)
@@ -187,7 +183,6 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
       await render({ folded, hasMore: true, onLoadEarlier })
       expect(onLoadEarlier).not.toHaveBeenCalled()
 
-      // Ten screens from the top of what is loaded, from the reader or not.
       readerScrollsTo(-15_000)
       expect(onLoadEarlier).toHaveBeenCalled()
 

@@ -1,10 +1,5 @@
-/**
- * Proof that the agent-row signal is the moment OpenCode 2 can submit, from two natural cold
- * `--standalone` starts that replayed Orca's worker-start timing (paste at readiness, Enter 500 ms
- * plus paste time later, at promptSentAtMs): one pasted on the agent row, one on the box's cursor
- * while a loaded machine kept the agent list from arriving. A third, in a pane too narrow for the
- * row, pasted at the signal's grace instead.
- */
+/** Natural OpenCode 2 cold starts exercise worker paste/Enter timing: agent-row readiness, premature box cursor,
+ * and narrow-pane row grace. Captures record promptSentAtMs and whether Enter submitted. */
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -16,7 +11,7 @@ import { readTimedRuntimeFixture, replayTranscript } from './agent-transcript-re
 
 const HELD_PASTE = '[Pasted ~'
 const AGENT_ROW_SIGNAL = TUI_AGENT_CONFIG.opencode2.submitPasteReadySignal!
-// The box's show-cursor, the rule OpenCode used before the agent-row signal.
+// Prior readiness used the box show-cursor.
 const BOX_CURSOR_SIGNAL: DraftPasteReadySignal = 'render-cursor-after-bracketed-paste'
 
 function readyAtMs(name: string, signal: DraftPasteReadySignal): number {
@@ -55,7 +50,7 @@ describe('OpenCode 2 submits an Enter sent after the agent row and drops one sen
     const { promptSentAtMs } = readTimedRuntimeFixture(name)
     const boxCursorAt = readyAtMs(name, BOX_CURSOR_SIGNAL)
     const agentRowAt = readyAtMs(name, AGENT_ROW_SIGNAL)
-    // The old rule fired over half a second before the row, so Orca's Enter landed in the gap.
+    // Prior readiness preceded the agent row by >500ms, putting worker Enter in the gap.
     expect(agentRowAt - boxCursorAt).toBeGreaterThanOrEqual(500)
     expect(promptSentAtMs!).toBeGreaterThan(boxCursorAt)
     expect(promptSentAtMs!).toBeLessThan(agentRowAt)

@@ -8,13 +8,13 @@ import { useShallow } from 'zustand/react/shallow'
 import {
   selectTaskPageWorkItemsCacheEntries,
   findTaskPageDialogWorkItem
-} from '@/components/task-page-cache-selectors'
+} from '@/components/task-page/task-page-cache-selectors'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import {
   getTaskPageRepoCacheInput,
   getTaskPageRepoSourceContext
-} from '../../task-page-source-context'
+} from '../task-page-source-context'
 import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(
@@ -46,7 +46,6 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     githubListRestoreWriteRef,
     taskListPositionRef
   } = model
-  // Why: the dialog's "Use" button routes through the same direct-launch flow as the row-level "Use" CTA so behavior is consistent regardless of entry point.
   const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
   const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
   const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')

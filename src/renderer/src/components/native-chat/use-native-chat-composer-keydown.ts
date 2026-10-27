@@ -30,8 +30,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   dismissPicker: (triggerKey: string) => void
   interrupt: () => void
   send: () => void
-  /** Cmd/Ctrl+Enter from an empty composer: send the newest queued draft now; false falls
-   *  through to send. */
+  /** Empty-composer Cmd/Ctrl+Enter steers the newest card; false falls through to send. */
   steerQueued?: (() => boolean) | undefined
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
@@ -63,8 +62,7 @@ export function useNativeChatComposerKeyDown({
   return useCallback(
     (event) => {
       if (isComposing() || event.nativeEvent.isComposing || event.keyCode === 229) {
-        // Why: IME Enter confirms composition; allowing it to fall through
-        // would accept a picker row or submit a partial draft.
+        // IME Enter commits composition; never pick a suggestion or submit a partial draft.
         if (event.key === 'Enter') {
           event.preventDefault()
         }
@@ -97,8 +95,7 @@ export function useNativeChatComposerKeyDown({
             return
           }
           const item = autocomplete.items[activeSuggestion] ?? autocomplete.items[0]
-          // A mid-prompt command is part of the sentence being written, so Enter
-          // completes the token instead of sending the command on its own.
+          // Only dispatch a command at a dispatchable prompt position; embedded tokens merely complete.
           if (event.key === 'Enter' && item.kind === 'command' && autocomplete.dispatchable) {
             dispatchPickerCommand(item)
           } else {
@@ -124,7 +121,6 @@ export function useNativeChatComposerKeyDown({
         return
       }
       if (event.key === 'Enter' && !event.shiftKey) {
-        // Platform primary modifier only (AGENTS.md): ⌘ on Mac, Ctrl elsewhere.
         const steerChord = isMacPlatform() ? event.metaKey : event.ctrlKey
         // Only from an empty composer: the chord never sends a card past what the user just wrote.
         const composerEmpty = draft.trim() === '' && !hasAttachments

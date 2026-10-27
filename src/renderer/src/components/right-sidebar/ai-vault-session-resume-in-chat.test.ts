@@ -61,7 +61,6 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
   )
 
   it('refuses a row already adopted into a chat before any other check', () => {
-    // That row reopens its own chat; a second adoption is a conflict the host would refuse.
     expect(
       eligibility({
         session: {
@@ -72,11 +71,34 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     ).toEqual({ available: false, reason: 'already-structured' })
   })
 
-  it('refuses a row recorded on a remote host', () => {
-    expect(eligibility({ session: session({ executionHostId: 'ssh:build-box' }) })).toEqual({
-      available: false,
-      reason: 'remote'
-    })
+  it.each(['ssh:build-box', 'runtime:unresolved-owner'] as const)(
+    'refuses a row recorded on %s',
+    (executionHostId) => {
+      expect(eligibility({ session: session({ executionHostId }) })).toEqual({
+        available: false,
+        reason: 'remote'
+      })
+    }
+  )
+
+  it.each<AiVaultSession['agent']>(['claude', 'codex'])(
+    'offers a paired-runtime %s conversation when its route is admitted',
+    (agent) => {
+      expect(
+        eligibility({ session: session({ agent, executionHostId: 'runtime:server-1' }) })
+      ).toMatchObject({ available: true })
+    }
+  )
+
+  it('rejects WSL transcripts on a paired runtime too', () => {
+    expect(
+      eligibility({
+        session: session({
+          executionHostId: 'runtime:server-1',
+          filePath: '//wsl.localhost/Ubuntu/home/dev/.claude/projects/p/session.jsonl'
+        })
+      })
+    ).toEqual({ available: false, reason: 'remote' })
   })
 
   it('refuses a row whose transcript is stored inside WSL', () => {
@@ -97,7 +119,6 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
   })
 
   it('offers a zero-count row whose preview proves the turns exist', () => {
-    // Some parsers only learn the turn count from metadata that may be absent.
     expect(
       eligibility({
         session: session({

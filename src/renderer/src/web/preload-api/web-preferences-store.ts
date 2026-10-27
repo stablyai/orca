@@ -40,8 +40,7 @@ export function getStoredSettings(): GlobalSettings {
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
       stored.terminalCursorStyleDefaultedToBlock !==
         migratedStored.terminalCursorStyleDefaultedToBlock ||
-      // Kept even though the terminalCustomThemes reference compare below already forces
-      // this branch for every stored blob: no migration should rely on that accident.
+      // Keep this explicit migration check even though terminalCustomThemes identity currently forces the branch.
       stored.terminalAllowOsc52Clipboard !== migratedStored.terminalAllowOsc52Clipboard ||
       stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !==
         migratedStored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers ||
@@ -54,8 +53,7 @@ export function getStoredSettings(): GlobalSettings {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         writeJson(SETTINGS_STORAGE_KEY, migratedStored)
         if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
-          // Why a raw merge, not readLocalWebUIState(): that path calls back into
-          // getStoredSettings(), and writing through it here would recurse.
+          // readLocalWebUIState calls getStoredSettings; raw merge avoids recursive migration writes.
           writeJson(UI_STORAGE_KEY, {
             ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
             osc52ClipboardDefaultOnNoticePending: true
@@ -152,14 +150,9 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
       )
     }
     Object.assign(runtimeSettings, runtimeChatPermissionSetting(result.settings))
-    // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
-    // sends it back, so web shows what the host enforces instead of a local value it ignores.
-    if (typeof result.settings.artifactSharingEnabled === 'boolean') {
-      runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
-    }
-    if (typeof result.settings.agentSkillSharingEnabled === 'boolean') {
-      runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled
-    }
+    // Read-only host capability; a host without a sharing service omits it, which must not keep a stale local grant.
+    runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled === true
+    runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled === true
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
     return settingsForActiveVisibilityOwner(next)
@@ -287,9 +280,7 @@ export async function updateRuntimePRBotAuthorOverride(args: {
 
 export function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
-  // Why settings first: getStoredSettings() runs the OSC 52 migration, which writes the
-  // notice arm into UI_STORAGE_KEY. Reading before it would snapshot a pre-arm state that
-  // every caller then writes back, erasing the arm the stamp can never raise again.
+  // Settings migration arms OSC 52’s UI notice; reading UI first would later overwrite that arm after its one-shot stamp.
   const storedSettings = getStoredSettings()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
   const base = {

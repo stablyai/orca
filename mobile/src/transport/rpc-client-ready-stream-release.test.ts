@@ -5,7 +5,6 @@ import type { RpcSuccess } from './types'
 
 type SentFrame = { id: string; method: string; params?: unknown }
 
-/** The registry sends through an `unknown` port, so name the shape the assertions read. */
 function readSentFrame(request: unknown): SentFrame {
   if (
     typeof request !== 'object' ||
@@ -87,13 +86,18 @@ describe.each(
     await Promise.resolve()
     afterReady.reply(readyReply(afterReady.sent[0]!.id, 'host-id-1'))
     disposeAfterReady()
+    disposeAfterReady()
+    afterReady.reply(readyReply(afterReady.sent[0]!.id, 'host-id-1'))
 
     const beforeReady = transport()
     const disposeBeforeReady = beforeReady.subscribe(method)
     await Promise.resolve()
     disposeBeforeReady()
+    disposeBeforeReady()
     expect(beforeReady.sent).toHaveLength(1)
     beforeReady.reply(readyReply(beforeReady.sent[0]!.id, 'host-id-2'))
+    beforeReady.reply(readyReply(beforeReady.sent[0]!.id, 'host-id-2'))
+    disposeBeforeReady()
 
     expect(afterReady.sent.slice(1)).toEqual([
       expect.objectContaining({ method: release, params: { subscriptionId: 'host-id-1' } })

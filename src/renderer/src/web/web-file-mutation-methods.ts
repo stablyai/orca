@@ -34,10 +34,7 @@ type ResolvedWebRuntimeFile = {
 
 type WebFileMutationSession = {
   resolveFilePath: (filePath: string) => Promise<ResolvedWebRuntimeFile>
-  /**
-   * Resolves to the host's advertised capabilities. `pinConnection` sends the session's later
-   * calls only over the connection that answered, for writes whose choice depends on that host.
-   */
+  /** Pin later writes to the connection that advertised these capabilities so host-dependent choices stay valid. */
   assertMutationSupported: (options: { pinConnection: boolean }) => Promise<readonly string[]>
   callRuntimeResult: (method: string, params: unknown) => Promise<unknown>
   getSshState: (targetId: string) => Promise<SshConnectionState | null>

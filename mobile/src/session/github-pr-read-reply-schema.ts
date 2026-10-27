@@ -26,14 +26,7 @@ import {
   prUserList
 } from './github-pr-entity-reply-schema'
 
-// The seven `github.*` / `hostedReview.*` replies the PR sidebar reads. Each schema requires the
-// members that identified the entity for main — the ones whose absence made it answer `null` — and
-// applies main's own default to everything else, because the shared types declare those members
-// non-optional and the sidebar renders them unguarded.
-//
-// What changes: a payload that is not the declared container at all (a string, a number, an
-// envelope) is an incompatible reply instead of the empty answer main gave it. "No pull request"
-// and "no hosted review" are still `null`, because the host really sends `null` for both.
+// Require entity identity and default the rest for unguarded renderers; malformed containers reject, while valid null still means no review.
 
 const HOSTED_REVIEW_STATE = ['open', 'closed', 'merged', 'draft'] as const
 const HOSTED_REVIEW_PROVIDER = [
@@ -45,13 +38,7 @@ const HOSTED_REVIEW_PROVIDER = [
   'unsupported'
 ] as const
 
-/**
- * Whether the worktree's repo has a GitHub remote, which gates the dedicated PR-view icon.
- *
- * `owner` and `repo` are required because they are the slug: main answered null without either, so
- * every caller already reads null as "no GitHub remote". Empty strings are accepted, exactly as
- * main's `typeof === 'string'` test did, while `host` is carried only when non-empty.
- */
+// Require slug string fields but retain legacy acceptance of empty strings.
 export const githubPrRepoSlugSchema = z
   .looseObject({ owner: z.string(), repo: z.string(), host: prText('host') })
   .transform((slug) => ({
@@ -61,14 +48,7 @@ export const githubPrRepoSlugSchema = z
   }))
   .nullable()
 
-/**
- * The hosted review on this branch, or `null` when there is none.
- *
- * `provider` and `number` are the identity the Create gate decides on, and main answered null
- * without either — including for a provider it did not recognise, which is why the arm set is
- * closed and degrades to the same null rather than to an arm. Nothing is sent back to the host
- * from here: mobile-pr-sidebar-state.ts:91 only compares the token to `'github'`.
- */
+// Unknown hosted-review providers degrade to null; the create gate recognizes only this closed provider set.
 export const hostedReviewForBranchSchema = z
   .looseObject({
     provider: salvagedOptional('provider', z.enum(HOSTED_REVIEW_PROVIDER)),
@@ -106,14 +86,7 @@ export const hostedReviewForBranchSchema = z
   )
   .nullable()
 
-/**
- * A pull request body, wherever it is carried.
- *
- * `number` and `state` are the identity: main answered null without either, and the sidebar has
- * nothing to render for a PR with no number. `prRepo` and `mergeMethodSettings` are what the
- * checks panel and the merge picker are keyed on, so both survive parsing rather than being
- * dropped with the rest.
- */
+// Preserve prRepo and merge settings because checks and merge choices depend on them.
 const pullRequestSchema = z
   .looseObject({
     number: prCount('number'),
@@ -154,26 +127,12 @@ const pullRequestSchema = z
         }
   )
 
-/**
- * What the branch lookup answers, which is not what the host's own refresh type carries.
- *
- * `PRRefreshOutcome` has an `errorType` and a `fetchedAt` this reply never contains, and the only
- * consumer (github-pr-rpc.ts) reads neither — so the reader declares the two members it does read
- * rather than fabricating the other two to satisfy a type it is not producing.
- */
+// Expose only fields actually sent/read; do not fabricate PRRefreshOutcome metadata.
 export type GitHubPrForBranchOutcome =
   | { kind: 'upstream-error'; message: string }
   | { kind: 'found'; pr: PRInfo }
 
-/**
- * The branch lookup's whole answer, outcome classification included.
- *
- * Legacy hosts answer a bare PR or `null`; current hosts answer a classified refresh outcome. Both
- * are declared here rather than normalized first, so the `upstream-error` arm keeps the host's own
- * message — the sidebar has surfaced that text since before the classification existed, and a
- * decode failure could not carry it. Which arm becomes an error is the call site's decision, not
- * the reader's: an error the host reported in-band is not a reply this app could not read.
- */
+// Accept legacy bare PR/null and classified outcomes; preserve upstream-error text as an in-band host result.
 export const githubPrForBranchSchema: z.ZodType<GitHubPrForBranchOutcome | null, unknown> = z.union(
   [
     z
@@ -194,7 +153,6 @@ export const githubPrForBranchSchema: z.ZodType<GitHubPrForBranchOutcome | null,
       }
       return { kind: 'found' as const, pr: outcome.pr }
     }),
-    // The legacy arm: a bare PRInfo, or `null` for no pull request.
     pullRequestSchema.transform((pr, ctx) => {
       if (!pr) {
         ctx.addIssue({ code: 'custom', message: 'pull request has no number or state', input: pr })
@@ -259,13 +217,7 @@ const workItemSchema = z
         }
   )
 
-/**
- * The work-item detail pane.
- *
- * `item` is required and answers for the whole reply: main returned null when it would not parse,
- * and the pane has no header, no state and no actions without it. Everything beside it is a list
- * the pane renders empty when the host sends none.
- */
+// Require item identity for the detail pane; missing companion lists render empty.
 export const githubWorkItemDetailsSchema = z
   .looseObject({
     item: workItemSchema,
@@ -276,8 +228,7 @@ export const githubWorkItemDetailsSchema = z
     pullRequestId: prText('pullRequestId'),
     checks: prCheckList('checks'),
     participants: prUserList('participants'),
-    // `assignees` stays absent rather than empty when the host sends no array, because the detail
-    // pane distinguishes "no assignees" from "this host does not report them".
+    // Absent assignees means unreported, distinct from a confirmed empty list.
     assignees: salvagedOptional('assignees', salvagingArray(z.string()))
   })
   .transform((details): GitHubWorkItemDetails | null =>

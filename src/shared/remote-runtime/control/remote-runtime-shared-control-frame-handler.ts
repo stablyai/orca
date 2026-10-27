@@ -4,7 +4,7 @@ import {
   remoteRuntimeReadyError,
   remoteRuntimeUnavailableError
 } from '../requests/remote-runtime-request-frames'
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { dispatchSharedControlFrame } from './remote-runtime-shared-control-frame-dispatch'
 import { parseSharedControlFrame } from './remote-runtime-shared-control-protocol'
 import type { SharedControlRetiredRequestIds } from '../requests/remote-runtime-shared-control-retired-request-ids'
@@ -29,7 +29,6 @@ export function handleSharedControlTextFrame(args: {
   setState: (state: SharedControlConnectionState) => void
   handleSocketClosed: (error: RemoteRuntimeClientError) => void
   sendEncrypted: (payload: unknown) => boolean
-  // Seals and sends this socket's auth frame (asynchronously).
   sendAuth: (handshake: PairedE2EEClientHandshake) => void
   markReady: () => void
   replaySubscriptions: () => void

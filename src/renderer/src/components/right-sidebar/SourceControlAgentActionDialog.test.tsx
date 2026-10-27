@@ -234,24 +234,35 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onStart).toHaveBeenCalledWith({
       agent: 'codex',
       commandInput: 'Resolve conflicts.',
-      agentArgs: ''
+      agentArgs: '--dangerously-bypass-approvals-and-sandbox'
     })
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
     expect(container.textContent).not.toContain('Launch agent')
   })
-  it('hides the dialog and auto-starts once when the saved repo launch recipe matches', async () => {
-    resetStore(
-      settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' }),
-      [repoWithSavedRecipe()]
-    )
-    renderControlledDialog({ repoId: 'repo-1' })
+  it('auto-starts a sparse repo recipe without giving it inherited model ownership', async () => {
+    const settings = settingsWithGlobalRecipe({
+      agentId: 'codex',
+      commandInputTemplate: '{basePrompt}',
+      launchPreferences: { agentId: 'codex', model: 'gpt-5.6-terra' }
+    })
+    const repo = repoWithSavedRecipe()
+    const sparse = { agentArgs: '--model gpt-5.6-sol' }
+    repo.sourceControlAi = { actionOverrides: { resolveConflicts: sparse } }
+    resetStore(settings, [repo])
+    renderControlledDialog({ repoId: 'repo-1', savedAgentArgs: sparse.agentArgs })
     expect(container.textContent).not.toContain('Launch agent')
     await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(mocks.onOpenChange).toHaveBeenCalledWith(false))
-    expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1)
-    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
+    expect(mocks.onStart).toHaveBeenCalledWith({
+      agent: 'codex',
+      commandInput: 'Resolve conflicts.',
+      agentArgs: `--dangerously-bypass-approvals-and-sandbox ${sparse.agentArgs}`,
+      sessionOptions: { model: 'gpt-5.6-terra' },
+      sessionOptionsYieldToAgentArgs: true
+    })
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
+    expect(repo.sourceControlAi.actionOverrides?.resolveConflicts).toEqual(sparse)
     expect(container.textContent).not.toContain('Launch agent')
   })
   it('keeps saved arguments on a prospective SSH terminal launch', async () => {
@@ -279,11 +290,10 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onStart).toHaveBeenCalledWith({
       agent: 'codex',
       commandInput: 'Resolve conflicts.',
-      agentArgs: '--model saved'
+      agentArgs: '--dangerously-bypass-approvals-and-sandbox --model saved'
     })
   })
-  // Why (#21429): a paired server's workspace has no SSH connection on this client; its agents
-  // are on the server, and this client's own list says nothing about them.
+  // Paired-server agents belong to the workspace owner; the client list cannot detect them (#21429).
   it('detects agents on the paired server that owns the workspace', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue([])
     resetStore(settingsWithGlobalRecipe(), [repoWithSavedRecipe('', null, 'runtime:env-1')])

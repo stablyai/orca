@@ -45,15 +45,7 @@ function unreadableRootPaths(discovery: SkillDiscoveryResult, wslDistro?: string
   )
 }
 
-/**
- * Whether a root that actually answered reached this skill.
- *
- * Why verification cannot reuse discovery's leniency: a root that did not answer
- * is served from the host's last completed scan, which is the state *before* this
- * install wrote. Counting that as proof would report a reinstall as verified
- * without reading a byte of what it just wrote. A co-owning root that did answer
- * is still proof, so a symlinked placement verifies as before.
- */
+/** Verify only roots that answered after install; retained pre-install scans prove no new bytes. Any answered co-owning root still suffices. */
 function isAnsweredSkill(
   skill: DiscoveredSkill,
   unreadableRoots: ReadonlySet<string>,

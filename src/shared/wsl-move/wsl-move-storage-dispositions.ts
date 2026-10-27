@@ -4,10 +4,7 @@ import {
   type WslMoveFieldDisposition
 } from './wsl-move-dispositions'
 
-/**
- * Renderer modules that use localStorage, by what they keep. A new module fails the census test
- * until it is listed here.
- */
+/** Census tests require a disposition for each renderer module using localStorage. */
 export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> = {
   'src/renderer/src/lib/quick-open-file-history.ts': {
     disposition: 'rewrite-desktop',
@@ -17,10 +14,11 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     disposition: 'rewrite-desktop',
     item: 43
   },
-  'src/renderer/src/lib/structured-agent-session-launch-persistence.ts': notApplicableDisposition(
-    44,
-    'Chats stay local on the desktop (owner decision C), so their launch records stay as written.'
-  ),
+  'src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-persistence.ts':
+    notApplicableDisposition(
+      44,
+      'Chats stay local on the desktop (owner decision C), so their launch records stay as written.'
+    ),
   'src/renderer/src/components/editor/file-view-preference-storage.ts': {
     disposition: 'rewrite-desktop',
     item: 72,
@@ -59,6 +57,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/jira-linked-view-storage.ts',
       'src/renderer/src/components/jira-list-columns.ts',
       'src/renderer/src/components/jira-prompt-templates.ts',
+      'src/renderer/src/components/jira-view-mode-storage.ts',
       'src/renderer/src/components/landing-preflight-dismissal.ts',
       'src/renderer/src/components/linear-issue-view-storage.ts',
       'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',
@@ -121,6 +120,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/runtime/orchestration/db/schema/migrate-v35.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate-v39.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate.ts': 'orchestration',
+  'src/main/runtime/orchestration/db/reset/removed-orchestration-work-store.ts': 'orchestration',
   'src/main/runtime/orchestration/mutation-receipt-capacity.ts': 'orchestration',
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/session-scanner-opencode-sqlite-fixture.ts': 'test-fixture',
@@ -194,6 +194,8 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'legacy_operation_receipts',
         'attempt_observation_facts',
         'structured_pointer_operations',
+        'removed_orchestration_work',
+        'removed_orchestration_work_coverage',
         'won'
       ],
       {

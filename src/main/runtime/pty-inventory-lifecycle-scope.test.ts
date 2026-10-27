@@ -200,6 +200,29 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     expect(await pending).toBeNull()
   })
 
+  it('stops a deadline-free read at its cap while newer listings keep overtaking it', async () => {
+    const listings: ReturnType<typeof deferred<PtyProcessInfo[]>>[] = []
+    const list = vi.fn<InventoryListing>(() => {
+      const listing = deferred<PtyProcessInfo[]>()
+      listings.push(listing)
+      return listing.promise
+    })
+    const { runtime } = createInventoryRuntime(list)
+    let now = 1000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    let result: unknown = 'pending'
+    void runtime.read(undefined, 'repo::/tmp/a').then((value) => (result = value))
+    // Each hop: a poller starts a newer listing, then the one the read waits on answers late.
+    for (let hop = 1; hop <= 5 && result === 'pending'; hop += 1) {
+      void runtime.read(undefined, `repo::/tmp/poller-${hop}`)
+      now += 1000
+      listings[hop - 1]?.resolve([processRow()])
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    expect(result).toBeNull()
+    expect(now - 1000).toBeLessThanOrEqual(PTY_CONTROLLER_LIST_TIMEOUT_MS + 1000)
+  })
+
   it('allows only one target retry and keeps a second invalidation unknown', async () => {
     const first = deferred<PtyProcessInfo[]>()
     const second = deferred<PtyProcessInfo[]>()

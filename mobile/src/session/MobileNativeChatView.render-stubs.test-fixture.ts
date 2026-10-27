@@ -3,7 +3,6 @@ import { vi } from 'vitest'
 const scrollToEnd = vi.hoisted(() => vi.fn())
 const scrollToOffset = vi.hoisted(() => vi.fn())
 const platform = vi.hoisted(() => ({ OS: 'ios' }))
-// The page list's scrollable node: the geometry it reads and the touches it listens to.
 const pageScroller = vi.hoisted(() => ({
   scrollTop: 0,
   scrollHeight: 0,
@@ -34,7 +33,6 @@ export async function reactNativeStub() {
     }),
     Platform: platform,
     Pressable: 'Pressable',
-    // The page's list scrolls through it.
     ScrollView: React.forwardRef((props, ref) => {
       const handle = {
         scrollTo: ({ y, animated }: { y: number; animated: boolean }) =>
@@ -67,7 +65,8 @@ export function gestureHandlerStub() {
 
 export async function composerStub() {
   const React = await import('react')
-  const { MobileNativeChatStopButton } = await import('./MobileNativeChatStopButton')
+  const { MobileNativeChatStopButton } =
+    await import('./native-chat/input/MobileNativeChatStopButton')
   return {
     MobileNativeChatComposer: (props: {
       onSend: (text: string) => Promise<boolean>
@@ -78,7 +77,6 @@ export async function composerStub() {
       React.createElement(
         'Composer',
         { ...props, accessibilityLabel: 'Send message', onPress: () => props.onSend('hi') },
-        // The real composer draws Stop in Send's slot while its draft is empty, as here.
         props.stop ? React.createElement(MobileNativeChatStopButton, props.stop) : null
       )
   }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 
@@ -57,7 +57,7 @@ describe('desktop rename of a remote server tab', () => {
       params: { terminal: 'term_7', title: '绑定' },
       timeoutMs: 15_000
     })
-    // Why both: a retained binding can name a handle a restarted host no longer knows.
+    // Retained bindings can name handles a restarted host no longer knows.
     expect(mocks.setWebRuntimeTabProps).toHaveBeenCalledWith({
       worktreeId: 'wt',
       tabId: TAB,

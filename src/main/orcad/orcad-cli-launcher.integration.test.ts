@@ -136,7 +136,6 @@ it.skipIf(skip)(
       })
       expect(version.code, version.stderr).toBe(0)
       expect(version.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/u)
-      // A person's own selector on the server is honoured, as on any machine.
       const person = await runProcess({
         program: launcher,
         args: ['status', '--json'],

@@ -1,11 +1,5 @@
-/**
- * #10923: a phone paired straight to a headless `orca serve` must learn each terminal agent's
- * provider session from `session.tabs.list`, or native chat has no transcript to read and stays
- * empty. The agents are fakes that pipe hook JSON through Orca's own managed hook scripts from
- * inside the serve's PTY, so the hook endpoint, pane key and tab-list projection are all real.
- * Real Codex 0.162 behaves the same way: a typed session reports its identity on its first turn,
- * and `codex resume` reports nothing until the user sends a message.
- */
+// Drive managed hooks from fake agents in real serve PTYs so phone tab lists expose readable transcript identities (#10923).
+// Resumed Codex emits no SessionStart before its first turn, so launch-time identity must cover that gap.
 import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -70,7 +64,6 @@ function transcriptLines(agent: FakeAgent, sessionId: string, cwd: string): stri
   return `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`
 }
 
-/** A fake agent: writes its transcript, then reports the same hook events the real CLI does. */
 function writeFakeAgent(dir: string, agent: FakeAgent, sessionId: string, cwd: string): string {
   const transcriptPath = path.join(dir, `${agent}-${sessionId}.jsonl`)
   writeFileSync(transcriptPath, transcriptLines(agent, sessionId, cwd))
@@ -163,7 +156,6 @@ async function waitForTerminal(
   return found
 }
 
-/** What the phone's chat view does: read the session tab list, then the transcript it names. */
 async function expectPhoneChatReadsTranscript(args: {
   phone: PairedMobileClient
   worktree: string
@@ -244,8 +236,7 @@ test('a phone paired to headless serve gets each terminal agent its provider ses
   }
 })
 
-// Codex runs SessionStart only at its first turn, so a resumed session is silent until the user
-// types. The host launched the resume, so it already knows which session the pane holds.
+// Codex resume stays hook-silent until input; the host must expose the identity it launched.
 test('a phone can read a resumed Codex chat before its first new turn', async ({
   testRepoPath
 }) => {
@@ -285,8 +276,7 @@ test('a phone can read a resumed Codex chat before its first new turn', async ({
   }
 })
 
-// The phone's Session History creates a shell pane and types the resume into it, so the host
-// never spawns the agent itself; the create names the conversation so the host can record it.
+// History types resume into an existing shell, so its terminal create must name the conversation first.
 test('a phone can read a Codex chat it resumed from Session History before its first new turn', async ({
   testRepoPath
 }) => {
@@ -297,7 +287,6 @@ test('a phone can read a Codex chat it resumed from Session History before its f
   try {
     const worktree = await openPhoneWorkspace(host, phone, testRepoPath)
     const sessionId = randomUUID()
-    // A saved Codex conversation in the serve's own (isolated) Codex home, as History lists it.
     const rolloutDir = path.join(host.env.HOME!, '.codex', 'sessions', '2026', '10', '16')
     mkdirSync(rolloutDir, { recursive: true })
     writeFileSync(
@@ -322,10 +311,9 @@ test('a phone can read a Codex chat it resumed from Session History before its f
     const resumedCodex = path.join(fakeDir, 'codex-resumed')
     writeFileSync(resumedCodex, '#!/bin/sh\necho FAKE_CODEX_RESUMED\nexec sleep 600\n')
     chmodSync(resumedCodex, 0o755)
-    // The phone's own builder, with the agent command pointed at the fake.
     const launch = buildMobileAiVaultResumeLaunch({
       session: session!,
-      hostPlatform: process.platform,
+      workspacePlatform: process.platform,
       settings: { agentCmdOverrides: { codex: resumedCodex } }
     })
     const { tab } = await phone.call<{ tab: { parentTabId: string } }>(

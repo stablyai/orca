@@ -1,11 +1,4 @@
-/**
- * Creating the worktree a `--worktree new-child` / `new-top-level` dispatch asks for.
- *
- * `withAgentTerminal` is the whole difference between the two worker modes: a PTY worker's
- * worktree is created agent-first, so the startup terminal IS the worker, while a structured
- * worker's worktree is created with no agent at all and its session is created for the worktree
- * afterwards. Setup, default tabs and lineage are identical either way.
- */
+/** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
@@ -32,11 +25,7 @@ export async function createWorkerWorktree(args: {
     from: string
   }
   agent: TuiAgent
-  /** False for a structured worker: the session is created for the worktree afterwards, so the
-   *  worktree must not be created agent-first. Setup and default tabs still run; what is skipped
-   *  is the startup agent terminal and, with it, the TUI trust write — which a structured session
-   *  does not need, since the trust preset exists so a PTY agent's menu does not eat the first
-   *  bracketed paste. The renderer's own structured worktree create skips both the same way. */
+  /** Structured creation skips startup agent and TUI trust presets: no PTY menu can consume its first paste. Setup/default tabs still run, matching renderer chat creates. */
   withAgentTerminal: boolean
   promisedAgentChat?: boolean
   onWorkspaceCreated?: (worktreeId: string) => void
@@ -69,6 +58,7 @@ export async function createWorkerWorktree(args: {
       ? {
           startupAgent: args.agent,
           startupLaunchSource: 'orchestration',
+          startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
         }
       : {}),
@@ -116,9 +106,7 @@ export async function createWorkerWorktree(args: {
           : terminal.handle === setupTerminalHandle
             ? 'setup'
             : 'configured_tab',
-      // Every terminal listed here — the agent terminal included — was created by this call's
-      // agent-first worktree creation. The old 'reused_agent_terminal' verb on the agent row
-      // conflated the role test with a lifecycle claim and misdiagnosed at least one incident.
+      // Agent-first creation made every listed terminal; reused_agent_terminal incorrectly mixed role with lifecycle.
       action: 'created',
       id: terminal.handle,
       tabId: terminal.tabId,

@@ -2,10 +2,7 @@ import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-/**
- * The executing runtime applies deltas to its latest record. This keeps paired-runtime
- * choices on their owner and prevents desktop/mobile writes from replacing one another.
- */
+/** Apply deltas at the owning runtime so desktop/mobile choices cannot replace each other’s records. */
 export function enqueueSessionOptionSettingsWrite(
   target: RuntimeClientTarget,
   mutation: NativeChatSessionOptionSettingsMutation

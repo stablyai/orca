@@ -23,8 +23,7 @@ const DETECTION_SCRIPT = [
 export async function detectSkillProvidersInWsl(distro: string): Promise<string[]> {
   let result
   try {
-    // Why probe: a bare `sh -c` has no login shell, so a PATH built by nvm/mise
-    // rc files never applies and an installed agent reads as absent.
+    // Resolve login PATH so nvm/mise-installed agents do not look absent.
     result = await runWslProcess({
       distro,
       loginPath: 'preferred',
@@ -39,11 +38,7 @@ export async function detectSkillProvidersInWsl(distro: string): Promise<string[
   if (result.code !== 0) {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
-  // Unconditional, not just on an empty list: the script always exits 0, so
-  // without the login PATH each lookup independently reads absent. A `claude`
-  // on the default PATH via Windows interop plus an nvm-only `codex` returns a
-  // plausible-looking `['claude']`, and the caller then skips the ~/.codex
-  // skill roots for a provider that is installed (#9725).
+  // Require resolved PATH even for nonempty output: Windows interop may find Claude while hiding nvm-only Codex (#9725).
   if (!result.environmentResolved) {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }

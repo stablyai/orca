@@ -4,7 +4,6 @@ import {
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -146,10 +145,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   })
 
   it('does not recover a pane whose relay reply was an identity mismatch', async () => {
-    // The mismatch suffix means the relay found a LIVE PTY under that id owned by ANOTHER pane, so
-    // it is evidence of presence, not absence. This transport is the only caller of
-    // terminal.recoverPane, so a bare SSH_SESSION_EXPIRED substring test here put a second agent on
-    // one transcript even though main already refuses the respawn on the same reply.
+    // Owner mismatch proves another pane’s PTY is live, not this one absent; bare expiry matching would cold-resume a duplicate despite main’s refusal.
     const onError = vi.fn()
     resolvedPaneHandle = 'terminal-mismatch'
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')

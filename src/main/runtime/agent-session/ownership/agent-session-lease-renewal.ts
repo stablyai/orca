@@ -1,7 +1,10 @@
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
 import { renewAgentSessionLease } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from '../../agent-session-store-state'
+import {
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from '../../agent-session-store-state'
 
 export type AgentSessionLeaseRenewal = {
   sessionId: string
@@ -17,14 +20,7 @@ export function renewAgentSessionLeases(
   defaultLeaseTtlMs: number
 ): AgentSessionRecord[] {
   return renewals.map((args) => {
-    const record = state.records.get(args.sessionId)
-    if (!record) {
-      throw new Error(
-        state.unreadableRecords.has(args.sessionId)
-          ? 'execution_owner_reconciling'
-          : 'agent_session_identity_required'
-      )
-    }
+    const record = requireWritableAgentSessionRecord(state, args.sessionId)
     const renewed = renewAgentSessionLease({
       record,
       fence: args.fence,

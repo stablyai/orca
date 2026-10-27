@@ -4,7 +4,6 @@ import {
   ORCAD_MIGRATION_BLOB_KIND_CONTRACTS,
   OrcadMigrationBlobChunkRequestSchema,
   OrcadMigrationBlobDescriptorSchema,
-  advertisedOrcadMigrationBlobCapabilities,
   assertOrcadMigrationBlobSet,
   findUnsupportedMigrationBlobKind,
   orcadMigrationBlobKindUnsupportedBlocker,
@@ -117,18 +116,6 @@ describe('orcad migration blob contract', () => {
     ).toBe('terminal-restore-hints')
     expect(orcadMigrationBlobKindUnsupportedBlocker('shell-history')).toMatch(
       /^orcad_migration_destination_blob_kind_unsupported:shell-history:/
-    )
-  })
-
-  it('advertises the channel and only the kinds that have an installer', () => {
-    expect(advertisedOrcadMigrationBlobCapabilities()).toEqual([
-      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
-      'orcad.migration-blob.terminal-restore-hints.v1',
-      'orcad.migration-blob.shell-history.v1'
-    ])
-    // A kind with no installer stays unadvertised, so no desktop sends it here.
-    expect(advertisedOrcadMigrationBlobCapabilities()).not.toContain(
-      'orcad.migration-blob.agent-session-records.v1'
     )
   })
 

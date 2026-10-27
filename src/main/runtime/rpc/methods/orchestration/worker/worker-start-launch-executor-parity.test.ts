@@ -1,8 +1,8 @@
-/**
- * A fresh worker starts through the shared launch executor, and its durable dispatch records must
- * read exactly as they did when the placement sequenced the launch itself: the same effects, the
- * same stage rows in the same order, one host question, and a refused chat that fails the start.
- */
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../../../shared/agent-session-record.test-fixture'
+/** Shared-executor starts must preserve durable effects/stage order, ask host support once and fail refused chats. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -102,11 +102,14 @@ function place(
 }
 
 function installHost() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a worker create reads only `subscribe` and the record's location.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host supplies subscribe and a complete writable record for the newly minted id.
   setStructuredAgentSessionHost({
     subscribe: () => () => {},
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        requireWritableRecord: (sessionId: string) =>
+          agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+      }
     }
   } as never)
 }
@@ -172,7 +175,8 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.getStructuredAgentSessionCreateSupport).toHaveBeenCalledTimes(1)
     expect(f.runtime.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
       'id:wt_new',
-      'claude'
+      'claude',
+      { requireInstalledChatProgram: true }
     )
     expect(f.stages).toEqual(['worktree_creating', 'worktree_created', 'terminal_creating'])
     expect(f.failedStages).toEqual(['worktree_create', 'terminal_create', 'terminal_create'])
@@ -196,6 +200,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_new', {
       startupAgent: 'claude',
       launchSource: 'orchestration',
+      suppressStartupUpdatePrompt: true,
       title: 'worker-task_1',
       surfaceOwner: false
     })
@@ -258,6 +263,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_existing', {
       startupAgent: 'claude',
       launchSource: 'orchestration',
+      suppressStartupUpdatePrompt: true,
       title: 'worker-task_1',
       surfaceOwner: false
     })

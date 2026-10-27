@@ -1,13 +1,13 @@
 import { dirname, extname, isAbsolute, resolve } from 'node:path'
-import { realpath, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import {
   PATH_ACCESS_DENIED_MESSAGE,
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
-} from './filesystem-auth'
-import { isDescendantOrEqual } from './filesystem-path-containment'
+} from './filesystem/filesystem-auth'
+import { isDescendantOrEqual } from './filesystem/filesystem-path-containment'
 import { PREVIEWABLE_BINARY_MIME_TYPES } from './filesystem/filesystem-file-content-inspection'
 import { getDefaultFloatingWorkspacePath } from './floating-workspace-directory'
 import {
@@ -16,6 +16,7 @@ import {
   isWindowsReservedDeviceName
 } from './automatic-load-path-text'
 import { NOT_A_REGULAR_FILE_MESSAGE } from './filesystem/local-regular-file-read'
+import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
 
 const USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE =
   'Access denied: a file opened by name needs an absolute path.'
@@ -49,7 +50,7 @@ export async function resolveUserNamedRegularFile(
   store: Store
 ): Promise<string> {
   const filePath = await resolveLocalRequestPath(targetPath, USER_FILE_ACCESS, store, 'read')
-  if (!(await stat(filePath)).isFile()) {
+  if (!(await stat(windowsFsPath(filePath))).isFile()) {
     throw new Error(NOT_A_REGULAR_FILE_MESSAGE)
   }
   return filePath
@@ -87,8 +88,10 @@ async function resolveDocumentResourcePath(
   if (isNetworkSharePath(resolvedTarget) || !isDescendantOrEqual(resolvedTarget, documentFolder)) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
-  const realTarget = resolve(await realpath(resolvedTarget))
-  if (!isDescendantOrEqual(realTarget, resolve(await realpath(documentFolder)))) {
+  const realTarget = resolve(await realpathAcrossWslDriveMount(resolvedTarget))
+  if (
+    !isDescendantOrEqual(realTarget, resolve(await realpathAcrossWslDriveMount(documentFolder)))
+  ) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   if (isRefusedAutomaticLoadPath(realTarget)) {
@@ -109,7 +112,7 @@ async function resolveChatImagePath(targetPath: string, store: Store): Promise<s
   if (isNetworkSharePath(resolvedTarget)) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
-  const realTarget = resolve(await realpath(resolvedTarget))
+  const realTarget = resolve(await realpathAcrossWslDriveMount(resolvedTarget))
   if (isRefusedAutomaticLoadPath(realTarget)) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
@@ -145,8 +148,8 @@ async function resolveDocumentFolderPath(
   ) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
-  const realTarget = resolve(await realpath(resolvedTarget))
-  const realFolder = resolve(await realpath(documentFolder))
+  const realTarget = resolve(await realpathAcrossWslDriveMount(resolvedTarget))
+  const realFolder = resolve(await realpathAcrossWslDriveMount(documentFolder))
   if (isRefusedAutomaticLoadPath(realTarget) || !isDescendantOrEqual(realTarget, realFolder)) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }

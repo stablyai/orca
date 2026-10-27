@@ -6,6 +6,8 @@ import type {
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type {
+  SavedResumeDecision,
+  TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
@@ -49,6 +51,7 @@ export type PtyApi = {
     commandDelivery?: 'renderer' | 'provider'
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -97,6 +100,11 @@ export type PtyApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
+    savedResumeDecision?: SavedResumeDecision
+    refusedResume?: TerminalLaunchResult['refusedResume']
+    launchToken?: string
+    resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
@@ -243,6 +251,7 @@ export type PtyApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
+      gapEscapeState?: string
     }) => void
   ) => () => void
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void

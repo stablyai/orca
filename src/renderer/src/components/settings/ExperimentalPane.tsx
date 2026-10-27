@@ -26,8 +26,7 @@ const MS_PER_MINUTE = 60 * 1000
 type ExperimentalPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  /** Hidden-experimental group is only rendered once the user has unlocked
-   *  it via Option-clicking the Experimental page title. */
+  /** Unlocked by Option-clicking the Experimental title. */
   hiddenExperimentalUnlocked?: boolean
 }
 
@@ -55,8 +54,7 @@ export function ExperimentalPane({
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
-  // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
-  // while displaying the same effective clamped value the planner will use.
+  // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
   )
@@ -213,7 +211,6 @@ export function ExperimentalPane({
                 )}
                 onChange={(minutes) =>
                   updateSettings({
-                    // Why: settings persist the planner contract, not the display unit.
                     agentHibernationIdleMs: minutes * MS_PER_MINUTE
                   })
                 }

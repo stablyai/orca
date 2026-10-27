@@ -49,8 +49,7 @@ export function isRemoteBrowserPageMissingError(error: unknown): boolean {
   return isRemoteBrowserPageMissingCode(readErrorCode(error))
 }
 
-// Why: restart retries must stop for failures the host cannot recover from on its own; anything
-// else is unproven and must keep retrying rather than strand the pane with a dead subscription.
+// Stop automatic retry only for proven permanent failures; unclassified failures retain bounded recovery.
 export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {
   const code = readErrorCode(error)
   if (code === null) {
@@ -62,7 +61,6 @@ export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {
 }
 
 export type RemoteBrowserStreamFailure = {
-  /** What the pane shows. */
   message: string
   /** False once the failure is proven unrecoverable on this connection. */
   shouldRetry: boolean

@@ -1,5 +1,4 @@
-// The words for a project runtime that needs repair, under the project settings page's keys. The
-// window passes its translator; the host writes English, like its other refusals.
+// Window callers translate project-setting keys; hosts use English refusals.
 import type {
   ProjectExecutionRuntimeRepair,
   ProjectExecutionRuntimeRepairReason
@@ -36,7 +35,6 @@ export function projectRuntimeRepairSentence(
 const english: RepairTranslate = (_key, fallback, { value0 }) =>
   fallback.replace('{{value0}}', value0)
 
-/** What an agent launch refused for this repair says: what happened, then the settings sentence. */
 export function agentLaunchRepairRefusal(repair: ProjectExecutionRuntimeRepair): string {
   const byDefault =
     repair.source === 'global-default'

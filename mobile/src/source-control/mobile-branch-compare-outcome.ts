@@ -7,22 +7,12 @@ import { isMobileGitUnavailableReply } from './mobile-git-status'
 import type { MobileGitBranchCompareReply } from './git-compare-reply-schema'
 import type { MobileBranchCompareState } from './mobile-source-control-screen-state'
 
-// The compare leg's own protocol and screen mapping: what one attempt against the worktree's base
-// can end as, and what each ending leaves on screen. Nothing here reaches React.
-
-/**
- * Every end one compare attempt can reach, its failures included. The attempt returns its outcome
- * instead of writing it, so the screen is written in exactly one place: past the owner's `commit`.
- */
 export type BranchCompareOutcome =
   | { readonly kind: 'ready'; readonly result: MobileGitBranchCompareReply }
   | { readonly kind: 'unavailable' }
   | { readonly kind: 'failed'; readonly message: string }
 
-/**
- * Total by construction: a throw here would reach a caller that only ever voids this load. Null is
- * the superseded answer, which the owner reads as no value at all.
- */
+// Return failures because callers void this load; null means superseded and publishes nothing.
 export async function readBranchCompareOutcome(
   client: RpcOperationSender,
   worktreeId: string,
@@ -30,9 +20,7 @@ export async function readBranchCompareOutcome(
 ): Promise<BranchCompareOutcome | null> {
   try {
     const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
-    // Resolving the base ref is itself a round trip, so the scope may have moved while it was out.
-    // Stopping here is what keeps a superseded attempt's compare off the wire: refusing it at commit
-    // would be just as safe on screen but would have sent the request.
+    // Base resolution can outlive its scope; stop before sending a superseded compare request.
     if (!currency.isCurrent()) {
       return null
     }
@@ -43,8 +31,7 @@ export async function readBranchCompareOutcome(
       worktree: `id:${worktreeId}`,
       baseRef
     })
-    // Why the raw refusal: a host that does not offer git to mobile is a capability gap this
-    // screen degrades on, and no acceptance policy carries the code and message through.
+    // Inspect raw refusal to degrade on missing git capability.
     if (isMobileGitUnavailableReply(reply)) {
       return { kind: 'unavailable' }
     }
@@ -64,7 +51,6 @@ export async function readBranchCompareOutcome(
   }
 }
 
-/** What an outcome leaves on screen, given what this caller wants kept when the attempt fails. */
 export function nextBranchCompareState(
   outcome: BranchCompareOutcome,
   previous: MobileBranchCompareState,
@@ -73,8 +59,7 @@ export function nextBranchCompareState(
   if (outcome.kind === 'ready') {
     return { kind: 'ready', result: outcome.result }
   }
-  // Why: wiping a prior ready compare to idle makes Changes say "No Changes" even when commits
-  // still exist (e.g. after abort-merge refresh).
+  // Clearing ready state to idle would claim No Changes despite retained branch commits.
   if (preserveReadyOnFailure && previous.kind === 'ready') {
     return previous
   }

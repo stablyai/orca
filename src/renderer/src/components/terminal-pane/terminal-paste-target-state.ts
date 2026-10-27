@@ -60,8 +60,7 @@ export function isTerminalPanePasteFocusCurrent({
   if (activeElement === activeElementAtDispatch) {
     return true
   }
-  // Why: macOS dictation and clipboard permission handoffs can transiently
-  // blur xterm to body, and xterm may replace its helper textarea mid-paste.
+  // Permission/dictation handoffs can blur xterm to body or replace its textarea mid-paste.
   if (isInertDocumentFocus(activeElement)) {
     return true
   }

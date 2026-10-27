@@ -30,14 +30,7 @@ import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-
 
 export type TerminalCreateOptions = {
   command?: string
-  /**
-   * Windows shell to spawn AS the PTY process, instead of the host default shell.
-   *
-   * Distinct from `command`, which is typed into whatever shell the host spawns: a caller asking
-   * for cmd or PowerShell through `command` gets it as a CHILD of the default shell, so the
-   * terminal's own process is still the default shell and leaving that child lands back on a
-   * prompt the caller never asked for.
-   */
+  /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
@@ -47,42 +40,25 @@ export type TerminalCreateOptions = {
   envToDelete?: string[]
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
+  resumeOrigin?: 'saved'
   launchToken?: string
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent
-  /**
-   * Initial text offered to `startupAgent`'s launch command, for an agent whose CLI takes a prompt
-   * argument. Not a general prompt channel: an agent that takes its text only after start has no
-   * launch command to carry it, and a caller that sets this for one is refused rather than having
-   * the prompt silently dropped. The text rides only when the typed line can carry it
-   * (`startup-line-prompt-carry`); otherwise the agent starts clean, `onStartupPromptCarry` says so,
-   * and post-start delivery belongs to whoever owns the live PTY.
-   */
+  /** Offer initial text only to compatible startupAgent launch commands; otherwise refuse instead of silently dropping it.
+   * Typed-line carry gates delivery; onStartupPromptCarry reports clean launches whose later delivery belongs to the live PTY owner. */
   startupPrompt?: string
-  /**
-   * `draft` puts `startupPrompt` in the agent's composer unsent, through its draft flag or env.
-   * TEMPORARY (createAgentSession parity, removed by the PR that gives prompts and drafts one
-   * delivery policy): a draft skips the typed-line carry rule, as it did before this planner.
-   */
+  /** TEMPORARY createAgentSession parity: draft populates the unsent composer via flag/env and bypasses typed-line carry; remove with unified delivery policy. */
   startupPromptDelivery?: 'auto-submit' | 'draft'
-  /**
-   * TEMPORARY (createAgentSession parity, removed by the PR that delivers uncarried prompts after
-   * start): `startupPrompt` rides the typed line at any size, and an agent that reads it only after
-   * start launches clean instead of being refused, as createAgentSession did before this planner.
-   */
+  /** TEMPORARY createAgentSession parity: force-line carries any size or launches clean for post-start-only agents; remove when uncarried prompts gain later delivery. */
   startupPromptCarry?: 'force-line'
   /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
   onStartupPromptCarry?: (carried: boolean) => void
-  /**
-   * Replaces the Settings launch arguments for this `startupAgent` only; `null` means none at all.
-   *
-   * Not part of `callerSuppliedLaunch`: that guard refuses a caller that brought its own *command*,
-   * which would contradict the agent the runtime is resolving. Arguments are an input to the plan
-   * the runtime still builds, so overriding them does not take the launch away from it.
-   */
+  /** Override Settings arguments for this agent (null means none); plan input is not a caller-supplied command and does not take launch ownership. */
   agentArgs?: string | null
-  /** Main-internal: the runtime fact this agent's command was quoted for; its spawn takes the PTY
-   *  shell from it. Set by the host planner or a host caller that quoted with it, never a client. */
+  /** Main-internal: Orca, not a user, types into this `startupAgent` once it starts. */
+  suppressStartupUpdatePrompt?: boolean
+  /** Host-only runtime fact used to quote this launch; spawn must take its shell from that same fact, never client input. */
   launchRuntime?: AgentLaunchRuntime
   /** Account routing env merged over `startupAgent`'s plan env; an input to that plan, like
    *  `agentArgs`, so not part of `callerSuppliedLaunch`. */
@@ -98,8 +74,7 @@ export type TerminalCreateOptions = {
   afterTabId?: string
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
-  /** The surface that asked for this `startupAgent` launch; the runtime attributes every one it
-   *  builds, as `unknown` when this is absent or unrecognized. Ignored without `startupAgent`. */
+  /** Attribute host-built startupAgent launches by surface; missing/unknown surface becomes unknown. Ignore without startupAgent. */
   launchSource?: string
   title?: string
   focus?: boolean
@@ -114,8 +89,7 @@ export type TerminalCreateOptions = {
   keepPaneOnStartFailure?: true
   /** With `keepPaneOnStartFailure`: a start already known to fail; only its pane is written. */
   startFailure?: Error
-  /** Layout-owner build: main's start wakes the pane's sleeping record in place of the window's
-   *  own restore, so it publishes whether the agent came back. */
+  /** Main-owned sleep wake publishes resume outcomes instead of relying on window restore. */
   resumesSleepingRecord?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
@@ -149,8 +123,7 @@ export type AgentSessionCreateReclaimIdentity = {
 export type AgentSessionCreateOperation = {
   fingerprint: string
   promise: Promise<RuntimeCreateAgentSessionResult>
-  // Why: a lost pty.spawn response leaves the host holding a live PTY the client
-  // never named; this is the name it was launched under, so a replay can adopt it.
+  // Lost spawn replies can leave unnamed live PTYs; replay adopts by this original launch identity.
   reclaim: { identity?: AgentSessionCreateReclaimIdentity }
 }
 
@@ -179,8 +152,7 @@ export type RuntimeTerminalAgentStatusEvent = {
   tabId?: string
   worktreeId?: string
   connectionId?: string | null
-  /** The pane's terminal handle, when it is bound to one. Stamped on the stored row so a
-   *  reader can rejoin it to the terminal after the pane key moved. */
+  /** Persist live terminal handle so readers can rejoin after pane-key movement. */
   terminalHandle?: string
   payload: ParsedAgentStatusPayload
   /** Set by the process-lifetime producer; see AgentHookServer.ingestTerminalStatus. */
@@ -259,8 +231,7 @@ export type OrchestrationCompatibilitySshAttachmentAuthority = Extract<
   { kind: 'ssh' }
 >
 
-/** COMPAT(legacy-relay-bridge): a relay-era terminal this runtime no longer hosts, which the
- *  bridge verified for the one CLI call its attachment lives for. */
+/** COMPAT(legacy-relay-bridge): bridge verifies an unhosted relay-era terminal only for this CLI attachment lifetime. */
 export type OrchestrationCompatibilitySshTerminal = Readonly<{
   handle: string
   paneKey: string
@@ -276,8 +247,7 @@ export type TerminalWaiter = {
   /** Retires this waiter from the shared idle-poll sweep; null when not polling. */
   cancelIdlePoll: (() => void) | null
   abortCleanup: (() => void) | null
-  /** Main-internal: waiting for a just-launched agent, so a name-only title must be held to a
-   *  quiet stream (`TuiIdleEvaluationInput.launchReadiness`). */
+  /** Main-only launch-readiness wait: name-only titles require quiet output (TuiIdleEvaluationInput.launchReadiness). */
   launchReadiness?: boolean
 }
 
@@ -294,8 +264,7 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   inputKind: Exclude<TerminalInputKind, 'query-reply'>
   /** Raw prompt text for submit scheduling; not written, only used for line-aware delays. */
   promptForSchedule?: string
-  /** The caller just saw this agent's composer accept input, so Enter follows the paste on the
-   *  desktop draft paste's timing instead of waiting for the render to settle. */
+  /** Caller observed composer input acceptance; schedule Enter using desktop draft-paste timing instead of render settlement. */
   composerReady?: boolean
   /** See buildAgentPromptPasteBytes. */
   leadLine?: string
@@ -304,14 +273,11 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   observationTimeoutMs?: number
   requestId?: string
   onInputAccepted?: (send: RuntimeTerminalSend) => void
-  /** `wait` holds the write while the agent asks for permission instead of refusing it with
-   *  `agent_prompt_blocked`; an answer, a process exit or binding change, or `signal` ends the hold. */
+  /** Wait through agent_prompt_blocked permissions until answer, exit, binding change or abort. */
   onPermission?: 'refuse' | 'wait'
-  /** The binding the caller admitted (`getTerminalPromptRequestBinding`); a different process is
-   *  refused with `terminal_handle_stale` instead of receiving the text. */
+  /** Refuse binding changes with terminal_handle_stale; never send admitted prompt text to a replacement process. */
   expectedBinding?: AgentPromptExpectedBinding
-  /** Runs as soon as the write carrying Enter is accepted (OMP's paste frame included), before any
-   *  later abort check can throw: the text is submitted whatever the call then answers. */
+  /** Run on accepted Enter write, including OMP paste framing; later abort cannot undo submitted text. */
   onSubmitWritten?: () => void
 }
 

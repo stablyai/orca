@@ -64,10 +64,7 @@ describe('release RC history', () => {
       commit(repo, 'initial')
       commit(repo, 'release: v1.4.36-rc.5')
       git(repo, ['tag', 'v1.4.36-rc.5'])
-      // Why this case: the subject is the only record left after the tag goes,
-      // and that is precisely when release-cut's explicit-version gate reads
-      // this. Under-reporting rc.6 here lets an explicit 1.4.36-rc.6 cut land
-      // below the v1.4.36-rc.6.perf build that clients already run.
+      // Deleted tags leave only commit subject: undercounting suffixed RC permits explicit release below clients’ current build.
       commit(repo, 'release: v1.4.36-rc.6.perf')
       git(repo, ['tag', 'v1.4.36-rc.6.perf'])
       git(repo, ['tag', '--delete', 'v1.4.36-rc.6.perf'])

@@ -1,6 +1,7 @@
 // Keep close state on the exact child. Callers join adapter-bounded attempts and retry unproven exits;
 // root-exit proof reaches the single exit handler, including late adapter reports.
 
+import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
 import { refuse } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
@@ -16,11 +17,12 @@ export type StructuredAgentSessionChildCloseVerdict = 'exited' | 'unverifiable'
 export async function joinStructuredAgentSessionChildClose(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
-  child: StructuredAgentSessionProviderChild
+  child: StructuredAgentSessionProviderChild,
+  observeClose?: AgentSessionCloseObserver
 ): Promise<StructuredAgentSessionChildCloseVerdict> {
   // Capture startup state before provider release loses that evidence.
   const unanswered = child.phase === 'starting'
-  if (!(await closeProviderRoot(context, sessionId))) {
+  if (!(await closeProviderRoot(context, sessionId, observeClose))) {
     return 'unverifiable'
   }
   await endClosedStructuredAgentSessionChild(context, sessionId, child, unanswered)
@@ -83,17 +85,19 @@ export async function joinClosingStructuredAgentSessionChild(
 
 function closeProviderRoot(
   context: StructuredAgentSessionLifetimeContext,
-  sessionId: string
+  sessionId: string,
+  observeClose?: AgentSessionCloseObserver
 ): Promise<boolean> {
   const { adapter, logger } = context.deps
   // Missing close means no owned process; implemented closes must prove exit.
   if (!adapter.disposeSession && !adapter.closeSession) {
     return Promise.resolve(true)
   }
+  context.deps.store.requireWritableRecord(sessionId)
   return stopAgentSessionProviderRoot(
     async () => {
       const close = adapter.disposeSession ?? adapter.closeSession
-      return (await close?.call(adapter, sessionId)) === true
+      return (await close?.call(adapter, sessionId, observeClose)) === true
     },
     // Proven exit stands; descendant/follow-up failures are log-only.
     (error) =>

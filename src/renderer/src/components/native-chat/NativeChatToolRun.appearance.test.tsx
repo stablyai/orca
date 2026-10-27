@@ -157,7 +157,6 @@ import { i18n } from '@/i18n/i18n'
       )
       expect(screen.getByText(QUESTION)).toBeInTheDocument()
       expect(container.querySelector('.lucide-message-square-more')).toBeInTheDocument()
-      // The raw call and its payload are exactly what this row exists to replace.
       expect(screen.queryByText(/Running AskUserQuestion/)).toBeNull()
       expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
     })
@@ -173,7 +172,6 @@ import { i18n } from '@/i18n/i18n'
 
       expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
       expect(screen.getByText(QUESTION)).toBeInTheDocument()
-      // A run that is only the ask has no work left to head, so it draws no header.
       expect(container.querySelector('[data-native-chat-tool-run-state]')).toBeNull()
     })
 
@@ -270,8 +268,7 @@ import { i18n } from '@/i18n/i18n'
       render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking />)
 
       expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
-      // One call ran; being asked a question is not work to summarize. The agent
-      // is blocked on the reader, so the run reads settled, not in progress.
+      // Waiting for an answer settles the work summary; the question itself adds no call count.
       expect(screen.getByText('Read 1 file')).toBeInTheDocument()
       expect(screen.queryByText('Reading 1 file')).toBeNull()
     })
@@ -386,7 +383,6 @@ import { i18n } from '@/i18n/i18n'
       contentHeight.current = 1200
       rerender(<Transcript mounted count={4} />)
 
-      // Neither back at the newest call nor following again: both were the reader's choice.
       expect(membersBox(container).scrollTop).toBe(100)
     })
 
@@ -401,7 +397,6 @@ import { i18n } from '@/i18n/i18n'
       fireEvent.click(header)
       fireEvent.click(header)
 
-      // A live run the reader reopens shows what it is doing now.
       expect(membersBox(container).scrollTop).toBe(900)
     })
 

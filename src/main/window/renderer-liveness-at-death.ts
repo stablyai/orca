@@ -1,14 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { recordCoalescedDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 
-/**
- * What the main window looked like to the user when its renderer died.
- *
- * Why: Windows `killed`/exit 1 reports are identical whether Task Manager, an EDR or
- * Orca held the knife. A renderer that had been hung for minutes, or a document
- * that never loaded (the post-update blank frame), turns "outside kill" into "the
- * user ended a frozen Orca" — and that is an Orca bug to chase, not noise.
- */
+/** Windows killed/exit1 cannot identify Task Manager, EDR or Orca as the cause. Retain prior hang/load state to distinguish users terminating a frozen app from unexplained external kills. */
 export type RendererLivenessAtDeath = {
   /** Set only while Chromium flags the renderer hung (needs ~15s of unacknowledged input); absent = not detected hung. */
   rendererUnresponsiveForMs?: number
@@ -23,14 +16,13 @@ export type RendererLivenessAtDeath = {
   mainWindowFocused?: boolean
 }
 
-// Why no dispose: every listener lives on the window or its webContents and dies with them.
+// Window/WebContents listeners die with their owners; no separate disposal.
 export type RendererLivenessTracker = {
-  /** Reads the state at a renderer death and clears the hang, so the replacement renderer's
-   * `responsive` is not logged as the dead one recovering. */
+  /** Snapshot death and clear hung state so replacement responsiveness is not attributed to the dead renderer. */
   takeAtRendererGone: () => RendererLivenessAtDeath
 }
 
-// Why coalesced: a renderer that flaps hung/responsive must not evict the 30-slot ring.
+// Coalesce hang flapping so it cannot evict the 30-entry breadcrumb ring.
 const UNRESPONSIVE_CRUMB_MIN_INTERVAL_MS = 60_000
 
 export function trackRendererLivenessAtDeath(
@@ -64,13 +56,12 @@ export function trackRendererLivenessAtDeath(
       minIntervalMs: UNRESPONSIVE_CRUMB_MIN_INTERVAL_MS
     })
   }
-  // Why start, not did-navigate: a failed load never commits, so did-navigate would leave the
-  // previous document's state in place for the blank window this exists to catch.
+  // Reset at navigation start: failed loads never commit and would otherwise inherit the previous document's healthy state.
   const onNavigationStart = (details?: {
     isMainFrame?: boolean
     isSameDocument?: boolean
   }): void => {
-    // Why optional: a throwing listener would stop the emitter's later navigation listeners.
+    // Malformed details must not throw and suppress later emitter listeners.
     if (!details?.isMainFrame || details.isSameDocument) {
       return
     }
@@ -121,8 +112,7 @@ export function trackRendererLivenessAtDeath(
 function readWindowState(
   window: BrowserWindow
 ): Pick<RendererLivenessAtDeath, 'mainWindowState' | 'mainWindowFocused'> {
-  // Why never throw: this runs inside render-process-gone ahead of recovery
-  // scheduling, and a window dying mid-close throws on every getter.
+  // This runs before recovery scheduling; destroyed-window getters must not throw and prevent recovery.
   try {
     if (window.isDestroyed()) {
       return {}

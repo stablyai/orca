@@ -15,10 +15,11 @@ describe('tui agent startup session options', () => {
       platform: 'linux',
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: 'opus', effort: 'xhigh', fastMode: true },
-      agentArgs: '--model haiku'
+      agentArgs: '  --model   haiku  '
     })
     expect(plan?.launchCommand).toBe("claude '--model' 'haiku'")
     expect(plan?.sessionOptions).toBeUndefined()
+    expect(plan?.launchConfig.agentArgs).toBe('  --model   haiku  ')
   })
 
   it('keeps the model record but drops an effort overridden by user arguments', () => {
@@ -48,9 +49,7 @@ describe('tui agent startup session options', () => {
     expect(plan?.launchCommand).toBe(
       "codex '-m' 'custom-codex-model' '-c' 'model_reasoning_effort=high'"
     )
-    expect(plan?.launchConfig.agentCommand).toBe(
-      "codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low'"
-    )
+    expect(plan?.launchConfig).toMatchObject({ agentCommand: 'codex', agentArgs: '' })
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
   })
 
@@ -101,9 +100,10 @@ describe('tui agent startup session options', () => {
       agentArgs: '--share --model opencode/global-default'
     })
     expect(plan?.launchCommand).toBe("opencode '--share' '--model' 'zai-coding-plan/glm-5.3-flash'")
-    expect(plan?.launchConfig.agentCommand).toBe(
-      "opencode '--share' '--model' 'opencode/global-default'"
-    )
+    expect(plan?.launchConfig).toMatchObject({
+      agentCommand: "opencode '--share'",
+      agentArgs: "'--share'"
+    })
     expect(plan?.sessionOptions).toEqual({ model: 'zai-coding-plan/glm-5.3-flash' })
   })
 
@@ -136,7 +136,7 @@ describe('tui agent startup session options', () => {
     ).toEqual({
       ok: false,
       error:
-        'Agent command override conflicts with the requested launch preferences. Remove model or effort flags from the command override.'
+        'Agent command override conflicts with the requested launch preferences. Remove model, effort or permission flags from the command override.'
     })
   })
 
@@ -224,9 +224,7 @@ describe('tui agent startup session options', () => {
     expect(plan?.launchCommand).toBe(
       "codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high' 'resume' 'thread-1'"
     )
-    expect(plan?.launchConfig.agentCommand).toBe(
-      "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium'"
-    )
+    expect(plan?.launchConfig).toMatchObject({ agentCommand: 'codex', agentArgs: '' })
     expect(plan?.sessionOptions).toEqual({ model: 'gpt-5.5', effort: 'high' })
   })
 })

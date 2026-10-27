@@ -1,4 +1,4 @@
-import { normalizeAgentNativeChatPermissionModes } from '../../../shared/agent-chat-permission-mode'
+import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
@@ -63,14 +63,13 @@ export function updateSettings(
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
     sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
   }
-  // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
+  // Normalize at the store boundary so every writer rejects truthy non-booleans.
   if ('minimizeToTrayOnClose' in updates) {
     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
   }
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }
-  // Why: the artifact publish capability must be an exact boolean on disk; no truthy value grants it.
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }
@@ -81,11 +80,6 @@ export function updateSettings(
     sanitizedUpdates.nestedWorkerMaxDepth = resolveNestedWorkerMaxDepth({
       nestedWorkerMaxDepth: updates.nestedWorkerMaxDepth
     })
-  }
-  if ('nativeChatPermissionMode' in updates || 'agentNativeChatPermissionModes' in updates) {
-    sanitizedUpdates.agentNativeChatPermissionModes = normalizeAgentNativeChatPermissionModes(
-      updates.agentNativeChatPermissionModes
-    )
   }
   if ('nativeChatAppearance' in updates) {
     sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
@@ -109,9 +103,14 @@ export function updateSettings(
     }
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
+  if ('nativeChatPermissionMode' in updates || 'agentPermissionDefault' in updates) {
+    Object.assign(
+      sanitizedUpdates,
+      legacyChatPermissionWrite(operations.state.settings, sanitizedUpdates)
+    )
+  }
   if ('terminalQuickCommands' in updates) {
     const terminalQuickCommands = normalizeTerminalQuickCommands(updates.terminalQuickCommands)
-    // Every local and paired save lands here, so this is where an unstorable list is refused.
     assertTerminalQuickCommandsStorable(terminalQuickCommands)
     sanitizedUpdates.terminalQuickCommands = terminalQuickCommands
   }
@@ -139,8 +138,7 @@ export function updateSettings(
       updates.terminalScrollbackRows
     )
   }
-  // Why here: every writer (desktop IPC, web RPC, CLI) crosses this boundary, so xterm can never be
-  // handed an out-of-range floor, and undefined stays undefined to mean "automatic" (#10754).
+  // All writers pass here; preserve undefined as automatic and bound explicit xterm ratios.
   if ('terminalMinimumContrastRatio' in updates) {
     sanitizedUpdates.terminalMinimumContrastRatio = normalizeTerminalMinimumContrastRatio(
       updates.terminalMinimumContrastRatio
@@ -192,13 +190,10 @@ export function updateSettings(
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
   }
   if ('prBotAuthorOverrides' in updates) {
-    // Why: every writer (desktop IPC, web RPC, migrations) hits this boundary, so the persisted list stays bounded and well-formed.
     sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
       updates.prBotAuthorOverrides
     )
   }
-  // Why here: desktop IPC, the web RPC and the CLI all write through this boundary, so the name a
-  // runtime publishes is the trimmed, bounded form no matter which client set it.
   if ('machineName' in updates) {
     sanitizedUpdates.machineName = normalizeMachineName(updates.machineName)
   }
@@ -236,7 +231,7 @@ export function updateSettings(
   if (historyWithPreviousLayout) {
     sanitizedUpdates.workspaceDirHistory = historyWithPreviousLayout
   }
-  // Why deep-merge telemetry: a partial update (e.g. flipping only `optedIn`) must not clobber siblings like `installId`.
+  // Partial telemetry updates must preserve siblings such as installId.
   const mergedTelemetry =
     sanitizedUpdates.telemetry !== undefined
       ? { ...operations.state.settings.telemetry, ...sanitizedUpdates.telemetry }

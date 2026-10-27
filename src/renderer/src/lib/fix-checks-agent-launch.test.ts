@@ -183,8 +183,7 @@ describe('startFixChecksAgent', () => {
       })
     ).resolves.toBe(true)
 
-    // Why: launchAgentInNewTab creates the surface; without the opt-out, activation would
-    // also re-seed a shell in a closed-last-terminal workspace.
+    // The launcher owns creation; activation must not seed a sibling shell after the last terminal closed.
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
     })
@@ -301,7 +300,7 @@ describe('startFixChecksAgent', () => {
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
-  it('rejects invalid saved CLI arguments before activating the attached workspace', async () => {
+  it('leaves hidden CLI validation to the selected launch route', async () => {
     mocks.resolveSourceControlActionRecipe.mockReturnValue({
       commandInputTemplate: '{basePrompt}',
       agentArgs: '--model "unterminated'
@@ -315,13 +314,12 @@ describe('startFixChecksAgent', () => {
         basePrompt: 'Fix checks',
         launchSource: 'task_page'
       })
-    ).resolves.toBe(false)
+    ).resolves.toBe(true)
 
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      'CLI arguments are invalid: Unclosed quote in command template.'
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agentArgs: '--model "unterminated' })
     )
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('rejects without focusing a terminal when agent launch throws', async () => {

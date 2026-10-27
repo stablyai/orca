@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fakes = vi.hoisted(() => ({
   channelOptions: null as null | {
@@ -7,7 +7,7 @@ const fakes = vi.hoisted(() => ({
   },
   start: vi.fn(),
   handleMessage: vi.fn(),
-  sendText: vi.fn(() => true),
+  sendText: vi.fn((_frame: string) => true),
   dispose: vi.fn()
 }))
 
@@ -33,13 +33,13 @@ class FakeSocket {
   readonly OPEN = 1
   readyState = 1
   bufferedAmount = 0
-  sent: unknown[] = []
+  sent: string[] = []
   onopen: (() => void) | null = null
   onmessage: ((event: { data: unknown }) => void) | null = null
   onerror: (() => void) | null = null
   onclose: ((event: { code: number }) => void) | null = null
 
-  send(value: unknown): void {
+  send(value: string): void {
     this.sent.push(value)
   }
 
@@ -63,12 +63,18 @@ const relay = {
 
 describe('mobile relay physical pairing client', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     vi.clearAllMocks()
     fakes.channelOptions = null
     fakes.sendText.mockReturnValue(true)
   })
 
-  it('uses first-frame outer auth, waits for host attach, then carries RPC over E2EE v2', async () => {
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  it('sends first-frame outer auth, then carries RPC through the authenticated channel', async () => {
     const socket = new FakeSocket()
     let openedUrl = ''
     const client = connectMobileRelayForPairing({
@@ -77,13 +83,13 @@ describe('mobile relay physical pairing client', () => {
       desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
       createSocket: (url) => {
         openedUrl = url
-        return socket as unknown as WebSocket
+        return pairingWebSocket(socket)
       }
     })
     socket.onopen?.()
     expect(openedUrl).toBe('wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9')
     expect(openedUrl).not.toContain('?')
-    expect(JSON.parse(socket.sent[0] as string)).toEqual({
+    expect(JSON.parse(socket.sent[0]!)).toEqual({
       type: 'relay-auth',
       v: 1,
       mode: 'connect',
@@ -98,11 +104,13 @@ describe('mobile relay physical pairing client', () => {
         leaseExpiresAt: Date.now() + 60_000
       })
     )
-    await vi.waitFor(() => expect(fakes.start).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fakes.start).toHaveBeenCalledOnce()
     fakes.channelOptions!.onAuthenticated()
     const responsePromise = client.sendRequest('status.get')
-    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-    const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fakes.sendText).toHaveBeenCalledOnce()
+    const request = JSON.parse(fakes.sendText.mock.calls[0]![0])
     expect(request).toEqual({
       id: 'relay-pair-1',
       deviceToken: 'device-token',
@@ -117,6 +125,8 @@ describe('mobile relay physical pairing client', () => {
       })
     )
     await expect(responsePromise).resolves.toMatchObject({ ok: true, result: { path: 'relay' } })
+    client.close()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('surfaces a typed endpoint-scoped outer rejection before E2EE', async () => {
@@ -125,7 +135,7 @@ describe('mobile relay physical pairing client', () => {
       relay,
       deviceToken: 'device-token',
       desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => pairingWebSocket(socket)
     })
     const status = client.sendRequest('status.get')
     socket.receive(JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 }))
@@ -140,7 +150,7 @@ describe('mobile relay physical pairing client', () => {
       relay,
       deviceToken: 'device-token',
       desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => pairingWebSocket(socket)
     })
     const status = client.sendRequest('status.get')
     socket.onerror?.()
@@ -155,7 +165,7 @@ describe('mobile relay physical pairing client', () => {
       relay,
       deviceToken: 'device-token',
       desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => pairingWebSocket(socket)
     })
     const status = client.sendRequest('status.get')
     socket.onerror?.()
@@ -172,7 +182,7 @@ describe('mobile relay physical pairing client', () => {
         relay,
         deviceToken: 'device-token',
         desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-        createSocket: () => socket as unknown as WebSocket
+        createSocket: () => pairingWebSocket(socket)
       })
       const status = client.sendRequest('status.get')
       const rejected = expect(status).rejects.toEqual(new RelayOuterError(1006))
@@ -192,7 +202,7 @@ describe('mobile relay physical pairing client', () => {
       relay,
       deviceToken: 'device-token',
       desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-      createSocket: () => socket as unknown as WebSocket,
+      createSocket: () => pairingWebSocket(socket),
       onLog: (entry) => entries.push(entry)
     })
     socket.onopen?.()
@@ -204,7 +214,8 @@ describe('mobile relay physical pairing client', () => {
         leaseExpiresAt: Date.now() + 60_000
       })
     )
-    await vi.waitFor(() => expect(fakes.start).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fakes.start).toHaveBeenCalledOnce()
     fakes.channelOptions!.onAuthenticated()
     client.close()
 
@@ -225,7 +236,7 @@ describe('mobile relay physical pairing client', () => {
       relay,
       deviceToken: 'device-token',
       desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-      createSocket: () => socket as unknown as WebSocket,
+      createSocket: () => pairingWebSocket(socket),
       onLog: (entry) => entries.push(entry)
     })
     const status = client.sendRequest('status.get')
@@ -239,3 +250,8 @@ describe('mobile relay physical pairing client', () => {
     })
   })
 })
+
+function pairingWebSocket(socket: FakeSocket): WebSocket {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The client and mocked channel only send/close and assign event handlers on this socket.
+  return socket as unknown as WebSocket
+}

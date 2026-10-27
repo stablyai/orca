@@ -41,10 +41,7 @@ function collectPersistedWorkspaceOwners(
     }
   }
   for (const lease of state.sshRemotePtyLeases) {
-    // A lease that can never be reattached is a routing tombstone, not a claim on a workspace:
-    // `terminated` is the operator close, and an `expired` row marked `supersededBy` /
-    // `relayIdRecycled` already lost its pane to a newer lease. Counting them as owners pinned
-    // their worktree's metadata row permanently, so the prune could never make progress (#17775).
+    // Unreattachable routing tombstones own no workspace; counting them pinned metadata forever (#17775).
     if (!sshRemotePtyLeaseAllowsReattach(lease)) {
       continue
     }
@@ -117,19 +114,7 @@ function isValidCandidateId(
   )
 }
 
-/**
- * The captured candidates a delete could still accept, decided without touching the disk.
- *
- * Why this exists: the caller `stat`s every candidate whose path Git no longer lists, then discovers
- * here that most of them are refused anyway — pinned by a persisted session, or structurally
- * unremovable on this host. Those verdicts are pure functions of persisted state, so paying for the
- * filesystem first inverts the cheap and expensive halves of the decision. On a store with ~1.4k
- * dangling rows that was the bulk of a permanent `stat` storm (#17775).
- *
- * Deliberately advisory: `pruneSessionlessMissingLocalWorktreeMetadataForRepo` re-checks everything
- * authoritatively against the capture, so a disagreement here costs at most a wasted `stat` or a row
- * lingering one more pass — it can never widen what gets deleted.
- */
+/** Prefilter before stat; authoritative deletion rechecks everything, so this cannot widen removal. */
 export function selectProbeableLocalWorktreeMetadataCandidates(
   state: PersistedState,
   scan: NativeLocalWorktreeMetadataScanExpectation,
@@ -191,7 +176,7 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     removedIds.push(worktreeId)
   }
   if (removedIds.length > 0) {
-    // Why: a global sweep could delete unrelated unaliased rows from another repo or host.
+    // Limit identity cleanup to removed rows or unrelated repo/host metadata could disappear.
     pruneUnreferencedWorktreeIdentityMeta(state, removedIdentityKeys)
   }
   return removedIds

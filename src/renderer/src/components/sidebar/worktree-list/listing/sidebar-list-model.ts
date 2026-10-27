@@ -17,7 +17,6 @@ import type { useSidebarExternalWorktreeCards } from './use-external-worktree-ca
 import type { useSidebarHostVisibleScope } from './use-host-visible-scope'
 import type { useSidebarSectionRows } from './use-section-rows'
 
-/** What WorktreeList hands the list model: the store's view settings, catalog and screen state. */
 export type SidebarListModelArgs = {
   filterState: SidebarWorktreeFilters['filterState']
   sortBy: SortBy
@@ -41,7 +40,6 @@ export type SidebarListModelArgs = {
   agentSendTargetWorktreeId: string | null
 }
 
-/** The rows WorktreeList renders and what its reveal, selection and cards read beside them. */
 export type SidebarListModel = {
   visibleWorktrees: Worktree[]
   visibleScope: ReturnType<typeof useSidebarHostVisibleScope>

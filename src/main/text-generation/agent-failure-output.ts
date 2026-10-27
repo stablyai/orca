@@ -1,7 +1,6 @@
 import { stripAnsiControlSequences } from '../../shared/commit-message-agent-output'
 
-/** Full (bounded) output of a failed agent-CLI generation run, kept for
- *  on-demand display only — never persisted or synced. */
+/** Bounded failure output is display-on-demand only; never persist or sync it. */
 export type AgentGenerationFailureOutput = {
   label: string
   exitCode: number | null
@@ -9,9 +8,7 @@ export type AgentGenerationFailureOutput = {
   stderr: string
 }
 
-// Why: bounding both ends keeps a runaway 4 MiB capture out of memory and IPC
-// while preserving where CLIs put their errors (some front-load them, some
-// print them last).
+// Keep both ends because CLIs print errors at either end; exclude runaway multi-MB captures from memory/IPC.
 const STREAM_HEAD_LIMIT = 16 * 1024
 const STREAM_TAIL_LIMIT = 48 * 1024
 
@@ -40,13 +37,10 @@ function boundStream(value: string): string {
   const bounded = `${value.slice(0, STREAM_HEAD_LIMIT)}\n… (${omitted} characters omitted) …\n${value.slice(
     value.length - STREAM_TAIL_LIMIT
   )}`
-  // Why: V8 otherwise retains the multi-megabyte parent through sliced strings
-  // stored in the capture map; this no-op replacement materializes a flat copy.
+  // Materialize a flat string so V8 cannot retain the multi-MB parent through a slice.
   return bounded.replace(/$/u, '')
 }
 
-/** Renders the capture as one copyable text block: a header line, then the
- *  streams that had content. */
 export function formatAgentGenerationFailureOutputForDisplay(
   output: AgentGenerationFailureOutput
 ): string {
@@ -62,9 +56,7 @@ export function formatAgentGenerationFailureOutputForDisplay(
   return sections.join('\n\n')
 }
 
-// Why: the block renders in a <pre> and gets pasted into bug reports; ANSI and
-// non-printing control/format characters (incl. bidi overrides) must not
-// survive, but line structure must.
+// Copyable preformatted output must retain lines but exclude ANSI/control/bidi formatting.
 function sanitizeStreamForDisplay(value: string): string {
   return stripAnsiControlSequences(value.replace(/\r\n?/g, '\n'))
     .replace(/[\p{Cc}\p{Cf}]/gu, (character) =>

@@ -183,7 +183,21 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
-  it('rejects remote-owned text reads that are not worktree-relative', async () => {
+  // Why: a restored host-file tab lost its grant; only its host may answer for the path.
+  it('asks the host for a grant for an absolute host path, never this computer', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: '/tmp/scratch.md',
+        exists: false,
+        isDirectory: false
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
     await expect(
       readRuntimeFileContent({
         target: { kind: 'environment' as const, environmentId: 'env-1' },
@@ -191,8 +205,14 @@ describe('runtime file client', () => {
         relativePath: '/tmp/scratch.md',
         worktreeId: 'wt-1'
       })
-    ).rejects.toThrow('Remote file is outside the owning runtime worktree')
+    ).rejects.toThrow()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.resolveTerminalPath' })
+    )
+    expect(fsReadFile).not.toHaveBeenCalled()
+  })
 
+  it('rejects remote-owned text reads that are not worktree-relative', async () => {
     await expect(
       readRuntimeFileContent({
         target: { kind: 'environment' as const, environmentId: 'env-1' },
@@ -350,9 +370,7 @@ describe('runtime file client', () => {
   })
 
   it('does not fall back when a non-RPC error merely shares the binary_file message', async () => {
-    // Why: only a typed RuntimeRpcCallError('binary_file') means the server
-    // classified the file as binary. A transport-level failure that happens to
-    // carry the same message text must propagate, not trigger a preview read.
+    // Only typed RuntimeRpcCallError(binary_file) authorizes preview fallback; matching transport-error text must propagate.
     runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'files.read') {
         return Promise.reject(new Error('binary_file'))

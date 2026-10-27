@@ -1,8 +1,6 @@
-// The visual directive as a markdown block, for native-chat assistant prose only. The parser sees it
-// like any other block (so code fences, indented code, quotes and lists keep their meaning), and the
-// line itself is judged by the one shared grammar.
+// Parse assistant visual directives as markdown blocks so fences, quotes and lists retain their grammar.
 
-import type { Paragraph, Root, RootContent } from 'mdast'
+import type { Node, Paragraph, Root, RootContent } from 'mdast'
 import type { Extension as FromMarkdownExtension } from 'mdast-util-from-markdown'
 import type {
   Code,
@@ -34,7 +32,7 @@ export const NATIVE_CHAT_VISUAL_PLACEHOLDER_PROPERTIES = [
   TITLE_PROPERTY
 ] as const
 
-export type NativeChatVisualNode = {
+export type NativeChatVisualNode = Node & {
   type: 'nativeChatVisual'
   file: string
   title: string | null
@@ -115,10 +113,7 @@ function hasChildren(node: RootContent): node is RootContent & ChildList {
   return 'children' in node && Array.isArray(node.children)
 }
 
-/**
- * Mounts only directives that stand alone at the top of the reply, up to the per-message cap. One
- * nested in a quote or list, or past the cap, reads as the text the agent wrote.
- */
+/** Mount only standalone top-level directives within the per-message cap; render nested/excess directives as authored text. */
 function placeVisuals(
   parent: ChildList,
   isRoot: boolean,
@@ -148,10 +143,7 @@ function placeVisuals(
   })
 }
 
-/**
- * The remark plugin. `nonce` is unguessable per rendered message, so raw HTML in the reply cannot
- * forge a placeholder the component would mount.
- */
+/** Use an unguessable per-message nonce so reply HTML cannot forge mountable placeholders. */
 export function remarkNativeChatVisuals(this: Processor, nonce: string): (tree: Root) => void {
   const data = this.data()
   data.micromarkExtensions = [...(data.micromarkExtensions ?? []), visualMicromarkExtension]

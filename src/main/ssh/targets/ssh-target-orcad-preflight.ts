@@ -1,11 +1,4 @@
-/**
- * Can this relay-hosted SSH target's state be exported to a managed orcad?
- *
- * Unlike claiming an empty target, export carries the target's repositories, folder
- * workspaces and the dormant state the manifest can represent, so those drain rather than block.
- * What blocks is what cannot move: another owner, live terminal leases, and dependent state the
- * manifest cannot carry. Read-only: building the manifest here exports nothing.
- */
+/** Read-only export preflight: catalog rows and representable dormant state can migrate; ownership, live leases and untransferred dependencies block. */
 import { isLiveSshPtyLease } from '../../../shared/ssh-types'
 import type { Store } from '../../persistence'
 import type {
@@ -76,7 +69,7 @@ export function preflightOrcadMigrationExport(
   }
 }
 
-/** Whether a confirmed "Move anyway" would export: what it can't leave (desktop drafts) still refuses. */
+/** Confirmed Move anyway can leave saved state, but desktop drafts that cannot be left still block. */
 export function leaveBehindClearsOrcadMigrationBlockers(
   store: OrcadMigrationPreflightStore & Pick<Store, 'createOrcadMigrationLeaveBehindView'>,
   targetId: string,
@@ -118,7 +111,6 @@ export function onlyLeavableOrcadMigrationBlockers(
   )
 }
 
-// Exported catalog rows and saved port forwards (which stay with the source) do not block.
 export function isBlockingOrcadMigrationBlocker(blocker: OrcadMigrationBlocker): boolean {
   return (
     blocker.category !== 'drainable-static-state' &&

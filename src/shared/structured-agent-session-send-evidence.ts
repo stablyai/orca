@@ -1,5 +1,3 @@
-// What the answer to a send's one `agentSession.send` request proves about its message.
-
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
 import {
   agentSessionRefusalFailure,
@@ -8,8 +6,7 @@ import {
   type AgentSessionWriteFailure
 } from './agent-session-write-failure'
 
-/** The reason a host gives a made-up `unknown` row: its ledger has the id and its journal does not,
- *  so the message may never have been written. */
+/** Synthetic unknown row: ledger holds the ID but journal lost it, so recording is unproved. */
 export const STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING = 'durable_send_submission_missing'
 
 export type StructuredAgentSessionSendAnswer =
@@ -32,13 +29,12 @@ const TURNED_AWAY_RPC_CODES: ReadonlySet<string> = new Set([
   'unauthorized'
 ])
 
-/** What the answer to a send's one request proves. Nothing sends it again, so no answer is ever
- *  read against an earlier attempt. */
+/** Judge this ID’s only send request; no earlier attempt exists to confuse its outcome. */
 export function structuredAgentSessionSendEvidence(
   answer: StructuredAgentSessionSendAnswer
 ): StructuredAgentSessionSendEvidence {
   if (answer.kind === 'thrown') {
-    // A thrown error, a thrown refusal included, is never proof: the host may have written first.
+    // Only pre-method RPC rejections prove no write; other throws/refusals can occur after recording.
     return answer.rpcCode !== undefined &&
       TURNED_AWAY_RPC_CODES.has(answer.rpcCode) &&
       readAgentSessionErrorRefusal(answer.error) === undefined
@@ -48,19 +44,19 @@ export function structuredAgentSessionSendEvidence(
   const { result } = answer
   if (result.ok) {
     const value: AgentSessionSendResult = result.value
-    // A made-up row for an id the host's ledger holds and its journal lost.
+    // Ledger-only synthetic rows cannot prove whether journal recording happened.
     return 'submission' in value &&
       value.submission.reason === STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
       ? { kind: 'uncertain' }
       : { kind: 'recorded' }
   }
   const failure = agentSessionRefusalFailure(result.refusal)
-  // "Outcome unknown" is never proof; an unconfirmed rewind is the host saying the send never ran.
+  // Operation-unknown is ambiguous except rewindUnconfirmed, which proves this send never ran.
   if (failure.kind === 'refused' && failure.code === 'agent_session_operation_unknown') {
     return failure.details?.reason === 'rewindUnconfirmed'
       ? { kind: 'not-recorded', failure }
       : { kind: 'uncertain' }
   }
-  // This request was the only one that carried the id, so nothing under it is recorded or running.
+  // This was the ID’s only request; a definite refusal leaves nothing recorded or running under it.
   return { kind: 'not-recorded', failure }
 }

@@ -6,8 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { flattenRetainedSlice } from './flatten-retained-slice'
 
-// Why 1 MB: comfortably above V8's SlicedString threshold, so a raw slice really does keep the
-// parent alive and the difference between flattened and not is unmistakable in heapUsed.
+// Use 1MB parents above V8’s SlicedString threshold so retained-parent versus copied-tail heap differences are measurable.
 const PARENT_CHARS = 1024 * 1024
 const TAIL_CHARS = 512
 const PARENTS = 8

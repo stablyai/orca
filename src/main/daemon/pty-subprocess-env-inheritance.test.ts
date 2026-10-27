@@ -281,7 +281,10 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ORCA_HISTFILE).toBe(expected)
-    expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
+    // History wrapping only sets ORCA_SHELL_FEATURES on the POSIX launch path.
+    expect(env.ORCA_SHELL_FEATURES).toBe(
+      process.platform === 'win32' || expected === undefined ? undefined : 'history'
+    )
   })
 
   it('does not inherit ELECTRON_RUN_AS_NODE from the daemon process env', async () => {

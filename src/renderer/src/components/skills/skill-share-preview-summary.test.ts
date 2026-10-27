@@ -42,8 +42,6 @@ describe('summarizeShareRisk', () => {
 })
 
 describe('sensitiveShareFiles', () => {
-  // Why: an executable script appears in both path sets; listing it twice would
-  // overstate how much of the package can run.
   it('lists a file that is both script and executable once', () => {
     const files = sensitiveShareFiles(
       preview({ scriptPaths: ['scripts/setup.sh'], executablePaths: ['scripts/setup.sh'] })

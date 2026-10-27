@@ -13,7 +13,7 @@ import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
-import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import {
   FILE_WRITE_OK,
   parseFileWriteResult,
@@ -23,7 +23,7 @@ import {
 import { writeRemoteFileIfUnchanged } from './runtime-file-write-disk-precondition'
 
 /** Refuses a save the host's frame cap would reject by dropping the whole connection. */
-function assertRemoteWriteFitsOneRequest(content: string): void {
+export function assertRemoteWriteFitsOneRequest(content: string): void {
   // Why: one UTF-16 unit escapes to at most 6 bytes, so most saves skip encoding.
   if (content.length * 6 + 2 <= REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES) {
     return

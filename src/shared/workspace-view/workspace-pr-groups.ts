@@ -1,6 +1,4 @@
-// Group by "PR": the lanes, their order and English labels, shared by the desktop and the phone.
-// Each surface reads a row's PR state its own way (the desktop from its review cache, the phone
-// from the row the host sends) and hands the state here.
+// Desktop and phone share PR lanes, ordering and labels; each supplies state from its own cache or host row.
 
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
@@ -14,15 +12,11 @@ export const PR_GROUP_LABELS: Record<PRGroupKey, string> = {
   closed: 'Closed'
 }
 
-/** Section key for a PR lane. */
 export function getPRLaneKey(prGroup: PRGroupKey): string {
   return `pr:${prGroup}`
 }
 
-/**
- * A PR's lane from its state. No PR (undefined), or a draft, is still in progress; a PR whose
- * state is unknown ('') is in review.
- */
+/** Missing reviews and drafts are in progress; an unknown state (empty string) is in review. */
 export function getPRGroupKeyForState(state: string | null | undefined): PRGroupKey {
   switch (state?.toLowerCase()) {
     case undefined:

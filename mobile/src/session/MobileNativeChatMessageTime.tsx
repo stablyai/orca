@@ -9,7 +9,6 @@ import { scaledType } from './mobile-native-chat-message-styles'
 
 let formatters: { time: Intl.DateTimeFormat; full: Intl.DateTimeFormat } | null = null
 
-/** When a message was sent or written, as desktop's `NativeChatMessageTimestamp` shows it. */
 export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessageTime({
   timestamp,
   fontScale

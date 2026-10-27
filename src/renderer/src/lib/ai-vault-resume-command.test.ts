@@ -5,10 +5,16 @@ import {
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
-import { dropDeletedSshResumeCwd } from './ai-vault-session-resume-preparation'
+import { dropDeletedRemoteResumeCwd } from './ai-vault-session-resume-preparation'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
+}))
+
+const browseServerDir = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/runtime-server-directory-browser', () => ({
+  browseRuntimeServerDirectory: browseServerDir
 }))
 
 afterEach(() => {
@@ -140,8 +146,7 @@ describe('ai vault resume command runtime', () => {
   })
 
   it('queues a PowerShell-valid command for the default Windows shell', () => {
-    // Why: the queued command is typed into the live tab shell (default
-    // PowerShell), which mis-parses the cmd `""`-doubled wrapper (#6152).
+    // Queued commands target the live shell: PowerShell misparses cmd’s doubled-quote wrapper (#6152).
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     expect(
@@ -216,8 +221,7 @@ describe('ai vault resume command runtime', () => {
   })
 
   it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {
-    // Regression: local rebuilds must forward session.filePath so OMP resumes by
-    // path, and queued Windows commands must match the live tab shell.
+    // Rebuilds must retain OMP session.filePath and quote for the live Windows shell.
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     const command = buildQueuedAiVaultResumeCommand({
@@ -517,11 +521,10 @@ describe('ai vault resume command runtime', () => {
     const startup = buildAiVaultResumeStartupForWorktree({
       state: makeState({ worktreePath: '/home/alice/wt/main' }),
       worktreeId: 'repo-1::worktree-1',
-      session: await dropDeletedSshResumeCwd(session)
+      session: await dropDeletedRemoteResumeCwd(session)
     })
 
-    // Why: typing `cd <deleted folder> && …` into the SSH shell stopped the agent, and Codex
-    // resumed at the root would still prompt with the deleted folder preselected (#17745).
+    // A deleted SSH cwd blocks startup, and Codex retains that missing folder even when resumed at root (#17745).
     expect(startup.command).not.toContain('feat-x')
     expect(startup.command).toContain("'-c' 'tui.resume_cwd=current' 'resume'")
     expect(startup.cwd).toBeUndefined()
@@ -529,6 +532,43 @@ describe('ai vault resume command runtime', () => {
       filePath: '/home/alice/wt/feat-x',
       connectionId: 'dev-box'
     })
+  })
+
+  it('resumes a paired server session at the workspace root once the server reports its folder deleted', async () => {
+    browseServerDir.mockImplementation(async (_environmentId: string, path: string) => {
+      if (path === '~') {
+        return { resolvedPath: '/home/alice', entries: [], pathFlavor: 'posix' }
+      }
+      throw new RuntimeRpcCallError({
+        id: 'req',
+        ok: false,
+        error: {
+          code: 'runtime_error',
+          message: `ENOENT: no such file or directory, stat '${path}'`
+        }
+      })
+    })
+    const session = {
+      agent: 'codex' as const,
+      sessionId: 'session one',
+      cwd: '/home/alice/wt/feat-x',
+      codexHome: '/home/alice/.codex',
+      executionHostId: 'runtime:env-1' as const,
+      executionHostPlatform: 'linux' as const,
+      resumeCommand:
+        "cd '/home/alice/wt/feat-x' && CODEX_HOME='/home/alice/.codex' codex resume 'session one'"
+    }
+
+    const startup = buildAiVaultResumeStartupForWorktree({
+      state: makeState({ worktreePath: '/home/alice/wt/main' }),
+      worktreeId: 'repo-1::worktree-1',
+      session: await dropDeletedRemoteResumeCwd(session)
+    })
+
+    expect(startup.command).not.toContain('feat-x')
+    expect(startup.command).toContain("'-c' 'tui.resume_cwd=current' 'resume'")
+    expect(startup.cwd).toBeUndefined()
+    expect(browseServerDir).toHaveBeenCalledWith('env-1', '/home/alice/wt/feat-x')
   })
 
   it('rebuilds remote real-home Codex commands without a stored home assignment', () => {

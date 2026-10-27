@@ -37,9 +37,7 @@ function DropdownMenuContent({
           'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-[4px] text-black dark:text-white shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
           className
         )}
-        // Why: Electron's -webkit-app-region: drag on the titlebar captures
-        // clicks at the OS level regardless of z-index. Without no-drag,
-        // dropdown menus that visually overlap the titlebar are unclickable.
+        // Disable native dragging: titlebar drag regions intercept menu clicks regardless of z-index.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
@@ -222,8 +220,7 @@ function DropdownMenuSubContent({
           'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-[4px] text-black dark:text-white shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
           className
         )}
-        // Why: same no-drag fix as DropdownMenuContent — titlebar drag region
-        // would otherwise capture clicks when submenu overlaps it.
+        // Disable native dragging where submenu content overlaps the titlebar.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}

@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { OpenFile } from '@/store/slices/editor'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
@@ -134,8 +134,7 @@ function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorksp
 
 describe('workspace-tab-palette-search', () => {
   it('stamps the row execution host so activation never resolves by id alone', () => {
-    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
-    // host's workspace behind a row labelled with this one's name and branch.
+    // Host-blind activation opens the wrong same-ID workspace behind another host’s row label.
     const worktree = makeWorktree({ hostId: 'ssh:box' })
     const entries = buildEntries({ worktrees: [worktree] })
     const [result] = searchWorkspaceTabs(entries, '')
@@ -236,8 +235,7 @@ describe('workspace-tab-palette-search', () => {
     expect(searchWorkspaceTabs(entries, 'fallback')[0]?.title).toBe('Fallback Terminal')
   })
 
-  // The tab strip shows the unified label; tabsByWorktree can lag on a default
-  // "Terminal N" while the label already has the live OSC agent title.
+  // Unified labels follow visible OSC titles while terminal records can lag at Terminal N.
   it('indexes the unified label when the terminal record title is stale', () => {
     const entries = buildEntries({
       tabsByWorktree: {
@@ -520,8 +518,7 @@ describe('workspace-tab-palette-search', () => {
   })
 
   it('falls back to the branch label when a cleared display name left it undefined', () => {
-    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
-    // so the store-level display-name corruption reaches here too.
+    // Cmd+J receives the same possibly corrupt stored display names as workspace search.
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,
       branch: 'refs/heads/feature/workspace-tab-search'

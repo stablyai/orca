@@ -3,8 +3,41 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentCommandOverrideInput, AgentDefaultArgsInput } from './AgentLaunchDefaultsEditor'
+import { TooltipProvider } from '../ui/tooltip'
 
 afterEach(cleanup)
+
+it.each(['', '--default'])(
+  'hides the %j placeholder while a permission chip is present',
+  (defaultArgs) => {
+    const editor = (withChip: boolean) => (
+      <TooltipProvider>
+        <AgentDefaultArgsInput
+          defaultArgs={defaultArgs}
+          argsOverride=""
+          onSaveArgs={vi.fn()}
+          permissionChip={
+            withChip
+              ? {
+                  label: 'Claude',
+                  flag: '--permission-mode default',
+                  removeRecipe: () => null,
+                  onRemove: vi.fn()
+                }
+              : undefined
+          }
+        />
+      </TooltipProvider>
+    )
+    const view = render(editor(true))
+    expect(screen.getByRole('button', { name: /Remove --permission-mode default/ })).toBeDefined()
+    const input = screen.getByRole('textbox', { name: 'Arguments' })
+    expect(input).toHaveProperty('placeholder', '')
+    expect(input).toHaveProperty('value', '')
+    view.rerender(editor(false))
+    expect(input).toHaveProperty('placeholder', defaultArgs || 'No default arguments')
+  }
+)
 
 describe('launch field reset ordering', () => {
   it.each(['arguments', 'command'] as const)(

@@ -24,7 +24,6 @@ export function chatProviderAgents(
   ]
 }
 
-/** Re-renders the caller whenever a host's chat agent list changes. */
 export function useHostStructuredAgentsVersion(): number {
   return useSyncExternalStore(
     subscribeHostStructuredAgents,

@@ -122,7 +122,6 @@ describe('useMobileDiffReviewController', () => {
     await update('reconnecting')
     await update('connected')
     expect(loadSnapshot).toHaveBeenCalledTimes(2)
-    // Why (F10): a failed refresh must not replace the review on screen with an error.
     expect(screenState).toMatchObject({ kind: 'ready', status: { branch: 'feature/one' } })
   })
 

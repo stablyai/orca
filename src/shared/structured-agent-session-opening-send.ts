@@ -1,5 +1,4 @@
-// Whether a send ahead is still opening its own turn: the host holds the next message for it, and
-// every client draws a message held that way after the live turn, never above it.
+// Hold subsequent sends while one opens a turn; clients draw held sends after live work.
 
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
@@ -11,7 +10,7 @@ import type {
 } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 
-/** What the read needs of each journal item; the host visits its fold without a snapshot. */
+/** Minimal fold shape lets the host read without rendering a snapshot. */
 export type StructuredAgentSessionOpeningSendItem = {
   itemId: string
   sequence: number
@@ -20,17 +19,9 @@ export type StructuredAgentSessionOpeningSendItem = {
   agentId?: string
 }
 
-/**
- * A send handed over while no turn ran, still unsettled, with no turn record written since its
- * handover (`fence`, when given: handed over by that child). A message handed over now would join
- * the turn that send is opening (Codex steers it in once the turn opens, Claude folds it into the
- * running cycle), yet its handover row would be written before that turn exists, and so read as
- * belonging to none. So the host holds it until the turn opens, and a client draws it after the
- * live turn meanwhile. Every way the send stops opening — its turn record, its echo, its refusal, a
- * lost answer's doubt, its child's end, a Stop that took — is a journal commit that settles it or
- * records its turn. A Stop that failed or was refused leaves the turn opening, so the next message
- * still waits.
- */
+/** An unsettled handover outside a turn, with no later turn record (optionally child-fenced), is still opening.
+ * Hold later sends until its turn exists or their handover would claim no turn despite joining it.
+ * Echo/refusal/doubt/child-end/successful Stop journal commits settle it; failed/refused Stop leaves subsequent messages waiting. */
 export function structuredAgentSessionSendOpeningTurn(
   submissions: readonly Pick<
     AgentJournalSubmission,
@@ -42,8 +33,7 @@ export function structuredAgentSessionSendOpeningTurn(
   return structuredAgentSessionOpeningSendItemId(submissions, visitItems, fence) !== null
 }
 
-/** The item of the newest send still opening its turn (`structuredAgentSessionSendOpeningTurn`),
- *  or null: the turn a client reads as live while it opens. */
+/** Newest still-opening send’s item, or null; clients treat it as live while the turn opens. */
 export function structuredAgentSessionOpeningSendItemId(
   submissions: readonly Pick<
     AgentJournalSubmission,
@@ -85,7 +75,6 @@ export function structuredAgentSessionOpeningSendItemId(
   return newest.handoverAt > newest.settledAt ? newest.handover : null
 }
 
-/** The same read over a client's journal items: the item of the send still opening, or null. */
 export function structuredAgentSessionOpeningSendIn(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]

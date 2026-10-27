@@ -53,8 +53,7 @@ describe('shouldShowOsc52ClipboardDefaultOnNotice', () => {
   })
 
   it('stays quiet before hydration, when the flag still reads its default', () => {
-    // Why: pre-hydration the store holds `false` for everyone, so firing on that
-    // value would nag every profile — including the ones never opted out.
+    // Before hydration false is the default for every profile, including those that never opted out.
     expect(
       shouldShowOsc52ClipboardDefaultOnNotice({ persistedUIReady: false, noticePending: true })
     ).toBe(false)
@@ -88,8 +87,7 @@ describe('useOsc52ClipboardDefaultOnNotice', () => {
   })
 
   it('toasts the armed profile without spending the notice up front', async () => {
-    // Why not consume on enqueue: quitting inside the toast's 15s would burn the profile's
-    // only notice on a launch where the posture change was never actually communicated.
+    // Enqueue must not spend the profile’s only notice if the app quits before it is seen.
     await mountProbe(true)
 
     expect(toastInfoMock).toHaveBeenCalledTimes(1)
@@ -99,9 +97,7 @@ describe('useOsc52ClipboardDefaultOnNotice', () => {
   it.each(['onAutoClose', 'onDismiss'] as const)('consumes the notice on %s', async (callback) => {
     await mountProbe(true)
 
-    // Why assert the option exists before invoking: optional chaining makes a missing
-    // callback a silent no-op, so a revert to clear-at-enqueue would satisfy the count
-    // below without ever wiring this close path.
+    // Require the callback before invoking it so missing close wiring cannot pass as a no-op.
     const close = toastInfoMock.mock.calls[0]?.[1]?.[callback]
     expect(close).toBeTypeOf('function')
     expect(storeState.clearOsc52ClipboardDefaultOnNotice).not.toHaveBeenCalled()
@@ -112,8 +108,7 @@ describe('useOsc52ClipboardDefaultOnNotice', () => {
   })
 
   it('assigns a stable toast id for notice deduplication', async () => {
-    // Why pin the id: the effect re-runs against the same closure, so the early return
-    // cannot catch the second pass — sonner collapses it only because the id matches.
+    // StrictMode repeats the same closure; sonner needs a stable ID to collapse the second toast.
     await mountProbe(true)
 
     expect(toastInfoMock.mock.calls[0]?.[1]?.id).toBe('osc52-clipboard-default-on-notice')
@@ -146,14 +141,12 @@ describe('useOsc52ClipboardDefaultOnNotice', () => {
     expect(options.description).toContain('Zellij')
     expect(options.action.label).toBe('Open Setting')
 
-    // Why assert unspent first: without it, a revert to clear-at-enqueue satisfies the
-    // count below and the action's own clear becomes deletable with nothing going red.
+    // Prove enqueue leaves the notice unspent so the action’s clear remains necessary.
     expect(storeState.clearOsc52ClipboardDefaultOnNotice).not.toHaveBeenCalled()
 
     options.action.onClick()
 
-    // Why assert the clear here: sonner's action path deletes the toast without firing
-    // onDismiss, so acting on the notice would otherwise leave it to re-toast next launch.
+    // Sonner actions omit onDismiss, so the action must consume the notice itself.
     expect(storeState.clearOsc52ClipboardDefaultOnNotice).toHaveBeenCalledTimes(1)
     expect(storeState.setSettingsSearchQuery).toHaveBeenCalledWith('')
     expect(storeState.openSettingsTarget).toHaveBeenCalledWith({

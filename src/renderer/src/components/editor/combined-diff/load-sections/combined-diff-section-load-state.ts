@@ -1,8 +1,7 @@
 import type { DiffLineCounts, LargeDiffRenderLimit } from '../../large-diff-render-limit'
 import type { DiffSection } from '../../diff-section-types'
 
-// Why: `diffResult === null` subsumes a dirty check — `dirty` is only ever set from a mounted
-// editor's content compare, which implies content was already loaded.
+// Null diff results already imply clean state: dirty can only come from a mounted, loaded editor.
 export function shouldRequestCombinedDiffSectionLoad(
   section: Pick<DiffSection, 'diffResult' | 'error'> | undefined,
   isLoading: boolean
@@ -39,12 +38,7 @@ function isSameLineCountMinimums(
   )
 }
 
-/**
- * True when a revalidation refetched exactly what the section already displays, so committing it
- * would swap Monaco models and re-measure the row for no visible change.
- *
- * Why: a rebase fires one watcher event per touched path, and most of those refetch identical diffs.
- */
+/** Skip identical text refetches after watcher events to avoid unnecessary Monaco model swaps and row measurement. */
 export function isUnchangedDiffSectionReload(
   current: ReloadedDiffSectionContent,
   next: ReloadedDiffSectionContent
@@ -61,9 +55,7 @@ export function isUnchangedDiffSectionReload(
   if ((currentLimit?.limited ?? false) !== (nextLimit?.limited ?? false)) {
     return false
   }
-  // Why: limited sections prune their content to '', so the content compare below can't see a
-  // refetch move. The fallback banner renders only this metadata, so it is both the sole change
-  // signal and the full description of what's on screen.
+  // Limited sections prune text to empty strings; render-limit metadata is their only visible change signal.
   if (currentLimit?.limited === true && nextLimit?.limited === true) {
     return (
       currentLimit.reason === nextLimit.reason &&

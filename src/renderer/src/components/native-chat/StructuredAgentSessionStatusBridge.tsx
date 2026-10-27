@@ -5,7 +5,7 @@ import { projectStatus } from './structured-agent-session-status-projection'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   subscribeStructuredAgentLaunchStatus
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'

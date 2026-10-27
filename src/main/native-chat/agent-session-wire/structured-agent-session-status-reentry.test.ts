@@ -66,7 +66,7 @@ async function createFeed() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => 1_000,
     statusSink: () => statusSink
   })

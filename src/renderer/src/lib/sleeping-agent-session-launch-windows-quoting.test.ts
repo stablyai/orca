@@ -1,6 +1,4 @@
-// Windows shell-quoting coverage for the sleeping-agent resume launch (#12320):
-// the queued resume line is typed into the new tab's shell, so cmd.exe tabs must
-// not receive PowerShell single quotes.
+// Resume lines enter the selected Windows shell; cmd.exe must never receive PowerShell single quoting (#12320).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
@@ -8,6 +6,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 const mockCreateTab = vi.fn()
 
 const store = {
+  agentStatusByPaneKey: {},
   settings: {
     agentCmdOverrides: {},
     agentDefaultArgs: {} as Record<string, string>,

@@ -2,7 +2,7 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
-import type { AgentSessionWorkspaceSleepResult } from '../../../shared/agent-session-workspace-sleep'
+import type { AgentSessionWorkspaceSleepResult } from '../../../shared/agent-session/agent-session-workspace-sleep'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-conversation-lifetime'
@@ -27,9 +27,9 @@ export async function sleepStructuredAgentSessionWorkspace(
   workspaceId: string,
   markAsleep = false
 ): Promise<AgentSessionWorkspaceSleepResult> {
-  let records: ReturnType<StructuredAgentSessionHostDeps['store']['listRecords']>
+  let records: ReturnType<StructuredAgentSessionHostDeps['store']['listConversations']>
   try {
-    records = host.deps.store.listRecords()
+    records = host.deps.store.listConversations()
   } catch (error) {
     host.deps.logger.warn('workspace chat inventory failed', {
       scope: 'workspace-chat-inventory',
@@ -54,17 +54,20 @@ export async function sleepStructuredAgentSessionWorkspace(
         LOCAL_EXECUTION_HOST_ID
       )
       return host.tasks.serialize(sessionId, async () => {
-        const record = host.deps.store.getRecord(sessionId)
+        const record = host.deps.store.getConversation(sessionId)
         if (
           !stop ||
           !record ||
           !belongs(record.location) ||
-          record.lease.runtimeFence !== stop.fence ||
+          record.currentFence !== stop.fence ||
           host.deps.store.admittedSendCount(sessionId) !== stop.admittedSends
         ) {
           return null
         }
-        return settleWorkspaceSleepChat(host, sessionId, stop.stopped, markAsleep)
+        if (!stop.stopped) {
+          return { stopped: false as const, fence: record.currentFence }
+        }
+        return settleWorkspaceSleepChat(host, sessionId, true, markAsleep)
       })
     })
   )
@@ -83,7 +86,7 @@ export async function sleepStructuredAgentSessionWorkspace(
       stoppedSessionIds.push(sessionId)
     } else if (
       stop.value &&
-      host.deps.store.getRecord(sessionId)?.lease.runtimeFence === stop.value.fence
+      host.deps.store.getConversation(sessionId)?.currentFence === stop.value.fence
     ) {
       failures.push({ sessionId, reason: 'stop-unverifiable' })
     }
@@ -99,7 +102,8 @@ async function settleWorkspaceSleepChat(
 ): Promise<WorkspaceSleepVerdict> {
   const current = host.deps.store.getRecord(sessionId)
   if (!current) {
-    return null
+    const conversation = host.deps.store.getConversation(sessionId)
+    return conversation ? { stopped: false, fence: conversation.currentFence } : null
   }
   if (!stopped) {
     return { stopped: false, fence: current.lease.runtimeFence }

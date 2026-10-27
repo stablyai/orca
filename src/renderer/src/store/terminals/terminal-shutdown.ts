@@ -2,11 +2,12 @@ import type { SleepingAgentSessionRecord } from '../../../../shared/agent-sessio
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
-  collectSleepingAgentSessionRecordsForWorktree,
-  type AgentStatusWorktreeShutdownReason
-} from '../slices/agent-status'
+  collectSleepingAgentSessionRecordsForWorktree
+} from '../slices/agent-status/agent-status-recovery-collection'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
 import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
@@ -43,9 +44,7 @@ export function createTerminalShutdownActions(
         resolveTerminalPtyOwner(get(), worktreeId),
         rendererShutdownPtyIds
       )
-      // Why: treating an unattributable owner as local skips the host stop yet still clears
-      // bindings and writes resume records, so the agent runs on unseen and wake starts a twin.
-      // A backend-owned teardown already stopped its PTYs, so it has nothing to misroute.
+      // Unknown owners must not lose bindings while agents run unseen and wake twins; backend-owned teardown already stopped them.
       if (teardownOwner.kind === 'refused' && !backendOwnsPtyTeardown) {
         console.warn('[terminal-shutdown] refusing teardown: terminal owner is ambiguous', {
           worktreeId,

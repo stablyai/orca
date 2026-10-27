@@ -51,8 +51,6 @@ describe('getAccountsMiniMaxSearchEntries', () => {
 
   it('exposes the keywords that drive the Settings search index', () => {
     const [entry] = getAccountsMiniMaxSearchEntries()
-    // Why: the Settings search needs at least one of these tokens to
-    // surface the MiniMax section when the user types a related term.
     expect(entry.keywords).toEqual(
       expect.arrayContaining(['minimax', 'cookie', 'session', 'rate limit', 'status bar'])
     )

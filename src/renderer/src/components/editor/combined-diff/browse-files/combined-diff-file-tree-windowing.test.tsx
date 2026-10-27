@@ -87,7 +87,6 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/** `fileCount` files spread over `directoryCount` directories, in the viewer's own tree order. */
 function buildEntries(fileCount: number, directoryCount: number): GitBranchChangeEntry[] {
   const raw: GitBranchChangeEntry[] = Array.from({ length: fileCount }, (_, index) => ({
     path: `src/dir${String(index % directoryCount).padStart(2, '0')}/file-${String(index).padStart(4, '0')}.ts`,
@@ -123,12 +122,10 @@ describe('combined diff file tree row windowing', () => {
     const directoryCount = 4
     renderTree(buildEntries(fileCount, directoryCount))
 
-    // `src` plus one directory row per leaf directory, plus one row per file.
     const totalRows = 1 + directoryCount + fileCount
     expect(totalRows).toBeLessThan(VIRTUALIZED_LIST_MIN_ROWS)
     expect(mountedRows.count).toBe(totalRows)
     expect(host.querySelector('[data-testid="virtualized-list"]')).toBeNull()
-    // Natural flow: no absolutely positioned wrappers, exactly the pre-virtualization markup.
     expect(host.querySelectorAll('[data-index]').length).toBe(0)
   })
 
@@ -140,7 +137,7 @@ describe('combined diff file tree row windowing', () => {
     const totalRows = 1 + directoryCount + fileCount
     expect(host.querySelector('[data-testid="virtualized-list"]')).not.toBeNull()
     expect(mountedRows.count).toBeGreaterThan(0)
-    // A 600px viewport plus overscan: bounded by the window, not by the review size.
+    // Bound mounted rows by viewport and overscan rather than total review size.
     expect(mountedRows.count).toBeLessThan(totalRows / 10)
   })
 })

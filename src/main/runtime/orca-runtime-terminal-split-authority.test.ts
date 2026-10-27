@@ -17,11 +17,10 @@ const SOURCE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SOURCE_PTY_ID = 'pty-source'
 const SPLIT_PTY_ID = 'pty-split'
 const SPLIT_INCARNATION_ID = 'pty-split-inc'
-// Switch-on, main stamps the source's pane with its terminal's incarnation, so they start equal.
+// Main-owned source panes start stamped with the live terminal incarnation.
 const SOURCE_STAMPED_BEFORE = ORCA_LAYOUT_OWNER_IS_MAIN
   ? { sourceIncarnationId: 'persisted-before' }
   : {}
-// Switch-on, a source main's layout no longer holds has no pane, so its handle is stale first.
 const UNOWNED_SOURCE_ERROR = ORCA_LAYOUT_OWNER_IS_MAIN
   ? 'terminal_handle_stale'
   : 'terminal_split_source_not_found'
@@ -101,7 +100,7 @@ function createHarness(
   const connectionId = options.connectionId ?? null
   const ownerHostId = connectionId ? `ssh:${connectionId}` : 'local'
   const requestedSessionHostIds: (string | undefined)[] = []
-  // The fixture's own spawn-commit reads are not the split's.
+  // Exclude fixture spawn-commit reads from split-read assertions.
   let committingPane = false
   const repo = {
     id: REPO_ID,
@@ -140,7 +139,6 @@ function createHarness(
     : vi.fn().mockRejectedValue(new Error(`Terminal tab ${TAB_ID} not found`))
   const rendererSplitTerminal = vi.fn()
   const runtime = new OrcaRuntimeService(store as never)
-  // As the PTY host's spawn commit: the split's pane is bound once its terminal starts.
   const spawn = options.deferSpawn
     ? vi.fn(
         committingSpawn(
@@ -204,7 +202,6 @@ function createHarness(
         : [],
     mobileSessionTabs: (options.includePairedSnapshot ?? includeSource) ? [remoteSnapshot()] : []
   })
-  // As the PTY host's spawn commit: the source's pane is bound in its owner's partition first.
   const registerSource = (incarnationId?: string) => {
     committingPane = true
     try {
@@ -225,8 +222,7 @@ function createHarness(
   if (!options.graphOnlySource) {
     registerSource(options.sourceIncarnationId)
     if (!includeSource && ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Switch-on, a registered terminal's pane was bound first, so an unowned source is one
-      // whose tab was closed since: the saved session no longer lists it.
+      // Bind-before-register means an unowned registered source lost its tab since spawn.
       session = persistedSession(false)
     }
   }
@@ -271,8 +267,7 @@ describe('remote runtime terminal split authority', () => {
   it('addresses a graph-backed split by stable leaf identity across a parked remount', async () => {
     const harness = createHarness(true, { rendererMounted: true, graphOnlySource: true })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main writes the split and starts its terminal under the new pane's stable id; no window
-      // is asked, so a parked or remounting tab cannot hold the split up.
+      // Main starts splits by stable pane id; parked/remounting windows cannot delay them.
       const started = await harness.runtime.splitTerminal(harness.handle, {
         direction: 'vertical'
       })
@@ -352,8 +347,7 @@ describe('remote runtime terminal split authority', () => {
     expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root?.type).toBe('split')
   })
 
-  // Switch-off only: with the switch on, main's leaves stand in for the window's in workspaces main
-  // owns, so a window pane bound to another terminal cannot exist (terminal-split-source-authority.ts).
+  // Main-owned leaves replace renderer authority, making differently bound window panes impossible.
   it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
     'does not reveal a persisted split into a renderer bound to a different PTY',
     async () => {
@@ -363,8 +357,7 @@ describe('remote runtime terminal split authority', () => {
     }
   )
 
-  // STA-9417: the window's graph lags a tab it already holds, so the split is offered regardless;
-  // a window without the tab rejects it and the persisted split stands.
+  // STA-9417: offer splits despite lagging window graph; window refusal must retain the persisted split.
   it('splits a persisted tab the window has not listed, and still offers it to the window', async () => {
     const harness = createHarness()
 
@@ -466,8 +459,7 @@ describe('remote runtime terminal split authority', () => {
           expectedSourceBinding: expect.objectContaining({ ptyId: SOURCE_PTY_ID })
         })
       )
-      // Why: persistence never recorded this incarnation, so sending it would make the store
-      // reject every split from a restored pane; the live id is fenced in-runtime instead.
+      // Unpersisted incarnation would make Store reject restored splits; fence the live id only in runtime.
       expect(harness.spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           expectedSourceBinding: expect.not.objectContaining({ incarnationId: expect.anything() })

@@ -1,16 +1,9 @@
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
-/**
- * Which Space rows a delete action applies to.
- *
- * Rows are host-partitioned: two rows can share a `repoId::path` worktree id
- * when the same repo is registered on two execution hosts. Anything feeding a
- * destructive action therefore hands back ROWS, not ids — an id alone cannot say
- * which host's checkout the user pointed at (STA-4343).
- */
+/** Host-partitioned scan rows can share workspace IDs; destructive selection must preserve the row’s host. */
 
-/** The selected rows themselves — each keeps its own host (STA-4343). */
+/** Qualify selection IDs by host so same-ID checkouts remain independent. */
 export function getWorkspaceSpaceWorktreeIdentity(
   row: Pick<WorkspaceSpaceWorktree, 'worktreeId' | 'executionHostId'>
 ): string {

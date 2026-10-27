@@ -1,17 +1,8 @@
-/**
- * Agent-task-complete notification policy predicates and timing constants.
- *
- * Why extracted from pty-connection.ts: the parked byte watcher and the
- * pty:sideEffect facts handler apply the exact live-path semantics without a
- * pane, and policy must not drift between the three consumers. This module is
- * deliberately dependency-light — no pane/xterm imports — so pane-less
- * consumers can use it.
- */
+/** Keep live, parked-watcher and side-effect completion policy aligned without importing pane/xterm dependencies. */
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
-/** Delay before BEL/completion OS notifications so the richer
- *  agent-task-complete notification can win a same-burst BEL race. */
+/** Delay BEL/completion banners so richer same-burst agent detail can win. */
 export const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 /** Hard cap on waiting for hook detail before dispatching a completion. */
 export const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1500
@@ -48,9 +39,7 @@ export function canDispatchAgentNotificationAfterGrace(
   entry: AgentStatusEntry | undefined,
   options: { allowDoneDetailAfterGrace?: boolean } = {}
 ): boolean {
-  // Why: hook-backed goal/mission loops can report `done` between milestones.
-  // User-input states may notify as soon as detail arrives, but `done` waits
-  // for the max quiet window so resumed work can cancel the pending banner.
+  // Milestone done may resume; wait for max quiet while input-needed states can notify when detail arrives.
   return (
     hasAgentNotificationDetail(entry) &&
     (entry?.state !== 'done' || options.allowDoneDetailAfterGrace === true)

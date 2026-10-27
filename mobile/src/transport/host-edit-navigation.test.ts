@@ -26,8 +26,7 @@ function navigationHarness(initialState: MobileHostEditNavigationState) {
   }
 }
 
-// Edit now waits for the nested host stack, not just the root `h` route, so every committed
-// state below carries the stack the replacement targets.
+// Replacement targets the nested host stack, so committed fixtures must include it.
 function committedHostState(hostIdParam: string): MobileHostEditNavigationState {
   return {
     index: 1,
@@ -83,12 +82,10 @@ describe('mobile host edit navigation', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     navigateToMobileHostEdit(harness.navigation, { push: vi.fn(), replace: vi.fn() }, 'host-1')
 
-    // Enter the host flow for a different host, then leave it entirely.
     harness.setState(committedHostState('host-2'))
     harness.setState({ index: 0, routes: [{ name: 'index' }] })
     expect(harness.unsubscribeState).toHaveBeenCalledOnce()
 
-    // A late matching commit must not resurrect the replacement.
     harness.setState(committedHostState('host-1'))
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
   })
@@ -119,7 +116,8 @@ describe('mobile host edit navigation', () => {
         {
           push: () => {
             throw error
-          }
+          },
+          replace: vi.fn()
         },
         'host-1'
       )

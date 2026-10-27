@@ -24,11 +24,7 @@ export type PaletteEvidenceFieldSource = IndexedPaletteEvidenceFieldSource & {
   renderOffset: number
 }
 
-/**
- * A `left/right` token may cover two visible fields at once, e.g. `orca/main`
- * meaning repo + branch. Both halves must hit or the token falls back to a
- * literal match inside one field.
- */
+/** Composite left/right tokens must prove both visible fields; otherwise match literally within one field. */
 export type PaletteCompositePair = { leftFieldId: string; rightFieldId: string }
 
 export type PaletteDocument = {
@@ -64,9 +60,7 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
     if (!fields.length) {
       continue
     }
-    // Why first-wins, matching indexPaletteFields: it keeps the first entry's fields, so
-    // overwriting the unit here would pair one record's rendered text with another's
-    // match offsets — highlights landing outside the string the row actually shows.
+    // Keep first evidence units with first indexed fields or text and highlight offsets would come from different records.
     if (evidenceUnits.has(entry.unit.id)) {
       continue
     }

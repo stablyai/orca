@@ -54,6 +54,8 @@ export async function startFixChecksFromDialog(args: {
   commandInput: string
   /** Omitted when CLI arguments do not apply, so the launch resolves the global Agents setting. */
   agentArgs?: string
+  sessionOptions?: Readonly<Record<string, string>>
+  sessionOptionsYieldToAgentArgs?: true
 }): Promise<boolean> {
   if (!args.targetRepoId) {
     return false
@@ -66,6 +68,8 @@ export async function startFixChecksFromDialog(args: {
     promptDelivery: 'submit-after-ready',
     agentOverride: args.agent,
     agentArgs: args.agentArgs,
+    ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
+    sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     openModalFallback: () => {
       toast.error(
         translate(

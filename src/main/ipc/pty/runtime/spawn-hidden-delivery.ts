@@ -1,4 +1,4 @@
-import { markRuntimeOwnedHiddenRendererPty } from '../../pty-hidden-delivery-gate'
+import { markRuntimeOwnedHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
 import { attachingRendererViewPtys, visibleRendererPtys } from '../delivery/visibility-state'
 import { closeStartupQueryAuthorityForPty } from '../provider/registry'
 import type { RuntimePtySpawnState } from './spawn-state'
@@ -9,7 +9,7 @@ export function markRuntimeSpawnHiddenBeforeSpawn(ctx: RuntimePtySpawnState): vo
   // Reattached IDs may already back visible panes.
   if (
     ctx.args.initiallyHidden !== true ||
-    !ctx.isNewDaemonSession ||
+    !ctx.ownsNewIncarnation ||
     ctx.effectiveSessionAppId === undefined
   ) {
     return

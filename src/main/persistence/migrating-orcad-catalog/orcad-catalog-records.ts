@@ -45,7 +45,7 @@ export function assertSameOrcadMigrationManifest(
   }
 }
 
-// Dormant only: no live PTY reaches the destination, so the incoming session is compared as is.
+// No live PTY migrates, so compare the incoming dormant session as is.
 export function prepareOrcadMigrationCatalog(
   manifest: OrcadMigrationManifest,
   state: StoreRuntimeState['state']
@@ -139,7 +139,7 @@ function assertNoRepositoryPathConflicts(incoming: Repo[], existing: Repo[]): vo
     }
     incomingByPath.set(key, repo.id)
   }
-  // Incoming rows land on this machine; a same-path row on another host is a different checkout.
+  // Same-path rows on other hosts represent different checkouts.
   for (const repo of existing.filter(isRepoOnCatalogHost)) {
     if (
       !incomingIdSet.has(repo.id) &&

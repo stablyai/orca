@@ -2,13 +2,7 @@ import { refreshTerminalImeInputContext } from '@/components/terminal-pane/termi
 import { UNCOVERED_TERMINAL_LEAF_SELECTOR } from '@/components/terminal-pane/native-chat-covered-pane'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 
-/**
- * Move keyboard focus into the xterm instance for a freshly-mounted terminal
- * tab. Handles the two-step race where React must first mount the new
- * TerminalPane/xterm before the hidden .xterm-helper-textarea exists —
- * double-rAF waits for that commit so focus lands on the new tab instead of
- * whatever surface (menu trigger, body, previous tab) just relinquished it.
- */
+/** Wait two frames for a fresh tab’s xterm textarea to mount so focus cannot land on the menu/body/previous tab. */
 function cssAttributeString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
@@ -33,8 +27,7 @@ function focusTerminalHelper(helper: HTMLElement, options: FocusTerminalTabSurfa
   }
   helper.focus()
   if (options.refreshImeContext) {
-    // Why: a CSS-hidden, long-lived xterm can retain a stale macOS native text
-    // input context even after DOM focus returns; blur/refocus rebuilds it.
+    // Blur/refocus refreshes stale macOS text-input context retained by long-hidden xterms.
     refreshTerminalImeInputContext(helper, {
       onRefocusSkipped: options.onImeRefocusSkipped
     })
@@ -69,8 +62,7 @@ export function focusTerminalTabSurface(
     pendingFocusFrameIds = pendingFocusFrameIds.filter((frameId) => frameId !== firstFrameId)
     const secondFrameId = requestAnimationFrame(() => {
       pendingFocusFrameIds = pendingFocusFrameIds.filter((frameId) => frameId !== secondFrameId)
-      // Why: this can be queued before inline tab rename mounts. If it runs
-      // afterward, focusing xterm blurs the rename input and commits it closed.
+      // A queued focus may run after inline rename mounts; do not blur and prematurely commit its input.
       if (
         options.shouldFocus?.() === false ||
         document.querySelector('[data-tab-rename-input="true"]')
@@ -90,8 +82,7 @@ export function focusTerminalTabSurface(
         }
         return
       }
-      // Why: a split chat tab keeps a covered xterm under the chat leaf; the
-      // tab-wide query must skip it or the deferred focus lands on it.
+      // Skip xterms covered by split chat portals so tab-wide deferred focus cannot steal composer focus.
       const scopedSelector = leafId
         ? `[data-terminal-tab-id="${escapedTabId}"] [data-leaf-id="${cssAttributeString(leafId)}"]${UNCOVERED_TERMINAL_LEAF_SELECTOR} .xterm-helper-textarea`
         : `[data-terminal-tab-id="${escapedTabId}"] ${UNCOVERED_TERMINAL_LEAF_SELECTOR} .xterm-helper-textarea`
@@ -105,12 +96,10 @@ export function focusTerminalTabSurface(
       }
       if (leafId) {
         if (!canUseSinglePaneStaleLeafFallback(tabId, leafId)) {
-          // Why: exact mobile split-pane focus must not silently focus a sibling
-          // pane when the requested UUID leaf has not mounted yet.
+          // Mobile UUID-leaf focus must wait for that pane rather than silently focus a sibling.
           return
         }
-        // Why: old single-pane remounts could remint the leaf id. Only recover
-        // after the tab layout no longer expects the requested leaf.
+        // Recover legacy reminted leaves only after layout stops expecting the requested ID.
         const tabScopedHelpers = document.querySelectorAll(
           `[data-terminal-tab-id="${escapedTabId}"] ${UNCOVERED_TERMINAL_LEAF_SELECTOR} .xterm-helper-textarea`
         )

@@ -1,7 +1,4 @@
-// Replays the fcitx + Sogou X11 DOM shape (terminal-pane/__fixtures__/fcitx4-sogou-*-trace.json)
-// into the native chat composer: pinyin letters arrive as keyups only, a single-character pick is a
-// plain Space/digit keydown whose keypress and insertText carry the candidate, a phrase pick is a
-// Process/229 keydown plus insertText, and no composition event fires at all.
+// Replay recorded fcitx4-sogou X11 events: pinyin keyups, plain selector/insertText for characters, Process/229 for phrases, no composition events.
 
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -63,8 +60,7 @@ async function plainSelectorPick(
   // XIM reports the selector keydown as key NUL / keyCode 0; its keyup is the real key.
   down: Pick<Key, 'key' | 'keyCode'> = selector
 ): Promise<void> {
-  // A plain keyDown whose text is the candidate yields keydown(selector) → keypress(candidate) →
-  // insertText(candidate), the recorded single-character pick.
+  // keyDown text produces the recorded selector → candidate keypress → insertText sequence.
   await session.send('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key: down.key,

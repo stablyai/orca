@@ -1,3 +1,4 @@
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
@@ -41,7 +42,7 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 }
 
 function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
-  return {
+  return agentSessionRecordFixture({
     sessionId: SESSION_ID,
     provider: 'codex',
     location: {
@@ -53,7 +54,7 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
     accountHome: { variable: 'CODEX_HOME', path: '/home/work/.codex' },
     providerHandleChain: [],
     ...overrides
-  } as AgentSessionRecord
+  })
 }
 
 function resolverFor(
@@ -162,7 +163,7 @@ describe('codex structured launch resolution', () => {
       resumeThreadId: null,
       permissionPolicy: {
         approvalPolicy: 'on-request',
-        sandbox: 'workspace-write',
+        sandbox: 'read-only',
         approvalsReviewer: 'user'
       },
       env: { CODEX_HOME: '/home/work/.codex' },
@@ -249,10 +250,7 @@ describe('codex structured launch resolution', () => {
   })
 
   it.each([
-    [
-      'ask',
-      { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'user' }
-    ],
+    ['ask', { approvalPolicy: 'on-request', sandbox: 'read-only', approvalsReviewer: 'user' }],
     [
       'auto',
       { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'auto_review' }
@@ -270,6 +268,15 @@ describe('codex structured launch resolution', () => {
 
     expect(launch.args).toEqual(['app-server'])
     expect(launch.permissionPolicy).toEqual(policy)
+  })
+
+  it('adds no policy overrides for the agent’s own settings', async () => {
+    const launch = await resolverFor(record())({
+      identity: IDENTITY,
+      spawnToken: TEST_SPAWN_TOKEN,
+      permissionMode: 'own'
+    })
+    expect(launch).not.toHaveProperty('permissionPolicy')
   })
 
   it('ignores the bypass flag the agent Arguments carry', async () => {
@@ -314,7 +321,6 @@ describe('codex structured launch resolution', () => {
   it('resumes the durable thread ID under its pinned account home', async () => {
     const launch = await resolverFor(
       record({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         launchArgs: ['--enable', 'unified_exec', '-c', 'model_reasoning_effort=high'],
         providerHandleChain: [
           { handle: codexProviderHandle('thread-current') }

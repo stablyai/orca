@@ -1,6 +1,4 @@
-// Astra pass 4 §2: desktop A leases nothing, but desktop B's live shell, under another target id on
-// the same account, must never read as exited. COMPAT(legacy-relay-bridge): the host converts anyway
-// and leaves B's relay alone, so the census reads `bridged` with nothing of A's to serve.
+// Other desktops' live relays never prove exit. COMPAT(legacy-relay-bridge): convert with bridged verdict while leaving their relays untouched.
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from './connection/ssh-connection'
@@ -54,7 +52,6 @@ import { censusHostRelayEndpoints } from './legacy-relay/ssh-host-relay-endpoint
 import { censusWindowsHostRelays } from './legacy-relay/ssh-host-relay-windows-census'
 import { hostTerminalProofFromCensus } from './legacy-relay/ssh-host-relay-terminals-on-connect'
 
-// The censuses only hand the connection to the mocked exec, probe and bridge.
 const conn: SshConnection = Object.create(null)
 const noLeases = { getSshRemotePtyLeases: () => [] }
 

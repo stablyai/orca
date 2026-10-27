@@ -27,14 +27,12 @@ describe('combined diff on-demand loading', () => {
   })
 
   it('defers uncounted tracked text files, whose size is unknown', () => {
-    // A capped status listing or a failed numstat leaves every tracked row
-    // uncounted; auto-loading them is what froze Monaco before deferral.
+    // Entry caps or failed numstat leave tracked rows uncounted; eager loading can freeze Monaco.
     expect(shouldLoadCombinedDiffOnDemand({ path: 'src/generated/schema.ts' })).toBe(true)
   })
 
   it('defers untracked files whose line counts were skipped as too large', () => {
-    // The scan counted this row's siblings and still skipped it, so it is past
-    // MAX_UNTRACKED_LINE_COUNT_BYTES — the one case where size is truly unknown.
+    // Untracked scans skip files beyond their byte limit even when sibling counts exist.
     expect(
       shouldLoadCombinedDiffOnDemand({
         path: 'data/dump.json',
@@ -46,8 +44,7 @@ describe('combined diff on-demand loading', () => {
   })
 
   it('automatically loads tracked binaries numstat left uncounted, whatever the extension', () => {
-    // `git diff --numstat` emits '-\t-' for any tracked binary; the extension
-    // list will never cover them all (.icns, .tiff, extensionless).
+    // Numstat marks binaries with dashes regardless of extension, including extensionless files.
     for (const path of ['resources/build/icon.icns', 'assets/logo.tiff', 'bin/orca-helper']) {
       expect(
         shouldLoadCombinedDiffOnDemand({ path, area: 'unstaged', hasCountedSiblings: true })
@@ -56,8 +53,7 @@ describe('combined diff on-demand loading', () => {
   })
 
   it('automatically loads submodule rows whose only change is untracked content inside', () => {
-    // Porcelain v2 reports `1 .M S..U ... sub` while numstat emits no row at
-    // all, so the section is uncounted and 'sub' has no extension to read.
+    // Submodule-only untracked changes produce porcelain status but no numstat row.
     expect(
       shouldLoadCombinedDiffOnDemand({
         path: 'vendor/sub',
@@ -68,8 +64,7 @@ describe('combined diff on-demand loading', () => {
   })
 
   it('defers uncounted rows when the whole pass skipped counting', () => {
-    // Entry cap hit or numstat failed: no sibling has counts, so nothing
-    // distinguishes a 4 KB binary from an unbounded text file.
+    // Without counted siblings, a small binary is indistinguishable from unbounded text.
     expect(
       shouldLoadCombinedDiffOnDemand({ path: 'resources/build/icon.icns', area: 'unstaged' })
     ).toBe(true)
@@ -102,8 +97,7 @@ describe('combined diff on-demand loading', () => {
   })
 
   it('credits a counted row only to its own counting pass', () => {
-    // Staged/unstaged numstats and the compare diff are separate git calls that
-    // fail separately, so `all` mode must not pool their results.
+    // Staged, unstaged and compare counting calls fail independently; all mode must not pool their evidence.
     const countedPasses = collectCountedCombinedDiffPasses([
       { path: 'src/app.ts', status: 'modified', area: 'unstaged' },
       { path: 'src/staged.ts', status: 'modified', area: 'staged', added: 4 },
@@ -125,7 +119,6 @@ describe('combined diff on-demand loading', () => {
   })
 
   it('separates the two deferral reasons the prompt has to explain', () => {
-    // Both defer, but only one is actually large; the prompt copy splits here.
     const overLimit = { added: MAX_AUTOMATIC_DIFF_CHANGED_LINES + 1, path: 'src/schema.ts' }
     const uncounted = {
       path: 'resources/build/icon.icns',

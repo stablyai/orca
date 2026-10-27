@@ -17,8 +17,7 @@ import { useWebviewDragPassthroughActive } from '../browser-pane/host-guest/use-
 
 /** Height reserved before a visual reports its own, so the reply below does not jump far. */
 export const NATIVE_CHAT_VISUAL_RESERVED_HEIGHT = 160
-// Chromium keeps a click's activation for about five seconds; one open per window means one click
-// in the visual opens at most one page.
+// Allow one link per Chromium activation window so one click cannot open multiple pages.
 const LINK_COOLDOWN_MS = 5_000
 
 function newChannel(): string {
@@ -27,13 +26,7 @@ function newChannel(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-/**
- * One agent-written visual in an opaque-origin frame that may run scripts and nothing else. It fits
- * its height to the page. A theme change restyles the page in place, so interaction state survives
- * it. On desktop the main process refuses the frame's
- * navigation; a later load that nothing answers (the frame gone blank or showing another page)
- * retires it, as a tripwire rather than a boundary.
- */
+/** Use an opaque script-only frame and restyle in place; unanswered later loads retire it as a tripwire, not a security boundary. */
 export function NativeChatVisualFrame({
   document: visual,
   title,
@@ -128,9 +121,7 @@ export function NativeChatVisualFrame({
         )
         return
       }
-      // A link opens only from a real gesture in this very frame: it must hold focus and the user
-      // must have just acted. This stops opens on load, not a page that waits for the next click,
-      // and it cannot prove the click was on the link the page names.
+      // Require recent input in this focused frame; this blocks load-time opens but cannot prove the gesture named this link.
       const now = performance.now()
       if (
         window.document.activeElement !== frame ||

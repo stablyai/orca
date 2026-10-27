@@ -68,11 +68,7 @@ export function getToneForAutomationRunStatus(status: AutomationRunStatus): Auto
   return 'unknown'
 }
 
-/**
- * Last-run picture for a catalog row without any run-history fetch: the owning
- * authority projects its newest retained run into the usage summary, and a row
- * from an older server falls back to the stored `lastRunAt` timestamp alone.
- */
+/** Use the authority-projected newest retained run without fetching history; legacy servers fall back to stored lastRunAt alone. */
 export function getAutomationRowLastRunSnapshot(row: {
   automation: Automation
   usageSummary: { lastRunStatus?: AutomationRunStatus | null; lastRunAt?: number | null } | null

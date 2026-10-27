@@ -13,8 +13,7 @@ export function normalizeAutoRenameBranchFromWorkDefaultOn(
     settings?.autoRenameBranchFromWorkDefaultedOn === true || options.preserveExplicitValue === true
 
   return {
-    // Why: old persisted profiles may contain the former default `false`;
-    // only guarded profiles or live user updates represent an intentional opt-out.
+    // Legacy false defaults are not intentional opt-outs; require guarded profiles or explicit live updates.
     autoRenameBranchFromWork: defaultedOn ? (settings?.autoRenameBranchFromWork ?? true) : true,
     autoRenameBranchFromWorkDefaultedOn: true
   }

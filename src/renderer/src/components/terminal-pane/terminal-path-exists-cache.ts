@@ -43,8 +43,7 @@ export function writeTerminalPathExistence(
   writeTerminalPathExistsCache(cache, key, { exists, ...probe })
 }
 
-// Why: POSIX-looking SSH paths are only meaningful inside their connection;
-// local/runtime keys keep the legacy scope so existing hover probes stay hot.
+// Scope POSIX SSH paths by connection; local/runtime cache keys retain legacy scope.
 export function getTerminalPathExistsCacheKey({
   absolutePath,
   connectionId,
@@ -84,8 +83,7 @@ export function writeTerminalPathExistsCache<T>(
   if (cache.has(key)) {
     cache.delete(key)
   } else {
-    // Why: terminal output can contain unbounded unique paths during long
-    // sessions; keep recent link probes without retaining every path forever.
+    // Bound recent probes because terminal output can name unlimited unique paths.
     while (cache.size >= TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES) {
       const oldestKey = cache.keys().next().value
       if (oldestKey === undefined) {

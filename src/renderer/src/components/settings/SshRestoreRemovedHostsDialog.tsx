@@ -16,7 +16,6 @@ type RemovedAliases =
   | { status: 'ready'; aliases: string[] }
   | { status: 'unavailable' }
 
-/** Confirms bringing back ~/.ssh/config hosts that were removed in Orca, naming them first. */
 export function SshRestoreRemovedHostsDialog({
   open,
   busy,
@@ -35,7 +34,7 @@ export function SshRestoreRemovedHostsDialog({
       return
     }
     let cancelled = false
-    // Why: a restore closes this dialog from outside, so a reopen must not show the last list.
+    // External restore closes this dialog; reset so reopening cannot show the old list.
     setRemoved({ status: 'loading' })
     window.api.ssh
       .listConfigHosts({ refresh: true })
@@ -45,7 +44,7 @@ export function SshRestoreRemovedHostsDialog({
           setRemoved({ status: 'ready', aliases: aliases.map((host) => host.alias) })
         }
       })
-      // Why: the list only informs the confirm; restore still works when it can't be read.
+      // The list informs confirmation; unreadability must not block restore.
       .catch(() => !cancelled && setRemoved({ status: 'unavailable' }))
     return () => {
       cancelled = true

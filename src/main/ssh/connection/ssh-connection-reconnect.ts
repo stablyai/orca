@@ -9,8 +9,7 @@ import { isCancelledConnectAttemptError } from '../ssh-connect-attempt-cancellat
 import { SshReconnectLadder } from '../ssh-reconnect-ladder'
 import { isSshUserDisconnected } from '../ssh-user-disconnect'
 
-// Why: resume and the window's own resume/online signal land together; a handshake younger than this
-// is the one the first signal just started, not one stuck on the route from before sleep.
+// Coalesce resume/online signals: a fresh handshake belongs to the first signal, not the stale pre-sleep route.
 const STALE_BACKGROUND_ATTEMPT_MS = 5_000
 
 /** What the reconnect ladder reads from its connection; getters so each read sees the live state. */
@@ -63,11 +62,7 @@ export class SshConnectionReconnector {
     await this.restartReconnect()
   }
 
-  /**
-   * Wake or network return: a spent ladder, a pending backoff, or a background handshake still
-   * running from before the route came back restarts now with a fresh budget, since attempts made
-   * while asleep (or in a macOS dark wake) say nothing about whether the host is reachable.
-   */
+  /** Restart spent/backoff/pre-wake attempts with a fresh budget; failures while asleep or in dark wake do not prove current unreachability. */
   retryAfterNetworkReturn(nowMs: number): boolean {
     if (!this.mayRedial() || this.host.isAwaitingCredential()) {
       return false
@@ -92,7 +87,7 @@ export class SshConnectionReconnector {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    // Why: OS sleep/wake can leave ssh2 thinking a dead TCP socket is still connected; tear down and reconnect so the relay can reattach remote PTYs.
+    // Sleep can leave a dead TCP socket marked connected; replace it so remote PTYs can reattach.
     this.host.closeTransportsForReconnect()
     this.host.setReconnectAttempt(0)
     this.reconnectLadder.reset()
@@ -100,8 +95,7 @@ export class SshConnectionReconnector {
     await this.runReconnectAttempt()
   }
 
-  // Why: a user's Disconnect is recorded before its teardown disposes this connection, which can
-  // wait behind the target's lifecycle; until then a drop, backoff or wake must not redial.
+  // User Disconnect is recorded before delayed teardown; block every drop/backoff/wake redial meanwhile.
   private mayRedial(): boolean {
     return !this.host.isDisposed() && !isSshUserDisconnected(this.host.targetId)
   }
@@ -133,16 +127,16 @@ export class SshConnectionReconnector {
     const connectGeneration = this.host.claimGeneration()
     this.backgroundAttemptStartedAtMs = Date.now()
     try {
-      // Why: reset before connecting so the 'connected' broadcast carries reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
+      // Publish reconnectAttempt0 on connected so ssh.ts re-establishes the relay.
       this.host.setReconnectAttempt(0)
       await this.host.attemptConnect(connectGeneration)
       if (!this.host.isCurrentAttempt(connectGeneration)) {
         return
       }
-      // Why: attemptConnect resolves only after a real handshake on either transport; the system-ssh probe's 'connected' must not clear the failure streak.
+      // Only real completed handshakes clear failures; system-SSH probe status alone cannot.
       this.reconnectLadder.markConnected(Date.now())
     } catch (err) {
-      // Why: a superseded attempt has no outcome to publish — the attempt that claimed the generation owns the state, and cancellation is that supersession.
+      // A superseded attempt cannot publish over its replacement.
       if (!this.host.isCurrentAttempt(connectGeneration)) {
         return
       }
@@ -154,7 +148,7 @@ export class SshConnectionReconnector {
         this.host.setState('auth-failed', error.message)
         return
       }
-      // Why: the system-SSH transport reports timeouts as prose, so the narrow code table would strand FIDO2 targets in 'error' forever.
+      // System-SSH timeouts are prose; code-only classification would strand FIDO2 hosts in error.
       if (!isTransientReconnectError(error)) {
         this.host.setState('error', error.message)
         return

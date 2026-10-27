@@ -8,8 +8,9 @@ import type {
   AgentSessionProviderHandleLink,
   StructuredAgentId
 } from '../../shared/agent-session-provider-handle'
-import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionOwnerObservation } from '../../shared/agent-session-conversation-view'
+import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session-lease-adjudication'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
@@ -21,7 +22,8 @@ export type StructuredAgentSessionAdoptionOwnership = {
   /** Any chat may own the conversation; only agents with importers can adopt it. */
   provider: StructuredAgentId
   providerSessionId: string
-  lease: AgentSessionLease
+  ownerObservation: AgentSessionOwnerObservation
+  role: 'head' | 'earlier'
 }
 
 export type StructuredAgentSessionAdoption = {
@@ -83,6 +85,7 @@ export function findConflictingStructuredAdoption(input: {
     input.ownership.find(
       (owner) =>
         owner.sessionId !== input.selfSessionId &&
+        owner.role === 'head' &&
         chatAgentsShareConversations(owner.provider, input.agent) &&
         owner.providerSessionId === input.providerSessionId
     ) ?? null
@@ -94,7 +97,7 @@ export function structuredAdoptionConflictError(
   ownership: StructuredAgentSessionAdoptionOwnership
 ): Error {
   return agentSessionRefusalError(
-    agentSessionLeaseAdmitsWriter(ownership.lease)
+    agentSessionOwnerObservationIsLive(ownership.ownerObservation)
       ? 'agent_session_conflict'
       : 'agent_session_ownership_unknown',
     {

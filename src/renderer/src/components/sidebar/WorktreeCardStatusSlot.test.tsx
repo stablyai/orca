@@ -297,6 +297,30 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('data-tooltip-root')
   })
 
+  it('marks the review status as last known while its WSL host is off (E9)', () => {
+    const render = (reviewStale: boolean) =>
+      renderToStaticMarkup(
+        <WorktreeCardStatusSlot
+          worktreeId="wt-1"
+          showStatus
+          showUnreadAction={false}
+          isUnread={false}
+          unreadTooltip="Mark as unread"
+          onPointerDown={vi.fn()}
+          onToggleUnread={vi.fn()}
+          prDisplay={review}
+          newCardStyle
+          reviewStale={reviewStale}
+        />
+      )
+    const stale = render(true)
+    expect(stale).toContain('PR checks: Failed · Last known status')
+    expect(stale).toContain('shimmer')
+    // The cached badge is kept, not dropped.
+    expect(stale).toContain('text-rose-500/85')
+    expect(render(false)).not.toContain('Last known status')
+  })
+
   it('uses the unified compact review glyph for GitLab MR status', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
@@ -340,8 +364,7 @@ describe('WorktreeCardStatusSlot', () => {
   })
 
   it('keeps sleeping distinct from PR status when new card style is on', () => {
-    // Why done, not inactive: a slept workspace keeps its retained done rows,
-    // so its status still reads 'done' — the exact case from #19624.
+    // Sleeping retains done rows; test that state rather than inactive.
     mocks.status = 'done'
     mocks.sleeping = true
     const markup = renderToStaticMarkup(
@@ -358,7 +381,6 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
 
-    // Why: sleep must stay distinct from awake completion; sleeping never collapses into PR.
     expect(markup).toContain('Sleeping')
     expect(markup).toContain('lucide-moon')
     expect(markup).not.toContain('PR checks: Failed')
@@ -421,7 +443,6 @@ describe('WorktreeCardStatusSlot', () => {
         hasBranchIdentity
       />
     )
-    // Why: sleeping wins over the branch lane, even with an identity present.
     expect(sleepingMarkup).toContain('Sleeping')
     expect(sleepingMarkup).toContain('lucide-moon')
     expect(sleepingMarkup).not.toContain('lucide-git-branch')

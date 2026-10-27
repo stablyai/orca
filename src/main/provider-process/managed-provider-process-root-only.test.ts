@@ -32,7 +32,6 @@ function fakeChild(pid: number | null = 9_999_999) {
   return { child, spawn }
 }
 
-/** A provider with no reaper of its own takes every close default. */
 function rootOnly(fixture: ReturnType<typeof fakeChild>) {
   return spawnManagedProviderProcess(
     { command: 'fixture-provider', args: [] },
@@ -62,7 +61,6 @@ describe('root-only managed provider close', () => {
       const closing = managed.close()
       await vi.advanceTimersByTimeAsync(ROOT_ONLY_GRACEFUL_EXIT_MS)
       await expect(closing).resolves.toEqual({ root: 'exited', tree })
-      // The root is gone, so the close is done: a repeat answers from the memo, not a second teardown.
       await expect(managed.close()).resolves.toEqual({ root: 'exited', tree })
       expect(teardown.terminate).toHaveBeenCalledOnce()
       expect(managed.lastCloseResult).toEqual({ root: 'exited', tree })

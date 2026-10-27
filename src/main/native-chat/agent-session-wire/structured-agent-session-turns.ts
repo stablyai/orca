@@ -7,7 +7,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   refuse,
   type AgentSessionRefusalReason,
@@ -163,4 +163,14 @@ function requireSubmission(
   }
   // Return this step’s answer; later journal settlement must not mutate it.
   return { ...submission }
+}
+
+export type AgentSessionReplayContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
+> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'cursor' | 'submission' | 'submissions' | 'epoch' | 'threadGoal'
+  > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
 }

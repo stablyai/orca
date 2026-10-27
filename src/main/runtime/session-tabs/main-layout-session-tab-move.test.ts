@@ -1,5 +1,4 @@
-// Layout-owner build: a phone's or paired client's tab move in a workspace main owns is main's own
-// layout command, window or not; the window is not asked to move it.
+// Phone/paired tab moves use main layout commands for owned workspaces, without asking a window.
 import { describe, expect, it, vi } from 'vitest'
 import {
   TAB_ID,
@@ -103,8 +102,7 @@ describe("a client's tab move in a workspace main owns", () => {
     }
   }
 
-  // Why (L280): main moves it itself, never by the window's path; a row it holds no tab for keeps
-  // no place of its own, and the client's indices count it as the client saw it.
+  // Main moves rows itself (L280); client-only rows retain no position, but client indices still count them.
   it('moves in a group showing a row main holds no tab for, without asking the window', async () => {
     const { runtime, moveSessionTab, groups, group } = await setup({ window: true })
     showUnheldRow(runtime)

@@ -13,7 +13,6 @@ import {
 
 type PromptIdentity = { itemId: string; expectedRevision: number }
 
-/** The prompt a Stop cancels: one the host says still waits on the person, when it says. */
 export function pendingStructuredPromptIdentity(
   state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'actionablePromptIds'>
 ): PromptIdentity | undefined {
@@ -37,8 +36,7 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   hostAnswersRepeatedStops: boolean | null
   /** Whether the host takes a Stop naming no turn; null until the status probe answers. */
   hostStopsConversation: boolean | null
-  /** Stops still on their way, by what they stop; against a host that does not answer a repeat
-   *  quietly, a press for the same one joins it here. */
+  // Join in-flight repeats only on legacy hosts that cannot quietly answer repeated Stop.
   inFlight: Map<string, Promise<boolean>>
   onSendError: (message: string) => void
 }): Promise<boolean> {
@@ -47,21 +45,20 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   const turnId = runningStructuredAgentSessionTurnId(current)
   // Check the capability before fields enter the fingerprint.
   const prompt = args.prompt && args.promptCancelSupported === true ? args.prompt : undefined
-  // Such a host stops whatever the chat has in flight, a send the agent has not echoed included;
-  // a card's Cancel names the turn that raised it, prompt identity sent or not.
+  // Conversation Stop also covers un-echoed sends; card Cancel must still name its originating turn.
   const unnamed = args.hostStopsConversation === true && !args.prompt
   if (!client || !sessionId || !enabled || current.fence === null || (!turnId && !unnamed)) {
     onSendError('Stop not sent')
     return false
   }
   const fields = unnamed ? {} : { turnId, ...(prompt ? { prompt } : {}) }
-  // Every press is its own Stop: a kept id would be answered from the last one and stop nothing.
+  // Mint an id for each Stop so the ledger cannot replay an earlier press instead of stopping work.
   const fence = current.fence
   const stop = () => sendStop({ client, sessionId, fence, fields, onSendError })
   if (args.hostAnswersRepeatedStops === true) {
     return stop()
   }
-  // Temporary, for a host that predates the quiet repeated Stop: remove once none is supported.
+  // Legacy hosts need client-side joining until they support quiet repeated Stop.
   const key = `${sessionId}:agentSession.cancel:${JSON.stringify(fields)}`
   const joined = inFlight.get(key)
   if (joined) {
@@ -69,7 +66,6 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   }
   const stopping = stop()
   inFlight.set(key, stopping)
-  // Gone once it settles, so the next press is a new Stop.
   void stopping.finally(() => {
     if (inFlight.get(key) === stopping) {
       inFlight.delete(key)

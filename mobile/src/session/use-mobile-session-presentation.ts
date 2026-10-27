@@ -1,4 +1,8 @@
-import { classifyConnection, verdictDisplayLabel } from '../transport/connection-health'
+import {
+  classifyConnection,
+  isConnectionOutage,
+  verdictDisplayLabel
+} from '../transport/connection-health'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
@@ -35,7 +39,6 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
-  // Why: a newly created workspace can hydrate with zero tabs before its first terminal exists.
   useInitialSessionTerminalAutoCreate({
     client,
     newlyCreatedWorkspace: created === '1',
@@ -50,19 +53,17 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     createTerminal: () => void handleCreateTerminal()
   })
 
-  // Why: reconnect trickles to 90s at its give-up cap; surface tap-to-retry so recovery needn't wait it out (issue #5049).
+  // Offer explicit retry after reconnect backoff reaches 90s so recovery need not wait for the next attempt.
   const connectionVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
     endpoint: hostEndpoint
   })
-  const connectionEscalated =
-    connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
-  // Not on the page: the shell owns the connection and the tap could only do nothing.
+  const connectionEscalated = isConnectionOutage(connectionVerdict)
   const showConnectionRetry = connectionEscalated && forceReconnectHost !== null
 
-  // Why: a drop the client heals in a few seconds must not flip the header to Reconnecting and back.
+  // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
   const terminalSummary =
     presentedConnState === 'connected'

@@ -26,13 +26,7 @@ type ToolbarItem = {
   icon: ComponentType<{ size?: number; color?: string }>
 }
 
-/**
- * The fifteen commands, in the order they are pressed in.
- *
- * Shared rather than declared twice because both surfaces drive the same document: inside the
- * WebView the press becomes an injected `runCommand` and on the page it is a call, but the row of
- * controls is the same row and a command added to the contract has to appear on both.
- */
+// Share command row across native injected runCommand and direct page calls so contract additions appear on both surfaces.
 const TOOLBAR_ITEMS: ToolbarItem[] = [
   { command: 'paragraph', label: 'Body', icon: Pilcrow },
   { command: 'heading1', label: 'H1', icon: Heading1 },

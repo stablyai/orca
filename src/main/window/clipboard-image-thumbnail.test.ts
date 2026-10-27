@@ -35,8 +35,7 @@ describe('buildClipboardImageThumbnail', () => {
   })
 
   it('reports no thumbnail rather than throwing for an oversized image', () => {
-    // The save call still surfaces the real too-large error; the probe only
-    // decides whether a placeholder chip is worth showing.
+    // Preview only decides placeholder visibility; save still reports the actual oversized-image failure.
     const image = fakeImage({ getSize: () => ({ height: 100_000, width: 100_000 }) })
 
     expect(buildClipboardImageThumbnail(image)).toBeNull()

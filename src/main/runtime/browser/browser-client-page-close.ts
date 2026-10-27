@@ -3,7 +3,7 @@ import { closeRuntimeBrowserClientPage } from '../runtime-browser-client-page-cr
 import type { RuntimeBrowserClientPage } from '../runtime-browser-page-registry'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 
-// Why no Electron import: a Node host with no browser engine closes these pages too.
+// Engine-free Node hosts also close client-hosted pages.
 export type BrowserClientPageCloseHost = Pick<
   RuntimeBrowserCommandHost,
   | 'getRuntimeBrowserPageRegistry'
@@ -20,8 +20,7 @@ export async function retireRuntimeBrowserClientPage(
   clientPage: RuntimeBrowserClientPage
 ): Promise<{ closed: true }> {
   const authority = host.getBrowserHostLeaseRegistry()
-  // Why: a retained page whose host quit has no placement left to command, and asking the
-  // absent host first would refuse the close and strand the tab with no way to dismiss it.
+  // Retained tabs outlive placements; requiring an absent host would make them impossible to dismiss.
   if (authority.getPlacement(clientPage.browserPageId)) {
     await closeRuntimeBrowserClientPage(authority, {
       browserPageId: clientPage.browserPageId,
@@ -46,11 +45,7 @@ type LogicalTabQueries = {
   browserTabCurrent(params: { worktree?: string }): Promise<{ tab: { browserPageId: string } }>
 }
 
-/**
- * The client-hosted page a close names, by id, index or as the current tab; undefined when the
- * target is not one. Index and current resolve against the host's whole logical tab list, so a
- * client page that leads it is never mistaken for an engine tab.
- */
+/** Resolve index/current against the complete logical list so client pages cannot be mistaken for engine tabs. */
 export async function resolveClientPageToClose(
   host: Pick<
     BrowserClientPageCloseHost,
@@ -87,7 +82,6 @@ export async function resolveClientPageToClose(
   return tab ? pages.getPage(tab.browserPageId) : undefined
 }
 
-/** Closes a named page this runtime's registry holds; null when the registry has no such page. */
 export async function closeRegisteredBrowserClientPage(
   host: BrowserClientPageCloseHost,
   params: PageCloseParams
@@ -110,10 +104,7 @@ export async function closeRegisteredBrowserClientPage(
   return retireRuntimeBrowserClientPage(host, clientPage)
 }
 
-/**
- * Page-targeted close on a host with no browser engine. Client-hosted pages and session rows
- * are runtime records, so retiring them never needed the engine; anything else still refuses.
- */
+/** Runtime records can retire without an engine; refuse targets outside those records. */
 export async function closeBrowserPageWithoutEngine(
   host: BrowserClientPageCloseHost,
   params: PageCloseParams,

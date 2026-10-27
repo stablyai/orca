@@ -161,7 +161,6 @@ describe('refreshWorktreeSidebarDragSession', () => {
         ],
         rects
       })
-      // Why: the row set changed ('a' mounted), so the fresh measurement is adopted.
     ).toEqual({ ...SESSION, rects })
   })
 

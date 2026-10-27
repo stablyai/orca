@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises'
-import { isAbsolute, join, relative } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { codexDatedRolloutRelativePath } from '../codex/codex-session-resume-home'
 import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
@@ -76,7 +77,10 @@ export async function prepareStructuredChatCliFork(
   prepare: AiVaultSessionResumePreparation
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const host = getStructuredAgentSessionHost()
-  const record = host?.deps.store.getRecord(args.sourceChat.sessionId)
+  const record =
+    host && host.deps.store.selectWritableRecord(args.sourceChat.sessionId).kind !== 'missing'
+      ? host.deps.store.requireWritableRecord(args.sourceChat.sessionId)
+      : undefined
   const registration = record && structuredAgentRuntimeRegistration(record.provider)
   const head = record && agentSessionProviderHandleChainHead(record.providerHandleChain)
   if (
@@ -101,6 +105,18 @@ export async function prepareStructuredChatCliFork(
   ) {
     throw new Error('Send a message after rewinding this chat, then open it in a terminal.')
   }
+  const requireCurrent = (): void => {
+    const current = host.deps.store.requireWritableRecord(record.sessionId)
+    const currentHead = agentSessionProviderHandleChainHead(current.providerHandleChain)
+    if (
+      current.location.workspaceId !== record.location.workspaceId ||
+      current.location.executionHostId !== record.location.executionHostId ||
+      current.location.wslDistro !== record.location.wslDistro ||
+      currentHead?.linkId !== head.linkId
+    ) {
+      throw new Error('This chat has no saved conversation available on this host.')
+    }
+  }
   const agent = record.provider
   const cwd =
     (await host.deps.resolveWorkspacePath?.(record.location.workspaceId)) || record.launchDirectory
@@ -113,6 +129,7 @@ export async function prepareStructuredChatCliFork(
   }
   assertNativeConversationContent(await host.journalSnapshot(record.sessionId))
   if (agentForksThroughChat(agent)) {
+    requireCurrent()
     const result = await copyStructuredChatRecordConversation(record, providerSessionId)
     const copy = result.forkedSession
     if (!copy || (agent === 'omp' && !copy.filePath)) {
@@ -163,6 +180,7 @@ export async function prepareStructuredChatCliFork(
     agent === 'codex' && isLegacyAgentSessionAccountHome(record.accountHome)
       ? record.accountHome.path
       : null
+  requireCurrent()
   const result = await prepare({
     agent,
     sessionId: providerSessionId,
@@ -173,11 +191,12 @@ export async function prepareStructuredChatCliFork(
   })
   const preparedHome = result.useRealCodexHome ? null : (result.substituteCodexHome ?? codexHome)
   if (codexHome && (result.useRealCodexHome || result.substituteCodexHome)) {
-    filePath = join(
-      preparedHome ?? getSystemCodexHomePath(),
-      'sessions',
-      relative(join(codexHome, 'sessions'), filePath)
-    )
+    // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
+    const relativePath = codexDatedRolloutRelativePath(join(codexHome, 'sessions'), filePath)
+    if (!relativePath) {
+      throw new Error('The prepared conversation is unavailable in the selected account.')
+    }
+    filePath = join(preparedHome ?? getSystemCodexHomePath(), 'sessions', relativePath)
     const preparedFile = await stat(filePath)
     if (!preparedFile.isFile() || preparedFile.size === 0) {
       throw new Error('The prepared conversation is unavailable in the selected account.')

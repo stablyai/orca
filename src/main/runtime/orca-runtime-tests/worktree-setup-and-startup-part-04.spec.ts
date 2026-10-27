@@ -66,6 +66,8 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     runtime.attachWindow(1)
+    // Delivery waits for composer readiness and pastes; its behaviour is covered with the delivery itself.
+    const deliver = vi.spyOn(runtime, 'deliverStartupFollowup').mockResolvedValue(true)
 
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
@@ -94,8 +96,9 @@ describe('OrcaRuntimeService', () => {
       })
     )
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
+      expect(deliver).toHaveBeenCalledWith(expect.any(String), { agent: 'aider', prompt: 'fix it' })
     })
+    expect(write).not.toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
   })
 
   it('does not send stdin-after-start prompts into a shell when the agent never starts', async () => {
@@ -377,7 +380,6 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('hands only the host window a setup main tried and failed to start', async () => {
-    // Main's own layout, where a layout-owner build keeps the setup pane that failed to start.
     const mainLayout = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
     const runtime = new ProvisioningRuntime(
       ORCA_LAYOUT_OWNER_IS_MAIN ? mainLayout.runtimeStore : store
@@ -449,7 +451,6 @@ describe('OrcaRuntimeService', () => {
 
     expect(spawn).toHaveBeenCalledTimes(2)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main shows the failure in the setup pane it wrote; the window is handed nothing to retry.
       expect(activateWorktree.mock.calls).toEqual([
         ['repo-1', expect.any(String), undefined, undefined, undefined]
       ])
@@ -478,7 +479,7 @@ describe('OrcaRuntimeService', () => {
       undefined
     )
     expect(activateWorktree).toHaveBeenCalledOnce()
-    // The window retries it where the user sees its output or its spawn error; clients never run it.
+    // The window retries setup where output is visible; paired clients must not execute it.
     expect(
       events.filter((event) => event.type === 'activateWorktree' && event.setup !== undefined)
     ).toEqual([])
@@ -555,7 +556,6 @@ describe('OrcaRuntimeService', () => {
         cwd: '/tmp/workspaces/runtime-explicit-draft',
         command: "codex '--dangerously-bypass-approvals-and-sandbox'",
         worktreeId: result.worktree.id,
-        // The host picked and launched this agent, so it carries the caller's surface too.
         telemetry: { agent_kind: 'codex', launch_source: 'cli', request_kind: 'new' }
       })
     )

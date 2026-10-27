@@ -1,15 +1,11 @@
-/* Deterministic guard for the validation work the session read boundary does. Counts zod container
- * nodes executed for one fixed payload rather than timing anything, so it cannot flake on a loaded
- * machine. It fails if the salvage combinators go back to letting zod validate-and-copy every map
- * and array before the transform re-walks it, or if the layout unions stop discriminating. */
+// Count container-node executions on a fixed payload to detect redundant validation/copy passes and non-discriminated layout unions without timing noise.
 import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { parseWorkspaceSessionSalvaging } from './workspace-session-salvage'
 
 let containerRuns = 0
 
-// Why: zod's default memoizer is the only hook that sees every container node, so this file swaps
-// it for a counting one. Cycle breaking is what it gives up, and no payload here holds a cycle.
+// Zod’s memoizer sees every container node. Replace cycle breaking with counting for these acyclic payloads.
 z.config({
   memoizer: {
     alloc: (_inst: unknown, _payload: unknown, empty: unknown) => empty,
@@ -72,7 +68,7 @@ function unifiedTab(id: string, wt: string, sortOrder: number): Record<string, u
   }
 }
 
-/** Fixed shape, no randomness: the count below is only meaningful against a stable payload. */
+/** Keep the payload deterministic so container counts remain comparable. */
 function fixedSession(): Record<string, unknown> {
   const tabsByWorktree: Record<string, unknown> = {}
   const unifiedTabs: Record<string, unknown> = {}
@@ -145,11 +141,7 @@ function fixedSession(): Record<string, unknown> {
   }
 }
 
-/* Container-node executions for `fixedSession()`, measured on this branch:
- *   before this change: 1_958
- *   after this change:  1_111
- * The bound sits between the two, so it fails on any return to the pre-pass containers or to a
- * non-discriminated layout union, and tolerates ordinary schema growth. */
+// The fixed payload took 1,958 container runs before optimization and 1,111 after. Allow schema growth while detecting redundant pre-passes or non-discriminated unions.
 const MAX_CONTAINER_RUNS = 1_400
 
 describe('workspace session validation work', () => {
@@ -161,7 +153,7 @@ describe('workspace session validation work', () => {
 
   it('validates the session without a redundant traversal of every map, array and union branch', () => {
     const payload = fixedSession()
-    // Why: zod compiles object fast paths on first use, so measure a settled parse.
+    // Warm Zod’s compiled object paths before measuring.
     parse(payload)
     containerRuns = 0
     const result = parse(payload)

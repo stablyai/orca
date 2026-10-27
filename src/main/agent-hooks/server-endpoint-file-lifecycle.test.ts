@@ -85,7 +85,7 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
-  it('rewrites the endpoint file with a new port after restart on the same path', async () => {
+  it('rewrites the endpoint file with a new token after restart on the same path', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
     const firstPath = server.endpointFilePath

@@ -9,9 +9,7 @@ export type DiscardConfirmationCopy = {
   confirmLabel: string
 }
 
-/**
- * Discard removes untracked files; staged additions retain their index version.
- */
+/** Discard deletes untracked files; staged additions retain their index version. */
 export function discardDeletesEntryFile(entry: Pick<GitStatusEntry, 'area' | 'status'>): boolean {
   return entry.area === 'untracked' || entry.status === 'untracked'
 }

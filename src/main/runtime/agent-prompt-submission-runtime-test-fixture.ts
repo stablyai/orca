@@ -25,7 +25,7 @@ export async function createAgentPromptSubmissionRuntime(
   const terminal = await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
     launchAgent
   })
-  // The pane holds a live agent, which its host would find in front of its terminal.
+  // Model a live foreground agent confirmed by its host.
   vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
   return { runtime, handle: terminal.handle, writes }
 }

@@ -48,7 +48,7 @@ export class AcpTimelineTranslator {
   private readonly failures: AcpTurnFailures
   private loading = false
   private readonly context = new AcpContextTimeline()
-  private activeTurn?: string
+  protected activeTurn?: string
 
   constructor(private readonly options: AcpTimelineTranslatorOptions) {
     this.dialect = options.dialect ?? GENERIC_ACP_DIALECT
@@ -103,6 +103,10 @@ export class AcpTimelineTranslator {
     }
     const ending = { ...failure, stopReason, at, failureDetail: detail, notSignedIn }
     return this.finishPrompt(clientMessageId, ending)
+  }
+
+  sessionLost(error: AcpAgentError): boolean {
+    return this.dialect.sessionLost?.(error, this.options.sessionId) === true
   }
 
   authenticationRequired(error: unknown): boolean {
@@ -306,7 +310,7 @@ export class AcpTimelineTranslator {
     return events
   }
 
-  private start(turn: string, at: number): ProviderTimelineEvent[] {
+  protected start(turn: string, at: number): ProviderTimelineEvent[] {
     if (turn === this.prompts.current?.turn) {
       const events = this.prompts.start(turn, at)
       // Late frames must not reopen or retarget this prompt.

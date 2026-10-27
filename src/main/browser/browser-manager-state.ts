@@ -25,6 +25,7 @@ import type {
 } from '../../shared/browser-guest-events'
 import type { BrowserGrabCancelReason } from '../../shared/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './browser-manager-viewport-scroll-state'
+import { BrowserGuestDevToolsDock } from './browser-guest-devtools-dock'
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
   protected abstract attachGuestPolicies(
@@ -72,6 +73,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     guest: Electron.WebContents
   ): void
   protected abstract setupMouseWheelZoomForwarding(
+    browserTabId: string,
+    guest: Electron.WebContents
+  ): void
+  protected abstract setupTargetUrlForwarding(
     browserTabId: string,
     guest: Electron.WebContents
   ): void
@@ -141,10 +146,12 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   protected readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
   protected readonly mouseWheelZoomCleanupByTabId = new Map<string, () => void>()
+  protected readonly targetUrlCleanupByTabId = new Map<string, () => void>()
   protected readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   protected readonly worktreeIdByTabId = new Map<string, string>()
   protected readonly policyAttachedGuestIds = new Set<number>()
   protected readonly offscreenGuestIds = new Set<number>()
+  protected readonly devToolsDock = new BrowserGuestDevToolsDock()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Restore the optimistically hidden error if navigation aborts.

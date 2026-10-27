@@ -1,6 +1,8 @@
 import type { TuiAgent } from './tui-agent'
 
 export type NativeChatAppearanceSettings = {
+  /** Absent follows the IDE font. */
+  fontFamily?: string
   /** Chat text size in px, 12–20; absent = 14. */
   fontSize?: number
   /** Code text size in px, 10–18; absent = 12. */
@@ -37,6 +39,8 @@ export function normalizeNativeChatAppearanceSettings(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
+  const fontFamily =
+    'fontFamily' in value && typeof value.fontFamily === 'string' ? value.fontFamily.trim() : ''
   const fontSize = normalizeSize('fontSize' in value ? value.fontSize : undefined, 12, 20, 14)
   const codeFontSize = normalizeSize(
     'codeFontSize' in value ? value.codeFontSize : undefined,
@@ -53,9 +57,17 @@ export function normalizeNativeChatAppearanceSettings(
     ...Object.fromEntries(
       Object.entries(value).filter(
         ([key]) =>
-          !['fontSize', 'codeFontSize', 'width', 'contrast', 'matchTerminalInterface'].includes(key)
+          ![
+            'fontFamily',
+            'fontSize',
+            'codeFontSize',
+            'width',
+            'contrast',
+            'matchTerminalInterface'
+          ].includes(key)
       )
     ),
+    ...(fontFamily ? { fontFamily } : {}),
     ...(fontSize !== DEFAULT_NATIVE_CHAT_FONT_SIZE ? { fontSize } : {}),
     ...(codeFontSize !== DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE ? { codeFontSize } : {}),
     ...(width ? { width } : {}),
@@ -70,6 +82,7 @@ export function resolveNativeChatAppearanceSettings(
 ): Required<NativeChatAppearanceSettings> {
   const normalized = normalizeNativeChatAppearanceSettings(value)
   return {
+    fontFamily: normalized?.fontFamily ?? '',
     fontSize: normalized?.fontSize ?? DEFAULT_NATIVE_CHAT_FONT_SIZE,
     codeFontSize: normalized?.codeFontSize ?? DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE,
     width: normalized?.width ?? 'comfortable',
@@ -85,7 +98,14 @@ export function resetNativeChatAppearanceSettings(
     Object.fromEntries(
       Object.entries(appearance ?? {}).filter(
         ([key]) =>
-          !['fontSize', 'codeFontSize', 'width', 'contrast', 'matchTerminalInterface'].includes(key)
+          ![
+            'fontFamily',
+            'fontSize',
+            'codeFontSize',
+            'width',
+            'contrast',
+            'matchTerminalInterface'
+          ].includes(key)
       )
     )
   )

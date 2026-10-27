@@ -28,14 +28,12 @@ describe('pane-scoped terminal keyboard protocol agent', () => {
   it('keeps KKP for the Grok startup pane but withholds it from a later shell split', () => {
     expect(resolvedKittyKeyboard({ launchAgent: 'grok' })).toBe(true)
 
-    // The lifecycle consumes its one-shot startup before a user-created split.
     expect(resolvedKittyKeyboard(null)).toBe(false)
   })
 
   it('uses persisted Grok identity for a restored root but not its later sibling', () => {
     expect(resolvedKittyKeyboard(undefined, 'grok')).toBe(true)
 
-    // onPaneCreated changes the lifecycle startup sentinel from undefined to null.
     expect(resolvedKittyKeyboard(null, 'grok')).toBe(false)
   })
 

@@ -5,11 +5,7 @@ import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
-// Why: regression guard for the renderer OOM crash. Enqueuing the local
-// `gh:enqueuePRRefresh` for a repo owned by a remote/SSH/runtime host rejects
-// with "Access denied: unknown repository path"; a flood of those failures grew
-// the renderer heap to the V8 ceiling and crashed it. enqueueGitHubPRRefresh
-// must only hit the local handler for local-host repos.
+// Route only eligible local repos to gh:enqueuePRRefresh; denied remote/SSH/runtime path floods previously grew renderer heap to OOM.
 const enqueuePRRefresh = vi.fn().mockResolvedValue(undefined)
 
 const mockApi = {

@@ -174,7 +174,7 @@ describe('startRuntimeCapabilityProbe', () => {
   })
 
   it('ignores a success that resolves after cancellation', async () => {
-    let resolveRequest: ((response: RpcResponse) => void) | null = null
+    let resolveRequest: ((response: RpcResponse) => void) | undefined
     const client = {
       sendRequest: () =>
         new Promise<RpcResponse>((resolve) => {

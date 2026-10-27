@@ -136,9 +136,7 @@ describe('web native chat preload API', () => {
     deliver({ type: 'snapshot', messages: [], hasMore: false, pending: true })
     deliver({ type: 'snapshot', messages: [message] })
 
-    // Dropping `pending` would settle an empty read as the session's history.
-    // hasMore proves the pending frame did not consume the initial slot — only
-    // the initial branch infers a filled window from the limit.
+    // Pending is not settled history; hasMore proves only the later initial frame infers a full window from the limit.
     expect(frames).toEqual([
       { type: 'snapshot', messages: [], hasMore: false, pending: true },
       { type: 'snapshot', messages: [message], hasMore: true }
@@ -182,7 +180,6 @@ describe('web MiniMax preload API', () => {
       configured: false,
       cookieConfigured: false,
       apiKeyConfigured: false,
-      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
       cookieProtection: null,
       apiKeyProtection: null
     })
@@ -191,7 +188,6 @@ describe('web MiniMax preload API', () => {
       configured: false,
       cookieConfigured: false,
       apiKeyConfigured: false,
-      // Null, not 'sealed': this bridge stores nothing, so it has no protection to claim.
       cookieProtection: null,
       apiKeyProtection: null
     })

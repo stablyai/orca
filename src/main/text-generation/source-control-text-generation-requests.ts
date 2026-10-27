@@ -129,8 +129,7 @@ export async function generatePullRequestFields(input: {
   }
 }
 
-// Why: a body may quote a lone closing tag inside valid JSON, so reasoning is
-// stripped only when the untouched output does not parse.
+// Valid JSON may quote a lone closing think tag; strip reasoning only after the original fails parsing.
 function parsePullRequestFieldsOutput(
   raw: string,
   context: PullRequestDraftContext,

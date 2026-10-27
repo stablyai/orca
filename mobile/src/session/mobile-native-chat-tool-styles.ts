@@ -2,8 +2,6 @@ import { Platform, StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { MONO_SIZE, scaledType } from './mobile-native-chat-message-styles'
 
-/** Desktop's chat type scale: tool rows in the body size, code in the code size,
- *  annotations a step smaller. Pinch-zoom scales all three. */
 export function toolType(fontScale: number) {
   return {
     row: scaledType(typography.bodySize, fontScale),
@@ -62,7 +60,6 @@ export const toolStyles = StyleSheet.create({
     flexShrink: 0,
     color: colors.textMuted
   },
-  /** A row named by its tool rather than a verb keeps most of the width for that name. */
   lineName: {
     flexShrink: 0,
     maxWidth: '60%'
@@ -100,7 +97,7 @@ export const toolStyles = StyleSheet.create({
     backgroundColor: colors.bgPanel,
     padding: spacing.sm
   },
-  /** Desktop's `max-h-64`: one long output scrolls in place instead of filling the screen. */
+  // Bound long output to a scroll box so it cannot fill the transcript.
   codeScroll: {
     maxHeight: 256,
     flexGrow: 0
@@ -160,7 +157,6 @@ export const toolStyles = StyleSheet.create({
   errorText: {
     color: colors.statusRed
   },
-  // Desktop's `NativeChatDiffView`: diff text on a tinted row in the chat's own diff colours.
   diffAdd: {
     color: colors.chatDiffAdded,
     backgroundColor: colors.diffAddedBg
@@ -194,7 +190,6 @@ export const toolStyles = StyleSheet.create({
   countRemoved: {
     color: colors.gitDecorationDeleted
   },
-  /** Desktop's `max-h-72`: a long change scrolls in place. */
   diffBody: {
     marginLeft: 24,
     marginTop: spacing.xs,

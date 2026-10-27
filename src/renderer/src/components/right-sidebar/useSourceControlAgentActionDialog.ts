@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import {
   pickSourceControlLaunchAgent,
   resolveSourceControlLaunchAgentScope
 } from '../../../../shared/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -53,16 +56,21 @@ export function useSourceControlAgentActionDialog({
     () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
     [actionId, repo, settings]
   )
-  // Why: when this repo already overrides the global default, default the save
-  // scope to the repo so saving the corrected agent updates that override in
-  // place instead of writing a global default the override would still shadow.
+  // Update existing repo overrides in place; a new global default would remain shadowed.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
-  const [commandTemplate, setCommandTemplate] = useState(
-    savedCommandInputTemplate ?? '{basePrompt}'
+  const initialRecipe = useCallback(
+    (): SourceControlActionRecipe => ({
+      ...resolveSourceControlActionRecipe({ settings, repo, actionId }),
+      agentId: savedAgentId ?? null,
+      commandInputTemplate: savedCommandInputTemplate ?? '{basePrompt}',
+      agentArgs: savedAgentArgs ?? ''
+    }),
+    [settings, repo, actionId, savedAgentId, savedCommandInputTemplate, savedAgentArgs]
   )
-  const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
-  const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
+  const [recipe, setRecipe] = useState(initialRecipe)
+  const commandTemplate = recipe.commandInputTemplate ?? '{basePrompt}'
+  const agentArgs = recipe.agentArgs ?? ''
   const openCycleRef = useRef(0)
   const wasOpenRef = useRef(false)
   const [openCycle, setOpenCycle] = useState(0)
@@ -93,34 +101,19 @@ export function useSourceControlAgentActionDialog({
     if (!wasOpenRef.current) {
       openCycleRef.current = cycle
       setOpenCycle(cycle)
+      setRecipe(initialRecipe())
+      setSaveLaunchRecipe(true)
+      setSaveTargetValue(defaultSaveTargetValue)
     }
     wasOpenRef.current = true
     setDiscovery({ cycle, outcome: 'pending' })
-    setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
-    setAgentArgs(savedAgentArgs ?? '')
-    setSelectedAgent(savedAgentId ?? null)
-    setSaveLaunchRecipe(true)
-    setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
-    // Why: whether CLI arguments apply is read synchronously from the local runtime's
-    // capabilities; settling them alongside detection keeps the field from appearing for a
-    // frame on a launch that turns out to be structured.
+    // Settle CLI-argument applicability with discovery so structured launches never flash an inapplicable field.
     void refreshAgents().then(
-      ({ detected, launchable }) => {
+      () => {
         if (stale || openCycleRef.current !== cycle) {
           return
         }
-        setSelectedAgent(
-          (current) =>
-            current ??
-            pickSourceControlLaunchAgent({
-              savedAgent: savedAgentId,
-              defaultAgent: settings?.defaultTuiAgent,
-              detectedAgents: detected,
-              disabledAgents,
-              chosenOpensAsChat: (agent) => launchable.includes(agent)
-            })
-        )
         setDiscovery({ cycle, outcome: 'success' })
       },
       (error: unknown) => {
@@ -133,20 +126,18 @@ export function useSourceControlAgentActionDialog({
     return () => {
       stale = true
     }
-  }, [
-    defaultSaveTargetValue,
-    disabledAgents,
-    open,
-    refreshAgents,
-    savedAgentId,
-    savedAgentArgs,
-    savedCommandInputTemplate,
-    repoId,
-    settings?.defaultTuiAgent
-  ])
+  }, [defaultSaveTargetValue, disabledAgents, open, refreshAgents, initialRecipe])
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 
+  const selectedAgent =
+    recipe.agentId && !isCustomAgentId(recipe.agentId)
+      ? recipe.agentId
+      : pickSourceControlLaunchAgent({
+          defaultAgent: settings?.defaultTuiAgent,
+          detectedAgents: launchableAgents,
+          disabledAgents
+        })
   const { agentOptions, selectedAgentUnavailable, hasEnabledAgents } = useMemo(
     () =>
       buildSourceControlAgentAvailability({
@@ -160,10 +151,7 @@ export function useSourceControlAgentActionDialog({
     basePrompt: baseCommandInput
   })
   const trimmedCommandInput = commandInput.trim()
-  // Why: a structured native chat session reads no CLI arguments, so the field is absent on
-  // launches that would take that route and present on the terminal launches that apply them.
-  // Resolved on every render rather than memoised: it reads the live store and the local
-  // runtime's capabilities, neither of which is in a dependency list.
+  // Recompute from live store/runtime capabilities each render; structured chat ignores CLI arguments and these inputs are not dependency-tracked.
   const agentArgsApply = sourceControlLaunchAppliesAgentArgs({
     agent: selectedAgent,
     worktreeId,
@@ -186,7 +174,7 @@ export function useSourceControlAgentActionDialog({
     trimmedCommandInput,
     agentArgs,
     agentArgsApply,
-    commandTemplate,
+    recipe,
     saveLaunchRecipe,
     saveTargetValue,
     actionId,
@@ -197,8 +185,7 @@ export function useSourceControlAgentActionDialog({
     groupId,
     promptDelivery,
     launchPlatform,
-    // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-    // label aligned with the real remote launch (no `orca-ide` rename).
+    // SSH uses plain orca; preview must match instead of applying the local Linux orca-ide rename.
     isRemote: typeof connectionId === 'string',
     launchSource,
     recoveryContext,
@@ -255,10 +242,10 @@ export function useSourceControlAgentActionDialog({
     isStarting,
     detectedAgents: launchableAgents,
     disabledAgents,
-    onAutoStart: ({ detectedAgents: agentsForLaunch, saveTargetValue: matchedTargetValue }) =>
+    onAutoStart: ({ detectedAgents: agentsForLaunch }) =>
       startWithDetectedAgents({
         detectedAgents: agentsForLaunch,
-        saveTargetValueOverride: matchedTargetValue
+        saveTargetValueOverride: 'none'
       })
   })
 
@@ -279,11 +266,18 @@ export function useSourceControlAgentActionDialog({
       },
     [resetDeliveryPlan]
   )
-  const onSelectedAgentChange = useMemo(() => resetPlanAfter(setSelectedAgent), [resetPlanAfter])
-  const onAgentArgsChange = useMemo(() => resetPlanAfter(setAgentArgs), [resetPlanAfter])
-  const onCommandTemplateChange = useMemo(
-    () => resetPlanAfter(setCommandTemplate),
-    [resetPlanAfter]
+  const onSelectedAgentChange = resetPlanAfter((agent: TuiAgent | null) =>
+    setRecipe(({ launchPreferences, ...current }) => ({
+      ...current,
+      agentId: agent,
+      ...(launchPreferences?.agentId === agent ? { launchPreferences } : {})
+    }))
+  )
+  const onAgentArgsChange = resetPlanAfter((agentArgs: string) =>
+    setRecipe((current) => ({ ...current, agentArgs }))
+  )
+  const onCommandTemplateChange = resetPlanAfter((commandInputTemplate: string) =>
+    setRecipe((current) => ({ ...current, commandInputTemplate }))
   )
   const onSaveLaunchRecipeChange = useMemo(
     () => resetPlanAfter(setSaveLaunchRecipe),
@@ -307,6 +301,7 @@ export function useSourceControlAgentActionDialog({
     agentArgs,
     agentArgsApply,
     commandTemplate,
+    recipe,
     saveLaunchRecipe,
     saveTargetValue,
     saveTargets,

@@ -18,7 +18,6 @@ function fakeSession(): ExternalChromiumBrowserSession {
 
 describe('external Chromium tab registry', () => {
   it('scopes a folder workspace through the browser-workspace resolver', async () => {
-    // The git-only selector cannot name a folder workspace; only the browser resolver can.
     const resolveWorktreeSelector = vi.fn(async () => {
       throw new Error('selector_not_found')
     })

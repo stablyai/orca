@@ -1,6 +1,6 @@
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getLinearPriorityLabel } from '@/components/task-page-localized-options'
+import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import type {
   LinearOrderBy,
   LinearGroupBy,

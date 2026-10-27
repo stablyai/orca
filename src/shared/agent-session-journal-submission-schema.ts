@@ -1,6 +1,4 @@
-// The deep validator for a journal submission (`AgentJournalSubmission`), the row a sent message's
-// dispatch state lives on. Open string fields stay type-checked, never enum-checked, as in
-// `agent-session-journal-schemas.ts`.
+// Deep-validate dispatch submissions with open string vocabularies, as in agent-session-journal-schemas.ts.
 
 import { z } from 'zod'
 import { AgentJournalAnsweredTurnSchema } from './agent-session-answered-turn-schema'

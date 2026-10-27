@@ -86,8 +86,7 @@ function SourceControlVariableDetails({
         )}
         value={info.example}
       />
-      {/* Why: a preview never replaces the description — it is the only in-product warning
-          that a bare `Fixes #{linkedIssue}` degrades to `Fixes #` on an unlinked workspace. */}
+      {/* Previews supplement the warning that missing linkedIssue turns Fixes #{linkedIssue} into Fixes #. */}
       {preview !== undefined ? (
         <SourceControlVariableSample
           label={translate(

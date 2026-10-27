@@ -13,7 +13,8 @@ type TerminatorSearch = { cursor: number; start: number; end: number }
 const OSC_INTRODUCER_PATTERN = /\u001b\]|\u009d/
 const STRING_INTRODUCER_PATTERN = /\u001b[P_^X]|[\u0090\u0098\u009e\u009f]/
 const CONTROL_STRING_INTRODUCER_PATTERN = /\u001b[\]P_^X]|[\u0090\u0098\u009d-\u009f]/
-const ANSI_INTRODUCER_PATTERN = /[\u001b\u0090\u0098\u009b\u009d-\u009f]/
+/** Any byte that can introduce an ANSI escape or control string. */
+export const ANSI_INTRODUCER_PATTERN = /[\u001b\u0090\u0098\u009b\u009d-\u009f]/
 
 function nextSt(value: string, payloadStart: number, search: TerminatorSearch): void {
   if (search.start >= payloadStart || search.cursor === value.length) {
@@ -133,11 +134,7 @@ function stripGenericEscapes(value: string): string {
   return collector.finish()
 }
 
-/**
- * Remove ANSI escape sequences while preserving text, tabs and line breaks.
- * Ordering matters: OSC/string sequences must be consumed before the generic
- * escape pattern, which would otherwise eat only their introducer.
- */
+/** Consume OSC/string sequences before generic escapes or only introducers disappear; preserve text, tabs and line breaks. */
 export function stripAnsiEscapeSequences(value: string): string {
   if (!ANSI_INTRODUCER_PATTERN.test(value)) {
     return value

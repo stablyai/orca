@@ -13,7 +13,6 @@ import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspac
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
@@ -34,6 +33,11 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
+import {
+  resolveSourceControlActionSessionOptions,
+  sourceControlActionLaunchOptions,
+  sourceControlActionAgentArgs
+} from '../../../shared/source-control-action-launch-preferences'
 
 type StartFixChecksAgentArgs = {
   repoId: string
@@ -91,8 +95,7 @@ async function resolveSavedAgentOverride(
     kind: 'git-worktree',
     ...(repo ? { repoId: repo.id, executionHostId: getRepoExecutionHostId(repo) } : {})
   }
-  // Why: a paired server answers per workspace, so only the enabled check can run before it exists;
-  // the direct launch checks installation on the new workspace.
+  // Before workspace creation, paired projects can check enabled only; installation is checked on the created workspace’s host.
   const detected = pendingAgents
     ? (await acquireAgentLaunchChoices(workspace, () => pendingAgents)).detected
     : null
@@ -212,14 +215,6 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       )
       return false
     }
-    const agentArgsPlan = planAgentCliArgsSuffix(
-      recipe().agentArgs,
-      launchPlatform === 'win32' ? 'powershell' : 'posix'
-    )
-    if (!agentArgsPlan.ok) {
-      toast.error(agentArgsPlan.error)
-      return false
-    }
     let revealFailed = false
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
@@ -227,7 +222,8 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       worktreeId: targetWorktreeId,
       groupId: args.groupId ?? targetWorktreeId,
       prompt,
-      agentArgs: recipe().agentArgs,
+      agentArgs: sourceControlActionAgentArgs(recipe(), agent, useAppStore.getState().settings),
+      ...sourceControlActionLaunchOptions(recipe(), agent),
       promptDelivery: 'submit-after-ready',
       launchPlatform,
       launchSource: args.launchSource,
@@ -283,6 +279,10 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     telemetrySource: args.telemetrySource,
     promptDelivery: 'submit-after-ready',
     agentArgs: recipe().agentArgs,
+    resolveAgentArgs: (agent) =>
+      sourceControlActionAgentArgs(recipe(), agent, useAppStore.getState().settings),
+    resolveSessionOptions: (agent) => resolveSourceControlActionSessionOptions(recipe(), agent),
+    sessionOptionsYieldToAgentArgs: recipe().launchPreferencesYieldToAgentArgs,
     ...(agentOverride.kind === 'agent' ? { agentOverride: agentOverride.agent } : {}),
     openModalFallback: args.openModalFallback
   })

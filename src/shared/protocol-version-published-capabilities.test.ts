@@ -86,6 +86,7 @@ const PUBLISHED_RUNTIME_CAPABILITIES = [
   'browser.tab-create-known-id.v1',
   'files.mutation-ownership.v1',
   'files.pathsExist',
+  'files.resolve-terminal-path.absolute-files.v1',
   'files.resolve-terminal-path.cross-workspace.v1',
   'folder-workspace.path-status.v1',
   'git.antigravity-configured-model.v1',

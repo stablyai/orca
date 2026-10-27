@@ -22,10 +22,7 @@ export type RuntimeMetadata = {
   startedAt: number
 }
 
-// Why: the CLI must handle metadata files written by older Orca versions that
-// used a singular `transport` field. This helper extracts the first transport
-// matching the given kinds from either the new `transports` array or the
-// legacy `transport` field.
+// Read both legacy singular transport and the newer transports array for older CLI metadata files.
 export function findTransport(
   metadata: RuntimeMetadata,
   ...kinds: RuntimeTransportMetadata['kind'][]

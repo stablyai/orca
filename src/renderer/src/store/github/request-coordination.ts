@@ -51,11 +51,7 @@ export function nextProviderRequestId(): number {
   return providerRequestSequence
 }
 
-/**
- * Why: the upgrade wait is bounded, so a stronger request can run beside a weaker one for the same
- * key. Only the request the key currently resolves to may write that key's cache — otherwise a late
- * weaker reply overwrites the stronger request's fresher result under a brand-new `fetchedAt`.
- */
+/** Bounded upgrade waits permit concurrent strengths; only current key owner may cache replies or late weaker results gain fresh timestamps over newer data. */
 export function ownsInflightRequest<T extends { requestId: number }>(
   registry: ReadonlyMap<string, T>,
   key: string,

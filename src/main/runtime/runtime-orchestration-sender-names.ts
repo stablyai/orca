@@ -1,7 +1,6 @@
-// The runtime's answer to "what is this agent called", from its own records, for any send that
-// speaks for another agent: the mail lane today, a dispatched task next.
+// Name another agent from host records when sending on its behalf.
 
-import type { AgentMessageSender } from '../../shared/agent-session-message-source'
+import type { AgentMessageSender } from '../../shared/agent-session/agent-session-message-source'
 import type { ConversationNameTab } from '../../shared/agent-row-conversation-name'
 import type { AgentStatusIpcPayload, AgentType } from '../../shared/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -130,8 +129,7 @@ export class RuntimeOrchestrationSenderNames {
   }
 }
 
-/** A split tab's title is its focused pane's, so a pane is named only by the title the person gave
- *  it; undefined for a single-pane tab, whose tab title is its own. */
+/** Split-tab titles name the focused pane; other split panes need user titles. Single-pane tabs use their own tab titles. */
 function splitPaneTitle(
   layout: Pick<TerminalLayoutSnapshot, 'root' | 'titlesByLeafId'> | undefined,
   paneKey: string | null

@@ -30,7 +30,7 @@ vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('./MobileNativeChatComposer', async () => {
+vi.mock('./native-chat/composer/MobileNativeChatComposer', async () => {
   const { composerStub } = await import('./MobileNativeChatView.render-stubs.test-fixture')
   return composerStub()
 })
@@ -73,7 +73,6 @@ describe('MobileNativeChatView: Stop control', () => {
     }
   )
 
-  // A Stop the provider took and never answered ends only at a repeat Stop.
   it('keeps Stop for the repeat that escalates while the host alone says Stopping', async () => {
     await render({
       structuredActivityUi: true,

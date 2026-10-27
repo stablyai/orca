@@ -1,16 +1,15 @@
-import { useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
-import { useMobileNativeChatFoldReuse } from './mobile-native-chat-fold-reuse'
-import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
+import type { MobileNativeChatImageAttachments } from './native-chat/composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
-import type { MobileNativeChatStructuredComposer } from './MobileNativeChatComposer'
-import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
-import { useMobileNativeChatComposerTray } from './use-mobile-native-chat-composer-tray'
+import type { MobileNativeChatStructuredComposer } from './native-chat/composer/MobileNativeChatComposer'
+import { useMobileNativeChatStreamingBubble } from './native-chat/use-mobile-native-chat-streaming-bubble'
+import { useMobileNativeChatComposerTray } from './native-chat/composer/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './MobileNativeChatVisual'
 import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-context'
-import { MobileNativeChatItemSourceContext } from './mobile-native-chat-item-read'
+import { MobileNativeChatRootItemSourceContext } from './mobile-native-chat-item-read'
 import { useMobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
 import {
   MobileNativeChatReplyRevealsContext,
@@ -22,13 +21,8 @@ import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat-a
 type Props = {
   controller: MobileNativeChatController
   activeSessionTabId?: string | null
-  /** Opens a tapped file reference (worktree-relative or absolute, optional
-   *  :line(:col) suffix) through the shared tap-to-open flow. */
   onOpenFile: (pathText: string) => void
-  /** Native-chat image attachments: picking adds a composer chip, and sending
-   *  rides the pending images along with the message text (desktop parity). */
   images: MobileNativeChatImageAttachments
-  /** A structured chat's + sheet, files and skills; null on a terminal-backed chat. */
   structuredComposer?: MobileNativeChatStructuredComposer | null
   onMicPress: (() => void) | undefined
   micActive: boolean
@@ -36,23 +30,16 @@ type Props = {
   onMicPressIn: () => void
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null
-  /** Latest send failure, rendered inline above the composer. */
   sendErrorMessage: string | null
-  /** Drops that failure once a later send succeeds. */
   onClearSendError: () => void
   /** Stable host/worktree/tab identity for accepted-send completion fencing. */
   sendSurfaceId: string
-  /** The agent session the tab holds; null until the tab's first one is known. */
   sessionId: string | null
-  /** Reads the retained route's focus generation for accepted-send fencing. */
   getSendCompletionGeneration: () => number
   keyboardInset: number
 }
 
-/** Keeps the terminal mounted underneath chat so its PTY subscription survives
- *  view toggles while the native surface owns the visible composer. Also owns
- *  the streaming gate: this component stays mounted across those toggles, while
- *  the chat list below it does not. */
+// Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
 export function MobileNativeChatOverlay({
   controller,
   activeSessionTabId,
@@ -73,18 +60,14 @@ export function MobileNativeChatOverlay({
   keyboardInset
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
-  // The chat is drawn only with a resolved agent; the fallback never reaches the screen.
   const agent = controller.nativeChatAgent ?? ''
   const fullContent = useMobileNativeChatMessageDetail(
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMobileNativeChatFoldReuse(
-    useMemo(
-      () => foldMobileNativeChatMessages(fullContent.messages, agent),
-      [fullContent.messages, agent]
-    ),
-    sendSurfaceId
+  const folded = useMemo(
+    () => foldMobileNativeChatMessages(fullContent.messages, agent),
+    [fullContent.messages, agent]
   )
   const streaming = useMobileNativeChatStreamingBubble(
     folded,
@@ -104,8 +87,7 @@ export function MobileNativeChatOverlay({
       pause: queued.pause,
       onResume: queued.resume,
       sessionKey: queued.sessionKey,
-      // Nothing steers into a turn a Stop is ending; the host holds such a send until it ends.
-      // The indicator's `stopping` is the display status, decided once in the session hook.
+      // Hold steering while Stop ends the turn; use the session’s single display-status decision.
       steerHeld: controller.nativeChatTurnIndicator?.stopping === true
     },
     backgroundTasks: controller.nativeChatBackgroundTasks
@@ -113,9 +95,31 @@ export function MobileNativeChatOverlay({
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
   const replyReveals = useMobileNativeChatReplyReveals(folded, streaming !== null, sendSurfaceId)
   const itemSource = controller.nativeChatItemSource
+  const committedDetail = useMemo(
+    () => ({ current: fullContent.detail }),
+    [itemSource?.client, itemSource?.sessionId]
+  )
+  useLayoutEffect(() => {
+    committedDetail.current = fullContent.detail
+  }, [committedDetail, fullContent.detail])
+  const load = useCallback(
+    async (id: string) => {
+      if (!committedDetail.current) {
+        throw new Error('Message unavailable')
+      }
+      await committedDetail.current.load(id)
+    },
+    [committedDetail]
+  )
   const detailSource = useMemo(
-    () => (itemSource ? { ...itemSource, messageDetail: fullContent.detail } : null),
-    [itemSource, fullContent.detail]
+    () =>
+      itemSource
+        ? {
+            ...itemSource,
+            messageDetail: fullContent.detail ? { ...fullContent.detail, load } : null
+          }
+        : null,
+    [itemSource, fullContent.detail, load]
   )
   if (!controller.showNativeChat) {
     return null
@@ -124,7 +128,7 @@ export function MobileNativeChatOverlay({
     <MobileNativeChatRowOverlaysHost conversation={{ surfaceId: sendSurfaceId, sessionId }}>
       <View style={styles.overlay}>
         <MobileNativeChatVisualContext.Provider value={visuals}>
-          <MobileNativeChatItemSourceContext.Provider value={detailSource}>
+          <MobileNativeChatRootItemSourceContext.Provider value={detailSource}>
             <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
               <MobileNativeChatView
                 messages={session.messages}
@@ -202,7 +206,7 @@ export function MobileNativeChatOverlay({
                 keyboardInset={keyboardInset}
               />
             </MobileNativeChatReplyRevealsContext.Provider>
-          </MobileNativeChatItemSourceContext.Provider>
+          </MobileNativeChatRootItemSourceContext.Provider>
         </MobileNativeChatVisualContext.Provider>
       </View>
     </MobileNativeChatRowOverlaysHost>

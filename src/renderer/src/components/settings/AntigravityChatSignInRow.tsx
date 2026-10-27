@@ -103,9 +103,7 @@ const SIGN_IN_ACTION_LABELS: Record<SignInAction, () => string> = {
 
 const SETTLED_OPERATION_PHASES = new Set(['succeeded', 'failed', 'cancelled'])
 
-/** Sign-in runs the installed server, so it waits while the host reports nothing to run or a
- *  Remove still runs; an Update keeps the old copy running until it lands. The install row beside
- *  it says why. A status the host could not report leaves it to the host. */
+/** Sign-in needs an installed server and no removal; updates keep the old copy usable, while unreported status defers to the host. */
 export function antigravityChatSignInBlocked(
   install: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
 ): boolean {
@@ -125,7 +123,6 @@ const NOT_FOLLOWED: AntigravityChatSignInView = {
   openFailed: false
 }
 
-/** The host's chat sign-in, followed while `owner` is set; the install row beside it reads it too. */
 export function useAntigravityChatSignIn(
   owner: RuntimeClientTarget | null
 ): AntigravityChatSignInView {
@@ -145,18 +142,16 @@ export function useAntigravityChatSignIn(
   return useSyncExternalStore(subscribeAntigravityChatSignIns, read, read)
 }
 
-/** Google's last page points at the host, which a browser on another computer can't reach, so its
- *  address is pasted here and the host passes it on. */
+/** Paste Google’s final URL because browsers on other computers cannot reach the host callback directly. */
 export function PastedAddressForm(props: {
   pending: boolean
   send: (callbackUrl: string, refused: (message: string) => void) => void
 }): React.JSX.Element {
   const [pasted, setPasted] = useState('')
-  // The host's refusal of this address; the form leaves once the host takes one.
   const [refusal, setRefusal] = useState<string | null>(null)
   const helpId = useId()
   const callbackUrl = pasted.trim()
-  // noValidate: the browser's URL check would pre-empt the host's refusal, which says what's wrong.
+  // Let host validation explain refused addresses instead of browser URL validation preempting it.
   return (
     <form
       noValidate
@@ -202,9 +197,7 @@ export function PastedAddressForm(props: {
   )
 }
 
-/** One host's chat sign-in as both Settings layouts show it. `signedOut` is the line for a host
- *  that answered it is not signed in; `unanswered` stands in while it has nothing else to say, as a
- *  host learns its sign-in only when a chat starts or asks to sign in. */
+/** Share host auth across Settings layouts; unanswered differs from signed-out because auth is learned only on chat/sign-in. */
 export function useAntigravityChatSignInControls(props: {
   owner: RuntimeClientTarget
   label: string
@@ -214,7 +207,6 @@ export function useAntigravityChatSignInControls(props: {
 }) {
   const { owner, label } = props
   const { status, flow, auth, openFailed, ...view } = useAntigravityChatSignIn(owner)
-  // One start, cancel or paste at a time, so a double click asks the host once.
   const [pending, setPending] = useState(false)
   const act = (request: () => Promise<void>): void => {
     setPending(true)
@@ -234,7 +226,6 @@ export function useAntigravityChatSignInControls(props: {
   return {
     flow,
     ownFlow,
-    /** The browser's link, while this client's sign-in waits on it. */
     url: ownFlow && flow?.phase === 'waiting' ? (flow.url ?? null) : null,
     line:
       status === 'known'
@@ -265,8 +256,7 @@ export function useAntigravityChatSignInControls(props: {
   }
 }
 
-/** This execution host's sign-in for Antigravity chats, run by the host's own server. Every row
- *  for a host shows the same sign-in, a running one included. */
+/** All rows for an execution host share its server’s sign-in, including running flows. */
 export function AntigravityChatSignInRow(props: {
   owner: RuntimeClientTarget
   label: string
@@ -292,7 +282,7 @@ export function AntigravityChatSignInRow(props: {
           {props.description ? (
             <p className="mt-1 text-xs text-muted-foreground">{props.description}</p>
           ) : null}
-          {/* The line keeps its height until the host answers, so nothing shifts when it does. */}
+          {/* Reserve line height so the host’s answer cannot shift layout. */}
           <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
             {line}
             {line && alert ? ' ' : null}
@@ -327,7 +317,7 @@ export function AntigravityChatSignInRow(props: {
         ) : (
           <Button
             size="xs"
-            // Signed in, the button only switches account, so it steps back from the primary.
+            // Account switching uses secondary styling once signed in.
             variant={signIn.action === 'changeAccount' ? 'outline' : 'default'}
             disabled={signIn.signInDisabled}
             onClick={signIn.start}

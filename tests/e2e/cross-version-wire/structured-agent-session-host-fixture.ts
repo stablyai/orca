@@ -11,18 +11,13 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 
-/** The host every skew installs to drive the surface: enough of the real host's
- *  shape for each handler to run, and a spy per method so "which call reached the
- *  host" is answerable per call rather than per suite. */
+// Use per-method spies so every skew can prove which call reached the host.
 export function structuredHostStub(
   sessionId: string,
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> {
   return {
-    // The restart-resume surface hangs off a host MEMBER rather than the root, but its spies stay
-    // flat here: callers iterate this map asserting every entry is a spy that did not run, and
-    // `installableHost` below is what reassembles the member. Keeping them flat also lets the
-    // manifest name them to prove a call reached the host.
+    // Keep restart-resume spies flat for manifest/delta assertions; installableHost rebuilds the nested member.
     restartResumableList: vi.fn(async () => []),
     restartResumableFailures: vi.fn(async () => []),
     restartResumableDismiss: vi.fn(async () => 0),
@@ -31,9 +26,7 @@ export function structuredHostStub(
     continueInterrupted: vi.fn(async () => ({ sessionId, outcome: 'superseded' })),
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     create: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
-    // Attach-shaped entries take a client-supplied location, so the host is asked whether it
-    // supports creating there. A real host always answers; leaving it unstubbed made every
-    // `ensure` refuse for the harness's own reason rather than the location's.
+    // Accept create-location probes so an unstubbed harness method cannot cause every ensure to refuse.
     supportsCreate: vi.fn(() => true),
     conversationCommand: vi.fn(async () => ({
       ok: true,
@@ -84,6 +77,7 @@ export function structuredHostStub(
       readable: true
     })),
     regenerateConversationName: vi.fn(() => true),
+    setUserConversationName: vi.fn(async () => ({ name: 'Release notes', applied: true })),
     hold: vi.fn(async () => undefined),
     release: vi.fn(() => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
@@ -107,8 +101,7 @@ export function structuredHostStub(
       subscriber.emit({ type: 'snapshot', sessions: [] })
       return () => undefined
     }),
-    // No opening emit, unlike the status feed above: a completion is an edge, so this stream
-    // opens empty and a subscriber that was away has missed what passed.
+    // Completions are edges: late subscribers get no opening snapshot.
     subscribeTurnCompletions: vi.fn(() => () => undefined),
     unsubscribe: vi.fn(),
     agentDefinitions: vi.fn(() => [CODEX_STRUCTURED_AGENT]),
@@ -116,10 +109,7 @@ export function structuredHostStub(
   }
 }
 
-/** The stub shaped the way the host actually exposes it: flat spies, plus the `restartResume`
- *  member the RPC methods reach through. Install this; assert against the flat map.
- *
- *  The one assertion lives here so no call site needs its own. */
+// Install the nested host shape, but assert against the flat spy map.
 export function installableHost(
   hostCalls: Record<string, ReturnType<typeof vi.fn>>
 ): StructuredAgentSessionHost {
@@ -128,7 +118,7 @@ export function installableHost(
     // The catalog read checks the session's record for a floating chat's own folder; none here.
     deps: {
       modelCatalog: { read: hostCalls.modelCatalog },
-      store: { getRecord: () => null, getOperationRow: () => null }
+      store: { getRecord: () => null, getConversation: () => null, getOperationRow: () => null }
     },
     restartResume: {
       list: hostCalls.restartResumableList,
@@ -146,18 +136,14 @@ export function installableHost(
 const TURN = { turnId: 'turn-1', state: 'completed' as const, startedAt: 1, completedAt: 6 }
 const TURN_ROW = { itemId: 'legacy:codex:s:turn-1', revision: 1, sequence: 1, observedAt: 1 }
 
-/** One completed turn the host journals, and the two ways the current host publishes it.
- *  The old client is derived from the baseline by removing the capability, so the downgrade
- *  stays exercised after a release ships it. */
+// Remove the new capability from baseline clients so turn-item downgrade remains exercised after release.
 export const turnItemSkew = {
-  /** Installs the stub host over a history page that carries the turn row. */
   install(sessionId: string, workspaceId: string): void {
     const host = structuredHostStub(sessionId, workspaceId)
     const items = [{ ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
     host.history.mockReturnValue({ ok: true, page: { items } })
     setStructuredAgentSessionHost(installableHost(host))
   },
-  /** Each skew's advertised list and the item it must be published. */
   clients(
     baseline: { capabilities: readonly string[] },
     current: { capabilities: readonly string[] }
@@ -173,8 +159,7 @@ export const turnItemSkew = {
   }
 }
 
-/** A Codex provider that is ready as soon as it is published, as one with an instant handshake is,
- *  for a real host that only needs a running agent behind a chat. */
+// Model an instant Codex handshake for real-host tests that need a ready provider.
 export function readyCodexProviderAdapter(input: {
   store: Pick<AgentSessionRecordStore, 'getRecord'>
   sessionId: string
@@ -184,6 +169,7 @@ export function readyCodexProviderAdapter(input: {
   host: () => StructuredAgentSessionHost
 }): StructuredAgentSessionAdapter {
   const { store, now } = input
+  let dispatched = 0
   return startsWhenPublished(
     {
       acquire: async ({ fence }) => ({
@@ -202,7 +188,18 @@ export function readyCodexProviderAdapter(input: {
           observedAt: now
         }
       }),
-      dispatch: async () => ({ state: 'accepted' }),
+      dispatch: async () => {
+        dispatched += 1
+        return {
+          state: 'accepted',
+          providerIdentity: {
+            provider: 'codex',
+            threadId: input.thread,
+            turnId: `turn-${dispatched}`,
+            ordinal: dispatched
+          }
+        }
+      },
       cancelTurn: async () => ({ cancelled: true }),
       answerPrompt: async () => undefined,
       setOption: async () => undefined

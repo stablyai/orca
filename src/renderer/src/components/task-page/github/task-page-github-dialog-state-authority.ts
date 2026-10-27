@@ -23,13 +23,7 @@ function markStateFamilyDirty(repoId: string, itemId: string): void {
   }
 }
 
-/**
- * Dialog state edits patch `workItemsCache` directly with no pending op, so a
- * search-lagged list refetch (GitHub search index + `gh` URL cache) silently
- * reverted them in the Tasks list (STA-3343). Record the confirmed state in the
- * mutation registry so the list fetch paths re-assert it until search catches
- * up; quiet adopt releases it on match, so external reverts still win.
- */
+/** Hold confirmed dialog state in the registry until search catches up; matching quiet adoption releases it so external reverts can win. */
 export function assertTaskPageGitHubDialogStateAuthority(args: {
   repoId: string
   itemId: string

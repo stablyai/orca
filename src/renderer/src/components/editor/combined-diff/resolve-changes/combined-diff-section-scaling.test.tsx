@@ -16,10 +16,7 @@ const SECTION_COUNT = 500
 
 type KeyReadCounter = { reads: number }
 
-/**
- * Sections whose `key` getter counts reads. Every O(N)-per-load pass this PR targets derives from
- * `section.key`, so the read count is a direct, deterministic proxy for the quadratic work.
- */
+/** Count section-key reads as a deterministic measure of per-load scan work. */
 function makeCountingSection(
   counter: KeyReadCounter,
   key: string,
@@ -57,7 +54,7 @@ const FAKE_VIRTUALIZER = {
   scrollToIndex: vi.fn()
 } as unknown as Virtualizer<HTMLDivElement, Element>
 
-// Stable across renders so the hooks under test see the same dependency identities the viewer gives them.
+// Keep dependency identities stable, matching the viewer.
 const NO_DIRECT_SCROLL_INPUT = (): boolean => false
 const NOOP = vi.fn()
 const PROGRAMMATIC_SCROLL_MARKS = createProgrammaticScrollMarks()
@@ -137,8 +134,7 @@ describe('combined diff section passes at scale', () => {
 
     let sections = initial
     for (let index = 0; index < SECTION_COUNT; index += 1) {
-      // Mirrors loadSectionNow's `prev.map((s, i) => i === index ? {...s, ...} : s)`: one new
-      // section object, every other row keeps its identity.
+      // Match loads that replace one section while retaining sibling identities.
       const next = sections.slice()
       next[index] = makeCountingSection(counter, `combined-branch:file-${index}.ts`, {
         loading: false,
@@ -149,12 +145,9 @@ describe('combined diff section passes at scale', () => {
     }
 
     const loadReads = counter.reads - readsAfterMount
-    // O(N): a handful of reads per loaded section. The pre-fix passes (restore-signal join, a
-    // second key -> index Map, the viewed-key key compare) read every key on every load, which is
-    // ~3 * 500 * 500 reads here.
+    // Require linear key reads across all loads; repeated full scans would grow quadratically.
     expect(loadReads).toBeLessThanOrEqual(8 * SECTION_COUNT)
 
-    // Outputs are still exactly right after the incremental patching.
     expect(view.result.current.rowKeys).toHaveLength(SECTION_COUNT)
     expect(view.result.current.rowKeys[0]).toBe('combined-branch:file-0.ts:expanded:1:1')
     expect(view.result.current.rowKeys[499]).toBe('combined-branch:file-499.ts:expanded:1:1')
@@ -206,7 +199,7 @@ describe('combined diff section passes at scale', () => {
     )
     const first = view.result.current
 
-    // A fresh array whose elements are identical: the shape a no-op setSections produces.
+    // A no-op section update can still produce a fresh array of identical objects.
     view.rerender({ rows: sections.slice() })
 
     expect(view.result.current).toBe(first)

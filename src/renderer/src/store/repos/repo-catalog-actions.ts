@@ -25,6 +25,7 @@ import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
   mergeFetchedRepoCatalog,
+  reconcileFetchedCatalogWorktreeState,
   reconcileReadoptedSshWorktreeState,
   reconcileSupersededSshRepos
 } from './repo-catalog-merge'
@@ -62,11 +63,7 @@ export function createRepoCatalogActions(
             setups: remainingSetups
           }
         )
-        // Why: mergeProjectHostSetupCompatibility always allocates; a no-op readoption
-        // must not churn catalog identity. This write is all-repos, not host-scoped,
-        // so it cannot go through mergeFetchedHostProjectCatalog. Reconcile
-        // hands the store arrays straight back when nothing moved, so writing them
-        // unconditionally still leaves identity-keyed selectors untouched.
+        // All-repos readoption cannot use host-scoped merge. Reconcile always-allocating compat results to preserve unchanged catalog arrays and avoid selector churn.
         const projects = reconcileCatalogRows(
           s.projects,
           compatibility.projects,
@@ -95,7 +92,7 @@ export function createRepoCatalogActions(
       set((s) => ({ reposFetchGeneration: s.reposFetchGeneration + 1 }))
       const fence = claimHostCatalogFence(get, 'repos', target)
       try {
-        const catalog = await fetchRepoCatalogForTarget(target)
+        const catalog = await fetchRepoCatalogForTarget(target, get().repos)
         // A newer same-host fetch or a replaced connection superseded us — drop this stale result.
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
@@ -131,7 +128,7 @@ export function createRepoCatalogActions(
           return {
             repos: prunedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
+            ...reconcileFetchedCatalogWorktreeState(s, catalog, prunedRepos),
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(prunedRepos, s.repos)
               ? {}

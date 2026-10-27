@@ -3,11 +3,11 @@ import type { RpcClient } from '../transport/rpc-client'
 import {
   sendMobileNativeChatMessageWithOutcome,
   type MobileNativeChatSendOutcome
-} from './mobile-native-chat-send'
+} from './native-chat/mobile-native-chat-send'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from './mobile-native-chat-terminal-write-lock'
+} from './native-chat/mobile-native-chat-terminal-write-lock'
 
 export function sendMobileNativeChatPermissionResponse(args: {
   client: RpcClient
@@ -47,9 +47,7 @@ export function useMobileNativeChatPermissionSend(args: {
         args.onSendError('Response not sent')
         return false
       }
-      // No stale-input heal here (unlike the text/ask sends): a choice is an
-      // `enter: false` key for an active overlay that swallows the clear, so it
-      // would consume the marker still protecting the next real message.
+      // Do not heal stale input through active overlays: they swallow clears but still acknowledge writes, consuming the marker without clearing the paste.
       let outcome: MobileNativeChatSendOutcome
       try {
         outcome = await sendMobileNativeChatPermissionResponse({

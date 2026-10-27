@@ -1,7 +1,4 @@
-// A Codex chat is Working while Codex still holds a send, never while Orca merely waits for a
-// delivery row: a turn that completes without taking a send (a hook blocked it) ends Working with
-// no row written, and a client already following the chat reads it from the frames it is sent.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake.
+// Exercise shipped host/journal/adapter with fake Codex: Working follows provider-held sends, including completion without delivery rows; subscribers read real frames.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

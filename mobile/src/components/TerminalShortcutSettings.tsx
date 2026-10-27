@@ -30,8 +30,7 @@ import {
   type TerminalAccessoryLayout
 } from '../terminal/terminal-accessory-layout'
 
-// Why: DragReorderList absolutely positions rows, so every row in a
-// reorderable section must share one fixed height.
+// Absolutely positioned DragReorderList rows require one fixed height per section.
 const REORDER_ROW_HEIGHT = 56
 
 function ShortcutBarRow({
@@ -325,8 +324,7 @@ const styles = StyleSheet.create({
   rowPressed: {
     backgroundColor: colors.bgRaised
   },
-  // Why: rows inside DragReorderList get a fixed height and a trailing grip
-  // handle from the list itself, so content only pads on the left.
+  // Reorder list supplies fixed height/trailing grip; pad content only on left.
   reorderRowContent: {
     flex: 1,
     height: '100%',

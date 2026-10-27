@@ -1,7 +1,4 @@
-/**
- * E2E only (`ORCA_E2E_FAKE_WSL_HOSTS`): stands in for wsl.exe so CI on any OS drives the WSL host
- * UI against a headless Orca server. Each "distro" connects straight to that server's pairing.
- */
+/** ORCA_E2E_FAKE_WSL_HOSTS maps fake distros directly to a headless server pairing so any CI OS can test WSL host UI without wsl.exe. */
 import { appendFileSync, readFileSync } from 'node:fs'
 import { z } from 'zod'
 import { parsePairingCode } from '../../shared/pairing'
@@ -89,13 +86,15 @@ export function createFakeWslHostConnector(
     },
     get: (distro) => active.get(key(distro)) ?? null,
     isReachable: async (distro) => active.has(key(distro)),
+    isSettling: () => false,
+    // The fake distro always runs, so a missing server is reachable by a reconnect.
+    reachability: async (distro) => (active.has(key(distro)) ? 'available' : 'unreachable'),
     disconnect: async (distro) => {
       if (active.delete(key(distro))) {
         onChange(distro, null, { state: 'closed' })
       }
     },
-    // Why the real terminal steps: they run against the headless Orca server standing in for
-    // orcad, so e2e sends the same RPCs a real removal does. Only the decommission is faked.
+    // Use real terminal RPCs against the headless fixture server for removal proof; fake only decommission.
     stopServer: async (distro, environmentId) => {
       if (!active.get(key(distro))) {
         return { stopped: true }

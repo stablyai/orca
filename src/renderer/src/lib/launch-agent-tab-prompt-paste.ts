@@ -3,11 +3,7 @@ import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-deliver
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
-/**
- * Pastes a new agent tab's prompt once its agent is ready, and says whether it landed. The one copy
- * of this delivery, for a tab whose terminal this window spawned and for one an `agent.launch`
- * spawned into it.
- */
+/** Share readiness/paste delivery and outcome reporting for both window-spawned and agent.launch-owned tab PTYs. */
 export function pasteAgentLaunchPromptOnceReady(args: {
   worktreeId: string
   tabId: string
@@ -41,8 +37,7 @@ export function pasteAgentLaunchPromptOnceReady(args: {
   }).then((delivered) => {
     if (delivered) {
       if (agent === 'command-code' && submit) {
-        // Why: Command Code has no prompt-submit hook; when Orca submits a
-        // generated prompt after readiness, seed working at delivery time.
+        // Command Code lacks prompt-submit hooks; seed working when generated input is submitted after readiness.
         seedCommandCodeSubmittedPromptStatus(worktreeId, tabId, args.prompt)
       }
       onPromptDelivered?.()

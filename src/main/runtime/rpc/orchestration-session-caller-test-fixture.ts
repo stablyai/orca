@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { vi } from 'vitest'
 import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -61,7 +62,13 @@ export type SessionCallerHarness = {
   close: () => void
 }
 
-export function createSessionCallerHarness(hostRef: SessionHostRef): SessionCallerHarness {
+export function createSessionCallerHarness(
+  hostRef: SessionHostRef,
+  getVisibleSessionTabIndex: () => { present: boolean; sessionIds: string[] } = () => ({
+    present: false,
+    sessionIds: []
+  })
+): SessionCallerHarness {
   const db = new OrchestrationDb(':memory:')
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
@@ -80,7 +87,20 @@ export function createSessionCallerHarness(hostRef: SessionHostRef): SessionCall
     deps: {
       store: {
         getRecord: (sessionId: string) => records.get(sessionId) ?? null,
-        listRecords: () => [...records.values()]
+        getConversation: (id: string) => {
+          const record = records.get(id)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => [...records.values()].map(agentSessionConversationView),
+        requireWritableRecord: (id: string) => {
+          const record = records.get(id)
+          if (!record) {
+            throw new Error('Missing test record')
+          }
+          return record
+        },
+        listRecords: () => [...records.values()],
+        getVisibleSessionTabIndex
       }
     }
   }
@@ -155,7 +175,6 @@ export function resultOf(response: unknown): Record<string, unknown> {
   return response.result
 }
 
-/** The `id` of a row a receipt carries. */
 export function idOf(row: unknown): string {
   if (!isRecord(row) || typeof row.id !== 'string') {
     throw new Error(`expected a row with an id, got ${JSON.stringify(row)}`)

@@ -25,7 +25,7 @@ import {
   callRuntimeEnvironment,
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentStatusPublished } from './runtime-environment-status-owner'

@@ -42,6 +42,7 @@ type ReadCompatibleActionRecipe = {
   agentId?: SourceControlActionRecipe['agentId']
   commandInputTemplate?: string | null
   agentArgs?: string | null
+  launchPreferences?: SourceControlActionRecipe['launchPreferences']
 }
 
 const TEXT_ACTION_ID_SET = new Set<SourceControlActionId>(SOURCE_CONTROL_TEXT_ACTION_IDS)
@@ -90,7 +91,8 @@ function normalizeCompleteRecipe(
   return {
     agentId: recipe.agentId ?? null,
     commandInputTemplate,
-    ...(agentArgs !== undefined ? { agentArgs } : {})
+    ...(agentArgs !== undefined ? { agentArgs } : {}),
+    ...(recipe.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {})
   }
 }
 

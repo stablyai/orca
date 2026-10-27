@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import { findPendingWorktreeCreationId } from '@/lib/pending-worktree-creation'
 import {
   canWatcherCoverParkedTerminalTab,
   disposeAllParkedTerminalWatchers,
@@ -167,8 +168,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       })
     }
     syncParkedTerminalTabWatchersForWorkspaces(syncEntriesByWorktreeId)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [
+    activationDeferredMountTabIdsByWorktreeRef,
     activeTabId,
     activeView,
     activityTerminalPortals,
@@ -179,6 +180,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
     effectiveParkedTerminalWorktreeIds,
+    measurableBackgroundWorktreeIdsRef,
+    mountedWorktreeIdsRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
@@ -194,22 +197,27 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
 
   const startupActivationGateWorktreeIdsRef = useRef(new Set<string>())
-  // Why a store subscription rather than a read inside the effects: the verdict flips to `none` the
-  // moment the execution host answers, and that transition is what re-runs the passes below.
-  // Why the retained selector: resolution walks the owner catalogs, so recomputing it on every store
-  // write would be the STA-3363 render-path multiplier again.
+  // Subscribe so host answers rerun the passes; retain owner resolution to avoid repeating catalog walks on every store write (STA-3363).
   const hostAuthoritySelector = useMemo(
     () => createWorkspaceTerminalHostAuthoritySelector(activeWorktreeId),
     [activeWorktreeId]
   )
   const activeWorktreeHostAuthority = useAppStore(hostAuthoritySelector)
+  const activeWorktreeCreationPending = useAppStore(
+    (state) =>
+      findPendingWorktreeCreationId(state.pendingWorktreeCreations, activeWorktreeId) !== null
+  )
 
   useEffect(() => {
-    if (!workspaceSessionReady || !terminalStartupRestorationReady || !activeWorktreeId) {
+    if (
+      !workspaceSessionReady ||
+      !terminalStartupRestorationReady ||
+      !activeWorktreeId ||
+      activeWorktreeCreationPending
+    ) {
       return
     }
-    // Why: the execution host owns terminal creation, and a host that has not answered is not a host
-    // with no terminals — seeding into that gap duplicates its tabs on every launch (STA-4658).
+    // An unanswered owner is not an empty host; seeding before its census duplicates tabs (STA-4658).
     if (activeWorktreeHostAuthority !== 'none') {
       return
     }
@@ -225,13 +233,11 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       ) {
         return
       }
-      // A reseed awaiting agent detection owns the surface. Left unmarked: that reseed bails if the
-      // user leaves during the wait, so a later return must seed here.
+      // An in-flight reseed owns the surface but remains unmarked so leaving mid-wait allows retry on return.
       if (outcome === 'empty' && isEmptyWorkspaceDefaultSurfacePending(activeWorktreeId)) {
         return
       }
-      // Why mark only once a decision applies: a cancelled or blocked check must stay retryable,
-      // and a rerun shares the gate's in-flight promise instead of repeating its work.
+      // Only applied decisions consume the gate; canceled/blocked checks stay retryable and reruns share the in-flight promise.
       startupActivationGateWorktreeIdsRef.current.add(activeWorktreeId)
       if (outcome !== 'empty') {
         return
@@ -242,14 +248,12 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       }
       // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
       const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-      // Why (main): only a workspace emptied by a recorded close stays empty; an empty row with no
-      // record is unknown and seeds. Read at decision time: the row can change while the check runs.
+      // Only recorded closes preserve emptiness; reread at decision time because rows can change while waiting.
       const activeWorktreeHasTerminalState = isTerminalWorkspaceEmptiedOnPurpose(
         useAppStore.getState(),
         activeWorktreeId
       )
       if (shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
-        // Switch point: main decides whether the workspace gets its first tab.
         if (
           ORCA_LAYOUT_OWNER_IS_MAIN &&
           createInitialTerminalThroughLayoutOwner(useAppStore.getState, activeWorktreeId, () =>
@@ -258,7 +262,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
         ) {
           return
         }
-        // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
+        // Initial default tabs must not count as user activity and reorder the sidebar; explicit New Tab still does.
         createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
       }
     })
@@ -268,6 +272,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
   }, [
     activeWorktreeId,
     activeWorktreeHostAuthority,
+    activeWorktreeCreationPending,
     createTab,
     reconcileWorktreeTabModel,
     terminalStartupRestorationReady,
@@ -287,8 +292,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     if (startupResumeWorktreeIdsRef.current.has(activeWorktreeId)) {
       return
     }
-    // Why not consume the one-shot here: the sweep declines outright while the host is unanswered,
-    // so marking it done would strand every sleeping agent on the workspace for the session.
+    // Do not consume recovery while the host is unanswered or sleeping agents remain stranded for this session.
     if (activeWorktreeHostAuthority === 'unverifiable') {
       return
     }

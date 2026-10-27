@@ -6,7 +6,6 @@ import {
 } from '../sidebar/worktree-agent-orchestration-batch'
 import { selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/worktree-agent-row-selectors'
 
-/** Select the singleton or batched orchestration view for active workspaces. */
 export function selectDashboardOrchestration(
   state: DashboardSnapshotState,
   activeWorkspaces: readonly Pick<ActiveDashboardWorkspace, 'worktree'>[]

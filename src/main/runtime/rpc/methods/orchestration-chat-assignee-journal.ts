@@ -11,10 +11,7 @@ export type StructuredJournalSource = Pick<
   'sessionId' | 'processIncarnation' | 'paneKey'
 >
 
-/**
- * A chat assignee's journal, read as a worker's is: its whole `/clear` lineage from its root, which
- * is also what the cursor is bound to. Null when the assignee is not a chat.
- */
+/** Read the chat's entire /clear lineage from its root and bind the cursor there; null for non-chat assignees. */
 export function chatAssigneeJournal(
   db: OrchestrationDb,
   dispatchId: string
