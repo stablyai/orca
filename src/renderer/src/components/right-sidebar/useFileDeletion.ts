@@ -95,7 +95,8 @@ export function useFileDeletion({
               'auto.components.right.sidebar.useFileDeletion.92276aceb7',
               'Delete'
             ),
-            confirmVariant: 'destructive'
+            confirmVariant: 'destructive',
+            initialFocus: 'confirm'
           })
           if (!confirmed) {
             return false
@@ -297,7 +298,8 @@ export function useFileDeletion({
                 'auto.components.right.sidebar.useFileDeletion.92276aceb7',
                 'Delete'
               ),
-              confirmVariant: 'destructive'
+              confirmVariant: 'destructive',
+              initialFocus: 'confirm'
             }),
           deleteNode: (node) => runDelete(node, { skipConfirmation: true })
         })
