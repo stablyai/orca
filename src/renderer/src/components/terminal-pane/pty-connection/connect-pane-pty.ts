@@ -140,7 +140,7 @@ export function connectPanePty(
   // Hold replacement PTY retirement until main takes it in a spawn request or disposal kills it.
   session.pendingReplacedPtyId = session.deps.replacesPtyId ?? null
   // Why: the first spawn claims the PTY, but a deferred retry is still the same user restart.
-  session.restartReplacesPty = session.pendingReplacedPtyId !== null
+  session.userRestart = session.pendingReplacedPtyId !== null
   session.deps.replacesPtyId = undefined
   session.claimPendingReplacedPtyId = (): string | null => {
     const ptyId: string | null = session.pendingReplacedPtyId

@@ -92,7 +92,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup),
       coldRestoreOverride ?? effectiveStartup
     )
-    const replacesPty = session.pendingReplacedPtyId !== null
     const spawnedRaw = session.transport.connect({
       url: '',
       cols: session.cols,
@@ -113,8 +112,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
       // Why: a restart swaps one live session for one; the live cap must not defer it after main stopped the old PTY.
       resumeSpawnIntent:
-        visibleAtSpawn || session.restartReplacesPty ? 'user-resume' : 'automatic-restore',
-      ...(replacesPty ? { claimReplacedPtyId: session.claimPendingReplacedPtyId } : {}),
+        visibleAtSpawn || session.userRestart ? 'user-resume' : 'automatic-restore',
+      // A deferred retry's claim returns null: main already stopped the replaced PTY.
+      ...(session.userRestart ? { claimReplacedPtyId: session.claimPendingReplacedPtyId } : {}),
       shouldContinue: () =>
         !session.disposed &&
         (findTerminalTabForPane(useAppStore.getState(), session.deps.worktreeId, session.deps.tabId)
@@ -152,6 +152,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           session.enterSpawnDeferredSleep(deferral, startupOverride, options, visibleAtSpawn)
           return null
         }
+        // Why: only a deferred restart's retry is still the user's restart; a later wake is automatic again.
+        session.userRestart = false
         const connectResult =
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
             ? spawnedPtyId
