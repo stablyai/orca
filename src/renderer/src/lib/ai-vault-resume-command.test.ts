@@ -1,5 +1,6 @@
+import { getDefaultSettings } from '../../../shared/constants'
+import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
 import {
   getAiVaultAgentProviderSession,
   buildAiVaultResumeCopyCommandForWorktree,
@@ -23,32 +24,44 @@ afterEach(() => {
 
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
-type AiVaultResumeCommandState = Pick<
-  AppState,
-  | 'activeRepoId'
-  | 'activeWorktreeId'
-  | 'folderWorkspaces'
-  | 'projectGroups'
-  | 'projects'
-  | 'repos'
-  | 'settings'
-  | 'worktreesByRepo'
->
+type AiVaultResumeCommandState = Parameters<
+  typeof buildAiVaultResumeCopyCommandForWorktree
+>[0]['state']
 
 function makeState(args: {
   worktreePath: string
   localWindowsRuntimePreference?: RuntimePreference
   terminalWindowsShell?: string
-}): AiVaultResumeCommandState {
+}): Extract<AiVaultResumeCommandState, { endpointProjects: unknown }> & {
+  settings: NonNullable<AiVaultResumeCommandState['settings']>
+} {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
     folderWorkspaces: [],
     projectGroups: [],
-    repos: [{ id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
-    projects: [
+    repos: [{ ...TEST_REPO, id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
+    endpointProjectHostSetups: [
       {
         id: 'repo-1',
+        projectId: 'repo-1',
+        repoId: 'repo-1',
+        hostId: 'local',
+        path: 'C:/Users/alice/repo',
+        displayName: 'repo',
+        setupMethod: 'legacy-repo',
+        setupState: 'ready',
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ],
+    endpointProjects: [
+      {
+        id: 'repo-1',
+        displayName: 'repo',
+        badgeColor: '',
+        createdAt: 0,
+        updatedAt: 0,
         sourceRepoIds: ['repo-1'],
         ...(args.localWindowsRuntimePreference
           ? { localWindowsRuntimePreference: args.localWindowsRuntimePreference }
@@ -56,21 +69,23 @@ function makeState(args: {
       }
     ],
     settings: {
+      ...getDefaultSettings('/tmp'),
       localWindowsRuntimeDefault: { kind: 'windows-host' },
       ...(args.terminalWindowsShell ? { terminalWindowsShell: args.terminalWindowsShell } : {}),
       agentDefaultArgs: { claude: '', codex: '' },
+      agentPermissionDefault: 'own',
       agentDefaultEnv: { claude: {}, codex: {} }
     },
     worktreesByRepo: {
       'repo-1': [
-        {
+        makeWorktree({
           id: 'repo-1::worktree-1',
           repoId: 'repo-1',
           path: args.worktreePath
-        }
+        })
       ]
     }
-  } as unknown as AiVaultResumeCommandState
+  }
 }
 
 function buildQueuedAiVaultResumeCommand(
@@ -205,6 +220,7 @@ describe('ai vault resume command runtime', () => {
 
   it('follows the live Windows shell for Cursor resume', () => {
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+    state.settings.agentPermissionOverrides = { cursor: 'full-access' }
 
     expect(
       buildQueuedAiVaultResumeCommand({

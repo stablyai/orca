@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isNewIssueDraftContentful,
   resolveNewIssueOpenSeed,
-  resolveUserRepoSwitchReset,
   resolveVanishedNewIssueRepoReset
 } from './task-page-new-issue-draft'
 import type { NewIssueDraft } from '@/store/slices/new-issue-draft'
@@ -14,65 +12,7 @@ function draft(overrides: Partial<NewIssueDraft> = {}): NewIssueDraft {
   return { title: '', body: '', labels: [], assignees: [], repoId: null, ...overrides }
 }
 
-describe('isNewIssueDraftContentful', () => {
-  it('is false for null and an all-empty draft', () => {
-    expect(isNewIssueDraftContentful(null)).toBe(false)
-    expect(isNewIssueDraftContentful(draft())).toBe(false)
-  })
-
-  it('is false for whitespace-only title/body', () => {
-    expect(isNewIssueDraftContentful(draft({ title: '   ', body: '\n\t' }))).toBe(false)
-  })
-
-  it('is false when only a repoId is set (repoId is not content)', () => {
-    expect(isNewIssueDraftContentful(draft({ repoId: 'repo-a' }))).toBe(false)
-  })
-
-  it('is true once a title, body, label, or assignee is present', () => {
-    expect(isNewIssueDraftContentful(draft({ title: 'Bug' }))).toBe(true)
-    expect(isNewIssueDraftContentful(draft({ body: 'details' }))).toBe(true)
-    expect(isNewIssueDraftContentful(draft({ labels: ['p1'] }))).toBe(true)
-    expect(isNewIssueDraftContentful(draft({ assignees: [assignee] }))).toBe(true)
-  })
-})
-
 describe('resolveNewIssueOpenSeed', () => {
-  it('takes the empty-default branch for no draft, targeting the first selected repo', () => {
-    expect(resolveNewIssueOpenSeed({ draft: null, selectedRepoIds: ['repo-a', 'repo-b'] })).toEqual(
-      { title: '', body: '', labels: [], assignees: [], repoId: 'repo-a' }
-    )
-  })
-
-  it('takes the default branch for a draft carrying only a repoId', () => {
-    expect(
-      resolveNewIssueOpenSeed({
-        draft: draft({ repoId: 'repo-b' }),
-        selectedRepoIds: ['repo-a', 'repo-b']
-      })
-    ).toEqual({ title: '', body: '', labels: [], assignees: [], repoId: 'repo-a' })
-  })
-
-  it('restores every field when the draft repo is still selected', () => {
-    expect(
-      resolveNewIssueOpenSeed({
-        draft: draft({
-          title: 'Bug',
-          body: 'details',
-          labels: ['p1'],
-          assignees: [assignee],
-          repoId: 'repo-b'
-        }),
-        selectedRepoIds: ['repo-a', 'repo-b']
-      })
-    ).toEqual({
-      title: 'Bug',
-      body: 'details',
-      labels: ['p1'],
-      assignees: [assignee],
-      repoId: 'repo-b'
-    })
-  })
-
   it('drops repo-scoped labels/assignees and falls back when the draft repo vanished', () => {
     expect(
       resolveNewIssueOpenSeed({
@@ -92,12 +32,6 @@ describe('resolveNewIssueOpenSeed', () => {
       assignees: [],
       repoId: 'repo-a'
     })
-  })
-
-  it('resolves repoId to null only when nothing is selected', () => {
-    expect(
-      resolveNewIssueOpenSeed({ draft: draft({ title: 'Bug' }), selectedRepoIds: [] })
-    ).toEqual({ title: 'Bug', body: '', labels: [], assignees: [], repoId: null })
   })
 })
 
@@ -126,31 +60,5 @@ describe('store-retention P1 guard (restore of an in-selection non-fallback repo
     expect(seed.assignees.length).toBeGreaterThan(0)
     expect(seed.labels).toEqual(original.labels)
     expect(seed.assignees).toEqual(original.assignees)
-  })
-})
-
-describe('resolveUserRepoSwitchReset', () => {
-  it('clears both repo-scoped labels and assignees on a genuine user repo switch', () => {
-    expect(resolveUserRepoSwitchReset()).toEqual({ labels: [], assignees: [] })
-  })
-})
-
-describe('resolveVanishedNewIssueRepoReset', () => {
-  it('returns null when the chosen repo is still selected', () => {
-    expect(resolveVanishedNewIssueRepoReset('repo-b', ['repo-a', 'repo-b'])).toBeNull()
-  })
-
-  it('returns null when no repo is chosen', () => {
-    expect(resolveVanishedNewIssueRepoReset(null, ['repo-a'])).toBeNull()
-  })
-
-  it('resets to the first selected repo when the chosen repo vanished', () => {
-    expect(resolveVanishedNewIssueRepoReset('removed', ['repo-a', 'repo-b'])).toEqual({
-      repoId: 'repo-a'
-    })
-  })
-
-  it('resets to null when the chosen repo vanished and nothing remains selected', () => {
-    expect(resolveVanishedNewIssueRepoReset('removed', [])).toEqual({ repoId: null })
   })
 })

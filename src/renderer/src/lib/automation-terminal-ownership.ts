@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'

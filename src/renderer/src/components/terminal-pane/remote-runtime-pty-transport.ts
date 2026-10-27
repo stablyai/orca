@@ -64,7 +64,7 @@ import {
   getRemoteRuntimeTerminalHandle,
   runtimeTerminalErrorMessage
 } from '../../runtime/runtime-terminal-stream'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getRemoteRuntimeTerminalMultiplexer } from '../../runtime/remote-runtime-terminal-multiplexer'
 import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../runtime/remote-runtime-terminal-snapshot-state'
 import { restoredSnapshotPaintsPrintableContent } from './restored-snapshot-coverage'
@@ -335,6 +335,7 @@ export function createRemoteRuntimePtyTransport(
   }
 
   const recoveryInputHold = createRemoteRuntimeRecoveryInputHold({ holdBeforeFirstConnect: true })
+  let isFirstConnect = true
   let heldInputRelease: {
     stream: RemoteRuntimeMultiplexedTerminal
     waitingForValidation: boolean
@@ -3368,12 +3369,31 @@ export function createRemoteRuntimePtyTransport(
     if (!replay) {
       settleSignInConnectWait()
     }
-    const expected = recoveryInputHold.expect(restoredInputEndpoint(options.sessionId))
+    // Why: a brand-new pane shows no old screen, so its typing belongs to the terminal it creates.
+    const newTerminal =
+      !options.sessionId && isFirstConnect && opts.keepTypeAheadForNewTerminal?.('connect') === true
+    isFirstConnect = false
+    const expected = newTerminal
+      ? recoveryInputHold.expectNewTerminal()
+      : recoveryInputHold.expect(restoredInputEndpoint(options.sessionId))
     let result: PtyConnectResult | undefined
     try {
       result = await connectPane(options)
     } finally {
-      recoveryInputHold.settleExpectation(expected, handle !== null && !destroyed)
+      const boundHandle = handle !== null && !destroyed ? handle : null
+      // Why a genuine create only: an adopted or cold-restored terminal is not the one typed into.
+      const createdFresh = Boolean(result && !result.isReattach && !result.coldRestore)
+      recoveryInputHold.settleExpectation(
+        expected,
+        boundHandle !== null,
+        // Startup work, or replayed history, that appeared since mount must not run behind typing.
+        boundHandle &&
+          createdFresh &&
+          opts.releasePreconnectInput?.() !== false &&
+          opts.keepTypeAheadForNewTerminal?.('bind') === true
+          ? heldInputEndpoint(boundHandle)
+          : null
+      )
       if (handle && recoveryInputHold.isHolding()) {
         releaseHeldInput()
       }

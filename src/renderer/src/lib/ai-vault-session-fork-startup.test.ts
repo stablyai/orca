@@ -1,3 +1,5 @@
+import { getDefaultSettings } from '../../../shared/constants'
+import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { buildAiVaultForkStartupForWorktree } from './ai-vault-session-fork-startup'
@@ -12,29 +14,43 @@ type ForkState = Pick<
   | 'activeWorktreeId'
   | 'folderWorkspaces'
   | 'projectGroups'
-  | 'projects'
+  | 'endpointProjects'
+  | 'endpointProjectHostSetups'
   | 'repos'
   | 'settings'
   | 'worktreesByRepo'
 >
 
 function makeState(): ForkState {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fork builder reads only these slices; the rest of AppState is never reached.
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
     folderWorkspaces: [],
     projectGroups: [],
-    repos: [{ id: 'repo-1', path: '/Users/ada/repo' }],
-    projects: [{ id: 'repo-1', sourceRepoIds: ['repo-1'] }],
+    repos: [{ ...TEST_REPO, id: 'repo-1', path: '/Users/ada/repo' }],
+    endpointProjects: [
+      {
+        id: 'repo-1',
+        displayName: 'repo',
+        badgeColor: '',
+        sourceRepoIds: ['repo-1'],
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ],
+    endpointProjectHostSetups: [],
     settings: {
+      ...getDefaultSettings('/tmp'),
+      agentPermissionDefault: 'own',
       agentDefaultArgs: { claude: '', codex: '' },
       agentDefaultEnv: { claude: {}, codex: {} }
     },
     worktreesByRepo: {
-      'repo-1': [{ id: 'repo-1::worktree-1', repoId: 'repo-1', path: '/Users/ada/repo' }]
+      'repo-1': [
+        makeWorktree({ id: 'repo-1::worktree-1', repoId: 'repo-1', path: '/Users/ada/repo' })
+      ]
     }
-  } as unknown as ForkState
+  }
 }
 
 const SESSION_ID = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'

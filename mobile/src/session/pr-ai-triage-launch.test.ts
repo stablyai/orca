@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
+import {
+  getDefaultSourceControlAiSettings,
+  resolveSourceControlActionRecipe
+} from '../../../src/shared/source-control-ai'
+import { buildAgentStartupPlan } from '../../../src/shared/tui-agent-startup'
+import { resolveAgentStartupPlanInputs } from '../../../src/shared/agent-startup-plan-inputs'
+import { toAgentLaunchPreferences } from '../../../src/shared/agent-launch-preferences'
+import { AgentLaunchReplay } from '../../../src/shared/rpc-contract/agent-launch-params'
 import { AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE } from './mobile-existing-agent-launch'
 import {
   AGENT_PROMPT_NOT_SENT_MESSAGE,
@@ -39,10 +47,16 @@ function ok(result: unknown): RpcResponse {
   return { id: 'x', ok: true, result, _meta: { runtimeId: 'r' } }
 }
 
-function hostClient(replies: { settings?: unknown; detected?: unknown[]; launch?: RpcResponse }) {
+// Answers by method so the order of the agent loader's reads doesn't matter.
+function hostClient(replies: {
+  settings?: unknown
+  repo?: unknown
+  detected?: unknown[]
+  launch?: RpcResponse
+}) {
   const sendRequest = vi.fn(async (method: string, _params?: unknown) => {
     if (method === 'repo.list') {
-      return ok({ repos: [{ id: 'repo-1' }] })
+      return ok({ repos: [replies.repo ?? { id: 'repo-1' }] })
     }
     if (method === 'settings.get') {
       return ok({ settings: replies.settings ?? {} })
@@ -164,7 +178,7 @@ describe('launchAgentWithPrompt', () => {
     })
   })
 
-  it("never sends the action's saved agent arguments; the agent's defaults apply", async () => {
+  it("forwards the action's saved terminal arguments", async () => {
     const { client, sendRequest } = hostClient({
       settings: {
         defaultTuiAgent: 'claude',
@@ -174,7 +188,66 @@ describe('launchAgentWithPrompt', () => {
     })
     await run(client)
     expect(launchParams(sendRequest)).toMatchObject({ agent: 'claude' })
-    expect(launchParams(sendRequest)).not.toHaveProperty('agentArgs')
+    expect(launchParams(sendRequest)).toHaveProperty('agentArgs', '--model opus')
+  })
+
+  it('keeps inherited phone options without raw conflicts when the workspace shell is unknown', async () => {
+    const settings = {
+      defaultTuiAgent: 'codex' as const,
+      sourceControlAi: {
+        ...getDefaultSourceControlAiSettings(),
+        actions: {
+          fixChecks: {
+            agentId: 'codex' as const,
+            surface: 'terminal' as const,
+            launchPreferences: { agentId: 'codex' as const, model: 'gpt-5.4' }
+          }
+        }
+      }
+    }
+    const repo = {
+      id: 'repo-1',
+      sourceControlAi: {
+        actionOverrides: { fixChecks: { agentArgs: '--model gpt-5.3-codex' } }
+      }
+    }
+    expect(
+      resolveSourceControlActionRecipe({ settings, repo, actionId: 'fixChecks' })
+    ).toMatchObject({ launchPreferencesYieldToAgentArgs: true })
+    const { client, sendRequest } = hostClient({
+      settings,
+      repo,
+      launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    })
+    const capabilities = [...LAUNCH_CAPABILITIES, 'agent.launch.chat-options.v1']
+    await expect(run(client, [...capabilities, 'agent.launch.surface.v1'])).resolves.toEqual({
+      kind: 'sent'
+    })
+    const params = AgentLaunchReplay.parse(launchParams(sendRequest))
+    expect(params).toMatchObject({ surface: 'terminal', chatOptions: { model: 'gpt-5.4' } })
+    expect(params).not.toHaveProperty('agentArgs')
+    const preferences = toAgentLaunchPreferences(params.chatOptions, params.agent)
+    const startup = buildAgentStartupPlan({
+      ...resolveAgentStartupPlanInputs({
+        agent: params.agent,
+        settings: {},
+        platform: 'linux',
+        isRemote: false,
+        shell: 'posix',
+        agentArgs: params.agentArgs,
+        sessionOptions: preferences?.model ? { model: preferences.model } : undefined
+      }),
+      prompt: params.prompt?.text ?? ''
+    })
+    expect(startup?.launchCommand).toContain('gpt-5.4')
+    expect(startup?.launchCommand).not.toContain('gpt-5.3-codex')
+
+    sendRequest.mockClear()
+    await expect(run(client, capabilities)).resolves.toEqual({ kind: 'sent' })
+    const olderHostParams = AgentLaunchReplay.parse(launchParams(sendRequest))
+    expect(olderHostParams).not.toHaveProperty('surface')
+    expect(olderHostParams).not.toHaveProperty('agentArgs')
+    expect(olderHostParams.chatOptions).toEqual(params.chatOptions)
   })
 
   it('refuses rather than swaps when the saved agent is not on this host', async () => {
@@ -310,3 +383,51 @@ describe('agentStartedMessage', () => {
     expect(agentStartedMessage('   ')).toBe('Agent started')
   })
 })
+
+it.each([undefined, '', '--add-dir /extra'])(
+  'forwards saved argument presence (%s) and capability-gated surface without changing warning success',
+  async (agentArgs) => {
+    for (const surface of [undefined, 'chat', 'terminal'] as const) {
+      for (const capable of [false, true]) {
+        const { client, sendRequest } = hostClient({
+          settings: {
+            defaultTuiAgent: 'codex',
+            sourceControlAi: {
+              actions: {
+                fixChecks: {
+                  agentId: 'codex',
+                  surface,
+                  ...(agentArgs !== undefined ? { agentArgs } : {})
+                }
+              }
+            }
+          },
+          launch: launchedWith(
+            { delivery: 'submit', outcome: 'handed-to-terminal' },
+            'The host ignored terminal-only arguments.'
+          )
+        })
+        const result = await run(client, [
+          ...LAUNCH_CAPABILITIES,
+          ...(capable ? ['agent.launch.surface.v1'] : [])
+        ])
+        expect(result).toEqual({
+          kind: 'sent',
+          warning: 'The host ignored terminal-only arguments.'
+        })
+        const params = launchParams(sendRequest)
+        if (agentArgs === undefined) {
+          expect(params).not.toHaveProperty('agentArgs')
+        } else {
+          expect(params).toHaveProperty('agentArgs', agentArgs)
+        }
+        if (surface === 'terminal' && capable) {
+          expect(params).toHaveProperty('surface', 'terminal')
+        } else {
+          expect(params).not.toHaveProperty('surface')
+        }
+        expect(promptedLaunchNotice(result).succeeded).toBe(true)
+      }
+    }
+  }
+)

@@ -1,19 +1,26 @@
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
 import { repoBaseRefListRead, repoDefaultBaseRefRead } from './mobile-repo-base-ref-operations'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { worktreeSummaryRead } from './mobile-worktree-metadata-operations'
+import {
+  resolveSourceControlBaseRef,
+  resolveSourceControlCompareBaseRef
+} from '../../../src/shared/source-control-base-ref-resolution'
 
-function getRepoIdFromMobileWorktreeId(id: string): string {
-  const separatorIdx = id.indexOf('::')
-  return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
+// The branch compare also honours desktop's compare-against-upstream setting.
+export type MobileBranchCompareTarget = {
+  compareAgainstUpstream: boolean
+  upstreamName?: string | null
 }
 
 export async function resolveMobileBranchCompareBaseRef(
   client: RpcOperationSender,
-  worktreeId: string
+  worktreeId: string,
+  compare?: MobileBranchCompareTarget
 ): Promise<string | null> {
-  const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
   if (!repoId) {
     return null
   }
@@ -23,20 +30,28 @@ export async function resolveMobileBranchCompareBaseRef(
     repoBaseRefListRead.request(client).catch(() => null)
   ])
   const worktreeSummary = worktreeReply && worktreeSummaryRead.interpret(worktreeReply)
-  if (worktreeSummary?.accepted) {
-    const worktreeBaseRef = worktreeSummary.value?.baseRef?.trim() || null
-    if (worktreeBaseRef) {
-      return worktreeBaseRef
-    }
-  }
-
+  const worktreeBaseRef = worktreeSummary?.accepted
+    ? (worktreeSummary.value?.baseRef ?? null)
+    : null
   const repos = repoReply && repoBaseRefListRead.interpret(repoReply)
-  if (repos?.accepted) {
-    const repo = repos.value.find((candidate) => candidate.id === repoId)
-    const repoBaseRef = repo?.worktreeBaseRef?.trim() || null
-    if (repoBaseRef) {
-      return repoBaseRef
-    }
+  const repoBaseRef = repos?.accepted
+    ? (repos.value.find((candidate) => candidate.id === repoId)?.worktreeBaseRef ?? null)
+    : null
+
+  // Desktop's resolution; the default is fetched only when nothing is pinned.
+  const upstreamCompareBaseRef = compare
+    ? resolveSourceControlCompareBaseRef({
+        enabled: compare.compareAgainstUpstream,
+        worktreeBaseRef,
+        repoBaseRef,
+        upstreamName: compare.upstreamName,
+        fallbackBaseRef: null
+      })
+    : null
+  const pinnedBaseRef =
+    upstreamCompareBaseRef ?? resolveSourceControlBaseRef({ worktreeBaseRef, repoBaseRef })
+  if (pinnedBaseRef) {
+    return pinnedBaseRef
   }
 
   const defaultReply = await repoDefaultBaseRefRead.request(client, { repo: `id:${repoId}` })

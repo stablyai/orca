@@ -3,8 +3,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
+import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
@@ -37,7 +37,7 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     permission: MobileChatPermission | null
     question: MobileChatQuestion | null
     respondPermission: (optionId: string) => Promise<boolean>
-    respondQuestion: (answer: string) => Promise<boolean>
+    respondQuestion: (answer: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
     queued: MobileStructuredQueuedMessageControls
     commandRefusalCauses: MobileNativeChatCommandRefusalCauses

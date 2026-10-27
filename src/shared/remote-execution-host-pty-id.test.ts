@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { toRemoteRuntimePtyId } from './remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from './remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from './ssh-pty-id'
 
 import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty-id'

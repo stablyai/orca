@@ -1,3 +1,18 @@
+import '../rpc/unused-default-rpc-methods.test-fixture'
+import { RpcDispatcher } from '../rpc/dispatcher'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { AI_VAULT_METHODS } from '../rpc/methods/ai-vault'
+import {
+  openSessionSearchHarness,
+  addSyntheticSession,
+  type SessionSearchHarness
+} from '../../ai-vault-search/session-search-engine-test-fixture'
+import { createSessionSearchService } from '../../ai-vault-search/session-search-service'
+import { setSessionSearchService } from '../../ai-vault-search/session-search-service-registry'
+import {
+  installSessionSearchScopeCatalogSource,
+  resetSessionSearchScopeCatalogForTests
+} from '../../ai-vault-search/session-search-scope-catalog'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,8 +56,12 @@ describe('desktop relay E2EE integration', () => {
   const servers: WebSocketServer[] = []
   const transports: CloudRelayTransport[] = []
   const userDataPaths: string[] = []
+  let searchIndex: SessionSearchHarness | undefined
 
   afterEach(async () => {
+    setSessionSearchService(null)
+    resetSessionSearchScopeCatalogForTests()
+    await searchIndex?.close()
     await Promise.all(transports.splice(0).map((transport) => transport.stop()))
     await Promise.all(
       servers.splice(0).map(
@@ -128,6 +147,40 @@ describe('desktop relay E2EE integration', () => {
     const receivedText = deferred<string>()
     const receivedBinary = deferred<Uint8Array>()
     const phoneBinary = deferred<Uint8Array>()
+    searchIndex = await openSessionSearchHarness('sta10541-relay-native')
+    addSyntheticSession(searchIndex.db, { id: 1, cwd: '/repo/app' })
+    addSyntheticSession(searchIndex.db, { id: 2, cwd: '/other' })
+    setSessionSearchService(
+      createSessionSearchService({
+        engine: searchIndex.engine,
+        indexer: {
+          status: () => {
+            throw new Error('not called')
+          },
+          reconcile: async () => undefined
+        }
+      })
+    )
+    installSessionSearchScopeCatalogSource(() => ({
+      repos: [{ id: 'app', path: '/repo/app', displayName: 'app', badgeColor: '', addedAt: 1 }],
+      projects: [],
+      projectHostSetups: [],
+      worktreeMeta: {},
+      settings: { workspaceDir: '', nestWorkspaces: false }
+    }))
+    const dispatcher = new RpcDispatcher({
+      runtime: new OrcaRuntimeService(),
+      methods: AI_VAULT_METHODS
+    })
+    const request = {
+      id: 'rpc-1',
+      authToken: 'test',
+      method: 'aiVault.searchSessions',
+      params: {
+        query: 'needle',
+        within: { kind: 'project', projectKey: 'repo:app', canonicalProjectKey: 'repo:app' }
+      }
+    }
     const wiring = new MobileSocketWiring({
       deviceRegistry: registry,
       e2eeKeypair: {
@@ -144,7 +197,10 @@ describe('desktop relay E2EE integration', () => {
           credentialKind: 'invite'
         })
         receivedText.resolve(plaintext)
-        reply(JSON.stringify({ id: 'rpc-1', ok: true, result: { path: 'relay' } }))
+        expect(JSON.parse(plaintext)).toEqual(request)
+        void dispatcher
+          .dispatch(request, { clientKind: 'mobile' })
+          .then((result) => reply(JSON.stringify(result)))
         sendBinary(new Uint8Array([4, 5, 6]))
       },
       onBinary: (_socket, bytes) => receivedBinary.resolve(new Uint8Array(bytes)),
@@ -226,16 +282,16 @@ describe('desktop relay E2EE integration', () => {
     })
     phone.send(JSON.stringify(phoneSession.hello))
     await authenticated.promise
-    phone.send(phoneSession.sealText(JSON.stringify({ id: 'rpc-1', method: 'status.get' })))
+    phone.send(phoneSession.sealText(JSON.stringify(request)))
     phone.send(phoneSession.sealBinary(new Uint8Array([1, 2, 3])))
 
-    await expect(receivedText.promise).resolves.toBe(
-      JSON.stringify({ id: 'rpc-1', method: 'status.get' })
-    )
+    await expect(receivedText.promise).resolves.toBe(JSON.stringify(request))
     await expect(receivedBinary.promise).resolves.toEqual(new Uint8Array([1, 2, 3]))
-    await expect(phoneText.promise).resolves.toBe(
-      JSON.stringify({ id: 'rpc-1', ok: true, result: { path: 'relay' } })
-    )
+    expect(JSON.parse(await phoneText.promise)).toMatchObject({
+      id: 'rpc-1',
+      ok: true,
+      result: { kind: 'results', hits: [{ sessionId: '1' }] }
+    })
     await expect(phoneBinary.promise).resolves.toEqual(new Uint8Array([4, 5, 6]))
 
     phone.terminate()

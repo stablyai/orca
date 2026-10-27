@@ -80,30 +80,60 @@ function projectRows(messages: readonly NativeChatMessage[]): NativeChatMessage[
   return stripNoiseMessages(foldToolMessages(foldSubagentItems(messages)))
 }
 
-function sortedCopy(
-  messages: readonly NativeChatMessage[],
-  compare: NativeChatMessageCompare
-): NativeChatMessage[] {
-  // Not `toSorted`: mobile's Hermes lacks it, and src/shared must stay loadable there.
-  return Array.from(messages).sort(compare)
+/** Preserve canonical sequence, inserting ordinary supplemental rows by their actual clocks. */
+export function orderNativeChatTranscriptEntries<T>(
+  entries: readonly T[],
+  messageOf: (entry: T) => NativeChatMessage,
+  compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages
+): T[] {
+  if (entries.some((entry) => messageOf(entry).journalPosition)) {
+    return Array.from(entries).sort((a, b) => compare(messageOf(a), messageOf(b)))
+  }
+  const canonical: T[] = []
+  const supplemental: T[] = []
+  for (const entry of entries) {
+    const message = messageOf(entry)
+    const target =
+      message.source !== 'transcript' && message.transcriptOrder === undefined
+        ? supplemental
+        : canonical
+    target.push(entry)
+  }
+  canonical.sort((a, b) => compare(messageOf(a), messageOf(b)))
+  supplemental.sort((a, b) => compareNativeChatMessagesByTime(messageOf(a), messageOf(b)))
+  const ordered: T[] = []
+  let next = 0
+  for (const entry of canonical) {
+    while (
+      next < supplemental.length &&
+      compareNativeChatMessagesByTime(messageOf(supplemental[next]!), messageOf(entry)) < 0
+    ) {
+      ordered.push(supplemental[next++]!)
+    }
+    ordered.push(entry)
+  }
+  return ordered.concat(supplemental.slice(next))
 }
 
 /** The conversation alone. `compare` lets the renderer order its own tail rows
  *  (streaming, optimistic sends), which never exist on the host. */
 export function projectNativeChatTranscriptMessages(
   messages: readonly NativeChatMessage[],
-  compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages
+  compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages,
+  order?: (messages: readonly NativeChatMessage[]) => NativeChatMessage[]
 ): NativeChatMessage[] {
-  return projectNativeChatTranscript(messages, compare).conversation
+  return projectNativeChatTranscript(messages, compare, undefined, order).conversation
 }
 
 /** Use conversation turn membership for each subagent row, as though it were a parent row at that position. */
 export function projectNativeChatTranscript(
   messages: readonly NativeChatMessage[],
   compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages,
-  journal?: NativeChatTurnJournal | null
+  journal?: NativeChatTurnJournal | null,
+  order = (rows: readonly NativeChatMessage[]) =>
+    orderNativeChatTranscriptEntries(rows, (row) => row, compare)
 ): NativeChatTranscriptProjection {
-  const sorted = sortedCopy(messages, compare)
+  const sorted = order(messages)
   const own: NativeChatMessage[] = []
   const byAgent = new Map<string, NativeChatMessage[]>()
   for (const message of sorted) {

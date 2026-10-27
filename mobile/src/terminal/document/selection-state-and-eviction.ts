@@ -3,6 +3,7 @@ import { repositionOverlay } from './selection-overlay'
 import { cancelSelect } from './selection-mode'
 import { notify } from './host-notify'
 import type { TerminalDocumentScope } from './document-scope'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal-scrollback-policy'
 
 // Tap slop must exceed long-press slop so small finger jitter can cancel selection without dropping link/path taps.
 
@@ -18,7 +19,7 @@ export function isBufferFull(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return false
   }
-  return scope.linesEverWritten >= 5000 + (scope.term.rows || 0)
+  return scope.linesEverWritten >= DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT + (scope.term.rows || 0)
 }
 
 export function checkEviction(scope: TerminalDocumentScope) {

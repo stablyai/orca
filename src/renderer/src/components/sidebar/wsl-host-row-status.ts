@@ -25,6 +25,12 @@ export function getWslHostRowHealth(
 }
 
 export function getWslHostStatusLabel(status: WslHostStatus | undefined): string | null {
+  if (status?.removalPending) {
+    return translate(
+      'auto.components.sidebar.wslHostRowStatus.removalPending',
+      'Removal didn’t finish'
+    )
+  }
   switch (status?.state) {
     case undefined:
     case 'ready':

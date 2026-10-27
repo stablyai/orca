@@ -143,7 +143,8 @@
       "streamedDetail": "La page s'exécute sur l'hôte distant et est diffusée sur cet appareil."
     },
     "remote": {
-      "findUnavailable": "Rechercher dans la page n'est pas disponible pendant la diffusion de cette page à partir de l'hôte distant."
+      "findUnavailable": "Rechercher dans la page n'est pas disponible pendant la diffusion de cette page à partir de l'hôte distant.",
+      "selectionTooLargeToCopy": "La sélection est trop volumineuse pour être copiée depuis une page diffusée par l’hôte distant."
     },
     "userAgentMigration": {
       "degradedDescription": "Un ancien choix d'identité de navigateur n'a pas pu être inspecté. Choisissez Nettoyé ou Natif dans les paramètres du navigateur ; les modifications prennent effet après un redémarrage.",
@@ -441,6 +442,23 @@
     "followSymlinkedDirectoriesDescription": "Recherchez les dossiers liés dans Quick Open et développez les dossiers liés locaux dans l'Explorateur de fichiers.",
     "accounts": {
       "claudeRemoveFolder": "Orca supprime le dossier Claude de ce compte et sa connexion de cet ordinateur. L'historique de chat partagé avec Système par défaut est conservé. S'il est sélectionné, le prochain Claude que vous démarrez utilise Système par défaut."
+    },
+    "sourceControl": {
+      "actionModel": {
+        "on": "Activé",
+        "off": "Désactivé",
+        "invalidArgs": "Les arguments CLI de {{value0}} sont invalides. Corrigez-les dans Paramètres → Source Control AI.",
+        "model": "Modèle",
+        "agentDefault": "Par défaut de l'agent",
+        "effortDefault": "Par défaut",
+        "savedModel": "Modèle des Réglages : {{value0}}",
+        "permissionsDefaultHint": "Les terminaux utilisent les Permissions des agents, sauf si cette action définit ses propres arguments CLI.",
+        "chatsOnly": "S'applique uniquement aux chats",
+        "terminalsOnly": "S'applique uniquement aux terminaux",
+        "extraArgs": "Arguments CLI supplémentaires",
+        "launchOptions": "Modèle et autorisations",
+        "savedLaunchOptions": "Options enregistrées : {{value0}}. Les anciens serveurs utilisent leurs propres réglages d’autorisations."
+      }
     }
   },
   "menu": {
@@ -3618,7 +3636,10 @@
               "failed": {
                 "toast": {
                   "62a0af2cb4": "La copie du presse-papiers du terminal n'a pas pu être confirmée",
-                  "fdd3e7e977": "L'application de terminal a demandé une copie, mais Orca n'a pas pu confirmer qu'elle a bien atteint le presse-papiers système."
+                  "fdd3e7e977": "L'application de terminal a demandé une copie, mais Orca n'a pas pu confirmer qu'elle a bien atteint le presse-papiers système.",
+                  "de286dcfe1": "La copie du terminal nécessite un clic",
+                  "84c938ffa2": "Le navigateur a bloqué une copie depuis l'application du terminal. Cliquez sur Copier pour placer le texte dans votre presse-papiers.",
+                  "a73165c6c5": "Copier"
                 }
               }
             }
@@ -8306,6 +8327,14 @@
           "chatErrorEscalationNeedsChat": "Activez l'interface de chat dans les paramètres expérimentaux pour l'utiliser.",
           "chatErrorEscalationKeywordError": "erreur",
           "chatErrorEscalationKeywordChat": "chat",
+          "heartbeatTitle": "Signaux de vie des travailleurs",
+          "heartbeatDescription": "Les travailleurs assignés se signalent toutes les quelques minutes pour que le coordinateur distingue un agent qui travaille d'un agent figé. Les désactiver réduit les messages envoyés au coordinateur, mais il perd ce signal de suivi. S'applique aux travailleurs assignés après le changement.",
+          "heartbeatKeywordHeartbeat": "signal de vie",
+          "heartbeatKeywordStalled": "bloqué",
+          "heartbeatKeywordInterval": "intervalle",
+          "heartbeatIntervalTitle": "Intervalle des signaux de vie",
+          "heartbeatIntervalDescription": "Un intervalle plus court donne au coordinateur des nouvelles plus fréquentes, mais lui envoie plus de messages. Un intervalle plus long envoie moins de messages, mais laisse plus de temps entre deux signaux. S'applique aux travailleurs assignés après le changement.",
+          "heartbeatIntervalSuffix": "minutes",
           "7bc082f4de": "Copier la commande d'installation"
         },
         "OrchestrationSetupCard": {
@@ -8522,8 +8551,6 @@
           "c7ef4415de": "Nom d'affichage",
           "b0a0c14a1c": "Détails d'affichage propres au projet pour la barre latérale et les onglets.",
           "removeProjectAllHosts": "Retirer ce projet d'Orca sur tous les hôtes configurés.",
-          "removeProjectCheckout": "Retirer ce checkout d'Orca. Les autres checkouts de ce projet sont conservés.",
-          "removeProjectKeepCheckouts": "Retirer ce projet d'Orca. Les checkouts qui ont leurs propres paramètres sont conservés.",
           "0909e5d650": "Retirer le projet",
           "ee5a290616": "Ouvert en tant que dossier. Les fonctions Git sont indisponibles pour cet espace de travail.",
           "323debba71": "Type :",
@@ -13869,8 +13896,6 @@
             "ea4788705e": "Annuler",
             "7ec6abbf2a": "Réinitialiser",
             "f4f3c9ca4a": "Modèle de prompt",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "Arguments CLI",
             "b99c33cec5": "Paramètres",
             "15c5d85706": "Agent",
             "3e8f21954f": "error",
@@ -20368,6 +20393,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "Impossible d’enregistrer cette action. Réessayez dans les paramètres.",
     "unlinkedPr": {
       "status": "PR #{{number}} non lié"
     },
@@ -20530,6 +20556,12 @@
       "findInFolder": "Rechercher dans {{path}}",
       "folderLoadError": "Impossible de charger ce dossier :",
       "emptyFolder": "Aucun fichier dans ce dossier"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
+      "titleTrash": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
+      "description": "Cette action est irréversible.",
+      "confirm": "Supprimer définitivement"
     }
   },
   "sparsePreset": {

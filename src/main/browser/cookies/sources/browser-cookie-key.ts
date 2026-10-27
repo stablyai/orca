@@ -10,6 +10,7 @@ import {
   type DetectedBrowser
 } from './browser-cookie-detection-types'
 import type { EncryptionKeyResult } from './browser-cookie-sqlite'
+import type { LinuxCookieKeyFailure } from '../../../../shared/browser-workspace-types'
 
 const PBKDF2_ITERATIONS = 1003
 const PBKDF2_KEY_LENGTH = 16
@@ -18,7 +19,9 @@ const PBKDF2_SALT = 'saltysalt'
 function runKeychainCommand(program: string, args: readonly string[], timeoutMs: number): string {
   const result = runProcessSync({ program, args, timeoutMs })
   if (result.code !== 0 || result.timedOut) {
-    throw new Error(`${program} exited with code ${result.code ?? 'unknown'}`)
+    throw Object.assign(new Error(`${program} exited with code ${result.code ?? 'unknown'}`), {
+      stderr: result.stderr
+    })
   }
   return result.stdout.trim()
 }
@@ -69,27 +72,38 @@ export function getLinuxEncryptionKey(
   const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
 
   let keyringPassword = ''
-  try {
-    keyringPassword = runKeychainCommand(
-      'secret-tool',
-      ['lookup', 'service', keychainService, 'account', keychainAccount],
-      5_000
-    )
-  } catch {
-    // Newer Chromium installs may key the secret by application.
+  let keyringFailure: LinuxCookieKeyFailure = 'key-unavailable'
+  const app = keychainAccount.toLowerCase().replaceAll(' ', '')
+  for (const args of [
+    ['lookup', 'service', keychainService, 'account', keychainAccount],
+    ['lookup', 'application', app]
+  ]) {
     try {
-      const app = keychainAccount.toLowerCase().replaceAll(' ', '')
-      keyringPassword = runKeychainCommand('secret-tool', ['lookup', 'application', app], 5_000)
-    } catch {
-      diag('  Linux keyring unavailable — v11 cookies cannot be decrypted')
+      keyringPassword = runKeychainCommand('secret-tool', args, 5_000)
+      break
+    } catch (error) {
+      if (typeof error === 'object' && error !== null) {
+        if ('code' in error && error.code === 'ENOENT') {
+          keyringFailure = 'secret-tool-missing'
+        } else if (
+          keyringFailure !== 'secret-tool-missing' &&
+          'stderr' in error &&
+          typeof error.stderr === 'string' &&
+          /dismissed|cancel|denied|locked/i.test(error.stderr)
+        ) {
+          keyringFailure = 'keyring-locked'
+        }
+      }
     }
   }
 
   if (!keyringPassword) {
+    diag('  Linux cookie encryption key unavailable — v11 cookies cannot be decrypted')
     return {
       mode: 'aes-128-cbc',
       keysByVersion: { v10: v10Key },
-      keyringUnavailable: true
+      keyringUnavailable: true,
+      keyringFailure
     }
   }
 

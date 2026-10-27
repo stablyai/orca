@@ -376,8 +376,8 @@ describe('fetchReposForAllHosts', () => {
       .repos.map((repo) => repo.id)
       .sort()
     expect(ids).toEqual(['local-repo', 'remote-repo'])
-    expect(store.getState().projects).toContainEqual(localProject)
-    expect(store.getState().projectHostSetups).toContainEqual(localProjectHostSetup)
+    expect(store.getState().endpointProjects).toContainEqual(localProject)
+    expect(store.getState().endpointProjectHostSetups).toContainEqual(localProjectHostSetup)
   })
 
   it('preserves runtime-owned project metadata during a local-only repo refresh', async () => {
@@ -440,10 +440,12 @@ describe('fetchReposForAllHosts', () => {
     expect(
       store
         .getState()
-        .projects.map((project) => project.id)
+        .endpointProjects.map((project) => project.id)
         .sort()
     ).toEqual(['local-project', 'repo:remote-repo'])
-    expect(store.getState().projects.find((project) => project.id === runtimeProject.id)).toEqual(
+    expect(
+      store.getState().endpointProjects.find((project) => project.id === runtimeProject.id)
+    ).toEqual(
       expect.objectContaining({
         displayName: runtimeProject.displayName,
         badgeColor: runtimeProject.badgeColor
@@ -460,10 +462,10 @@ describe('fetchReposForAllHosts', () => {
     expect(
       store
         .getState()
-        .projects.map((project) => project.id)
+        .endpointProjects.map((project) => project.id)
         .sort()
     ).toEqual(['local-project', 'repo:remote-repo'])
-    expect(store.getState().projects).toContainEqual(localProject)
+    expect(store.getState().endpointProjects).toContainEqual(localProject)
   })
 
   it('preserves shared project metadata when the same project id is fetched from multiple hosts', async () => {
@@ -473,8 +475,8 @@ describe('fetchReposForAllHosts', () => {
 
     await store.getState().fetchReposForAllHosts()
 
-    expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
-    const setups = store.getState().projectHostSetups
+    expectSharedProjectMetadata(store.getState().endpointProjects, sharedProjectId)
+    const setups = store.getState().endpointProjectHostSetups
     expect(setups).toHaveLength(2)
     expect(setups).toEqual(
       expect.arrayContaining([
@@ -502,7 +504,7 @@ describe('fetchReposForAllHosts', () => {
     await store.getState().fetchReposForAllHosts()
 
     expect(
-      store.getState().projects.find((project) => project.id === sharedProjectId)
+      store.getState().endpointProjects.find((project) => project.id === sharedProjectId)
         ?.localWindowsRuntimePreference
     ).toEqual({ kind: 'windows-host' })
   })
@@ -515,7 +517,7 @@ describe('fetchReposForAllHosts', () => {
     await store.getState().fetchReposForAllHosts()
     await store.getState().fetchRuntimeEnvironmentRepos('env-1')
 
-    expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
+    expectSharedProjectMetadata(store.getState().endpointProjects, sharedProjectId)
   })
 
   it('keeps the local side of a shared project when a runtime refresh removes its repos', async () => {
@@ -561,10 +563,10 @@ describe('fetchReposForAllHosts', () => {
 
     const sharedProject = store
       .getState()
-      .projects.find((project) => project.id === sharedProjectId)
+      .endpointProjects.find((project) => project.id === sharedProjectId)
     expect(sharedProject?.sourceRepoIds).toEqual(['local-repo'])
     expect(sharedProject?.localWindowsRuntimePreference).toEqual({ kind: 'windows-host' })
-    expect(store.getState().projectHostSetups).toEqual([
+    expect(store.getState().endpointProjectHostSetups).toEqual([
       expect.objectContaining({
         projectId: sharedProjectId,
         hostId: 'local',
@@ -581,7 +583,7 @@ describe('fetchReposForAllHosts', () => {
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
     await store.getState().fetchReposForAllHosts()
-    expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
+    expectSharedProjectMetadata(store.getState().endpointProjects, sharedProjectId)
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         return {
@@ -617,11 +619,12 @@ describe('fetchReposForAllHosts', () => {
 
     await store.getState().fetchRuntimeEnvironmentRepos('env-1')
 
-    expect(store.getState().projects.map((project) => project.id)).toEqual([sharedProjectId])
+    const { endpointProjects, endpointProjectHostSetups } = store.getState()
+    expect(endpointProjects.map((project) => project.id)).toEqual([sharedProjectId])
     expect(
-      store.getState().projects.find((project) => project.id === sharedProjectId)?.sourceRepoIds
+      endpointProjects.find((project) => project.id === sharedProjectId)?.sourceRepoIds
     ).toEqual(['local-repo'])
-    expect(store.getState().projectHostSetups).toEqual([
+    expect(endpointProjectHostSetups).toEqual([
       expect.objectContaining({
         projectId: sharedProjectId,
         hostId: 'local',
@@ -671,16 +674,15 @@ describe('fetchReposForAllHosts', () => {
 
     await store.getState().fetchRuntimeEnvironmentRepos('env-1')
 
+    const { endpointProjects, endpointProjectHostSetups } = store.getState()
     expect(
-      store.getState().projects.find((project) => project.id === sharedProjectId)?.sourceRepoIds
+      endpointProjects.find((project) => project.id === sharedProjectId)?.sourceRepoIds
     ).toEqual(['local-repo'])
-    expect(
-      store
-        .getState()
-        .projects.map((project) => project.id)
-        .sort()
-    ).toEqual(['github:stablyai/orca', 'repo:remote-repo'])
-    expect(store.getState().projectHostSetups).toEqual(
+    expect(endpointProjects.map((project) => project.id).sort()).toEqual([
+      'github:stablyai/orca',
+      'repo:remote-repo'
+    ])
+    expect(endpointProjectHostSetups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           projectId: sharedProjectId,
@@ -738,7 +740,8 @@ describe('fetchReposForAllHosts', () => {
     await store.getState().fetchRuntimeEnvironmentRepos('env-1')
 
     expect(
-      store.getState().projects.find((project) => project.id === sharedProjectId)?.sourceRepoIds
+      store.getState().endpointProjects.find((project) => project.id === sharedProjectId)
+        ?.sourceRepoIds
     ).toEqual(['local-repo'])
   })
 

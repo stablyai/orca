@@ -17,7 +17,7 @@ import {
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
-import { maxValidPaletteActivityTimestamp } from './palette-match/palette-ranking'
+import { maxValidPaletteActivityTimestamp } from '../../../shared/palette-match/palette-ranking'
 
 type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
 

@@ -106,14 +106,10 @@ export const VERIFY_CHECKS = [
     inputs: ['README.md', 'docs/readme/']
   },
   {
-    name: 'process-host imports',
-    args: ['config/scripts/check-process-host-imports.mjs'],
+    name: 'import boundaries',
+    runtime: 'bun',
+    args: ['config/scripts/check-import-boundaries.mjs'],
     inputs: [...SOURCE_ROOTS, 'config/process-host-direct-import-baseline.txt']
-  },
-  {
-    name: 'compat boundary imports',
-    args: ['config/scripts/check-compat-boundary-imports.mjs'],
-    inputs: ['src/']
   },
   {
     name: 'dead design-system classes',

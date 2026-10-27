@@ -120,7 +120,7 @@ jobs:
           src/main/runtime/rpc/methods/computer.test.ts
           src/main/runtime/rpc/methods/computer-actions.test.ts
           src/cli/runtime/envelope-schema.test.ts
-          src/shared/remote-runtime-client.test.ts
+          src/shared/remote-runtime/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel

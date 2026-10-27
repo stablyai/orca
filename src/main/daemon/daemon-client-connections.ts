@@ -1,3 +1,4 @@
+import { daemonHelloResizeModel } from './daemon-history-replay-pty'
 import type { Socket } from 'node:net'
 import { StringDecoder } from 'node:string_decoder'
 import { isDaemonRequestFrame, isHelloFrame } from './daemon-client-frame-guards'
@@ -158,6 +159,7 @@ export class DaemonClientConnections {
         ok: true,
         // Negotiate on the last NDJSON line before the client switches to binary frames.
         ...(streamFraming === BINARY_STREAM_FRAMING ? { streamFraming } : {}),
+        ...daemonHelloResizeModel(),
         ...(identity.launchNonce && identity.startedAtMs
           ? {
               daemonIdentity: {

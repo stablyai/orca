@@ -106,7 +106,8 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
             providerExitObserved: true,
             ...(viewShown ? { viewShown } : {}),
-            ...(payload.cause ? { cause: payload.cause } : {})
+            ...(payload.cause ? { cause: payload.cause } : {}),
+            ...(payload.hostLost ? { hostLost: true } : {})
           })
         }
         // Control replies may overtake stream data; physical exit must still retire late output.

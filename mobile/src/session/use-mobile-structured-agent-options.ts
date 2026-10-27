@@ -25,7 +25,7 @@ import { legacyHostPermissionDescriptor } from '../../../src/shared/structured-a
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
-import { persistMobileStructuredOptionPicks } from './mobile-native-chat-session-option-persistence'
+import { persistMobileStructuredOptionPicks } from './native-chat/input/mobile-native-chat-session-option-persistence'
 import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import { encodeStructuredAgentSessionOptionValue } from '../../../src/shared/structured-agent-session-option-codec'

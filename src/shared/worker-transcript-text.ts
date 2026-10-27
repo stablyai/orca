@@ -1,6 +1,6 @@
 /** Share worker-read transcript and terminal-read text rendering so peers see identical tool-call output through either surface. */
 
-import { claimBackgroundTaskTwins } from './native-chat-background-task-row'
+import { claimBackgroundTaskTwins } from './native-chat/input/native-chat-background-task-row'
 import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText

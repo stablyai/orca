@@ -64,7 +64,8 @@ describe('Cmd-click on a project file that links out of the project', () => {
 
     expect(statMock).toHaveBeenCalledExactlyOnceWith({
       filePath: '/tmp/docs/plain.md',
-      connectionId: undefined
+      connectionId: undefined,
+      wakeWslDistro: true
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/docs/plain.md', relativePath: 'docs/plain.md' }),

@@ -301,6 +301,23 @@
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹。",
     "accounts": {
       "claudeRemoveFolder": "Orca 会从此计算机删除此账户的 Claude 文件夹及其登录信息。与系统默认共享的聊天记录会保留。如果此账户被选中，您下次启动的 Claude 将使用系统默认。"
+    },
+    "sourceControl": {
+      "actionModel": {
+        "on": "开启",
+        "off": "关闭",
+        "invalidArgs": "{{value0}} 的 CLI 参数无效。请在设置 → Source Control AI 中修正。",
+        "model": "模型",
+        "agentDefault": "智能体默认",
+        "effortDefault": "默认",
+        "savedModel": "设置中的模型：{{value0}}",
+        "permissionsDefaultHint": "除非此操作设置了自己的 CLI 参数，否则终端使用智能体权限。",
+        "chatsOnly": "仅适用于聊天",
+        "terminalsOnly": "仅适用于终端",
+        "extraArgs": "额外 CLI 参数",
+        "launchOptions": "模型和权限",
+        "savedLaunchOptions": "已保存的选项：{{value0}}。旧版服务器使用其自身的权限设置。"
+      }
     }
   },
   "menu": {
@@ -3438,7 +3455,10 @@
               "failed": {
                 "toast": {
                   "62a0af2cb4": "无法确认终端剪贴板复制",
-                  "fdd3e7e977": "终端应用请求了复制，但 Orca 无法确认内容已写入系统剪贴板。"
+                  "fdd3e7e977": "终端应用请求了复制，但 Orca 无法确认内容已写入系统剪贴板。",
+                  "de286dcfe1": "终端复制需要点击",
+                  "84c938ffa2": "浏览器阻止了来自终端应用的复制。点击“复制”即可将文本放入剪贴板。",
+                  "a73165c6c5": "复制"
                 }
               }
             }
@@ -8099,6 +8119,14 @@
           "chatErrorEscalationNeedsChat": "请在实验性设置中开启聊天界面后使用。",
           "chatErrorEscalationKeywordError": "错误",
           "chatErrorEscalationKeywordChat": "聊天",
+          "heartbeatTitle": "工作者心跳",
+          "heartbeatDescription": "已分派的工作者每隔几分钟报告一次，让协调者能区分正在工作的智能体和卡住的智能体。关闭后发给协调者的消息会减少，但协调者也不再收到这一报告信号。仅对更改后分派的工作者生效。",
+          "heartbeatKeywordHeartbeat": "心跳",
+          "heartbeatKeywordStalled": "卡住",
+          "heartbeatKeywordInterval": "间隔",
+          "heartbeatIntervalTitle": "心跳间隔",
+          "heartbeatIntervalDescription": "间隔越短，协调者收到报告越频繁，但消息也越多。间隔越长，消息越少，但两次报告之间的空档也越长。仅对更改后分派的工作者生效。",
+          "heartbeatIntervalSuffix": "分钟",
           "7bc082f4de": "复制安装命令"
         },
         "OrchestrationSetupCard": {
@@ -8309,8 +8337,6 @@
           "c7ef4415de": "显示名称",
           "b0a0c14a1c": "侧边栏和选项卡的项目特定显示详细信息。",
           "removeProjectAllHosts": "从所有已配置主机的 Orca 中删除该项目。",
-          "removeProjectCheckout": "从 Orca 中删除此检出。此项目的其他检出将保留。",
-          "removeProjectKeepCheckouts": "从 Orca 中删除该项目。拥有独立设置的检出将保留。",
           "0909e5d650": "删除项目",
           "ee5a290616": "作为文件夹打开。 Git 功能对此工作区不可用。",
           "323debba71": "类型：",
@@ -13684,8 +13710,6 @@
           "SourceControlAgentActionDialogForm": {
             "7ec6abbf2a": "重置",
             "f4f3c9ca4a": "提示词模板",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "CLI 参数",
             "b99c33cec5": "设置",
             "15c5d85706": "智能体",
             "3e8f21954f": "错误",
@@ -20215,7 +20239,8 @@
       "streamedDetail": "该页面在远程主机上运行并流式传输到该设备。"
     },
     "remote": {
-      "findUnavailable": "当此页面从远程主机流式传输时，在页面中查找不可用。"
+      "findUnavailable": "当此页面从远程主机流式传输时，在页面中查找不可用。",
+      "selectionTooLargeToCopy": "所选内容太大，无法从远程主机流式传输的页面中复制。"
     },
     "userAgentMigration": {
       "degradedDescription": "无法检查旧的浏览器身份选择。在浏览器设置中选择 Cleaned 或 Native；更改在重新启动后生效。",
@@ -20383,6 +20408,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "无法保存此操作。请在设置中重试保存。",
     "unlinkedPr": {
       "status": "PR #{{number}} 未链接"
     },
@@ -20530,6 +20556,12 @@
       "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "无法将“{{name}}”移到回收站。是否永久删除？",
+      "titleTrash": "无法将“{{name}}”移到废纸篓。是否永久删除？",
+      "description": "此操作无法撤销。",
+      "confirm": "永久删除"
     }
   },
   "sparsePreset": {

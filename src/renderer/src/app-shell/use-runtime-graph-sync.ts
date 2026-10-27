@@ -59,8 +59,8 @@ export function useRuntimeGraphSync(): void {
         // Publish project-catalog changes to paired phones.
         if (
           state.repos !== previousState.repos ||
-          state.projects !== previousState.projects ||
-          state.projectHostSetups !== previousState.projectHostSetups ||
+          state.endpointProjects !== previousState.endpointProjects ||
+          state.endpointProjectHostSetups !== previousState.endpointProjectHostSetups ||
           state.projectOrderBy !== previousState.projectOrderBy
         ) {
           scheduleRuntimeGraphSync()

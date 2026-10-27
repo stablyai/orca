@@ -449,6 +449,9 @@ describe('useGitStatusPolling', () => {
     // Why: evidence refreshes keep the 3s anti-churn floor from the last run.
     await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
+    // Only the active workspace's first status is a user act that may start its WSL distro.
+    expect(gitStatus.mock.calls[0]?.[0]).toMatchObject({ wakeWslDistro: true })
+    expect(gitStatus.mock.calls[1]?.[0]).not.toHaveProperty('wakeWslDistro')
     expect(window.api.fs.watchWorktree).not.toHaveBeenCalled()
     expect(window.api.fs.unwatchWorktree).not.toHaveBeenCalled()
 

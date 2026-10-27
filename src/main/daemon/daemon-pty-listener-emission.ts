@@ -7,13 +7,14 @@ export function emitPtyListeners<T>(listeners: readonly T[], emit: (listener: T)
 
 export function createPtyExitPayload(
   id: string,
-  { code, incarnationId, cause, replacedByRestart }: Omit<DaemonPtyRouterExitEvent, 'id'>
+  { code, incarnationId, cause, replacedByRestart, hostLost }: Omit<DaemonPtyRouterExitEvent, 'id'>
 ): DaemonPtyRouterExitEvent {
   return {
     id,
     code,
     ...(incarnationId ? { incarnationId } : {}),
     ...(cause ? { cause } : {}),
-    ...(replacedByRestart ? { replacedByRestart } : {})
+    ...(replacedByRestart ? { replacedByRestart } : {}),
+    ...(hostLost ? { hostLost } : {})
   }
 }

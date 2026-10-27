@@ -26,6 +26,8 @@ export type WslWatcherDeps = {
   ignoreDirs: string[]
   scheduleBatchFlush: (root: WatchedRoot) => void
   watchedRoots: Map<string, WatchedRoot>
+  /** The child died on its own, e.g. the distro stopped; runs before the overflow refresh. */
+  onUnexpectedStop?: (root: WatchedRoot, distro: string) => void
 }
 
 const POLL_INTERVAL_SECONDS = 2
@@ -152,8 +154,7 @@ export async function createWslWatcher(
   if (!wsl) {
     throw new Error(`Not a WSL path: ${worktreePath}`)
   }
-  const distro = wsl.distro
-  const linuxPath = wsl.linuxPath
+  const { distro, linuxPath } = wsl
 
   const root: WatchedRoot = {
     subscription: null!,
@@ -180,6 +181,8 @@ export async function createWslWatcher(
       return
     }
     stopped = true
+    // First: the overflow refresh below reads the root, which would boot a just-stopped distro.
+    deps.onUnexpectedStop?.(root, distro)
     markOverflowWithoutUncStat(root)
     deps.scheduleBatchFlush(root)
     deps.watchedRoots.delete(rootKey)

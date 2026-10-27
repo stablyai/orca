@@ -155,7 +155,11 @@ export function scanChromiumCookieRows(
   context.undecryptableWarning = buildUndecryptableWarning({
     decryptFailed: context.decryptFailed,
     appBoundFailed: context.appBoundFailed,
-    keyringUnavailableFailed: context.keyringUnavailableFailed
+    keyringUnavailableFailed: context.keyringUnavailableFailed,
+    keyringFailure:
+      sourceKey?.mode === 'aes-128-cbc' && sourceKey.keyringFailure
+        ? { cause: sourceKey.keyringFailure, browser: context.browser.label }
+        : undefined
   })
 
   // Refuse before live mutation if an older client cannot report partition skips.

@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { ParsedTerminalFileLink } from '@/lib/terminal-links'
+import type { ParsedTerminalFileLink } from '../../../../shared/terminal-links'
 import { isWorktreeConnectionResolved } from '@/lib/connection-context'
 import type { FileLinkExists } from '@/components/sidebar/comment-markdown-native-chat-file-links'
 import { createTerminalPathExistenceBatch } from '@/components/terminal-pane/terminal-path-existence-batch'

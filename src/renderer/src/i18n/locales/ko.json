@@ -301,6 +301,23 @@
     "followSymlinkedDirectoriesDescription": "Quick Open에서 연결된 폴더를 검색하고 파일 탐색기에서 로컬 연결 폴더를 펼칩니다.",
     "accounts": {
       "claudeRemoveFolder": "Orca는 이 컴퓨터에서 해당 계정의 Claude 폴더와 로그인 정보를 삭제합니다. 시스템 기본 계정과 공유하는 채팅 기록은 유지됩니다. 삭제한 계정이 선택되어 있었다면, 다음에 시작하는 Claude는 시스템 기본 계정을 사용합니다."
+    },
+    "sourceControl": {
+      "actionModel": {
+        "on": "켜짐",
+        "off": "꺼짐",
+        "invalidArgs": "{{value0}}의 CLI 인수가 올바르지 않습니다. 설정 → Source Control AI에서 수정하세요.",
+        "model": "모델",
+        "agentDefault": "에이전트 기본값",
+        "effortDefault": "기본값",
+        "savedModel": "설정의 모델: {{value0}}",
+        "permissionsDefaultHint": "이 작업에 자체 CLI 인수가 없으면 터미널은 에이전트 권한을 사용합니다.",
+        "chatsOnly": "채팅에만 적용",
+        "terminalsOnly": "터미널에만 적용",
+        "extraArgs": "추가 CLI 인수",
+        "launchOptions": "모델 및 권한",
+        "savedLaunchOptions": "저장된 옵션: {{value0}}. 이전 서버는 서버의 권한 설정을 사용합니다."
+      }
     }
   },
   "menu": {
@@ -3438,7 +3455,10 @@
               "failed": {
                 "toast": {
                   "62a0af2cb4": "터미널 클립보드 복사를 확인할 수 없습니다",
-                  "fdd3e7e977": "터미널 앱이 복사를 요청했지만 Orca가 시스템 클립보드에 반영되었는지 확인하지 못했습니다."
+                  "fdd3e7e977": "터미널 앱이 복사를 요청했지만 Orca가 시스템 클립보드에 반영되었는지 확인하지 못했습니다.",
+                  "de286dcfe1": "터미널 복사에 클릭이 필요합니다",
+                  "84c938ffa2": "브라우저가 터미널 앱의 복사를 차단했습니다. 복사를 클릭하면 클립보드에 넣습니다.",
+                  "a73165c6c5": "복사"
                 }
               }
             }
@@ -8099,6 +8119,14 @@
           "chatErrorEscalationNeedsChat": "사용하려면 실험적 기능 설정에서 채팅 UI를 켜세요.",
           "chatErrorEscalationKeywordError": "오류",
           "chatErrorEscalationKeywordChat": "채팅",
+          "heartbeatTitle": "워커 하트비트",
+          "heartbeatDescription": "할당된 워커가 몇 분마다 상태를 알려 코디네이터가 작업 중인 에이전트와 응답 없는 에이전트를 구분할 수 있습니다. 끄면 코디네이터로 가는 메시지가 줄지만 그 상태 신호를 더 이상 받을 수 없습니다. 변경 이후 할당된 워커에 적용됩니다.",
+          "heartbeatKeywordHeartbeat": "하트비트",
+          "heartbeatKeywordStalled": "멈춤",
+          "heartbeatKeywordInterval": "간격",
+          "heartbeatIntervalTitle": "하트비트 간격",
+          "heartbeatIntervalDescription": "간격이 짧을수록 코디네이터가 더 자주 상태를 받지만 메시지도 많아집니다. 간격이 길수록 메시지는 줄지만 상태 보고 사이의 공백이 길어집니다. 변경 이후 할당된 워커에 적용됩니다.",
+          "heartbeatIntervalSuffix": "분",
           "7bc082f4de": "설치 명령 복사"
         },
         "OrchestrationSetupCard": {
@@ -8309,8 +8337,6 @@
           "c7ef4415de": "표시 이름",
           "b0a0c14a1c": "사이드바 및 탭에 대한 프로젝트별 표시 세부 정보입니다.",
           "removeProjectAllHosts": "구성된 모든 호스트의 Orca에서 이 프로젝트를 제거합니다.",
-          "removeProjectCheckout": "Orca에서 이 체크아웃을 제거합니다. 이 프로젝트의 다른 체크아웃은 유지됩니다.",
-          "removeProjectKeepCheckouts": "Orca에서 이 프로젝트를 제거합니다. 자체 설정이 있는 체크아웃은 유지됩니다.",
           "0909e5d650": "프로젝트 제거",
           "ee5a290616": "폴더로 열렸습니다. 이 워크스페이스에서는 Git 기능을 사용할 수 없습니다.",
           "323debba71": "유형:",
@@ -13684,8 +13710,6 @@
           "SourceControlAgentActionDialogForm": {
             "7ec6abbf2a": "재설정",
             "f4f3c9ca4a": "프롬프트 템플릿",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "CLI 인수",
             "b99c33cec5": "설정",
             "15c5d85706": "에이전트",
             "3e8f21954f": "오류",
@@ -20193,7 +20217,8 @@
       "streamedDetail": "페이지는 원격 호스트에서 실행되고 이 기기로 스트리밍됩니다."
     },
     "remote": {
-      "findUnavailable": "이 페이지가 원격 호스트에서 스트리밍되는 동안에는 페이지에서 찾기를 사용할 수 없습니다."
+      "findUnavailable": "이 페이지가 원격 호스트에서 스트리밍되는 동안에는 페이지에서 찾기를 사용할 수 없습니다.",
+      "selectionTooLargeToCopy": "선택 영역이 너무 커서 원격 호스트에서 스트리밍되는 페이지에서 복사할 수 없습니다."
     },
     "userAgentMigration": {
       "degradedDescription": "이전 브라우저 ID 선택을 검사할 수 없습니다. 브라우저 설정에서 정리됨 또는 기본을 선택하십시오. 변경 사항은 다시 시작한 후에 적용됩니다.",
@@ -20382,6 +20407,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "이 작업을 저장하지 못했습니다. 설정에서 다시 저장해 보세요.",
     "unlinkedPr": {
       "status": "PR #{{number}} 연결 해제됨"
     },
@@ -20529,6 +20555,12 @@
       "findInFolder": "{{path}}에서 찾기",
       "folderLoadError": "이 폴더를 불러오지 못했습니다:",
       "emptyFolder": "이 폴더에 파일이 없습니다"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
+      "titleTrash": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
+      "description": "이 작업은 되돌릴 수 없습니다.",
+      "confirm": "영구 삭제"
     }
   },
   "sparsePreset": {

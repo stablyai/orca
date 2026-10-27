@@ -32,7 +32,7 @@ export function resolveNewWorkspaceDialogRepoId({
   activeRepoId?: string | null
   focusedHostScope?: ExecutionHostScope | null
 }): string {
-  // Share repo seeding across dialogs; mobile mirrors locally because Metro cannot bundle root runtime modules.
+  // Share repo seeding across the desktop dialogs and mobile.
   const focusedHostRepo =
     focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE
       ? eligibleRepos.find((repo) => getRepoExecutionHostId(repo) === focusedHostScope)

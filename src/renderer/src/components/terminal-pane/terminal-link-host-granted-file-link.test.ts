@@ -1,6 +1,11 @@
 import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY } from '../../../../shared/runtime-file-contracts'
 import { createProviderSetup, makeBufferLine } from './terminal-link-provider-buffer-fixtures'
 import {
   flushDoubleRaf,
@@ -8,7 +13,13 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const { storeState, statMock, openFileMock, runtimeEnvironmentCallMock } = doubles
+const {
+  storeState,
+  statMock,
+  openFileMock,
+  runtimeEnvironmentCallMock,
+  runtimeEnvironmentTransportCallMock
+} = doubles
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -29,7 +40,7 @@ installTerminalLinkTestEnvironment(doubles)
 
 const IMAGE = '/tmp/orca-preview.png'
 
-function hostGrants(): void {
+function hostGrants(readOnly?: true): void {
   runtimeEnvironmentCallMock.mockResolvedValue({
     id: 'rpc-1',
     ok: true,
@@ -39,7 +50,13 @@ function hostGrants(): void {
       absolutePath: IMAGE,
       exists: true,
       isDirectory: false,
-      openTarget: { kind: 'absolute-file', provider: 'local', absolutePath: IMAGE, grantId: 'g-1' }
+      openTarget: {
+        kind: 'absolute-file',
+        provider: 'local',
+        absolutePath: IMAGE,
+        grantId: 'g-1',
+        ...(readOnly ? { readOnly } : {})
+      }
     },
     _meta: { runtimeId: 'remote-runtime' }
   })
@@ -75,9 +92,7 @@ describe('a paired-server terminal path outside its workspace', () => {
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
   })
 
-  it('opens the linked file through its grant', async () => {
-    hostGrants()
-
+  async function clickLink(): Promise<void> {
     const links = await provideLinks()
     // Why a prototype-less object: node has no MouseEvent; activation reads only these fields.
     const click: MouseEvent = Object.assign(Object.create(null), {
@@ -88,18 +103,55 @@ describe('a paired-server terminal path outside its workspace', () => {
     })
     links[0]!.activate(click, IMAGE)
     await flushDoubleRaf()
+  }
+
+  // Why editable: the caller may already write this file through a terminal on the host.
+  it('opens the linked file editable through its grant', async () => {
+    hostGrants()
+
+    await clickLink()
 
     expect(statMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: IMAGE,
         runtimeEnvironmentId: 'env-1',
-        readOnly: true,
         terminalArtifactGrantId: 'g-1'
       }),
       { forceContentReload: true }
     )
+    expect(openFileMock.mock.calls[0]?.[0]).not.toHaveProperty('readOnly')
   })
+
+  it.each(['a read-only grant', 'a host that cannot renew grants'])(
+    'keeps %s read-only',
+    async (reason) => {
+      if (reason === 'a read-only grant') {
+        hostGrants(true)
+      } else {
+        hostGrants()
+        runtimeEnvironmentTransportCallMock.mockImplementation(
+          (args: RuntimeEnvironmentCallRequest) => {
+            const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+            if (!status?.ok) {
+              return runtimeEnvironmentCallMock(args)
+            }
+            const capabilities = status.result.capabilities?.filter(
+              (capability) => capability !== TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY
+            )
+            return { ...status, result: { ...status.result, capabilities } }
+          }
+        )
+      }
+
+      await clickLink()
+
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({ terminalArtifactGrantId: 'g-1', readOnly: true }),
+        { forceContentReload: true }
+      )
+    }
+  )
 
   it('shows no link for a path the host refuses, even when this computer has it', async () => {
     runtimeEnvironmentCallMock.mockResolvedValue({

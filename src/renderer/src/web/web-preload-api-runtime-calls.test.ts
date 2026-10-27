@@ -275,3 +275,99 @@ describe('web preload runtime calls', () => {
     expect(call).toHaveBeenLastCalledWith('runtime.queued-timeout', undefined, { timeoutMs: 25 })
   })
 })
+
+describe('direct History search lifetime on the real browser queue', () => {
+  it('retires queued work and preserves captured pairing across an awaited status response', async () => {
+    vi.resetModules()
+    const calls: string[] = []
+    let release: () => void = () => {}
+    let held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        connectionEpoch = 1
+        async call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push(method)
+          if (method === 'hold' || method === 'aiVault.searchStatus') {
+            await held
+          }
+          const { searchResults } = await import('../../../shared/ai-vault-search-test-fixture')
+          const { unavailableSessionSearchStatus } =
+            await import('../../../shared/ai-vault-search-client')
+          return {
+            id: method,
+            ok: true,
+            result:
+              method === 'aiVault.searchStatus'
+                ? { ...unavailableSessionSearchStatus(), supportedAgents: ['codex'] }
+                : searchResults(),
+            _meta: { runtimeId: 'runtime-a' }
+          }
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'selected')
+    const { createWebAiVaultApi } = await import('./preload-api/web-ai-vault-api')
+    const { webRuntimeState, runtimeCallQueuePool } =
+      await import('./preload-api/web-runtime-session')
+    const api = createWebAiVaultApi()
+    const blockers = Array.from({ length: 8 }, () =>
+      runtimeCallQueuePool.enqueue('selected', 'hold', () => held)
+    )
+    let active = true
+    const queued = api
+      .searchSessions({ query: 'needle' }, 'runtime:selected', () => active)
+      .then(
+        () => {
+          throw new Error('retired work accepted')
+        },
+        (error: unknown) => error
+      )
+    active = false
+    release()
+    await Promise.all(blockers)
+    expect(await queued).toBeInstanceOf(Error)
+    expect(calls).not.toContain('aiVault.searchSessions')
+    calls.length = 0
+    held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const waiting = api
+      .searchSessions({ query: 'needle', filters: { agents: ['codex'] } }, 'runtime:selected')
+      .then(
+        () => {
+          throw new Error('replaced pairing accepted')
+        },
+        (error: unknown) => error
+      )
+    await vi.waitFor(() => expect(calls).toContain('aiVault.searchStatus'))
+    const selected = webRuntimeState.activeEnvironment!
+    webRuntimeState.activeEnvironment = { ...selected, pairingRevision: 2 }
+    release()
+    expect(await waiting).toBeInstanceOf(Error)
+    expect(calls).not.toContain('aiVault.searchSessions')
+    // Already-issued work may settle, but a selected-environment switch cannot launch its search.
+    calls.length = 0
+    held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const switched = api
+      .searchSessions({ query: 'needle', filters: { agents: ['codex'] } }, 'runtime:selected')
+      .then(
+        () => {
+          throw new Error('switched target accepted')
+        },
+        (error: unknown) => error
+      )
+    await vi.waitFor(() => expect(calls).toContain('aiVault.searchStatus'))
+    webRuntimeState.activeEnvironment = { ...selected, id: 'other' }
+    release()
+    expect(await switched).toBeInstanceOf(Error)
+    expect(calls).not.toContain('aiVault.searchSessions')
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+})

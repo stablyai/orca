@@ -226,7 +226,11 @@ it('publishes real chat options to main and popout, retaining card candidates an
   expect(view.result.current.launchableAgentsByWorktreeId?.['wt-2']).toEqual(['grok'])
   const lastPublished = () => publishSnapshot.mock.calls.at(-1)?.[0].launchableAgentsByWorktreeId
   await vi.waitFor(() => expect(lastPublished()?.['wt-1']).toEqual(['claude', 'grok']))
-  for (const route of [{ projects: [] }, { activeWorkspaceExecutionHostId: 'local' as const }]) {
+  for (const route of [
+    { endpointProjects: [] },
+    { endpointProjectHostSetups: [] },
+    { activeWorkspaceExecutionHostId: 'local' as const }
+  ]) {
     const [live, published] = [view.result.current, publishSnapshot.mock.calls.length]
     act(() => useAppStore.setState(route))
     expect(view.result.current).not.toBe(live)

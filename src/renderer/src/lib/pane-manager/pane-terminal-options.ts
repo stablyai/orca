@@ -1,6 +1,6 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
-import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
+import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-contrast-correction'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>

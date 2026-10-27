@@ -9,6 +9,7 @@ import {
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import {
   externalChromiumCommandArguments,
+  externalChromiumWaitCommand,
   normalizeExternalChromiumCommandResult
 } from './external-chromium-command-arguments'
 import {
@@ -159,6 +160,11 @@ export class ExternalChromiumBrowserProcess {
     }
     if (method === 'browserEval') {
       return this.session.run(['eval', String(params.expression ?? '')])
+    }
+    if (method === 'browserWait') {
+      const { args, processTimeoutMs } = externalChromiumWaitCommand(params)
+      await this.session.run(args, processTimeoutMs)
+      return { waited: true }
     }
     if (method === 'browserSelectAll') {
       await this.session.run(['focus', String(params.element ?? '')])

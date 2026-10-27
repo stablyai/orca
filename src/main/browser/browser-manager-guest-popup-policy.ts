@@ -33,16 +33,17 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
       const browserTabId = ownerContext?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
+      const newTabUrl = externalUrl ?? (isLocalFileLinkFromLocalPage(guest, url) ? url : null)
       // Opener-dependent requests retain a child window instead of becoming tabs.
       if (
         ownerContext &&
-        externalUrl &&
+        newTabUrl &&
         isNewBrowserTabPopupIntent({ url, frameName, disposition, postBody })
       ) {
         // Scripted opens persist as tabs, so opens without observed input consume a budget.
         if (!clicked && !this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
           this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(externalUrl),
+            origin: safeOrigin(newTabUrl),
             action: 'blocked'
           })
           return { action: 'deny' }
@@ -50,12 +51,12 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         if (
           this.openLinkInOrcaTab(
             ownerContext.browserTabId,
-            externalUrl,
+            newTabUrl,
             disposition !== 'background-tab'
           )
         ) {
           this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(externalUrl),
+            origin: safeOrigin(newTabUrl),
             action: 'opened-in-orca'
           })
         }
@@ -168,4 +169,9 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     }
     return openPopupWithOriginBar(options, url, () => false).contentWebContents
   }
+}
+
+// Web pages must not reach the filesystem; only a local page may link to local files.
+export function isLocalFileLinkFromLocalPage(guest: Electron.WebContents, url: string): boolean {
+  return url.startsWith('file:') && guest.getURL().startsWith('file:')
 }

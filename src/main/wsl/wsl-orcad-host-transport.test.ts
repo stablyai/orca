@@ -205,9 +205,9 @@ describe('createWslOrcadHostTransport', () => {
         commandLoops: false,
         readDistroRegistryId: async (distro) => (distro === 'Ubuntu-24.04' ? id : null)
       })
-    await expect(make('1a2b')?.orcadLaunchEnv?.()).resolves.toEqual([
+    await expect(make('1a2b')?.orcadLaunchEnv?.({ fullVersion: '0.1.0+abc' })).resolves.toEqual([
       [ORCAD_WSL_DISTRO_GUID_ENV, '1a2b']
     ])
-    await expect(make(null)?.orcadLaunchEnv?.()).resolves.toEqual([])
+    await expect(make(null)?.orcadLaunchEnv?.({ fullVersion: '0.1.0+abc' })).resolves.toEqual([])
   })
 })

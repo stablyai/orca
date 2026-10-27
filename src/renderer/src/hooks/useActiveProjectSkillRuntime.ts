@@ -1,3 +1,4 @@
+import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
@@ -77,7 +78,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
     useShallow((state) => ({
       activeRepoId: state.activeRepoId,
       activeWorktreeId: state.activeWorktreeId,
-      projects: state.projects,
+      projectHostSetupProjection: getProjectHostSetupProjectionFromState(state),
       repos: state.repos,
       folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,

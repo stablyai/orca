@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
 import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot

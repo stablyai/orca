@@ -6,7 +6,10 @@ import { useWorkingRingRotation } from './use-working-ring-rotation'
 
 // Match desktop per-agent vocabulary: working yellow spinner, done emerald, attention red, interrupted muted, unconfirmed amber, idle neutral.
 // Separate from AgentSpinner’s five-state worktree rollup.
-const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, string> = {
+const DOT_COLORS: Record<
+  Exclude<AgentDotState, 'working' | 'monitoring' | 'unverifiable'>,
+  string
+> = {
   done: '#10b981',
   blocked: '#ef4444',
   waiting: '#ef4444',

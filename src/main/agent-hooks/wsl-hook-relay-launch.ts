@@ -1,4 +1,4 @@
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
@@ -102,7 +102,7 @@ export function spawnWslRelayProcess(
   distro: string,
   env: NodeJS.ProcessEnv,
   version: string
-): ChildProcessWithoutNullStreams {
+): PipedChildProcess {
   // --exec bypasses login-shell rewriting and passes $HOME verbatim for guest-side expansion.
   const command = `exec sh "${guestRelayDirExpr(version)}/launch.sh"`
   return spawnProcess({
@@ -153,10 +153,10 @@ export async function launchWslRelayWithInstall(options: {
   version: string
   io: WslRelayLaunchIo
   isDisposed: () => boolean
-  onChild: (child: ChildProcessWithoutNullStreams) => void
+  onChild: (child: PipedChildProcess) => void
   onNoNode: () => void
   onFailure: (message: string) => void
-  connect: (transport: MultiplexerTransport, child: ChildProcessWithoutNullStreams) => Promise<void>
+  connect: (transport: MultiplexerTransport, child: PipedChildProcess) => Promise<void>
 }): Promise<void> {
   const { distro, env, bundleJsPath, version, io } = options
   let installTried = false

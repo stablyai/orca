@@ -45,9 +45,11 @@ export type StructuredAgentSessionLaunchIntent = {
   params: StructuredAgentSessionCreateParams
   createMessageSupport?: boolean
   createPrepared?: true
-  prepareCreate?: () => void
+  prepareCreate?: (hostTakesExplicitOptions: boolean) => void
   beforeCreate?: () => boolean
   surfaceAddress?: StructuredLaunchSurfaceAddress
+  /** The saved selection create seeds, read when the intent is built. */
+  explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
 }
 
@@ -141,14 +143,17 @@ function buildStructuredAgentSessionLaunchIntent(
 export function retryStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredAgentSessionLaunchIntent {
-  return buildStructuredAgentSessionLaunchIntent(
-    intent.worktreeId,
-    intent,
-    intent.agent,
-    intent.sessionId,
-    intent.params.resumeFrom,
-    intent.seedOptions
-  )
+  return {
+    ...buildStructuredAgentSessionLaunchIntent(
+      intent.worktreeId,
+      intent,
+      intent.agent,
+      intent.sessionId,
+      intent.params.resumeFrom,
+      intent.seedOptions
+    ),
+    explicitLaunchOptions: intent.explicitLaunchOptions
+  }
 }
 
 export function restoreStructuredAgentSessionLaunchIntent(args: {
@@ -160,8 +165,11 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** A paired server's seed, kept with the launch so a reload shows what create runs. */
+  explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
   firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
@@ -184,12 +192,14 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+      ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})
     },
     ...(args.createMessageSupport === undefined
       ? {}
       : { createMessageSupport: args.createMessageSupport }),
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
+    ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
     ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
   }
 }

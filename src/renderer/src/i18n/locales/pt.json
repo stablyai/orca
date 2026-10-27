@@ -604,7 +604,8 @@
       "streamedDetail": "A página é executada no host remoto e transmitida para este dispositivo."
     },
     "remote": {
-      "findUnavailable": "Localizar na página não está disponível enquanto esta página é transmitida do host remoto."
+      "findUnavailable": "Localizar na página não está disponível enquanto esta página é transmitida do host remoto.",
+      "selectionTooLargeToCopy": "A seleção é grande demais para ser copiada de uma página transmitida pelo host remoto."
     },
     "userAgentMigration": {
       "degradedDescription": "Não foi possível inspecionar uma escolha antiga de identidade do navegador. Escolha Limpo ou Nativo nas configurações do Navegador; as alterações têm efeito após reiniciar.",
@@ -4295,9 +4296,7 @@
           "show": "Mostrar",
           "hide": "Ocultar",
           "externalWorktreesGlobal": "Padrão global: {{value0}}",
-          "useGlobal": "Usar global",
-          "removeProjectCheckout": "Remova este checkout do Orca. Outros checkouts deste projeto permanecem.",
-          "removeProjectKeepCheckouts": "Remova este projeto do Orca. Os checkouts que têm suas próprias configurações permanecem."
+          "useGlobal": "Usar global"
         },
         "Settings": {
           "3bf149e873": "Configurações do Projeto > {{value0}}",
@@ -7725,6 +7724,14 @@
           "chatErrorEscalationNeedsChat": "Ative a interface de chat nas configurações experimentais para usar.",
           "chatErrorEscalationKeywordError": "erro",
           "chatErrorEscalationKeywordChat": "chat",
+          "heartbeatTitle": "Sinais de vida dos workers",
+          "heartbeatDescription": "Os workers atribuídos dão sinal a cada poucos minutos para que o coordenador distinga um agente trabalhando de um travado. Desativar reduz as mensagens para o coordenador, mas ele perde esse sinal de acompanhamento. Vale para workers atribuídos após a mudança.",
+          "heartbeatKeywordHeartbeat": "sinal de vida",
+          "heartbeatKeywordStalled": "travado",
+          "heartbeatKeywordInterval": "intervalo",
+          "heartbeatIntervalTitle": "Intervalo dos sinais de vida",
+          "heartbeatIntervalDescription": "Intervalos menores dão ao coordenador sinais mais frequentes, mas enviam mais mensagens. Intervalos maiores enviam menos mensagens, mas deixam mais tempo entre os sinais. Vale para workers atribuídos após a mudança.",
+          "heartbeatIntervalSuffix": "minutos",
           "7bc082f4de": "Copiar comando de instalação"
         },
         "RuntimeAccessGrantList": {
@@ -10115,8 +10122,6 @@
             "ea4788705e": "Cancelar",
             "7ec6abbf2a": "Redefinir",
             "f4f3c9ca4a": "Modelo de prompt",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "Argumentos da CLI",
             "b99c33cec5": "Configurações",
             "15c5d85706": "Agente",
             "3e8f21954f": "erro",
@@ -15656,7 +15661,10 @@
               "failed": {
                 "toast": {
                   "62a0af2cb4": "Não foi possível confirmar a cópia para a área de transferência do terminal",
-                  "fdd3e7e977": "O aplicativo de terminal solicitou uma cópia, mas o Orca não conseguiu confirmar que ela chegou à área de transferência do sistema."
+                  "fdd3e7e977": "O aplicativo de terminal solicitou uma cópia, mas o Orca não conseguiu confirmar que ela chegou à área de transferência do sistema.",
+                  "de286dcfe1": "A cópia do terminal precisa de um clique",
+                  "84c938ffa2": "O navegador bloqueou uma cópia do aplicativo do terminal. Clique em Copiar para colocar o texto na sua área de transferência.",
+                  "a73165c6c5": "Copiar"
                 }
               }
             }
@@ -20673,6 +20681,12 @@
       "findInFolder": "Buscar em {{path}}",
       "folderLoadError": "Não foi possível carregar esta pasta:",
       "emptyFolder": "Nenhum arquivo nesta pasta"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "Não foi possível mover '{{name}}' para a Lixeira. Excluir permanentemente?",
+      "titleTrash": "Não foi possível mover '{{name}}' para a Lixeira. Excluir permanentemente?",
+      "description": "Isso não pode ser desfeito.",
+      "confirm": "Excluir permanentemente"
     }
   },
   "sparsePreset": {

@@ -66,7 +66,7 @@ type CatalogFrame = {
   depth: number
 }
 
-function isCatalogObject(value: unknown): value is Record<string, unknown> {
+export function isCatalogObject(value: unknown): value is Record<string, unknown> {
   return (
     typeof value === 'object' &&
     value !== null &&

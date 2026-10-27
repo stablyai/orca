@@ -12,10 +12,9 @@ import { RepositoryHooksSection } from './repository/execution/RepositoryHooksSe
 import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
-import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
+import { RepositorySourceControlAiSection } from './repository/source-control/RepositorySourceControlAiSection'
 import { SearchableSetting } from './SearchableSetting'
 import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
-import type { SettingsProjectRemovalScope } from './settings-project-list'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
@@ -59,9 +58,6 @@ type RepositoryPaneProps = {
   removeProject: (repoId: string) => void
   project?: Project | null
   selectedProjectSetupId?: string
-  settingsSelectionKey?: string
-  settingsEntryRepoIds?: ReadonlySet<string>
-  removalScope?: SettingsProjectRemovalScope
   isLocalWindowsProject?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -82,9 +78,6 @@ export function RepositoryPane({
   removeProject,
   project = null,
   selectedProjectSetupId,
-  settingsSelectionKey,
-  settingsEntryRepoIds,
-  removalScope = 'project',
   isLocalWindowsProject = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
@@ -247,7 +240,6 @@ export function RepositoryPane({
           </div>
           <RepositoryRemoveProjectButton
             repo={repo}
-            removalScope={removalScope}
             forceVisible={forceFullPaneForRepoMatch}
             removeProject={removeProject}
           />
@@ -310,8 +302,6 @@ export function RepositoryPane({
             <RepositoryHostSetupsSection
               repo={repo}
               selectedProjectSetupId={selectedProjectSetupId}
-              settingsSelectionKey={settingsSelectionKey}
-              settingsEntryRepoIds={settingsEntryRepoIds}
               forceVisible={forceFullPaneForRepoMatch}
               searchQuery={searchQuery}
               searchEntries={hostSetupEntries}

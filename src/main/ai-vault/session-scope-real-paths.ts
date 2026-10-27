@@ -32,8 +32,11 @@ export async function resolveAiVaultScopeRealPaths(
     }
   }
   const scanScopePaths = [...scopePaths]
+  const seen = new Set(scopePaths.map(normalizeRuntimePathForComparison))
   for (const { realPath } of links) {
-    if (!scanScopePaths.some((path) => sameComparisonPath(path, realPath))) {
+    const key = normalizeRuntimePathForComparison(realPath)
+    if (!seen.has(key)) {
+      seen.add(key)
       scanScopePaths.push(realPath)
     }
   }

@@ -7,6 +7,7 @@ import type { ConnectorConfig } from './config.js'
 import { openConnectorDatabase, openInMemoryConnectorDatabase } from './connector-database.js'
 import { createConnectorServer } from './connector-server.js'
 import { connectorHostId } from './connector-token-verifier.js'
+import type { DiscordRestApi } from './discord-rest.js'
 
 export const PUBLIC_URL = 'https://connector.onorca.dev'
 export const AUTH_ISSUER = 'https://login.onorca.dev'
@@ -18,6 +19,7 @@ const testDatabaseUrl = process.env.ORCA_CONNECTOR_TEST_DATABASE_URL
 export function testConnectorConfig(): ConnectorConfig {
   return {
     mode: 'active',
+    role: 'api',
     port: 0,
     publicUrl: PUBLIC_URL,
     dataDir: './data/connector-test',
@@ -79,7 +81,12 @@ async function testTokenIssuer() {
   return {
     jwks: createLocalJWKSet({ keys: [jwk] }),
     sign: async (claims: { sub: string; mid: string }, expiresAtSeconds: number) =>
-      await new SignJWT({ prof: 'profile-1', sid: 'family-1', mid: claims.mid, purpose: 'connector-host' })
+      await new SignJWT({
+        prof: 'profile-1',
+        sid: 'family-1',
+        mid: claims.mid,
+        purpose: 'connector-host'
+      })
         .setProtectedHeader({ alg: 'ES256', kid: 'test-key' })
         .setIssuer(AUTH_ISSUER)
         .setAudience('orca-connector')
@@ -121,6 +128,7 @@ export async function createConnectorHarness(
   options: {
     pollHoldMs?: number
     wrapDatabase?: (database: CloudDatabase) => CloudDatabase
+    discordApi?: DiscordRestApi
   } = {}
 ) {
   let now = 1_800_000_000_000
@@ -131,7 +139,12 @@ export async function createConnectorHarness(
     { ...testConnectorConfig(), ...config },
     options.wrapDatabase?.(database) ?? database,
     notifications,
-    { now: () => now, jwks: issuer.jwks, pollHoldMs: options.pollHoldMs ?? 0 }
+    {
+      now: () => now,
+      jwks: issuer.jwks,
+      pollHoldMs: options.pollHoldMs ?? 0,
+      ...(options.discordApi ? { discordApi: options.discordApi } : {})
+    }
   )
   await runtime.waker.start()
   cleanups.push(() => runtime.waker.close())

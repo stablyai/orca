@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { PtyTransport } from './pty-transport-types'
 
 /** Local main replaces the named old PTY during spawn; remote hosts lack that field and retain kill-then-connect compatibility. */

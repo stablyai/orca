@@ -12,6 +12,8 @@ export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'
   paneKey: string
   ptyId?: string
   tabId?: string
+  /** A connected PTY on this host backs the row. */
+  hasLivePty?: true
   worktreeId?: string
   connectionId: string | null
   state: ParsedAgentStatusPayload['state']

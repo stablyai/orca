@@ -84,6 +84,27 @@ export async function readWslDistroRegistryId(
   return matches?.length === 1 ? matches[0].id : null
 }
 
+/**
+ * The distro's current registered name: by its recorded GUID first (it survives a rename), else
+ * by name. False when neither is registered; null when the registrations can't be read.
+ */
+export async function resolveWslDistroName(
+  distro: string,
+  distroGuid?: string,
+  query: RegQuery = defaultRegQuery
+): Promise<string | false | null> {
+  const registrations = await readWslDistroRegistrations(query)
+  if (!registrations) {
+    return null
+  }
+  const guid = distroGuid?.trim().replace(/[{}]/g, '').toLowerCase()
+  const wanted = distro.trim().toLowerCase()
+  const match =
+    (guid && registrations.find((entry) => entry.id === guid)) ||
+    registrations.find((entry) => entry.distro.toLowerCase() === wanted)
+  return match ? match.distro : false
+}
+
 const SHARED_READ_TTL_MS = 30_000
 const sharedReads = new Map<string, { at: number; id: Promise<string | null> }>()
 

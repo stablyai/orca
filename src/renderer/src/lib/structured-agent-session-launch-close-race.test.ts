@@ -183,12 +183,12 @@ describe('a close that races a structured launch', () => {
     })
   })
 
-  it('cancels a close-racing launch without retrying or toasting', async () => {
+  it('cancels a close-racing unknown launch without retrying or toasting', async () => {
     const worktreeId = 'wt-close-race'
     const intent = launchIntent(worktreeId, 'session-close-race')
     let resolveRefresh!: (snapshots: RuntimeMobileSessionTabsResult[]) => void
     mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 1 })
+    mocks.launch.mockRejectedValueOnce(new Error('response lost'))
     vi.mocked(refreshLocalStructuredSessionTabs).mockImplementationOnce(
       () => new Promise((resolve) => (resolveRefresh = resolve))
     )
@@ -234,7 +234,7 @@ describe('a close that races a structured launch', () => {
     const intent = launchIntent(worktreeId)
     let resolveRefresh!: (snapshots: RuntimeMobileSessionTabsResult[]) => void
     mocks.createIntent.mockReturnValueOnce(intent)
-    mocks.launch.mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 1 })
+    mocks.launch.mockRejectedValueOnce(new Error('response lost'))
     vi.mocked(refreshLocalStructuredSessionTabs).mockImplementationOnce(
       () => new Promise((resolve) => (resolveRefresh = resolve))
     )

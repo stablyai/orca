@@ -7,6 +7,7 @@ import { resolveEnvironmentPairingOffer } from '../../shared/runtime-environment
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { listWslHostDistros } from './wsl-host-distro-list'
+import { resolveWslDistroName } from './wsl-distro-registry-id'
 import type { WslHostConnector, WslHostReachability } from './wsl-host-service'
 import { readWslDistroOrcadPublicKey } from './wsl-host-ssh-orcad-conflict'
 import {
@@ -165,7 +166,8 @@ export function createWslHostConnector(options: {
       if (reachability === 'unavailable') {
         return {
           stopped: false,
-          reason: 'The WSL service did not confirm whether the distro runs.'
+          reason: 'The WSL service did not confirm whether the distro runs.',
+          verdict: 'unverifiable'
         }
       }
       if (reachability === 'stopped') {
@@ -181,11 +183,17 @@ export function createWslHostConnector(options: {
         decommission: decommissionWslHostOrcad(target, createWslOrcadHostTransport({ target }))
       })
     },
+    resolveDistroName: (distro, distroId) => resolveWslDistroName(distro, distroId),
     releaseHolder: async (distro) => {
       await holder.release(distro)
     },
-    adoptHolders: async () => {
-      await holder.adoptHolders()
+    adoptHolders: async (isWanted) => {
+      for (const { distro } of await holder.adoptHolders()) {
+        if (!isWanted(distro)) {
+          // Verified by pid, start time and command line; an unverifiable holder is kept.
+          await holder.release(distro)
+        }
+      }
     },
     dispose: () => liveness.dispose()
   }

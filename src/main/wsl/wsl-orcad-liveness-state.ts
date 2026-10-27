@@ -1,4 +1,4 @@
-import { EXIT_SETTLE_MS, failedExit } from './wsl-orcad-liveness-evidence'
+import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { SystemPowerLifecycleListener } from '../system-power-lifecycle'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
@@ -15,13 +15,18 @@ export const WSL_ORCAD_HEARTBEAT_MS = 120_000
 export type WslOrcadTimer = { cancel(): void }
 
 export type WslOrcadLivenessDependencies = {
-  manager: Pick<WslOrcadConnectionManager, 'ensure' | 'get' | 'publish' | 'close'>
+  manager: Pick<
+    WslOrcadConnectionManager,
+    'ensure' | 'get' | 'publish' | 'close' | 'retireListener'
+  >
   readRunning: () => Promise<WslRunningDistrosRead>
   readIdentity: (distro: string, orcadPid: number | null) => Promise<WslGuestIdentity | null>
   openWatch: (connection: WslOrcadConnection) => Promise<WslOrcadWatch>
   collectCensus: (connection: WslOrcadConnection) => Promise<OrcadTerminalCensus>
   /** A WSL project or terminal the user can see is open on this distro. */
   hasUserVisibleWork: (distro: string) => boolean
+  /** E9: recovery reconnects only into a distro confirmed running right before it spawns. */
+  requireRunning?: (distro: string) => Promise<boolean>
   deferUntilRunning: (distro: string, key: string, task: () => unknown) => void
   /** C3's `ensureHeld`; called only while the distro is confirmed running, so it never boots. */
   ensureHolder?: (distro: string) => Promise<unknown>
@@ -105,8 +110,13 @@ export function isSupervisedSettling(entry: Supervised | undefined, nowMs: numbe
   )
 }
 
+/** Any watch or holder exit, a clean one (code 0 from `wsl --shutdown`) included. */
+export function isWatchOrHolderExit(trigger: Trigger): boolean {
+  return trigger !== 'heartbeat' && trigger.source !== 'verify'
+}
+
 export function noteSupervisedExit(entry: Supervised, trigger: Trigger, nowMs: number): void {
-  if (failedExit(trigger)) {
+  if (isWatchOrHolderExit(trigger)) {
     entry.lastExitMs = nowMs
   }
 }

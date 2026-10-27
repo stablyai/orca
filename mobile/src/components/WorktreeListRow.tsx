@@ -8,6 +8,7 @@ import type { Worktree } from '../worktree/workspace-list-types'
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { areStructurallyEqual } from '../worktree/structural-equality'
 import { projectGroupRowIndent } from '../worktree/project-group-indent'
 import { getWorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
@@ -22,8 +23,6 @@ function displayBranch(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-type WorktreeRollupStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
-
 type Props = {
   item: Worktree
   isReadOnly: boolean
@@ -35,7 +34,7 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeRollupStatus
+  status: WorktreeStatus
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean

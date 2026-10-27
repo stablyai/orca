@@ -11,17 +11,9 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
+import { rankWorktreeStatus, type WorktreeStatus } from '../../../shared/worktree-status-rollup'
 
-export type WorktreeStatus =
-  | 'active'
-  | 'working'
-  | 'monitoring'
-  | 'permission'
-  | 'failed'
-  | 'interrupted'
-  | 'unconfirmed'
-  | 'done'
-  | 'inactive'
+export type { WorktreeStatus } from '../../../shared/worktree-status-rollup'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
@@ -206,38 +198,5 @@ export function resolveWorktreeStatus(args: {
       terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
     }
   )
-  if (args.hasPermission) {
-    return 'permission'
-  }
-  // Why: heuristic 'permission' outranks heuristic 'working' — the user-actionable signal wins when panes in one tab disagree.
-  if (heuristic === 'permission') {
-    return 'permission'
-  }
-  // Failure outranks live work, including surviving subagents; only a pending question comes first.
-  if (args.hasFailed) {
-    return 'failed'
-  }
-  // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
-  if (args.hasLiveWorking || heuristic === 'working') {
-    return 'working'
-  }
-  if (args.hasLiveMonitoring || heuristic === 'monitoring') {
-    return 'monitoring'
-  }
-  // Why: a departed agent's failure has no expiry, so it must not pin the card over live work.
-  if (args.hasRetainedFailed) {
-    return 'failed'
-  }
-  // Why: an end Orca cannot prove is not a finish, and unlike a user's Stop it is news.
-  if (args.hasUnconfirmed) {
-    return 'unconfirmed'
-  }
-  // A user's Stop follows every state that is news, but must not collapse into success.
-  if (args.hasInterrupted) {
-    return 'interrupted'
-  }
-  if (args.hasLiveDone || args.hasRetainedDone) {
-    return 'done'
-  }
-  return heuristic
+  return rankWorktreeStatus(heuristic, args)
 }

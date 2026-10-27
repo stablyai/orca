@@ -66,7 +66,8 @@ export class CdpWsProxy {
       this.debuggerChannel,
       this.domFocusReplay,
       guardFocus,
-      showAgentPointer
+      showAgentPointer,
+      holdPaint
     )
   }
 

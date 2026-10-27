@@ -43,6 +43,8 @@ function describeLeftovers(leftovers: readonly WslHostTerminalLeftover[]): strin
 export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<WslHostServerStop> {
   const sleep = steps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
   const problems: string[] = []
+  // Anything proven still running makes the stop `live`; only doubt leaves it `unverifiable`.
+  let provenLive = false
   let leftovers: WslHostTerminalLeftover[] = []
   try {
     leftovers = await steps.endTerminals()
@@ -58,7 +60,11 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
   const servingRuntimeId = await steps.servingRuntimeId().catch(() => null)
   await steps.closeBridge()
   if (leftovers.length > 0) {
+    provenLive = true
     problems.push(`Terminals that refused to close: ${describeLeftovers(leftovers)}`)
+  }
+  if (census.liveSessions !== null && census.liveSessions > 0) {
+    provenLive = true
   }
   if (census.liveSessions !== 0) {
     problems.push(
@@ -70,11 +76,19 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
   // Decommission still verifies/refuses live sessions; retain its evidence.
   const result = await steps.decommission(census, servingRuntimeId)
   if (result.outcome === 'refused') {
+    provenLive ||= result.verdict === 'live'
     problems.push(`Orca’s server kept running: ${result.reason}`)
   } else if (result.retirement !== 'retired') {
+    provenLive ||= result.retirement === 'live'
     problems.push('Orca’s server stopped, but its terminal daemon is still running.')
   }
-  return problems.length === 0 ? { stopped: true } : { stopped: false, reason: problems.join(' ') }
+  return problems.length === 0
+    ? { stopped: true }
+    : {
+        stopped: false,
+        reason: problems.join(' '),
+        verdict: provenLive ? 'live' : 'unverifiable'
+      }
 }
 
 /** Use saved environment pairing and routed RPC for removal, never the bridge's raw pairing offer. */

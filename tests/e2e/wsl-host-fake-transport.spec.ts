@@ -414,7 +414,9 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
     await expect(confirm).toBeHidden({ timeout: 30_000 })
     // Closed by handle, so the host-only shell ends too, and nothing is reported left running.
     await expect.poll(() => hubTerminalsIn(hostOnlyPath), { timeout: 30_000 }).toBe(0)
-    await expect(page.getByText(/something in the distro is still running/)).toHaveCount(0)
+    await expect(
+      page.getByText(/something in the distro is still running|didn’t remove the host yet/)
+    ).toHaveCount(0)
     await expect
       .poll(() =>
         page.evaluate(

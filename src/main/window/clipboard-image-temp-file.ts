@@ -5,11 +5,17 @@ import { randomUUID } from 'node:crypto'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
-import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
+import {
+  agentSessionPastedImageName,
+  sanitizeAgentSessionAttachmentName,
+  type AgentSessionAttachmentClipboardTarget
+} from '../../shared/agent-session-attachments'
 import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
+  /** A phone-picked file's own name; without it the paste is saved as a .png. */
+  fileName?: string
   runtimeEnvironmentId?: string | null
   /** With `runtimeEnvironmentId`: store the image as an attachment of this structured chat. */
   agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
@@ -19,13 +25,16 @@ export type SaveClipboardImageAsTempFileArgs = {
   forStructuredChat?: boolean
 }
 
+// The path is typed into terminals, so keep no character a shell would expand.
+function shellInertFileName(name: string): string {
+  return sanitizeAgentSessionAttachmentName(name).replace(/[^\p{L}\p{M}\p{N} ._-]/gu, '_')
+}
+
 export async function saveClipboardImageBufferAsTempFile(
   buffer: Buffer,
   args?: SaveClipboardImageAsTempFileArgs
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
-
-  const fileName = `orca-paste-${Date.now()}-${randomUUID()}.png`
 
   if (args?.connectionId) {
     throw new SshHostNotServedError(args.connectionId)
@@ -37,7 +46,13 @@ export async function saveClipboardImageBufferAsTempFile(
     folder = nativeChatPasteFolder()
     await fs.mkdir(folder, { recursive: true })
   }
-  const tempPath = path.join(folder, fileName)
+  // A picked file keeps its own name, so the paste gets a folder to stay unique.
+  const tempPath = args?.fileName
+    ? path.join(folder, `orca-paste-${randomUUID()}`, shellInertFileName(args.fileName))
+    : path.join(folder, agentSessionPastedImageName(Date.now(), randomUUID()))
+  if (args?.fileName) {
+    await fs.mkdir(path.dirname(tempPath), { recursive: true })
+  }
   await fs.writeFile(tempPath, buffer)
   return tempPath
 }

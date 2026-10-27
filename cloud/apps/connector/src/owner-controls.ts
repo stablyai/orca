@@ -3,10 +3,12 @@ import type { CloudDatabase, SqlRow } from '@orca-cloud/cloud-database'
 import {
   ConnectorDeliveryResultSchema,
   ConnectorPendingPromptSchema,
+  type ConnectorConversation,
   type ConnectorHelloRequest,
   type ConnectorPendingPrompt
 } from '@orca-cloud/connector-contract'
 import { lockConnectorHost } from './connector-hosts.js'
+import { conversationKey, threadPlace } from './connector-threads.js'
 import type { QueueInTransaction } from './queue-delivery.js'
 
 // What an owner can do to their conversation from any connected app: answer the agent's prompt
@@ -30,8 +32,10 @@ export type AnswerablePrompt = Extract<ConnectorPendingPrompt, { kind: 'approval
 
 // One answer per prompt, so repeated presses are inbox duplicates. Hashed, so any contract-valid
 // conversation and prompt ids still make a delivery id within its 128 limit.
-export const answerDeliveryId = (externalId: string, promptId: string) =>
-  `answer:${createHash('sha256').update(`${externalId}\0${promptId}`).digest('hex')}`
+export const answerDeliveryId = (conversation: ConnectorConversation, promptId: string) =>
+  `answer:${createHash('sha256')
+    .update(`${conversation.source}\0${conversation.externalId}\0${promptId}`)
+    .digest('hex')}`
 
 export function pendingPrompt(thread: SqlRow): ConnectorPendingPrompt | undefined {
   return typeof thread.pending_prompt === 'string'
@@ -91,13 +95,13 @@ export async function ownerActionState(
 export async function applyOwnerAction(
   transaction: CloudDatabase,
   queue: QueueInTransaction,
-  externalId: string,
+  conversation: ConnectorConversation,
   actorUserId: string,
   action: OwnerAction
 ): Promise<OwnerActionOutcome | null> {
   const [found] = await transaction.query(
-    'SELECT host_id, owner_user_id FROM connector_threads WHERE external_id = ?',
-    [externalId]
+    'SELECT host_id, owner_user_id FROM connector_threads WHERE source = ? AND external_id = ?',
+    conversationKey(conversation)
   )
   if (!found) {
     return null
@@ -109,17 +113,15 @@ export async function applyOwnerAction(
   const hostId = String(found.host_id)
   await lockConnectorHost(transaction, hostId)
   const [thread] = await transaction.query(
-    'SELECT * FROM connector_threads WHERE external_id = ? AND host_id = ?',
-    [externalId, hostId]
+    'SELECT * FROM connector_threads WHERE source = ? AND external_id = ? AND host_id = ?',
+    [...conversationKey(conversation), hostId]
   )
   if (!thread) {
     return { kind: 'moved_on' }
   }
   const target = {
-    externalId,
-    teamId: String(thread.team_id),
-    channelId: String(thread.channel_id),
-    threadTs: String(thread.thread_ts),
+    conversation,
+    place: threadPlace(thread),
     ownerUserId,
     hostId,
     placeId: String(thread.place_id)
@@ -134,7 +136,7 @@ export async function applyOwnerAction(
   }
   const queued = await queue(transaction, {
     thread: target,
-    deliveryId: answerDeliveryId(externalId, action.promptId),
+    deliveryId: answerDeliveryId(conversation, action.promptId),
     body: { kind: 'answer', promptId: action.promptId, optionId: action.optionId }
   })
   return queued === 'queued'

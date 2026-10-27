@@ -25,12 +25,14 @@ import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from
 import {
   findUniqueWorktreeById,
   findWorktreeById,
-  isStaleExactLinkedPRLookup,
+  isStaleExactLinkedPRLookup
+} from './worktree-refresh'
+import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from './worktree-refresh'
+} from '../../../../shared/github/linked-pr-staleness'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]

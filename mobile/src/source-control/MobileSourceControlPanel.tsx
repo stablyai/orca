@@ -7,6 +7,10 @@ import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
+import {
+  buildMobileSourceControlPrimaryAction,
+  resolveMobileSourceControlReviewInputs
+} from './mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './MobileSourceControlModals'
 import { MobileSourceControlSegments } from './MobileSourceControlSegments'
 import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
@@ -141,6 +145,16 @@ export function MobileSourceControlPanel({
     branch: prBranch,
     headSha: prHeadSha
   })
+  const prSidebarState = prController.prSidebarState
+  const review = useMemo(
+    () => resolveMobileSourceControlReviewInputs(prSidebarState),
+    [prSidebarState]
+  )
+  const primaryActionArgs = state.primaryActionArgs
+  const primaryAction = useMemo(
+    () => buildMobileSourceControlPrimaryAction({ ...primaryActionArgs, review }),
+    [primaryActionArgs, review]
+  )
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
   const refetchPr = prController.refetchPRSidebar
@@ -192,7 +206,7 @@ export function MobileSourceControlPanel({
   }, [isHostedRepo, prBranch, prController.prSidebarState])
 
   const onRefresh = useCallback(() => {
-    void loadStatus({ preserveReadyOnFailure: true })
+    void loadStatus({ preserveReadyOnFailure: true, rereadSettings: true })
     if (activeTab === 'history') {
       setHistoryRefreshNonce((n) => n + 1)
       return
@@ -297,7 +311,7 @@ export function MobileSourceControlPanel({
 
       {showChanges ? (
         <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
-          <MobileSourceControlContent state={state} />
+          <MobileSourceControlContent state={state} primaryAction={primaryAction} />
         </View>
       ) : activeTab === 'changes' ? (
         statusGate

@@ -46,6 +46,11 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(resolveExplicitTerminalTitleAgentType('OMP')).toBe('omp')
   })
 
+  it('reads Pi/OMP identity only from the leading brand', () => {
+    expect(resolveExplicitTerminalTitleAgentType('⠂ OMP: fix title detection')).toBeNull()
+    expect(resolveExplicitTerminalTitleAgentType('Fix Pi > OMP routing - grok')).toBe('grok')
+  })
+
   it('treats Claude generic status prefixes as activity-only, not identity', () => {
     expect(resolveExplicitTerminalTitleAgentType('✳ investigating startup')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('⠸ investigating startup')).toBeNull()

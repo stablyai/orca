@@ -1,6 +1,7 @@
+import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget,
@@ -31,12 +32,12 @@ type CodexPaneLaneState = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'folderWorkspaces'
-  | 'projects'
   | 'repos'
   | 'runtimeEnvironments'
   | 'settings'
   | 'worktreesByRepo'
->
+> &
+  ProjectCatalogReadState
 
 /** Foreign machines have independent credentials; assign distinct lanes so local host/WSL account switches cannot mute their panes. */
 const RUNTIME_ENVIRONMENT_LANE_PREFIX = 'env:'

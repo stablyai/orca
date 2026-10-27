@@ -118,29 +118,26 @@ export function ProjectOptionRow({
       onMouseMove={onArm}
       onClick={onCommit}
       className={cn(
-        // Baseline-align mixed text sizes so name/detail read as one line.
-        'flex h-8 cursor-default items-baseline gap-2 rounded-sm px-2 text-sm',
+        'flex cursor-default items-start gap-2 rounded-sm px-2 py-1.5 text-sm',
         armed && 'bg-accent text-accent-foreground',
         current && !armed && 'bg-accent/60'
       )}
     >
-      <span className="flex h-8 shrink-0 items-center">
+      <span className="flex h-5 w-4 shrink-0 items-center justify-center">
         <ProjectOptionMark option={option} />
       </span>
-      {/* Reserve up to half the row for the name so deep paths cannot squeeze it away. */}
-      <MatchedText
-        text={option.displayName}
-        hits={nameHits}
-        className={cn('max-w-[50%] shrink', current && 'font-medium')}
-      />
-      <ProjectOptionDetail
-        detail={option.detail}
-        hits={detailHits}
-        className={cn(
-          'ml-auto min-w-0 flex-1 shrink-[999] justify-end pl-2 text-right text-xs',
-          ambiguous ? 'text-foreground/80' : 'text-muted-foreground'
-        )}
-      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <MatchedText
+          text={option.displayName}
+          hits={nameHits}
+          className={current ? 'font-medium' : undefined}
+        />
+        <ProjectOptionDetail
+          detail={option.detail}
+          hits={detailHits}
+          className={cn('text-xs', ambiguous ? 'text-foreground/80' : 'text-muted-foreground')}
+        />
+      </span>
     </div>
   )
 }

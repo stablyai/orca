@@ -80,23 +80,23 @@ export function registerReposRefreshIdentityTests(): void {
     it('keeps the projects and host setups arrays and entries across a no-op refetch', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
-      const setups = store.getState().projectHostSetups
+      const projects = store.getState().endpointProjects
+      const setups = store.getState().endpointProjectHostSetups
       expect(projects).toHaveLength(1)
       expect(setups).toHaveLength(1)
 
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects).toBe(projects)
-      expect(store.getState().projects[0]).toBe(projects[0])
-      expect(store.getState().projectHostSetups).toBe(setups)
-      expect(store.getState().projectHostSetups[0]).toBe(setups[0])
+      expect(store.getState().endpointProjects).toBe(projects)
+      expect(store.getState().endpointProjects[0]).toBe(projects[0])
+      expect(store.getState().endpointProjectHostSetups).toBe(setups)
+      expect(store.getState().endpointProjectHostSetups[0]).toBe(setups[0])
     })
 
     it('lets a nested hookSettings change through', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const setups = store.getState().projectHostSetups
+      const setups = store.getState().endpointProjectHostSetups
 
       mockRepos({
         ...repo,
@@ -104,20 +104,20 @@ export function registerReposRefreshIdentityTests(): void {
       })
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projectHostSetups).not.toBe(setups)
-      expect(store.getState().projectHostSetups[0]?.hookSettings?.mode).toBe('override')
+      expect(store.getState().endpointProjectHostSetups).not.toBe(setups)
+      expect(store.getState().endpointProjectHostSetups[0]?.hookSettings?.mode).toBe('override')
     })
 
     it('lets a displayName change through on projects', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
+      const projects = store.getState().endpointProjects
 
       mockRepos({ ...repo, displayName: 'Renamed' })
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects).not.toBe(projects)
-      expect(store.getState().projects[0]?.displayName).toBe('Renamed')
+      expect(store.getState().endpointProjects).not.toBe(projects)
+      expect(store.getState().endpointProjects[0]?.displayName).toBe('Renamed')
     })
 
     it('lets an array-field change through', async () => {
@@ -135,7 +135,7 @@ export function registerReposRefreshIdentityTests(): void {
     it('lets a nested gitRemoteIdentity change through', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
+      const projects = store.getState().endpointProjects
 
       mockRepos({
         ...repo,
@@ -143,39 +143,39 @@ export function registerReposRefreshIdentityTests(): void {
       })
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects).not.toBe(projects)
-      expect(store.getState().projects[0]?.gitRemoteIdentity?.remoteName).toBe('upstream')
+      expect(store.getState().endpointProjects).not.toBe(projects)
+      expect(store.getState().endpointProjects[0]?.gitRemoteIdentity?.remoteName).toBe('upstream')
     })
 
     it('treats clearing localWindowsRuntimePreference as a change', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projectId = store.getState().projects[0]!.id
+      const projectId = store.getState().endpointProjects[0]!.id
       const withPreference: Project = {
-        ...store.getState().projects[0]!,
+        ...store.getState().endpointProjects[0]!,
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       }
-      store.setState({ projects: [withPreference] })
+      store.setState({ endpointProjects: [withPreference] })
 
       await store.getState().fetchRepos(catalogOwner(store))
 
       // Why: a local-host refresh is authoritative; an absent key must not read as unchanged.
-      expect(store.getState().projects[0]).not.toBe(withPreference)
-      expect(store.getState().projects[0]?.id).toBe(projectId)
-      expect(store.getState().projects[0]?.localWindowsRuntimePreference).toBeUndefined()
+      expect(store.getState().endpointProjects[0]).not.toBe(withPreference)
+      expect(store.getState().endpointProjects[0]?.id).toBe(projectId)
+      expect(store.getState().endpointProjects[0]?.localWindowsRuntimePreference).toBeUndefined()
     })
 
     it('reuses an unchanged setup element while a sibling changes', async () => {
       mockRepos(repo, secondRepo)
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const setups = store.getState().projectHostSetups
+      const setups = store.getState().endpointProjectHostSetups
       expect(setups).toHaveLength(2)
 
       mockRepos(repo, { ...secondRepo, displayName: 'Repo 2 renamed' })
       await store.getState().fetchRepos(catalogOwner(store))
 
-      const next = store.getState().projectHostSetups
+      const next = store.getState().endpointProjectHostSetups
       expect(next).not.toBe(setups)
       expect(next[0]).toBe(setups[0])
       expect(next[1]).not.toBe(setups[1])
@@ -184,14 +184,14 @@ export function registerReposRefreshIdentityTests(): void {
     it('does not reuse a setup that moved to a different execution host', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const setups = store.getState().projectHostSetups
+      const setups = store.getState().endpointProjectHostSetups
       expect(setups[0]?.hostId).toBe('local')
 
       // Fallback setup.id equals repo.id; cross-host same-ID case must retain owner routing metadata.
       mockRepos({ ...repo, executionHostId: 'ssh:host-a', connectionId: 'host-a' })
       await store.getState().fetchRepos(catalogOwner(store))
 
-      const next = store.getState().projectHostSetups
+      const next = store.getState().endpointProjectHostSetups
       expect(next[0]).not.toBe(setups[0])
       expect(next[0]?.hostId).toBe('ssh:host-a')
     })
@@ -202,29 +202,29 @@ export function registerReposRefreshIdentityTests(): void {
       mockRepos(repo, sshRepo)
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const setups = store.getState().projectHostSetups
+      const setups = store.getState().endpointProjectHostSetups
       expect(setups).toHaveLength(2)
       expect(new Set(setups.map((setup) => setup.id)).size).toBe(1)
 
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projectHostSetups).toBe(setups)
-      expect(store.getState().projectHostSetups[0]).toBe(setups[0])
-      expect(store.getState().projectHostSetups[1]).toBe(setups[1])
+      expect(store.getState().endpointProjectHostSetups).toBe(setups)
+      expect(store.getState().endpointProjectHostSetups[0]).toBe(setups[0])
+      expect(store.getState().endpointProjectHostSetups[1]).toBe(setups[1])
     })
 
     it('drops a project and its setup when its repo disappears', async () => {
       mockRepos(repo, secondRepo)
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
+      const projects = store.getState().endpointProjects
 
       mockRepos(repo)
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects).not.toBe(projects)
-      expect(store.getState().projects).toHaveLength(1)
-      expect(store.getState().projectHostSetups).toHaveLength(1)
+      expect(store.getState().endpointProjects).not.toBe(projects)
+      expect(store.getState().endpointProjects).toHaveLength(1)
+      expect(store.getState().endpointProjectHostSetups).toHaveLength(1)
     })
 
     it('keeps a project owned only through a repo on another host', async () => {
@@ -242,13 +242,13 @@ export function registerReposRefreshIdentityTests(): void {
         updatedAt: 1
       }
       store.setState({
-        projects: [...store.getState().projects, sshOwned],
-        projectHostSetups: []
+        endpointProjects: [...store.getState().endpointProjects, sshOwned],
+        endpointProjectHostSetups: []
       })
 
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects.map((project) => project.id)).toContain('ssh-owned')
+      expect(store.getState().endpointProjects.map((project) => project.id)).toContain('ssh-owned')
     })
 
     it('keeps a project whose repo id is cloned onto a second host', async () => {
@@ -266,34 +266,36 @@ export function registerReposRefreshIdentityTests(): void {
         updatedAt: 1
       }
       store.setState({
-        projects: [...store.getState().projects, dualHostOwned],
-        projectHostSetups: []
+        endpointProjects: [...store.getState().endpointProjects, dualHostOwned],
+        endpointProjectHostSetups: []
       })
 
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects.map((project) => project.id)).toContain('dual-host-owned')
+      expect(store.getState().endpointProjects.map((project) => project.id)).toContain(
+        'dual-host-owned'
+      )
     })
 
     it('adds a project and its setup when a repo appears', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
+      const projects = store.getState().endpointProjects
 
       mockRepos(repo, secondRepo)
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects).not.toBe(projects)
-      expect(store.getState().projects).toHaveLength(2)
-      expect(store.getState().projectHostSetups).toHaveLength(2)
+      expect(store.getState().endpointProjects).not.toBe(projects)
+      expect(store.getState().endpointProjects).toHaveLength(2)
+      expect(store.getState().endpointProjectHostSetups).toHaveLength(2)
     })
 
     it('keeps catalog identity when repo.addedAt is 0', async () => {
       mockRepos({ ...repo, addedAt: 0 })
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
-      const setups = store.getState().projectHostSetups
+      const projects = store.getState().endpointProjects
+      const setups = store.getState().endpointProjectHostSetups
       expect(projects).toHaveLength(1)
       expect(setups).toHaveLength(1)
       expect(projects[0]?.createdAt).toBe(0)
@@ -301,18 +303,18 @@ export function registerReposRefreshIdentityTests(): void {
 
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects).toBe(projects)
-      expect(store.getState().projects[0]).toBe(projects[0])
-      expect(store.getState().projectHostSetups).toBe(setups)
-      expect(store.getState().projectHostSetups[0]).toBe(setups[0])
+      expect(store.getState().endpointProjects).toBe(projects)
+      expect(store.getState().endpointProjects[0]).toBe(projects[0])
+      expect(store.getState().endpointProjectHostSetups).toBe(setups)
+      expect(store.getState().endpointProjectHostSetups[0]).toBe(setups[0])
     })
 
     it('keeps catalog identity when repo.addedAt is omitted', async () => {
       mockRepos(omitAddedAt(repo))
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
-      const setups = store.getState().projectHostSetups
+      const projects = store.getState().endpointProjects
+      const setups = store.getState().endpointProjectHostSetups
       expect(projects).toHaveLength(1)
       expect(setups).toHaveLength(1)
       expect(projects[0]?.createdAt).toBe(0)
@@ -320,17 +322,17 @@ export function registerReposRefreshIdentityTests(): void {
 
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projects).toBe(projects)
-      expect(store.getState().projects[0]).toBe(projects[0])
-      expect(store.getState().projectHostSetups).toBe(setups)
-      expect(store.getState().projectHostSetups[0]).toBe(setups[0])
+      expect(store.getState().endpointProjects).toBe(projects)
+      expect(store.getState().endpointProjects[0]).toBe(projects[0])
+      expect(store.getState().endpointProjectHostSetups).toBe(setups)
+      expect(store.getState().endpointProjectHostSetups[0]).toBe(setups[0])
     })
 
     it('lets a nested hookSettings change through when repo.addedAt is 0', async () => {
       mockRepos({ ...repo, addedAt: 0 })
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const setups = store.getState().projectHostSetups
+      const setups = store.getState().endpointProjectHostSetups
 
       mockRepos({
         ...repo,
@@ -339,9 +341,9 @@ export function registerReposRefreshIdentityTests(): void {
       })
       await store.getState().fetchRepos(catalogOwner(store))
 
-      expect(store.getState().projectHostSetups).not.toBe(setups)
-      expect(store.getState().projectHostSetups[0]).not.toBe(setups[0])
-      expect(store.getState().projectHostSetups[0]?.hookSettings?.mode).toBe('override')
+      expect(store.getState().endpointProjectHostSetups).not.toBe(setups)
+      expect(store.getState().endpointProjectHostSetups[0]).not.toBe(setups[0])
+      expect(store.getState().endpointProjectHostSetups[0]?.hookSettings?.mode).toBe('override')
     })
   })
 
@@ -412,8 +414,8 @@ export function registerReposRefreshIdentityTests(): void {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
       const before = store.getState()
-      const projects = before.projects
-      const setups = before.projectHostSetups
+      const projects = before.endpointProjects
+      const setups = before.endpointProjectHostSetups
       expect(projects).toHaveLength(1)
       expect(setups).toHaveLength(1)
 
@@ -422,26 +424,26 @@ export function registerReposRefreshIdentityTests(): void {
       // Empty readoption returns state unchanged; fresh pending arrays alone wake all subscribers.
       expect(store.getState()).toBe(before)
       expect(store.getState().pendingSshRepoReadoptions).toBe(before.pendingSshRepoReadoptions)
-      expect(store.getState().projects).toBe(projects)
-      expect(store.getState().projects[0]).toBe(projects[0])
-      expect(store.getState().projectHostSetups).toBe(setups)
-      expect(store.getState().projectHostSetups[0]).toBe(setups[0])
+      expect(store.getState().endpointProjects).toBe(projects)
+      expect(store.getState().endpointProjects[0]).toBe(projects[0])
+      expect(store.getState().endpointProjectHostSetups).toBe(setups)
+      expect(store.getState().endpointProjectHostSetups[0]).toBe(setups[0])
     })
 
     it('keeps catalog identity for a pending-only readoption while pending updates', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
-      const setups = store.getState().projectHostSetups
+      const projects = store.getState().endpointProjects
+      const setups = store.getState().endpointProjectHostSetups
       const readoption = { oldTargetId: 'ssh-old', newTargetId: 'ssh-new', repoIds: [repo.id] }
 
       store.getState().recordSshRepoReadoptions([readoption])
 
       expect(store.getState().pendingSshRepoReadoptions).toEqual([readoption])
-      expect(store.getState().projects).toBe(projects)
-      expect(store.getState().projects[0]).toBe(projects[0])
-      expect(store.getState().projectHostSetups).toBe(setups)
-      expect(store.getState().projectHostSetups[0]).toBe(setups[0])
+      expect(store.getState().endpointProjects).toBe(projects)
+      expect(store.getState().endpointProjects[0]).toBe(projects[0])
+      expect(store.getState().endpointProjectHostSetups).toBe(setups)
+      expect(store.getState().endpointProjectHostSetups[0]).toBe(setups[0])
     })
 
     it('replaces the moved setup on a real prune/rehome', async () => {
@@ -458,7 +460,7 @@ export function registerReposRefreshIdentityTests(): void {
       mockRepos(oldHostRepo, newHostRepo)
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
-      const setups = store.getState().projectHostSetups
+      const setups = store.getState().endpointProjectHostSetups
       expect(setups).toHaveLength(2)
       const oldSetup = setups.find((setup) => setup.hostId === 'ssh:ssh-old')
       const newSetup = setups.find((setup) => setup.hostId === 'ssh:ssh-new')
@@ -471,7 +473,7 @@ export function registerReposRefreshIdentityTests(): void {
           { oldTargetId: 'ssh-old', newTargetId: 'ssh-new', repoIds: [repo.id] }
         ])
 
-      const next = store.getState().projectHostSetups
+      const next = store.getState().endpointProjectHostSetups
       expect(next).not.toBe(setups)
       expect(next).toHaveLength(1)
       expect(next[0]).not.toBe(oldSetup)

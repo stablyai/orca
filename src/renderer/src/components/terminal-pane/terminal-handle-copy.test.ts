@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 

@@ -19,6 +19,7 @@ const cellPoint = (col: number, row: number) => ({
 function textLine(text: string): TerminalDocumentLine {
   return {
     length: text.length,
+    isWrapped: false,
     translateToString: (_trimRight, start, end) => text.slice(start ?? 0, end ?? text.length)
   }
 }

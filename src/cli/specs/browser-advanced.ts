@@ -183,7 +183,8 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['set', 'media'],
-    summary: 'Set color scheme and reduced motion preferences',
+    summary:
+      'Set color scheme and reduced motion preferences (omitted ones reset to no preference)',
     usage:
       'orca set media [--color-scheme <dark|light>] [--reduced-motion <reduce|no-preference>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'color-scheme', 'reduced-motion', 'worktree']

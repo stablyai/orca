@@ -13,6 +13,7 @@ export type TerminalWebViewCommand =
       rows: number
       initialData?: string
       oscLinks?: TerminalOscLinkRange[]
+      kittyKeyboardFlags?: number
       terminalTheme?: RuntimeMobileTerminalTheme
       fontScale?: number
       // Width-reflow replay contains the same rewrapped content; preserve reader position instead of jumping to bottom.

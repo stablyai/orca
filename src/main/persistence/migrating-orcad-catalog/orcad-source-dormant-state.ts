@@ -43,6 +43,8 @@ export type OrcadMigrationSourceDormantInspection = {
   blockedCounts: Record<TransferredDormantKind, number>
   /** Session blockers and remedies. */
   blockedSessionItems: string[]
+  /** Automations that move once their in-flight run finishes. */
+  runningAutomationItems: string[]
   /** Retained on this desktop after confirmed "Move anyway". */
   leftBehindItems: string[]
 }
@@ -235,6 +237,11 @@ export function collectOrcadMigrationSourceDormantState(
     },
     blockedCounts,
     blockedSessionItems,
+    runningAutomationItems: leaveBehind
+      ? []
+      : automationState.runningAutomationNames.map(
+          (name) => `${name} is running; wait for it to finish, then connect again`
+        ),
     leftBehindItems
   }
 }

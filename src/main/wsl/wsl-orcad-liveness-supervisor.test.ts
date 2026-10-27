@@ -5,6 +5,7 @@ import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import type { WslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
+import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import { WSL_ORCAD_HEARTBEAT_MS } from './wsl-orcad-liveness-state'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
@@ -70,15 +71,20 @@ function harness(options: { visible?: boolean } = {}) {
     }
   )
   const readRunning = vi.fn(async () => state.running)
+  const requireRunning = vi.fn(async (_distro: string) => true)
   const readIdentity = vi.fn(async () => state.identity)
   const collectCensus = vi.fn(async () => CENSUS)
   const ensureHolder = vi.fn(async () => {})
+  const retireListener = vi.fn(async () => {
+    connection = null
+  })
   const supervisor = new WslOrcadLivenessSupervisor({
     manager: {
       ensure,
       get: () => connection,
       publish: (_distro, status) => statuses.push(status),
-      close: async () => {}
+      close: async () => {},
+      retireListener
     },
     readRunning,
     readIdentity,
@@ -101,6 +107,7 @@ function harness(options: { visible?: boolean } = {}) {
     collectCensus,
     hasUserVisibleWork: () => state.visible,
     deferUntilRunning: (_distro, _key, task) => deferred.push(task),
+    requireRunning,
     ensureHolder,
     subscribePower: (listener) => {
       power = listener
@@ -151,9 +158,11 @@ function harness(options: { visible?: boolean } = {}) {
     deferred,
     ensure,
     readRunning,
+    requireRunning,
     readIdentity,
     collectCensus,
     ensureHolder,
+    retireListener,
     advance,
     settle,
     power: () => power,
@@ -183,6 +192,8 @@ describe('WslOrcadLivenessSupervisor', () => {
     ])
     expect(h.readIdentity).toHaveBeenCalledTimes(1) // never exec'd into the stopped distro
     expect(h.ensure).toHaveBeenCalledTimes(1)
+    // Parked with visible work too: a dial to a kept listener would boot the distro.
+    expect(h.retireListener).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     expect(h.deferred).toHaveLength(1)
     // Started by someone else: relaunch into the running distro.
     h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
@@ -220,6 +231,32 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.statuses.at(-1)).toMatchObject({ state: 'distro-stopped' })
   })
 
+  it('reports settling after a clean exit too (code 0 from wsl --shutdown)', async () => {
+    const h = harness({ visible: true })
+    await h.supervisor.connect('Ubuntu')
+    h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
+    h.lastWatch().exit(0)
+    // Past the verdict pass (settle and re-read), the window after the exit still holds.
+    await h.advance(1_000)
+    expect(h.supervisor.isSettling('Ubuntu')).toBe(true)
+    await h.advance(10_000)
+    expect(h.supervisor.isSettling('Ubuntu')).toBe(false)
+  })
+
+  it('settles a clean exit before reading identity, so a stale list cannot boot the distro', async () => {
+    const h = harness({ visible: true })
+    await h.supervisor.connect('Ubuntu')
+    const identityReads = h.readIdentity.mock.calls.length
+    // wsl --shutdown ends the watch cleanly while WSL still lists the distro for a moment.
+    h.state.running = { status: 'confirmed', distros: [] }
+    h.readRunning.mockResolvedValueOnce({ status: 'confirmed', distros: ['Ubuntu'] })
+    h.lastWatch().exit(0)
+    await h.advance(60_000)
+    expect(h.statuses.at(-1)).toMatchObject({ state: 'distro-stopped' })
+    // Never exec'd into the stopping distro.
+    expect(h.readIdentity).toHaveBeenCalledTimes(identityReads)
+  })
+
   it('never boots a stopped distro for background work; the gate resumes it once running', async () => {
     const h = harness({ visible: false })
     await h.supervisor.connect('Ubuntu')
@@ -231,6 +268,8 @@ describe('WslOrcadLivenessSupervisor', () => {
     ])
     expect(h.ensure).toHaveBeenCalledTimes(1)
     expect(h.ensureHolder).not.toHaveBeenCalled()
+    // A dial to a kept listener would spawn wsl.exe and boot the stopped distro.
+    expect(h.retireListener).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     expect(h.deferred).toHaveLength(1)
     // The user started it some other way: the distro restarted, so relaunch into it.
     h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
@@ -272,15 +311,48 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.lastWatch().closed).toBe(false)
   })
 
+  it('recovery reconnects only into a distro it confirms running right before spawning (E9)', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    h.state.identity = { distroInstance: 'boot:1', orcad: null }
+    h.lastWatch().exit(1)
+    await h.advance(60_000)
+    const recoveryCalls = h.ensure.mock.calls.slice(1)
+    expect(recoveryCalls.length).toBeGreaterThan(0)
+    for (const [, opts] of recoveryCalls) {
+      expect(opts).toMatchObject({ requireRunning: h.requireRunning })
+    }
+  })
+
   it('reports ready itself when a user connect supersedes a recovery', async () => {
     const h = harness()
     await h.supervisor.connect('Ubuntu')
     h.state.identity = { distroInstance: 'boot:1', orcad: null }
     h.lastWatch().exit(0)
-    await h.settle()
+    // A clean exit is settled (and the list re-read) before the verdict, as a failed one is.
+    await h.advance(EXIT_SETTLE_MS)
     expect(h.statuses.at(-1)).toMatchObject({ state: 'reconnecting' })
     await h.supervisor.connect('Ubuntu')
     expect(h.statuses.at(-1)).toEqual({ state: 'ready', census: null })
+  })
+
+  it('never reports ready or holds the distro on a wake after the listener was retired', async () => {
+    const h = harness({ visible: false })
+    // No pid file at arm: the port is the only liveness evidence.
+    h.state.identity = { distroInstance: 'boot:1', orcad: null }
+    await h.supervisor.connect('Ubuntu')
+    h.state.watchSignal = 'refused'
+    h.lastWatch().exit(0)
+    await h.advance(60_000)
+    expect(h.retireListener).toHaveBeenCalledOnce()
+    // Before the fix, a missing connection read as a port that answered.
+    h.state.watchSignal = 'ready'
+    const holds = h.ensureHolder.mock.calls.length
+    h.power()?.onResume()
+    await h.advance(60_000)
+    expect(h.statuses.filter((status) => status.state === 'ready')).toEqual([])
+    expect(h.ensureHolder).toHaveBeenCalledTimes(holds)
+    expect(h.ensure).toHaveBeenCalledTimes(1)
   })
 
   it('leaves an orcad nobody uses stopped instead of undoing its idle exit', async () => {
@@ -291,13 +363,14 @@ describe('WslOrcadLivenessSupervisor', () => {
     await h.advance(60_000)
     expect(h.statuses).toEqual([{ state: 'idle', terminals: 'unverifiable' }])
     expect(h.ensure).toHaveBeenCalledTimes(1)
+    expect(h.retireListener).toHaveBeenCalledExactlyOnceWith('Ubuntu')
   })
 
   it('reattaches the watch when orcad is still the same process', async () => {
     const h = harness()
     await h.supervisor.connect('Ubuntu')
     h.lastWatch().exit(0)
-    await h.advance(0)
+    await h.advance(EXIT_SETTLE_MS)
     expect(h.statuses).toEqual([])
     expect(h.watches).toHaveLength(2)
     expect(h.ensure).toHaveBeenCalledTimes(1)

@@ -21,7 +21,10 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
 import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session-attachments'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { readRuntimeTerminalArtifactContent } from './runtime-terminal-artifact-read'
+import {
+  isHostFileOutsideWorkspaces,
+  readHostFileOutsideWorkspaces
+} from './runtime-terminal-artifact-read'
 import {
   pagedTextFileResult,
   pinRemoteFileAddress,
@@ -53,7 +56,9 @@ export async function readRuntimeFileContent({
   includeLocalLogMetadata,
   access,
   terminalArtifactGrantId,
-  pageOversizedBinary
+  expectedEnvironmentPairingRevision,
+  pageOversizedBinary,
+  wakeWslDistro
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   assertExternalSshReadOwnership(target, connectionId, expectedExternalSshTargetId)
   if (target.kind !== 'environment' || !worktreeId) {
@@ -61,15 +66,19 @@ export async function readRuntimeFileContent({
       filePath,
       connectionId,
       includeLocalLogMetadata,
-      ...localAccess(connectionId, access)
+      ...localAccess(connectionId, access),
+      ...(wakeWslDistro && !connectionId ? { wakeWslDistro } : {})
     })
   }
-  if (terminalArtifactGrantId) {
-    return readRuntimeTerminalArtifactContent({
+  // Why: decided synchronously so ordinary reads pin their pairing without an extra await.
+  if (isHostFileOutsideWorkspaces({ filePath, relativePath, grantId: terminalArtifactGrantId })) {
+    return readHostFileOutsideWorkspaces({
       target,
       worktreeId,
-      absolutePath: filePath,
-      grantId: terminalArtifactGrantId
+      filePath,
+      relativePath,
+      grantId: terminalArtifactGrantId,
+      expectedEnvironmentPairingRevision
     })
   }
   // A workspace path first; a chat's scratch file is the absolute path no workspace contains.

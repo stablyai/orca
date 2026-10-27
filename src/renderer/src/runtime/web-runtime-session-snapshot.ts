@@ -42,6 +42,11 @@ function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApply
   return sessionTabsApplyModules
 }
 
+/** Lets a test pay this lazy load before a timed wait instead of inside it. */
+export async function loadWebRuntimeSessionTabsApplyModulesForTests(): Promise<void> {
+  await loadSessionTabsApplyModules()
+}
+
 export async function refreshWebRuntimeSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string,

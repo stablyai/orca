@@ -39,7 +39,7 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 import { useAppStore } from '@/store'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeAcceptedWebSessionTerminalHandle } from './web-session-terminal-handle-events'
 import {
   _getWebSessionTabsReceiptTrackingCountsForTest,

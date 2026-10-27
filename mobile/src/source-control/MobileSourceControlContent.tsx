@@ -7,14 +7,17 @@ import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { MobileSourceControlFileList } from './MobileSourceControlFileList'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
-  state: MobileSourceControlState
+  state: Omit<MobileSourceControlState, 'primaryActionArgs'>
+  // The panel builds it once it knows the branch's review.
+  primaryAction: MobileSourceControlPrimaryAction
 }
 
-export function MobileSourceControlContent({ state }: Props) {
+export function MobileSourceControlContent({ state, primaryAction }: Props) {
   const {
     insets,
     connState,
@@ -36,7 +39,6 @@ export function MobileSourceControlContent({ state }: Props) {
     stageablePaths,
     unstageablePaths,
     stagedCount,
-    primaryAction,
     createPrAction,
     stageAll,
     unstageAll,

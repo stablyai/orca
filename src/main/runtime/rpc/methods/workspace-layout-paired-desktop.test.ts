@@ -7,7 +7,7 @@ import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
 } from '../../../../shared/workspace-layout/layout-intents-capability'
-import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcCallerScope } from '../rpc-caller-scope'
 

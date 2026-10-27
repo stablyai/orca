@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { presentGitHubPRMergeState, type GitHubPRMergeStateInput } from './github-pr-merge-state'
+import type { GitHubPRMergeStateInput } from '../../../shared/github/pull-request-merge-state'
+import { presentGitHubPRMergeState } from './github-pr-merge-state'
 
 function pr(overrides: Partial<GitHubPRMergeStateInput> = {}): GitHubPRMergeStateInput {
   return {

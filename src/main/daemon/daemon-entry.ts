@@ -1,3 +1,4 @@
+import '../memory/host-malloc-tunables-claim'
 import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'

@@ -1,6 +1,8 @@
 import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
+import { getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
+import { canUseRepoWideTrust } from '../../../shared/orca-hook-trust-entries'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import {
   checkRuntimeHooks,
@@ -29,20 +31,6 @@ function enqueueTrustPrompt<T>(task: () => Promise<T>): Promise<T> {
 
 export function __resetTrustPromptChainForTests(): void {
   trustPromptChain = Promise.resolve()
-}
-
-function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
-  const defaultTabCommands = (yamlHooks?.defaultTabs ?? [])
-    .map((tab, index) => {
-      const command = tab.command?.trim()
-      if (!command) {
-        return null
-      }
-      const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${command}`
-    })
-    .filter((entry): entry is string => entry !== null)
-  return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
 }
 
 function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
@@ -97,11 +85,6 @@ function hookRepoOwnerHostId(
   return ownerHostId
 }
 
-function canUseRepoWideTrust(state: AppState, repoId: string): boolean {
-  const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
-  return Boolean(state.trustedOrcaHooks[repoId]?.all) && !hasDuplicateRepoId
-}
-
 async function confirmScriptContent(
   state: AppState,
   repoId: string,
@@ -113,7 +96,7 @@ async function confirmScriptContent(
   if (isCancelled()) {
     return 'skip'
   }
-  if (canUseRepoWideTrust(state, repoId) || !scriptContent) {
+  if (canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId) || !scriptContent) {
     return 'run'
   }
 
@@ -245,7 +228,7 @@ export async function ensureHooksConfirmed(
       return 'skip'
     }
     const state = typeof stateOrGetter === 'function' ? stateOrGetter() : stateOrGetter
-    if (canUseRepoWideTrust(state, repoId)) {
+    if (canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId)) {
       return 'run'
     }
 

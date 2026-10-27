@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/native-chat/tools/native-chat-tool-run-sentence'
 import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 import { NATIVE_CHAT_DIFF_CARD_COPY } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
-import { NATIVE_CHAT_TASK_LIST_COPY } from '../../../../shared/native-chat-task-list'
+import { NATIVE_CHAT_TASK_LIST_COPY } from '../../../../shared/native-chat/input/native-chat-task-list'
 
 // Shared mobile copy and desktop catalog fallbacks must match byte-for-byte to prevent silent platform drift.
 const catalog = en as unknown as {

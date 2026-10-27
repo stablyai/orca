@@ -106,10 +106,11 @@ export function wakeRememberedWslHosts(
   }
   let registered: Set<string>
   try {
+    // A host whose Remove is pending must not be booted: that would undo its stop's proof.
     registered = new Set(
-      readWslHostDeployments(userDataPath).deployments.map((record) =>
-        wslDistroHolderKey(record.distro)
-      )
+      readWslHostDeployments(userDataPath)
+        .deployments.filter((record) => !record.pendingStop)
+        .map((record) => wslDistroHolderKey(record.distro))
     )
   } catch {
     return []

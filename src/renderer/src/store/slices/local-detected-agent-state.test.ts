@@ -32,7 +32,8 @@ function createTestStore(repos: Repo[]) {
   )
   store.setState({
     repos,
-    projects: repos.map((repo) => ({
+    endpointProjectHostSetups: [],
+    endpointProjects: repos.map((repo) => ({
       id: repo.id,
       displayName: repo.displayName,
       badgeColor: repo.badgeColor,
@@ -96,7 +97,7 @@ describe('local detected agent context lifecycle', () => {
 
   it('keeps native provider inventory across WSL selection and refresh', async () => {
     const store = createTestStore([makeRepo('repo-1')])
-    const projects = store.getState().projects
+    const projects = store.getState().endpointProjects
     detectAgents.mockResolvedValueOnce(['grok']).mockResolvedValueOnce([])
     await store.getState().ensureNativeDetectedAgents()
     expect(detectAgents).toHaveBeenNthCalledWith(1, undefined)
@@ -106,7 +107,7 @@ describe('local detected agent context lifecycle', () => {
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
     const inventory = store.getState().readLocalAgentInventory(FLOATING_TERMINAL_WORKTREE_ID)
     expect(inventory).toEqual({ ids: ['grok'], state: 'successful' })
-    store.setState({ projects: [] })
+    store.setState({ endpointProjects: [] })
     refreshAgents.mockRejectedValueOnce(new Error('native refresh failed'))
     await expect(store.getState().refreshDetectedAgents()).resolves.toEqual(['grok'])
     expect(readNativeDetectedAgents(store.getState())).toEqual(['grok'])
@@ -122,14 +123,14 @@ describe('local detected agent context lifecycle', () => {
         finish = resolve
       })
     )
-    store.setState({ projects })
+    store.setState({ endpointProjects: projects })
     const wslRefresh = store.getState().refreshDetectedAgents()
     expect(store.getState().detectedAgentIds).toBeNull()
     finish({ agents: ['codex'] })
     await wslRefresh
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
     expect(readNativeDetectedAgents(store.getState())).toEqual(['grok'])
-    store.setState({ projects: [] })
+    store.setState({ endpointProjects: [] })
     await store.getState().refreshDetectedAgents()
     expect(readNativeDetectedAgents(store.getState())).toEqual(['codex'])
   })

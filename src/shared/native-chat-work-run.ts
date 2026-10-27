@@ -1,6 +1,6 @@
 // Group tool calls and finished thoughts into one collapsible run between prose rows; thinking before each call must not double the visible rows.
 
-import { isNativeChatAskCall } from './native-chat-ask-row'
+import { isNativeChatAskCall } from './native-chat/input/native-chat-ask-row'
 import { deriveNativeChatRowContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
 import { pairToolBlocks } from './native-chat/tools/native-chat-tool-pairs'

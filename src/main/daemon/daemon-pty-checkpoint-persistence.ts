@@ -170,7 +170,8 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         liveSnapshot,
         restoreInfo,
         pendingRecords,
-        isFirstTake: opts.isFirstTake
+        isFirstTake: opts.isFirstTake,
+        resizeModel: this.historyManager?.hostingResizeModel()
       })
     } catch (error) {
       console.warn('[history] durable history rebuild failed:', sessionId, error)

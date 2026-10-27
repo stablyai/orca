@@ -6,6 +6,7 @@ import {
   type AgentSessionRefusalError
 } from '../../../shared/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
+import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connector-params'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
@@ -99,6 +100,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'remote_update_not_downloaded',
   'connectors_disabled',
   'external_conversation_not_found',
+  ...CONNECTOR_REPLY_ERROR_CODES,
   ...AGENT_SESSION_RPC_ERROR_CODES
 ])
 

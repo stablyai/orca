@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -41,6 +43,7 @@ vi.mock('@/lib/structured-agent-launch-settlement', () => ({
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildAgentLaunchRouteInput,
+  selectAgentLaunchRouteView,
   workspaceKindForWorktreeId,
   type AgentLaunchRouteArgs,
   type AgentLaunchRouteStore
@@ -491,4 +494,25 @@ describe('a cwd that names the workspace root', () => {
     expect(at('/srv/notes/')).toBe(false)
     expect(at('/srv/notes/drafts')).toBe(true)
   })
+})
+
+it('captures both actual endpoint catalogs and invalidates the route view for either write', () => {
+  const store = createTestStore()
+  const first = selectAgentLaunchRouteView(store.getState())
+  expect(first.projectHostSetupProjection).toBe(
+    getProjectHostSetupProjectionFromState(store.getState())
+  )
+  expect(selectAgentLaunchRouteView(store.getState())).toBe(first)
+  store.setState({ endpointProjects: [...store.getState().endpointProjects] })
+  const projectsChanged = selectAgentLaunchRouteView(store.getState())
+  expect(projectsChanged).not.toBe(first)
+  expect(projectsChanged.projectHostSetupProjection).toBe(
+    getProjectHostSetupProjectionFromState(store.getState())
+  )
+  store.setState({ endpointProjectHostSetups: [...store.getState().endpointProjectHostSetups] })
+  const setupsChanged = selectAgentLaunchRouteView(store.getState())
+  expect(setupsChanged).not.toBe(projectsChanged)
+  expect(setupsChanged.projectHostSetupProjection).toBe(
+    getProjectHostSetupProjectionFromState(store.getState())
+  )
 })

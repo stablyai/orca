@@ -1,3 +1,4 @@
+import { normalizeSavedGitRemoteIdentity } from './git-remote-identity'
 import { getRepoExecutionHostId } from './execution-host'
 import {
   normalizeProjectHostSetupRow,
@@ -7,6 +8,8 @@ import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
 import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
 import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
 import type { Repo } from './repo-types'
+import { getRepoSetupOwnerScope } from './repo-host-identity'
+import { getOutclaimedProjectSetups } from './project-checkout-claim'
 
 /** Own fresh mutable project drafts: using persisted/caller rows leaks mergeProjectRepo writes. Mirror sourceRepoIds in a set
  * to avoid membership rescans. */
@@ -68,18 +71,9 @@ export function getGitRemoteProviderIdentity(
   )
 }
 
-function getProjectGitRemoteIdentity(
-  repo: Pick<Repo, 'gitRemoteIdentity'>
-): NonNullable<Repo['gitRemoteIdentity']> | null {
-  const identity = repo.gitRemoteIdentity
-  const canonicalKey =
-    typeof identity?.canonicalKey === 'string' ? identity.canonicalKey.trim() : ''
-  const remoteName = typeof identity?.remoteName === 'string' ? identity.remoteName.trim() : ''
-  const remoteUrl = typeof identity?.remoteUrl === 'string' ? identity.remoteUrl.trim() : ''
-  return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null
-}
-
-/** Limit gh setup prompts to GitHub-backed projects proven by remote, explicit upstream or generated GitHub avatar. */
+/** True when the repo resolves to a GitHub provider identity (via explicit
+ *  upstream or a GitHub-sourced avatar icon). Used to scope GitHub-CLI setup
+ *  prompts to users who actually have GitHub-backed projects. */
 export function isGitHubBackedRepo(
   repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): boolean {
@@ -89,7 +83,10 @@ export function isGitHubBackedRepo(
 export function hasProjectRemoteIdentity(
   repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): boolean {
-  return getProjectProviderIdentity(repo) !== null || getProjectGitRemoteIdentity(repo) !== null
+  return (
+    getProjectProviderIdentity(repo) !== null ||
+    normalizeSavedGitRemoteIdentity(repo.gitRemoteIdentity) !== null
+  )
 }
 
 /** Undefined remote identity is pending/unreachable, distinct from resolved null (checked, unusable).
@@ -111,7 +108,7 @@ export function getProjectIdentityKey(
   if (identity) {
     return getProjectIdForProviderIdentity(identity)
   }
-  const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
+  const gitRemoteIdentity = normalizeSavedGitRemoteIdentity(repo.gitRemoteIdentity)
   if (gitRemoteIdentity) {
     return `${GIT_REMOTE_PROJECT_ID_PREFIX}${gitRemoteIdentity.canonicalKey}`
   }
@@ -125,12 +122,6 @@ export function isHostLocalProjectId(projectId: string): boolean {
 
 export function getProjectIdForProviderIdentity(identity: ProjectProviderIdentity): string {
   return `github:${githubRepoIdentityKey(identity)}`
-}
-
-function getProjectId(
-  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
-): string {
-  return getProjectIdentityKey(repo)
 }
 
 function isGitHubRemoteHost(host: string): boolean {
@@ -246,7 +237,7 @@ export function mergeCatalogUpdatedAt(left: number, right: number): number {
 
 function createProjectFromRepo(repo: Repo, projectId: string): Project {
   const identity = getProjectProviderIdentity(repo)
-  const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
+  const gitRemoteIdentity = normalizeSavedGitRemoteIdentity(repo.gitRemoteIdentity)
   const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
   return {
     id: projectId,
@@ -301,22 +292,53 @@ function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
 
 export function projectHostSetupProjectionFromRepos(
   repos: readonly Repo[],
-  _now?: number
+  _now?: number,
+  setupFacts: readonly ProjectHostSetup[] = []
+): ProjectHostSetupProjection {
+  return projectHostSetupProjection(repos, setupFacts, true)
+}
+
+export function projectHostSetupCompatibilityFromRepos(
+  repos: readonly Repo[]
+): ProjectHostSetupProjection {
+  return projectHostSetupProjection(repos, [], false)
+}
+
+function projectHostSetupProjection(
+  repos: readonly Repo[],
+  setupFacts: readonly ProjectHostSetup[],
+  claims: boolean
 ): ProjectHostSetupProjection {
   const projectById = new Map<string, ProjectAccumulator>()
   const setups: ProjectHostSetup[] = []
 
-  for (const repo of repos) {
-    const projectId = getProjectId(repo)
-    const existing = projectById.get(projectId)
+  // Why normalize here: a repo row is untrusted persisted/wire data too, and these
+  // constructors copy repo.path / repo.id straight onto fields consumers call .trim() on.
+  const factsByOwner = new Map(
+    setupFacts.map((setup) => [
+      JSON.stringify([getRepoSetupOwnerScope(setup), setup.repoId]),
+      setup
+    ])
+  )
+  const remoteSetups = repos.map((repo) => {
+    const setup = createSetupFromRepo(repo, getProjectIdentityKey(repo))
+    const facts = factsByOwner.get(JSON.stringify([getRepoSetupOwnerScope(setup), repo.id]))
+    const setupMethod = facts?.setupMethod ?? setup.setupMethod
+    return normalizeProjectHostSetupRow({ ...setup, setupMethod })
+  })
+  const outclaimed = claims ? getOutclaimedProjectSetups(remoteSetups) : new Set<ProjectHostSetup>()
+  for (const [index, repo] of repos.entries()) {
+    const remoteSetup = remoteSetups[index]
+    const setup = outclaimed.has(remoteSetup)
+      ? { ...remoteSetup, projectId: `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}` }
+      : remoteSetup
+    const existing = projectById.get(setup.projectId)
     if (existing) {
       mergeProjectRepo(existing, repo)
     } else {
-      const project = createProjectFromRepo(repo, projectId)
-      projectById.set(projectId, { project, sourceRepoIds: new Set(project.sourceRepoIds) })
+      const project = createProjectFromRepo(repo, setup.projectId)
+      projectById.set(setup.projectId, { project, sourceRepoIds: new Set(project.sourceRepoIds) })
     }
-    // Repo rows are untrusted too; normalize constructors copying id/path into fields callers trim.
-    const setup = normalizeProjectHostSetupRow(createSetupFromRepo(repo, projectId))
     setups.push(setup)
   }
 
@@ -324,11 +346,4 @@ export function projectHostSetupProjectionFromRepos(
     projects: [...projectById.values()].map((entry) => normalizeProjectRow(entry.project)),
     setups
   }
-}
-
-export function getProjectHostSetupsForProject(
-  setups: readonly ProjectHostSetup[],
-  projectId: string
-): readonly ProjectHostSetup[] {
-  return setups.filter((setup) => setup.projectId === projectId)
 }

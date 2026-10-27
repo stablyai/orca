@@ -50,10 +50,10 @@ describe('repo slice runtime routing', () => {
     await store.getState().fetchRepos({ runtimeEnvironmentId: null })
 
     expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }])
-    expect(store.getState().projects).toEqual([
+    expect(store.getState().endpointProjects).toEqual([
       expect.objectContaining({ id: 'repo:local-repo', sourceRepoIds: ['local-repo'] })
     ])
-    expect(store.getState().projectHostSetups).toEqual([
+    expect(store.getState().endpointProjectHostSetups).toEqual([
       expect.objectContaining({ id: 'local-repo', hostId: 'local' })
     ])
     expect(reposList).toHaveBeenCalled()
@@ -116,10 +116,10 @@ describe('repo slice runtime routing', () => {
     await store.getState().fetchRepos({ runtimeEnvironmentId: 'env-1' })
 
     expect(store.getState().repos).toEqual([{ ...remoteRepo, executionHostId: 'runtime:env-1' }])
-    expect(store.getState().projects).toEqual([
+    expect(store.getState().endpointProjects).toEqual([
       expect.objectContaining({ id: 'repo:remote-repo', sourceRepoIds: ['remote-repo'] })
     ])
-    expect(store.getState().projectHostSetups).toEqual([
+    expect(store.getState().endpointProjectHostSetups).toEqual([
       expect.objectContaining({ id: 'remote-repo', hostId: 'runtime:env-1' })
     ])
     expect(store.getState().activeRepoId).toBeNull()
@@ -280,7 +280,7 @@ describe('repo slice runtime routing', () => {
     }
     projectsSetupExistingFolder.mockResolvedValue({ project, setup, repo: localRepo })
     const store = createTestStore()
-    store.setState({ projects: [project] })
+    store.setState({ endpointProjects: [project] })
 
     await expect(
       store.getState().setupProjectExistingFolder({
@@ -296,8 +296,8 @@ describe('repo slice runtime routing', () => {
     })
 
     expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }])
-    expect(store.getState().projects).toEqual([project])
-    expect(store.getState().projectHostSetups).toEqual([setup])
+    expect(store.getState().endpointProjects).toEqual([project])
+    expect(store.getState().endpointProjectHostSetups).toEqual([setup])
     expect(projectsSetupExistingFolder).toHaveBeenCalledWith({
       projectId: project.id,
       projectProviderIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' },
@@ -336,8 +336,8 @@ describe('repo slice runtime routing', () => {
       expect(projectsSetupExistingFolder).not.toHaveBeenCalled()
       expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
       expect(store.getState().repos).toBe(before.repos)
-      expect(store.getState().projects).toBe(before.projects)
-      expect(store.getState().projectHostSetups).toBe(before.projectHostSetups)
+      expect(store.getState().endpointProjects).toBe(before.endpointProjects)
+      expect(store.getState().endpointProjectHostSetups).toBe(before.endpointProjectHostSetups)
       expect(toast.error).toHaveBeenCalledWith('Failed to add project', {
         description: SERVER_SSH_REFUSAL,
         duration: expect.any(Number)

@@ -1,5 +1,6 @@
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { resolveChecksActionAgent } from '@/lib/fix-checks-agent-launch'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../shared/source-control-ai-actions'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { useCallback, useEffect } from 'react'
@@ -155,11 +156,23 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     ? undefined
     : 'Commenting requires a GitHub PR repository target.'
   const workspace = worktreeLaunchWorkspace(activeWorktreeId ?? '')
-  useChatProgramFacts(workspace, Boolean(activeWorktreeId) && sourceControlAiActionsVisible)
+  const observation = useAgentMenuObservation(
+    activeWorktreeId,
+    sourceControlAiActionsVisible,
+    useAgentDetectionTargetForWorktree(activeWorktreeId)
+  )
   const launchState = useAppStore.getState()
   const noAgentFor = (actionId: SourceControlActionId): boolean =>
+    !observation.preferencesPending &&
     detectedAgentIds != null &&
-    resolveChecksActionAgent(launchState, actionId, repo?.id, workspace, detectedAgentIds) == null
+    resolveChecksActionAgent(
+      launchState,
+      actionId,
+      repo?.id,
+      workspace,
+      detectedAgentIds,
+      observation.preferences
+    ) == null
   const noEnabledAgentKnown = noAgentFor('resolveConflicts')
   const actionDisabledReason = (actionId: SourceControlActionId): string | undefined =>
     !activeWorktreeId

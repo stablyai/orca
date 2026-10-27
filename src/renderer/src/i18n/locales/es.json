@@ -301,6 +301,23 @@
     "followSymlinkedDirectoriesDescription": "Busca carpetas enlazadas en Apertura rápida y expande las carpetas enlazadas locales en el Explorador de archivos.",
     "accounts": {
       "claudeRemoveFolder": "Orca elimina la carpeta de Claude de esta cuenta y su inicio de sesión de este equipo. El historial de chat compartido con Predeterminado del sistema se conserva. Si está seleccionada, el próximo Claude que inicies usará Predeterminado del sistema."
+    },
+    "sourceControl": {
+      "actionModel": {
+        "on": "Activado",
+        "off": "Desactivado",
+        "invalidArgs": "Los argumentos de CLI de {{value0}} no son válidos. Corrígelos en Ajustes → Source Control AI.",
+        "model": "Modelo",
+        "agentDefault": "Predeterminado del agente",
+        "effortDefault": "Predeterminado",
+        "savedModel": "Modelo de Configuración: {{value0}}",
+        "permissionsDefaultHint": "Las terminales usan los Permisos de agentes salvo que esta acción defina sus propios argumentos CLI.",
+        "chatsOnly": "Solo se aplica a los chats",
+        "terminalsOnly": "Solo se aplica a las terminales",
+        "extraArgs": "Argumentos CLI adicionales",
+        "launchOptions": "Modelo y permisos",
+        "savedLaunchOptions": "Opciones guardadas: {{value0}}. Los servidores antiguos usan su propia configuración de permisos."
+      }
     }
   },
   "menu": {
@@ -3453,7 +3470,10 @@
               "failed": {
                 "toast": {
                   "62a0af2cb4": "No se pudo confirmar la copia del portapapeles del terminal",
-                  "fdd3e7e977": "La app del terminal solicitó una copia, pero Orca no pudo confirmar que llegara al portapapeles del sistema."
+                  "fdd3e7e977": "La app del terminal solicitó una copia, pero Orca no pudo confirmar que llegara al portapapeles del sistema.",
+                  "de286dcfe1": "La copia del terminal necesita un clic",
+                  "84c938ffa2": "El navegador bloqueó una copia de la aplicación del terminal. Haz clic en Copiar para ponerla en tu portapapeles.",
+                  "a73165c6c5": "Copiar"
                 }
               }
             }
@@ -8130,6 +8150,14 @@
           "chatErrorEscalationNeedsChat": "Activa la interfaz de chat en la configuración experimental para usarlo.",
           "chatErrorEscalationKeywordError": "error",
           "chatErrorEscalationKeywordChat": "chat",
+          "heartbeatTitle": "Latidos de los trabajadores",
+          "heartbeatDescription": "Los trabajadores asignados se reportan cada pocos minutos para que el coordinador distinga un agente que trabaja de uno colgado. Si lo desactivas, el coordinador recibe menos mensajes, pero pierde esa señal de actividad. Se aplica a los trabajadores asignados después del cambio.",
+          "heartbeatKeywordHeartbeat": "latido",
+          "heartbeatKeywordStalled": "atascado",
+          "heartbeatKeywordInterval": "intervalo",
+          "heartbeatIntervalTitle": "Intervalo de latidos",
+          "heartbeatIntervalDescription": "Un intervalo más corto le da al coordinador reportes más frecuentes, pero le envía más mensajes. Un intervalo más largo envía menos mensajes, pero deja más tiempo entre reportes. Se aplica a los trabajadores asignados después del cambio.",
+          "heartbeatIntervalSuffix": "minutos",
           "7bc082f4de": "Copiar comando de instalación"
         },
         "OrchestrationSetupCard": {
@@ -8340,8 +8368,6 @@
           "c7ef4415de": "Nombre para mostrar",
           "b0a0c14a1c": "Detalles de visualización específicos del proyecto para la barra lateral y las pestañas.",
           "removeProjectAllHosts": "Eliminar este proyecto de Orca en todos los hosts configurados.",
-          "removeProjectCheckout": "Eliminar este checkout de Orca. Los demás checkouts de este proyecto se conservan.",
-          "removeProjectKeepCheckouts": "Eliminar este proyecto de Orca. Los checkouts que tienen su propia configuración se conservan.",
           "0909e5d650": "Eliminar proyecto",
           "ee5a290616": "Abierto como carpeta. Las funciones de Git no están disponibles para este espacio de trabajo.",
           "323debba71": "Tipo:",
@@ -13725,8 +13751,6 @@
             "ea4788705e": "Cancelar",
             "7ec6abbf2a": "Reiniciar",
             "f4f3c9ca4a": "Plantilla de prompt",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "Argumentos CLI",
             "b99c33cec5": "Ajustes",
             "15c5d85706": "Agente",
             "3e8f21954f": "error",
@@ -20215,7 +20239,8 @@
       "streamedDetail": "La página se ejecuta en el host remoto y se transmite a este dispositivo."
     },
     "remote": {
-      "findUnavailable": "Buscar en la página no está disponible mientras esta página se transmite desde el host remoto."
+      "findUnavailable": "Buscar en la página no está disponible mientras esta página se transmite desde el host remoto.",
+      "selectionTooLargeToCopy": "La selección es demasiado grande para copiarla desde una página transmitida desde el host remoto."
     },
     "userAgentMigration": {
       "degradedDescription": "No se pudo inspeccionar una elección antigua de identidad del navegador. Elige Limpiada o Nativa en los ajustes del navegador; los cambios surten efecto tras reiniciar.",
@@ -20360,6 +20385,12 @@
       "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "No se pudo mover '{{name}}' a la Papelera de reciclaje. ¿Eliminarlo permanentemente?",
+      "titleTrash": "No se pudo mover '{{name}}' a la Papelera. ¿Eliminarlo permanentemente?",
+      "description": "Esto no se puede deshacer.",
+      "confirm": "Eliminar permanentemente"
     }
   },
   "sparsePreset": {
@@ -20795,6 +20826,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "No se pudo guardar esta acción. Intenta guardarla de nuevo en Ajustes.",
     "discard": {
       "deleteUntrackedFileDescription": "Esto eliminará permanentemente este archivo sin seguimiento. No se puede deshacer.",
       "deleteUntrackedFilesDescription": "Esto eliminará permanentemente estos {{count}} archivos sin seguimiento. No se puede deshacer.",

@@ -38,15 +38,16 @@ type UseFileExplorerTreeResult = {
   loadDir: (
     dirPath: string,
     depth: number,
-    options?: { force?: boolean; failOnError?: boolean }
+    options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
   ) => Promise<boolean>
   statPath: (path: string) => Promise<UserOpenedPathStat>
   markPathAsDirectory: (path: string) => void
   refreshTree: () => Promise<FileExplorerTreeRefreshOutcome>
-  refreshDir: (dirPath: string) => Promise<void>
+  /** `wakeWslDistro` only for a user act: it may start a stopped WSL distro. */
+  refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void>
   /** True while a dir's cached listing predates the last full refresh that skipped it. */
   isDirStale: (dirPath: string) => boolean
-  resetAndLoad: () => void
+  resetAndLoad: (options?: { wakeWslDistro?: boolean }) => void
 }
 
 /** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
@@ -98,7 +99,7 @@ export function useFileExplorerTree(
     async (
       dirPath: string,
       depth: number,
-      options?: { force?: boolean; failOnError?: boolean }
+      options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
     ) => {
       const cache = dirCacheRef.current
       if (
@@ -114,7 +115,9 @@ export function useFileExplorerTree(
       setDirCache((prev) => withPendingFileExplorerDirCacheEntries(prev, [dirPath]))
       updateLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, [dirPath]))
       try {
-        const listing = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath)
+        const listing = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
+          wakeWslDistro: options?.wakeWslDistro
+        })
         // Only the current read may clear loading; superseded reads must preserve their replacement’s spinner.
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
@@ -266,7 +269,7 @@ export function useFileExplorerTree(
   }, [activeWorktreeId, expanded, loadDir, updateLoadingDirPaths, worktreePath])
 
   const refreshDir = useCallback(
-    async (dirPath: string) => {
+    async (dirPath: string, options?: { wakeWslDistro?: boolean }) => {
       if (!worktreePath) {
         return
       }
@@ -274,7 +277,7 @@ export function useFileExplorerTree(
         dirPath === worktreePath
           ? -1
           : splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-      await loadDir(dirPath, depth, { force: true })
+      await loadDir(dirPath, depth, { force: true, wakeWslDistro: options?.wakeWslDistro })
     },
     [worktreePath, loadDir]
   )
@@ -283,19 +286,22 @@ export function useFileExplorerTree(
 
   const rootCache = worktreePath ? dirCache[worktreePath] : undefined
 
-  const resetAndLoad = useCallback(() => {
-    refreshGenerationRef.current++
-    // Reset tokens so previous-worktree responses cannot repopulate the cleared tree.
-    dirLoadTrackerRef.current.reset()
-    staleDirsRef.current.clear()
-    setDirCache({})
-    setSourceWorkspaceId(null)
-    updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
-    setRootError(null)
-    if (worktreePath) {
-      void loadDir(worktreePath, -1, { force: true })
-    }
-  }, [worktreePath, loadDir, updateLoadingDirPaths])
+  const resetAndLoad = useCallback(
+    (options?: { wakeWslDistro?: boolean }) => {
+      refreshGenerationRef.current++
+      // Reset tokens so previous-worktree responses cannot repopulate the cleared tree.
+      dirLoadTrackerRef.current.reset()
+      staleDirsRef.current.clear()
+      setDirCache({})
+      setSourceWorkspaceId(null)
+      updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
+      setRootError(null)
+      if (worktreePath) {
+        void loadDir(worktreePath, -1, { force: true, wakeWslDistro: options?.wakeWslDistro })
+      }
+    },
+    [worktreePath, loadDir, updateLoadingDirPaths]
+  )
 
   return {
     dirCache,

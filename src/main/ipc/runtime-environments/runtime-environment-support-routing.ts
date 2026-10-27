@@ -13,7 +13,7 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/ele
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../../shared/remote-runtime-client'
+} from '../../../shared/remote-runtime/remote-runtime-client'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import {
   isRuntimeEnvironmentCapabilityOutcomeCurrent,

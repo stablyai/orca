@@ -1,8 +1,9 @@
-// A place is where a Slack start may run; its id rebuilds the launch target with no lookup, so twins on other hosts stay apart.
+// A place is where a connector start may run; its id rebuilds the launch target with no lookup, so twins on other hosts stay apart.
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import {
   CONNECTOR_CLIENT_LIMITS,
+  type ConnectorConversation,
   type ConnectorProject
 } from '../../shared/connector-cloud-contract'
 import {
@@ -55,13 +56,14 @@ function decodePlace(placeId: string): Place | null {
 /** A pure function of the delivery, so a resent start hashes to the same receipt. */
 export function placeLaunchTarget(
   placeId: string,
-  deliveryId: string
+  deliveryId: string,
+  source: ConnectorConversation['source']
 ): AgentLaunchParams['target'] | null {
   const place = decodePlace(placeId)
   if (!place) {
     return null
   }
-  const name = `slack-${createHash('sha256').update(deliveryId).digest('hex').slice(0, 8)}`
+  const name = `${source}-${createHash('sha256').update(deliveryId).digest('hex').slice(0, 8)}`
   if (place[0] === 'folder') {
     return { kind: 'create-folder-workspace', create: { projectGroupId: place[1], name } }
   }

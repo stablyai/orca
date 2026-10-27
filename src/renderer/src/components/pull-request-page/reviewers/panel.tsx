@@ -8,7 +8,7 @@ import type { GitHubAssignableUser } from '../../../../../shared/github/pull-req
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
-import { getGitHubPRReviewerRows } from '@/components/github-pr-reviewer-display'
+import { getGitHubPRReviewerRows } from '../../../../../shared/github/pr-reviewer-display'
 import { mergeReviewerSuggestions } from '@/components/github/work-item-state-presentation'
 import {
   filterGitHubPRReviewerCandidates,

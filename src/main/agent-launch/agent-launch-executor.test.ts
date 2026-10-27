@@ -375,10 +375,17 @@ describe("a caller's chat default in place of the host's", () => {
 describe('a launch into a workspace that already exists', () => {
   it('opens a session without creating anything', async () => {
     const h = harness({})
-    const result = await h.run({ agent: 'codex', target: { kind: 'existing', worktree: 'wt-7' } })
+    const result = await h.run({
+      agent: 'codex',
+      target: { kind: 'existing', worktree: 'wt-7' },
+      chatOptions: { model: 'action-model', fastMode: 'false' }
+    })
     expect(h.calls).toEqual(['createSupport', 'createStructuredSession'])
     expect(h.createWorktree).not.toHaveBeenCalled()
     expect(result.worktreeId).toBe('wt-7')
+    expect(h.createStructuredSession).toHaveBeenCalledWith(
+      expect.objectContaining({ chatOptions: { model: 'action-model', fastMode: 'false' } })
+    )
   })
 
   it.each(['claude', 'grok'] as const)(
@@ -400,7 +407,16 @@ describe('a launch into a workspace that already exists', () => {
 describe('an agent with no structured session', () => {
   it('stays a terminal without asking the host', async () => {
     const h = harness({})
-    const result = await h.run({ agent: 'gemini', target: { kind: 'existing', worktree: 'wt-7' } })
+    const result = await h.run({
+      agent: 'gemini',
+      target: { kind: 'existing', worktree: 'wt-7' },
+      chatOptions: { model: 'action-model', fastMode: 'false' }
+    })
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).not.toHaveProperty('chatOptions')
+    // The saved choice reaches the terminal too; its converter keeps only what has a flag.
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
+      options: { model: 'action-model', fastMode: 'false' }
+    })
     expect(h.calls).toEqual(['createTerminalAgent'])
     expect(result.receipt).toMatchObject({ reason: 'agent_without_structured_session' })
   })

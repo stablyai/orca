@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import type { MobileFileMedia } from './mobile-file-media'
+import { PDF_MIME_TYPE, type MobileFileMedia } from './mobile-file-media'
 import { downloadMobileFileMedia, type MobileMediaSink } from './mobile-file-media-download'
 import { createMobileMediaSink } from './mobile-media-preview-cache'
 import { MobileMediaPlayback } from './MobileMediaPlayback'
+import { MobilePdfPreview } from './MobilePdfPreview'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
@@ -15,7 +16,12 @@ type Props = { media: MobileFileMedia; client: MobileFilePreviewRpcSender | null
 
 export function MobileFileMediaPreview(props: Props) {
   const { worktreeId, relativePath, mimeType } = props.media
-  return <MediaDownload key={JSON.stringify([worktreeId, relativePath, mimeType])} {...props} />
+  const key = JSON.stringify([worktreeId, relativePath, mimeType])
+  return mimeType === PDF_MIME_TYPE ? (
+    <MobilePdfPreview key={key} media={props.media} />
+  ) : (
+    <MediaDownload key={key} {...props} />
+  )
 }
 
 function MediaDownload({ media, client, title }: Props) {

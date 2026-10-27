@@ -17,7 +17,10 @@ import {
   reduceStructuredAgentSession
 } from '../../../shared/structured-agent-session-reducer'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import { readAgentSessionHistory } from './agent-session-history-page'
+import {
+  createAgentSessionCatchUpReader,
+  readAgentSessionHistory
+} from './agent-session-history-page'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -425,9 +428,11 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       expect(work()).toEqual([0, 0, 0])
       expect(sourceGets()).toHaveLength(0)
       const cursor = journal.cursor()
+      const snapshot = journal.snapshot()
       await journal.open()
       expect(journal.cursor()).toEqual(cursor)
       expect(journal.queuedMessages.displayState() === display).toBe(false)
+      expect(journal.snapshot()).not.toBe(snapshot)
       feed.publish(SESSION, journal)
       expect(work()).toEqual([corrections, 1, 1])
       reset()
@@ -547,13 +552,20 @@ it('public metadata follows legacy-only commits, item recreation and epoch repla
   await journal.open()
   const ids = vi.spyOn(journal.queuedMessages.displayState().normalizedHandOffs, Symbol.iterator)
   const key = journal.publicRead().normalizationKey
+  const snapshot = journal.snapshot()
+  expect(journal.snapshot()).toBe(snapshot)
   expect(key).not.toBe('')
   const cursor = journal.cursor()
+  const catchUp = createAgentSessionCatchUpReader(journal, undefined, journal.publicRead())
+  const request = { sessionId: SESSION, direction: 'tail' as const }
+  const beforeImport = catchUp(request)
+  expect(beforeImport).toMatchObject({ ok: true, page: { items: snapshot.items } })
   db().exec('DROP TRIGGER b2_source_fail_import')
   await journal.queuedMessages.importAtOpen()
   expect(journal.cursor()).toEqual(cursor)
   expect(legacyIds()).toEqual([])
-  journal.snapshot()
+  expect(journal.snapshot()).not.toBe(snapshot)
+  expect(catchUp(request)).toEqual(beforeImport)
   expect(ids).toHaveBeenCalledTimes(1)
   expect(journal.publicRead().normalizationKey).toBe(key)
   expect(ids).toHaveBeenCalledTimes(2)

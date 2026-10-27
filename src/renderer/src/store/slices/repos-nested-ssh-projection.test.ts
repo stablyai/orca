@@ -74,7 +74,7 @@ it('preserves distinct SSH execution setups behind the same runtime owner', asyn
 
   await store.getState().fetchRepos(catalogOwner(store))
 
-  const setups = store.getState().projectHostSetups
+  const setups = store.getState().endpointProjectHostSetups
   expect(setups).toHaveLength(2)
   expect(setups).toEqual(
     expect.arrayContaining([
@@ -147,7 +147,7 @@ it('prefers an authoritative paired-runtime setup over its repo-derived fallback
 
   await store.getState().fetchRepos(catalogOwner(store))
 
-  expect(store.getState().projectHostSetups).toEqual([
+  expect(store.getState().endpointProjectHostSetups).toEqual([
     {
       ...setup,
       hostId: 'runtime:env-1',

@@ -70,6 +70,7 @@ beforeEach(() => {
   root = createRoot(container)
   // Provide the fs bridge needed by mounted WorktreeSymlinksSection path suggestions.
   ;(window as unknown as { api: unknown }).api = {
+    preflight: { detectAgents: async () => [] },
     fs: { readDir: () => Promise.resolve([]) }
   }
 })

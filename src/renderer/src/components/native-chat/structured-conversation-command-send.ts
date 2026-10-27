@@ -16,7 +16,7 @@ import {
   structuredAgentSessionStartFailureFacts
 } from './structured-agent-session-delivery-notices'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
-import type { StructuredPromptItem } from './structured-agent-session-message-projection'
+import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission

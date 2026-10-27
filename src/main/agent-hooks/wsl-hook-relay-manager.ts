@@ -15,7 +15,7 @@ import {
   type WslHookRelayManagerDeps
 } from './wsl-hook-relay-deps'
 import { wireWslRelayLink } from './wsl-hook-relay-link'
-import { WslRelayRecovery } from './wsl-hook-relay-recovery'
+import type { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
@@ -29,6 +29,7 @@ import {
   wslRuntimeHomePathsEqual
 } from '../codex/managed-wsl-codex-home-registry'
 import {
+  createWslRelayRecoveryForManager,
   markWslRelayFailed,
   resolveWslDefaultDistro,
   resumeWslStoppedRelays
@@ -44,18 +45,11 @@ export class WslHookRelayManager {
   private warnedBundleMissing = false
   constructor(deps: Partial<WslHookRelayManagerDeps> = {}) {
     this.deps = { ...defaultWslHookRelayDeps, ...deps }
-    this.recovery = new WslRelayRecovery({
-      isDistroRunning: (distro) => this.deps.isDistroRunning(distro),
-      warn: (message) => this.deps.warn(message),
+    this.recovery = createWslRelayRecoveryForManager({
+      deps: () => this.deps,
+      states: this.states,
       isDisposed: () => this.disposed,
-      isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
-      restart: (distro) => this.ensureForDistro(distro, this.stateFor(distro)?.codexHomePath),
-      dropState: (state) => {
-        const key = wslHookRelayStateKey(state.distro)
-        if (this.states.get(key) === state) {
-          this.states.delete(key)
-        }
-      }
+      ensure: (...args) => this.ensureForDistro(...args)
     })
   }
   setManagedHookSettingsResolver(resolve: WslHookRelayManagerDeps['managedHookSettings']): void {

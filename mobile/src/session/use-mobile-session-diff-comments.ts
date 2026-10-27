@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
+import { formatDiffComments } from '../../../src/shared/diff-comments-format'
 import { useClipboardWriter } from '../platform/clipboard'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
@@ -6,7 +7,6 @@ import { sessionWorktreeNotesWrite } from './mobile-session-write-operations'
 import { triggerSelection, triggerSuccess, triggerError } from '../platform/haptics'
 import {
   addMobileDiffComment,
-  formatDiffComments,
   normalizeMobileDiffComments,
   removeDeliveredMobileDiffComments,
   removeMobileDiffComments,

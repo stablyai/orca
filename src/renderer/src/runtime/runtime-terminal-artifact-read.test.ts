@@ -16,6 +16,12 @@ const granted = {
 }
 const grantParams = { worktree: 'id:wt-1', grantId: 'g-1', absolutePath: '/tmp/out.png' }
 
+function grantIdOf(params: unknown): string | undefined {
+  return typeof params === 'object' && params !== null && 'grantId' in params
+    ? String(params.grantId)
+    : undefined
+}
+
 describe('a granted host file outside every workspace', () => {
   it('reads text through its grant', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
@@ -61,6 +67,59 @@ describe('a granted host file outside every workspace', () => {
     )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.read' })
+    )
+  })
+
+  // Why: Reload, Compare and Keep My Edits read a file whose host change staled the tab's grant.
+  it('renews a stale grant for the same path and reads through the new one', async () => {
+    const meta = { runtimeId: 'remote-runtime' }
+    runtimeEnvironmentCall.mockImplementation(
+      async (args: { method: string; params?: unknown }) => {
+        if (args.method === 'files.resolveTerminalPath') {
+          return {
+            id: 'rpc',
+            ok: true,
+            result: {
+              worktree: 'wt-1',
+              relativePath: null,
+              absolutePath: '/tmp/out.png',
+              exists: true,
+              isDirectory: false,
+              openTarget: {
+                kind: 'absolute-file',
+                provider: 'local',
+                absolutePath: '/tmp/out.png',
+                grantId: 'g-2'
+              }
+            },
+            _meta: meta
+          }
+        }
+        return grantIdOf(args.params) === 'g-1'
+          ? {
+              id: 'rpc',
+              ok: false,
+              error: { code: 'runtime_error', message: 'terminal_file_grant_stale' },
+              _meta: meta
+            }
+          : {
+              id: 'rpc',
+              ok: true,
+              result: { content: 'new', truncated: false, byteLength: 3 },
+              _meta: meta
+            }
+      }
+    )
+
+    await expect(readRuntimeFileContent(granted)).resolves.toEqual({
+      content: 'new',
+      isBinary: false
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'files.readTerminalArtifact',
+        params: { ...grantParams, grantId: 'g-2' }
+      })
     )
   })
 })

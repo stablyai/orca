@@ -87,6 +87,7 @@ export async function handleStructuredAgentSessionCreate(
         structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
+        ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),
         ...(params.options ? { options: params.options } : {}),
         ...(params.firstMessage ? { firstMessage: params.firstMessage } : {}),
         atRest: Boolean(

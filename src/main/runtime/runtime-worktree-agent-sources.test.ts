@@ -50,6 +50,15 @@ describe('worktree agent source admission', () => {
     expect(sources.get(paneKey)?.worktreeId).toBe('remote-worktree')
   })
 
+  it('marks only rows a connected PTY backs as live', () => {
+    expect(collectRuntimeWorktreeAgentSources(connected).get(paneKey)?.hasLivePty).toBe(true)
+    const remote = { ...hookRow, connectionId: 'ssh-connection' }
+    expect(
+      collectRuntimeWorktreeAgentSources({ ...base, hookSnapshots: [remote] }).get(paneKey)
+        ?.hasLivePty
+    ).toBeUndefined()
+  })
+
   it('rejoins the row to the connected PTY behind its terminal handle', () => {
     expect(collectRuntimeWorktreeAgentSources(connected).get(paneKey)?.ptyId).toBe('pty')
     // The handle is the last rescue once a controller incarnation nulls the pane binding.

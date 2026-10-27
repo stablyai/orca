@@ -17,6 +17,7 @@ import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime
 import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
 import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
+import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
 import { electronServeEnvironment } from './electron-serve-browser-environment'
 import {
   ElectronSidecarTabRegistry,
@@ -256,7 +257,12 @@ export class ElectronServeBrowserProcess {
 
     let result: unknown
     try {
-      result = await sendOrcadSidecarRequest(metadata, rpcMethod, params)
+      result = await sendOrcadSidecarRequest(
+        metadata,
+        rpcMethod,
+        params,
+        method === 'browserWait' ? browserWaitRequestTimeoutMs(params.timeout) : undefined
+      )
     } catch (error) {
       if (
         targetPage &&

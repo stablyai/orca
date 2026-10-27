@@ -3,7 +3,7 @@ import type {
   AgentJournalQuestionItem
 } from './agent-session-journal-types'
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
-import { parseAskFromToolInput } from './native-chat-ask'
+import { parseAskFromToolInput } from './native-chat/input/native-chat-ask'
 import { agentJournalItemRowOrigin } from './agent-session-journal-position'
 import { agentJournalLinkageFields } from './agent-session-journal-producer'
 import type { NativeChatMessage } from './native-chat-types'

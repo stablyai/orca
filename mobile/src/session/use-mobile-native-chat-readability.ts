@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   nativeChatRepoListRead,
@@ -10,7 +11,6 @@ import {
   isMobileFolderNativeChatReadable,
   isMobileNativeChatTranscriptReadable
 } from './native-chat/mobile-native-chat-eligibility'
-import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 
 type ReadabilityState = { client: RpcClient | null; worktreeId: string; readable: boolean }
 
@@ -64,7 +64,7 @@ export function useMobileNativeChatReadability(
         }
         const accepted = nativeChatRepoListRead.interpret(response)
         const repos: MobileRuntimeRepoSummary[] = accepted.accepted ? accepted.value : []
-        const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
+        const repoId = getRepoIdFromWorktreeId(worktreeId)
         const repo = repos.find((candidate) => candidate.id === repoId)
         setState({
           client,

@@ -231,7 +231,13 @@ describe('AgentBrowserBridge under a host revocation', () => {
     grantFocus()
 
     await expect(click).rejects.toMatchObject({ code: 'desktop_browser_bridge_unavailable' })
-    expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith('Runtime.evaluate', expect.anything())
+    // Only the read-only first-paint probe, sent before the focus wait, may reach the page.
+    expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith(
+      'Runtime.evaluate',
+      expect.not.objectContaining({
+        expression: expect.stringContaining("getEntriesByType('paint')")
+      })
+    )
     expect(dispatchedMouseEvents(wc)).toHaveLength(0)
     expect(release).toHaveBeenCalled()
   })

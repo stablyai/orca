@@ -115,6 +115,10 @@ describe('nativeChat:readSession handler', () => {
       }
       expect(result.error).toBeUndefined()
       expect(result.messages).toHaveLength(2)
+      expect(result.messages).toMatchObject([
+        { transcriptOrder: 0 },
+        { transcriptOrder: expect.any(Number) }
+      ])
     } finally {
       if (previousHome === undefined) {
         delete process.env.HOME
