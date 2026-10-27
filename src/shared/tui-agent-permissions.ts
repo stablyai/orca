@@ -45,7 +45,9 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
 }
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
-  goose: { GOOSE_MODE: 'auto' }
+  goose: { GOOSE_MODE: 'auto' },
+  // Why: DSH 0.2 reads its launch permission from env; this is its official full-access preset.
+  dsh: { DSH_PERMISSION_MODE: 'danger-full-access' }
 }
 
 const PERMISSION_AGENT_IDS = Object.keys(TUI_AGENT_CONFIG).filter(

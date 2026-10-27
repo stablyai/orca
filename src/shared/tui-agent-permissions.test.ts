@@ -88,7 +88,10 @@ describe('tui agent permissions', () => {
     expect(
       resolveNonAutoAgentPermissionMode({
         agentDefaultArgs: { ...automatic.agentDefaultArgs, ...custom },
-        agentDefaultEnv: { goose: { GOOSE_MODE: 'custom' } }
+        agentDefaultEnv: {
+          goose: { GOOSE_MODE: 'custom' },
+          dsh: { DSH_PERMISSION_MODE: 'workspace-write' }
+        }
       })
     ).toBe('mixed')
   })

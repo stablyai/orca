@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   resolvedTuiAgentArgsBypassPermissions,
   resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv,
   tuiAgentArgsBypassPermissions
 } from './tui-agent-launch-defaults'
 import { applyAgentPermissionMode, YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
@@ -113,5 +114,29 @@ describe('resolveTuiAgentLaunchArgs', () => {
   it('falls back to the agent default when nothing is configured', () => {
     expect(resolveTuiAgentLaunchArgs('claude', {})).toBe('--dangerously-skip-permissions')
     expect(resolveTuiAgentLaunchArgs('claude', { agentDefaultArgs: { claude: '' } })).toBe('')
+  })
+})
+
+describe('resolveTuiAgentLaunchEnv', () => {
+  it('pins DSH full access for the typed choice and keeps user env', () => {
+    const fullAccess = {
+      agentPermissionDefault: 'full-access' as const,
+      agentPermissionOverrides: {}
+    }
+    expect(
+      resolveTuiAgentLaunchEnv('dsh', {
+        ...fullAccess,
+        agentDefaultEnv: { dsh: { DSH_TUI_THEME: 'dark' } }
+      })
+    ).toEqual({ DSH_PERMISSION_MODE: 'danger-full-access', DSH_TUI_THEME: 'dark' })
+    expect(
+      resolveTuiAgentLaunchEnv('dsh', {
+        ...fullAccess,
+        agentDefaultEnv: { dsh: { DSH_PERMISSION_MODE: 'workspace-write' } }
+      })
+    ).toEqual({ DSH_PERMISSION_MODE: 'workspace-write' })
+    expect(
+      resolveTuiAgentLaunchEnv('dsh', { ...fullAccess, agentPermissionOverrides: { dsh: 'own' } })
+    ).toEqual({})
   })
 })
