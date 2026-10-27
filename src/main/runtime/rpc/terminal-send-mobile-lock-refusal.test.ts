@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { DriverState, OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
@@ -70,6 +70,84 @@ describe('terminal send mobile-lock refusal reason', () => {
       { kind: 'mobile', clientId: 'm1' },
       { text: 'hello', enter: true, client: { id: 'orca-cli', type: 'desktop' } }
     )
+    expect(result).toEqual({
+      handle: 'terminal-1',
+      accepted: false,
+      bytesWritten: 0,
+      refusedReason: 'mobile-driving'
+    })
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])(
+    'names the phone when it takes control during a viewport claim that returns %s',
+    async (updated) => {
+      let driver: DriverState = { kind: 'idle' }
+      const claimStarted = Promise.withResolvers<void>()
+      const claim = Promise.withResolvers<boolean>()
+      const refreshRemoteDesktopViewer = vi.fn(() => {
+        claimStarted.resolve()
+        return claim.promise
+      })
+      const sending = send(
+        driver,
+        {
+          text: 'hello',
+          enter: true,
+          claimViewport: true,
+          viewport: { cols: 96, rows: 32 },
+          client: { id: 'orca-cli', type: 'desktop' }
+        },
+        { getDriver: vi.fn(() => driver), refreshRemoteDesktopViewer }
+      )
+
+      await claimStarted.promise
+      driver = { kind: 'mobile', clientId: 'm1' }
+      claim.resolve(updated)
+      const { runtime, send: result } = await sending
+      expect(refreshRemoteDesktopViewer).toHaveBeenCalledWith('pty-1', 'orca-cli', 96, 32, true)
+      expect(result).toEqual({
+        handle: 'terminal-1',
+        accepted: false,
+        bytesWritten: 0,
+        refusedReason: 'mobile-driving'
+      })
+      expect(runtime.sendTerminal).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps a failed viewport claim generic when no phone controls the terminal', async () => {
+    const refreshRemoteDesktopViewer = vi.fn().mockResolvedValue(false)
+    const { runtime, send: result } = await send(
+      { kind: 'desktop' },
+      {
+        text: 'hello',
+        enter: true,
+        claimViewport: true,
+        viewport: { cols: 96, rows: 32 },
+        client: { id: 'orca-cli', type: 'desktop' }
+      },
+      { refreshRemoteDesktopViewer }
+    )
+
+    expect(refreshRemoteDesktopViewer).toHaveBeenCalledWith('pty-1', 'orca-cli', 96, 32, true)
+    expect(result).toEqual({ handle: 'terminal-1', accepted: false, bytesWritten: 0 })
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('names the phone when it takes control during the agent-status guard', async () => {
+    let driver: DriverState = { kind: 'desktop' }
+    const getTerminalAgentStatus = vi.fn(async () => {
+      driver = { kind: 'mobile', clientId: 'm1' }
+      return { handle: 'terminal-1', isRunningAgent: true, status: 'idle' as const }
+    })
+    const { runtime, send: result } = await send(
+      driver,
+      { enter: true, requireAgentStatus: 'sendable', client: { id: 'c1', type: 'desktop' } },
+      { getDriver: vi.fn(() => driver), getTerminalAgentStatus }
+    )
+
+    expect(getTerminalAgentStatus).toHaveBeenCalledWith('terminal-1')
     expect(result).toEqual({
       handle: 'terminal-1',
       accepted: false,
