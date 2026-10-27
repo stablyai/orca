@@ -1,3 +1,6 @@
+import { useContext } from 'react'
+import { parseNativeChatNextPrompts } from '../../../../shared/native-chat-next-prompts'
+import { NativeChatNextPromptsEnabledContext } from './native-chat-next-prompts-context'
 import { cn } from '@/lib/utils'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
@@ -49,8 +52,14 @@ export function NativeChatAssistantMessageRow({
   const toolRun = toolRunProps(props, content, run)
   const isSystem = message.role === 'system'
   // A thought heading a run reads inside it, so the row has no words of its own.
-  const words = message.role === 'reasoning' ? '' : markdown
-  // Hide controls on system asides and the still-working frontier, where more content may arrive.
+  const nextPromptsEnabled = useContext(NativeChatNextPromptsEnabledContext)
+  const streaming = messageIsStreaming(message, activeTurnIsWorking, trailingRun)
+  const answer =
+    nextPromptsEnabled && message.role === 'assistant' && !message.agentId && !message.shortened
+      ? parseNativeChatNextPrompts(markdown, { hideOpenTrailingBlock: streaming }).text
+      : markdown
+  const words = message.role === 'reasoning' ? '' : answer
+  // 系统旁注和仍可能追加内容的工作轮次不显示操作按钮。
   const showControls =
     !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
 
@@ -83,7 +92,7 @@ export function NativeChatAssistantMessageRow({
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
           // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
-          streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
+          streaming={streaming}
         />
       ) : null}
       {toolRun ? <NativeChatToolRun {...toolRun} /> : null}

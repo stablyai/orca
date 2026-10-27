@@ -13,6 +13,7 @@ import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import { codexProviderHandleLink } from './codex-structured-owner-identity'
+import { codexNextPromptConfig } from './codex-next-prompt-instructions'
 import { openCodexThread } from './codex-structured-thread-open'
 import { catchUpCodexThread } from './codex-structured-thread-catch-up'
 import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
@@ -90,6 +91,14 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
+  // 恢复会话沿用已保存的指令，避免覆盖从其他客户端带入的会话指令。
+  const nextPromptConfig = launch.resumeThreadId
+    ? {}
+    : await waitForPromiseWithSignal(
+        codexNextPromptConfig(connection, launch.cwd, threadLaunch.threadConfig),
+        openInput.signal
+      )
+  current()
   const commandEnv = {
     ...launch.commandEnv,
     ...(launch.visuals ? { [NATIVE_CHAT_SCRATCH_DIR_ENV]: launch.visuals.folder } : {})
@@ -97,8 +106,12 @@ export async function openCodexStructuredSession(
   const opened = await waitForPromiseWithSignal(
     openCodexThread(
       connection,
-      { ...threadLaunch, commandEnv },
-      // Long rollout/MCP setup relies on the host ceiling and cancellation unless a timeout is supplied.
+      {
+        ...threadLaunch,
+        threadConfig: { ...threadLaunch.threadConfig, ...nextPromptConfig },
+        commandEnv
+      },
+      // 未指定超时时，长会话恢复和 MCP 启动沿用宿主时限及取消信号。
       deps.requestTimeoutMs ?? null,
       openInput.signal
     ),

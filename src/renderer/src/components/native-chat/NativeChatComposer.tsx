@@ -31,10 +31,7 @@ import { useNativeChatComposerAppMenuSelection } from './use-native-chat-compose
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
 
-export type {
-  NativeChatComposerHandle,
-  NativeChatComposerProps
-} from './native-chat-composer-types'
+export type { NativeChatComposerHandle, NativeChatComposerProps }
 
 /** Send through the chat’s structured transport or verified PTY route, with agent-aware autocomplete and image handling. */
 const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
@@ -349,6 +346,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     return (
       <NativeChatComposerField
+        nextPromptsBlocked={sendHeld || inputOwnedByCard}
         draftScopeKey={draftScopeKey}
         textareaRef={textareaRef}
         draft={draft}

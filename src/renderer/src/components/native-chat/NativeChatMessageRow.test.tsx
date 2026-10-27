@@ -25,6 +25,7 @@ afterEach(() => {
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { NativeChatNextPromptsEnabledContext } from './native-chat-next-prompts-context'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
 
@@ -63,6 +64,38 @@ function renderMessage(
 }
 
 describe('MessageRow control visibility', () => {
+  it('hides an open suggestion block during streaming and restores interrupted content', async () => {
+    const text = 'Visible answer.\n\n```orca-next-prompts\n["unfinished'
+    const row = (working: boolean, enabled = true, trailing = true) => (
+      <NativeChatNextPromptsEnabledContext value={enabled}>
+        <MessageRow
+          message={{
+            id: 'streaming-answer',
+            role: 'assistant',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [{ type: 'text', text }]
+          }}
+          activeTurnIsWorking={working}
+          trailingRun={trailing}
+          expandSignal={false}
+          onScrollMessageToTop={vi.fn()}
+        />
+      </NativeChatNextPromptsEnabledContext>
+    )
+    const { container, rerender } = render(row(true))
+    await screen.findByText('Visible answer.')
+    expect(container).not.toHaveTextContent('unfinished')
+    rerender(row(false))
+    await waitFor(() => expect(container).toHaveTextContent('unfinished'))
+    rerender(row(true))
+    await waitFor(() => expect(container).not.toHaveTextContent('unfinished'))
+    rerender(row(true, false))
+    await waitFor(() => expect(container).toHaveTextContent('unfinished'))
+    rerender(row(true, true, false))
+    await waitFor(() => expect(container).toHaveTextContent('unfinished'))
+  })
+
   it('renders and copies a fenced code block through the markdown path', async () => {
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
     Object.assign(window, { api: { ui: { writeClipboardText } } })

@@ -229,9 +229,10 @@ describe('a Codex chat acquisition with visuals', () => {
     await acquired(codex, { env: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/other' } })
     const connection = codex.connections[0]!
     const methods = connection.calls.map((call) => call.method)
-    expect(methods.slice(0, 2)).toEqual(['initialize', 'thread/start'])
+    // 建议初始化只读取配置，不注册额外的 skill 根目录。
+    expect(methods.slice(0, 3)).toEqual(['initialize', 'config/read', 'thread/start'])
     expect(methods).not.toContain('skills/extraRoots/set')
-    const config = connection.calls[1]?.params?.config
+    const config = connection.calls.find((call) => call.method === 'thread/start')?.params?.config
     const scratchDirOverride = `shell_environment_policy.set.${NATIVE_CHAT_SCRATCH_DIR_ENV}`
     expect(config).not.toHaveProperty(['sandbox_workspace_write.writable_roots'])
     expect(config).not.toHaveProperty([scratchDirOverride])
