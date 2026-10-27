@@ -20,6 +20,9 @@ import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-exter
 const openUrl = vi.fn()
 const openBrowser = vi.fn(async () => 'opened-page')
 const state = {
+  repos: [],
+  endpointProjects: [],
+  endpointProjectHostSetups: [],
   activeWorktreeId: 'unrelated-workspace',
   settings: { openLinksInApp: true, openLinksInAppModifierInverts: false },
   setActiveWorktree: vi.fn(),
