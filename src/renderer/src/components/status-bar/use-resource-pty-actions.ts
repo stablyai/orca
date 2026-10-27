@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { PtyFencedTerminationRequest } from '../../../../shared/pty-fenced-termination'
+import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type { ResourcePtyRow } from './resource-pty-view-model'
 import type { useResourceSessionInventory } from './use-resource-session-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -31,79 +32,82 @@ export function ptyTerminationReason(reason: string): string {
 }
 
 export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSessionInventory>) {
-  const [confirmation, setConfirmation] = useState<{
-    request: PtyFencedTerminationRequest
-    identity: string
-    label: string
-    location: string | null
-    foregroundProcess: string | null
-  } | null>(null)
   const [ending, setEnding] = useState<ReadonlySet<string>>(new Set())
   const endingRef = useRef(new Set<string>())
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(new Map())
   const mounted = useMountedRef()
-  const { removeSession, invalidate } = inventory
-  const confirm = useCallback((row: ResourcePtyRow): void => {
-    if (
-      !row.session.incarnationId ||
-      !row.session.fencedTermination ||
-      row.session.exiting ||
-      endingRef.current.has(row.identity)
-    ) {
-      return
-    }
-    setConfirmation({
-      identity: row.identity,
-      label: row.label,
-      location: [row.project, row.workspace].filter(Boolean).join(' / ') || row.session.cwd || null,
-      foregroundProcess: row.session.foregroundProcess ?? null,
-      request: {
-        id: row.session.id,
-        expectedIncarnationId: row.session.incarnationId,
-        requireNoAgentOwner: row.session.agentOwnership === 'absent',
-        requireUnattached: row.binding === 'unbound'
+  const { removeSession, invalidate, sessionsError } = inventory
+  const endMany = useCallback(
+    async (rows: readonly ResourcePtyRow[]): Promise<void> => {
+      if (sessionsError) {
+        return
       }
-    })
-  }, [])
-  const endConfirmed = useCallback(async (): Promise<void> => {
-    if (!confirmation || endingRef.current.has(confirmation.identity)) {
-      return
-    }
-    const target = confirmation
-    endingRef.current.add(target.identity)
-    setEnding(new Set(endingRef.current))
-    setErrors((previous) => {
-      const next = new Map(previous)
-      next.delete(target.identity)
-      return next
-    })
-    try {
-      const result = await window.api.pty.killFenced(target.request)
-      if (
-        result.outcome === 'ended' ||
-        result.outcome === 'already_exited' ||
-        (result.outcome === 'refused' && result.reason === 'replaced')
-      ) {
-        removeSession(target.request.id, target.request.expectedIncarnationId)
-      } else if (mounted.current && result.outcome === 'refused') {
-        setErrors((previous) =>
-          new Map(previous).set(target.identity, ptyTerminationReason(result.reason))
-        )
+      const targets: { identity: string; request: PtyFencedTerminationRequest }[] = []
+      for (const row of rows) {
+        if (
+          !canEndResourcePty(row) ||
+          !row.session.incarnationId ||
+          endingRef.current.has(row.identity)
+        ) {
+          continue
+        }
+        endingRef.current.add(row.identity)
+        targets.push({
+          identity: row.identity,
+          request: {
+            id: row.session.id,
+            expectedIncarnationId: row.session.incarnationId,
+            requireNoAgentOwner: row.session.agentOwnership === 'absent',
+            requireUnattached: row.binding === 'unbound'
+          }
+        })
       }
-    } catch {
-      if (mounted.current) {
-        setErrors((previous) =>
-          new Map(previous).set(target.identity, ptyTerminationReason('unverifiable'))
-        )
+      if (targets.length === 0) {
+        return
       }
-    } finally {
-      endingRef.current.delete(target.identity)
-      if (mounted.current) {
-        setEnding(new Set(endingRef.current))
-        setConfirmation(null)
-      }
-      invalidate()
-    }
-  }, [confirmation, invalidate, mounted, removeSession])
-  return { confirmation, setConfirmation, ending, errors, confirm, endConfirmed }
+      setEnding(new Set(endingRef.current))
+      setErrors((previous) => {
+        const next = new Map(previous)
+        for (const target of targets) {
+          next.delete(target.identity)
+        }
+        return next
+      })
+      await forEachWithConcurrency(targets, 4, async (target) => {
+        try {
+          const result = await window.api.pty.killFenced(target.request)
+          if (
+            result.outcome === 'ended' ||
+            result.outcome === 'already_exited' ||
+            (result.outcome === 'refused' && result.reason === 'replaced')
+          ) {
+            removeSession(target.request.id, target.request.expectedIncarnationId)
+          } else if (mounted.current && result.outcome === 'refused') {
+            setErrors((previous) =>
+              new Map(previous).set(target.identity, ptyTerminationReason(result.reason))
+            )
+          }
+        } catch {
+          if (mounted.current) {
+            setErrors((previous) =>
+              new Map(previous).set(target.identity, ptyTerminationReason('unverifiable'))
+            )
+          }
+        } finally {
+          endingRef.current.delete(target.identity)
+          if (mounted.current) {
+            setEnding(new Set(endingRef.current))
+          }
+          invalidate()
+        }
+      })
+    },
+    [invalidate, mounted, removeSession, sessionsError]
+  )
+  const end = useCallback((row: ResourcePtyRow): void => void endMany([row]), [endMany])
+  return { ending, errors, end, endMany }
+}
+
+export function canEndResourcePty(row: ResourcePtyRow): boolean {
+  return !!row.session.incarnationId && !!row.session.fencedTermination && !row.session.exiting
 }

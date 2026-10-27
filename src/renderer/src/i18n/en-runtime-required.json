@@ -2065,6 +2065,10 @@
   },
   "resourceManager": {
     "pty": {
+      "cancel": "Cancel",
+      "end": "End terminal",
+      "endDescription": "This ends the terminal and its child processes. Unsaved work may be lost.",
+      "endTitle": "End {{terminal}}?",
       "localOwnedCount_one": "{{count}} Orca PTY on this computer",
       "localOwnedCount_other": "{{count}} Orca PTYs on this computer"
     }
