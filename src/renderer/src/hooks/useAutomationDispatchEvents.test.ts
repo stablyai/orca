@@ -7,6 +7,8 @@ const mockDispatchEvent = vi.fn()
 
 const mockLaunchAgentBackgroundSession = vi.fn()
 const mockFindReusableAutomationSession = vi.fn()
+const mockFindLiveAutomationSession = vi.fn()
+const mockWaitForIdleAutomationSession = vi.fn()
 const mockObserveExistingAutomationSession = vi.fn()
 const mockSubmitPromptToAgentPty = vi.fn()
 const mockCreateWorktree = vi.fn()
@@ -140,7 +142,9 @@ vi.mock('@/components/automations/automation-host-client', () => ({
 }))
 
 vi.mock('@/lib/automation-session-reuse', () => ({
-  findReusableAutomationSession: mockFindReusableAutomationSession
+  findReusableAutomationSession: mockFindReusableAutomationSession,
+  findLiveAutomationSession: mockFindLiveAutomationSession,
+  waitForIdleAutomationSession: mockWaitForIdleAutomationSession
 }))
 
 vi.mock('@/lib/automation-session-observer', () => ({
@@ -870,5 +874,16 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
     expect(mockReleaseRuntimeObservers).toHaveBeenCalledOnce()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+  })
+
+  it('waits for a busy reused session to finish instead of launching a fresh one', async () => {
+    const busy = { tabId: 'agent-tab', ptyId: 'agent-pty', paneKey: 'agent-tab:leaf' }
+    mockFindLiveAutomationSession.mockReturnValue(busy)
+    mockWaitForIdleAutomationSession.mockResolvedValue(busy)
+    mockObserveExistingAutomationSession.mockResolvedValue(() => {})
+    await registerAndDispatch(makeAutomation({ reuseSession: true }))
+    expect(mockWaitForIdleAutomationSession).toHaveBeenCalledOnce()
+    expect(mockSubmitPromptToAgentPty).toHaveBeenCalledOnce()
+    expect(mockLaunchAgentBackgroundSession).not.toHaveBeenCalled()
   })
 })
