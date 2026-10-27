@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { useAppStore } from '../../store'
 import TabBar from './TabBar'
 import type { TabBarProps } from './tab-bar-props'
 
@@ -13,23 +14,37 @@ const TITLES = [
   "You're the president agent coordinating this review"
 ]
 const noop = (): void => {}
+const enableFitTitles = (): void => {
+  useAppStore.setState((state) => ({
+    settings: state.settings && { ...state.settings, experimentalFitTabsToTitles: true }
+  }))
+}
 
 function TabWidthFixture({
   count,
   titles = TITLES,
+  renamedTitles,
   browserTabs,
   editorFiles,
   tabBarOrder
 }: {
   count: number
   titles?: string[]
+  /** Titles an agent applies after mount; widths should hold until the strip changes. */
+  renamedTitles?: string[]
 } & Pick<TabBarProps, 'browserTabs' | 'editorFiles' | 'tabBarOrder'>): React.JSX.Element {
   const [activeTabId, setActiveTabId] = useState('tab-0')
+  const [liveTitles, setLiveTitles] = useState(titles)
+  useEffect(() => {
+    if (renamedTitles) {
+      setLiveTitles(renamedTitles)
+    }
+  }, [renamedTitles])
   const tabs: TerminalTab[] = Array.from({ length: count }, (_, index) => ({
     id: `tab-${index}`,
     worktreeId: WORKSPACE_ID,
     ptyId: null,
-    title: titles[index % titles.length],
+    title: liveTitles[index % liveTitles.length],
     customTitle: null,
     color: null,
     sortOrder: index,
@@ -67,22 +82,31 @@ function TabWidthFixture({
   )
 }
 
+export const fixedWidth = defineFixture({
+  width: 1280,
+  render: () => <TabWidthFixture count={4} />
+})
+
 export const spacious = defineFixture({
+  setup: enableFitTitles,
   width: 1280,
   render: () => <TabWidthFixture count={4} />
 })
 
 export const single = defineFixture({
+  setup: enableFitTitles,
   width: 1280,
   render: () => <TabWidthFixture count={1} titles={['Terminal 1']} />
 })
 
 export const long = defineFixture({
+  setup: enableFitTitles,
   width: 1280,
   render: () => <TabWidthFixture count={1} titles={['A very long conversation title '.repeat(8)]} />
 })
 
 export const contentFit = defineFixture({
+  setup: enableFitTitles,
   width: 1280,
   render: () => (
     <TabWidthFixture
@@ -97,11 +121,13 @@ export const contentFit = defineFixture({
 })
 
 export const narrow = defineFixture({
+  setup: enableFitTitles,
   width: 420,
   render: () => <TabWidthFixture count={4} />
 })
 
 export const mixed = defineFixture({
+  setup: enableFitTitles,
   width: 620,
   render: () => (
     <TabWidthFixture
@@ -112,11 +138,13 @@ export const mixed = defineFixture({
 })
 
 export const overflowing = defineFixture({
+  setup: enableFitTitles,
   width: 420,
   render: () => <TabWidthFixture count={12} />
 })
 
 export const mixedTypes = defineFixture({
+  setup: enableFitTitles,
   width: 620,
   render: () => (
     <TabWidthFixture
@@ -153,6 +181,7 @@ export const mixedTypes = defineFixture({
 })
 
 export const competingTitles = defineFixture({
+  setup: enableFitTitles,
   width: 620,
   render: () => (
     <TabWidthFixture
@@ -164,4 +193,32 @@ export const competingTitles = defineFixture({
       ]}
     />
   )
+})
+
+export const agentRename = defineFixture({
+  setup: enableFitTitles,
+  width: 1280,
+  render: () => (
+    <TabWidthFixture
+      count={3}
+      titles={['claude', 'Review the implementation for layout regressions', 'Notes']}
+      renamedTitles={['Investigate why tab widths shift after agent renames', 'Done', 'Notes']}
+    />
+  ),
+  interact: () =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+})
+
+export const agentRenameCrowded = defineFixture({
+  setup: enableFitTitles,
+  width: 420,
+  render: () => (
+    <TabWidthFixture
+      count={4}
+      titles={['A very long conversation title '.repeat(4), 'Notes', 'Codex Chat', 'Review']}
+      renamedTitles={['Done', 'Notes', 'Investigate why tab widths shift', 'Review']}
+    />
+  ),
+  interact: () =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 })

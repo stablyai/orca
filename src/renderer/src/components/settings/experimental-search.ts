@@ -3,6 +3,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
+import { getFitTabsToTitlesSearchEntry } from './fit-tabs-to-titles-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 import { getBrowserExtensionsExperimentalSearchEntry } from './browser-extensions-experimental-search'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
@@ -180,6 +181,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
+    getFitTabsToTitlesSearchEntry(),
     getEphemeralVmsSearchEntry(),
     getBrowserExtensionsExperimentalSearchEntry(),
     // Index WSL toggles only on Windows desktops that expose them.
@@ -220,6 +222,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
+      )
+    ),
+    fitTabsToTitles: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.fitTabsToTitles.title',
+        'Fit tabs to titles'
       )
     ),
     ephemeralVms: findEntry(

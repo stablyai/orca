@@ -12,7 +12,7 @@ import {
   getClientHostedBrowserRowLabel
 } from './client-hosted-browser-row-label'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
-import { TAB_LABEL_WIDTH_CLASSES, TAB_ROOT_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_ROOT_WIDTH_CLASSES, TabTitleLabel } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 
 /** Paired-client pages have no unified tab: expose presence and close without persisted ordering, pinning or drag actions. */
@@ -68,11 +68,11 @@ export default function ClientHostedBrowserTab({
             className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-blue-500'}`}
             aria-hidden
           />
-          <span
-            className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${row.hostAbsent ? 'text-muted-foreground' : ''}`}
-          >
-            {label}
-          </span>
+          <TabTitleLabel
+            tabId={row.browserPageId}
+            title={label}
+            className={row.hostAbsent ? 'text-muted-foreground' : undefined}
+          />
           <button
             type="button"
             aria-label={translate('browser.clientHosted.hostRowClose', 'Close hosted page')}

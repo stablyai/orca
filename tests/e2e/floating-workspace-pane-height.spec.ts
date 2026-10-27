@@ -161,7 +161,11 @@ test('tabs use spare room for titles, share crowded space, and scroll at the min
       ({ count, titles, worktreeId }) => {
         const store = window.__store!
         store.setState((state) => ({
-          settings: { ...state.settings!, floatingTerminalEnabled: true }
+          settings: {
+            ...state.settings!,
+            floatingTerminalEnabled: true,
+            experimentalFitTabsToTitles: true
+          }
         }))
         const tabs = [...(store.getState().tabsByWorktree[worktreeId] ?? [])]
         while (tabs.length < count) {
@@ -224,7 +228,17 @@ test('tabs use spare room for titles, share crowded space, and scroll at the min
 test('@headful floating header keeps a drag and maximize target with expanded and overflowing tabs', async ({
   orcaPage
 }) => {
-  for (const count of [1, 16]) {
+  // Cover the shipped fixed widths and the title-fit experiment once the strip overflows.
+  for (const { count, fitTitles } of [
+    { count: 1, fitTitles: true },
+    { count: 16, fitTitles: false },
+    { count: 16, fitTitles: true }
+  ]) {
+    await orcaPage.evaluate((fitTitles) => {
+      window.__store!.setState((state) => ({
+        settings: { ...state.settings!, experimentalFitTabsToTitles: fitTitles }
+      }))
+    }, fitTitles)
     await seedFloatingSimulatorTabs(orcaPage, count)
     await openFloatingPanel(orcaPage)
 

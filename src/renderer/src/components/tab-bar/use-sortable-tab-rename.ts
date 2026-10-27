@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { TabTitleRename } from './tab-width-rules'
 import {
   RENAME_TERMINAL_TAB_EVENT,
   type RenameTerminalTabDetail
@@ -18,6 +19,7 @@ export function useSortableTabRename({
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+  const [committedRename, setCommittedRename] = useState<TabTitleRename>({ count: 0, title: null })
   const renameFocusFrameRef = useRef<number | null>(null)
   // Why: onBlur fires during Input unmount; mark rename resolved so it can't re-commit and overwrite discarded edits.
   const committedOrCancelledRef = useRef(false)
@@ -35,7 +37,9 @@ export function useSortableTabRename({
     }
     committedOrCancelledRef.current = true
     const trimmed = renameValue.trim()
-    onSetCustomTitle(tabId, trimmed.length > 0 ? trimmed : null)
+    const nextTitle = trimmed.length > 0 ? trimmed : null
+    setCommittedRename((previous) => ({ count: previous.count + 1, title: nextTitle }))
+    onSetCustomTitle(tabId, nextTitle)
     setIsEditing(false)
   }, [renameValue, onSetCustomTitle, tabId])
 
@@ -85,6 +89,7 @@ export function useSortableTabRename({
     handleRenameOpen,
     commitRename,
     cancelRename,
-    setRenameInputElement
+    setRenameInputElement,
+    committedRename
   }
 }

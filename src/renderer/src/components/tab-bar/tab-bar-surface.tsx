@@ -25,6 +25,7 @@ import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
+import { TabTitleWidthProvider } from './tab-width-rules'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
@@ -159,18 +160,27 @@ export function renderTabBarSurface({
               .filter(Boolean)
               .join(' ')}
           >
-            <TabStripTooltipProvider>
-              {renderedItems}
-              {clientHostedBrowserRows.length > 0 ? (
-                <ClientHostedBrowserTabRows
-                  rows={clientHostedBrowserRows}
-                  worktreeId={worktreeId}
-                  groupId={resolvedGroupId}
-                  groupActiveTabId={props.groupActiveTabId ?? null}
-                  includeTopTabBorder={includeTopTabBorder}
-                />
-              ) : null}
-            </TabStripTooltipProvider>
+            <TabTitleWidthProvider
+              worktreeId={worktreeId}
+              shown={props.stripShown}
+              tabIds={[
+                ...orderedItems.map((item) => item.id),
+                ...clientHostedBrowserRows.map((row) => row.browserPageId)
+              ]}
+            >
+              <TabStripTooltipProvider>
+                {renderedItems}
+                {clientHostedBrowserRows.length > 0 ? (
+                  <ClientHostedBrowserTabRows
+                    rows={clientHostedBrowserRows}
+                    worktreeId={worktreeId}
+                    groupId={resolvedGroupId}
+                    groupActiveTabId={props.groupActiveTabId ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                  />
+                ) : null}
+              </TabStripTooltipProvider>
+            </TabTitleWidthProvider>
           </div>
           <TabStripScrollIndicator
             hasOverflow={tabStripOverflowState.hasOverflow}
