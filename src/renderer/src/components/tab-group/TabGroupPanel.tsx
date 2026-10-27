@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useMemo } from 'react'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
@@ -185,12 +186,14 @@ export default function TabGroupPanel({
         activeTab?.contentType === 'terminal' ||
         activeTab?.contentType === 'agent-session' ||
         activeTab?.contentType === 'browser' ||
-        activeTab?.contentType === 'simulator'
+        isLiveSurfaceContentType(activeTab?.contentType)
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
-      activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
+      activeSimulatorTabId={
+        activeTab && isLiveSurfaceContentType(activeTab.contentType) ? activeTab.id : null
+      }
       activeTabType={
         activeTab?.contentType === 'terminal'
           ? 'terminal'
@@ -198,8 +201,8 @@ export default function TabGroupPanel({
             ? 'agent-session'
             : activeTab?.contentType === 'browser'
               ? 'browser'
-              : activeTab?.contentType === 'simulator'
-                ? 'simulator'
+              : activeTab && isLiveSurfaceContentType(activeTab.contentType)
+                ? activeTab.contentType
                 : 'editor'
       }
       onActivateFile={commands.activateEditor}
@@ -335,7 +338,7 @@ export default function TabGroupPanel({
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'agent-session' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          !isLiveSurfaceContentType(activeTab.contentType) && (
             // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
             <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}

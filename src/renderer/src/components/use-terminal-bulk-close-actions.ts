@@ -11,6 +11,7 @@ import {
 } from './terminal-workspace-model'
 import type { TerminalCloseController } from './use-terminal-close-actions'
 import { useBulkTabCloseConfirmation } from './use-bulk-tab-close-confirmation'
+import { isLiveSurfaceContentType } from '../../../shared/tab-types'
 
 export function useTerminalBulkCloseActions(
   controller: Pick<
@@ -82,7 +83,7 @@ export function useTerminalBulkCloseActions(
           closeBrowserTab(id, browserCloseOptions)
           // closeBrowserTab announces the MRU target before guest teardown can trigger bridge fallback.
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
-        } else if (unifiedTab?.contentType === 'simulator') {
+        } else if (isLiveSurfaceContentType(unifiedTab?.contentType)) {
           state.closeUnifiedTab(unifiedTab.id)
         }
       }
