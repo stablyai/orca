@@ -459,6 +459,7 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('tags a Trash failure so the renderer can offer permanent deletion', async () => {
+    // SAFETY: the fixture supplies the store methods used by filesystem authorization.
     registerFilesystemHandlers(store as never)
     const targetPath = path.resolve('/workspace/repo/file.txt')
     trashItemMock.mockRejectedValue(new Error('Failed to perform delete operation'))
@@ -470,6 +471,7 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('hard-deletes without Trash only when permanent is exactly true', async () => {
+    // SAFETY: the fixture supplies the store methods used by filesystem authorization.
     registerFilesystemHandlers(store as never)
     const targetPath = path.resolve('/workspace/repo/dir')
 

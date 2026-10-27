@@ -20555,6 +20555,12 @@
       "findInFolder": "{{path}} 内を検索",
       "folderLoadError": "このフォルダーを読み込めませんでした：",
       "emptyFolder": "このフォルダーにはファイルがありません"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "「{{name}}」をごみ箱に移動できませんでした。完全に削除しますか？",
+      "titleTrash": "「{{name}}」をごみ箱に移動できませんでした。完全に削除しますか？",
+      "description": "この操作は取り消せません。",
+      "confirm": "完全に削除"
     }
   },
   "sparsePreset": {

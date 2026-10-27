@@ -20555,6 +20555,12 @@
       "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "无法将“{{name}}”移到回收站。是否永久删除？",
+      "titleTrash": "无法将“{{name}}”移到废纸篓。是否永久删除？",
+      "description": "此操作无法撤销。",
+      "confirm": "永久删除"
     }
   },
   "sparsePreset": {

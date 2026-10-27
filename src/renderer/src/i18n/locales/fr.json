@@ -20555,6 +20555,12 @@
       "findInFolder": "Rechercher dans {{path}}",
       "folderLoadError": "Impossible de charger ce dossier :",
       "emptyFolder": "Aucun fichier dans ce dossier"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
+      "titleTrash": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
+      "description": "Cette action est irréversible.",
+      "confirm": "Supprimer définitivement"
     }
   },
   "sparsePreset": {
