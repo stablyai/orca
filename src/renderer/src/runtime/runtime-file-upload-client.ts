@@ -37,6 +37,7 @@ export async function uploadRuntimeFileWithoutClobber(
   expectedExecutionHostId?: 'local' | `ssh:${string}`
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
+  let tempRemoved = false
   try {
     session.assertCurrent()
     // Main owns file/socket handles and streams slices; renderer never loads the whole body.
@@ -58,7 +59,7 @@ export async function uploadRuntimeFileWithoutClobber(
       // Import results expose this text directly; remove Electron’s remote-method wrapper.
       throw new Error(extractIpcErrorMessage(error, 'Upload failed'))
     }
-    await callRuntimeFileImportMutation(
+    const result = await callRuntimeFileImportMutation<{ tempRemoved?: boolean }>(
       session,
       'files.commitUpload',
       {
@@ -71,20 +72,25 @@ export async function uploadRuntimeFileWithoutClobber(
       },
       30_000
     )
+    tempRemoved = result?.tempRemoved === true
   } finally {
-    await callRuntimeFileImportMutation(
-      session,
-      'files.delete',
-      {
-        worktree: toRuntimeWorktreeSelector(worktreeId),
-        relativePath: tempRelativePath,
-        recursive: false,
-        expectedSshTargetId,
-        expectedSshConnectionGeneration,
-        expectedExecutionHostId
-      },
-      15_000
-    ).catch(() => {})
+    if (tempRemoved) {
+      session.assertCurrent()
+    } else {
+      await callRuntimeFileImportMutation(
+        session,
+        'files.delete',
+        {
+          worktree: toRuntimeWorktreeSelector(worktreeId),
+          relativePath: tempRelativePath,
+          recursive: false,
+          expectedSshTargetId,
+          expectedSshConnectionGeneration,
+          expectedExecutionHostId
+        },
+        15_000
+      ).catch(() => {})
+    }
   }
 }
 

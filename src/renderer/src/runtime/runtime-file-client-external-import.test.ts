@@ -12,10 +12,12 @@ import {
 
 installRuntimeFileClientEnvironment()
 
-const okResponse = (id: string): unknown => ({
+type UploadCommitTestResult = { ok: true; tempRemoved?: boolean | string }
+
+const okResponse = (id: string, result: UploadCommitTestResult = { ok: true }): unknown => ({
   id,
   ok: true,
-  result: { ok: true },
+  result,
   _meta: { runtimeId: 'remote-runtime' }
 })
 
@@ -211,8 +213,7 @@ describe('runtime file client', () => {
       .mockResolvedValueOnce(notFoundResponse('stat-destination-miss'))
       .mockResolvedValueOnce(okResponse('create-destination-dir'))
       .mockResolvedValueOnce(notFoundResponse('stat-miss'))
-      .mockResolvedValueOnce(okResponse('commit-upload'))
-      .mockResolvedValueOnce(okResponse('delete-temp'))
+      .mockResolvedValueOnce(okResponse('commit-upload', { ok: true, tempRemoved: true }))
 
     await expect(
       importExternalPathsToRuntime(
@@ -237,6 +238,12 @@ describe('runtime file client', () => {
     })
 
     const upload = uploadRequests()[0]
+    expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.method)).toEqual([
+      'files.stat',
+      'files.createDir',
+      'files.stat',
+      'files.commitUpload'
+    ])
     expect(upload?.relativePath).toMatch(/^uploads\/\.large\.bin\.orca-upload-/)
     expect(upload?.sourceRootPath).toBe('/Users/me/large.bin')
     expect(upload?.entryRelativePath).toBe('')
@@ -248,6 +255,53 @@ describe('runtime file client', () => {
       expect.objectContaining({ method: 'files.writeBase64Chunk' })
     )
   })
+
+  it.each([undefined, false, 'true'])(
+    'retains temp cleanup when the host removal receipt is %s',
+    async (tempRemoved) => {
+      fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
+        sources: [
+          {
+            sourcePath: '/client/note.txt',
+            status: 'staged',
+            name: 'note.txt',
+            kind: 'file',
+            entries: [stagedFile('', 4096, 91)]
+          }
+        ]
+      })
+      runtimeEnvironmentCall
+        .mockResolvedValueOnce(notFoundResponse('stat-file-miss'))
+        .mockResolvedValueOnce(okResponse('commit-upload', { ok: true, tempRemoved }))
+        .mockResolvedValueOnce(okResponse('delete-temp'))
+
+      const result = await importExternalPathsToRuntime(
+        {
+          target: { kind: 'environment', environmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        ['/client/note.txt'],
+        '/remote/repo'
+      )
+
+      expect(result.results[0]?.status).toBe('imported')
+      expect(runtimeEnvironmentCall.mock.calls.map(([args]) => args.method)).toEqual([
+        'files.stat',
+        'files.commitUpload',
+        'files.delete'
+      ])
+      expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          method: 'files.delete',
+          params: expect.objectContaining({
+            relativePath: uploadRequests()[0]?.relativePath,
+            recursive: false
+          })
+        })
+      )
+    }
+  )
 
   it('does not commit an upload when the owner generation changes while it streams', async () => {
     fsStageExternalPathsForRuntimeUpload.mockResolvedValue({

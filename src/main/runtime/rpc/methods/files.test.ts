@@ -682,10 +682,11 @@ describe('file RPC methods', () => {
     expect(runtime.writeFileExplorerFileBase64Chunk).not.toHaveBeenCalled()
   })
 
-  it('commits staged runtime uploads without clobbering the final destination', async () => {
+  it('forwards host cleanup confirmation for a committed runtime upload', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This method's dispatcher path only uses the two mocked runtime members.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      commitFileExplorerUpload: vi.fn().mockResolvedValue({ ok: true })
+      commitFileExplorerUpload: vi.fn().mockResolvedValue({ ok: true, tempRemoved: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
@@ -702,7 +703,7 @@ describe('file RPC methods', () => {
       'assets/.logo.png.orca-upload-a',
       'assets/logo.png'
     )
-    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+    expect(response).toMatchObject({ ok: true, result: { ok: true, tempRemoved: true } })
   })
 
   it('renames file explorer paths for a selected worktree', async () => {
