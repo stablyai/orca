@@ -53,28 +53,31 @@ describe('a worker for a registered native-chat agent', () => {
     })
   })
 
-  it('starts a terminal worker when the chat program Orca installs is missing here', async () => {
-    const mode = decideWorkerStartMode({
-      params: { agent: 'antigravity' },
-      settings: STRUCTURED_PREFERENCE
-    })
-    // A desktop chat tab can offer the install; a worker cannot, so only it asks for an installed one.
-    const host = {
-      getStructuredAgentSessionCreateSupport: async (
-        _worktree: string,
-        _agent: string,
-        options?: { requireInstalledChatProgram?: boolean }
-      ) =>
-        options?.requireInstalledChatProgram
-          ? { supported: false, reason: 'chat-program' as const }
-          : { supported: true }
+  it.each([
+    ['chat-program', 'chat_runtime_not_installed'],
+    ['chat-sign-in', 'chat_signed_out']
+  ] as const)(
+    'starts a terminal worker when setup is required (%s)',
+    async (reason, receiptReason) => {
+      const mode = decideWorkerStartMode({
+        params: { agent: 'antigravity' },
+        settings: STRUCTURED_PREFERENCE
+      })
+      // A desktop chat tab can offer setup; a worker cannot.
+      const host = {
+        getStructuredAgentSessionCreateSupport: async (
+          _worktree: string,
+          _agent: string,
+          options?: { requireReadyChatProgram?: boolean }
+        ) => (options?.requireReadyChatProgram ? { supported: false, reason } : { supported: true })
+      }
+      expect(await resolveWorkerStartModeOnHost(host, mode, 'wt-1', 'antigravity')).toMatchObject({
+        mode: 'terminal',
+        preferred: 'structured',
+        reason: receiptReason
+      })
     }
-    expect(await resolveWorkerStartModeOnHost(host, mode, 'wt-1', 'antigravity')).toMatchObject({
-      mode: 'terminal',
-      preferred: 'structured',
-      reason: 'chat_runtime_not_installed'
-    })
-  })
+  )
 
   it('starts a terminal worker for an agent whose chat provider the user turned off', () => {
     expect(

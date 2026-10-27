@@ -70,7 +70,8 @@ const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   codex_on_windows: 'Codex has no structured session on Windows',
   structured_unsupported_on_host: 'the execution host cannot create one here',
   chat_runtime_not_installed:
-    "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)"
+    "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)",
+  chat_signed_out: "its chat isn't signed in on this host (sign in from a new chat tab in Orca)"
 }
 
 const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeReason> = {
@@ -84,14 +85,19 @@ const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeRe
   'client-capability': 'structured_sessions_unavailable'
 }
 
-type HostSupportReason = 'agent' | 'remote' | 'wsl' | 'chat-program'
-type HostLaunchSupport = { supported: boolean; reason?: HostSupportReason }
+type HostLaunchSupport = Awaited<
+  ReturnType<OrcaRuntimeService['getStructuredAgentSessionCreateSupport']>
+>
 
-const HOST_SUPPORT_REASON: Record<HostSupportReason, AgentLaunchDowngradeReason> = {
+const HOST_SUPPORT_REASON: Record<
+  NonNullable<HostLaunchSupport['reason']>,
+  AgentLaunchDowngradeReason
+> = {
   agent: 'structured_unsupported_on_host',
   remote: 'remote_execution_host',
   wsl: 'wsl_execution_runtime',
-  'chat-program': 'chat_runtime_not_installed'
+  'chat-program': 'chat_runtime_not_installed',
+  'chat-sign-in': 'chat_signed_out'
 }
 
 /** Apply shared feasibility policy to facts available before resolving the workspace. */
@@ -206,9 +212,9 @@ async function readStructuredCreateSupport(
     return { supported: false, reason: 'agent' }
   }
   try {
-    // These launches have no chat tab to offer the install, so they keep the agent's own CLI.
+    // These launches have no chat tab to offer setup, so they keep the agent's own CLI.
     return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent, {
-      requireInstalledChatProgram: true
+      requireReadyChatProgram: true
     })
   } catch {
     return null

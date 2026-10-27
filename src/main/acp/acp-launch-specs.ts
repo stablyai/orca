@@ -48,7 +48,8 @@ import {
 import {
   ANTIGRAVITY_LAUNCH_GATE,
   answerAntigravityChatAuth,
-  antigravityChatAccount
+  antigravityChatAccount,
+  antigravityChatObservedSignedOut
 } from '../antigravity/antigravity-chat-account'
 import { readAntigravitySignInLine } from '../antigravity/antigravity-sign-in-url'
 import type { AcpSignInWatch } from './acp-agent-connection'
@@ -111,6 +112,8 @@ export type AcpLaunchSpec = {
   }): string | undefined
   /** A valid sign-in output line closes the chat signed out. */
   signIn?: Omit<AcpSignInWatch, 'link'>
+  /** True only after a chat here was seen signed out; unknown counts as signed in. */
+  observedSignedOut?(): boolean
   account: AcpAccountBinding
   /** Ascending release-line minimums, checked before creation and at every launch. */
   minimumVersions?: readonly string[]
@@ -275,6 +278,7 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
     read: readAntigravitySignInLine,
     answered: answerAntigravityChatAuth
   },
+  observedSignedOut: antigravityChatObservedSignedOut,
   account: antigravityChatAccount,
   installDirectories: () => [],
   managedRuntime: ANTIGRAVITY_ACP_RUNTIME,

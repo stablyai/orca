@@ -1,9 +1,17 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
+import * as acpLaunchResolution from '../acp/acp-structured-launch-resolution'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   getStructuredAgentSessionHost,
   setStructuredAgentSessionHost
 } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  answerAntigravityChatAuth,
+  antigravityChatSignIn
+} from '../antigravity/antigravity-chat-account'
 
 const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
   isWindowsProcessStartTimeAvailable: vi.fn(() => true)
@@ -53,7 +61,7 @@ type TestLocation = {
 
 type SupportResult = {
   supported: boolean
-  reason?: 'agent' | 'remote' | 'wsl' | 'chat-program'
+  reason?: 'agent' | 'remote' | 'wsl' | 'chat-program' | 'chat-sign-in'
 }
 
 function createRuntime(location: TestLocation): OrcaRuntimeService {
@@ -98,6 +106,7 @@ describe('structured agent-session create-support probe', () => {
     isWindowsProcessStartTimeAvailable.mockReset()
     isWindowsProcessStartTimeAvailable.mockReturnValue(true)
     setStructuredAgentSessionHost(null)
+    antigravityChatSignIn.set({ auth: 'unknown', flow: null })
     vi.restoreAllMocks()
   })
 
@@ -168,6 +177,34 @@ describe('structured agent-session create-support probe', () => {
       })
     }
   )
+
+  it('sends launches without a chat tab to a terminal only after the chat was seen signed out', async () => {
+    setPlatform('win32')
+    vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue({
+      version: '1.3.0',
+      url: 'https://example.test/runtime.zip',
+      archiveSha256: 'a'.repeat(64),
+      archiveBytes: 1,
+      members: []
+    })
+    vi.spyOn(acpLaunchResolution, 'resolveAcpLaunchCommand').mockReturnValue(
+      join(tmpdir(), ANTIGRAVITY_LAUNCH_SPEC.command)
+    )
+    const runtime = createRuntime({ executionHostId: 'local', wslDistro: null })
+    const support = () =>
+      runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'antigravity', {
+        requireReadyChatProgram: true
+      })
+    antigravityChatSignIn.set({ auth: 'unknown', flow: null })
+    expect(await support()).toEqual({ supported: true })
+    answerAntigravityChatAuth(false)
+    expect(await support()).toEqual({ supported: false, reason: 'chat-sign-in' })
+    expect(
+      await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'antigravity')
+    ).toEqual({ supported: true })
+    answerAntigravityChatAuth(true)
+    expect(await support()).toEqual({ supported: true })
+  })
 
   it('still installs and reconciles on startup when a store is already persisted', async () => {
     const runtime = createRuntime({ executionHostId: 'local', wslDistro: null })

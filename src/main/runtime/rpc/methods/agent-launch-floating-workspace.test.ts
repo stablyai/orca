@@ -110,7 +110,7 @@ describe('agent.launch with the real floating workspace resolver', () => {
       expect(scope).toHaveBeenCalledExactlyOnceWith(selector)
       if (structuredPreference) {
         expect(createSupport).toHaveBeenCalledWith(`id:${FLOATING_TERMINAL_WORKTREE_ID}`, 'codex', {
-          requireInstalledChatProgram: true
+          requireReadyChatProgram: true
         })
         expect(createStructuredSession).toHaveBeenCalledWith(
           expect.objectContaining({ worktree: `id:${FLOATING_TERMINAL_WORKTREE_ID}` })

@@ -176,7 +176,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
       'id:wt_new',
       'claude',
-      { requireInstalledChatProgram: true }
+      { requireReadyChatProgram: true }
     )
     expect(f.stages).toEqual(['worktree_creating', 'worktree_created', 'terminal_creating'])
     expect(f.failedStages).toEqual(['worktree_create', 'terminal_create', 'terminal_create'])

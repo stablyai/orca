@@ -82,6 +82,8 @@ export type StructuredAgentChatProgram = {
   resolve: StructuredAgentLaunchCheck['resolveLaunch']
   /** Whether Orca can download this program on this host when none is found. */
   installable?: () => boolean
+  /** True only after a chat here was seen signed out; unknown counts as signed in. */
+  observedSignedOut?: () => boolean
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {

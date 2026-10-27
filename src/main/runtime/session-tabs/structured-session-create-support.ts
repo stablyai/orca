@@ -21,7 +21,10 @@ import {
   resolveHostStructuredAgentLaunchEnvironment
 } from '../structured-agent-launch-support'
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
-import { structuredAgentChatProgramNeedsInstall } from '../structured-agent-availability'
+import {
+  structuredAgentChatBlocker,
+  type StructuredAgentChatBlocker
+} from '../structured-agent-availability'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../structured-agent-session-runtime'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../structured-agent-session-host-refusal'
@@ -44,26 +47,26 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
   >
 
-  /** `requireInstalledChatProgram` is for launches with no chat tab to offer Orca's install. */
+  /** `requireReadyChatProgram` is for launches with no chat tab to offer Orca's install or sign-in. */
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
     agent: StructuredAgentId,
-    options?: { requireInstalledChatProgram?: boolean }
-  ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' | 'chat-program' }> {
+    options?: { requireReadyChatProgram?: boolean }
+  ): Promise<{
+    supported: boolean
+    reason?: 'agent' | 'remote' | 'wsl' | StructuredAgentChatBlocker
+  }> {
     const support = await resolveHostStructuredAgentCreateSupport({
       agent,
       worktreeSelector,
       location: await this.resolveStructuredAgentSessionLocation(worktreeSelector),
       runtime: this
     })
-    if (
-      support.supported &&
-      options?.requireInstalledChatProgram &&
-      (await structuredAgentChatProgramNeedsInstall(agent, this))
-    ) {
-      return { supported: false, reason: 'chat-program' }
+    if (!support.supported || !options?.requireReadyChatProgram) {
+      return support
     }
-    return support
+    const blocker = await structuredAgentChatBlocker(agent, this)
+    return blocker ? { supported: false, reason: blocker } : support
   }
 
   /** Use this runtime's registered definition to pin account home; reads/create must not install the host just to inspect it. */

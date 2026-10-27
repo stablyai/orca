@@ -42,7 +42,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       const options = { commandSettings, dataDirectory: getProfileUserDataPath() }
       return { command: resolveAcpLaunchCommand(spec, env, options), env }
     },
-    ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {})
+    ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {}),
+    ...(spec.observedSignedOut ? { observedSignedOut: spec.observedSignedOut } : {})
   }
 }
 

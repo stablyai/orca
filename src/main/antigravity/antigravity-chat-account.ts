@@ -42,6 +42,9 @@ export function answerAntigravityChatAuth(signedIn: boolean): void {
   }
 }
 
+export const antigravityChatObservedSignedOut = (): boolean =>
+  antigravityChatSignIn.get().value.auth === 'signedOut'
+
 export async function closeAntigravitySignInOwner(
   home: string,
   connection: SignInOwner

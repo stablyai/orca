@@ -92,16 +92,22 @@ async function observeChatProgram(
   return chatProgram.installable?.() ? 'installable' : 'missing'
 }
 
-/** True when a chat start would fail until Orca installs the agent's chat program on this host. */
-export async function structuredAgentChatProgramNeedsInstall(
+export type StructuredAgentChatBlocker = 'chat-program' | 'chat-sign-in'
+
+/** Why a chat start would fail here until Orca installs or signs in the agent's chat program. */
+export async function structuredAgentChatBlocker(
   agent: string,
   runtime: HealthRuntime
-): Promise<boolean> {
+): Promise<StructuredAgentChatBlocker | null> {
   const metadata = structuredAgentRuntimeMetadata(agent)
-  return Boolean(
-    metadata?.chatProgram?.installable &&
-    (await observeChatProgram(metadata, runtime)) === 'installable'
-  )
+  const chatProgram = metadata?.chatProgram
+  if (!chatProgram) {
+    return null
+  }
+  if (chatProgram.installable && (await observeChatProgram(metadata, runtime)) === 'installable') {
+    return 'chat-program'
+  }
+  return chatProgram.observedSignedOut?.() ? 'chat-sign-in' : null
 }
 
 /** Refresh shell facts on install, settings or agent Refresh; retain health without readers for immediate later subscription. */
