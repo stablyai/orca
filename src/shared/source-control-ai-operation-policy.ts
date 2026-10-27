@@ -205,11 +205,16 @@ export function resolveSourceControlActionRecipe(input: {
   if (!repoRecipe) {
     return { ...globalRecipe, commandInputTemplate }
   }
-  // A model belongs to its agent, so a repo on another agent never inherits the global model.
-  const { launchPreferences: globalLaunchPreferences, ...globalWithoutModel } = globalRecipe
+  // A model and a chat-or-CLI pick belong to their agent; a repo on another agent inherits neither.
+  const {
+    launchPreferences: globalLaunchPreferences,
+    surface: globalSurface,
+    ...globalWithoutModel
+  } = globalRecipe
   const repoKeepsGlobalAgent = repoRecipe.agentId === undefined
   const launchPreferences =
     repoRecipe.launchPreferences ?? (repoKeepsGlobalAgent ? globalLaunchPreferences : undefined)
+  const surface = repoRecipe.surface ?? (repoKeepsGlobalAgent ? globalSurface : undefined)
   const inheritsChoiceUnderOwnArgs =
     launchPreferences !== undefined &&
     repoRecipe.launchPreferences === undefined &&
@@ -218,6 +223,7 @@ export function resolveSourceControlActionRecipe(input: {
     ...globalWithoutModel,
     commandInputTemplate,
     ...(launchPreferences ? { launchPreferences } : {}),
+    ...(surface ? { surface } : {}),
     ...(inheritsChoiceUnderOwnArgs ? { launchPreferencesYieldToAgentArgs: true as const } : {}),
     ...(repoRecipe.agentId !== undefined ? { agentId: repoRecipe.agentId } : {}),
     ...(typeof repoRecipe.commandInputTemplate === 'string'

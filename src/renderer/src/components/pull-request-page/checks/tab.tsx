@@ -1,3 +1,4 @@
+import { selectCanonicalProjects } from '@/store/project-host-setup-selector'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CircleDashed } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -62,13 +63,13 @@ export function ChecksTab({
 }): React.JSX.Element {
   const targetRepoId = repoId ?? item.repoId
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const repo = useAppStore((s) =>
     targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
   )
   const repos = useAppStore((s) => s.repos)
-  const projects = useAppStore((s) => s.projects)
+  const projects = useAppStore((s) => selectCanonicalProjects(s))
   const [fixingChecks, setFixingChecks] = useState(false)
   const [fixChecksComposerPrompt, setFixChecksComposerPrompt] = useState<string | null>(null)
   const mountedRef = useMountedRef()
@@ -136,7 +137,7 @@ export function ChecksTab({
           {
             activeRepoId: null,
             activeWorktreeId: null,
-            projects,
+            projectHostSetupProjection: { projects, setups: [] },
             repos,
             settings,
             worktreesByRepo: {}
@@ -343,7 +344,7 @@ export function ChecksTab({
       repoConnectionId={repo?.connectionId ?? null}
       targetRepoId={targetRepoId}
       item={item}
-      updateSettings={updateSettings}
+      updateSettings={updateSettingsOrThrow}
       updateRepo={updateRepo}
     />
   )

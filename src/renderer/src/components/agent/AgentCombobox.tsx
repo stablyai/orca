@@ -39,6 +39,8 @@ type AgentComboboxSelectionProps =
   | { allowBlankTerminal?: false; onValueChange: (agent: TuiAgent) => void }
 
 type AgentComboboxProps = AgentComboboxSelectionProps & {
+  blankLabel?: string
+  disabled?: boolean
   agents: AgentCatalogEntry[]
   value: TuiAgent | null
   onOpenManageAgents?: () => void
@@ -64,6 +66,8 @@ const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
 
 export default function AgentCombobox({
   agents,
+  blankLabel,
+  disabled,
   value,
   onOpenManageAgents,
   defaultAgent,
@@ -75,6 +79,8 @@ export default function AgentCombobox({
   surfaceRows,
   ...selection
 }: AgentComboboxProps): React.JSX.Element {
+  const blankText =
+    blankLabel ?? translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
   const allowBlankTerminal = selection.allowBlankTerminal === true
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -260,7 +266,7 @@ export default function AgentCombobox({
               aria-expanded={open}
               onKeyDown={handleTriggerKeyDown}
               // Why: the "(CLI)" suffix depends on the host's answer; it never pops in on a settled field.
-              disabled={surfaceRows?.selection.ready === false && value !== null}
+              disabled={disabled || (surfaceRows?.selection.ready === false && value !== null)}
               className={cn(
                 // Retain room for long labels; py-0 clears default vertical padding to center content in h-8/h-9.
                 'h-8 justify-between px-3 py-0 text-xs font-normal',
@@ -291,10 +297,7 @@ export default function AgentCombobox({
                     icon={<Terminal className="size-3.5" />}
                     label={
                       allowBlankTerminal
-                        ? translate(
-                            'auto.components.agent.AgentCombobox.986f946354',
-                            'Blank Terminal'
-                          )
+                        ? blankText
                         : translate(
                             'components.agentSessionContinuation.selectAgent',
                             'Select an Agent'
@@ -350,10 +353,7 @@ export default function AgentCombobox({
                     onSelect: handleSelectBlank,
                     onSetDefault: onSetDefault ? () => onSetDefault('blank') : undefined,
                     icon: <Terminal className="size-3.5" />,
-                    label: translate(
-                      'auto.components.agent.AgentCombobox.986f946354',
-                      'Blank Terminal'
-                    )
+                    label: blankText
                   })
                 : null}
               {surfaceRows ? (

@@ -94,9 +94,12 @@ describe('orchestration CLI/runtime boundary', () => {
     expect(db.getDispatchContext(child.id)?.assignee_handle).toBe('term_worker')
   })
 
-  it('dispatches through CLI argv with heartbeats off, preserving worker commands', async () => {
+  it.each([null, 15])('CLI argv preserves worker commands (%s minutes)', async (interval) => {
     const store = partialRuntimeStore({
-      getSettings: () => ({ orchestrationHeartbeatsEnabled: false })
+      getSettings: () => ({
+        orchestrationHeartbeatsEnabled: interval !== null,
+        orchestrationHeartbeatIntervalMinutes: interval ?? 5
+      })
     })
     ;({ db, ctx } = h.setup(true, store))
     const { runtime } = ctx
@@ -151,7 +154,11 @@ describe('orchestration CLI/runtime boundary', () => {
       result.preamble,
       expect.anything()
     )
-    expect(result.preamble).not.toMatch(/heartbeat/i)
+    if (interval === null) {
+      expect(result.preamble).not.toMatch(/heartbeat/i)
+    } else {
+      expect(result.preamble).toContain('Send a heartbeat every 15 minutes')
+    }
     for (const command of [
       '--type worker_done',
       '--outcome succeeded',

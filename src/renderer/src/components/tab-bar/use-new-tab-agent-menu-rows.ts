@@ -27,8 +27,7 @@ import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structure
 import {
   buildNewTabAgentMenuRows,
   hostChatAnswer,
-  type HostChatAnswer,
-  type NewTabAgentMenuRow
+  type HostChatAnswer
 } from '@/lib/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
@@ -52,7 +51,7 @@ export type NewTabAgentMenuModel =
   | { state: 'loading'; placeholderCount: number }
   | {
       state: 'settled'
-      rows: NewTabAgentMenuRow[]
+      rows: ReturnType<typeof buildNewTabAgentMenuRows>
       detection: UseDetectedAgentsResult
       /** The default these rows were ordered by, so the new-agent badge marks the same agent. */
       defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
@@ -195,8 +194,7 @@ export function useAgentMenuObservation(
   ].filter(isTuiAgent)
   const inventoryFailed =
     detection.detectedIds === null && (detection.detectionFailed || detection.needsServerUpdate)
-  const localAcquiring =
-    localCapabilities.state === 'unlearned' || localCapabilities.state === 'pending'
+  const localAcquiring = ['unlearned', 'pending'].includes(localCapabilities.state)
   const capabilityPending =
     input.hostCapabilities == null && (local ? localAcquiring : facts.checking)
   const hostCatalogPending =
@@ -259,8 +257,11 @@ export function useAgentMenuObservation(
         placeholderCount: Math.max(chatAgents.length, detection.detectedIds?.length ?? 0, 2)
       }
     : { state: 'settled', rows, detection, defaultTuiAgent: settings?.defaultTuiAgent }
+  const { defaultTuiAgent, disabledTuiAgents } = settings ?? {}
   return {
     model,
+    preferences: { defaultTuiAgent, disabledTuiAgents },
+    preferencesPending,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
     selectionFor: (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {

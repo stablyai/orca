@@ -48,6 +48,7 @@ import {
   wslOrcadDeferralCode,
   wslOrcadDeferralFailure
 } from './wsl-orcad-update-admission'
+import { withOwnBuildLaunchEnv } from './wsl-orcad-own-build-launch-env'
 
 /** An update this app carries that the host may not take yet; the incumbent keeps serving. */
 export type WslOrcadDeferredUpdate = WslHostDeferredUpdate
@@ -126,10 +127,12 @@ export async function deployAndLaunchWslOrcad(
 async function launchOverTransport(
   name: string,
   target: WslOrcadHostTarget,
-  conn: OrcadHostTransport,
+  transport: OrcadHostTransport,
   options: WslOrcadDeployOptions
 ): Promise<WslOrcadLaunch> {
   const { signal } = options
+  let ownBuildVersion: string | null = null
+  const conn = withOwnBuildLaunchEnv(transport, () => ownBuildVersion)
   const kernel = await execCommand(conn, 'uname -r', { signal })
   if (isWsl1KernelRelease(kernel)) {
     throw new OrcadHostUnsupportedError(
@@ -163,6 +166,7 @@ async function launchOverTransport(
   })
   const appVersion = getAppEnvironment().getVersion()
   const candidateVersion = readLocalFullVersion(localOrcadDir)
+  ownBuildVersion = candidateVersion
   const failureHost = { kind: 'wsl', id: target.id } as const
   const intent = options.intent ?? 'connect'
   const admit = (record: OrcadActivationRecord, admitIntent: OrcadUpdateIntent) =>

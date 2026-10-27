@@ -21,6 +21,7 @@ import type { SourceControlAiWriteTarget } from '../../../../shared/source-contr
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import { SourceControlAgentCliArgsField } from './SourceControlAgentCliArgsField'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { describeSourceControlActionModel } from '../settings/source-control-action-model-copy'
@@ -41,6 +42,7 @@ type SourceControlAgentActionDialogFormProps = {
   selectedAgent: TuiAgent | null
   hasEnabledAgents: boolean
   detecting: boolean
+  surfaceRows: AgentComboboxSurfaceRows
   statusCopy: string | null
   agentArgs: string
   /** False when the launch would be structured native chat; the field is then absent, not disabled. */
@@ -58,7 +60,7 @@ type SourceControlAgentActionDialogFormProps = {
   canStart: boolean
   isStarting: boolean
   startLabel: string
-  onSelectedAgentChange: (agent: TuiAgent | null) => void
+  onAgentPick: (agent: TuiAgent) => void
   onAgentArgsChange: (value: string) => void
   onCommandTemplateChange: (value: string) => void
   onSaveLaunchRecipeChange: (value: boolean) => void
@@ -89,6 +91,7 @@ export function SourceControlAgentActionDialogForm({
   selectedAgent,
   hasEnabledAgents,
   detecting,
+  surfaceRows,
   statusCopy,
   agentArgs,
   agentArgsApply,
@@ -105,7 +108,7 @@ export function SourceControlAgentActionDialogForm({
   canStart,
   isStarting,
   startLabel,
-  onSelectedAgentChange,
+  onAgentPick,
   onAgentArgsChange,
   onCommandTemplateChange,
   onSaveLaunchRecipeChange,
@@ -154,7 +157,9 @@ export function SourceControlAgentActionDialogForm({
             <AgentCombobox
               agents={agentOptions}
               value={selectedAgent}
-              onValueChange={onSelectedAgentChange}
+              onValueChange={onAgentPick}
+              surfaceRows={surfaceRows}
+              disabled={!surfaceRows.selection.ready}
               allowNarrowTrigger
               triggerClassName="w-full"
             />

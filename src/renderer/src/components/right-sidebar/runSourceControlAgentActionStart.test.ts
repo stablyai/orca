@@ -30,8 +30,9 @@ vi.mock('sonner', () => ({
 
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
 import { saveSourceControlActionRecipe } from '../../../../shared/source-control-ai-recipe-save'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
+import { saveSourceControlAiActionRecipeForTarget } from './source-control/ai/recipe-persistence'
 import { sourceControlActionLaunchOptions } from '../../../../shared/source-control-action-launch-preferences'
 import {
   resolveAgentLaunchCommand,
@@ -45,8 +46,6 @@ function buildArgs(
   return {
     selectedAgent: 'codex',
     trimmedCommandInput: 'Fix the bug',
-    agentArgs: '--model gpt-5',
-    agentArgsApply: true,
     recipe: { agentId: 'codex', commandInputTemplate: '{basePrompt}', agentArgs: '--model gpt-5' },
     saveTargetValue: 'none',
     actionId: 'resolveComments',
@@ -173,24 +172,50 @@ describe('runSourceControlAgentActionStart', () => {
     expect(onLaunchAccepted).not.toHaveBeenCalled()
   })
 
-  // Failed delivery must abort before onLaunched can post irreversible host replies/resolutions.
-  it('aborts an accepted launch when deferred prompt delivery fails', async () => {
+  // Why: irreversible host writes (fixing replies, thread resolves) hang off onLaunched, so a
+  // launch whose prompt never landed must report the abort and never reach onLaunched.
+  it('saves before deferred delivery and retains the recipe when delivery fails', async () => {
+    let resolveDelivery = (_value: { delivered: boolean; failureNotified: boolean }): void => {}
+    const promptDeliveryResult = new Promise<{ delivered: boolean; failureNotified: boolean }>(
+      (resolve) => {
+        resolveDelivery = resolve
+      }
+    )
     const onLaunchAccepted = vi.fn()
     const onLaunchAborted = vi.fn()
+    const onSaveAgentDefault = vi.fn()
     mocks.launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'tab-1' },
-      startupPlan: {} as never,
-      pasteDraftAfterLaunch: true,
-      promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: true })
+      promptDeliveryResult
     })
+    const args = buildArgs({
+      settings: getDefaultSettings('/tmp'),
+      saveTargetValue: 'global',
+      onSaveAgentDefault,
+      onLaunchAccepted,
+      onLaunchAborted
+    })
+    const launchPromise = runSourceControlAgentActionStart(args)
 
-    await expect(
-      runSourceControlAgentActionStart(buildArgs({ onLaunchAccepted, onLaunchAborted }))
-    ).resolves.toBe(false)
-
+    expect(onSaveAgentDefault).toHaveBeenCalledWith(
+      { type: 'global' },
+      'resolveComments',
+      args.recipe
+    )
+    expect(onSaveAgentDefault.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.launchAgentInNewTab.mock.invocationCallOrder[0]
+    )
     expect(onLaunchAccepted).toHaveBeenCalledTimes(1)
+    expect(mocks.onLaunched).not.toHaveBeenCalled()
+    expect(mocks.onClose).not.toHaveBeenCalled()
+
+    resolveDelivery({ delivered: false, failureNotified: true })
+    await expect(launchPromise).resolves.toBe(false)
+
+    expect(onSaveAgentDefault).toHaveBeenCalledOnce()
     expect(onLaunchAborted).toHaveBeenCalledTimes(1)
     expect(mocks.onLaunched).not.toHaveBeenCalled()
+    expect(mocks.onClose).not.toHaveBeenCalled()
   })
 
   it('aborts an accepted launch when promptDeliveryResult rejects', async () => {
@@ -371,13 +396,29 @@ describe('runSourceControlAgentActionStart', () => {
     expect(onLaunchAborted).not.toHaveBeenCalled()
   })
 
-  // Recipe-save rejection after acceptance must still settle callbacks or the action stays disabled indefinitely.
-  it('completes the launch when saving the agent default rejects', async () => {
+  // Recipe persistence can fail while prompt delivery succeeds; report each outcome independently.
+  it('completes the launch and reports a failed repository recipe write', async () => {
     const onLaunchAborted = vi.fn()
     const originalConsole = console
     const consoleError = vi.fn()
     vi.stubGlobal('console', { ...originalConsole, error: consoleError })
-    mocks.onSaveAgentDefault.mockRejectedValue(new Error('settings not loaded'))
+    const settings = getDefaultSettings('/tmp')
+    const updateRepo = vi.fn().mockResolvedValue(false)
+    const onSaveAgentDefault = vi.fn(
+      (
+        ...[target, actionId, recipe]: Parameters<
+          NonNullable<Parameters<typeof runSourceControlAgentActionStart>[0]['onSaveAgentDefault']>
+        >
+      ) =>
+        saveSourceControlAiActionRecipeForTarget({
+          getStoreState: () => ({ settings, repos: [] }),
+          updateSettings: vi.fn(),
+          updateRepo,
+          target,
+          actionId,
+          recipe
+        })
+    )
     mocks.launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'tab-1' },
       startupPlan: {} as never,
@@ -387,13 +428,30 @@ describe('runSourceControlAgentActionStart', () => {
 
     try {
       await expect(
-        runSourceControlAgentActionStart(buildArgs({ saveTargetValue: 'global', onLaunchAborted }))
+        runSourceControlAgentActionStart(
+          buildArgs({
+            saveTargetValue: 'repo',
+            repoId: 'repo-1',
+            settings,
+            onSaveAgentDefault,
+            onLaunchAborted
+          })
+        )
       ).resolves.toBe(true)
 
-      expect(mocks.onSaveAgentDefault).toHaveBeenCalledTimes(1)
+      expect(updateRepo).toHaveBeenCalledOnce()
       expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
       expect(mocks.onClose).toHaveBeenCalledTimes(1)
       expect(onLaunchAborted).not.toHaveBeenCalled()
+      await vi.waitFor(() => {
+        expect(consoleError).toHaveBeenCalledWith(
+          'onSaveAgentDefault failed',
+          new Error('Could not save the Source Control AI action.')
+        )
+        expect(mocks.toastError).toHaveBeenCalledWith(
+          'Could not save this action. Try saving it again in Settings.'
+        )
+      })
     } finally {
       vi.stubGlobal('console', originalConsole)
     }
@@ -405,52 +463,18 @@ describe('runSourceControlAgentActionStart CLI arguments applicability', () => {
     vi.clearAllMocks()
   })
 
-  // Undefined selects global agent arguments; empty string would suppress that fallback.
-  it('omits the per-action arguments so a terminal launch resolves the global setting', async () => {
+  // Why: `undefined` is what reaches the global Agents arguments; an empty string would beat
+  // that fallback and launch the agent with no arguments at all.
+  it('keeps terminal candidates even when a dialog field is hidden', async () => {
     mocks.launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'tab-1' }
     })
 
-    await expect(
-      runSourceControlAgentActionStart(buildArgs({ agentArgsApply: false }))
-    ).resolves.toBe(true)
+    await expect(runSourceControlAgentActionStart(buildArgs())).resolves.toBe(true)
 
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledTimes(1)
     const launchCall = mocks.launchAgentInNewTab.mock.calls[0]?.[0]
-    expect(launchCall).toHaveProperty('agentArgs', undefined)
-  })
-
-  it('omits them on the onStart branch too', async () => {
-    const onStart = vi.fn().mockResolvedValue(true)
-
-    await expect(
-      runSourceControlAgentActionStart(
-        buildArgs({ agentArgsApply: false, onStart, worktreeId: undefined, groupId: undefined })
-      )
-    ).resolves.toBe(true)
-
-    expect(onStart).toHaveBeenCalledWith({
-      agent: 'codex',
-      commandInput: 'Fix the bug',
-      agentArgs: undefined
-    })
-  })
-
-  // Omitting a field must not overwrite saved terminal arguments.
-  it('still saves the recipe with the arguments the user had stored', async () => {
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: { kind: 'local-terminal', tabId: 'tab-1' }
-    })
-
-    await runSourceControlAgentActionStart(
-      buildArgs({ agentArgsApply: false, saveTargetValue: 'global' })
-    )
-
-    expect(mocks.onSaveAgentDefault).toHaveBeenCalledWith(
-      expect.anything(),
-      'resolveComments',
-      expect.objectContaining({ agentArgs: '--model gpt-5' })
-    )
+    expect(launchCall).toHaveProperty('agentArgs', '--model gpt-5')
   })
 })
 
@@ -475,6 +499,43 @@ it('executes the actual bound namespace while saving the literal default recipe'
   )
 })
 
+it('confirms delivery and closes even while saving remains pending', async () => {
+  mocks.launchAgentInNewTab.mockReturnValue({
+    surface: { kind: 'local-terminal', tabId: 'tab-1' },
+    promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+  })
+  const onSaveAgentDefault = vi.fn(() => new Promise<void>(() => {}))
+  const onLaunched = vi.fn()
+  await expect(
+    runSourceControlAgentActionStart(
+      buildArgs({ saveTargetValue: 'global', onSaveAgentDefault, onLaunched })
+    )
+  ).resolves.toBe(true)
+  expect(onLaunched).toHaveBeenCalledOnce()
+  expect(mocks.onClose).toHaveBeenCalled()
+})
+
+it.each([undefined, '', '--add-dir /extra'])(
+  'retains argument presence and inherited option precedence at adapter inputs (%s)',
+  async (agentArgs) => {
+    const recipe = {
+      agentId: 'codex' as const,
+      agentArgs,
+      surface: 'terminal' as const,
+      launchPreferences: { agentId: 'codex' as const, model: 'saved' },
+      launchPreferencesYieldToAgentArgs: true as const
+    }
+    const onStart = vi.fn().mockResolvedValue(true)
+    await runSourceControlAgentActionStart(buildArgs({ recipe, onStart }))
+    expect(onStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentArgs,
+        sessionOptions: { model: 'saved' },
+        sessionOptionsYieldToAgentArgs: true
+      })
+    )
+  }
+)
 // Saved to the repository, the copied choice owns the action there, as on every later launch.
 it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
   'persists the complete target for changed or unchanged Customize arguments %s',

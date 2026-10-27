@@ -156,6 +156,7 @@ describe('nativeChat subscribe lifecycle', () => {
 
     subscribe(renderer.sender, 'unmount')
     expect(setupSignal(0).aborted).toBe(false)
+    expect(subscribeTranscript.mock.calls[0]?.[0]).toMatchObject({ sourceOrder: true })
     expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(1)
     unsubscribe(renderer.sender, 'unmount')
     expect(setupSignal(0).aborted).toBe(true)

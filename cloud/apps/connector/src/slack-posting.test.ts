@@ -1,6 +1,6 @@
 import { CONNECTOR_PATHS, ConnectorPollResponseSchema } from '@orca-cloud/connector-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanupConnectorHarnesses } from './connector-server-harness.test-fixture.js'
+import { cleanupConnectorHarnesses, pauseBefore } from './connector-server-harness.test-fixture.js'
 import {
   BOT,
   CHANNEL,
@@ -278,6 +278,55 @@ describe('Slack thread status and posts', () => {
     await harness.pass()
     expect((await states())[`reply:${harness.machine.hostId}:r2`]).toBe('uncertain')
   })
+
+  it('orders sends per channel within one workspace only', async () => {
+    const harness = await startedThread()
+    const posts = new ConnectorPosts(harness.database, harness.now, 'slack')
+    const place = { containerId: 'C9', threadId: '1800000000.000900' }
+    await harness.database.transaction(async (transaction) => {
+      await posts.queue(transaction, {
+        ...place,
+        workspaceId: 'T8',
+        postId: 'other-workspace',
+        kind: 'message',
+        body: { text: 'a' }
+      })
+      await posts.queue(transaction, {
+        ...place,
+        workspaceId: 'T9',
+        postId: 'this-workspace',
+        kind: 'message',
+        body: { text: 'b' }
+      })
+    })
+    // The same channel id in another workspace is another channel: neither waits on the other.
+    const claimed = (await posts.claim()).map((post) => post.postId)
+    expect(claimed).toEqual(expect.arrayContaining(['other-workspace', 'this-workspace']))
+  })
+
+  it('a second worker, as another role runs, claims nothing while the first holds the lease', async () => {
+    const harness = await startedThread()
+    const api = new ConnectorPosts(harness.database, harness.now, 'slack')
+    const gateway = new ConnectorPosts(harness.database, harness.now, 'slack')
+    expect(await api.claim()).not.toEqual([])
+    expect(await gateway.claim()).toEqual([])
+  })
+
+  // SQLite runs one transaction at a time, so only Postgres can overlap two claims.
+  it.skipIf(!process.env.ORCA_CONNECTOR_TEST_DATABASE_URL)(
+    'a claim that overlaps another one takes nothing',
+    async () => {
+      const harness = await startedThread()
+      const paused = pauseBefore(harness.database, 'UPDATE connector_posts SET state')
+      const api = new ConnectorPosts(paused.database, harness.now, 'slack')
+      const gateway = new ConnectorPosts(harness.database, harness.now, 'slack')
+      const first = api.claim()
+      await paused.atStatement
+      expect(await gateway.claim()).toEqual([])
+      paused.release()
+      expect(await first).not.toEqual([])
+    }
+  )
 
   it('a sender whose lease ran out changes nothing', async () => {
     const harness = await startedThread()

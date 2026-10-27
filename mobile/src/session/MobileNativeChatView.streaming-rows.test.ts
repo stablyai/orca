@@ -16,7 +16,7 @@ import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-
 import type * as MobileNativeChatRowPropsModule from './use-mobile-native-chat-row-props'
 import type * as MobileNativeChatRowProjectionModule from './mobile-native-chat-row-projection'
 import type * as MobileNativeChatMessageDetailModule from './use-mobile-native-chat-message-detail'
-import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { MobileNativeChatView } from './MobileNativeChatView'
 import { MobileNativeChatRowContent } from './MobileNativeChatRowItemSource'
@@ -156,20 +156,26 @@ vi.mock('./MobileNativeChatMessage', async () => {
     )
   }
 })
-vi.mock('./MobileNativeChatPromptCard', () => ({ MobileNativeChatPromptCard: 'PromptCard' }))
+vi.mock('./native-chat/input/MobileNativeChatPromptCard', () => ({
+  MobileNativeChatPromptCard: 'PromptCard'
+}))
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('./MobileAgentWorkingIndicator', () => ({
   MobileAgentWorkingIndicator: 'WorkingIndicator'
 }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
-vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
+vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
+vi.mock('./native-chat/input/MobileNativeChatPermission', () => ({
+  MobileNativeChatPermission: 'ChatPermission'
+}))
+vi.mock('./native-chat/input/MobileNativeChatQuestion', () => ({
+  MobileNativeChatQuestion: 'ChatQuestion'
+}))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
 vi.mock('./native-chat/input/MobileNativeChatQueuedMessages', () => ({
   MobileNativeChatQueuedMessages: 'Queued'
 }))
-vi.mock('./MobileNativeChatBackgroundTasks', () => ({
+vi.mock('./native-chat/input/MobileNativeChatBackgroundTasks', () => ({
   MobileNativeChatBackgroundTasks: 'BackgroundTasks'
 }))
 vi.mock('./MobileNativeChatImageViewer', () => ({ MobileNativeChatImageViewer: 'ImageViewer' }))

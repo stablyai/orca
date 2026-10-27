@@ -54,6 +54,8 @@ export async function runDiscordGatewayWorker(input: {
     if (!leadership) {
       return 0
     }
+    // The API scales to zero, so the always-on leader runs the core's sweeps too; posts are leased.
+    const stopBackground = runtime.core.startBackground()
     try {
       const fatal = Promise.withResolvers<string>()
       const ended = Promise.race([
@@ -86,6 +88,7 @@ export async function runDiscordGatewayWorker(input: {
       }
       return reason === 'stopping' ? 0 : 1
     } finally {
+      stopBackground()
       await leadership.release()
     }
   } finally {

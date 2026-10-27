@@ -4,22 +4,17 @@ import {
   readWslGuestPaneProcesses,
   readWslGuestPaneShellCwd
 } from '../wsl/wsl-guest-pane-processes'
+import { teardownReadBudgetMs } from './daemon-request-deadline'
 
 // Reserve teardown time for the final checkpoint and kill when a distro does not answer.
 const READ_BUDGET_MS = 3_000
-const READ_SHARE_OF_DEADLINE = 0.25
 
 /** The shell's folder in the bridge's UNC spelling, which wake reads; else null. */
 export async function readDaemonWslSleepCwd(
   pane: { paneKey: string; wslDistro: string; live: boolean },
   deadlineMs?: number
 ): Promise<string | null> {
-  const budget = Math.floor(
-    Math.min(
-      READ_BUDGET_MS,
-      deadlineMs === undefined ? READ_BUDGET_MS : (deadlineMs - Date.now()) * READ_SHARE_OF_DEADLINE
-    )
-  )
+  const budget = teardownReadBudgetMs(READ_BUDGET_MS, deadlineMs)
   if (process.platform !== 'win32' || budget <= 0) {
     return null
   }

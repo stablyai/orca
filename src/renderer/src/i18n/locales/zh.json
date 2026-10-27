@@ -8123,6 +8123,10 @@
           "heartbeatDescription": "已分派的工作者每隔几分钟报告一次，让协调者能区分正在工作的智能体和卡住的智能体。关闭后发给协调者的消息会减少，但协调者也不再收到这一报告信号。仅对更改后分派的工作者生效。",
           "heartbeatKeywordHeartbeat": "心跳",
           "heartbeatKeywordStalled": "卡住",
+          "heartbeatKeywordInterval": "间隔",
+          "heartbeatIntervalTitle": "心跳间隔",
+          "heartbeatIntervalDescription": "间隔越短，协调者收到报告越频繁，但消息也越多。间隔越长，消息越少，但两次报告之间的空档也越长。仅对更改后分派的工作者生效。",
+          "heartbeatIntervalSuffix": "分钟",
           "7bc082f4de": "复制安装命令"
         },
         "OrchestrationSetupCard": {
@@ -8333,8 +8337,6 @@
           "c7ef4415de": "显示名称",
           "b0a0c14a1c": "侧边栏和选项卡的项目特定显示详细信息。",
           "removeProjectAllHosts": "从所有已配置主机的 Orca 中删除该项目。",
-          "removeProjectCheckout": "从 Orca 中删除此检出。此项目的其他检出将保留。",
-          "removeProjectKeepCheckouts": "从 Orca 中删除该项目。拥有独立设置的检出将保留。",
           "0909e5d650": "删除项目",
           "ee5a290616": "作为文件夹打开。 Git 功能对此工作区不可用。",
           "323debba71": "类型：",
@@ -20405,6 +20407,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "无法保存此操作。请在设置中重试保存。",
     "unlinkedPr": {
       "status": "PR #{{number}} 未链接"
     },

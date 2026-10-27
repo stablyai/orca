@@ -58,13 +58,18 @@ function renderForm(
       selectedAgent: 'codex',
       hasEnabledAgents: true,
       detecting: false,
+      surfaceRows: {
+        model: { state: 'loading', placeholderCount: 0 },
+        selection: { ready: true, cli: false },
+        onPick: () => {}
+      },
       statusCopy: null,
       agentArgs: '',
       agentArgsApply: true,
       recipe: {
         agentId: overrides.selectedAgent ?? 'codex',
         commandInputTemplate: overrides.commandTemplate ?? '{basePrompt}',
-        agentArgs: overrides.agentArgs ?? ''
+        ...(overrides.agentArgs !== undefined ? { agentArgs: overrides.agentArgs } : {})
       },
       commandTemplate: '{basePrompt}',
       savedCommandInputTemplate: '{basePrompt}',
@@ -81,7 +86,7 @@ function renderForm(
       canStart: true,
       isStarting: false,
       startLabel: 'Start agent',
-      onSelectedAgentChange: () => {},
+      onAgentPick: () => {},
       onAgentArgsChange: () => {},
       onCommandTemplateChange: () => {},
       onSaveLaunchRecipeChange: () => {},
@@ -178,11 +183,14 @@ describe('SourceControlAgentActionDialogForm', () => {
       saveTargets,
       saveTargetValue: 'repo'
     })
+    const clearedArgsMarkup = renderForm({ settings, agentArgs: '' })
 
     expect(globalMarkup).toContain('Launch recipe already saved')
     expect(globalMarkup).not.toContain('Save &amp; start agent')
     expect(repoMarkup).not.toContain('Launch recipe already saved')
     expect(repoMarkup).toContain('Save &amp; start agent')
+    expect(clearedArgsMarkup).not.toContain('Launch recipe already saved')
+    expect(clearedArgsMarkup).toContain('Save &amp; start agent')
   })
 
   it('surfaces a diverging repo override alongside the save controls', () => {

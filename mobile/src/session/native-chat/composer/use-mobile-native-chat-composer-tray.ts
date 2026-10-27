@@ -1,6 +1,6 @@
 import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import { MobileNativeChatBackgroundTasks } from '../../MobileNativeChatBackgroundTasks'
+import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import {
   MobileNativeChatQueuedMessages,
   type MobileNativeChatQueuedMessagesProps

@@ -8330,6 +8330,10 @@
           "heartbeatDescription": "Les travailleurs assignés se signalent toutes les quelques minutes pour que le coordinateur distingue un agent qui travaille d'un agent figé. Les désactiver réduit les messages envoyés au coordinateur, mais il perd ce signal de suivi. S'applique aux travailleurs assignés après le changement.",
           "heartbeatKeywordHeartbeat": "signal de vie",
           "heartbeatKeywordStalled": "bloqué",
+          "heartbeatKeywordInterval": "intervalle",
+          "heartbeatIntervalTitle": "Intervalle des signaux de vie",
+          "heartbeatIntervalDescription": "Un intervalle plus court donne au coordinateur des nouvelles plus fréquentes, mais lui envoie plus de messages. Un intervalle plus long envoie moins de messages, mais laisse plus de temps entre deux signaux. S'applique aux travailleurs assignés après le changement.",
+          "heartbeatIntervalSuffix": "minutes",
           "7bc082f4de": "Copier la commande d'installation"
         },
         "OrchestrationSetupCard": {
@@ -8546,8 +8550,6 @@
           "c7ef4415de": "Nom d'affichage",
           "b0a0c14a1c": "Détails d'affichage propres au projet pour la barre latérale et les onglets.",
           "removeProjectAllHosts": "Retirer ce projet d'Orca sur tous les hôtes configurés.",
-          "removeProjectCheckout": "Retirer ce checkout d'Orca. Les autres checkouts de ce projet sont conservés.",
-          "removeProjectKeepCheckouts": "Retirer ce projet d'Orca. Les checkouts qui ont leurs propres paramètres sont conservés.",
           "0909e5d650": "Retirer le projet",
           "ee5a290616": "Ouvert en tant que dossier. Les fonctions Git sont indisponibles pour cet espace de travail.",
           "323debba71": "Type :",
@@ -20390,6 +20392,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "Impossible d’enregistrer cette action. Réessayez dans les paramètres.",
     "unlinkedPr": {
       "status": "PR #{{number}} non lié"
     },

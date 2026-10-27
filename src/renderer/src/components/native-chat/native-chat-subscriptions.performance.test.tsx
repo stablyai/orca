@@ -112,7 +112,7 @@ function corpus(scale: number, dense = false) {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
     projectGroups: [],
-    projects: [],
+    endpointProjects: [],
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: true,
     removedRuntimeEnvironmentIds: new Set(),

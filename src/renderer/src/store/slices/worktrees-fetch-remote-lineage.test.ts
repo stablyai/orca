@@ -82,7 +82,9 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees('repo1')
 
-    expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
+    expect(store.getState().worktreesByRepo.repo1).toEqual([
+      { ...refreshed, projectId: 'repo:repo1', projectHostSetupId: 'repo1' }
+    ])
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
     expect(store.getState().sortEpoch).toBe(8)
   })
@@ -116,7 +118,9 @@ describe('fetchWorktrees', () => {
       path: '/remote/wt1',
       branch: 'refs/heads/remote',
       hostId: 'runtime:env-1',
-      runtimeOwnerEnvironmentId: 'env-1'
+      runtimeOwnerEnvironmentId: 'env-1',
+      projectId: 'repo:repo1',
+      projectHostSetupId: 'repo1'
     })
     const staleLineage = makeLineage({
       worktreeId: worktree.id,
@@ -528,6 +532,8 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([
       {
         ...refreshed,
+        projectId: 'repo:repo1',
+        projectHostSetupId: 'repo1',
         hostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1'
       }

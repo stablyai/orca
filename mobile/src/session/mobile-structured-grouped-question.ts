@@ -3,7 +3,7 @@ import {
   isValidAgentSessionQuestionAnswers,
   type AgentSessionQuestionAnswer
 } from '../../../src/shared/agent-session-question-answer'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
+import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 
 // Grouped prompts put content in questions and leave flat options empty; collect steps locally and submit the whole answer set once.
 export type GroupedQuestionDraft = {

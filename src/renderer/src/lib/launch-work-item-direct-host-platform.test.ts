@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
@@ -83,7 +85,7 @@ function sshState(remotePlatform: 'linux' | 'win32'): SshConnectionState {
 type HostCase = {
   name: string
   client: NodeJS.Platform
-  repo: { path: string; connectionId?: string; executionHostId?: string }
+  repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>
   ssh?: Map<string, SshConnectionState>
   runtime?: Map<string, RuntimeEnvironmentStatus>
   expected: NodeJS.Platform
@@ -91,11 +93,15 @@ type HostCase = {
 
 function setStore(hostCase: HostCase): void {
   mocks.clientPlatform = hostCase.client
+  const repos: Repo[] = [
+    { id: 'repo-1', displayName: 'Repo', badgeColor: '#000000', addedAt: 1, ...hostCase.repo }
+  ]
   mocks.store = {
-    repos: [{ id: 'repo-1', displayName: 'Repo', addedAt: 1, ...hostCase.repo }],
+    repos,
     activeRepoId: null,
     activeWorktreeId: null,
-    projects: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     projectGroups: [],
     folderWorkspaces: [],
     worktreesByRepo: {},
@@ -227,7 +233,21 @@ describe('launchWorkItemDirect quotes for the execution host (#27971)', () => {
 
   it("quotes a local Windows project's WSL runtime for that distro", async () => {
     setStore({ name: 'wsl', client: 'win32', repo: { path: 'C:\\repo' }, expected: 'linux' })
-    mocks.store.projects = [
+    mocks.store.endpointProjectHostSetups = [
+      {
+        id: 'repo-1',
+        projectId: 'repo-1',
+        repoId: 'repo-1',
+        path: 'C:\\repo',
+        displayName: 'Repo',
+        hostId: 'local',
+        setupState: 'ready',
+        setupMethod: 'legacy-repo',
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ] satisfies ProjectHostSetup[]
+    mocks.store.endpointProjects = [
       {
         id: 'repo-1',
         displayName: 'Repo',
@@ -237,7 +257,7 @@ describe('launchWorkItemDirect quotes for the execution host (#27971)', () => {
         updatedAt: 1,
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       }
-    ]
+    ] satisfies Project[]
     mocks.createWorktree.mockResolvedValue({
       worktree: { id: 'repo-1::C:\\repo-wt', path: 'C:\\repo-wt' }
     })

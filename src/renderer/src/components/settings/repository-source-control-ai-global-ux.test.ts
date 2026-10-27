@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
+import {
+  normalizeRepoSourceControlAiOverrides,
+  normalizeSourceControlAiSettings
+} from '../../../../shared/source-control-ai'
 import type { RepoSourceControlAiOverrides } from '../../../../shared/source-control-ai-types'
 import type { SourceControlAiRepoUpdate } from '../../../../shared/source-control-ai-recipe-save'
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
@@ -139,14 +142,24 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
     }
   )
 
-  it('keeps an optimistic immediate field when the persist succeeds', async () => {
+  it('persists an immediate edit without completing untouched sparse sibling recipes', async () => {
+    const actionOverrides = {
+      fixChecks: { agentArgs: null, commandInputTemplate: null, surface: 'terminal' as const },
+      resolveComments: { agentArgs: '' },
+      resolveConflicts: { commandInputTemplate: '{basePrompt}' }
+    }
     const updateRepo = vi.fn().mockResolvedValue(true)
-    const { result } = setup({}, updateRepo)
+    const { result } = setup({ actionOverrides }, updateRepo)
     await act(async () => {
       result.current.updateEnablement(true)
     })
+    expect(updateRepo).toHaveBeenCalledOnce()
+    const payload = updateRepo.mock.calls[0]?.[1].sourceControlAi
+    expect(payload).toEqual({ enabled: true, actionOverrides })
+    expect(
+      normalizeRepoSourceControlAiOverrides(JSON.parse(JSON.stringify(payload)))?.actionOverrides
+    ).toEqual(actionOverrides)
     expect(result.current.displayRepoAi.enabled).toBe(true)
-    expect(updateRepo).toHaveBeenCalledTimes(1)
     expect(result.current.saveError).toBeNull()
   })
 
@@ -445,7 +458,7 @@ describe('editing one repository action', () => {
     expect(edited.launchPreferencesYieldToAgentArgs).toBeUndefined()
   })
 
-  it('saves a prompt edit without authoring args the user never typed or touching a sibling', () => {
+  it('saves a prompt edit without authoring args the user never typed or touching a sibling', async () => {
     const sibling = { agentArgs: '--repo' }
     const cleared = {
       fixCommitFailure: { agentId: 'codex' as const, agentArgs: null },
@@ -455,6 +468,33 @@ describe('editing one repository action', () => {
       fixCommitFailure: expect.objectContaining({ agentArgs: null, commandInputTemplate: 'mine' }),
       fixPushFailure: sibling
     })
+    const updateRepo = vi.fn().mockResolvedValue(true)
+    const persistedRepoAi = { actionOverrides: cleared }
+    const { result } = renderHook(() =>
+      useRepositorySourceControlAiGlobalUx({
+        repoId: 'repo-1',
+        persistedRepoAi,
+        settings,
+        source: settings.sourceControlAi!,
+        updateRepo
+      })
+    )
+    act(() => result.current.updateActionTemplate('fixCommitFailure', 'mine'))
+    await act(async () => result.current.saveActionRecipeText('fixCommitFailure'))
+    const payload = JSON.parse(JSON.stringify(updateRepo.mock.calls[0]?.[1].sourceControlAi))
+    expect(payload.actionOverrides.fixCommitFailure).toMatchObject({
+      agentId: 'codex',
+      agentArgs: null,
+      commandInputTemplate: 'mine'
+    })
+    expect(payload.actionOverrides.fixPushFailure).toEqual(sibling)
+    expect(
+      resolveSourceControlActionRecipe({
+        settings,
+        repo: { sourceControlAi: payload },
+        actionId: 'fixCommitFailure'
+      }).agentArgs
+    ).toBe('')
     // Absent args under nonempty Globals: the edited action keeps the args it ran with.
     const absent = { actionOverrides: { fixCommitFailure: { agentId: 'codex' as const } } }
     expect(reload(editPrompt(absent, 'fixCommitFailure'), 'fixCommitFailure').agentArgs).toBe(

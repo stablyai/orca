@@ -3,8 +3,8 @@ import {
   agentSessionPromptQuestions,
   type AgentSessionQuestionAnswer
 } from '../../../src/shared/agent-session-question-answer'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
+import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import {
   groupedQuestionPromptKey,
   projectGroupedQuestion,

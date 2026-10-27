@@ -64,9 +64,9 @@ export function completeRepoActionRecipe(
   return {
     agentId: recipe.agentId ?? null,
     commandInputTemplate,
-    // Empty args are a value: they suppress the agent's default flags, unlike absent args.
     ...(typeof recipe.agentArgs === 'string' ? { agentArgs: recipe.agentArgs } : {}),
-    ...(recipe.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {})
+    ...(recipe.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {}),
+    ...(recipe.surface ? { surface: recipe.surface } : {})
   }
 }
 

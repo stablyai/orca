@@ -1,13 +1,11 @@
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type {
-  AskAnswerSelection,
-  AskPrompt,
-  parseAskFromStatus
-} from '../../../src/shared/native-chat-ask'
-import type { detectAgentPermission } from './mobile-native-chat-permission'
-import type { parseAgentQuestion } from './mobile-native-chat-question'
+import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask-types'
+import type { parseAskFromStatus } from '../../../src/shared/native-chat-ask'
+import type { detectAgentPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { parseAgentQuestion } from './native-chat/input/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns

@@ -79,6 +79,9 @@ describe('#8832 hard-wrapped path candidates glue next-line text into URLs', () 
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
     registerHttpLinkStoreAccessor(() => ({
+      repos: [],
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()

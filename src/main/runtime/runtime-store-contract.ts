@@ -114,6 +114,7 @@ export type RuntimeStore = {
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationChatErrorEscalationEnabled?: GlobalSettings['orchestrationChatErrorEscalationEnabled']
     orchestrationHeartbeatsEnabled?: GlobalSettings['orchestrationHeartbeatsEnabled']
+    orchestrationHeartbeatIntervalMinutes?: GlobalSettings['orchestrationHeartbeatIntervalMinutes']
     workspaceDir: string
     nestWorkspaces: boolean
     workspaceDirHistory?: GlobalSettings['workspaceDirHistory']

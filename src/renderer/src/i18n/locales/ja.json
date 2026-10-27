@@ -8160,6 +8160,10 @@
           "heartbeatDescription": "割り当てられたワーカーが数分ごとに状況を知らせるので、コーディネーターは作業中の Agent と応答しなくなった Agent を見分けられます。オフにするとコーディネーターへのメッセージは減りますが、その定期連絡がなくなります。変更後に割り当てられたワーカーに適用されます。",
           "heartbeatKeywordHeartbeat": "ハートビート",
           "heartbeatKeywordStalled": "停止",
+          "heartbeatKeywordInterval": "間隔",
+          "heartbeatIntervalTitle": "ハートビートの間隔",
+          "heartbeatIntervalDescription": "間隔を短くするとコーディネーターへの定期連絡が増えますが、メッセージも増えます。長くするとメッセージは減りますが、連絡の間隔が空きます。変更後に割り当てられたワーカーに適用されます。",
+          "heartbeatIntervalSuffix": "分",
           "7bc082f4de": "インストールコマンドのコピー"
         },
         "OrchestrationSetupCard": {
@@ -8370,8 +8374,6 @@
           "c7ef4415de": "表示名",
           "b0a0c14a1c": "サイドバーとタブのプロジェクト固有の表示詳細。",
           "removeProjectAllHosts": "このプロジェクトを、設定済みのすべてのホストの Orca から削除します。",
-          "removeProjectCheckout": "このチェックアウトを Orca から削除します。このプロジェクトの他のチェックアウトは残ります。",
-          "removeProjectKeepCheckouts": "このプロジェクトを Orca から削除します。独自の設定を持つチェックアウトは残ります。",
           "0909e5d650": "プロジェクトの削除",
           "ee5a290616": "フォルダーとして開きます。このワークスペースでは Git 機能を使用できません。",
           "323debba71": "タイプ：",
@@ -20405,6 +20407,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "このアクションを保存できませんでした。設定でもう一度保存してください。",
     "unlinkedPr": {
       "status": "PR #{{number}} のリンクが解除されました"
     },

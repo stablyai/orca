@@ -30,6 +30,7 @@ export const AiVaultListSessionsParams = z
       )
       .pipe(z.union([z.number().int(), z.undefined()]))
       .optional(),
+    historyOwnership: z.object({ projectKey: z.string().min(1).max(1024).optional() }).optional(),
     includeAntigravityIdeSessions: OptionalBoolean,
     unlimited: OptionalBoolean,
     force: OptionalBoolean,

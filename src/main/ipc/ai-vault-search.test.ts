@@ -1,13 +1,18 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch } = vi.hoisted(() => ({
-  clearSearch: vi.fn(),
-  handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
-  sshSearch: vi.fn(),
-  sshHostInfos: vi.fn<() => { targetId: string }[]>(() => []),
-  runtimeSearch: vi.fn()
-}))
+const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch, runtimeHostInfos } =
+  vi.hoisted(() => ({
+    clearSearch: vi.fn(),
+    handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
+    sshSearch: vi.fn(),
+    sshHostInfos: vi.fn<() => { targetId: string }[]>(() => []),
+    runtimeSearch: vi.fn(),
+    runtimeHostInfos: vi.fn<() => readonly RuntimeAiVaultHostInfo[]>(() => [])
+  }))
 vi.mock('../ai-vault/session-scanner-service-spawn', () => ({
   clearSessionSearchInService: clearSearch
 }))
@@ -18,11 +23,23 @@ vi.mock('electron', () => ({
   },
   ipcRenderer: { invoke: (name: string, ...args: unknown[]) => handlers.get(name)!(null, ...args) }
 }))
+vi.mock('./ai-vault', () => ({
+  getActiveRuntimeAiVaultHostInfosResult: () => ({ hostInfos: runtimeHostInfos() })
+}))
 vi.mock('./ssh/ssh', () => ({
   requestActiveSshSessionSearch: sshSearch,
   getActiveSshAiVaultHostInfos: sshHostInfos
 }))
 
+import type { RuntimeAiVaultHostInfo } from './ai-vault-runtime-scan'
+import { getSavedRuntimeAiVaultHostInfos } from '../ai-vault/runtime-session-scanner'
+import { bindRuntimeSessionSearch } from '../ai-vault/runtime-session-search-call'
+import {
+  addEnvironmentFromPairingCode,
+  removeEnvironment
+} from '../../shared/runtime-environment-store'
+import { generateKeyPair, publicKeyToBase64 } from '../../shared/e2ee-crypto'
+import { encodePairingOffer } from '../../shared/pairing'
 import { registerAiVaultSearchHandlers } from './ai-vault-search'
 import { aiVaultApi } from '../../preload/api/ai-vault-bridge'
 import { setSessionSearchService } from '../ai-vault-search/session-search-service-registry'
@@ -42,6 +59,7 @@ beforeEach(() => {
   sshHostInfos.mockReset()
   sshHostInfos.mockReturnValue([])
   runtimeSearch.mockReset()
+  runtimeHostInfos.mockReset().mockReturnValue([])
   clearSearch.mockReset()
   registerAiVaultSearchHandlers({
     callRuntimeSearch: runtimeSearch
@@ -275,4 +293,71 @@ describe('local search hits owned by a native chat', () => {
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
+})
+
+it('binds the desktop leg once before awaited agent status and reuses the producer address', async () => {
+  const bound = vi.fn(async (method: string) =>
+    method === 'aiVault.searchStatus'
+      ? { ...unavailableSessionSearchStatus(), supportedAgents: ['codex'] }
+      : searchResults()
+  )
+  const bindRuntimeSearch = vi.fn(() => bound)
+  registerAiVaultSearchHandlers({ callRuntimeSearch: runtimeSearch, bindRuntimeSearch })
+  const within = {
+    kind: 'project' as const,
+    projectKey: 'project:P',
+    canonicalProjectKey: 'repo:b'
+  }
+  await aiVaultApi.searchSessions(
+    { query: 'needle', filters: { agents: ['codex'] }, within },
+    'runtime:selected'
+  )
+  expect(bindRuntimeSearch).toHaveBeenCalledExactlyOnceWith('selected')
+  expect(bound.mock.calls.map(([method]) => method)).toEqual([
+    'aiVault.searchStatus',
+    'aiVault.searchSessions'
+  ])
+  expect(bound).toHaveBeenLastCalledWith(
+    'aiVault.searchSessions',
+    expect.objectContaining({ within })
+  )
+  expect(runtimeSearch).not.toHaveBeenCalled()
+})
+
+it('keeps healthy All results when a persisted runtime is removed between enumeration and eager binding', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'sta10541-all-bind-'))
+  try {
+    const environment = addEnvironmentFromPairingCode(root, {
+      name: 'search-host',
+      pairingCode: encodePairingOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:9',
+        deviceToken: 'a'.repeat(48),
+        publicKeyB64: publicKeyToBase64(generateKeyPair().publicKey)
+      })
+    })
+    runtimeHostInfos.mockImplementationOnce(() => {
+      const advertised = getSavedRuntimeAiVaultHostInfos(root)
+      removeEnvironment(root, environment.id)
+      return advertised
+    })
+    const local = fakeSearchService()
+    setSessionSearchService(local)
+    const bindRuntimeSearch = vi.fn((id: string) => bindRuntimeSessionSearch(root, id))
+    registerAiVaultSearchHandlers({ callRuntimeSearch: runtimeSearch, bindRuntimeSearch })
+    const result = await aiVaultApi.searchSessions({ query: 'needle' }, 'all')
+    expect(bindRuntimeSearch).toHaveBeenCalledExactlyOnceWith(environment.id)
+    expect(local.search).toHaveBeenCalledOnce()
+    expect(result).toMatchObject({ kind: 'results', hits: [{ executionHostId: 'local' }] })
+    if (result.kind !== 'results') {
+      throw new Error('healthy results lost')
+    }
+    expect(result.hosts).toContainEqual({
+      executionHostId: `runtime:${environment.id}`,
+      outcome: 'unreachable'
+    })
+    expect(runtimeSearch).not.toHaveBeenCalled()
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })

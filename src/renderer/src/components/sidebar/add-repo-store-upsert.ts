@@ -40,8 +40,8 @@ export function upsertAddedRepoWithProjectHostSetup(
   // Direct IPC bypasses repo-slice compatibility projection; synchronize project-first state here.
   useAppStore.setState({
     repos,
-    projects: projection.projects,
-    projectHostSetups: projection.setups
+    endpointProjects: projection.projects,
+    endpointProjectHostSetups: projection.setups
   })
   return { alreadyPresent, repo: ownedRepo }
 }

@@ -168,6 +168,32 @@ it('disables the menu, input, reset and chip keyboard path while preserving geom
   expect(preferences).toHaveBeenLastCalledWith({ ...model, permissionMode: 'own' })
 })
 
+it.each([undefined, null])('keeps untouched %s arguments unowned until the user edits', (value) => {
+  const onArgsChange = vi.fn()
+  const view = (args: string | null | undefined) => (
+    <TooltipProvider>
+      <SourceControlActionArguments
+        agent="claude"
+        value={args}
+        onArgsChange={onArgsChange}
+        onPreferencesChange={vi.fn()}
+      />
+    </TooltipProvider>
+  )
+  const rendered = render(view(value))
+  const input = screen.getByRole('textbox', { name: 'Arguments' })
+  fireEvent.focus(input)
+  fireEvent.blur(input)
+  expect(onArgsChange).not.toHaveBeenCalled()
+  fireEvent.change(input, { target: { value: '--verbose' } })
+  expect(onArgsChange).toHaveBeenLastCalledWith('--verbose')
+  rendered.rerender(view('--verbose'))
+  fireEvent.change(input, { target: { value: '' } })
+  rendered.rerender(view(''))
+  fireEvent.blur(input)
+  expect(onArgsChange).toHaveBeenLastCalledWith('', true)
+})
+
 it('keeps the old Codex workspace-write Ask literal and explains that terminal text wins', () => {
   const text = '  -a on-request -s workspace-write -c approvals_reviewer=user  --search '
   const recipe = {

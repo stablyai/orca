@@ -13,6 +13,7 @@ import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec
 import {
   SOURCE_CONTROL_ACTION_IDS,
   setSourceControlActionAgentDefault,
+  type SourceControlActionRecipe,
   type SourceControlActionId,
   type SourceControlAiActionDefaults
 } from '../../../../shared/source-control-ai-actions'
@@ -155,7 +156,8 @@ export function SourceControlAiActionRecipeDefaults({
 
   const onActionAgentChange = async (
     actionId: SourceControlActionId,
-    value: string
+    value: string,
+    choice?: Pick<SourceControlActionRecipe, 'surface'>
   ): Promise<void> => {
     const agentId =
       value === '__default_agent__'
@@ -165,9 +167,14 @@ export function SourceControlAiActionRecipeDefaults({
           : (value as TuiAgent)
     const changed = config.actions?.[actionId]?.agentId !== agentId
     const captured = actionRecipeDraftState.values[actionId].launchPreferences
-    const saved = await writeActionDefault((actions) =>
-      setSourceControlActionAgentDefault(actions, actionId, agentId)
-    )
+    const saved = await writeActionDefault((actions) => {
+      const next = setSourceControlActionAgentDefault(actions, actionId, agentId)
+      if (choice) {
+        const { surface: _previous, ...recipe } = next[actionId] ?? {}
+        next[actionId] = { ...recipe, ...(choice.surface ? { surface: choice.surface } : {}) }
+      }
+      return next
+    })
     if (saved && changed && captured) {
       onActionLaunchPreferencesChange(actionId, (current) =>
         retireActionLaunchPreferences(current, captured, agentId)
@@ -227,7 +234,8 @@ export function SourceControlAiActionRecipeDefaults({
                   onReviewRepo={(repoId) => openRepoSourceControlAiSettings(repoId, actionId)}
                 />
               }
-              onAgentChange={(id, value) => void onActionAgentChange(id, value)}
+              surface={recipe?.surface}
+              onAgentChange={(id, value, choice) => void onActionAgentChange(id, value, choice)}
               launchPreferences={actionRecipeDraftState.values[actionId].launchPreferences}
               onLaunchPreferencesChange={(id, value) =>
                 void onActionLaunchPreferencesChange(id, value)

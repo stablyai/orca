@@ -8123,6 +8123,10 @@
           "heartbeatDescription": "할당된 워커가 몇 분마다 상태를 알려 코디네이터가 작업 중인 에이전트와 응답 없는 에이전트를 구분할 수 있습니다. 끄면 코디네이터로 가는 메시지가 줄지만 그 상태 신호를 더 이상 받을 수 없습니다. 변경 이후 할당된 워커에 적용됩니다.",
           "heartbeatKeywordHeartbeat": "하트비트",
           "heartbeatKeywordStalled": "멈춤",
+          "heartbeatKeywordInterval": "간격",
+          "heartbeatIntervalTitle": "하트비트 간격",
+          "heartbeatIntervalDescription": "간격이 짧을수록 코디네이터가 더 자주 상태를 받지만 메시지도 많아집니다. 간격이 길수록 메시지는 줄지만 상태 보고 사이의 공백이 길어집니다. 변경 이후 할당된 워커에 적용됩니다.",
+          "heartbeatIntervalSuffix": "분",
           "7bc082f4de": "설치 명령 복사"
         },
         "OrchestrationSetupCard": {
@@ -8333,8 +8337,6 @@
           "c7ef4415de": "표시 이름",
           "b0a0c14a1c": "사이드바 및 탭에 대한 프로젝트별 표시 세부 정보입니다.",
           "removeProjectAllHosts": "구성된 모든 호스트의 Orca에서 이 프로젝트를 제거합니다.",
-          "removeProjectCheckout": "Orca에서 이 체크아웃을 제거합니다. 이 프로젝트의 다른 체크아웃은 유지됩니다.",
-          "removeProjectKeepCheckouts": "Orca에서 이 프로젝트를 제거합니다. 자체 설정이 있는 체크아웃은 유지됩니다.",
           "0909e5d650": "프로젝트 제거",
           "ee5a290616": "폴더로 열렸습니다. 이 워크스페이스에서는 Git 기능을 사용할 수 없습니다.",
           "323debba71": "유형:",
@@ -20404,6 +20406,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "이 작업을 저장하지 못했습니다. 설정에서 다시 저장해 보세요.",
     "unlinkedPr": {
       "status": "PR #{{number}} 연결 해제됨"
     },

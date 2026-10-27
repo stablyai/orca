@@ -9,6 +9,7 @@ const UrlVerificationSchema = z.object({
 
 const EventCallbackSchema = z.object({
   type: z.literal('event_callback'),
+  api_app_id: z.string().min(1),
   team_id: z.string().min(1),
   // Slack Connect: a channel shared with another company.
   is_ext_shared_channel: z.boolean().optional(),
@@ -32,6 +33,8 @@ export const PERSON_SUBTYPES = new Set(['thread_broadcast', 'file_share'])
 
 // One person's post, the same whether Slack sent it as message or app_mention.
 export type SlackMessage = {
+  // The app Slack delivered it for; must be the app whose URL received it.
+  appId: string
   teamId: string
   channelId: string
   userId: string
@@ -69,6 +72,7 @@ export function readSlackEnvelope(payload: unknown): SlackEnvelope {
   return {
     kind: 'message',
     message: {
+      appId: callback.data.api_app_id,
       teamId: callback.data.team_id,
       channelId: event.data.channel,
       userId: user,

@@ -1,12 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '../types'
-import { createPreflightSlice } from './preflight'
-import { createRuntimeStatusSlice } from './runtime-status'
+import { createTestStore } from './store-test-helpers'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const preflightCheck = vi.fn()
@@ -44,16 +42,6 @@ globalThis.window = {
     }
   } as unknown as Window['api']
 } as Window & typeof globalThis
-
-function createTestStore() {
-  return create<AppState>()(
-    (...a) =>
-      ({
-        ...createPreflightSlice(...a),
-        ...createRuntimeStatusSlice(...a)
-      }) as AppState
-  )
-}
 
 function resetPreflightMocks(): void {
   preflightCheck.mockReset()
@@ -247,10 +235,10 @@ describe('createPreflightSlice', () => {
         runtime: {
           kind: 'wsl',
           hostPlatform: 'wsl',
-          projectId: 'repo-1',
+          projectId: 'repo:repo-1',
           distro: 'Ubuntu',
           reason: 'project-override',
-          cacheKey: 'repo-1:wsl:Ubuntu'
+          cacheKey: 'repo:repo-1:wsl:Ubuntu'
         }
       },
       wslDistro: 'Ubuntu'

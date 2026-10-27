@@ -5,8 +5,11 @@ import type * as WebviewRegistryModule from '../host-guest/webview-registry'
 import type * as DocPreviewArtifactShareModule from './doc-preview-artifact-share'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/webview-drag-passthrough'
+
+const confirmExternalLink = async (): Promise<boolean> => false
 
 const GRANT_ID = 'a'.repeat(32)
 // The draw-tool hint's own storage key; the hook that owns it keeps it private.
@@ -150,16 +153,19 @@ async function renderPreview(
   const { HtmlDocPreview } = await import('./HtmlDocPreview')
   await act(async () => {
     root.render(
-      <TooltipProvider>
-        <HtmlDocPreview
-          isActive={options.isActive ?? true}
-          previewId="preview-1"
-          filePath={ABSOLUTE_PATH}
-          relativePath={ENTRY_RELATIVE_PATH}
-          worktreeId="wt-1"
-          holdsGuestFocus={options.holdsGuestFocus ?? false}
-        />
-      </TooltipProvider>
+      <ConfirmationDialogContext.Provider value={confirmExternalLink}>
+        <TooltipProvider>
+          <HtmlDocPreview
+            isActive={options.isActive ?? true}
+            previewId="preview-1"
+            browserWorkspaceId="browser-1"
+            filePath={ABSOLUTE_PATH}
+            relativePath={ENTRY_RELATIVE_PATH}
+            worktreeId="wt-1"
+            holdsGuestFocus={options.holdsGuestFocus ?? false}
+          />
+        </TooltipProvider>
+      </ConfirmationDialogContext.Provider>
     )
   })
   const webview = container.querySelector('webview') as StubWebview | null

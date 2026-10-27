@@ -1,4 +1,16 @@
-import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
+import {
+  ensureAgentLaunchPreferences,
+  type AgentLaunchPreferences
+} from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  resolveChecksActionAgent,
+  sourceControlRepoAgentRows
+} from '@/lib/source-control-agent-picker'
+export { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
+import {
+  AgentLaunchChoiceCancelled,
+  acquireAgentLaunchChoices
+} from './host-chat-program-acquisition'
 import { toast } from 'sonner'
 import {
   ensureDetectedAgentsForRepo,
@@ -7,16 +19,11 @@ import {
 } from '@/lib/agent-detection-target-inventory'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { type ProspectiveWorkspace, worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
-import { readAgentLaunchChoice } from '@/lib/host-chat-program'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import {
-  pickSourceControlLaunchAgent,
-  readSourceControlLaunchRecipeAgentId
-} from '../../../shared/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../shared/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
@@ -27,15 +34,14 @@ import {
 } from '../../../shared/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { AppState } from '@/store/types'
-import type { SourceControlActionId } from '../../../shared/source-control-ai-actions'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 import {
+  projectSourceControlActionLaunch,
+  resolveSourceControlActionRequestedSurface,
   resolveSourceControlActionSessionOptions,
-  sourceControlActionLaunchOptions,
   sourceControlActionAgentArgs
 } from '../../../shared/source-control-action-launch-preferences'
 
@@ -55,58 +61,32 @@ type SavedAgentOverrideResult =
   | { kind: 'launch-default' }
   | { kind: 'blocked' }
 
-/** Button gates and execution use the same recipe and preserve strict saved Checks choices. */
-export function resolveChecksActionAgent(
-  state: AppState,
-  actionId: SourceControlActionId,
-  repoId: string | undefined,
-  workspace: ProspectiveWorkspace,
-  detected: readonly TuiAgent[] | null
-): TuiAgent | null {
-  const repo = state.repos.find((entry) => entry.id === repoId)
-  const savedAgent = readSourceControlLaunchRecipeAgentId(
-    resolveSourceControlActionRecipe({ settings: state.settings, repo, actionId })
-  )
-  const usable = (agent: TuiAgent): boolean =>
-    isTuiAgentEnabled(agent, state.settings?.disabledTuiAgents) &&
-    (detected?.includes(agent) === true ||
-      readAgentLaunchChoice(state, agent, workspace, detected).chatEligibility !== 'no')
-  if (savedAgent && actionId === 'fixChecks') {
-    return usable(savedAgent) ? savedAgent : null
-  }
-  return pickSourceControlLaunchAgent({
-    savedAgent,
-    defaultAgent: state.settings?.defaultTuiAgent,
-    detectedAgents: [...(detected ?? [])],
-    disabledAgents: state.settings?.disabledTuiAgents,
-    chosenOpensAsChat: usable
-  })
-}
-
 async function resolveSavedAgentOverride(
   savedAgentId: () => TuiAgent | null | undefined,
-  repo: (RepoHostFields & { id: string }) | null
+  repo: (RepoHostFields & { id: string }) | null,
+  workspace: ProspectiveWorkspace,
+  preferencesPromise: Promise<AgentLaunchPreferences>
 ): Promise<SavedAgentOverrideResult> {
   if (!savedAgentId()) {
     return { kind: 'launch-default' }
   }
   const pendingAgents = ensureDetectedAgentsForRepo(useAppStore.getState(), repo ?? {})
-  const workspace: ProspectiveWorkspace = {
-    kind: 'git-worktree',
-    ...(repo ? { repoId: repo.id, executionHostId: getRepoExecutionHostId(repo) } : {})
-  }
-  // Before workspace creation, paired projects can check enabled only; installation is checked on the created workspace’s host.
-  const detected = pendingAgents
-    ? (await acquireAgentLaunchChoices(workspace, () => pendingAgents)).detected
-    : null
+  // Why: a paired server answers per workspace, so only the enabled check can run before it exists;
+  // the direct launch checks installation on the new workspace.
+  const [choices, preferences] = await Promise.all([
+    pendingAgents ? acquireAgentLaunchChoices(workspace, () => pendingAgents) : null,
+    preferencesPromise
+  ])
+  const detected = choices?.detected ?? null
   const current = useAppStore.getState()
   const savedAgent = savedAgentId()
   if (!savedAgent) {
     return { kind: 'launch-default' }
   }
   const available = pendingAgents
-    ? resolveChecksActionAgent(current, 'fixChecks', repo?.id, workspace, detected) === savedAgent
-    : isTuiAgentEnabled(savedAgent, current.settings?.disabledTuiAgents)
+    ? resolveChecksActionAgent(current, 'fixChecks', repo?.id, workspace, detected, preferences) ===
+      savedAgent
+    : isTuiAgentEnabled(savedAgent, preferences.disabledTuiAgents)
   if (!available) {
     toast.error(
       translate(
@@ -121,12 +101,22 @@ async function resolveSavedAgentOverride(
 
 async function pickExistingWorktreeAgent(worktreeId: string): Promise<TuiAgent | null> {
   const workspace = worktreeLaunchWorkspace(worktreeId)
-  const choices = await acquireAgentLaunchChoices(workspace, () =>
-    ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
-  )
+  const [choices, preferences] = await Promise.all([
+    acquireAgentLaunchChoices(workspace, () =>
+      ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
+    ),
+    ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+  ])
   const state = useAppStore.getState()
   const repoId = state.allWorktrees().find((entry) => entry.id === worktreeId)?.repoId
-  const agent = resolveChecksActionAgent(state, 'fixChecks', repoId, workspace, choices.detected)
+  const agent = resolveChecksActionAgent(
+    state,
+    'fixChecks',
+    repoId,
+    workspace,
+    choices.detected,
+    preferences
+  )
   if (!agent) {
     const repo = state.repos.find((entry) => entry.id === repoId)
     const savedAgent = readSourceControlLaunchRecipeAgentId(
@@ -147,7 +137,19 @@ async function pickExistingWorktreeAgent(worktreeId: string): Promise<TuiAgent |
   return agent
 }
 
-export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
+export function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
+  return launchFixChecksAgent(args).catch((error) => {
+    if (
+      error instanceof AgentLaunchChoiceCancelled ||
+      (error instanceof DOMException && error.name === 'AbortError')
+    ) {
+      return false
+    }
+    throw error
+  })
+}
+
+async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
   const store = useAppStore.getState()
   const repo = store.repos.find((candidate) => candidate.id === args.repoId) ?? null
   const recipe = () =>
@@ -215,15 +217,19 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       )
       return false
     }
+    const { commandInput: projectedPrompt, ...projection } = projectSourceControlActionLaunch(
+      recipe(),
+      agent,
+      { renderedPrompt: prompt, settings: useAppStore.getState().settings }
+    )
     let revealFailed = false
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
       agent,
       worktreeId: targetWorktreeId,
       groupId: args.groupId ?? targetWorktreeId,
-      prompt,
-      agentArgs: sourceControlActionAgentArgs(recipe(), agent, useAppStore.getState().settings),
-      ...sourceControlActionLaunchOptions(recipe(), agent),
+      prompt: projectedPrompt,
+      ...projection,
       promptDelivery: 'submit-after-ready',
       launchPlatform,
       launchSource: args.launchSource,
@@ -266,7 +272,13 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     return false
   }
 
-  const agentOverride = await resolveSavedAgentOverride(savedAgentId, repo)
+  const { target } = sourceControlRepoAgentRows(repo)
+  const workspace = typeof target === 'string' ? worktreeLaunchWorkspace(target) : target.workspace
+  const preferences = ensureAgentLaunchPreferences(store, workspace)
+  const [agentOverride, agentLaunchPreferences] = await Promise.all([
+    resolveSavedAgentOverride(savedAgentId, repo, workspace, preferences),
+    preferences
+  ])
   const prompt = agentOverride.kind === 'blocked' ? '' : commandInput()
   if (!prompt) {
     return false
@@ -275,6 +287,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
   return await launchWorkItemDirect({
     item: { ...args.item, pasteContent: prompt },
     repoId: args.repoId,
+    agentLaunchPreferences,
     launchSource: args.launchSource,
     telemetrySource: args.telemetrySource,
     promptDelivery: 'submit-after-ready',
@@ -283,7 +296,17 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       sourceControlActionAgentArgs(recipe(), agent, useAppStore.getState().settings),
     resolveSessionOptions: (agent) => resolveSourceControlActionSessionOptions(recipe(), agent),
     sessionOptionsYieldToAgentArgs: recipe().launchPreferencesYieldToAgentArgs,
-    ...(agentOverride.kind === 'agent' ? { agentOverride: agentOverride.agent } : {}),
+    ...(agentOverride.kind === 'agent'
+      ? {
+          agentOverride: agentOverride.agent,
+          launchChoice: {
+            requestedSurface: resolveSourceControlActionRequestedSurface(
+              recipe(),
+              agentOverride.agent
+            )
+          }
+        }
+      : {}),
     openModalFallback: args.openModalFallback
   })
 }

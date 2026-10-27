@@ -20,7 +20,7 @@ import {
 } from './wsl-hook-relay-launch'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
 import { listWslDistrosAsync } from '../wsl'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { deferUntilWslDistroRunning, isWslDistroRunning } from '../wsl-background-distro-gate'
 import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
 
 // Concurrent wsl.exe spawns can trigger transient E_UNEXPECTED failures.
@@ -49,6 +49,7 @@ export type WslHookRelayManagerDeps = {
   listDistros: () => Promise<string[]>
   /** Recovery must not boot a distro the user shut down. */
   isDistroRunning: typeof isWslDistroRunning
+  deferUntilRunning: typeof deferUntilWslDistroRunning
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
@@ -91,6 +92,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   readBundle: (jsPath) => readFileSync(jsPath),
   listDistros: () => listWslDistrosAsync(),
   isDistroRunning: isWslDistroRunning,
+  deferUntilRunning: deferUntilWslDistroRunning,
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,

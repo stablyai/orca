@@ -17,6 +17,8 @@ import type {
   planAgentSessionLaunch
 } from '@/lib/agent-session-launch-plan'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
+import { directLaunchSurfaceRequest } from './launch-work-item-direct-preflight'
+import type { LaunchWorkItemDirectArgs } from './launch-work-item-direct-types'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   buildDirectWorkItemStartup,
@@ -82,11 +84,13 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   worktreeId: string
   worktreePath: string
   repoId: string
+  agentLaunchPreferences?: LaunchWorkItemDirectArgs['agentLaunchPreferences']
   agentOverride?: TuiAgent
   agentArgs?: string | null
   sessionOptions?: Readonly<Record<string, string>>
   resolveAgentArgs?: (agent: TuiAgent) => string | null | undefined
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
+  launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
   sessionOptionsYieldToAgentArgs?: true
   repoConnectionId: string | null
   repoHost: RepoHostFields & { path: string }
@@ -106,6 +110,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   const launchConnectionId = getConnectionId(args.worktreeId) ?? args.repoConnectionId
   const agentSelection = await resolveDirectWorkItemAgent({
     agentOverride: args.agentOverride,
+    agentLaunchPreferences: args.agentLaunchPreferences,
     worktreeId: args.worktreeId,
     repoHost: args.repoHost,
     launchConnectionId,
@@ -153,7 +158,8 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
             workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
             prompt: args.draftContent,
             promptDelivery: args.promptDelivery,
-            ...(sessionOptions ? { launchOptions: sessionOptions } : {})
+            ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+            ...directLaunchSurfaceRequest(args.launchChoice)
           })
   const structuredLaunch = plan?.route === 'structured-native-chat'
 

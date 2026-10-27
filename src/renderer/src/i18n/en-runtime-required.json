@@ -1424,6 +1424,7 @@
           "chatErrorEscalationKeywordChat": "chat",
           "chatErrorEscalationKeywordError": "error",
           "heartbeatKeywordHeartbeat": "heartbeat",
+          "heartbeatKeywordInterval": "interval",
           "heartbeatKeywordStalled": "stalled"
         },
         "OrchestrationSkillAgentCoverage": {
@@ -2921,6 +2922,9 @@
     "hooks": {
       "ipc": {
         "events": {
+          "browserStateIpcBridge": {
+            "docPreviewLinkFailed": "Could not open this link in Orca Browser."
+          },
           "os": {
             "markdown": {
               "file": {

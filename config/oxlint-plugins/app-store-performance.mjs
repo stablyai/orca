@@ -354,12 +354,39 @@ function noNestedFreshUnderShallowRule(sourceCode) {
   })
 }
 
+function noRawProjectCatalogComputedRule(sourceCode) {
+  return {
+    MemberExpression(node) {
+      if (!node.computed || node.property.type !== 'Identifier') {
+        return
+      }
+      const definition = variableFor(node.property, { sourceCode })?.defs[0]
+      const declaration = definition?.node
+      if (
+        definition?.type === 'Variable' &&
+        declaration.parent.kind === 'const' &&
+        declaration.init?.type === 'Literal' &&
+        ['endpointProjects', 'endpointProjectHostSetups'].includes(declaration.init.value)
+      ) {
+        this.report({
+          node,
+          message: 'Read canonical project affiliation through the project catalog selector.'
+        })
+      }
+    }
+  }
+}
+
 // Skip JS AST deserialization in files that cannot name a store hook.
 const STORE_HOOK_TEXT = /use[A-Z][A-Za-z0-9]*Store/
 
 function bindContext(createVisitors) {
   return (context) => {
-    if (!STORE_HOOK_TEXT.test(context.sourceCode.text) && !context.sourceCode.text.includes('\\')) {
+    if (
+      createVisitors !== noRawProjectCatalogComputedRule &&
+      !STORE_HOOK_TEXT.test(context.sourceCode.text) &&
+      !context.sourceCode.text.includes('\\')
+    ) {
       return {}
     }
     const visitors = createVisitors(context.sourceCode)
@@ -374,6 +401,7 @@ export default {
   meta: { name: 'app-store-performance' },
   rules: {
     'require-selector': { create: bindContext(requireSelectorRule) },
+    'no-raw-project-catalog-computed': { create: bindContext(noRawProjectCatalogComputedRule) },
     'no-identity-selector': { create: bindContext(noIdentitySelectorRule) },
     'no-fresh-selector-result': { create: bindContext(noFreshSelectorResultRule) },
     'no-nested-fresh-under-shallow': { create: bindContext(noNestedFreshUnderShallowRule) }

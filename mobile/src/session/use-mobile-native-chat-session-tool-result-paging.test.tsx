@@ -153,6 +153,7 @@ describe('mobile transcript tool result paging', () => {
           agent: 'claude',
           sessionId: 'remote-session',
           limit: hasCursor ? 60 : 100,
+          capabilities: { transcriptSourceOrder: 1 },
           ...(hasCursor ? { beforeOffset: 700 } : {})
         },
         expect.objectContaining({ budgetSpansConnect: true })

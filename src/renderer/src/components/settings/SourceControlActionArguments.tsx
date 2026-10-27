@@ -23,7 +23,7 @@ export function SourceControlActionArguments({
   onPreferencesChange
 }: {
   agent: TuiAgent | null | undefined
-  value: string
+  value: string | null | undefined
   preferences?: SourceControlActionLaunchPreferences
   disabled?: boolean
   showArguments?: boolean
@@ -36,7 +36,7 @@ export function SourceControlActionArguments({
   const choice = selected?.permissionMode ?? inherited
   const label = agent ? (AGENT_CATALOG.find((entry) => entry.id === agent)?.label ?? agent) : ''
   const flag = agent && selected?.permissionMode ? agentPermissionArgs(agent, choice) : ''
-  const loose = agent ? agentArgsSetPermission(agent, value) : false
+  const loose = agent ? agentArgsSetPermission(agent, value ?? '') : false
   const select = (next: typeof choice | 'default'): void => {
     if (!agent || disabled) {
       return
@@ -78,10 +78,15 @@ export function SourceControlActionArguments({
         <div className="w-full min-w-0">
           <AgentDefaultArgsInput
             defaultArgs=""
-            argsOverride={value}
+            argsOverride={value ?? ''}
             disabled={disabled}
             onDraftChange={(text) => onArgsChange(text)}
-            onSaveArgs={(text) => onArgsChange(text, true)}
+            onSaveArgs={(text) => {
+              // Unedited inherited or cleared arguments must not become an authored empty override.
+              if (value != null || text !== '') {
+                onArgsChange(text, true)
+              }
+            }}
             permissionChip={
               flag && !loose
                 ? {
