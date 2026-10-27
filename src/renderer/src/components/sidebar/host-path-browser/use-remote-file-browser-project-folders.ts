@@ -1,14 +1,43 @@
-import { useCallback, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, type KeyboardEvent, type RefObject } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { stepRemoteFileBrowserHighlight } from './remote-file-browser-highlight'
+import type { FetchListing } from './use-remote-file-browser-listing'
 import {
   remoteFileBrowserProjectFolders,
   type RemoteFileBrowserHost
 } from './remote-file-browser-project-folders'
 
 const NO_FOLDERS: readonly string[] = []
+
+/** Opened away from ~, the browser never lists home, so folder rows would show full paths. */
+export function useRemoteFileBrowserHomeAnchor(
+  needed: boolean,
+  fetchListing: FetchListing,
+  homePathRef: RefObject<string | null>,
+  setHomePath: (path: string) => void
+): void {
+  useEffect(() => {
+    if (!needed || homePathRef.current !== null) {
+      return
+    }
+    let cancelled = false
+    // The listing cache keeps this result, so a later Home click costs nothing.
+    fetchListing('~').then(
+      (result) => {
+        if (!cancelled && homePathRef.current === null) {
+          homePathRef.current = result.resolvedPath
+          setHomePath(result.resolvedPath)
+        }
+      },
+      () => {}
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [needed, fetchListing, homePathRef, setHomePath])
+}
 
 export function useRemoteFileBrowserProjectFolders(
   host: RemoteFileBrowserHost,
