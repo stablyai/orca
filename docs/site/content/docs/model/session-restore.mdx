@@ -11,7 +11,7 @@ When you close Orca, the next launch rehydrates the whole workspace: every open 
 
 - **Open worktrees** — every worktree you had open in the sidebar.
 - **Tabs and splits** — pane layout per worktree, including nested splits and which tab was focused.
-- **Running agent processes** — agents you had running keep running across an Orca quit. A background daemon owns the PTYs, so closing the app window doesn't kill Claude Code, Codex, or any other agent CLI mid-task. On next launch, Orca warm-reattaches to the same processes. To end them instead, use **Quit and Stop All Sessions** (see [When restore runs](#when-restore-runs)).
+- **Running agent processes** — agents you had running keep running across an Orca quit. A background daemon owns the PTYs, so closing the app window doesn't kill Claude Code, Codex, or any other agent CLI mid-task. On next launch, Orca warm-reattaches to the same processes. To end them instead, use **Quit Completely** (see [When restore runs](#when-restore-runs)).
 - **Terminal scrollback** — the buffer in each terminal, including output produced while Orca was closed.
 - **Focused worktree and tab** — Orca opens to the same view you closed.
 
@@ -37,7 +37,7 @@ Session restore runs on every launch. What comes back depends on what happens to
 
 **Sessions stopped before quitting → agents and terminal tabs are gone:**
 
-- **Quit and Stop All Sessions** — after you confirm, Orca closes every terminal tab and stops its session, as **Settings → Terminal → Manage Sessions → Kill all sessions** does, then quits. Projects and worktrees stay in the sidebar; the closed terminal tabs don't come back on next launch.
+- **Quit Completely** — after you confirm, Orca closes every terminal tab and stops its session, as **Settings → Terminal → Manage Sessions → Kill all sessions** does, then quits. Projects and worktrees stay in the sidebar; the closed terminal tabs don't come back on next launch.
 
 The item is in the Orca menu on macOS, and under **File** in the application menu (the **···** button in the title bar) on Windows and Linux. It is also in the menu bar icon menu on macOS and the tray icon menu on Windows. Terminal sessions on remote hosts may keep running there, and a tab from a paired Orca server can come back if the server never received the close. If a session on this computer can't be stopped, Orca shows an error and stays open.
 

@@ -251,7 +251,7 @@ describe('createSystemTray', () => {
   })
 
   it.each(['win32', 'darwin'] as const)(
-    'offers Quit and Stop All Sessions directly above Quit on %s when a handler is supplied',
+    'offers Quit Completely directly above Quit on %s when a handler is supplied',
     async (platform) => {
       setPlatform(platform)
       const { createSystemTray } = await loadModule()
@@ -267,10 +267,10 @@ describe('createSystemTray', () => {
               'Settings',
               'Check for Updates...',
               undefined,
-              'Quit and Stop All Sessions...',
+              'Quit Completely...',
               'Quit'
             ]
-          : ['Open Orca', undefined, 'Quit and Stop All Sessions...', 'Quit']
+          : ['Open Orca', undefined, 'Quit Completely...', 'Quit']
       )
       builtMenuItems().at(-2)?.click?.()
       expect(options.onQuitAndStopAllSessions).toHaveBeenCalledOnce()
@@ -668,7 +668,7 @@ describe('language changes', () => {
       expect(trayInstances).toHaveLength(1)
       expect(trayInstances[0].setContextMenu).toHaveBeenCalledTimes(2)
       expect(builtMenuItems()[0].label).toBe('Orca を開く')
-      expect(builtMenuItems().at(-2)?.label).toBe('すべてのセッションを停止して終了…')
+      expect(builtMenuItems().at(-2)?.label).toBe('完全に終了…')
       expect(builtMenuItems().at(-1)?.label).toBe('終了')
       builtMenuItems()[0].click?.()
       builtMenuItems().at(-2)?.click?.()

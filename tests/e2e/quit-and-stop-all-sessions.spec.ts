@@ -49,7 +49,7 @@ async function confirmQuitAndStopAllSessionsFromMenu(app: ElectronApplication): 
   }, MENU_ITEM_ID)
 }
 
-test('Quit and Stop All Sessions closes the terminal tab and ends its shell and the daemon', async (// oxlint-disable-next-line no-empty-pattern -- this test owns both Electron launches.
+test('Quit Completely closes the terminal tab and ends its shell and the daemon', async (// oxlint-disable-next-line no-empty-pattern -- this test owns both Electron launches.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX shell pid probe')
   // Two Electron launches (quit, then relaunch) plus waits for the shell and daemon to exit.
@@ -96,7 +96,7 @@ test('Quit and Stop All Sessions closes the terminal tab and ends its shell and 
     // Why the exit event, not a poll: session.close needs app.process(), which Playwright drops soon after exit.
     const exited = waitForExit(first.app.process(), 60_000)
     await confirmQuitAndStopAllSessionsFromMenu(first.app)
-    expect(await exited, 'Orca stayed open after Quit and Stop All Sessions').toBe(true)
+    expect(await exited, 'Orca stayed open after Quit Completely').toBe(true)
     await session.close(first.app)
     firstApp = null
 

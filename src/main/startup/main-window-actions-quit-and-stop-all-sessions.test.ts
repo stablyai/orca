@@ -185,10 +185,7 @@ describe('quitAndStopAllSessionsFromUserCommand', () => {
     quitAndStopAllSessionsFromUserCommand()
     await flushPromptChain()
 
-    expect(error).toHaveBeenCalledWith(
-      '[quit] Quit and Stop All Sessions failed:',
-      expect.any(Error)
-    )
+    expect(error).toHaveBeenCalledWith('[quit] Quit Completely failed:', expect.any(Error))
     expect(prompt.confirm).toHaveBeenCalledTimes(2)
   })
 
@@ -307,7 +304,7 @@ describe('getSystemTrayOptions', () => {
     Object.assign(state, { store: { getSettings: () => ({ appIcon: 'classic' }) } })
   })
 
-  it('offers Quit and Stop All Sessions on a desktop app only', () => {
+  it('offers Quit Completely on a desktop app only', () => {
     expect(getSystemTrayOptions()?.onQuitAndStopAllSessions).toBe(
       quitAndStopAllSessionsFromUserCommand
     )
@@ -318,7 +315,7 @@ describe('getSystemTrayOptions', () => {
 })
 
 describe('getAppMenuQuitHandlers', () => {
-  it('offers Quit and Stop All Sessions on a desktop app, and keeps a serve host on its own Quit', () => {
+  it('offers Quit Completely on a desktop app, and keeps a serve host on its own Quit', () => {
     expect(getAppMenuQuitHandlers()).toEqual({
       onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand
     })

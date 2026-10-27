@@ -94,7 +94,7 @@ function consumePendingRequest(): void {
     .catch(() => {})
 }
 
-/** Main confirmed Quit and Stop All Sessions; stop every session here, then let main quit. */
+/** Main confirmed Quit Completely; stop every session here, then let main quit. */
 export function registerQuitAndStopAllSessionsIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(window.api.ui.onQuitAndStopAllSessions?.(consumePendingRequest) ?? (() => {}))
   // Why: a window opened for the request can mount after main's push.

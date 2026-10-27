@@ -351,7 +351,8 @@
     "paste": "Pegar",
     "copy": "Copiar",
     "selectAll": "Seleccionar todo",
-    "quitAndStopAllSessions": "Salir y detener todas las sesiones..."
+    "quitAndStopAllSessions": "Salir por completo...",
+    "quitAndStopAllSessionsTooltip": "También detiene todas las sesiones de terminal, incluidos los agentes en ejecución. Salir sin más las mantiene activas para que Orca se vuelva a conectar en el próximo inicio."
   },
   "tray": {
     "openOrca": "Abrir Orca",
@@ -21287,9 +21288,9 @@
     "agentDriving": "Un agente está usando esta página"
   },
   "quitAndStopAllSessions": {
-    "title": "Salir y detener todas las sesiones",
+    "title": "Salir por completo",
     "message": "¿Detener todas las sesiones de terminal y salir de Orca?",
-    "detail": "Orca cierra todas las pestañas de terminal y detiene sus sesiones, incluidos los agentes que se ejecutan en terminales, y luego se cierra. Las sesiones de terminal en hosts remotos pueden seguir ejecutándose allí. Se pierde el trabajo de terminal no guardado y las pestañas cerradas no vuelven en el próximo inicio. Esta acción no se puede deshacer.",
+    "detail": "Orca cierra todas las pestañas de terminal y detiene sus sesiones, incluidos los agentes que se ejecutan en terminales, y luego se cierra. Salir sin más las mantiene activas para que Orca se vuelva a conectar en el próximo inicio. Las sesiones de terminal en hosts remotos pueden seguir ejecutándose allí. Se pierde el trabajo de terminal no guardado y las pestañas cerradas no vuelven en el próximo inicio. Esta acción no se puede deshacer.",
     "confirm": "Detener sesiones y salir",
     "cancel": "Cancelar",
     "failed": "No se pudieron detener todas las sesiones de terminal, así que Orca sigue abierto.",

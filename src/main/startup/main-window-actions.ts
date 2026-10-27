@@ -133,7 +133,7 @@ function showMessageBoxOnMainWindow(options: MessageBoxOptions): Promise<Message
 }
 
 /**
- * Quit and Stop All Sessions (app menu, tray): after confirmation the renderer runs Settings'
+ * Quit Completely (app menu, tray): after confirmation the renderer runs Settings'
  * Kill all sessions, then asks main to quit. The renderer does the work because Kill all also
  * retires the tabs, so nothing reopens or resumes them on next launch.
  */
@@ -163,7 +163,7 @@ export function quitAndStopAllSessionsFromUserCommand(): void {
         )
       }
     })
-    .catch((error) => console.error('[quit] Quit and Stop All Sessions failed:', error))
+    .catch((error) => console.error('[quit] Quit Completely failed:', error))
     .finally(() => {
       quitAndStopAllSessionsConfirming = false
     })

@@ -118,7 +118,7 @@ export const mainProcessState = {
   recoveryReloadInFlight: createWebContentsTimedFlag(),
   // Retain Settings clicks until the renderer pulls after listener mount.
   pendingOpenSettings: createWebContentsTimedFlag(),
-  // Why: a confirmed Quit and Stop All Sessions can open the window; its renderer pulls this one-shot on mount.
+  // Why: a confirmed Quit Completely can open the window; its renderer pulls this one-shot on mount.
   pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
   // Buffer OS Open With before any renderer listener exists.

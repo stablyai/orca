@@ -5,7 +5,7 @@ const CONFIRM_BUTTON_INDEX = 0
 const CANCEL_BUTTON_INDEX = 1
 const ACKNOWLEDGE_BUTTON_INDEX = 0
 
-/** Asks before Quit and Stop All Sessions; resolves true only when the user confirms. */
+/** Asks before Quit Completely; resolves true only when the user confirms. */
 export async function confirmQuitAndStopAllSessions(
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
 ): Promise<boolean> {
@@ -19,14 +19,14 @@ export async function confirmQuitAndStopAllSessions(
     defaultId: CANCEL_BUTTON_INDEX,
     cancelId: CANCEL_BUTTON_INDEX,
     noLink: true,
-    title: translateMain('quitAndStopAllSessions.title', 'Quit and Stop All Sessions'),
+    title: translateMain('quitAndStopAllSessions.title', 'Quit Completely'),
     message: translateMain(
       'quitAndStopAllSessions.message',
       'Stop all terminal sessions and quit Orca?'
     ),
     detail: translateMain(
       'quitAndStopAllSessions.detail',
-      "Orca closes every terminal tab and stops its session, including agents running in terminals, then quits. Terminal sessions on remote hosts may keep running there. Unsaved terminal work is lost, and the closed tabs don't come back on next launch. This can't be undone."
+      "Orca closes every terminal tab and stops its session, including agents running in terminals, then quits. Plain Quit keeps them running so Orca reattaches on next launch. Terminal sessions on remote hosts may keep running there. Unsaved terminal work is lost, and the closed tabs don't come back on next launch. This can't be undone."
     )
   })
   return response === CONFIRM_BUTTON_INDEX
@@ -42,7 +42,7 @@ export async function explainStopAllSessionsUnavailable(
     defaultId: ACKNOWLEDGE_BUTTON_INDEX,
     cancelId: ACKNOWLEDGE_BUTTON_INDEX,
     noLink: true,
-    title: translateMain('quitAndStopAllSessions.title', 'Quit and Stop All Sessions'),
+    title: translateMain('quitAndStopAllSessions.title', 'Quit Completely'),
     message: translateMain(
       'quitAndStopAllSessions.unavailableMessage',
       "Orca can't stop every terminal session right now."

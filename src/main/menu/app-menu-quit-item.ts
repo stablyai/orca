@@ -27,7 +27,21 @@ function createAppMenuQuitItem(
   }
 }
 
-/** Quit and Stop All Sessions (when offered) directly above Quit, so Quit stays the last entry. */
+/** Shared by the app menu and tray; toolTip is macOS-only, the confirmation explains it elsewhere. */
+export function quitAndStopAllSessionsMenuText(): Pick<
+  Electron.MenuItemConstructorOptions,
+  'label' | 'toolTip'
+> {
+  return {
+    label: translateMain('menu.quitAndStopAllSessions', 'Quit Completely...'),
+    toolTip: translateMain(
+      'menu.quitAndStopAllSessionsTooltip',
+      'Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch.'
+    )
+  }
+}
+
+/** Quit Completely (when offered) directly above Quit, so Quit stays the last entry. */
 export function createAppMenuQuitItems(
   handlers: AppMenuQuitHandlers,
   macAppName?: string
@@ -40,7 +54,7 @@ export function createAppMenuQuitItems(
   return [
     {
       id: QUIT_AND_STOP_ALL_SESSIONS_MENU_ITEM_ID,
-      label: translateMain('menu.quitAndStopAllSessions', 'Quit and Stop All Sessions...'),
+      ...quitAndStopAllSessionsMenuText(),
       // No accelerator: macOS reserves ⌥⌘Q for "Quit and Keep Windows", the opposite intent.
       click: () => onQuitAndStopAllSessions()
     },

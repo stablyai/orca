@@ -491,7 +491,8 @@
     "paste": "Coller",
     "copy": "Copier",
     "selectAll": "Tout sélectionner",
-    "quitAndStopAllSessions": "Quitter et arrêter toutes les sessions..."
+    "quitAndStopAllSessions": "Quitter complètement...",
+    "quitAndStopAllSessionsTooltip": "Arrête aussi toutes les sessions de terminal, y compris les agents en cours. Quitter simplement les laisse tourner pour qu'Orca s'y reconnecte au prochain lancement."
   },
   "tray": {
     "openOrca": "Ouvrir Orca",
@@ -21287,9 +21288,9 @@
     "agentDriving": "Un agent utilise cette page"
   },
   "quitAndStopAllSessions": {
-    "title": "Quitter et arrêter toutes les sessions",
+    "title": "Quitter complètement",
     "message": "Arrêter toutes les sessions de terminal et quitter Orca ?",
-    "detail": "Orca ferme tous les onglets de terminal et arrête leurs sessions, y compris les agents qui tournent dans des terminaux, puis quitte. Les sessions de terminal sur des hôtes distants peuvent continuer d'y tourner. Tout travail non enregistré dans un terminal est perdu et les onglets fermés ne reviennent pas au prochain lancement. Cette action est irréversible.",
+    "detail": "Orca ferme tous les onglets de terminal et arrête leurs sessions, y compris les agents qui tournent dans des terminaux, puis quitte. Quitter simplement les laisse tourner pour qu'Orca s'y reconnecte au prochain lancement. Les sessions de terminal sur des hôtes distants peuvent continuer d'y tourner. Tout travail non enregistré dans un terminal est perdu et les onglets fermés ne reviennent pas au prochain lancement. Cette action est irréversible.",
     "confirm": "Arrêter les sessions et quitter",
     "cancel": "Annuler",
     "failed": "Impossible d'arrêter toutes les sessions de terminal, Orca reste donc ouvert.",

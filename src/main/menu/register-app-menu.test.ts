@@ -660,11 +660,11 @@ describe('registerAppMenu', () => {
   )
 
   it.each(['darwin', 'linux', 'win32'] as const)(
-    'offers Quit and Stop All Sessions directly above Quit only when a handler is supplied (%s)',
+    'offers Quit Completely directly above Quit only when a handler is supplied (%s)',
     (platform) => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
       const quitMenu = platform === 'darwin' ? 'Orca' : 'File'
-      const label = 'Quit and Stop All Sessions...'
+      const label = 'Quit Completely...'
 
       registerAppMenu(buildMenuOptions())
       expect(getSubmenu(getTemplate(), quitMenu).some((item) => item.label === label)).toBe(false)
@@ -676,6 +676,7 @@ describe('registerAppMenu', () => {
       const stopAll = submenu.at(-2)
       expect(stopAll?.label).toBe(label)
       expect(stopAll?.id).toBe('quit-and-stop-all-sessions')
+      expect(stopAll?.toolTip).toContain('running agents')
       expect(stopAll?.accelerator).toBeUndefined()
       expect(submenu.at(-1)?.role).toBe('quit')
       // Why untyped: the handler ignores its Electron arguments.

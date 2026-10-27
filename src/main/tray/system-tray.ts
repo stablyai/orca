@@ -4,6 +4,7 @@ import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate
 import { deferAppKitSceneMutation } from '../appkit-scene-mutation'
 import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
+import { quitAndStopAllSessionsMenuText } from '../menu/app-menu-quit-item'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
 import { stampTrayDevBadge } from './tray-dev-badge'
 
@@ -270,7 +271,7 @@ function buildTrayMenu(opts: SystemTrayOptions): Menu {
     ...(opts.onQuitAndStopAllSessions
       ? ([
           {
-            label: translateMain('menu.quitAndStopAllSessions', 'Quit and Stop All Sessions...'),
+            ...quitAndStopAllSessionsMenuText(),
             click: safeMenuAction(opts.onQuitAndStopAllSessions)
           }
         ] satisfies Electron.MenuItemConstructorOptions[])
