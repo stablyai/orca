@@ -98,6 +98,9 @@ export type UISlicePreferences = {
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
+  /** Each paired runtime host's own columns, keyed by environment id; never persisted locally. */
+  hostWorkspaceStatuses: Readonly<Record<string, readonly WorkspaceStatusDefinition[]>>
+  fetchHostWorkspaceStatuses: (environmentId: string) => Promise<void>
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardColumnWidth: number

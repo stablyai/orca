@@ -64,6 +64,7 @@ export function registerRuntimeClientIpcBridge(
     refresh: async (environmentId) => {
       // Why: project events can reveal target CRUD, but known target states already arrive by push.
       void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
       // Group/folder edits share reposChanged; refresh groups before folders to resolve their owners.
       const runtimeOwner = { runtimeEnvironmentId: environmentId }
@@ -110,8 +111,9 @@ export function registerRuntimeClientIpcBridge(
       applyNativeChatLaunchDraftResolved(useAppStore.getState(), event)
       return
     }
-    // A paired desktop keeps its own Workspace options; only the host's phone mirrors them.
+    // A paired desktop keeps its own Workspace options; it reads only the host's columns, for the host's cards.
     if (event.type === 'workspaceViewChanged') {
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       return
     }
     if (event.type === 'reposChanged') {
@@ -222,6 +224,7 @@ export function registerRuntimeClientIpcBridge(
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const subscription = subscribeRuntimeClientEvents(
         environmentId,
         (event) => {

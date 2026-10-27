@@ -22,6 +22,7 @@ import { useWorkspaceKanbanRenderLifecycle } from './use-workspace-kanban-render
 import { useWorkspaceKanbanDrawerLingering } from './use-workspace-kanban-drawer-lingering'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { useWorkspaceBoardStatuses } from './use-workspace-board-statuses'
 
 type WorkspaceKanbanDrawerProps = {
   leftSidebarStyle?: React.CSSProperties
@@ -60,7 +61,8 @@ function WorkspaceKanbanDrawerContent({
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
-  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const localWorkspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const workspaceStatuses = useWorkspaceBoardStatuses()
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
   const syncTaskStatusFromWorkspaceBoard = useAppStore((s) => s.syncTaskStatusFromWorkspaceBoard)
   const setSyncTaskStatusFromWorkspaceBoard = useAppStore(
@@ -202,7 +204,7 @@ function WorkspaceKanbanDrawerContent({
     handleRemoveStatus
   } = useWorkspaceKanbanStatusActions({
     allWorktrees,
-    workspaceStatuses,
+    workspaceStatuses: localWorkspaceStatuses,
     setWorkspaceStatuses,
     updateWorktreeMeta
   })
@@ -256,7 +258,7 @@ function WorkspaceKanbanDrawerContent({
         totalCount: boardWorktrees.length,
         onQueryChange: setQuery,
         onClearQuery: clearQuery,
-        workspaceStatuses,
+        workspaceStatuses: localWorkspaceStatuses,
         syncTaskStatusFromWorkspaceBoard,
         onSyncTaskStatusFromWorkspaceBoardChange: setSyncTaskStatusFromWorkspaceBoard,
         onRenameStatus: handleRenameStatus,

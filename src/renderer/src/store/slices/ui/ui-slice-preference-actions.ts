@@ -34,6 +34,7 @@ import {
   normalizeWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace-statuses'
+import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -206,6 +207,24 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeWorkspaceStatuses(statuses)
       window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
       set({ workspaceStatuses: normalized })
+    },
+    hostWorkspaceStatuses: {},
+    fetchHostWorkspaceStatuses: async (environmentId) => {
+      try {
+        const { ui } = await callRuntimeRpc<{ ui: { workspaceStatuses?: unknown } }>(
+          { kind: 'environment', environmentId },
+          'ui.get',
+          undefined,
+          { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
+        )
+        const statuses = normalizeWorkspaceStatuses(ui.workspaceStatuses)
+        set((s) => ({
+          hostWorkspaceStatuses: { ...s.hostWorkspaceStatuses, [environmentId]: statuses }
+        }))
+      } catch (err) {
+        // An unreachable host keeps its last columns.
+        console.warn(`Skipped workspace statuses for runtime environment ${environmentId}:`, err)
+      }
     },
 
     workspaceBoardOpacity: 1,

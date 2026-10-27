@@ -9,7 +9,11 @@ import {
   type WorktreeDragGroup
 } from './worktree-manual-order'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import type { WorktreeMetaBatchUpdate } from '../../store/slices/worktree-helpers'
 import type { WorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 
@@ -23,7 +27,7 @@ export function useWorkspaceKanbanWorktreeActions(args: {
   sortBy: ReturnType<typeof useAppStore.getState>['sortBy']
   updateWorktreeMeta: ReturnType<typeof useAppStore.getState>['updateWorktreeMeta']
   updateWorktreesMeta: ReturnType<typeof useAppStore.getState>['updateWorktreesMeta']
-  workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
   worktreeById: ReadonlyMap<string, Worktree>
   manualOrderCatalog: WorktreeManualOrderCatalog
   worktreesByStatus: ReadonlyMap<string, readonly Worktree[]>

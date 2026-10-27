@@ -147,6 +147,8 @@ export function setLineageFixtureState(
     // Use the all-host default so host filtering cannot remove fixture rows.
     workspaceHostScope: 'all',
     workspaceStatuses: groupBy === 'workspace-status' ? cloneDefaultWorkspaceStatuses() : [],
+    hostWorkspaceStatuses: {},
+    removedRuntimeEnvironmentIds: new Set(),
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {
       [child.id]: makeLineage(child, parent),

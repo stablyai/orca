@@ -305,6 +305,8 @@ function setStatusLaneState(): void {
     workspaceHostScope: 'all',
     workspacePortScan: null,
     workspaceStatuses: [...DEFAULT_WORKSPACE_STATUSES],
+    hostWorkspaceStatuses: {},
+    removedRuntimeEnvironmentIds: new Set(),
     worktreeCardProperties: [
       'status',
       'pr',
