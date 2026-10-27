@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { extractTerminalFileLinkCandidates, extractTerminalFileLinks } from './terminal-links'
+import { extractTerminalFileLinks } from './terminal-links'
 
-for (const extract of [extractTerminalFileLinks, extractTerminalFileLinkCandidates]) {
+for (const extract of [extractTerminalFileLinks]) {
   describe(extract.name, () => {
     it.each([
       [

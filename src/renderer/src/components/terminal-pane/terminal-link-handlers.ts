@@ -2,7 +2,7 @@ import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
 import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
-import { extractTerminalFileLinkCandidates, extractTerminalFileLinks } from '@/lib/terminal-links'
+import { extractTerminalFileLinks, type ParsedTerminalFileLink } from '@/lib/terminal-links'
 import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
@@ -78,6 +78,20 @@ function preferLongestNonOverlappingLinks(links: ProvidedFileLink[]): ProvidedFi
   })
 }
 
+// Why: xterm hit-tests only the hovered row, so checking the rest of a long line wastes host stats.
+function linksTouchingBufferRow(
+  logicalLine: WrappedLogicalLine,
+  bufferLineNumber: number
+): ParsedTerminalFileLink[] {
+  const links = extractTerminalFileLinks(logicalLine.text)
+  const row = logicalLine.rows.find((candidate) => candidate.y + 1 === bufferLineNumber)
+  if (!row) {
+    return links
+  }
+  const rowEnd = row.startIndex + row.text.length
+  return links.filter((link) => link.startIndex <= rowEnd && link.endIndex >= row.startIndex)
+}
+
 export function createFilePathLinkProvider(
   paneId: number,
   deps: LinkHandlerDeps,
@@ -104,9 +118,10 @@ export function createFilePathLinkProvider(
         return
       }
 
-      if (
-        logicalLines.every((logicalLine) => extractTerminalFileLinks(logicalLine.text).length === 0)
-      ) {
+      const parsedLines = logicalLines.map((logicalLine) =>
+        linksTouchingBufferRow(logicalLine, bufferLineNumber)
+      )
+      if (parsedLines.every((parsedLinks) => parsedLinks.length === 0)) {
         callback(undefined)
         return
       }
@@ -114,85 +129,86 @@ export function createFilePathLinkProvider(
       const pathExists = createTerminalPathExistenceBatch()
       // A rejected wrapped-path guess must not hide verified sibling paths.
       void Promise.allSettled(
-        logicalLines.flatMap((logicalLine) =>
-          extractTerminalFileLinkCandidates(logicalLine.text).map(
-            async (parsed): Promise<ProvidedFileLink | null> => {
-              const runtimeEnvironmentId =
-                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
-              const target = resolveFileLinkTarget(parsed, {
-                cwd: deps.getPaneLinkCwd?.(paneId) ?? startupCwd,
-                homePath: deps.terminalHomePath,
-                worktreeId,
-                worktreePath,
-                runtimeEnvironmentId,
-                wslDistro: deps.wslDistro
-              })
-              const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
-              if (!target || !range) {
-                return null
-              }
-              const terminalHandle = deps.getRuntimeTerminalHandleForPane?.(paneId) ?? null
-              if (
-                !(await fileLinkTargetExists(target, pathExistsCache, pathExists, terminalHandle))
-              ) {
-                return null
-              }
-              const { absolutePath: mappedPath, fileContext } = target
+        logicalLines.flatMap((logicalLine, lineIndex) =>
+          parsedLines[lineIndex].map(async (parsed): Promise<ProvidedFileLink | null> => {
+            const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+            if (!range || range.start.y > bufferLineNumber || range.end.y < bufferLineNumber) {
+              return null
+            }
+            const runtimeEnvironmentId =
+              deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+            const target = resolveFileLinkTarget(parsed, {
+              cwd: deps.getPaneLinkCwd?.(paneId) ?? startupCwd,
+              homePath: deps.terminalHomePath,
+              worktreeId,
+              worktreePath,
+              runtimeEnvironmentId,
+              wslDistro: deps.wslDistro
+            })
+            if (!target) {
+              return null
+            }
+            const terminalHandle = deps.getRuntimeTerminalHandleForPane?.(paneId) ?? null
+            if (
+              !(await fileLinkTargetExists(target, pathExistsCache, pathExists, terminalHandle))
+            ) {
+              return null
+            }
+            const { absolutePath: mappedPath, fileContext } = target
 
-              return {
-                logicalLine,
-                link: {
-                  range,
-                  text: parsed.displayText,
-                  activate: (event) => {
-                    if (
-                      handleTerminalFileLink(
-                        mappedPath,
-                        target.line,
-                        target.column,
-                        event,
-                        {
-                          worktreeId,
-                          worktreePath,
-                          runtimeEnvironmentId,
-                          wslDistro: deps.wslDistro,
-                          terminalHandle,
-                          sourceTabId: deps.sourceTabId,
-                          onOpenFailure: (failure) =>
-                            showFileLinkOpenFailureToast(mappedPath, failure)
-                        },
-                        deps.getLinkActionContext?.(paneId)
-                      )
-                    ) {
-                      pane.terminal.clearSelection?.()
-                    }
-                  },
-                  hover: () => {
-                    // Only local paths can use the Shift+modifier OS escape hatch.
-                    const canOpenWithSystemDefault =
-                      shouldOpenTerminalFileWithSystemDefault(fileContext)
-                    const showActions = deps.getLinkActionContext
-                      ? deps.getLinkActionContext(paneId) !== null
-                      : true
-                    const hint = target.isKnownWorktreeRoot
-                      ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault, showActions)
-                      : canOpenWithSystemDefault
-                        ? isHtmlFilePath(mappedPath)
-                          ? getTerminalHtmlFileOpenHint(localHtmlFileDestinations(), showActions)
-                          : showActions
-                            ? openLinkHint
-                            : getTerminalFileOpenHint(false)
-                        : getTerminalOrcaFileOpenHint(showActions)
-                    linkTooltip.textContent = `${mappedPath} (${hint})`
-                    linkTooltip.style.display = ''
-                  },
-                  leave: () => {
-                    linkTooltip.style.display = 'none'
+            return {
+              logicalLine,
+              link: {
+                range,
+                text: parsed.displayText,
+                activate: (event) => {
+                  if (
+                    handleTerminalFileLink(
+                      mappedPath,
+                      target.line,
+                      target.column,
+                      event,
+                      {
+                        worktreeId,
+                        worktreePath,
+                        runtimeEnvironmentId,
+                        wslDistro: deps.wslDistro,
+                        terminalHandle,
+                        sourceTabId: deps.sourceTabId,
+                        onOpenFailure: (failure) =>
+                          showFileLinkOpenFailureToast(mappedPath, failure)
+                      },
+                      deps.getLinkActionContext?.(paneId)
+                    )
+                  ) {
+                    pane.terminal.clearSelection?.()
                   }
+                },
+                hover: () => {
+                  // Only local paths can use the Shift+modifier OS escape hatch.
+                  const canOpenWithSystemDefault =
+                    shouldOpenTerminalFileWithSystemDefault(fileContext)
+                  const showActions = deps.getLinkActionContext
+                    ? deps.getLinkActionContext(paneId) !== null
+                    : true
+                  const hint = target.isKnownWorktreeRoot
+                    ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault, showActions)
+                    : canOpenWithSystemDefault
+                      ? isHtmlFilePath(mappedPath)
+                        ? getTerminalHtmlFileOpenHint(localHtmlFileDestinations(), showActions)
+                        : showActions
+                          ? openLinkHint
+                          : getTerminalFileOpenHint(false)
+                      : getTerminalOrcaFileOpenHint(showActions)
+                  linkTooltip.textContent = `${mappedPath} (${hint})`
+                  linkTooltip.style.display = ''
+                },
+                leave: () => {
+                  linkTooltip.style.display = 'none'
                 }
               }
             }
-          )
+          })
         )
       )
         .then((settledLinks) => {

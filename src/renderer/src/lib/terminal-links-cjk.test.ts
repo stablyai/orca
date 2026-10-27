@@ -14,8 +14,10 @@ describe('CJK terminal path names', () => {
     ])(`keeps ${character} in %s`, (template) => {
       const filePath = template.replace('CHAR', character)
       const links = extractTerminalFileLinks(filePath)
-      expect(links.map((link) => link.pathText)).toEqual([filePath])
-      expect(links[0]).toMatchObject({ startIndex: 0, endIndex: filePath.length })
+      expect(links.find((link) => link.pathText === filePath)).toMatchObject({
+        startIndex: 0,
+        endIndex: filePath.length
+      })
     })
 
     it(`preserves location and normalized Windows target for ${character}`, () => {

@@ -4,7 +4,7 @@ import {
   type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
 import type { IBufferLine, IBufferRange } from '@xterm/xterm'
-import { extractTerminalFileLinkCandidates } from '@/lib/terminal-links'
+import { extractTerminalFileLinks } from '@/lib/terminal-links'
 import {
   getTerminalFileContext,
   openDetectedFilePath,
@@ -63,7 +63,7 @@ export function openFilePathLinkAtBufferPosition(
   const gesture = ++latestClickGesture
   const links: ClickedFileLink[] = []
   for (const logicalLine of buildCandidateLogicalLinesForBufferPosition(buffer, position.y)) {
-    for (const parsed of extractTerminalFileLinkCandidates(logicalLine.text)) {
+    for (const parsed of extractTerminalFileLinks(logicalLine.text)) {
       const target = resolveFileLinkTarget(parsed, {
         cwd: deps.startupCwd,
         homePath: deps.terminalHomePath,

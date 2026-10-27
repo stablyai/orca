@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks'
 import { describe, it, expect } from 'vitest'
-import { extractTerminalFileLinks, extractTerminalFileLinkCandidates } from './terminal-links'
+import { extractTerminalFileLinks } from './terminal-links'
 
 // Large space-padded newline-free ConPTY dashboards once caused overlapping-whitespace backtracking (#5970); bound fixture size without hiding the regression.
 describe('terminal-links ReDoS guard (#5970)', () => {
@@ -16,7 +16,6 @@ describe('terminal-links ReDoS guard (#5970)', () => {
     it(`scans "${name}" in roughly linear time`, () => {
       const start = performance.now()
       extractTerminalFileLinks(line)
-      extractTerminalFileLinkCandidates(line)
       const elapsedMs = performance.now() - start
       expect(elapsedMs).toBeLessThan(500)
     })
