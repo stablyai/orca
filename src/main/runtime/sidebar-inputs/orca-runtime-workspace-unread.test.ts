@@ -11,7 +11,7 @@ import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs'
 import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs'
 import { requireSwitchedOn } from './require-switched-on'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../shared/workspace-unread-raise-capability'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -41,8 +41,7 @@ const LEAF = '22222222-2222-4222-8222-222222222222'
 const PANE = `tab-1:${LEAF}`
 const PHONE: RpcDispatchStreamingOptions = { clientKind: 'mobile', connectionId: 'phone-1' }
 
-/** What each kind of desktop socket sends: the request and subscription sockets, the browser host
- *  lease and network tunnel (which add only browser capabilities to the shared base), and the CLI. */
+/** Desktop request, subscription, browser-host lease, network-tunnel and CLI capability sets. */
 function currentDesktopSockets() {
   return {
     request: remoteRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES),

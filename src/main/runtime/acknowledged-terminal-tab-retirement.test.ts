@@ -12,8 +12,7 @@ import { delegatedMobileSessionTabClose } from './mobile-session-tab-close-outco
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
-// The window's acknowledged close; the layout-owner build closes in main without one, and its
-// twins of these cases are in acknowledged-terminal-tab-retirement-main-close.test.ts.
+// Main-owned closes have no window ack; their counterparts live in acknowledged-terminal-tab-retirement-main-close.test.ts.
 const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
 
 const fixtures: ReturnType<typeof createAcknowledgedTabRetirementFixture>[] = []
@@ -235,11 +234,7 @@ itSwitchOff(
     )
     f.acknowledgement.resolve()
     await expect(pending).resolves.toMatchObject({ refused: true, refusalReason: 'stale-terminal' })
-    // Why: notifier.closeTerminalTab carries only a tab id — no generation, PTY or
-    // incarnation — so the renderer kills whatever occupies that id when it arrives.
-    // Retrying the close after this refusal therefore destroys the successor, and
-    // re-capturing identity beforehand cannot prevent it (it only detects a further
-    // race). One call per close is what keeps the successor alive.
+    // Tab-only close notices lack generation identity; retrying after refusal could kill the successor, even after recapture.
     expect(f.closeTerminalTab).toHaveBeenCalledTimes(1)
     expect(f.hasTab()).toBe(true)
   }

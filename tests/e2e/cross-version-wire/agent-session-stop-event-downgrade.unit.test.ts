@@ -35,12 +35,10 @@ import {
   renderJournalState
 } from '../../../src/main/native-chat/agent-session-journal/journal-reducer'
 
-// A release that knows none of the Stop event, the Resume marker and the reopen mark: an unknown
-// row kind would make it delete the journal from that row on, so each rides a tombstone it reads.
+// Old readers would truncate at unknown row kinds; encode Stop/Resume/reopen evidence in tombstones they understand.
 const BASELINE_REF = 'v1.4.218'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
-// A main build that shares this one's host database and schema version, so a downgrade to it opens
-// the journal writable. No release tag has that database yet; move to the first one that does.
+// Pin a main build sharing this database/schema for writable downgrade; move to the first release that ships it.
 const WRITABLE_BASELINE_REF = '3727100cc9dbcea6201f8a3e506676a3c4b53b18'
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -299,12 +297,8 @@ test("an older build opens this build's journal writable and appends to it; the 
   }
 }, 120_000)
 
-// Why a Stop's event cannot have a row kind of its own yet: this build keeps a kind it does not know
-// and refuses the load as a newer Orca's chat, but a build from before that deletes the journal from
-// it. So a Stop kind ships
-// its reader first and is written once no supported build lacks that reader, or is written at a
-// bumped `v`. Move the baseline to the first release with this rule, and the older build keeps the
-// row too.
+// Write a new Stop row kind only after supported readers know it, or bump v; earlier hosts truncate unknown kinds.
+// Move the pinned baseline once a released reader preserves them.
 test("this build keeps a newer build's row kind and refuses the load; a build before it deletes it", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-newer-kind-downgrade-'))
   const journals = createTrackedJournalOpener()

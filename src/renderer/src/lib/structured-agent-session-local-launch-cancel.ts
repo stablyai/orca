@@ -1,6 +1,6 @@
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { retireStructuredAgentSessionTab } from '@/runtime/structured-agent-session-tab-retirement'
-import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+import { deleteStructuredAgentLaunchRecord } from './agent-session/launch/structured-agent-session-launch-persistence'
 
 // Chats a cancel closed on this machine's host; session ids are never reused.
 const closedByLocalCancel = new Set<string>()
@@ -14,11 +14,7 @@ export function resetStructuredAgentLocalLaunchCancelsForTests(): void {
   closedByLocalCancel.clear()
 }
 
-/**
- * ORCA_LAYOUT_OWNER=main only: this machine's host refuses a create whose close came first, or
- * closes the chat as it lands, so a local cancel retires the chat on the host at once and keeps no
- * tombstone. A failed retire is logged; main still remembers the close.
- */
+/** With main layout ownership, local close fences concurrent create and retires immediately without tombstone. Log retirement failure; main still remembers close. */
 export function cancelStructuredAgentLaunchOnLocalHost(
   worktreeId: string,
   sessionId: string

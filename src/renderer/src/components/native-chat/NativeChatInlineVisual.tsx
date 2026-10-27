@@ -1,3 +1,6 @@
+import { useAppStore } from '@/store'
+import { captureLinkOpenIntent } from '@/lib/link-open-intent'
+import { beginLinkOpenRequest } from '@/lib/link-open-request'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { SquareArrowOutUpRight } from 'lucide-react'
 import { toast } from 'sonner'
@@ -27,8 +30,14 @@ export function NativeChatVisualUnavailable(): React.JSX.Element {
 }
 
 /** Opens the visual like any HTML file of the chat's workspace: rendered, its source a click away. */
-function openNativeChatVisualFile(worktreeId: string, path: string): void {
-  const plan = openFileInBrowserTab({ filePath: path, worktreeId })
+function openNativeChatVisualFile(owner: NativeChatVisualOwner, path: string): void {
+  const isCurrentRequest = beginLinkOpenRequest()
+  const linkIntent = captureLinkOpenIntent(useAppStore.getState(), owner.worktreeId, owner.tabId)
+  const plan = openFileInBrowserTab({
+    filePath: path,
+    worktreeId: owner.worktreeId,
+    ...(owner.tabId ? { linkContext: { linkIntent, isCurrentRequest } } : {})
+  })
   if (plan.status === 'unsupported') {
     toast.error(plan.message)
   }
@@ -63,10 +72,7 @@ async function readNativeChatVisualShareRequest(
   }
 }
 
-/**
- * A visual inside an assistant reply. Its frame mounts once the reply scrolls near it and stays
- * mounted, so what the reader did in it survives scrolling away and back.
- */
+/** Mount near the viewport, then keep the frame mounted so interactive state survives scrolling away. */
 export function NativeChatInlineVisual({
   owner,
   file,
@@ -120,7 +126,7 @@ export function NativeChatInlineVisual({
                   variant="outline"
                   size="icon-xs"
                   aria-label={openLabel}
-                  onClick={() => openNativeChatVisualFile(owner.worktreeId, state.document.path)}
+                  onClick={() => openNativeChatVisualFile(owner, state.document.path)}
                 >
                   <SquareArrowOutUpRight />
                 </Button>

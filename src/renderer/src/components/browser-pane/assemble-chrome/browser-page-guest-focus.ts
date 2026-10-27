@@ -1,11 +1,7 @@
 import { useMemo, type RefObject } from 'react'
 import { hasBrowserClientPageAttachedGuest } from '../browser-client-page-retained-elements'
 
-/**
- * How a browser pane hands focus to whatever renders the page. Panes differ in what that
- * is — an Electron <webview> guest, or a streamed screencast surface — so the chrome focus
- * rules stay identical across them by talking to this instead of a webview ref.
- */
+/** Abstract webview and streamed-surface focus so chrome rules stay consistent across backends. */
 export type BrowserPageGuestFocus = {
   blur: () => void
   /** Whether the guest actually took focus. */
@@ -30,6 +26,8 @@ export function useWebviewGuestFocus(
           return false
         }
         try {
+          // Why: focus the window first so the close shortcut closes the new tab, not the original tab.
+          window.focus()
           webview.focus()
         } catch {
           // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).
@@ -42,11 +40,7 @@ export function useWebviewGuestFocus(
   )
 }
 
-/**
- * Guest focus for panes whose page is a DOM node. `fallbackRef` covers the window where the
- * primary element does not exist yet — the streamed pane renders no screencast <img> until
- * its first frame arrives, so before then its viewport is the only thing focus can land on.
- */
+/** Before the first streamed image arrives, focus its viewport fallback. */
 export function useElementGuestFocus(
   primaryRef: RefObject<HTMLElement | null>,
   fallbackRef?: RefObject<HTMLElement | null>

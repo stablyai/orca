@@ -9,6 +9,7 @@ import {
   claudeAuthDiagnostic,
   claudeInitializationAuthError,
   readClaudeCapabilities,
+  readClaudeReportedPermissionMode,
   readClaudeModels,
   type ClaudeInitObservation,
   type ClaudeInitProof
@@ -113,6 +114,10 @@ export async function readClaudeStartupFacts(input: {
 }
 
 function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitializeFacts): void {
+  const permission = facts.init ? readClaudeReportedPermissionMode(facts.init.message) : undefined
+  if (permission !== undefined && session.reportedOptions.reportedPermissionMode === undefined) {
+    session.reportedOptions.reportedPermissionMode = permission
+  }
   const { init, initialization } = facts
   // Preserve a running model already reported by a turn's init frame.
   if (init?.model && session.reportedOptions.model === undefined) {

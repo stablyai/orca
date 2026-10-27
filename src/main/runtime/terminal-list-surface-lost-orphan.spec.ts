@@ -10,12 +10,7 @@ import { bindPaneFirst } from './bind-first-pane.test-fixture'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 export function registerTerminalListSurfaceLostOrphanTests(): void {
-  // #18191: a terminal whose pane the graph dropped kept reporting `orphaned: false` with a
-  // `tabId` no tab has — "field-for-field identical to a healthy one", so an operator polling
-  // `terminal list` had no signal at all. The runtime asked whether the PTY record agreed with
-  // itself; it never asked the leaf topology whether that pane still exists.
-  // Layout-owner builds: a terminal holds its surface exactly when main's layout binds it, so the
-  // pane drops out of main's layout, not out of the window's graph; window graphs never retract it.
+  // Orphan status must compare PTY claims to current layout topology (#18191); main-layout builds retract panes through main, not window graphs.
 
   const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
   const KEPT_LEAF = '11111111-1111-4111-8111-111111111111'
@@ -186,7 +181,6 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
       const kept = byPty.get(KEPT_PTY)
       const dropped = byPty.get(DROPPED_PTY)
 
-      // The whole defect in one line: these two readings used to be identical.
       expect(dropped?.orphaned).not.toBe(kept?.orphaned)
       expect(dropped?.orphaned).toBe(true)
       expect(kept?.orphaned).toBe(false)
@@ -209,8 +203,7 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
 
       const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
       const byPty = new Map(terminals.map((terminal) => [terminal.ptyId, terminal]))
-      // The renderer may still hold that pane unmounted; it needs the name to rebind instead of forking.
-      // Layout-owner builds: views draw main's layout, which no longer has the pane to name.
+      // Window-owned panes retain recorded names to rebind without forking; main-owned layout has already removed the pane.
       expect(byPty.get(DROPPED_PTY)?.recordedPaneKey).toBe(
         ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : makePaneKey('tab-dropped', DROPPED_LEAF)
       )
@@ -231,9 +224,7 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
     it('does not call a surface recorded since the last graph statement orphaned', async () => {
       const runtime = makeRuntime()
       dropOnePane(runtime)
-      // Spawn records the renderer's pane identity before the graph carrying it arrives (#7587).
-      // Re-recording waits for the first graph statement; prior silence cannot retract the claim.
-      // Layout-owner builds: the spawn commit binds the pane in main's layout, which no graph outranks.
+      // Spawn may claim a pane before its first graph statement (#7587); silence cannot retract it, and main-owned bindings outrank graphs.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         bindPaneFirst(runtime, pane('tab-dropped', DROPPED_LEAF, DROPPED_PTY))
       } else {
@@ -260,9 +251,7 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
     })
 
     it('does not let the inventory restore un-drop a pane the graph dropped', async () => {
-      // `list` always refreshes PTY records from the controller inventory first, and that refresh
-      // replays the still-persisted paneKey. Stamping that replay at write time gave it the standing
-      // of a fresh graph statement, so the very read that reports the orphan erased it first.
+      // Inventory refresh replays persisted pane keys; stamping that replay as fresh graph evidence would erase the orphan being reported.
       const runtime = makeRuntime(sessionStillHoldingBothPanes())
       dropOnePane(runtime)
 
@@ -294,10 +283,7 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
 
     it('does not call every pane orphaned when the graph goes away', async () => {
       const runtime = makeRuntime()
-      // Losing the authoritative graph clears the leaf map wholesale
-      // (transitionGraphReloadToTerminalState). That emptiness says nothing about any individual
-      // PTY, so reading it as "no pane holds this" would report every live terminal orphaned at
-      // once — the same lie as #18191, pointed the other way.
+      // Unavailable graphs clear leaf maps but prove no pane absence; do not orphan every live terminal.
       runtime.markGraphUnavailable(1)
 
       const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)

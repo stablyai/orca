@@ -118,6 +118,10 @@ export type AllHostCatalogFetchOptions = {
   remoteHosts?: 'include' | 'skip'
 }
 
+export type AllHostRepoCatalogFetchOptions = AllHostCatalogFetchOptions & {
+  onHostLoaded?: (hostId: ExecutionHostId) => Promise<void>
+}
+
 export type ProjectRemovalFailure = {
   projectId: string
   reason: string
@@ -157,8 +161,8 @@ export type RuntimeCatalogFetchOptions = {
 
 export type RepoSlice = {
   repos: readonly Repo[]
-  projects: readonly Project[]
-  projectHostSetups: readonly ProjectHostSetup[]
+  endpointProjects: readonly Project[]
+  endpointProjectHostSetups: readonly ProjectHostSetup[]
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
@@ -171,7 +175,7 @@ export type RepoSlice = {
   pendingSshRepoReadoptions: readonly SshRepoReadoption[]
   recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
   fetchRepos: (options: RuntimeCatalogFetchOptions) => Promise<void>
-  fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
+  fetchReposForAllHosts: (options?: AllHostRepoCatalogFetchOptions) => Promise<void>
   awaitLocalRepoCatalogSettlement: () => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
   fetchProjectGroups: (options: RuntimeCatalogFetchOptions) => Promise<void>
@@ -276,6 +280,8 @@ export type RepoSlice = {
       errorFeedback?: 'toast' | 'silent'
       automaticCleanup?: boolean
       confirmedDiscards?: ConfirmedUnsavedDiscards
+      /** Paired servers only: skip the unreachable server now and replay its repo.rm on reconnect. */
+      localOnly?: boolean
     }
   ) => Promise<void>
   updateProject: (

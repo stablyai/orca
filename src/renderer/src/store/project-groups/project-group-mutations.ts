@@ -204,8 +204,7 @@ export function createProjectGroupMutationActions(
 
       const removedProjectIds: string[] = []
       const failedProjectRemovals: ProjectRemovalFailure[] = []
-      // Why: members were captured before the cascade cleared membership; a same-id row on another
-      // host outside the group must survive, so each member row is removed on its own host.
+      // Cascade captured members by host; same-ID rows outside this group on other hosts must survive.
       const membersById = new Map<string, Repo[]>()
       for (const member of targets.projects) {
         const row = findRepoForHost(get().repos, member.id, { hostId: member.hostId })
@@ -297,7 +296,7 @@ export function createProjectGroupMutationActions(
           return {
             repos: nextRepos,
             ...mergeProjectCompatibilityForHostRepoChange({
-              previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
+              previous: s,
               nextRepos,
               hostId: movedHostId
             }),

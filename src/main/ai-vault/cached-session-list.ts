@@ -1,4 +1,9 @@
 import { join } from 'node:path'
+import type { SessionSearchScopeCatalogSource } from '../ai-vault-search/session-search-scope-catalog'
+import {
+  compileSessionSearchProjectOwnership,
+  sessionSearchProjectOwner
+} from '../ai-vault-search/session-search-project-ownership'
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import {
   clearAiVaultBackgroundRestartCircuit,
@@ -14,6 +19,7 @@ import {
 } from '../../shared/ai-vault-types'
 import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
+import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
 import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
@@ -46,6 +52,7 @@ export class AiVaultLocalScanError extends Error {
 
 // Configure sources through the runtime service; headless serve never runs window-only IPC registration.
 export type AiVaultSessionSources = {
+  getProjectOwnershipCatalog?: SessionSearchScopeCatalogSource
   getAdditionalCodexHomePaths?: () => readonly string[]
 }
 
@@ -69,7 +76,13 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
 /** Resolve fresh WSL roots for both listing and indexing; distros can start or stop between scans. */
 export async function localAiVaultScanRoots(): Promise<
   Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
-    Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders' | 'claudeProfileProjectsDirs'>
+    Pick<
+      AiVaultScanOptions,
+      | 'executionHostId'
+      | 'wslOpenCodeReaders'
+      | 'claudeProfileProjectsDirs'
+      | 'opencodeAccountDataDirs'
+    >
 > {
   const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
     filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
@@ -80,6 +93,7 @@ export async function localAiVaultScanRoots(): Promise<
     wslHomeDirs,
     // Scanner workers have no account router; supply profile roots from this process.
     claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),
+    opencodeAccountDataDirs: managedOpenCodeAccountDataDirs(),
     wslOpenCodeReaders: await prepareOpenCodeWslReaders(wslHomeDirs),
     // Runtime-addressed callers restamp host-local results at the RPC edge instead of rescanning.
     executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -108,12 +122,15 @@ export async function listAiVaultSessions(
     cachedList.expiresAt > now &&
     aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
   ) {
-    return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
+    return annotateHistoryOwnership(
+      truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths),
+      args
+    )
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
   const startGeneration = cacheGeneration
   let progress: LocalAiVaultScanProgressHandle | null = null
-  return scanCoordinator.run({
+  const result = await scanCoordinator.run({
     key: scanKey,
     force: args?.force,
     signal: options.signal,
@@ -161,6 +178,37 @@ export async function listAiVaultSessions(
       return result
     }
   })
+  return annotateHistoryOwnership(result, args)
+}
+
+async function annotateHistoryOwnership(
+  result: AiVaultListResult,
+  args?: AiVaultListArgs
+): Promise<AiVaultListResult> {
+  if (!args?.historyOwnership) {
+    return result
+  }
+  try {
+    const catalog = sources.getProjectOwnershipCatalog?.()
+    if (catalog) {
+      const ownership = await compileSessionSearchProjectOwnership(
+        catalog,
+        args.historyOwnership.projectKey ?? ''
+      )
+      result = {
+        ...result,
+        sessions: result.sessions.map((session) => ({
+          ...session,
+          projectOwnerKey: session.cwd
+            ? sessionSearchProjectOwner(ownership, session.cwd, session.filePath)
+            : null
+        }))
+      }
+    }
+  } catch (error) {
+    console.error('[ai-vault] history ownership unavailable:', error)
+  }
+  return result
 }
 
 // Subagent transcript validation shares these WSL-aware roots with discovery.

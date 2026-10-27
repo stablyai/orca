@@ -27,13 +27,12 @@ function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-/** Holds the next disk write until the returned release runs. */
 function holdNextWrite(disk: FakeEditorDisk): () => void {
   let release = (): void => {}
   const gate = new Promise<void>((resolve) => {
     release = resolve
   })
-  // Why: the held write is always the first, so it lands unconditionally.
+  // The first held write has no prior write to conflict with.
   disk.fs.writeFile.mockImplementationOnce(
     async ({ filePath, content }: { filePath: string; content: string }) => {
       await gate
@@ -151,7 +150,6 @@ describe('editor save queue: one running and one queued save per record', () => 
 
     release()
     expect(await editSave).toBe('written')
-    // The diff's guarded write runs after the edit's landed, so it sees disk moved.
     expect(await diffSave).toBe('blocked-stale')
     expect(disk.files.get(PATH)).toBe('from edit')
   })

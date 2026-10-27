@@ -1,8 +1,7 @@
 const INSTANCE_ZONE_URL = 'http://metadata.google.internal/computeMetadata/v1/instance/zone'
 const REQUEST_TIMEOUT_MS = 3_000
 
-// The metadata server answers `projects/<number>/zones/<zone>`. Undefined on any failure:
-// the zone only labels log lines, so it must never hold up or fail a boot.
+// Zone only labels logs; metadata lookup failure must not fail boot.
 export async function readCloudRunInstanceZone(
   fetchImpl: typeof fetch = fetch
 ): Promise<string | undefined> {

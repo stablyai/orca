@@ -181,7 +181,6 @@ describe('files.listAll page size', () => {
     expect(response).toMatchObject({ ok: true, result: ['src/index.ts'] })
   })
 
-  // A malformed cap indicates a caller bug.
   it('refuses a malformed page size instead of silently picking one', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The explicit file registry only reads the members stubbed for this case.
     const runtime = {
@@ -240,8 +239,7 @@ describe('files.resolveTerminalPath RPC', () => {
     })
   })
 
-  // Why: clients predating crossWorkspace reuse their own worktree id for the
-  // follow-up files.open, so sibling-workspace retargeting must be an explicit opt-in.
+  // Older clients reuse their worktree id for files.open; require explicit opt-in before retargeting to a sibling workspace.
   it('forwards crossWorkspace only when the client opts in', async () => {
     const { runtime, dispatcher } = createDispatcher()
 

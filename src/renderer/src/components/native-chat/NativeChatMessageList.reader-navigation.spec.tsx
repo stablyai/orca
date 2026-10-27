@@ -88,7 +88,6 @@ function liveList(messages: NativeChatMessage[]): React.JSX.Element {
   return <NativeChatMessageList session={session(messages)} isWorking expandSignal={false} />
 }
 
-/** The last `count` closed tool runs, with the row each sits in. */
 function closedRuns(count: number): { toggle: HTMLElement; rowIndex: number }[] {
   return screen
     .getAllByRole('button', { expanded: false })
@@ -102,7 +101,6 @@ function closedRuns(count: number): { toggle: HTMLElement; rowIndex: number }[] 
     })
 }
 
-/** Click a run's toggle and let its row re-measure, as a painted frame would. */
 function toggleRun(container: HTMLElement, toggle: HTMLElement, openRows: readonly number[]): void {
   fireEvent.click(toggle)
   const heights = Array.from({ length: Math.max(-1, ...openRows) + 1 }, () => ROW_PX)
@@ -147,7 +145,6 @@ describe('reader navigation', () => {
     paint(container)
     scrollTranscript(container, 1000)
     paint(container)
-    // Anti-vacuous: the reader is parked well above the end.
     expect(distanceFromBottom(container)).toBeGreaterThan(1000)
 
     act(() => handle.current?.revealLatest())
@@ -263,7 +260,6 @@ describe('reader navigation', () => {
     const withTool = [...transcript, toolMessage(toolIndex)]
     const { container, rerender } = render(liveList(withTool))
     paint(container)
-    // Anti-vacuous: following the end, so the run sits at the bottom of the view.
     expect(distanceFromBottom(container)).toBe(0)
     const scrollTopBeforeOpen = scrollRoot(container).scrollTop
 
@@ -273,7 +269,6 @@ describe('reader navigation', () => {
     rerender(liveList([...withTool, marker(toolIndex + 1), marker(toolIndex + 2)]))
     paint(container)
 
-    // The opened output and the streamed rows both pushed the end down, and the view went with it.
     expect(scrollRoot(container).scrollTop).toBeGreaterThan(scrollTopBeforeOpen)
     expect(distanceFromBottom(container)).toBe(0)
     expect(offersJumpToLatest()).toBe(false)
@@ -352,7 +347,6 @@ describe('reader navigation', () => {
     deliverResizes()
     expect(scroller.scrollTop).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Toggle turn details' }))
-    // Anti-vacuous: the expansion inserted rows before the tail the pin named.
     expect(window?.querySelectorAll('[data-index]').length ?? 0).toBeGreaterThan(beforeSlots)
     paint(container)
     act(() => vi.advanceTimersByTime(160))

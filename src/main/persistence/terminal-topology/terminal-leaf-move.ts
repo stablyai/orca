@@ -1,6 +1,7 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
 import {
   terminalLeafMovePaneKeys,
   type TerminalLeafMoveRequest,
@@ -21,7 +22,6 @@ import {
 
 type PlannedTerminalLeafMove = {
   result: TerminalLeafMoveResult
-  /** Every partition the plan rewrote; empty when nothing changes. */
   sessions: TerminalSessionPartition[]
 }
 
@@ -30,7 +30,7 @@ export function moveRecordKey<T>(
   fromKey: string,
   toKey: string | null,
   remap: (value: T) => T = (value) => value,
-  /** Keep a value already at `toKey`; the moved one is dropped. */
+  /** Preserve existing destination values on collision. */
   keepTarget = false
 ): Record<string, T> | undefined {
   if (!record || !Object.hasOwn(record, fromKey)) {
@@ -57,7 +57,7 @@ function hasTabId(session: WorkspaceSessionState, tabId: string): boolean {
   )
 }
 
-/** A tab other than the source holds the leaf; a layout left behind by a removed row owns nothing. */
+/** Removed-tab layouts cannot claim leaf ownership. */
 export function leafHeldByOtherTab(
   session: WorkspaceSessionState,
   sourceTabId: string,
@@ -120,7 +120,7 @@ function moveLeafInPartition(
   if (remainingLayout) {
     terminalLayoutsByTabId[sourceTabId] = remainingLayout
   } else {
-    // Its sibling was never bound here; the sibling's own binding mints the layout again.
+    // A sibling never bound here can recreate its layout when its own binding arrives.
     delete terminalLayoutsByTabId[sourceTabId]
   }
   const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
@@ -138,7 +138,7 @@ function moveLeafInPartition(
       tabsByWorktree: { ...session.tabsByWorktree, [worktreeId]: [...nextTabs, targetTab] },
       terminalLayoutsByTabId,
       ...(session.remoteSessionIdsByTabId ? { remoteSessionIdsByTabId } : {}),
-      // A stale copy's incarnation belongs to the PTY it no longer names.
+      // Stale copies cannot carry another PTY's incarnation to the destination.
       terminalPtyIncarnationsByPaneKey: moveRecordKey(
         session.terminalPtyIncarnationsByPaneKey,
         fromPaneKey,
@@ -155,13 +155,7 @@ function moveLeafInPartition(
   )
 }
 
-/**
- * Moves one leaf and its binding into a new tab in a single session write (STA-9259). The leaf
- * id and the PTY are kept; only the tab half of the pane key changes, so every pane-keyed record
- * follows it here instead of being rebuilt later by a renderer save that main's membership rebase
- * would discard. Every owner partition holding the pane moves together: a relay reattach writes an
- * SSH pane into `local` as well as `ssh:`, and a copy left behind refuses the moved pane's bind.
- */
+/** Move every partition holder and pane-keyed record atomically; preserve leaf/PTY identity (STA-9259). */
 export function planTerminalLeafMove(
   partitions: readonly TerminalSessionPartition[],
   request: TerminalLeafMoveRequest
@@ -184,14 +178,19 @@ export function planTerminalLeafMove(
       ? [{ hostId, session, sourceTab, sourceLayout }]
       : []
   })
-  // Main never saw this leaf, so no binding of it can be duplicated here.
   if (holders.length === 0) {
     return { result: { status: 'not_held' }, sessions: [] }
+  }
+  if (
+    request.keepsSourcePane &&
+    holders.some(({ sourceLayout }) => collectLeafIds(sourceLayout.root).length < 2)
+  ) {
+    return refuse('last_pane')
   }
   const boundPtyIds = new Set(
     holders.flatMap(({ sourceLayout }) => sourceLayout.ptyIdsByLeafId?.[leafId] ?? [])
   )
-  // The renderer's live PTY id wins: after an SSH respawn one copy can still name the old PTY.
+  // Prefer the renderer's live PTY; an SSH respawn can leave an old ID in one copy.
   const ptyId = request.ptyId ?? (boundPtyIds.size === 1 ? [...boundPtyIds][0] : null)
   if (boundPtyIds.size > 0 && !(ptyId && boundPtyIds.has(ptyId))) {
     return refuse('pty_mismatch')
@@ -213,7 +212,6 @@ const PANE_KEYED_UI_RECORDS = [
 
 type PaneAddress = { tabId: string; leafId: string }
 
-/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a pane to its new key. */
 export function rekeyPaneProfileRecords(
   state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
   from: PaneAddress,
@@ -247,7 +245,6 @@ export function rekeyPaneProfileRecords(
   }
 }
 
-/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a moved leaf. */
 export function rekeyMovedLeafProfileRecords(
   state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
   move: TerminalLeafMoveRequest
@@ -259,7 +256,7 @@ export function rekeyMovedLeafProfileRecords(
   )
 }
 
-/** Pane-keyed UI marks and SSH leases follow a moved leaf; returns their restores. */
+/** Return restores for rekeyed UI marks and SSH leases. */
 export function writeMovedLeafProfileRecords(
   request: TerminalLeafMoveRequest,
   context: TerminalTopologyCommitContext
@@ -267,7 +264,7 @@ export function writeMovedLeafProfileRecords(
   return writeRekeyedProfileRecords(rekeyMovedLeafProfileRecords(context.state, request), context)
 }
 
-/** Writes rekeyed UI marks and SSH leases; returns their restores. */
+/** Return restores for rekeyed profile records. */
 export function writeRekeyedProfileRecords(
   rekeyed: ReturnType<typeof rekeyPaneProfileRecords>,
   context: TerminalTopologyCommitContext

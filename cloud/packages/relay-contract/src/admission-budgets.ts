@@ -8,8 +8,7 @@ export const RELAY_ADMISSION_BUDGETS = {
   maxProcessQueuedBytes: 64 * 1024 * 1024,
   spliceLowWaterBytes: 64 * 1024,
   spliceHighWaterBytes: 256 * 1024,
-  // Why: must admit at least one maxFrameBytes frame for a backpressured
-  // peer, or large catalog responses close the splice with LIMIT_EXCEEDED.
+  // Queue at least one maxFrameBytes frame or large catalogs close backpressured splices with LIMIT_EXCEEDED.
   spliceHardQueuedBytes: 8 * 1024 * 1024 + 256 * 1024,
   spliceWedgedTimeoutMs: 10 * 1000
 } as const

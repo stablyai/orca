@@ -62,7 +62,7 @@ export function getSettingsSectionId(
   repoIdToRepresentative: Map<string, string>
 ): string {
   if (pane === 'repo' && repoId) {
-    // Why: Settings renders one collapsed pane per project, so resolve a repoId target to its project's representative section.
+    // Each project has one pane; map every host’s repo ID to its representative.
     return `repo-${repoIdToRepresentative.get(repoId) ?? repoId}`
   }
   return pane
@@ -120,7 +120,7 @@ export function getSettingsScrollTarget(
 }
 
 export function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {
-  // Why: the pane is swapped in wholesale, so a subsection deep link only nudges inner scroll when the pane exceeds the viewport.
+  // Whole-pane swaps need inner scrolling only when the pane exceeds the viewport.
   const target = getSettingsScrollTarget(targetId, container)
   if (!target) {
     return

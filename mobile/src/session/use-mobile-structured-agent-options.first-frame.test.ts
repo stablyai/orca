@@ -5,7 +5,7 @@ import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult
 } from '../../../src/shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 
@@ -15,7 +15,6 @@ const HOST_LIST: AgentSessionModelCatalogResult = {
   fetchedAt: 1_000
 }
 
-/** Catalog reads take each scripted answer in turn; option reads never answer. */
 function client(
   catalog: () => Promise<AgentSessionModelCatalogResult>,
   options?: () => Promise<AgentSessionOptionsResult>
@@ -59,7 +58,7 @@ async function mount(initial: Props) {
       enabled: true,
       fence: props.fence,
       mutate,
-      hostSupport: { permissionModes: true, coherentModelCatalog: true }
+      hostSupport: { permissionModes: true, coherentModelCatalog: true, statusFeed: false }
     })
     latest = options
     frames.push(modelChoices(options.optionSnapshot))
@@ -93,7 +92,6 @@ describe('the phone picker’s first frame', () => {
     expect(harness.frames.every((choices) => choices.length === 0)).toBe(true)
     await act(async () => answer(HOST_LIST))
     expect(harness.frames.at(-1)).toEqual(['gpt-host'])
-    // Only the host's list was ever offered.
     expect(harness.frames.filter((choices) => choices.length > 0)).toEqual(
       harness.frames.filter((choices) => choices.length > 0).map(() => ['gpt-host'])
     )

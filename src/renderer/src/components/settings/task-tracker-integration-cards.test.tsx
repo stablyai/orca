@@ -12,6 +12,9 @@ import { LinearIntegrationCard } from './task-tracker-integration-cards'
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 type StoreState = {
+  repos: never[]
+  endpointProjects: never[]
+  endpointProjectHostSetups: never[]
   linearStatus: {
     connected: boolean
     workspaces?: { id: string; organizationName: string; displayName: string; email?: string }[]
@@ -59,6 +62,9 @@ function installStore(
   settings: StoreState['settings'] = { activeRuntimeEnvironmentId: null }
 ): StoreState {
   const state: StoreState = {
+    repos: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     linearStatus: {
       connected,
       workspaces: connected
@@ -102,8 +108,7 @@ async function renderCard(): Promise<HTMLDivElement> {
 
 describe('LinearIntegrationCard account scope', () => {
   beforeEach(() => {
-    // Why: the embedded agent-skill CTA scans installed skills through
-    // window.api; without a stub it renders a scan error instead of a state.
+    // Stub the skill scan so the CTA renders setup state rather than a bridge error.
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {

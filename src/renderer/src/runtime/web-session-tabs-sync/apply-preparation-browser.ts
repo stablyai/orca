@@ -20,8 +20,9 @@ import {
   sameOpenFiles,
   webSessionOpenFilesForWorktree
 } from './state-equality-files'
-import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
+import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
+import { isAgentSessionTabOfAnotherHost } from './mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 
 export function prepareWebSessionTabsSnapshotBrowser(
@@ -46,6 +47,14 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const publishedAgentSessionIds = new Set(
     snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
   )
+  // A chat this frame publishes or replaces is its to rebuild, whichever host last showed it.
+  const claimedAgentSessionIds = new Set(publishedAgentSessionIds)
+  for (const tab of snapshot.tabs) {
+    if (tab.type === 'agent-session' && tab.replacesSessionId) {
+      claimedAgentSessionIds.add(tab.replacesSessionId)
+    }
+  }
+  const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const readyBrowserTabs = reconcilesNonAgentTabs ? snapshot.tabs.filter(isReadyBrowserTab) : []
@@ -72,11 +81,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
         if (!browserWorkspaceHasRemoteEnvironmentPage(state, tab, environmentId)) {
           return false
         }
-        // Why: a staged tab holds a handle before its create RPC answers, and a restored tab holds
-        // one rebuilt from disk before the relaunched host has republished the page. Neither
-        // handle is evidence the host ever saw this snapshot's worktree, so absence proves
-        // nothing — culling here would erase an optimistic tab mid-create or a restored tab a
-        // recovering host is still about to hand back.
+        // Staged/restored handles predate host proof; absence cannot cull optimistic creates or recovering pages before publication.
         if (
           (state.browserPagesByWorkspace[tab.id] ?? []).some((page) => {
             const handle = state.remoteBrowserPageHandlesByPageId[page.id]
@@ -85,13 +90,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
         ) {
           return false
         }
-        // Why: a runtime with nothing published for this worktree, or one that has restarted and not
-        // yet taken its client-hosted pages back, answers with a frame that looks exactly like
-        // "everything was closed". A page this desktop is still hosting outlives the runtime
-        // process, so its own guest is the better evidence — hold the row and let adoption publish
-        // it, rather than deleting a tab that is still rendering. The unreconciled flag is
-        // host-bounded; the unpublished-worktree frame is not, and its hold lasts until the runtime
-        // publishes that worktree at all.
+        // Desktop guests survive runtime restart. Hold client-hosted rows until worktree publication or the bounded unreconciled flag clears; unpublished empty frames prove no close.
         if (
           !hostSnapshotAffirmsClientHostedPages(snapshot) &&
           browserWorkspaceHasClientHostedEnvironmentPage(state, tab, environmentId)
@@ -153,7 +152,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
         (file) =>
           file.runtimeEnvironmentId === environmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
-          // Why: only cull host-mirrored tabs; locally opened files have no host counterpart, so their omission isn't a close signal.
+          // Cull only host-mirrored files; locally opened tabs have no host counterpart to list them.
           file.mirroredFromRuntimeSession === true &&
           !mirroredEditorFileIds.has(file.id)
       )
@@ -164,8 +163,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
     (file.runtimeEnvironmentId === environmentId &&
       (removedEditorFileIds.has(file.id) || mirroredEditorFileIds.has(file.id)))
   const replacedOpenFileCount = worktreeOpenFiles.filter(isReplacedOpenFile).length
-  // Why: both consumers below ask only about this worktree, so the surviving ids answer
-  // them in worktree scope instead of walking every open file in the app.
+  // Both consumers are worktree-scoped; use surviving IDs without walking global files.
   const nextWorktreeOpenFileIds = new Set<string>(
     worktreeOpenFiles.filter((file) => !isReplacedOpenFile(file)).map((file) => file.id)
   )
@@ -173,8 +171,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
     nextWorktreeOpenFileIds.add(fileId)
   }
   const nextOpenFiles = (() => {
-    // Why: with nothing to drop or mirror, rebuilding reproduces the array exactly, so
-    // skip the global rebuild the equality check below would have thrown away anyway.
+    // No drops or mirrors means identical output; skip the global rebuild equality would discard.
     if (replacedOpenFileCount === 0 && mirroredOpenFiles.length === 0) {
       return state.openFiles
     }
@@ -187,9 +184,13 @@ export function prepareWebSessionTabsSnapshotBrowser(
   advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId)
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
-      // A matching host row is authoritative; retaining the provisional tab beside its mirror
-      // would briefly render two panes before lifecycle publication is recorded.
-      // A host that cannot list its chats is no evidence this one closed.
+      if (
+        !claimedAgentSessionIds.has(tab.entityId) &&
+        isAgentSessionTabOfAnotherHost(state, tab, snapshotExecutionHostId)
+      ) {
+        return true
+      }
+      // Matching host identity replaces provisional tabs immediately or both panes render before lifecycle publication.
       return (
         !publishedAgentSessionIds.has(tab.entityId) &&
         (!agentSessionsAffirmed ||

@@ -10,6 +10,7 @@ import {
 import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
+import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -31,6 +32,8 @@ import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recover
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { wakeRememberedWslHosts } from './wsl/wsl-host-early-wake'
+import { wslHostsGateOpen } from './wsl/wsl-host-gate'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -95,14 +98,21 @@ const handleMacAppActivation = createMacAppActivationHandler({
   requestActivation: requestDesktopActivation
 })
 
-const preflightReady = runMainProcessPreflight({
-  focusExistingWindow,
-  requestDesktopActivation
-})
+// The uninstaller's holder release runs instead of the app, never alongside it.
+const preflightReady =
+  !runWslHolderUninstallPreflight() &&
+  runMainProcessPreflight({
+    focusExistingWindow,
+    requestDesktopActivation
+  })
 
 // Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
   void leaseAppImageGenerationForCurrentProcess()
+  // Why this early: a cold distro takes seconds to boot; starting now overlaps it with app startup.
+  if (process.platform === 'win32' && wslHostsGateOpen()) {
+    wakeRememberedWslHosts(app.getPath('userData'))
+  }
   app.on('open-url', (event, url) => {
     if (!parseSkillShareId(url)) {
       return

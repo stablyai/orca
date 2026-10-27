@@ -156,8 +156,7 @@ describe('terminal WebView init surface replacement', () => {
   })
 
   it('commits only the newest surface when phone-fit init calls overlap', () => {
-    // Why: restored terminals can receive desktop scrollback, a phone resize,
-    // and phone scrollback before any xterm replay callback has completed.
+    // Restored terminals may receive desktop replay, resize and phone replay before any xterm write completes.
     dispatchInit(120, 'desktop')
     animationFrames.shift()?.()
     dispatchInit(51, 'phone-resize')

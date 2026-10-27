@@ -9,7 +9,7 @@ import { WatcherProcessFailure } from '../ipc/filesystem/watcher-process/parcel-
 import {
   WATCHER_IGNORE_DIRS,
   buildParcelWatcherIgnoreOptions
-} from '../ipc/filesystem-watcher-ignore'
+} from '../ipc/filesystem/watchers/filesystem-watcher-ignore'
 
 const {
   forgetRuntimeWatcherProcessRootMock,

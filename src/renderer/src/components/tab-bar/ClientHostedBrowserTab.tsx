@@ -12,16 +12,10 @@ import {
   getClientHostedBrowserRowLabel
 } from './client-hosted-browser-row-label'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
-import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES, TAB_ROOT_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 
-/**
- * A page rendering on a paired client desktop, shown in this host's strip.
- *
- * Intentionally thinner than BrowserTab: no drag, no pin, no reorder, no close-others. Those all
- * act on a unified tab, and this row has none — it is derived from the runtime's page registry and
- * exists only in memory. What it does own is presence and a close.
- */
+/** Paired-client pages have no unified tab: expose presence and close without persisted ordering, pinning or drag actions. */
 export default function ClientHostedBrowserTab({
   row,
   isActive,
@@ -53,7 +47,7 @@ export default function ClientHostedBrowserTab({
       >
         <div
           data-client-hosted-browser-row-id={row.browserPageId}
-          className={`group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getTabRootStateClasses(isActive)}`}
+          className={`${TAB_ROOT_WIDTH_CLASSES} group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getTabRootStateClasses(isActive)}`}
           onPointerDown={onActivate}
           onMouseDown={(event) => {
             if (event.button === 1) {

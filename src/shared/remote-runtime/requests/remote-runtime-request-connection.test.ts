@@ -15,7 +15,7 @@ import {
   publicKeyToBase64
 } from '../../e2ee-crypto'
 import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connection'
-import { remoteRuntimeClientCapabilities } from '../../remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 
 type TestServer = {
   wss: WebSocketServer

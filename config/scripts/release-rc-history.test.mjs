@@ -21,6 +21,9 @@ function withGitRepo(run) {
     git(dir, ['init', '--initial-branch=main'])
     git(dir, ['config', 'user.name', 'Test Bot'])
     git(dir, ['config', 'user.email', 'test@example.com'])
+    // Why: global tag.gpgsign turns lightweight fixture tags into annotated ones that need a message.
+    git(dir, ['config', 'commit.gpgsign', 'false'])
+    git(dir, ['config', 'tag.gpgsign', 'false'])
     run(dir)
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -64,10 +67,7 @@ describe('release RC history', () => {
       commit(repo, 'initial')
       commit(repo, 'release: v1.4.36-rc.5')
       git(repo, ['tag', 'v1.4.36-rc.5'])
-      // Why this case: the subject is the only record left after the tag goes,
-      // and that is precisely when release-cut's explicit-version gate reads
-      // this. Under-reporting rc.6 here lets an explicit 1.4.36-rc.6 cut land
-      // below the v1.4.36-rc.6.perf build that clients already run.
+      // Deleted tags leave only commit subject: undercounting suffixed RC permits explicit release below clients’ current build.
       commit(repo, 'release: v1.4.36-rc.6.perf')
       git(repo, ['tag', 'v1.4.36-rc.6.perf'])
       git(repo, ['tag', '--delete', 'v1.4.36-rc.6.perf'])

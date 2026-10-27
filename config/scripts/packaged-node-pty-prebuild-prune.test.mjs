@@ -8,16 +8,8 @@ const require = createRequire(import.meta.url)
 const { prunePackagedNodePty } = require('../packaged-runtime-node-modules.cjs')
 const { PE_MACHINE } = require('./windows-pe-machine.cjs')
 
-/**
- * node-pty's loader tries build/Release, then build/Debug, then
- * prebuilds/<platform>-<arch>, swallowing failures in between. Only the source
- * build carries Orca's job-object exports, so leaving the prebuilt conpty.node
- * beside it means an ABI mismatch or an AV quarantine silently downgrades the
- * app to a binary that cannot own a PTY tree.
- *
- * The siblings must survive: Orca's patch deletes the `conpty_console_list` and
- * winpty `pty` gyp targets, so those binaries exist nowhere but here.
- */
+// Loader swallows build/Release/Debug failures and falls back to prebuilds; upstream conpty lacks job ownership, so ABI/AV failures must not silently downgrade it.
+// Preserve conpty_console_list and winpty siblings: the patch removes their build targets, leaving only upstream copies.
 describe('prunePackagedNodePty: the Windows conpty fallback', () => {
   let resources
   const HOST_ARCH = process.arch
@@ -71,9 +63,7 @@ describe('prunePackagedNodePty: the Windows conpty fallback', () => {
   })
 
   it.each(SIBLINGS)('keeps %s, which exists nowhere else in a packaged build', (sibling) => {
-    // Orca's patch removes the conpty_console_list and winpty gyp targets, so a
-    // Windows source build never produces these. Deleting them kills console
-    // membership silently and breaks PTY spawn below Windows build 18309.
+    // Keep console-list/winpty prebuilds: patch removes their targets; deleting them breaks membership and PTY spawn below Windows 18309.
     seedWindowsTree()
 
     prunePackagedNodePty(resources, 'win32', HOST_ARCH)
@@ -92,8 +82,7 @@ describe('prunePackagedNodePty: the Windows conpty fallback', () => {
   })
 
   it('keeps the fallback when build/Release holds a different arch than the slice', () => {
-    // A cross-HOST package can copy a build/Release that the target cannot load;
-    // deleting the prebuild would remove the only binary the shipped app has.
+    // Cross-host build/Release can be unloadable on target; pruning then deletes its only usable binary.
     const target = HOST_ARCH === 'arm64' ? 'x64' : 'arm64'
     seedWindowsTree(target, HOST_ARCH)
 
@@ -103,9 +92,7 @@ describe('prunePackagedNodePty: the Windows conpty fallback', () => {
   })
 
   it('removes the fallback on a cross-arch package whose build/Release IS the slice arch', () => {
-    // Measured on Windows: `electron-builder --win --arm64` on an x64 host does
-    // cross-rebuild a correct arm64 addon. Keying off the host arch skipped this
-    // case, so the slice shipped the unpatched prebuild as a reachable fallback.
+    // Cross-arch electron-builder can rebuild correctly; judge binary architecture, not host, or arm64 slice keeps unsafe upstream fallback.
     const target = HOST_ARCH === 'arm64' ? 'x64' : 'arm64'
     seedWindowsTree(target, target)
 

@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import * as environmentStore from '../../../shared/runtime-environment-store'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { AtomicSnapshotWriter } from '../../persistence/atomic-snapshot-writer'
+import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
@@ -53,7 +55,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../shared/remote-runtime-client', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
@@ -116,9 +118,57 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
+
+  it.each([false, true])(
+    'dispatches with minting membership while durability is unresolved (lost reply: %s)',
+    async (lostReply) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      const environment = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+        name: 'desk',
+        pairingCode: pairingCode()
+      })
+      const history = desktopChatCreationHistory(userDataPath)
+      vi.spyOn(AtomicSnapshotWriter.prototype, 'write').mockImplementation(
+        () => new Promise(() => {})
+      )
+      sendRemoteRuntimeRequestMock.mockImplementation(async (_connection, method) => {
+        if (method === 'status.get') {
+          return {
+            id: 'status',
+            ok: true,
+            result: { runtimeId: 'runtime-remote', capabilities: [] },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+        }
+        expect(history.sessionIds()).toEqual(['codex_minted'])
+        if (lostReply) {
+          throw new RemoteRuntimeClientError('connection_closed', 'reply lost')
+        }
+        return { id: 'create', ok: true, result: {}, _meta: { runtimeId: 'runtime-remote' } }
+      })
+      const call = handler<
+        { selector: string; method: string; params: unknown },
+        RuntimeRpcResponse<unknown>
+      >('runtimeEnvironments:call')
+      await expect(
+        call(null, {
+          selector: environment.id,
+          method: 'agentSession.create',
+          params: { envelope: { sessionId: 'codex_minted' } }
+        })
+      ).resolves.toMatchObject(
+        lostReply ? { ok: false, error: { message: 'reply lost' } } : { ok: true }
+      )
+      expect(history.sessionIds()).toEqual(['codex_minted'])
+      expect(
+        sendRemoteRuntimeRequestMock.mock.calls.some((call) => call[1] === 'agentSession.create')
+      ).toBe(true)
+    }
+  )
 
   it('proxies generic one-shot RPC calls to the saved remote runtime', async () => {
     registerRuntimeEnvironmentHandlers(store as never)

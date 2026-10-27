@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileWebShellSessionEvent } from './mobile-web-shell-session-contract'
 
-/** Each place a read of the host's generation can fail, and the cause it reports. */
 const doubles = vi.hoisted(() => ({
   manifest: (): Promise<unknown> => Promise.reject(new Error('no manifest staged')),
   fetch: (): Promise<unknown> => Promise.reject(new Error('no fetch staged'))
@@ -26,7 +25,6 @@ import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'
 import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
 
-// The mocked operations never touch the client; they only need one to exist.
 const CLIENT: RpcClient = {
   sendRequest: async () => {
     throw new Error('unused')
@@ -221,10 +219,7 @@ describe('the download', () => {
   })
 })
 
-/**
- * Against the real store: the copies a reused asset needs are made by the stage, on the store's
- * queue, so what other mounts do to the staging tree mid-download cannot take them away.
- */
+// Use the real store queue: reused-asset copies must survive concurrent mounts sweeping staging during download.
 describe('a download that reuses the cached generation', () => {
   const HOST = deriveHostCacheKey('host-a')
 
@@ -247,7 +242,6 @@ describe('a download that reuses the cached generation', () => {
     }
   }
   const CACHED = bundle(4)
-  // The page changed; the script is left to the stage to copy.
   const UPDATE = {
     ...bundle(8),
     assets: new Map([['index.html', new Uint8Array(8)]]),

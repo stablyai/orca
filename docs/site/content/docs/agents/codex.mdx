@@ -22,6 +22,18 @@ Many Codex users run multiple accounts to stretch rate limits. Orca's account sw
 
 **System default** uses your real `~/.codex` login (the same home a bare `codex` outside Orca would use). Extra accounts Orca manages get their own home under Orca's account data so credentials and rollouts stay isolated. New Codex launches follow the active account; already-running sessions keep the home they started with until you restart them.
 
+## Wrapper scripts that set `CODEX_HOME`
+
+Orca installs its status hooks in the home each launch uses: `~/.codex` for **System default**, or the account's own home for extra accounts (passed as `CODEX_HOME`). If a `codex` wrapper earlier on your `PATH` always exports a different `CODEX_HOME`, Codex reads a home Orca didn't set up: status hooks never fire and account switching has no effect. To keep a custom home:
+
+- Make the wrapper respect a home that is already set, so extra accounts keep working:
+
+  ```bash
+  export CODEX_HOME="${CODEX_HOME:-$HOME/.codex-openai}"
+  ```
+
+- Make `~/.codex` point at your custom home (`ln -s ~/.codex-openai ~/.codex`, after moving any existing `~/.codex` aside), so System default and the wrapper read the same folder.
+
 ## Nested Task subagents
 
 When Codex spawns Task subagents, Orca can show them as child rows under the parent agent on the worktree agent list and [Agent Dashboard](/docs/model/agents-sessions#agent-dashboard). Expand the chevron to see each child; click a child to focus the parent terminal (subagents do not own a separate pane).

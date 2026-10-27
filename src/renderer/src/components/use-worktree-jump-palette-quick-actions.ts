@@ -139,9 +139,7 @@ export function useWorktreeJumpPaletteQuickActions({
       openNewTerminalTabInActiveWorkspace
     ]
   )
-  // Why: buildQuickActionContext() reads the store imperatively, so these voided values are the
-  // memo's real inputs — each one is read (some transitively, e.g. runtimeStatusByEnvironmentId
-  // via the managed-browser creation policy) while availability is computed.
+  // Availability reads store state imperatively; these values supply its real memo dependencies, including managed-browser runtime status.
   const availableActions = useMemo(() => {
     void activeView
     void activeWorktreeId

@@ -264,7 +264,9 @@ describe('store selectors', () => {
         displayName: 'orca'
       })
     ]
-    const state = { repos }
+    const endpointProjects: AppState['endpointProjects'] = []
+    const endpointProjectHostSetups: AppState['endpointProjectHostSetups'] = []
+    const state = { repos, endpointProjects, endpointProjectHostSetups }
 
     const projection = getProjectHostSetupProjectionFromState(state)
 
@@ -274,8 +276,10 @@ describe('store selectors', () => {
       projectId: 'repo:repo-1',
       hostId: 'local'
     })
-    expect(getProjectHostSetupProjectionFromState({ repos })).toBe(projection)
-    expect(getProjectHostSetupProjectionFromState({ repos: [...repos] })).not.toBe(projection)
+    expect(getProjectHostSetupProjectionFromState({ ...state, repos })).toBe(projection)
+    expect(getProjectHostSetupProjectionFromState({ ...state, repos: [...repos] })).not.toBe(
+      projection
+    )
   })
 
   it('does not fall back to a same-ID local repo when the active runtime row is absent', () => {
@@ -488,7 +492,13 @@ describe('store selectors', () => {
       }
     ]
 
-    expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toEqual({
+    expect(
+      getProjectHostSetupProjectionFromState({
+        repos,
+        endpointProjects: projects,
+        endpointProjectHostSetups: projectHostSetups
+      })
+    ).toEqual({
       projects,
       setups: projectHostSetups
     })
@@ -557,8 +567,8 @@ describe('store selectors', () => {
 
     const projection = getProjectHostSetupProjectionFromState({
       repos,
-      projects,
-      projectHostSetups
+      endpointProjects: projects,
+      endpointProjectHostSetups: projectHostSetups
     })
 
     expect(projection.projects.map((project) => project.id)).toEqual(['github:stablyai/orca'])
@@ -582,8 +592,8 @@ describe('store selectors', () => {
 
     const projection = getProjectHostSetupProjectionFromState({
       repos,
-      projects: [],
-      projectHostSetups: []
+      endpointProjects: [],
+      endpointProjectHostSetups: []
     })
 
     expect(projection.projects).toEqual([
@@ -638,8 +648,8 @@ describe('store selectors', () => {
 
     const projection = getProjectHostSetupProjectionFromState({
       repos,
-      projects,
-      projectHostSetups
+      endpointProjects: projects,
+      endpointProjectHostSetups: projectHostSetups
     })
 
     expect(projection.projects.map((project) => project.id)).toEqual([
@@ -647,9 +657,13 @@ describe('store selectors', () => {
       'cloud-project'
     ])
     expect(projection.setups.map((setup) => setup.id)).toEqual(['repo-1', 'cloud-project::gpu-vm'])
-    expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toBe(
-      projection
-    )
+    expect(
+      getProjectHostSetupProjectionFromState({
+        repos,
+        endpointProjects: projects,
+        endpointProjectHostSetups: projectHostSetups
+      })
+    ).toBe(projection)
   })
 })
 
@@ -713,8 +727,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
   })
 
   it('does not light for a stale unread entry whose floating tab no longer exists', () => {
-    // Mirrors closing a floating tab: the tab is gone from tabsByWorktree, so even
-    // a lingering map entry (there should be none — closeTab purges) cannot show.
+    // Removed floating tabs must not show attention through lingering unread-map entries.
     const state = makeState({
       tabsByWorktree: { [FLOATING]: [floatingTab('ft-live')] },
       unreadTerminalTabs: { 'ft-closed': true },

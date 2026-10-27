@@ -1,11 +1,24 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Platform, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native'
+import { Platform, StyleSheet, View, type LayoutRectangle } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
+import Animated, {
+  useAnimatedRef,
+  useSharedValue,
+  type AnimatedRef,
+  type SharedValue
+} from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
 
 /** Desktop's `max-h-40`: three one-line cards and part of a fourth, whose cut-off edge is the
  *  sign that the list scrolls. */
 export const QUEUE_LIST_MAX_HEIGHT = 160
+
+export type MobileQueueDragViewport = {
+  scrollRef: AnimatedRef<Animated.ScrollView>
+  scrollOffsetY: SharedValue<number>
+  scrollContentHeight: SharedValue<number>
+  onDragActiveChange: (active: boolean) => void
+}
 
 type Metrics = { offset: number; viewport: number; content: number }
 
@@ -19,9 +32,12 @@ export function MobileQueuedMessageScrollList({
   /** The newest card has no sender: the person just queued it, so the list shows it. */
   newestIsPersons: boolean
   /** Rows, given `reveal` to keep an edited row in view. */
-  children: (reveal: (row: LayoutRectangle) => void) => ReactNode
+  children: (reveal: (row: LayoutRectangle) => void, drag: MobileQueueDragViewport) => ReactNode
 }): React.JSX.Element {
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useAnimatedRef<Animated.ScrollView>()
+  const scrollOffsetY = useSharedValue(0)
+  const scrollContentHeight = useSharedValue(0)
+  const [dragging, setDragging] = useState(false)
   const metrics = useRef<Metrics>({ offset: 0, viewport: 0, content: 0 })
   const shownIds = useRef<ReadonlySet<string>>(new Set(messageIds))
   const flashed = useRef(false)
@@ -66,20 +82,32 @@ export function MobileQueuedMessageScrollList({
   }
   return (
     <View>
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollRef}
         style={styles.scroll}
+        scrollEnabled={!dragging}
         nestedScrollEnabled
         showsVerticalScrollIndicator
         persistentScrollbar
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={32}
-        onScroll={(event) => measure({ offset: event.nativeEvent.contentOffset.y })}
+        onScroll={(event) => {
+          scrollOffsetY.value = event.nativeEvent.contentOffset.y
+          measure({ offset: event.nativeEvent.contentOffset.y })
+        }}
         onLayout={(event) => measure({ viewport: event.nativeEvent.layout.height })}
-        onContentSizeChange={(_width, height) => measure({ content: height })}
+        onContentSizeChange={(_width, height) => {
+          scrollContentHeight.value = height
+          measure({ content: height })
+        }}
       >
-        {children(reveal)}
-      </ScrollView>
+        {children(reveal, {
+          scrollRef,
+          scrollOffsetY,
+          scrollContentHeight,
+          onDragActiveChange: setDragging
+        })}
+      </Animated.ScrollView>
       {cues.above ? <ListEdgeFade edge="top" /> : null}
       {cues.below ? <ListEdgeFade edge="bottom" /> : null}
     </View>

@@ -1,5 +1,3 @@
-// A send a Stop took back before the agent started it: where it is drawn, and the one row after it.
-
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import {
   agentJournalItemPosition,
@@ -15,7 +13,7 @@ import { inSendOrder } from './native-chat/native-chat-send-order'
 import { stoppedTurnOpeners, structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 
-/** The row after a send a Stop took back before the agent started it; a client words it by this. */
+/** Presentation key for the notice after a send stopped before execution. */
 export const NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION = 'stopped-before-start'
 /** Its words where a client has no catalog of its own (the phone). */
 export const NATIVE_CHAT_STOPPED_BEFORE_START_TEXT = 'Stopped manually'
@@ -27,20 +25,13 @@ export function isStoppedBeforeStartBlock(block: NativeChatBlock): boolean {
   )
 }
 
-/** Where a send a Stop took back is drawn. `opensTurn`: a turn opened for it, whose interrupted
- *  end is its stop; `position`: where it is drawn, when that is not its own row. */
+/** opensTurn identifies its interrupted turn; position overrides where its own row draws. */
 export type StoppedSendPlace = { opensTurn: boolean; position?: AgentJournalPosition }
 
-/**
- * A send a Stop took back (`stopped`, by item id) is drawn at its own row, past the end of every
- * turn whose opener the journal wrote before it: a host that publishes `submittedSequence` puts
- * that row where the send was taken back. One that opened a turn is drawn as that turn's opener;
- * when that turn's record is not loaded, before the turn's first loaded row. Journal order only,
- * never a clock.
- * Temporary: a host that predates `submittedSequence` may leave the row where it was sent, so the
- * send is also drawn below the latest row sent before it (`latestRowsSentBefore`); harmless on one
- * that moves the row. Dropped once no supported remote host lacks the field.
- */
+/** Place stopped sends after turns whose openers precede them, using journal order. A send that opened a turn stays its opener,
+ * or precedes that turn’s first loaded row when the record is unloaded.
+ * Temporary until the remote version floor: hosts without submittedSequence may leave sends at their original place;
+ * latestRowsSentBefore also puts them below earlier sends, harmless when newer hosts already moved them. */
 export function placeStoppedSends(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
@@ -65,7 +56,6 @@ export function placeStoppedSends(
     const record = itemsById.get(turnOpenedBy.get(itemId) ?? '')
     const opened = record ? openerPosition(item, record) : unloadedTurnOpened.get(itemId)
     if (opened) {
-      // Drawn where its turn opened, as an opener is.
       return compareAgentJournalPositions(own, opened) !== 0
         ? { opensTurn: true, position: opened }
         : { opensTurn: true }
@@ -84,8 +74,7 @@ export function placeStoppedSends(
   }
 }
 
-/** Where a turn's opener is drawn: its own row, or just before the record when its row comes after
- *  it, as the row of a send taken back after its turn opened does. */
+/** Place an opener before its turn record if its own row moved after it during take-back. */
 function openerPosition(
   opener: AgentJournalRenderItem,
   record: AgentJournalRenderItem
@@ -97,8 +86,7 @@ function openerPosition(
     : own
 }
 
-/** For each taken-back send that opened a turn whose record is not loaded (a page that starts inside
- *  that turn), just before the turn's first loaded row; none when a loaded user row is in it. */
+/** When a stopped opener’s turn record is unloaded, place it before the first loaded turn row unless that row is already user-owned. */
 function unloadedTurnsOpened(
   items: readonly AgentJournalRenderItem[],
   itemsById: ReadonlyMap<string, AgentJournalRenderItem>,
@@ -127,11 +115,7 @@ function unloadedTurnsOpened(
   )
 }
 
-/**
- * For a point in the journal, just after the furthest row of every turn whose opener comes before
- * it, or the point itself when none reaches past it. One pass over the items, then a binary search
- * per point. A send placed here opened no turn, so no turn is its own.
- */
+/** For each point, advance beyond all turns opened before it. One pass plus a binary search per point; these sends opened no turn themselves. */
 function turnEndsByOpener(
   items: readonly AgentJournalRenderItem[],
   anchors: ReadonlyMap<string, string>,
@@ -186,9 +170,7 @@ function turnEndsByOpener(
   }
 }
 
-/** For each submission, the latest loaded row of the ones sent before it, in `submittedAt` order
- *  with ties kept in list order as the client reducer keeps them. Temporary: read only for a host
- *  that predates `submittedSequence`. */
+/** Legacy-only latest loaded send before each submission, by submittedAt with stable ties; removable after the submittedSequence host floor. */
 function latestRowsSentBefore(
   submissions: readonly AgentJournalSubmission[],
   itemsById: ReadonlyMap<string, AgentJournalRenderItem>
@@ -214,13 +196,8 @@ function latestRowsSentBefore(
   return before
 }
 
-/**
- * Sends a Stop took back (`stopped`, by item id, in list order) and drawn on their own (`shown`)
- * keep the order they were sent in: a later one is drawn no earlier than just after an earlier
- * one. Sent order is the published `submittedSequence`.
- * Temporary, until a host version floor: a host that predates it gives `submittedAt`, its accept
- * time, with ties kept in list order as the client reducer keeps them. Returns whether it moved any.
- */
+/** Keep independently drawn stopped sends in published submittedSequence order. Return whether any moved.
+ * Temporary until a host floor: absent sequence falls back to submittedAt with stable list-order ties. */
 export function keepStoppedSendsInSendOrder(
   messages: NativeChatMessage[],
   stopped: ReadonlyMap<string, AgentJournalSubmission>,

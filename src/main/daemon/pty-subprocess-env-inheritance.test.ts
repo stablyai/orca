@@ -74,6 +74,11 @@ import {
   stripLegacyTerminalShimEnv
 } from '../pty/legacy-terminal-shim-dir'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import {
+  claimHostMallocTunables,
+  hostMallocTunablesLaunchEnv,
+  resetHostMallocTunablesForTests
+} from '../memory/host-malloc-tunables'
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -281,7 +286,10 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ORCA_HISTFILE).toBe(expected)
-    expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
+    // History wrapping only sets ORCA_SHELL_FEATURES on the POSIX launch path.
+    expect(env.ORCA_SHELL_FEATURES).toBe(
+      process.platform === 'win32' || expected === undefined ? undefined : 'history'
+    )
   })
 
   it('does not inherit ELECTRON_RUN_AS_NODE from the daemon process env', async () => {
@@ -303,6 +311,28 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+  })
+
+  it('gives shells the user’s malloc once a host daemon claims its launch tunables', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    for (const [name, value] of hostMallocTunablesLaunchEnv()) {
+      process.env[name] = value
+    }
+    try {
+      claimHostMallocTunables()
+      await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      for (const [name] of hostMallocTunablesLaunchEnv()) {
+        delete process.env[name]
+      }
+      resetHostMallocTunablesForTests()
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    for (const [name] of hostMallocTunablesLaunchEnv()) {
+      expect(env[name]).toBeUndefined()
+    }
   })
 
   it('does not forward a half-activated conda env from the daemon process env', async () => {

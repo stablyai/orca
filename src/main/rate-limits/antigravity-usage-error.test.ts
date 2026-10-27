@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { classifyAntigravityUsageFailure } from './antigravity-usage-error'
+import {
+  classifyAntigravityUsageFailure,
+  formatAgyErrorForDisplay
+} from './antigravity-usage-error'
 
 /** Captured verbatim from agy 1.2.11 when the account had exhausted its weekly pool. */
 const REAL_RESOURCE_EXHAUSTED =
@@ -28,8 +31,7 @@ describe('classifyAntigravityUsageFailure', () => {
   })
 
   it('separates an unentitled account from a signed-out one', () => {
-    // Why this matters: telling a signed-in user to sign in sends them to re-auth that fixes
-    // nothing.
+    // Valid sessions without entitlement need subscription guidance, not reauthentication.
     expect(classifyAntigravityUsageFailure(agyError({ status: 'PERMISSION_DENIED' }))).toEqual({
       failureKind: 'no-subscription',
       signedOut: false
@@ -49,8 +51,7 @@ describe('classifyAntigravityUsageFailure', () => {
     'please sign in to continue',
     'AUTHENTICATION REQUIRED'
   ])('falls back to the sentence when no structured error is printed: %s', (output) => {
-    // Why a fallback at all: the structured line is the stable signal, but not every path prints
-    // one, and a signed-out account must never be reported as an unreadable payload.
+    // Some signed-out paths emit no structured error; preserve sign-in guidance.
     expect(classifyAntigravityUsageFailure(output)).toEqual({
       failureKind: 'missing-credentials',
       signedOut: true
@@ -75,4 +76,12 @@ describe('classifyAntigravityUsageFailure', () => {
   ])('returns null for %s rather than inventing a cause', (_label, output) => {
     expect(classifyAntigravityUsageFailure(output)).toBeNull()
   })
+})
+
+it('bounds a large unbroken error without blocking the main process', () => {
+  const text = `${'!'.repeat(256 * 1024)}@invalid`
+  const started = performance.now()
+
+  expect(formatAgyErrorForDisplay(text)).toBe(`${'!'.repeat(159)}…`)
+  expect(performance.now() - started).toBeLessThan(2000)
 })

@@ -53,8 +53,7 @@ function shouldKeepPhysicalResizeAnchor(terminal: Terminal): boolean {
   if (!windowsPty?.buildNumber) {
     return false
   }
-  // Why: xterm disables reflow only when an explicit legacy build is present;
-  // Orca's backend-only fallback for an unknown Windows build still reflows.
+  // Only explicit legacy Windows builds disable xterm reflow; Orca’s unknown-build backend fallback still reflows.
   return windowsPty.backend !== 'conpty' || windowsPty.buildNumber < 21376
 }
 
@@ -102,8 +101,7 @@ function readReflowedRowCellCount(
   const cols = Math.max(terminal.cols, 1)
   const lastCell = lines.getCellMetrics(lineY, cols - 1)
   const nextFirstCell = lines.getCellMetrics(lineY + 1, 0)
-  // Why: xterm wraps a width-2 glyph one cell early when only the last column
-  // remains. That placeholder is not part of the logical cell offset.
+  // xterm wraps width-two glyphs early at the last column; exclude that placeholder from logical offsets.
   return lastCell?.code === 0 && lastCell.width === 1 && nextFirstCell?.width === 2
     ? cols - 1
     : cols
@@ -113,8 +111,7 @@ function createReflowLineReader(terminal: Terminal): ReflowLineReader {
   const internalLines = (terminal as TerminalWithInternalBufferLines)._core?._bufferService?.buffer
     ?.lines
   if (internalLines) {
-    // Why: public getLine/getCell allocate wrapper objects per row/cell. The
-    // pinned xterm core exposes the same active lines without resize-path GC.
+    // Use pinned core lines to avoid per-row/cell public wrapper allocations during resize.
     return {
       isWrapped: (lineY) => internalLines.get(lineY)?.isWrapped ?? false,
       getCellMetrics: (lineY, column) => {

@@ -18,13 +18,7 @@ async function getModifierKey(page: Page): Promise<'Meta' | 'Control'> {
   return modifierKey
 }
 
-/**
- * Press a Cmd/Ctrl shortcut using the platform-specific modifier key.
- *
- * Why: Orca binds shortcuts as Cmd on macOS and Ctrl on Linux/Windows. Using
- * a helper keeps the E2E suite aligned with the app's runtime shortcut logic
- * instead of hardcoding macOS-only key chords in each spec.
- */
+// Use Cmd on macOS and Ctrl on Linux/Windows, matching runtime shortcuts.
 export async function pressShortcut(
   page: Page,
   key: string,

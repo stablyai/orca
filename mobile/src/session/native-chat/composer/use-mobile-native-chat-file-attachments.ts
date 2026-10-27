@@ -14,19 +14,15 @@ type FilesByScope = Readonly<Record<string, readonly PendingNativeChatFile[]>>
 const NO_FILES: readonly PendingNativeChatFile[] = []
 
 export type MobileNativeChatFileAttachments = {
-  /** Files for the active scope (tab) only. */
   readonly files: readonly PendingNativeChatFile[]
   readonly attachFiles: () => Promise<void>
-  /** Drops these files: a removed card, or the files a send carried (one attached while it was in
-   *  flight stays). */
+  // Drop only files removed or carried by this send; attachments added while sending must survive.
   readonly removeFiles: (ids: readonly string[]) => void
 }
 
-/** Files attached to a structured chat, uploaded into the host's attachment store on pick. */
 export function useMobileNativeChatFileAttachments(args: {
   client: RpcClient | null
   sessionId: string | null
-  /** The composer surface the files belong to, so a tab switch never carries them over. */
   scopeKey: string | null
   enabled: boolean
   showToast: ShowToast

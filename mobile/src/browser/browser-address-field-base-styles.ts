@@ -1,12 +1,6 @@
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
-/**
- * The address bar's input and its overlaid label, minus the one thing that is a platform answer.
- *
- * Shared because a `.web.ts` cannot import a value from the file it shadows, and two copies of a
- * style object is how the two platforms drift apart on everything except the difference that was
- * meant to be between them.
- */
+// Keep common styles outside platform siblings: .web cannot import the file it shadows, and copies drift.
 export const browserAddressFieldBase = {
   input: {
     flex: 1,

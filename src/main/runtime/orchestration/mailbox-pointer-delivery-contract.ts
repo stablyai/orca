@@ -26,7 +26,6 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   isAgentSettledForDelivery: (leaf: OrchestrationMailboxLeaf) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
-  getTabTitle: (tabId: string) => string | null | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
   getTerminalHandleForLeafKey: (leafKey: string) => string | undefined
   resolveSubmitTarget: (

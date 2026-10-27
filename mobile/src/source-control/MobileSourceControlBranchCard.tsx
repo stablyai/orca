@@ -13,19 +13,13 @@ type Props = {
   stagedCount: number
   branchCount: number
   conflictOperation: string | null
-  // True while any serial git IO is in flight — disables Abort so ops don't race.
   conflictBusy: boolean
-  // True only while abort-merge / abort-rebase itself is running (label accuracy).
   conflictAborting: boolean
   onAbortConflict: (operation: string) => void
-  // The PR chip is shown only on repos with a hosted-review remote; null hides it.
   prChip: MobilePrChipSummary | null
   onOpenPr: () => void
 }
 
-// Persistent card at the top of every hub segment: branch identity, sync/counts,
-// conflict state, and the PR chip. Shared so PR/History see the same status the
-// Changes lens does without re-deriving it.
 export function MobileSourceControlBranchCard({
   branchLabel,
   syncLabel,
@@ -56,7 +50,7 @@ export function MobileSourceControlBranchCard({
         <Text style={styles.countText}>{stagedCount} staged</Text>
         {branchCount > 0 ? <Text style={styles.countText}>{branchCount} on branch</Text> : null}
       </View>
-      {/* Own row so Abort never overflows past the card when counts are long. */}
+      {/* Keep Abort on its own row so long counts cannot overflow the card. */}
       {showConflict ? (
         <View style={styles.conflictRow}>
           <Text style={styles.conflictText}>{conflictOperation}</Text>

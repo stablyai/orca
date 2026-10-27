@@ -7,10 +7,7 @@ import type {
 import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain,
-  normalizeCookieImportDomain,
-  replaceCookiesForImportedDomains,
-  type CookieImportMode,
-  type ReplacedImportedDomainCookies
+  normalizeCookieImportDomain
 } from './browser-cookie-import-policy'
 import {
   acquireCookieMutationLock,
@@ -25,11 +22,7 @@ import {
   type ImportWritePhase
 } from './browser-cookie-import-write'
 import { readFile } from 'node:fs/promises'
-import {
-  diag,
-  reasonWithDiagLog,
-  summarizeCookieImportError
-} from './browser-cookie-import-diagnostics'
+import { diag } from './browser-cookie-import-diagnostics'
 import {
   validateCookieEntry,
   type RawCookieEntry,
@@ -44,6 +37,7 @@ export type CookieImportTarget = {
   // Reuse the Electron Session as the lock key across import paths; a fresh adapter would not serialize.
   mutationLockOwner: object
   openWriteStore: () => CookieImportSessionStore
+  flushStore?: () => Promise<void>
 }
 
 export type CookieImportOptions = {
@@ -55,7 +49,8 @@ export function cookieImportTarget(targetPartition: string): CookieImportTarget 
   return {
     partition: targetPartition,
     mutationLockOwner: targetSession,
-    openWriteStore: () => openCookieClearStore(targetSession)
+    openWriteStore: () => openCookieClearStore(targetSession),
+    flushStore: () => targetSession.cookies.flushStore()
   }
 }
 
@@ -63,7 +58,6 @@ export async function importValidatedCookies(
   cookies: ValidatedCookie[],
   totalInput: number,
   target: CookieImportTarget,
-  mode: CookieImportMode,
   options: CookieImportOptions = {}
 ): Promise<BrowserCookieImportResult> {
   const targetPartition = target.partition
@@ -79,7 +73,7 @@ export async function importValidatedCookies(
   const sourceBoundFiltered = validDomainCookies.filter(
     (cookie) => !isGoogleSourceBoundCookie(cookie.name, cookie.domain)
   )
-  // Exclude device-bound sessions before deriving the replacement scope.
+  // Preserve device-bound sessions.
   const importableCookies = sourceBoundFiltered.filter(
     (cookie) => !isNonTransplantableCookieDomain(cookie.domain)
   )
@@ -90,17 +84,8 @@ export async function importValidatedCookies(
   diag(
     `importValidatedCookies: ${cookies.length} validated, ${invalidDomainSkipped} unsafe-domain skipped, ${integritySkipped} source-bound skipped, ${nonTransplantableSkipped} non-transplantable skipped of ${totalInput} total, partition="${targetPartition}"`
   )
-  // Derive writes and removal scope from one plan before opening the jar.
+  // Refuse unsupported reporting before opening the jar.
   const plan = planImportWrites(importableCookies)
-
-  // An unnamed family cannot be protected from removal.
-  if (plan.hasUnrepresentableSkip) {
-    return {
-      ok: false,
-      reason:
-        'Could not import: a cookie with an unreadable site partition has no registrable domain, so its existing session cannot be protected.'
-    }
-  }
 
   // Refuse before mutation when an older client cannot report partition skips.
   if (options.canReportPartitionSkippedCookies === false && plan.skips.length > 0) {
@@ -117,65 +102,29 @@ export async function importValidatedCookies(
   const cookieClearStore = plan.writes.length > 0 ? target.openWriteStore() : null
 
   if (cookieClearStore) {
-    // Hold the Session lock through replacement, writes, and rollback; opening the adapter attaches no debugger.
     const releaseMutationLock = await acquireCookieMutationLock(target.mutationLockOwner)
-    let replaced: ReplacedImportedDomainCookies | null = null
     try {
-      if (mode === 'replace-imported-domains') {
-        try {
-          // Use the family-closed write plan so skipped siblings remain outside the removal scope.
-          const replacementDomains = plan.writes.map((cookie) => cookie.domain)
-          replaced = await replaceCookiesForImportedDomains(cookieClearStore, replacementDomains)
-          diag(`  removed ${replaced.removed.length} existing cookies in imported domain scopes`)
-        } catch (err) {
-          diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
-          return {
-            ok: false,
-            reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
-          }
-        }
-      }
-
-      // Chromium requires printable ASCII in cookie values.
       const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
       phase = await writeImportedCookies(
         cookieClearStore,
         plan.writes.map((cookie) => ({ ...cookie, value: stripNonPrintable(cookie.value) })),
-        { stopOnFailure: replaced !== null, log: diag }
+        { log: diag }
       )
-      skipped += phase.writeRejected
-
-      if (phase.failure && replaced) {
-        const rollbackFailures: unknown[] = []
-        for (const cookie of phase.attemptedKeys.toReversed()) {
-          try {
-            await cookieClearStore.remove(cookie.url, cookie.name)
-          } catch (err) {
-            rollbackFailures.push(err)
-          }
-        }
-        // Avoid opening a hidden debugger window for an empty restore set.
-        if (replaced.identities.length > 0) {
-          try {
-            await cookieClearStore.restoreClearIdentities(replaced.identities.toReversed())
-          } catch (err) {
-            rollbackFailures.push(err)
-          }
-        }
-        if (rollbackFailures.length > 0) {
-          diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
-        }
-        return {
-          ok: false,
-          reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
-        }
-      }
+      skipped += phase.writeRejected + phase.expired
     } finally {
       try {
         cookieClearStore.dispose()
       } finally {
         releaseMutationLock()
       }
+    }
+  }
+
+  if (phase.importedCount > 0) {
+    try {
+      await target.flushStore?.()
+    } catch (error) {
+      diag(`  cookie flush failed: ${String(error)}`)
     }
   }
 
@@ -263,10 +212,5 @@ export async function importCookiesFromFile(
     }
   }
 
-  return importValidatedCookies(
-    validated,
-    parsed.length,
-    cookieImportTarget(targetPartition),
-    'replace-imported-domains'
-  )
+  return importValidatedCookies(validated, parsed.length, cookieImportTarget(targetPartition))
 }

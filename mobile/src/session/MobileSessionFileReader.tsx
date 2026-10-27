@@ -159,9 +159,8 @@ function FileReaderDocument({
       return undefined
     }
 
-    // Why: defer highlighting one tick so large files show as plain text immediately before colors are applied.
+    // Defer highlighting one tick so large files appear as plain text immediately.
     const timer = setTimeout(() => {
-      // file + html share the syntax-segment source view (html's "Source" toggle).
       if (doc.kind === 'file' || doc.kind === 'html') {
         setFileSyntax({
           doc,
@@ -177,7 +176,6 @@ function FileReaderDocument({
           lines: highlightMobileDiffLines(doc.lines, syntaxLanguage)
         })
       }
-      // image: no syntax highlighting.
     }, 0)
 
     return () => clearTimeout(timer)

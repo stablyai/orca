@@ -14,8 +14,6 @@ const FOLDED_HEIGHT =
   markdownStyles.paragraph.lineHeight *
   CHAT_PROSE_SCALE
 
-/** A long message of yours, folded to its first lines until opened. Desktop parity:
- *  `NativeChatUserMessageFold`, with the same text rule. */
 export function MobileNativeChatUserMessageFold({
   text,
   fontScale,
@@ -27,7 +25,7 @@ export function MobileNativeChatUserMessageFold({
 }: {
   text: string
   fontScale: number
-  /** The transcript's state, which outlives this row when the list recycles it. */
+  // Keep disclosure in the transcript across row recycling.
   open: boolean
   onToggle: () => void
   recovery?: ReturnType<typeof useMobileNativeChatFullMessage>['recovery']
@@ -35,11 +33,9 @@ export function MobileNativeChatUserMessageFold({
   children: React.ReactNode
 }): React.JSX.Element {
   const longText = useMemo(() => nativeChatUserMessageFolds(text), [text])
-  // The text rule can pick a message that already fits the fold; that one gets no toggle.
   const [height, setHeight] = useState<number | null>(null)
   const clip = FOLDED_HEIGHT * fontScale
-  // Native text inside the clip is laid out to fit it, so a cut message measures at the clip, not
-  // its full height: reaching it means cut (1pt for rounding). Unfolding on `>` looped.
+  // Native clips measure at the folded height; use >= with rounding tolerance or expanding to measure would loop.
   const folds = longText && (height === null || height >= clip - 1)
   return (
     <>

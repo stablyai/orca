@@ -192,6 +192,7 @@ export function claudeStructuredSessionOptionsFrom(
     ...(support ? { fastModeSupport: support } : {}),
     current: {
       model,
+      reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),

@@ -1,5 +1,3 @@
-// Fixtures and DOM lookups shared by the resume dialog's test files.
-
 import type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 
 export const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
@@ -13,7 +11,6 @@ export const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   workspaceKind: 'git-worktree'
 }))
 
-/** A chat the host acted on and could not carry on, as it reports it. */
 export function failure(sessionId: string, reason = 'agent_session_restart_work_superseded') {
   const candidate = offered.find((entry) => entry.sessionId === sessionId)!
   return { ...candidate, failedAt: candidate.recordedAt + 60_000, outcome: 'refused', reason }
@@ -29,7 +26,6 @@ export function button(text: string): HTMLButtonElement {
   return found
 }
 
-/** A chat's own checkbox; its accessible name carries the prompt. */
 export function chatBox(sessionId: string): HTMLElement {
   const found = document.querySelector<HTMLElement>(
     `[role="checkbox"][aria-label*="Prompt ${sessionId}"]`

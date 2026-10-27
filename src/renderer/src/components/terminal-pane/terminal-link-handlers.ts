@@ -1,14 +1,15 @@
-import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
+import { dedupeLogicalLines } from '../../../../shared/terminal-link-logical-line-deduplication'
 import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
-import { extractTerminalFileLinkCandidates, extractTerminalFileLinks } from '@/lib/terminal-links'
+import {
+  extractTerminalFileLinkCandidates,
+  extractTerminalFileLinks
+} from '../../../../shared/terminal-links'
 import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import {
-  buildCandidateLogicalLinesForBufferPosition,
-  openFilePathLinkAtBufferPosition
-} from './terminal-file-link-hit-testing'
+import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
+import { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
 import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
@@ -17,7 +18,7 @@ import {
   buildWrappedLogicalLine,
   rangeForParsedFileLink,
   type WrappedLogicalLine
-} from './wrapped-terminal-link-ranges'
+} from '../../../../shared/wrapped-terminal-link-ranges'
 import {
   getTerminalHtmlFileOpenHint,
   getTerminalOrcaFileOpenHint,
@@ -168,8 +169,7 @@ export function createFilePathLinkProvider(
                     }
                   },
                   hover: () => {
-                    // Why: only local paths can offer the Shift+modifier system
-                    // default escape hatch; remote paths may not exist locally.
+                    // Only local paths can use the Shift+modifier OS escape hatch.
                     const canOpenWithSystemDefault =
                       shouldOpenTerminalFileWithSystemDefault(fileContext)
                     const showActions = deps.getLinkActionContext
@@ -214,8 +214,7 @@ export function createFilePathLinkProvider(
           callback(links.length > 0 ? links : undefined)
         })
         .catch(() => {
-          // Link discovery is best-effort; a stale xterm callback must not
-          // recreate the unhandled rejection this path is meant to contain.
+          // Stale xterm callbacks must not escape best-effort discovery as unhandled rejections.
         })
     }
   }
@@ -238,9 +237,7 @@ export function installFilePathLinkClickFallback(
     }
     const runtimeEnvironmentId =
       deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
-    // Why: xterm can show a wrapped provider link as active while still missing
-    // activation for the clicked wrapped row. Always retry file-path hit testing
-    // on modifier mouseup; openDetectedFilePath coalesces duplicate opens.
+    // Retry hit testing on modifier mouseup: wrapped links can hover active without clickable-row activation. Opening coalesces duplicates.
     const opened = openFilePathLinkAtBufferPosition(
       terminal.buffer.active,
       position,

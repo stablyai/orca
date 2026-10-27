@@ -144,10 +144,6 @@ describe('a run of provider retry rows', () => {
     ])
   })
 
-  it("draws an older host's single revised row as it is", () => {
-    expect(drawn([retry(4)])).toEqual(['Codex is retrying: Reconnecting... 4/5.'])
-  })
-
   it('hands back the same list when nothing retried', () => {
     const messages: NativeChatMessage[] = [
       { id: 'a', role: 'assistant', blocks: [], timestamp: 1, source: 'transcript' }

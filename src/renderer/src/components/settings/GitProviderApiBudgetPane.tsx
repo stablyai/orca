@@ -79,7 +79,6 @@ export function GitProviderApiBudgetPane({
     return null
   }
 
-  // Why: provider budgets are diagnostic, so they render after core git and AI
-  // settings instead of competing with everyday branch and attribution controls.
+  // Put diagnostic budgets after everyday Git/AI controls.
   return <div className="space-y-4 border-t border-border/40 pt-4">{visibleSections}</div>
 }

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 
+import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
 import { worktreeCreateGit } from '../git/worktree-create-git-executor'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 import type { BrowserWindow } from 'electron'
@@ -76,7 +77,7 @@ import { computeValidatedBranchName } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
 import { notifyLineageRepos } from '../worktree-lineage-change-notification'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
@@ -924,14 +925,10 @@ export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
   creationId?: string,
-  checkout?: WorktreeCheckoutProgress | null
+  detail?: Pick<CreateWorktreeProgressEvent, 'checkout' | 'worktreeId'>
 ): void {
   if (!mainWindow.isDestroyed()) {
-    const event: CreateWorktreeProgressEvent = {
-      creationId,
-      phase,
-      ...(checkout !== undefined ? { checkout } : {})
-    }
+    const event: CreateWorktreeProgressEvent = { creationId, phase, ...detail }
     mainWindow.webContents.send('createWorktree:progress', event)
   }
 }
@@ -997,11 +994,12 @@ async function performLocalWorktreeCreate(
     ...(creationId
       ? {
           onCheckoutProgress: (checkout: WorktreeCheckoutProgress | null) =>
-            emitCreateWorktreeProgress(mainWindow, 'creating', creationId, checkout)
+            emitCreateWorktreeProgress(mainWindow, 'creating', creationId, { checkout })
         }
       : {})
   })
 
+  const branchSeed = selectWorktreeCreateBranchSeed(args, settings.autoRenameBranchFromWork)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
@@ -1147,11 +1145,46 @@ async function performLocalWorktreeCreate(
   let resolved = false
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
+  let selectedRemoteBranchName: string | null = null
   let lastBranchConflictKind: 'local' | 'remote' | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
   let lastExistingReviewNumber: number | null = null
   const shouldRetireGeneratedName =
     args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
+  if (
+    args.branchIntent === 'open-existing' &&
+    args.branchNameOverride &&
+    !args.pushTarget &&
+    getSelectedReviewBranch(args) === null
+  ) {
+    branchName = await resolveCreateBranchName(
+      repo.path,
+      args.branchNameOverride,
+      sanitizedName,
+      settings,
+      username,
+      localWorktreeGitOptions
+    )
+    const conflict = await getBranchConflictKind(
+      repo.path,
+      branchName,
+      baseBranch,
+      localWorktreeGitOptions
+    )
+    if (conflict === null) {
+      selectedRemoteBranchName = branchName
+    }
+  }
+  const pathIsAvailable = (): boolean => {
+    worktreePath = ensurePathWithinWorkspace(
+      computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings, workspaceRoot),
+      workspaceRoot
+    )
+    // Pending removals still own paths Git may already have deleted; skip them until teardown settles.
+    return (
+      !existsSync(worktreePath) && !findPendingWorktreeRemovalConflict(repo.path, { worktreePath })
+    )
+  }
   await timing.time('resolve_name', async () => {
     const retiredNameRegistry = shouldRetireGeneratedName
       ? await getRetiredNameRegistryForRepo(store, repo, store.getRepos(), settings)
@@ -1179,6 +1212,13 @@ async function performLocalWorktreeCreate(
         continue
       }
       attempts += 1
+      if (selectedRemoteBranchName) {
+        if (pathIsAvailable()) {
+          resolved = true
+          break
+        }
+        continue
+      }
       lastExistingReviewNumber = null
 
       branchName = await resolveCreateBranchName(
@@ -1186,7 +1226,7 @@ async function performLocalWorktreeCreate(
         selectedExistingLocalBranchName
           ? selectedExistingLocalBranchName
           : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-        effectiveSanitizedName,
+        branchSeed ? getWorktreeCreateCandidate(branchSeed, suffix) : effectiveSanitizedName,
         settings,
         username,
         localWorktreeGitOptions
@@ -1278,15 +1318,7 @@ async function performLocalWorktreeCreate(
         }
       }
 
-      worktreePath = ensurePathWithinWorkspace(
-        computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings, workspaceRoot),
-        workspaceRoot
-      )
-      // Pending removals still own paths Git may already have deleted; skip them until teardown settles.
-      if (
-        existsSync(worktreePath) ||
-        findPendingWorktreeRemovalConflict(repo.path, { worktreePath })
-      ) {
+      if (!pathIsAvailable()) {
         continue
       }
 
@@ -1345,7 +1377,10 @@ async function performLocalWorktreeCreate(
       await legacyFetchPromise
     })
   }
-  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
+  // Why: the catalog watcher can publish the checkout mid-create; the renderer must not seed it a shell yet.
+  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId, {
+    worktreeId: composeWorktreeId(repo.id, worktreePath)
+  })
 
   // Defer fork remote creation/fetch until first synchronization; read-only review creation needs neither.
   const preparedPushTarget: GitPushTarget | undefined = args.pushTarget
@@ -1406,17 +1441,6 @@ async function performLocalWorktreeCreate(
               addProjectGitOptions(existingBranchOption)
             )
           }
-          if (suggestLocalBaseRefUpdate) {
-            return addSparseWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              sparseDirectories,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
-            )
-          }
           return addSparseWorktree(
             repo.path,
             worktreePath,
@@ -1424,7 +1448,7 @@ async function performLocalWorktreeCreate(
             sparseDirectories,
             baseBranch,
             settings.refreshLocalBaseRefOnWorktreeCreate,
-            addProjectGitOptions(remoteTrackingBaseOption)
+            preparedWorktreeOptions
           )
         }
 
@@ -1439,17 +1463,6 @@ async function performLocalWorktreeCreate(
             addProjectGitOptions(existingBranchOption)
           )
         }
-        if (suggestLocalBaseRefUpdate) {
-          return addWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate,
-            false,
-            addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
-          )
-        }
         return addWorktree(
           repo.path,
           worktreePath,
@@ -1457,7 +1470,7 @@ async function performLocalWorktreeCreate(
           baseBranch,
           settings.refreshLocalBaseRefOnWorktreeCreate,
           false,
-          addProjectGitOptions(remoteTrackingBaseOption)
+          preparedWorktreeOptions
         )
       })) ?? {}
   } catch (error) {
@@ -1497,6 +1510,9 @@ async function performLocalWorktreeCreate(
   }
 
   const worktreeId = `${repo.id}::${created.path}`
+  if (created.path !== worktreePath) {
+    emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId, { worktreeId })
+  }
   const now = Date.now()
   // Review head SHA/ref seeds creation; Source Control comparison uses the review target branch.
   const metadataBaseRef = args.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch

@@ -72,6 +72,7 @@ export async function applyAgentWorkspaceTrust(
           wslDistro: context.wslDistro
         }),
       codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome, context.codexHome),
+      kimiHome: context.env?.KIMI_CODE_HOME || process.env.KIMI_CODE_HOME,
       // Codex shares its config lock queue with hook installs.
       deadlineMs:
         preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS

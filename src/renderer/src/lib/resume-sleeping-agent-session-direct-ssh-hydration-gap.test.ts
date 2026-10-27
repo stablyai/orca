@@ -1,13 +1,4 @@
-/**
- * STA-3500: the startup resume sweep must not cold-resume a direct-SSH session before its target
- * connects. STA-3498 counted five concurrent `claude` processes on one transcript that way.
- *
- * The paired-runtime flavor already parks per pane (host-mirrored-pane-liveness.ts), but that guard
- * only recognises `web-terminal-*` surface ids, so direct SSH fell straight through it.
- *
- * Both halves matter: the sweep must decline while the target is unreachable, and it must still wake
- * a genuinely sleeping agent once the target connects.
- */
+/** Direct SSH wake must wait for connection before declaring panes absent (STA-3500/3498 once forked five Claude writers). Paired-runtime web-terminal guards did not cover this path; retain records while unreachable and wake genuine sleepers after reconnect. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'

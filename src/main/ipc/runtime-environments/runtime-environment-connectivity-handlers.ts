@@ -1,3 +1,8 @@
+import {
+  manuallyDisconnectedResponse,
+  runtimeEnvironmentCallFailure
+} from './runtime-environment-call-failure'
+import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
@@ -7,15 +12,14 @@ import {
 } from '../../../shared/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
-  type PublicKnownRuntimeEnvironment
+  type PublicKnownRuntimeEnvironment,
+  type RuntimeEnvironmentRemoval
 } from '../../../shared/runtime-environments'
 import {
   connectThroughOwningService,
   removeThroughOwningService
 } from './runtime-environment-host-service-ops'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
-import { RuntimeRpcCallQueueOverloadError } from '../../../shared/runtime-rpc-call-queue'
-import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { Store } from '../../persistence'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
@@ -28,8 +32,7 @@ import {
 } from './runtime-environment-request-connections'
 import {
   clearRuntimeEnvironmentManualDisconnect,
-  isRuntimeEnvironmentManuallyDisconnected,
-  RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
+  isRuntimeEnvironmentManuallyDisconnected
 } from './runtime-environment-manual-disconnect'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
@@ -48,20 +51,6 @@ import {
 } from '../../wsl/wsl-orcad-host-environments'
 import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/wsl-host-gate'
 
-function manuallyDisconnectedResponse(
-  environment: ReturnType<typeof resolveEnvironment>
-): RuntimeRpcResponse<never> {
-  return {
-    id: 'runtime.manualDisconnect',
-    ok: false,
-    error: {
-      code: 'runtime_manually_disconnected',
-      message: RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-    },
-    _meta: { runtimeId: environment.runtimeId }
-  }
-}
-
 export { isRuntimeEnvironmentManuallyDisconnected }
 
 type ConnectivityHandlerOptions = {
@@ -75,6 +64,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   getUserDataPath,
   invalidateTransport
 }: ConnectivityHandlerOptions): void {
+  ipcMain.handle('runtimeEnvironments:desktopCreatedChatIds', () =>
+    desktopChatCreationHistory(getUserDataPath()).sessionIds()
+  )
   ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
     getRuntimeEnvironmentStatusSnapshots()
   )
@@ -119,9 +111,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     (
       _event,
       args: { selector: string }
-    ):
-      | { removed: PublicKnownRuntimeEnvironment }
-      | Promise<{ removed: PublicKnownRuntimeEnvironment }> => {
+    ): RuntimeEnvironmentRemoval | Promise<RuntimeEnvironmentRemoval> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
@@ -132,10 +122,19 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       assertWslHostReachable(environment)
       const ownedRemoval = removeThroughOwningService(environment)
       if (ownedRemoval) {
-        return ownedRemoval.then(() => ({ removed: redactRuntimeEnvironment(environment) }))
+        // A WSL host whose server Remove couldn't prove stopped stays listed; say so (E11).
+        return ownedRemoval.then((serverStop) => ({
+          removed: redactRuntimeEnvironment(environment),
+          serverStop
+        }))
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
-      void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport, store)
+      void retireRemovedRuntimeEnvironment(
+        removed.id,
+        invalidateTransport,
+        store,
+        getUserDataPath()
+      )
       closeLegacySelectorTransport(args.selector, removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }
@@ -212,25 +211,6 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
   )
 }
 
-function runtimeEnvironmentCallFailure(
-  environment: ReturnType<typeof resolveEnvironment>,
-  method: string,
-  error: unknown
-): RuntimeRpcFailure | null {
-  if (
-    !(error instanceof RemoteRuntimeClientError) &&
-    !(error instanceof RuntimeRpcCallQueueOverloadError)
-  ) {
-    return null
-  }
-  return {
-    id: method,
-    ok: false,
-    error: { code: error.code, message: error.message },
-    _meta: { runtimeId: environment.runtimeId }
-  }
-}
-
 function registerPassiveCallHandler(getUserDataPath: () => string): void {
   ipcMain.handle(
     'runtimeEnvironments:call',
@@ -249,6 +229,11 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
+      void desktopChatCreationHistory(getUserDataPath()).recordCreate(
+        environment.id,
+        args.method,
+        args.params
+      )
       // Every renderer request to a paired host passes this account environment boundary.
       const accounts = await withWslOrcadAccountEnv({
         environmentId: environment.id,

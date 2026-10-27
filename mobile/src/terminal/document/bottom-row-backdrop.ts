@@ -4,7 +4,6 @@ import { getMeasuredCellHeight, getTotalScale } from './cell-metrics'
 
 const DEFAULT_BACKGROUND = -1
 
-/** Uniform last-row backgrounds; xterm keeps the live OSC 11 default on its element. */
 export function lastRowBackground(scope: TerminalDocumentScope): string | null {
   const term = scope.term
   if (!term || !term.buffer || !term.buffer.active) {
@@ -46,7 +45,7 @@ export function lastRowBackground(scope: TerminalDocumentScope): string | null {
   return `rgb(${(shared >> 16) & 255}, ${(shared >> 8) & 255}, ${shared & 255})`
 }
 
-// Extend only the fractional row; larger gaps belong to the surrounding theme.
+// Extend only the fractional row; larger gaps use the surrounding theme.
 export function paintBottomRowBackdrop(scope: TerminalDocumentScope) {
   const container = elementInRoot(scope.root, 'terminal-container')
   if (!container) {

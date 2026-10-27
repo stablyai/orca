@@ -9,7 +9,6 @@ import {
   canAddRootComment,
   canDeleteComment,
   canEditComment,
-  isMutablePRConversationComment,
   isResolvableComment,
   isSubmittableCommentBody
 } from './pr-comment-actions'
@@ -97,27 +96,6 @@ describe('isSubmittableCommentBody', () => {
     expect(isSubmittableCommentBody('hi')).toBe(true)
     expect(isSubmittableCommentBody('')).toBe(false)
     expect(isSubmittableCommentBody('   \n ')).toBe(false)
-  })
-})
-
-describe('isMutablePRConversationComment', () => {
-  it('allows only root conversation comments with a valid id', () => {
-    expect(isMutablePRConversationComment(comment())).toBe(true)
-  })
-
-  it('excludes review/threaded/inline comments', () => {
-    expect(isMutablePRConversationComment(comment({ threadId: 'T_1' }))).toBe(false)
-    expect(isMutablePRConversationComment(comment({ path: 'a.ts' }))).toBe(false)
-    expect(
-      isMutablePRConversationComment(comment({ url: 'https://x/pullrequestreview-1#r2' }))
-    ).toBe(false)
-  })
-
-  it('requires a positive integer id', () => {
-    expect(isMutablePRConversationComment(comment({ id: 0 }))).toBe(false)
-    expect(isMutablePRConversationComment(comment({ id: -1 }))).toBe(false)
-    expect(isMutablePRConversationComment(comment({ id: 1.5 }))).toBe(false)
-    expect(isMutablePRConversationComment(comment({ id: Number.MAX_SAFE_INTEGER + 1 }))).toBe(false)
   })
 })
 

@@ -45,23 +45,27 @@ export function getSetupStateLabel(setupState: ProjectHostSetupState): string {
 
 export function buildSetupHostOptions({
   projectHostSetups,
+  outclaimed = false,
   hostOptions
 }: {
+  outclaimed?: boolean
   projectHostSetups: ProjectHostSetup[]
   hostOptions: readonly ExecutionHostRegistryEntry[]
 }): SetupHostOption[] {
+  if (outclaimed) {
+    return []
+  }
   const setupHostIds = new Set(projectHostSetups.map((setup) => setup.hostId))
   return pickerExecutionHosts(hostOptions)
     .filter(
       (host) =>
         !setupHostIds.has(host.id) &&
-        // Why: one machine; the project already set up under its other id needs no second offer.
+        // Host aliases name one machine; do not offer setup again under another ID.
         !host.aliasHostIds?.some((aliasHostId) => setupHostIds.has(aliasHostId))
     )
     .map((host) => {
       const unavailableDetail = getHostSetupUnavailableDetail(host)
-      // Why: import and clone require live remote providers, while an offline
-      // host can still be recorded as a placeholder for later setup.
+      // Offline hosts can be placeholders; clone/import require live providers.
       const canUsePathActions = host.health === 'local' || host.health === 'available'
       return {
         id: host.id,

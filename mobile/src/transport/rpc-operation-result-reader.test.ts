@@ -48,8 +48,7 @@ describe('a single-variant reader', () => {
     })
   })
 
-  // zod-salvage keeps its collector at module level, so a leak here would blame the next
-  // reply for the previous one's drops.
+  // The module-level salvage collector must not attribute one reply’s drops to the next.
   it('does not leak drop diagnostics into the next read', () => {
     salvagingReader({ worktrees: [{ id: 7 }] })
 
@@ -69,8 +68,7 @@ describe('a single-variant reader', () => {
     expect(result.issues[20]).toEqual({ path: '', message: '5 further issues omitted' })
   })
 
-  // The caveat that comes with zod-salvage: it wraps a synchronous parse only. An async
-  // schema must read as incompatible rather than leaking a promise into the outcome.
+  // Salvage parsing is synchronous; async schemas must become incompatible rather than leak a promise.
   it('reads an async schema as incompatible instead of leaking a promise', () => {
     const asyncReader = rpcResultVariant(
       'rows',

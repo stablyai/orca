@@ -62,9 +62,7 @@ afterEach(() => {
   _resetWslCachesForTests()
 })
 
-// The RPC/relay prefetch is the only warm-up a remote client reaches, so it has
-// to resolve the same project runtime the IPC handler does. Constructed through
-// the barrel because the split chain resolves selectors in a later subclass.
+// RPC prefetch must match IPC project routing; construct through the barrel for later selector subclasses.
 describe('prefetchManagedWorktreeCreateBase (orca-runtime-get-worktree-terminal-provisioning-host)', () => {
   it('warms up in the distro a WSL-routed project runs in', async () => {
     _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
@@ -89,7 +87,6 @@ describe('prefetchManagedWorktreeCreateBase (orca-runtime-get-worktree-terminal-
     )
   })
 
-  // A repair-required runtime must degrade to host git, not fail the warm-up.
   it('does not surface a repair-required project runtime as a prefetch failure', async () => {
     _setWslCachesForTests({ available: true, distros: ['Debian'] })
     setPlatform('win32')

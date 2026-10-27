@@ -56,7 +56,6 @@ describe('uploadMobileNativeChatImages', () => {
         previewUri: 'file:///photo.jpg'
       }
     ])
-    // Native chat defers the paste to submit — nothing is sent to the terminal here.
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
     expect(saveCall?.params).toEqual({ contentBase64: 'AAAA', connectionId: 'conn-7' })

@@ -21,7 +21,6 @@ class RuntimeWithEditorOpenGroup extends OrcaRuntimeService {
   }
 }
 
-/** A host whose saved view shows the first of two groups. */
 function twoGroupHost() {
   const saved = addWorkspace(emptySession(), TEST_WORKTREE_ID, [
     { id: 'g1', tabs: [{ id: 't1', leaves: [[leaf(1)]] }] },

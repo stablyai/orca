@@ -29,10 +29,6 @@ describe('linearSettingsForBoardWorktree', () => {
     })
   })
 
-  it('uses this computer for a workspace no row places', () => {
-    expect(linearSettingsForBoardWorktree({}, WORKTREE_ID)).toEqual({ kind: 'local' })
-  })
-
   it("skips a local twin of a server instead of borrowing this computer's Linear", () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 

@@ -103,7 +103,7 @@ const AGENT_ARGS = {
 } as const
 
 function sentRuntime(runtime: ProjectRuntimeSent): Record<string, unknown> {
-  const base = { projectId: LAUNCH_REPO_ID, reason: runtime.reason }
+  const base = { projectId: `repo:${LAUNCH_REPO_ID}`, reason: runtime.reason }
   return {
     status: 'resolved',
     runtime:
@@ -113,13 +113,13 @@ function sentRuntime(runtime: ProjectRuntimeSent): Record<string, unknown> {
             kind: 'wsl',
             hostPlatform: 'wsl',
             distro: runtime.distro,
-            cacheKey: `${LAUNCH_REPO_ID}:wsl:${runtime.distro}`
+            cacheKey: `repo:${LAUNCH_REPO_ID}:wsl:${runtime.distro}`
           }
         : {
             ...base,
             kind: 'windows-host',
             hostPlatform: 'win32',
-            cacheKey: `${LAUNCH_REPO_ID}:windows-host`
+            cacheKey: `repo:${LAUNCH_REPO_ID}:windows-host`
           }
   }
 }

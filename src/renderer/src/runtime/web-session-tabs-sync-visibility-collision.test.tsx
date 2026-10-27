@@ -39,7 +39,7 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 import { useAppStore } from '@/store'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeAcceptedWebSessionTerminalHandle } from './web-session-terminal-handle-events'
 import {
   _getWebSessionTabsReceiptTrackingCountsForTest,
@@ -440,7 +440,13 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       authoritative: true
     })
     const tabId = toWebTerminalSurfaceTabId('host-tab-b')
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([tabId])
+    // Each host's rows are its own, so A's wait with the deferred repair instead of being wiped by B.
+    expect(
+      useAppStore
+        .getState()
+        .tabsByWorktree[WORKTREE]?.map((tab) => tab.id)
+        .sort()
+    ).toEqual([toWebTerminalSurfaceTabId('host-tab-a'), tabId])
     expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(2)
 
     newerRecovery.resolve(makeTerminalSnapshot('-b', 2))
@@ -488,16 +494,19 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       snapshots: [unrelatedSnapshot],
       authoritative: true
     })
+    const hostATabId = toWebTerminalSurfaceTabId('host-tab-a')
     const hostBTabId = toWebTerminalSurfaceTabId('host-tab-b')
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      hostBTabId
-    ])
+    const terminalTabIds = (): string[] | undefined =>
+      useAppStore
+        .getState()
+        .tabsByWorktree[WORKTREE]?.map((tab) => tab.id)
+        .sort()
+    // Each host's rows are its own, so A's stay until its omission is recorded.
+    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
 
     staleRecovery.resolve(makeTerminalSnapshot('-a', 2))
     await act(settle)
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      hostBTabId
-    ])
+    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
 
     slowInventoryRecovery.resolve(unrelatedSnapshot)
     await act(settle)
@@ -505,9 +514,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       type: 'updated',
       ...makeTerminalSnapshot('-a', 3)
     })
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      toWebTerminalSurfaceTabId('host-tab-a')
-    ])
+    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
     hook.unmount()
   })
 
@@ -645,8 +652,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       liveTabId
     ])
     expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
-    // The retraction boundary outlives the recovery that was pending when it landed; it is what
-    // still fences the stale frame after the live republication overwrote the receipt slot.
+    // Retraction boundary must outlive recovery and receipt-slot overwrite to fence delayed pre-close frames.
     expect(_getWebSessionTabsReceiptTrackingCountsForTest()).toEqual({
       receipts: 1,
       removalWatermarks: 1
@@ -702,8 +708,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       recovery.resolve(makeTerminalSnapshot(index === 0 ? '-a' : '-b', index + 1))
     }
     await act(settle)
-    // The receipt slot is per worktree, so what repeated frames could grow is the tracking behind
-    // it; the watermark stays absent because nothing retracted, and the mirror holds one tab.
+    // Repeated frames may grow tracking despite one receipt slot; no retraction means no watermark and one mirrored tab.
     expect(_getWebSessionTabsReceiptTrackingCountsForTest()).toEqual({
       receipts: 1,
       removalWatermarks: 0

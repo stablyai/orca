@@ -55,26 +55,26 @@ export function createRepoCatalogActions(
         const reconciliation = reconcileReadoptedSshRepoRows(s.repos, pendingSshRepoReadoptions)
         const repos = reconciliation.repos
         const worktreeState = reconcileReadoptedSshWorktreeState(s, pendingSshRepoReadoptions)
-        const remainingSetups = filterSetupsForPrunedRepoRows(s.projectHostSetups, s.repos, repos)
+        const remainingSetups = filterSetupsForPrunedRepoRows(
+          s.endpointProjectHostSetups,
+          s.repos,
+          repos
+        )
         const compatibility = mergeProjectHostSetupCompatibility(
           projectCompatibilityFromRepos(repos),
           {
-            projects: s.projects,
+            projects: s.endpointProjects,
             setups: remainingSetups
           }
         )
-        // Why: mergeProjectHostSetupCompatibility always allocates; a no-op readoption
-        // must not churn catalog identity. This write is all-repos, not host-scoped,
-        // so it cannot go through mergeFetchedHostProjectCatalog. Reconcile
-        // hands the store arrays straight back when nothing moved, so writing them
-        // unconditionally still leaves identity-keyed selectors untouched.
+        // All-repos readoption cannot use host-scoped merge. Reconcile always-allocating compat results to preserve unchanged catalog arrays and avoid selector churn.
         const projects = reconcileCatalogRows(
-          s.projects,
+          s.endpointProjects,
           compatibility.projects,
           (project) => project.id
         )
         const projectHostSetups = reconcileCatalogRows(
-          s.projectHostSetups,
+          s.endpointProjectHostSetups,
           compatibility.projectHostSetups,
           getProjectHostSetupOwnerKey
         )
@@ -82,8 +82,8 @@ export function createRepoCatalogActions(
           repos,
           pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
           ...worktreeState,
-          projects,
-          projectHostSetups
+          endpointProjects: projects,
+          endpointProjectHostSetups: projectHostSetups
         }
       }),
 
@@ -115,9 +115,9 @@ export function createRepoCatalogActions(
           const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
           const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
             previous: {
-              projects: s.projects,
+              projects: s.endpointProjects,
               projectHostSetups: filterSetupsForPrunedRepoRows(
-                s.projectHostSetups,
+                s.endpointProjectHostSetups,
                 result.repos,
                 prunedRepos
               )
@@ -133,7 +133,8 @@ export function createRepoCatalogActions(
             repos: prunedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
             ...reconcileFetchedCatalogWorktreeState(s, catalog, prunedRepos),
-            ...mergedProjectCompatibility,
+            endpointProjects: mergedProjectCompatibility.projects,
+            endpointProjectHostSetups: mergedProjectCompatibility.projectHostSetups,
             ...(arrayElementsUnchanged(prunedRepos, s.repos)
               ? {}
               : { folderWorkspacePathStatuses: {} }),

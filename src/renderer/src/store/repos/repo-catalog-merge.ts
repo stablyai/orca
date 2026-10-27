@@ -15,6 +15,7 @@ import { fetchProjectHostSetupCompatibility } from '../projects/project-host-rou
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
 import { dropWorktreeRowsOfDroppedRepos } from './dropped-repo-worktree-rows'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { withoutPendingRuntimeRepoRemovals } from './pending-runtime-repo-removals'
 
 export type FetchedRepoCatalog = {
   repos: readonly Repo[]
@@ -54,7 +55,11 @@ export function mergeFetchedRepoCatalog(
   projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
-  const repos = mergeFetchedReposForHost(currentRepos, catalog.repos, catalog.hostId)
+  const repos = mergeFetchedReposForHost(
+    currentRepos,
+    withoutPendingRuntimeRepoRemovals(catalog.repos, catalog.hostId),
+    catalog.hostId
+  )
   return {
     repos,
     projectHostSetupCompatibility: catalog.projectHostSetupCompatibility,
@@ -82,8 +87,7 @@ export function filterSetupsForPrunedRepoRows(
       .filter((repo) => !survivingOwners.has(`${getRepoExecutionHostId(repo)}:${repo.id}`))
       .map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
   )
-  // Why: this result feeds the compat merge as `previous`, so an unconditional copy would discard
-  // the identity that merge is about to try to preserve.
+  // Compat merge receives this as previous; unconditional copying defeats the identity it tries to retain.
   if (prunedOwners.size === 0) {
     return setups
   }

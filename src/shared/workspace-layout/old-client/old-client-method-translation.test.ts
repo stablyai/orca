@@ -57,7 +57,7 @@ function commandsOf(translation: MethodTranslation): LayoutCommand[] {
   return translation.commands
 }
 
-/** `terminal.create` as an old desktop's pane transport sends it, parsed as today. */
+/** Parse terminal.create as an older desktop pane transport sends it. */
 function createParams(fields: { tabId?: string; leafId?: string; title?: string }) {
   return TerminalCreateParams.parse({
     worktree: `id:${WS}`,
@@ -287,7 +287,7 @@ describe('session.tabs.move translation', () => {
     return model.workspaces[WS]!.groups.find((group) => group.id === groupId)!.tabOrder
   }
 
-  /** Translates against the snapshot the client was shown, as the handler does today. */
+  /** Translate against the snapshot the client saw, matching the handler. */
   function move(model: WorkspaceLayoutModel, params: Record<string, unknown>) {
     const workspace = model.workspaces[WS]!
     const shown = projectSessionTabs(WS, workspace, NO_VIEW, NO_FACTS, false)

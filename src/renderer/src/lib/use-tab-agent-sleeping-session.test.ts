@@ -11,7 +11,7 @@ import type {
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
-import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { resolveTabAgentFromSignals } from '../../../shared/tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
@@ -58,9 +58,7 @@ function sleepingRecord(paneKey: string, agent: ResumableTuiAgent): SleepingAgen
 
 describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
   it("prefers a hibernated pane's session identity over a stale reused launchAgent", () => {
-    // Why: a codex launch later reused for claude leaves a claude sleeping record
-    // for the pane. Its generic spinner title names no agent, so only the session
-    // record proves the launch identity went stale.
+    // A Codex pane reused for Claude can retain a generic spinner; only sleeping-session ownership proves the launch identity stale.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -112,7 +110,7 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
     ).toBe('codex')
   })
 
-  it('suppresses stale sleeping identity after local shell exit evidence', () => {
+  it('keeps a hibernating pane on its wake record while the kill shows the shell', () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -120,19 +118,6 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
         title: 'zsh',
         hookAgent: null,
         processShellForeground: true,
-        sleepingSessionAgent: 'codex',
-        launchAgent: 'codex'
-      })
-    ).toBeNull()
-  })
-
-  it('retains sleeping identity for remote panes without local shell evidence', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: true,
-        title: 'zsh',
-        hookAgent: null,
         sleepingSessionAgent: 'codex',
         launchAgent: 'codex'
       })
@@ -146,7 +131,6 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
         isRemote: false,
         title: shell,
         hookAgent: null,
-        sleepingSessionAgent: 'codex',
         launchAgent: 'codex'
       })
     ).toBeNull()
@@ -200,9 +184,7 @@ describe('useTabAgent sleeping-session', () => {
 
   it('paints a hibernated pane with its sleeping-session agent over a stale launchAgent', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    // Why: the pane was launched as codex, then reused for claude and hibernated.
-    // No live hook/process remains and the frozen title names no agent, so the
-    // persisted session record is the only proof the launch identity went stale.
+    // After reused Claude hibernates, persisted session identity alone can override stale Codex launch when hooks/process/title reveal none.
     useAppStore.setState({
       terminalLayoutsByTabId: {
         'tab-1': {

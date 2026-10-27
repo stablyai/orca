@@ -9,11 +9,7 @@ import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker
 import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 
-/**
- * Freezes a releasing worker's output, or ends the release `release_unknown` when a structured
- * worker's running session cannot be verified: that is no evidence still on its way, so leaving
- * the request `requested` would have every reconcile retry it forever. A fresh request retries it.
- */
+/** Freeze release output; unverifiable structured sessions finish release_unknown instead of retrying forever as requested. A fresh request may retry. */
 export async function captureWorkerReleaseArchive(
   args: Parameters<typeof captureWorkerOutputArchive>[0] & {
     db: OrchestrationDb

@@ -59,9 +59,7 @@ export function UpdatedMetric({
     if (scannedAt === null) {
       return
     }
-    // Refresh once immediately (unconditional, as before) so a rescan that lands
-    // while hidden isn't shown stale, then pause the ongoing 60s tick while the
-    // window is hidden — same visibility-gated pattern as useNow.
+    // Refresh new scans immediately, then pause minute ticks while the window is hidden.
     setNow(Date.now())
     return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 60_000 })
   }, [scannedAt])

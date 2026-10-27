@@ -32,8 +32,7 @@ export function getEffectiveFileExplorerIgnoredPaths({
     return EMPTY_IGNORED_PATHS
   }
 
-  // Why: expanding folders changes the query before the async ignored refresh returns.
-  // Keep same-worktree answers so known ignored rows do not flash as normal text.
+  // Retain same-worktree answers while expanded-folder queries refresh to prevent ignored-row flashes.
   return ignoredPathResult.paths
 }
 
@@ -85,9 +84,7 @@ export function useFileExplorerIgnoredPaths({
         })
     }
 
-    // Why: every filter keystroke changes relativePaths. Waiting for a short
-    // quiet window prevents obsolete queries from launching uncancellable Git
-    // subprocess chains while the visible name projection stays immediate.
+    // Debounce filter changes before launching uncancellable Git query chains; visible name filtering stays immediate.
     const timer = shouldDebounceIgnoredQuery
       ? window.setTimeout(refresh, FILE_EXPLORER_IGNORED_QUERY_DEBOUNCE_MS)
       : null

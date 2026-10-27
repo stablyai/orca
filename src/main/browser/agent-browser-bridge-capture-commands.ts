@@ -17,11 +17,11 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return this.readScreenshotFromResult(
-        await this.execAgentBrowser(sessionName, [
-          'screenshot',
-          '--screenshot-format',
-          screenshotFormat
-        ]),
+        await this.execAgentBrowser(
+          sessionName,
+          ['screenshot', '--screenshot-format', screenshotFormat],
+          { cliArgv: true }
+        ),
         screenshotFormat
       )
     })

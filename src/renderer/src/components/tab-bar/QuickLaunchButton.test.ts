@@ -158,8 +158,7 @@ describe('QuickLaunchAgentMenuItems', () => {
   })
 
   it('routes agent detection to the worktree-owning runtime host, not the local client', () => {
-    // Repro for the "Remote Server lists local agents" bug: a worktree owned by
-    // a paired runtime must probe that runtime, never the client's PATH.
+    // Detect agents on the workspace’s execution host; client PATH cannot describe a paired runtime.
     storeState.worktreesByRepo = {
       'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'runtime:env-1' }]
     }

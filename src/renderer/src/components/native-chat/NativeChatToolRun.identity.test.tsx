@@ -225,9 +225,7 @@ it.each(['running', 'completed'] as const)(
     expect(screen.getByText('My server')).toBeTruthy()
     expect(screen.getByText('ns.tool')).toBeTruthy()
     expect(screen.getByTitle(name)).toBeTruthy()
-    // The run header's glyph plus the row's, both plug: the identity holds
-    // wherever it is drawn. The header names no individual call, so it carries
-    // one glyph for the run rather than one per member.
+    // Run and member glyphs must agree on MCP identity.
     expect(document.querySelectorAll('.lucide-plug')).toHaveLength(2)
   }
 )

@@ -12,12 +12,17 @@ export function MobileLoadErrorState({
   return (
     <View style={styles.state}>
       <Text style={styles.errorText}>{message}</Text>
-      {onRetry ? (
-        <Pressable style={styles.retryButton} onPress={onRetry} accessibilityRole="button">
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      ) : null}
+      {onRetry ? <MobileStateButton label="Retry" onPress={onRetry} /> : null}
     </View>
+  )
+}
+
+/** The bordered action a centered load state offers, such as Retry. */
+export function MobileStateButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable style={styles.retryButton} onPress={onPress} accessibilityRole="button">
+      <Text style={styles.retryText}>{label}</Text>
+    </Pressable>
   )
 }
 

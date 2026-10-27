@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
@@ -13,15 +16,15 @@ const mockToast = {
 const mockWriteClipboardText = vi.fn(async () => undefined)
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
+const repos: Repo[] = []
+const endpointProjects: Project[] = []
+const endpointProjectHostSetups: ProjectHostSetup[] = []
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  projects: [] as {
-    id: string
-    sourceRepoIds: string[]
-    localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
-  }[],
-  repos: [] as { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[],
+  endpointProjects,
+  endpointProjectHostSetups,
+  repos,
   settings: {} as {
     localWindowsRuntimeDefault?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
   },
@@ -78,13 +81,19 @@ describe('forkAgentSessionFromPane', () => {
     vi.clearAllMocks()
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
-    store.projects = [
+    store.repos = [
       {
         id: 'repo-1',
-        sourceRepoIds: ['repo-1']
+        path: 'C:\\repo',
+        displayName: 'Repo',
+        badgeColor: '',
+        addedAt: 0,
+        kind: 'git'
       }
     ]
-    store.repos = [{ id: 'repo-1', kind: 'git' }]
+    const catalog = projectHostSetupProjectionFromRepos(store.repos)
+    store.endpointProjects = [...catalog.projects]
+    store.endpointProjectHostSetups = [...catalog.setups]
     store.settings = { localWindowsRuntimeDefault: { kind: 'windows-host' } }
     store.worktreesByRepo = {
       'repo-1': [
@@ -172,8 +181,7 @@ describe('forkAgentSessionFromPane', () => {
     )
   })
 
-  // A paired server's surface is published by the launcher; a seeding reveal would add a blank
-  // host terminal beside the chat or agent terminal.
+  // The launcher publishes the paired-host surface; seeding reveal would add an unwanted sibling shell.
   it('reveals a paired fork without seeding a surface of its own', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
@@ -282,7 +290,7 @@ describe('forkAgentSessionFromPane', () => {
   )
 
   it('uses Linux startup quoting for SSH workspaces', async () => {
-    store.repos = [{ id: 'repo-1', kind: 'git', connectionId: 'ssh-1' }]
+    store.repos = [{ ...store.repos[0], connectionId: 'ssh-1' }]
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
     }
@@ -339,13 +347,10 @@ describe('forkAgentSessionFromPane', () => {
   })
 
   it('uses Linux startup quoting when a Windows-path project is forced to WSL', async () => {
-    store.projects = [
-      {
-        id: 'repo-1',
-        sourceRepoIds: ['repo-1'],
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
+    store.endpointProjects = store.endpointProjects.map((project) => ({
+      ...project,
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    }))
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'pi' }
     }
@@ -483,7 +488,7 @@ describe('forkAgentSessionFromPane', () => {
   })
 
   it('does not create a worktree from a folder-only source workspace', async () => {
-    store.repos = [{ id: 'repo-1', kind: 'folder' }]
+    store.repos = [{ ...store.repos[0], kind: 'folder' }]
     store.getKnownWorktreeById.mockReturnValue({
       id: 'wt-1',
       repoId: 'repo-1',

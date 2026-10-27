@@ -57,8 +57,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
     return () => setWindowCloseRequestHandler(null)
   }, [proceedToNativeWindowClose, queueEditorCloseRequests, windowCloseAfterDirtyRef])
 
-  // Why lazy: a `useRef(expr)` argument re-runs on every render and is thrown away, and this
-  // walks every browser page and tab across all worktrees on a component that renders constantly.
+  // Initialize lazily: eager useRef arguments walk every browser page/tab again on every render.
   const prevBrowserWebviewIdsRef = useRef<Set<string>>(undefined!)
   prevBrowserWebviewIdsRef.current ??= collectBrowserWebviewIds(
     useAppStore.getState().browserTabsByWorktree,

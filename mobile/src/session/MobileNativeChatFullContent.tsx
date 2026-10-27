@@ -3,7 +3,7 @@ import { Pressable, Text, View, type TextStyle } from 'react-native'
 import {
   truncateToolDetail,
   MAX_TOOL_DETAIL_LENGTH
-} from '../../../src/shared/native-chat-tool-summary'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
@@ -14,15 +14,14 @@ import type {
 } from '../../../src/shared/agent-session-journal-types'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { styles } from './mobile-native-chat-message-styles'
-import { toolStyles } from './mobile-native-chat-tool-styles'
+import { toolStyles } from './native-chat/transcript/mobile-native-chat-tool-styles'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import {
   MobileNativeChatItemSourceContext,
   readMobileNativeChatItem
 } from './mobile-native-chat-item-read'
 
-// "Show full output" and "Show full message": a row the phone was sent a head of, read whole from
-// the host that keeps it. State is the row's own, so a live revision never fights it.
+// Keep full-content state per row so live transcript revisions cannot overwrite the reader’s requested expansion.
 
 type Load = 'idle' | 'loading' | 'failed'
 
@@ -57,7 +56,6 @@ function outputOf(body: AgentJournalItemBody | null): AgentJournalBoundedPayload
   return body?.kind === 'diff' ? body.patch : null
 }
 
-/** A tool's output in an opened line: its head, and the whole of it on request. */
 export function MobileNativeChatToolOutput({
   body,
   type,
@@ -143,7 +141,6 @@ export function MobileNativeChatToolOutput({
   )
 }
 
-/** `message` as drawn: whole once the reader asked for a reply the phone was sent shortened. */
 export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
   shown: NativeChatMessage
   showFull: React.JSX.Element | null

@@ -19,6 +19,11 @@ import {
   endTerminalScrollIntentBufferRebuild
 } from './terminal-scroll-intent-rebuild'
 
+// Why: markTerminalPinnedViewport registers its own anchor before fit registers the reflow marker.
+function createPinAnchorMarker() {
+  return { line: 42, isDisposed: false, dispose: vi.fn() }
+}
+
 class MockHTMLElement {
   classList: { contains: (cls: string) => boolean }
   children: MockHTMLElement[]
@@ -283,8 +288,7 @@ describe('safeFit', () => {
     const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
-      // Reflow at narrower cols rewraps lines; the tracked content now lives
-      // at a different absolute line than the pre-fit viewport number.
+      // Narrower reflow moves tracked content away from its original absolute viewport line.
       activeBuffer.baseY = 130
       activeBuffer.viewportY = 0
       marker.line = 57
@@ -493,6 +497,7 @@ describe('safeFit', () => {
     const replacementMarker = { line: 5, isDisposed: false, dispose: vi.fn() }
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
       .fn()
+      .mockReturnValueOnce(createPinAnchorMarker())
       .mockReturnValueOnce(originalMarker)
       .mockReturnValueOnce(replacementMarker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
@@ -538,7 +543,10 @@ describe('safeFit', () => {
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
     const marker = { line: 30, isDisposed: false, dispose: vi.fn() }
-    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
+      .fn()
+      .mockReturnValueOnce(createPinAnchorMarker())
+      .mockReturnValue(marker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
       activeBuffer.baseY = 70
       activeBuffer.viewportY = 0
@@ -587,6 +595,7 @@ describe('safeFit', () => {
     const replacementMarker = { line: 5, isDisposed: false, dispose: vi.fn() }
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
       .fn()
+      .mockReturnValueOnce(createPinAnchorMarker())
       .mockReturnValueOnce(originalMarker)
       .mockReturnValueOnce(replacementMarker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {

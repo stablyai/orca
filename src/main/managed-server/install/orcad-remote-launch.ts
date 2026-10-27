@@ -157,7 +157,7 @@ function setsidLaunchTail(
     ...launchEnv,
     // Only WSL setsid launches receive this marker.
     `${ORCAD_WSL_HOST_ENV}=1`,
-    ...hostEnv.map(([name, value]) => `${assertEnvName(name)}=${quotePosixShell(value)}`),
+    ...hostEnv.map(launchEnvAssignment),
     'sh -c \'orcad_detach() { if setsid -f true >/dev/null 2>&1; then setsid -f "$@"; ' +
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
     `sh -c 'echo $$ > "$1" && umask "$2" && shift 2 && exec "$@"' orcad-launch ${pidFile}`,
@@ -169,6 +169,17 @@ function setsidLaunchTail(
     'do sleep 0.05; orcad_wait=$((orcad_wait + 1)); done;',
     `cat ${pidFile}`
   ]
+}
+
+function launchEnvAssignment([name, value, mode]: OrcadLaunchEnvEntry): string {
+  if (mode !== 'keep-existing') {
+    return `${assertEnvName(name)}=${quotePosixShell(value)}`
+  }
+  // Inside "${NAME:-default}" quotes are literal, so only quote-free defaults are expressible.
+  if (!/^[A-Za-z0-9._=:,/-]+$/.test(value)) {
+    throw new Error(`orcad_launch_env_default_invalid:${name}`)
+  }
+  return `${assertEnvName(name)}="\${${name}:-${value}}"`
 }
 
 function assertEnvName(name: string): string {

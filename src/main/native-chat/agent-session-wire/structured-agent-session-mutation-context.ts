@@ -28,6 +28,7 @@ export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
+  publishConversationName?: (sessionId: string) => void
   /** For callers outside session serialization. */
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
   /** Display-admitted child records used by command admission. */

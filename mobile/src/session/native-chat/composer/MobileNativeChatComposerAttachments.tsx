@@ -15,7 +15,6 @@ import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment
 
 const THUMB_SIZE = 58
 
-/** The card's second line: the file's type, then its size. */
 function composerFileMeta(file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>) {
   const extension = /\.([a-z0-9]{1,8})$/i.exec(file.name)?.[1]
   const subtype = /^[^/]+\/([a-z0-9]{1,8})$/i.exec(file.mime)?.[1]
@@ -23,7 +22,6 @@ function composerFileMeta(file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'b
   return `${type} · ${formatPreviewByteLength(file.byteLength)}`
 }
 
-/** Everything riding on the next send, inside the composer box above the text. */
 export function MobileNativeChatComposerAttachments({
   images,
   files,
@@ -153,8 +151,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.45)'
   },
-  // Most of the badge sits inside its item, which Android needs to deliver the tap; the strip's
-  // padding keeps the 5pt overhang from being clipped.
+  // Keep most of the badge inside its item for Android touch delivery; strip padding protects the overhang.
   remove: {
     position: 'absolute',
     top: -5,

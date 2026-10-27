@@ -10,7 +10,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import type {
@@ -18,7 +18,7 @@ import type {
   TerminalTabTitleUpdate
 } from '../slices/terminal-tab-title-batch'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
-import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
@@ -30,7 +30,6 @@ import type {
   HydrateWorkspaceSessionOptions
 } from './terminal-contracts'
 
-/** Main's answer for a sleep it ran: every PTY stopped, or only `stoppedPtyIds` before it failed. */
 /** Main's answer to a sleep it ran; on success, the wake records it keeps (null: another host's). */
 export type HostTerminalStop =
   | { failed: false; records: readonly SleepingAgentSessionRecord[] | null }
@@ -81,6 +80,8 @@ export type TerminalActions = {
       split?: TabSplitTarget
       recordInteraction?: boolean
       id?: string
+      /** `id` is a mirrored host tab's `web-terminal-` id, minted here and never taken from IPC. */
+      mirroredHostTab?: boolean
       launchAgent?: TuiAgent
       /** The pane a host `agent.launch` laid out before its agent existed, while its fate is open. */
       agentLaunchPane?: TerminalTab['agentLaunchPane']
@@ -209,6 +210,7 @@ export type TerminalActions = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      resumeOrigin?: 'saved'
       launchToken?: string
       launchAgent?: TuiAgent
       agentArgsOverride?: string | null
@@ -235,6 +237,7 @@ export type TerminalActions = {
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
     agentArgsOverride?: string | null

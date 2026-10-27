@@ -7,6 +7,9 @@ function ok(result: unknown): RpcResponse {
   return { id: 'rpc', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
+// Drains the resolve round trip without counting its internal awaits.
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
 function activationState(activated: boolean) {
   return {
     activated,
@@ -58,7 +61,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -91,7 +94,7 @@ describe('openMobileNativeChatFileTap', () => {
       pathText: '~/orca-plans/result.html',
       nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
     })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -120,7 +123,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts:120:7' })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -153,8 +156,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'gone/missing.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
     expect(options.pushPreviewRoute).not.toHaveBeenCalled()
@@ -168,8 +170,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
   })

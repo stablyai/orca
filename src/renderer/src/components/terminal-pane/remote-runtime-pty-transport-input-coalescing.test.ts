@@ -15,7 +15,6 @@ import {
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -77,20 +76,14 @@ describe('createRemoteRuntimePtyTransport', () => {
   })
 
   it('replays a viewport that changed during the subscribe round-trip once the stream is current', async () => {
-    // Why: a resize landing while the subscribe is in flight takes the one-shot
-    // RPC fallback, which is refresh-only (no leak) and no-ops before the stream
-    // floor exists. The transport must replay the latest viewport over the
-    // now-current stream so the PTY does not stall at the subscribe-time width.
-    // Hold the multiplex "ready" to keep the round-trip open across the resize.
+    // Hold subscribe readiness while resize hits the refresh-only fallback; the resolved stream must replay latest geometry before the viewport timer.
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    // Drain microtasks WITHOUT advancing timers, so the 33ms viewport batcher
-    // cannot fire — the replayed Resize frame must come from the round-trip
-    // flush alone (this test fails if that flush is removed).
+    // Drain only microtasks so the 33ms viewport timer cannot hide a missing round-trip flush.
     const flushMicrotasks = async (): Promise<void> => {
       for (let i = 0; i < 20; i += 1) {
         await Promise.resolve()
@@ -121,8 +114,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     // The Subscribe frame still carries the subscribe-time viewport...
     expect(latestSubscribePayload().viewport).toEqual({ cols: 80, rows: 24 })
-    // ...and the newer viewport is replayed as a Resize frame over the stream,
-    // before the batcher's 33ms timer could have produced it.
+    // Require newer Resize before the batch timer can produce it.
     const resizeFrame = latestFrameForOpcode(TerminalStreamOpcode.Resize)
     expect(resizeFrame && decodeTerminalStreamJson(resizeFrame.payload)).toEqual({
       cols: 132,
@@ -178,8 +170,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           TerminalStreamOpcode.Input
         ])
       })
-      // Query replies must stay their own frames: concatenating them with keystrokes
-      // produces a mixed payload the host classifier cannot recognise as a reply.
+      // Keep query replies in distinct frames so host classification can recognize them after queued typing.
       const input = subscriptionSendBinary.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)

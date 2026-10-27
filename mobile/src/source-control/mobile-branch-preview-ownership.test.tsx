@@ -48,6 +48,7 @@ describe('committed diff preview ownership', () => {
   }) {
     const openers = useMobileSourceControlOpeners({
       client,
+      diffShowWhitespace: false,
       connState: 'connected',
       hostId: 'host-1',
       worktreeId,

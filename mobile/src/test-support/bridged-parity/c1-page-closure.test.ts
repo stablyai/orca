@@ -12,7 +12,6 @@ import { readGolden } from '../rpc-recording/golden-recording'
 
 const GOLDENS = resolve(import.meta.dirname, '../../../rpc-foundation/goldens')
 
-/** The run a corpus that diverged exactly as the pin says would hand the rule. */
 function asPinned(): Map<string, PageClosureObservation> {
   const run = new Map<string, PageClosureObservation>()
   for (const [family, goldens] of Object.entries(C1_PAGE_CLOSURE)) {
@@ -32,10 +31,7 @@ describe('the C1 page closure', () => {
   it('pins goldens that exist, in the family the corpus records them under', () => {
     for (const [family, goldens] of Object.entries(C1_PAGE_CLOSURE)) {
       for (const id of Object.keys(goldens)) {
-        // Through the corpus's own reader, which checks the format version and the value pool and
-        // throws a named diagnostic otherwise. The assertion this file wants is about `family`, and
-        // asserting the shape in order to read one field made this test the second place that
-        // decides what a golden is.
+        // Read through the corpus decoder so this test cannot become a second authority on golden format.
         const recorded = readGolden(GOLDENS, id)
         expect({ id, family: recorded.family }).toEqual({ id, family })
       }
@@ -70,7 +66,6 @@ describe('reading a run against the pin', () => {
 
   it('names a closure golden that changed verdict', () => {
     const run = asPinned()
-    // Whichever golden it is, the verdict it moves to has to be one it is not already pinned to.
     const found = [...run].find(([, seen]) => seen.verdict !== 'params-undefined')
     if (found === undefined) {
       throw new Error('the pin is empty')

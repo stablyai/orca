@@ -81,8 +81,7 @@ function drain(queue: WriteQueueHarness): void {
 }
 
 describe('terminal WebView write queue', () => {
-  // Distinct contents per chunk: with one shared string the sum below would count the same
-  // 64 KB string 128 times and read identically even if nothing were released.
+  // Use distinct chunk strings so retained-code-unit counts detect actual queue retention.
   function distinctChunks(count: number, codeUnits: number): string[] {
     return Array.from({ length: count }, (_v, i) => {
       const marker = `chunk-${i}:`
@@ -90,8 +89,7 @@ describe('terminal WebView write queue', () => {
     })
   }
 
-  // The measured quantity is a count of queue-reachable string code units, not heap bytes:
-  // xterm may still hold the submitted chunk, so this proves only that the queue released it.
+  // Count queue-reachable string units, not heap bytes; xterm may still retain submitted chunks.
   it('retains only the pending chunk after 127 of 128 dequeues', () => {
     const CHUNK_CODE_UNITS = 65_536
     const CHUNK_COUNT = 128
@@ -110,8 +108,7 @@ describe('terminal WebView write queue', () => {
     expect(measure()).toBe(CHUNK_CODE_UNITS)
   })
 
-  // Compaction is gated on writeQueueHead * 2 > writeQueue.length, so the pre-change retention
-  // window grows with the backlog rather than sitting at a fixed cap.
+  // Legacy compaction retention grows with backlog because it waits for consumed slots to exceed half the queue.
   it.each([
     [1_000, 500],
     [10_000, 5_000]
@@ -158,7 +155,6 @@ describe('terminal WebView write queue', () => {
     queue.pump()
     expect(order).toEqual([])
     queue.flushWrite()
-    // The boundary runs once the replay write lands, before the live chunk is submitted.
     expect(order).toEqual(['boundary'])
     expect(queue.writes).toEqual(['replay', 'live'])
     queue.flushWrite()
@@ -176,7 +172,6 @@ describe('terminal WebView write queue', () => {
     drain(queue)
 
     expect(calls).toEqual(['first', 'second'])
-    // Empty chunks still reach xterm; the queue does not filter them.
     expect(queue.writes).toEqual(['', ''])
     expect(queue.snapshot()).toEqual({ slots: [], head: 0 })
   })

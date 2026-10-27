@@ -38,7 +38,6 @@ afterEach(() => {
   renderer = null
 })
 
-/** The long-press sheet for `row`. */
 async function renderSheet(row: Partial<Worktree>) {
   const controller = {
     actions: {},
@@ -71,7 +70,6 @@ async function renderSheet(row: Partial<Worktree>) {
   }
 }
 
-/** The long-press sheet's action labels for `row`. */
 async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
   const { sheet } = await renderSheet(row)
   return sheet.props.actions.map((action: { label: string }) => action.label)
@@ -80,6 +78,17 @@ async function actionLabels(row: Partial<Worktree>): Promise<string[]> {
 describe('the workspace long-press sheet', () => {
   it("offers Sleep for the desktop's own workspace", async () => {
     expect(await actionLabels({})).toContain('Sleep')
+  })
+
+  it("keeps Delete disabled on a primary checkout with the desktop's reason", async () => {
+    const { sheet } = await renderSheet({ isMainWorktree: true })
+    const remove = sheet.props.actions.find(
+      (action: { label: string }) => action.label === 'Delete'
+    )
+    expect(remove).toMatchObject({
+      disabled: true,
+      hint: "Primary worktree — can't be deleted. Remove the project instead."
+    })
   })
 
   it("does not offer Sleep for a server's workspace, which the desktop would sleep by its own id", async () => {

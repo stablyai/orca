@@ -1,3 +1,7 @@
+import {
+  getProjectHostSetupProjectionFromState,
+  type ProjectCatalogReadState
+} from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
@@ -19,39 +23,36 @@ type AiVaultResumeShellState = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'folderWorkspaces'
-  | 'projects'
   | 'repos'
   | 'settings'
   | 'worktreesByRepo'
->
+> &
+  ProjectCatalogReadState
 
 export function resolveAiVaultResumeStartupShell(args: {
   state: AiVaultResumeShellState
   worktreeId?: string | null
   platform: NodeJS.Platform
-  isLocalSession: boolean
 }): AgentStartupShell {
-  // Why no login-shell probe: everything this command is built from — quoting
-  // and env clearing — is emitted in a form that is correct in sh and fish
-  // alike, so the Unix branch never has to know which one reads the line.
+  // No login-shell probe: quoting and env clearing are deliberately valid in both sh and fish.
   if (args.platform !== 'win32') {
     return 'posix'
   }
-  const projectRuntime = args.isLocalSession
-    ? getLocalProjectExecutionRuntimeContext(args.state, args.worktreeId, CLIENT_PLATFORM)
-    : undefined
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(
+    args.state,
+    args.worktreeId,
+    CLIENT_PLATFORM
+  )
   const workspacePath = getAiVaultResumeWorkspacePath(
     args.state,
     args.worktreeId ?? args.state.activeWorktreeId
   )
-  const shellOverride = args.isLocalSession
-    ? resolveLocalWindowsTerminalShellOverrideForTab({
-        explicitShellOverride: undefined,
-        defaultWindowsShell: args.state.settings?.terminalWindowsShell,
-        isWslWorktree: Boolean(workspacePath && parseWslUncPath(workspacePath)),
-        projectRuntime
-      })
-    : undefined
+  const shellOverride = resolveLocalWindowsTerminalShellOverrideForTab({
+    explicitShellOverride: undefined,
+    defaultWindowsShell: args.state.settings?.terminalWindowsShell,
+    isWslWorktree: Boolean(workspacePath && parseWslUncPath(workspacePath)),
+    projectRuntime
+  })
   const shell = shellOverride ? resolveWindowsShellStartupFamily(shellOverride) : undefined
   return resolveStartupShell(args.platform, shell)
 }
@@ -82,12 +83,8 @@ export function getAiVaultResumeWorkspacePath(
 
 export function getAiVaultResumeWorkspaceWslDistro(
   state: Pick<AppState, 'folderWorkspaces' | 'repos' | 'worktreesByRepo'> &
-    Partial<
-      Pick<
-        AppState,
-        'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings' | 'projectGroups'
-      >
-    >,
+    Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'settings' | 'projectGroups'>> &
+    ProjectCatalogReadState,
   workspaceId: string | null | undefined
 ): string | null | undefined {
   const workspacePath = getAiVaultResumeWorkspacePath(state, workspaceId)
@@ -95,7 +92,7 @@ export function getAiVaultResumeWorkspaceWslDistro(
   const runtimeState = {
     activeRepoId: state.activeRepoId ?? null,
     activeWorktreeId: state.activeWorktreeId ?? null,
-    projects: state.projects ?? [],
+    projectHostSetupProjection: getProjectHostSetupProjectionFromState(state),
     settings: state.settings ?? null,
     folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups ?? [],

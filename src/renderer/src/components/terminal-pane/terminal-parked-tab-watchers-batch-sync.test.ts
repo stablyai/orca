@@ -189,8 +189,7 @@ describe('parked terminal watcher batch synchronization', () => {
         const tabId = `tab-${index}`
         const ptyId = `${worktreeId}@@session-${index}`
         tabsByWorktreeId.get(worktreeId)!.push({ id: tabId, ptyId })
-        // A live, already-parked tab: present in both registries, nothing to
-        // dispose and nothing to start, so the pass is a pure registry scan.
+        // Already-parked live tabs need only registry scans, without starts/disposals.
         parkedWatchersByTabId.set(tabId, {
           worktreeId,
           tabPtyId: ptyId,
@@ -231,9 +230,7 @@ describe('parked terminal watcher batch synchronization', () => {
       const batchedVisits = batched.count
       batched.restore()
 
-      // Old shape: every surface re-walks both registries in full.
       expect(perSurfaceVisits).toBe(WORKSPACE_COUNT * registryRows)
-      // New shape: each registry is walked exactly once for the whole pass.
       expect(batchedVisits).toBe(registryRows)
       expect(perSurfaceVisits / batchedVisits).toBeGreaterThan(400)
     })
@@ -248,9 +245,7 @@ describe('parked terminal watcher batch synchronization', () => {
         parkedTabIds: string[]
         restoreTitleOnStartTabIds?: string[]
       }[]
-      /** Watcher rows already in the registry when the pass runs. */
       preParkedTabs: { worktreeId: string; tabId: string; ptyId: string; withDisposer: boolean }[]
-      /** Captures for tabs that may or may not still be live. */
       preCapturedTabs: { worktreeId: string; tabId: string; ptyId: string | null }[]
     }
 
@@ -463,12 +458,7 @@ describe('parked terminal watcher batch synchronization', () => {
         const key = 'worktreeId' in event ? event.worktreeId : 'shared'
         ;(eventsByWorktree[key] ??= []).push(event)
       }
-      // Why per-worktree, not one global sequence: batching deliberately hoists
-      // every workspace's dispose sweep ahead of every workspace's start pass.
-      // Registry rows are tab-id keyed and a tab belongs to exactly one
-      // worktree, so that reorder crosses only disjoint tab sets. `shared`
-      // events (pane-title clears, pre-handler discards) are compared as a
-      // multiset for the same reason.
+      // Dispose/start hoisting crosses disjoint tab sets; compare order per worktree and shared events as multisets.
       for (const key of Object.keys(eventsByWorktree)) {
         if (key === 'shared') {
           eventsByWorktree[key] = [...eventsByWorktree[key]].sort((left, right) =>

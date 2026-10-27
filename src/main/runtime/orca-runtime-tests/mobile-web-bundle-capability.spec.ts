@@ -10,14 +10,13 @@ import {
 } from '../rpc/methods/mobile-web-bundle.test-fixture'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../shared/mobile-web-bundle/mobile-web-bundle-capability'
 
-// The resolver caches per process and the aggregated suite shares that process, so each case
-// installs its own root and hands the cache back the way it found it.
+// The aggregate shares this process cache; each fixture must restore it.
 function statusCapabilitiesForInstall(appPath: string): readonly string[] {
   resetBundledMobileWebBundleCacheForTests()
   installMobileWebBundleAppPath(appPath)
   const { capabilities } = createRuntime().getStatus()
   if (!capabilities) {
-    // A status carrying no list at all would let every absence assertion below pass vacuously.
+    // A missing capability list would make absence assertions pass vacuously.
     throw new Error('status.get answered no capability list')
   }
   return capabilities
@@ -37,8 +36,6 @@ describe('OrcaRuntimeService mobile web bundle capability', () => {
     resetBundledMobileWebBundleCacheForTests()
   })
 
-  // The mixed-version guarantee: a dev tree or an `orca serve` install that never built
-  // out/mobile-web must not promise a bundle it can only refuse.
   it('omits the mobile web bundle capability where the install carries no bundle', () => {
     withInstallRoot('orca-mobile-web-absent-', (install) => {
       expect(statusCapabilitiesForInstall(install)).not.toContain(MOBILE_WEB_BUNDLE_CAPABILITY)
@@ -52,8 +49,6 @@ describe('OrcaRuntimeService mobile web bundle capability', () => {
     })
   })
 
-  // A manifest the contract rejects is the same answer as no bundle, so advertising off the
-  // directory's existence rather than off a parsed manifest would promise a download that errors.
   it('omits the capability where the bundle manifest does not parse', () => {
     withInstallRoot('orca-mobile-web-unparseable-', (install) => {
       const root = join(install, 'out', 'mobile-web')

@@ -137,14 +137,13 @@ export function AddRepoDialogStepContent({
   onPickCreateParent,
   onCreate
 }: AddRepoDialogStepContentProps): React.JSX.Element | null {
-  // Why here: the selected server decides whether its own SSH hosts can hold a new project.
+  // The selected server owns the SSH hosts eligible for project creation.
   const serverSsh = useServerSshProjects(
     activeRuntimeEnvironmentId ?? null,
     selectedHostLabel ?? null,
     onOpenRemoteStep
   )
-  // Why the start step for a remote step without a server: SSH hosts hold projects only through
-  // the paired server that reaches them, so there is nothing to show if that server went away.
+  // Server-owned SSH hosts need their paired server; return to Start if it disappears.
   if (step === 'add' || (step === 'remote' && !serverSsh)) {
     return (
       <AddRepoLocalStartStep

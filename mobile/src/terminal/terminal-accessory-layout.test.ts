@@ -131,8 +131,6 @@ describe('terminal accessory layout', () => {
       )
     ).toEqual({
       version: 2,
-      // Why asserted: 'space' follows its canonical predecessor 'tab' even
-      // though the user moved 'tab' into the middle of the bar.
       orderedBuiltInIds: ['enter', 'tab', 'space', 'escape'],
       visibleBuiltInIds: ['enter', 'space', 'escape']
     })
@@ -283,7 +281,7 @@ describe('terminal accessory layout', () => {
       visibleBuiltInIds: ['enter', 'escape']
     })
 
-    // Why asserted: a stale drag result missing an id must not drop that key.
+    // Stale drag results must not drop missing ids from the layout.
     expect(
       reorderTerminalAccessoryBuiltInIds(layout, ['enter', 'escape'], ['escape', 'tab', 'enter'])
         .orderedBuiltInIds

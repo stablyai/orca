@@ -317,8 +317,7 @@ function applyMissingEnglishEntries(catalog, missing) {
   return changed
 }
 
-// Why: #12113 — parity checks pass while repair-locale-catalog rewrites translated generic terms
-// back to English, so drift only surfaces when someone regenerates the catalog.
+// Check repair policy too: parity passed while repair rewrote translated generic terms into English (#12113).
 export function collectGenericTermRegressions(enEntries, localeEntries, localeName) {
   const renderings = canonicalGenericRenderings(localeName)
   if (renderings.length === 0) {
@@ -358,13 +357,53 @@ function formatGenericTermRegressions(regressions) {
     .join('\n')
 }
 
+// Why: JSON.parse silently keeps the last duplicate key.
+function collectDuplicateCatalogKeys(fileName, text) {
+  const sourceFile = ts.parseJsonText(fileName, text)
+  const duplicates = []
+  const visit = (node, prefix) => {
+    if (!ts.isObjectLiteralExpression(node)) {
+      return
+    }
+    const seen = new Set()
+    for (const property of node.properties) {
+      if (!ts.isPropertyAssignment(property)) {
+        continue
+      }
+      const name = property.name.text
+      const key = prefix ? `${prefix}.${name}` : name
+      if (seen.has(name)) {
+        const { line } = sourceFile.getLineAndCharacterOfPosition(property.getStart(sourceFile))
+        duplicates.push(`${fileName}:${line + 1} ${key}`)
+      }
+      seen.add(name)
+      visit(property.initializer, key)
+    }
+  }
+  for (const statement of sourceFile.statements) {
+    visit(statement.expression, '')
+  }
+  return duplicates
+}
+
+async function readCatalogFile(catalogPath) {
+  const text = await fs.readFile(catalogPath, 'utf8')
+  const duplicates = collectDuplicateCatalogKeys(path.basename(catalogPath), text)
+  if (duplicates.length > 0) {
+    console.error('Localization catalog has duplicate keys; JSON keeps only the last value.')
+    console.error('')
+    console.error(duplicates.map((duplicate) => `- ${duplicate}`).join('\n'))
+    return undefined
+  }
+  return JSON.parse(text)
+}
+
 function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
     collectLocaleParityIssues(enCatalog, localeCatalog)
   const genericTermRegressions = collectGenericTermRegressions(enEntries, localeEntries, localeName)
 
-  // Why: feature PRs own English declarations; absent target leaves deliberately
-  // use i18next's existing English fallback until a localization PR supplies them.
+  // Feature PRs own English declarations; missing target translations use i18next fallback until localization supplies them.
   console.log(
     `${localeName}.json coverage: ${enEntries.size - missingInLocale.length}/${enEntries.size} translated, ${missingInLocale.length} missing.`
   )
@@ -461,8 +500,7 @@ async function reportPluginCatalog(root, catalog, pluginCatalogPath) {
   if (interpolationMismatches.length > 0) {
     console.log(formatMissingKeys('interpolation mismatch', interpolationMismatches.slice(0, 20)))
   }
-  // Why: absent plugin translations safely fall back to English, but a present
-  // value with different variables can render broken or misleading UI.
+  // Missing plugin translation can fall back; mismatched variables in present value can mislead or break UI.
   return interpolationMismatches.length > 0 ? 1 : 0
 }
 
@@ -489,7 +527,10 @@ export async function main(
 ) {
   const localesDir = path.join(root, LOCALES_RELATIVE_DIR)
   const catalogPath = path.join(localesDir, 'en.json')
-  const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'))
+  const catalog = await readCatalogFile(catalogPath)
+  if (catalog === undefined) {
+    return 1
+  }
   const pluginCatalogs = options.pluginCatalogs ?? []
   if (pluginCatalogs.length > 0) {
     if (options.fix) {
@@ -565,8 +606,8 @@ export async function main(
   for (const fileName of localeFiles) {
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
-    const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
-    if (reportDottedCatalogKeys(fileName, localeCatalog) !== 0) {
+    const localeCatalog = await readCatalogFile(localeCatalogPath)
+    if (localeCatalog === undefined || reportDottedCatalogKeys(fileName, localeCatalog) !== 0) {
       return 1
     }
     const exitCode = verifyLocaleCatalog(catalog, localeName, localeCatalog)

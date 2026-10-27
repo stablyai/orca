@@ -22,10 +22,7 @@ function hostScopedPortHostKey(host: HostScopedPortHost): string {
   return JSON.stringify([host.route.target, host.executionHostId, host.worktreeId])
 }
 
-/**
- * Ports on an SSH host, scanned and stopped only through the endpoint that owns it. No browser
- * open: a URL opened here would reach this client's machine, not the SSH host.
- */
+/** Scan/stop SSH ports through their owner; opening URLs here would reach the client instead of that host. */
 export function HostScopedPortsPanel({
   host,
   isVisible
@@ -35,7 +32,7 @@ export function HostScopedPortsPanel({
   isVisible: boolean
 }): React.JSX.Element {
   const hostKey = hostScopedPortHostKey(host)
-  // Why keyed: a scan that lands after the workspace switched hosts must never show as this host's.
+  // Key scan results so a late response cannot appear under a newly selected host.
   const [scanned, setScanned] = useState<{ key: string; scan: WorkspacePortHostScanResult } | null>(
     null
   )

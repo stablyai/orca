@@ -13,7 +13,7 @@ import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
-import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { syncPreviewTerminalLigatures } from '@/components/dashboard-popout/preview-terminal-ligatures'
 import {
   buildPreviewAppearanceOptions,
@@ -316,8 +316,7 @@ export function PlainSshTerminalView({
 
   // Why the theme's background: fit leaves a remainder of pixels beside the grid that must not show the card.
   const themeBackground = resolveThemeColors(settings, systemPrefersDark).theme?.background
-  // A translucent theme is painted once by xterm already; painting it again would darken the grid.
-  // Same test as xterm's allowTransparency (preview-terminal-options), not the rgba form opacity 1 also takes.
+  // Avoid double-painting xterm transparency; use allowTransparency’s setting test because rgba can still be opaque.
   const translucent =
     settings?.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
   const background = translucent ? undefined : themeBackground

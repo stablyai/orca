@@ -140,9 +140,7 @@ export function BrowserPageToolbar({
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),
-        // Why the fallbacks: guest history cannot survive a conversion (the guest was replaced),
-        // so once it runs out Back returns across the conversion — and Forward re-crosses it —
-        // instead of going dead.
+        // Guest replacement loses history; Back/Forward cross the conversion once guest history runs out.
         goBack: () => {
           if (canGoBack) {
             webviewRef.current?.goBack()
@@ -244,7 +242,6 @@ export function BrowserPageToolbar({
         ),
         disabled: !externalUrl
       }}
-      // oxlint-disable-next-line react-doctor/no-unstable-nested-components -- BrowserChromeToolbar calls this as a function, so BrowserToolbarMenu stays one stable component.
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
           currentProfileId={sessionProfileId}

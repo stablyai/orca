@@ -70,8 +70,7 @@ describe('the worktree-list route that hands off to the shell', () => {
   })
 
   it('refuses a dot-segment host id instead of handing over a route the page refuses', async () => {
-    // `encodeURIComponent` leaves a dot alone and `%2e%2e` is a dot segment to the URL parser too,
-    // so this one cannot be encoded into a pathname the bridge accepts.
+    // Neither encodeURIComponent nor escaped dots can make a dot segment acceptable to the bridge.
     for (const hostId of ['..', '.']) {
       dependencies.hostId = hostId
       dependencies.pathnames.length = 0
@@ -84,9 +83,7 @@ describe('the worktree-list route that hands off to the shell', () => {
   })
 
   it('opens the first of a repeated host id, never the pair joined into one', async () => {
-    // Expo Router answers a repeated key with an array. Interpolated, `String(['a','b'])` is
-    // `a,b` and `encodeURIComponent` makes that the single segment `a%2Cb`, which the bridge's
-    // segment rule accepts — so the shell would open a page for a host nobody has.
+    // Use firstParam for repeated Expo keys; encoding the array as a,b otherwise invents one valid but nonexistent host segment.
     dependencies.hostId = ['host-1', 'host-2']
     await renderRoute()
     expect(dependencies.pathnames).toEqual(['/h/host-1'])

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE } from '../../../src/shared/native-chat-visual-directive'
+import { NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { parseMobileMarkdownTree, plainText } from './mobile-markdown-tree'
 import {
   mobileMarkdownVisualPlaceholderIndex,

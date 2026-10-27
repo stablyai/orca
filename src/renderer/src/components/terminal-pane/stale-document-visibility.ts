@@ -1,12 +1,4 @@
-// Chromium's macOS window-occlusion tracker can wedge document.visibilityState
-// at 'hidden' after display sleep, never firing another visibilitychange. Real
-// user input reaching this window while the document claims hidden is a
-// physical contradiction — keystrokes and clicks only reach a focused,
-// on-screen window. This module latches that proof so terminal delivery can
-// treat the document as visible until the next genuine visibilitychange
-// restores trust in the occlusion tracker. Without it, the hidden-delivery
-// gate stays latched for panes the user is looking at and main drops their
-// bytes indefinitely (field: 78MB dropped on 2 visible ptys, v1.4.124-rc.2.perf).
+// After macOS display sleep, Chromium can stay hidden without visibilitychange; real input overrides that stale state until the tracker changes again, preventing visible PTYs from losing delivery.
 
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 
@@ -46,8 +38,7 @@ function onDocumentVisibilityChange(): void {
     state: document.visibilityState,
     clearedStaleOverride: visibilityProvenStale
   })
-  // A genuine visibilitychange means the occlusion tracker is reporting
-  // again — hand authority back to document.visibilityState.
+  // A genuine visibilitychange restores tracker authority.
   visibilityProvenStale = false
 }
 
@@ -61,8 +52,7 @@ function installGlobalListeners(): void {
     return
   }
   globalListenersInstalled = true
-  // Capture phase so no stopPropagation in the app can hide the proof; the
-  // handler is a single property read when visibility is healthy.
+  // Capture input before app stopPropagation can hide the visibility evidence.
   document.addEventListener('keydown', onUserInteractionWithDocument, {
     capture: true,
     passive: true
@@ -86,9 +76,7 @@ function removeGlobalListeners(): void {
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
 }
 
-// The listener runs when staleness is first proven; register the same handler
-// used for document visibilitychange so recovery reuses the pane's existing
-// gate-resync + hidden-output-restore path.
+// Reuse each pane’s visibilitychange recovery for gate resync and hidden-output restore.
 export function registerStaleDocumentVisibilityRecovery(
   listener: StaleVisibilityRecoveryListener
 ): () => void {

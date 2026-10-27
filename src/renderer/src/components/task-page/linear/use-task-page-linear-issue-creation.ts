@@ -107,7 +107,6 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
       setLinearRefreshNonce((n) => n + 1)
       useAppStore.getState().recordFeatureInteraction('linear-tasks')
 
-      // Why: auto-select the new issue so the user sees exactly what was filed (mirrors the GitHub create-issue flow).
       void linearGetIssue(
         linearTaskSourceContext ?? defaultScopeSource(settings),
         result.id,

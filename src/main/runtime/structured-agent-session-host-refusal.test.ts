@@ -1,5 +1,4 @@
-// A process whose chat journal will not open refuses every chat, leaves the file alone, and
-// otherwise starts as usual: terminals, tabs and session history go on without a host.
+// Journal-open refusal leaves the file intact and other runtime work available.
 
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -80,8 +79,6 @@ afterEach(async () => {
 })
 
 describe('a process whose journal will not open', () => {
-  // T-corrupt-open: the error surfaces, every chat says it cannot be loaded, and nothing is
-  // renamed, deleted or rebuilt.
   it('refuses every chat and leaves a damaged file exactly as it is', async () => {
     const path = journalDatabasePath(root)
     await writeFile(path, 'not a database '.repeat(512))
@@ -99,14 +96,11 @@ describe('a process whose journal will not open', () => {
     expect(existsSync(`${path}-wal`)).toBe(false)
     expect(existsSync(`${path}-shm`)).toBe(false)
 
-    // Once a person moves the file aside, the next request installs.
     await unlink(path)
     await expect(install()).resolves.toBeDefined()
     expect(gateRefusal).toThrow('the gate admitted the request')
   })
 
-  // A database from an unreleased build of this change: never migrated or renamed, so it reads as
-  // damage, and the log says where it is and what to do.
   it('refuses a database an unreleased build wrote as unusable, and says to move it aside', async () => {
     const path = journalDatabasePath(root)
     const earlier = new Database(path)
@@ -132,8 +126,6 @@ describe('a process whose journal will not open', () => {
     expect(await digest(path)).toBe(before)
   })
 
-  // T5: a newer build's database is not refused: the host installs over it read-only, so chats
-  // stay visible, and the file is left byte-identical.
   it('installs over a database a newer Orca wrote, and leaves it byte-identical', async () => {
     const path = journalDatabasePath(root)
     const seeded = new Database(path)
@@ -156,7 +148,6 @@ describe('logging a journal that will not open', () => {
     await writeFile(path, 'not a database '.repeat(512))
   }
 
-  // Every chat request retries the open; the same failure each time is one log, not one per request.
   it('logs a repeated failure once, with its stack, and again after an open succeeds', async () => {
     await install()
     await stopStructuredAgentSessionRuntime()
@@ -185,8 +176,6 @@ describe('logging a journal that will not open', () => {
   })
 })
 
-// A refused host is a no-host state for startup: the app restores terminals and tabs as usual,
-// and only structured requests are refused.
 describe('startup and other non-chat work without a structured host', () => {
   function startupRuntime(ensureHost: () => Promise<unknown> = install) {
     const runtime = new OrcaRuntimeService()
@@ -237,8 +226,7 @@ describe('startup and other non-chat work without a structured host', () => {
     })
   })
 
-  // The inventory must say "cannot tell", never "no chats": a client culls what an answer omits,
-  // and the desktop then saves its chat tabs away.
+  // An unverifiable inventory must be marked: clients cull omitted chats and persist the resulting tab list.
   describe('the session-tabs inventory', () => {
     /** The worktree's frame as the renderer's own graph publication leaves it: no chat rows. */
     const WORKTREE_FRAME: RuntimeMobileSessionTabsResult = {
@@ -318,7 +306,7 @@ describe('startup and other non-chat work without a structured host', () => {
       expect(getStructuredAgentSessionHost()).not.toBeNull()
     })
 
-    // Subscribers still hold the frames that said "cannot tell"; the restore that can tell pushes.
+    // Subscribers still hold unverifiable frames, so a successful restore must publish the recovered inventory.
     it('pushes the chats without the mark once a later list has a host', async () => {
       await writeJunkJournal()
       vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -328,7 +316,6 @@ describe('startup and other non-chat work without a structured host', () => {
       const pushed: RuntimeMobileSessionTabsResult[] = []
       const unsubscribe = runtime.onMobileSessionTabsChanged((frame) => pushed.push(frame))
 
-      // Once a person moves the file aside, a chat request installs the host.
       await unlink(journalDatabasePath(root))
       const host = await install()
       vi.spyOn(host, 'listSessionTabs').mockReturnValue([

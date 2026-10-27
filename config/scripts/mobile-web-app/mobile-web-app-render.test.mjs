@@ -17,18 +17,13 @@ import {
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
-// Why a real browser: the route tree is handed to expo-router's own ExpoRoot through a synthesized
-// RequireContext. Nothing short of mounting it proves that object is the shape ExpoRoot reads.
+// Mount real ExpoRoot: only rendering proves synthesized RequireContext has expected shape.
 const HOST_ROUTE = '/h/render-check-host'
-/** The pattern `init.pageRoutes` names, which is what the page matches a navigation against. */
 const HOST_ROUTE_PATTERN = '/h/[hostId]'
 
-// What the double answers `ready` with. Asserted on the document, so a page that mounted against
-// some other session, or against none, fails here rather than on a phone.
 const SHELL_SESSION_ID = 'render-check-session'
 const SHELL_BUILD_ID = 'render-check-build'
-// The host the shell opened the page for. Without it `expo-secure-store` is {} on web and the list
-// paints "Host not found" over a host that is right there.
+// Install init host: web expo-secure-store is empty, otherwise valid host paints Host not found.
 const SHELL_HOST = {
   id: 'render-check-host',
   name: 'Render Check Host',
@@ -36,8 +31,7 @@ const SHELL_HOST = {
   lastConnected: 1
 }
 
-// The sharded `test` job does not install mobile dependencies, so the page cannot be built there.
-// The CSP suite below needs none of them and still runs. pr.yml's mobile_web_app job runs both.
+// Root shards lack mobile dependencies; browser bundling runs in mobile_web_app, while CSP tests run in both.
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip
 
@@ -50,20 +44,11 @@ let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
 
-/**
- * Chunk paths the server answers with a module that throws on evaluation.
- *
- * The one way to reproduce the failure the boundary exists for: a route chunk that never arrives
- * intact. Building a second bundle around a throwing route would test a synthetic tree; poisoning
- * one file of the real bundle keeps everything else exactly what ships.
- */
+// Poison real route chunk to test boundary without substituting a synthetic route tree.
 const poisonedChunks = new Set()
 const POISON_MESSAGE = 'render check poisoned this route chunk'
 
-/**
- * Chunk paths the server holds until the check lets them go, so "the chunk has not arrived" is a
- * state the check controls rather than a window it has to win a race against.
- */
+// Hold chunks until released so pending-load assertions do not depend on winning a network race.
 const heldChunks = new Map()
 let paintName = null
 
@@ -79,9 +64,7 @@ beforeAll(async () => {
   const built = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
   const { outDir } = built
   routeChunks = built.routeChunks
-  // The real bytes with a throw in front: the module still links, so the importer resolves
-  // every export it asked for and then evaluation throws. A body replaced outright fails at
-  // link instead, which is a different failure from the one the boundary is here for.
+  // Prepend throw to retain exports/linking; replacing body would test link failure rather than evaluation failure.
   const served = await createBundleServer({
     outDir,
     cspHeader,
@@ -105,8 +88,7 @@ beforeAll(async () => {
   })
   server = served.server
   origin = served.origin
-  // CI runs this against the runner's Google Chrome rather than paying for a browser download,
-  // the same reason and the same override shape as the orcad browser-provider job.
+  // Use runner Chrome override to avoid CI browser downloads.
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
   browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
 }, 180_000)
@@ -119,18 +101,10 @@ afterAll(async () => {
   }
 })
 
-// expo-router's Unmatched screen mounts cleanly and paints text, so "no errors, some html" stays
-// green with every host route unreachable. Each route below names content only it can produce.
+// Require route-specific content; Expo Unmatched also paints text without errors.
 const UNMATCHED = 'Unmatched Route'
 
-/**
- * A page with every signal the checks below read: uncaught errors, console errors, and the script
- * paths the browser actually fetched. The last one is how a client-side navigation proves it
- * pulled the next route's chunk rather than painting out of what the entry already had.
- *
- * No `shellRoute` installs no double at all, which is the page that never mounts; a null one
- * installs a shell that named no screen.
- */
+// Observe fetched scripts as proof navigation loads next chunk; undefined shellRoute omits double, null installs shell without screen.
 async function openPage({
   shellRoute,
   shellHost = SHELL_HOST,
@@ -140,8 +114,7 @@ async function openPage({
 } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   if (shellRoute !== undefined) {
-    // At document start, where the native shell installs the real channel: the entry reads it
-    // while its own script runs, so a channel added after `load` would already be too late.
+    // Install channel at document start like native shell; entry reads it before load.
     await page.addInitScript(installShellDouble, {
       version: bridgeVersion,
       sessionId: SHELL_SESSION_ID,
@@ -157,10 +130,8 @@ async function openPage({
   const errors = []
   const scripts = []
   let reportUncaught = () => {}
-  // An uncaught error from the entry means nothing will ever mount. Racing it against the wait
-  // reports that error in a second instead of a 30s timeout that names nothing -- which is what a
-  // native-only route module, throwing at import before React runs, looks like from here.
-  // Resolved rather than rejected: this one settles during goto, before anything awaits it.
+  // Race mount wait with entry errors to report native-only import failures without 30s timeout.
+  // Resolve rather than reject: error can settle during goto before any waiter attaches.
   const uncaught = new Promise((resolve) => {
     reportUncaught = resolve
   })
@@ -182,12 +153,7 @@ async function openPage({
   return { page, errors, scripts, uncaught }
 }
 
-/**
- * Wait for the entry to mount and then for the route's own content, polled rather than read once:
- * the route manifest defers every screen behind `import()`, so the entry's `mounted` signal lands
- * while the route's chunk is still being fetched and the body is briefly empty. Waiting for the
- * string the caller is about to assert is what makes the check about the route and not the timing.
- */
+// Wait for route-specific content after mounted: deferred route chunk can still leave suspense body empty.
 async function waitForRoute({ page, errors, uncaught }, route, awaitText) {
   const named = (cause, what) =>
     new Error(`${route} ${what}: ${errors.join(' | ') || 'no page or console error'}`, { cause })
@@ -199,10 +165,7 @@ async function waitForRoute({ page, errors, uncaught }, route, awaitText) {
       ),
       uncaught
     ])
-  // The entry's own signal, not "#root has children": an error boundary or a half-painted tree
-  // also fills #root, and this only lands once expo-router's tree below the wrapper has committed.
-  // Polled on a timer rather than Playwright's default animation frames, which a page that never
-  // paints never delivers.
+  // Require committed Expo tree signal; root children can be an error/fallback. Timer polling works even when page never paints rAF.
   const cause = await race(
     page.waitForFunction(() => document.documentElement.dataset.orcaWebEntry === 'mounted', {
       timeout: 30_000,
@@ -224,35 +187,27 @@ async function waitForRoute({ page, errors, uncaught }, route, awaitText) {
   if (paintCause) {
     throw named(paintCause, `mounted but never painted ${JSON.stringify(awaitText)}`)
   }
-  // Folded into the errors the caller already asserts empty: a throw the boundary caught paints
-  // nothing and logs nothing a `pageerror` listener hears, so this is the only place it shows up.
+  // Fold boundary faults into asserted errors: caught throws emit no pageerror and may leave blank body.
   for (const fault of await page.evaluate(() => globalThis.__orcaRenderCheckFaults ?? [])) {
     errors.push(`page fault: ${fault}`)
   }
 }
 
-/**
- * Opens the document the way the shell does — at `/`, the one path it serves — and lets the page
- * route itself from what the double names. Navigating straight to the route would hide exactly the
- * step this check exists to prove.
- */
+// Open / as shell does, then route from init; direct route navigation would hide entry routing bugs.
 async function render(route, awaitText, { shellRoute = { pathname: route }, ...shell } = {}) {
   const opened = await openPage({ shellRoute, ...shell })
   await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
   await waitForRoute(opened, route, awaitText)
   const text = await opened.page.evaluate(() => document.body.innerText)
-  // What the page believes it is: read off the document rather than off the double, so a tree that
-  // mounted without a session, or against a session it invented, is not a passing render.
+  // Read page’s session identity to catch mounting without shell’s session or inventing one.
   const session = await opened.page.evaluate(() => ({
     sessionId: document.documentElement.dataset.orcaWebSessionId ?? null,
     buildId: document.documentElement.dataset.orcaWebBuildId ?? null
   }))
-  // The document is served at "/" and the page rewrites its own path before it renders; without
-  // that, every route below would be expo-router's Unmatched screen.
+  // Require rewrite from / before render or every host route resolves to Unmatched.
   const url = await opened.page.evaluate(() => location.pathname + location.search)
   await opened.page.close()
-  // A CSP refusal reaches the page as a console error, so the caller's empty-errors assertion is
-  // also the policy assertion; name it here so a failure says which one broke.
+  // Name CSP refusals within asserted console errors for useful diagnostics.
   return {
     errors: opened.errors,
     cspErrors: opened.errors.filter((entry) => entry.includes('Content Security Policy')),
@@ -262,7 +217,6 @@ async function render(route, awaitText, { shellRoute = { pathname: route }, ...s
   }
 }
 
-/** How many frames the double has heard under the paint name, which is what uncovers the view. */
 const paintReports = (page, name) =>
   page.evaluate(
     (paint) =>
@@ -270,11 +224,9 @@ const paintReports = (page, name) =>
     name
   )
 
-/** The entry's state and what it painted, for a page that is never going to mount a route tree. */
 async function renderWithoutTree({ shellRoute } = {}) {
   const { page, errors } = await openPage({ shellRoute })
-  // Read straight after `load` and not polled: the entry decides this synchronously, inside the
-  // script `load` waits for, so a state that is not settled by now is never going to settle.
+  // Read immediately after load: entry decides synchronously, so further polling would hide an unsettled decision.
   await page.goto(`${origin}/`, { waitUntil: 'load' })
   const entry = await page.evaluate(() => document.documentElement.dataset.orcaWebEntry ?? 'absent')
   const rootChildren = await page.evaluate(() => document.getElementById('root').childElementCount)
@@ -337,25 +289,18 @@ describe('the shell policy this page is tested under', () => {
     expect(cspHeader.split('; ').filter((entry) => entry.includes('https:'))).toEqual([
       "img-src 'self' data: blob: https:"
     ])
-    // `http:` is not a substring of `https:`, so this still refuses a cleartext source.
     expect(cspHeader).not.toContain('http:')
   })
 })
 
-/** A 1x1 PNG: the smallest payload that proves an image decoded rather than merely being allowed. */
+// 1×1 PNG proves decoding, not merely policy admission.
 const DATA_URI_IMAGE =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
 describeRender('an image preview under the shell policy', () => {
   it('decodes a data: URI, which is the only shape a file preview has', async () => {
-    // What a preview actually is: normalizeMobileFilePreviewResult composes
-    // `data:<mime>;base64,<content>` out of a reply the page already holds and hands it to React
-    // Native Web's Image, which paints it as a CSS background. The `new Image()` below is not a
-    // stand-in for that: react-native-web 0.21.2 loads through `ImageLoader.load`, which is
-    // `new window.Image()` with `onload`/`onerror` on it, and the hidden <img> the component also
-    // renders carries neither — it is there for the browser's image context menu and for
-    // `getBackgroundSize()`. So this is the same mechanism the screen's own load runs through, and
-    // its failure is what turns the screen into "Unable to load preview".
+    // Match RN-Web ImageLoader’s new Image/onload path for data:<mime>;base64 preview URLs.
+    // Component’s hidden img lacks load/error handlers and serves context menu/getBackgroundSize, so it cannot prove preview load succeeds.
     const { page, errors } = await openPage()
     await page.goto(`${origin}/`, { waitUntil: 'load' })
     const naturalWidth = await page.evaluate(
@@ -378,8 +323,7 @@ describeRender('an image preview under the shell policy', () => {
 
 describeRender('the page server this check runs against', () => {
   it('404s a file path the bundle does not contain', async () => {
-    // Without this the document answers every path, and a publicPath the script cannot fetch
-    // from still renders, because the script is fetched from the one prefix that is served.
+    // Restrict served prefix or catch-all server would hide unusable script publicPath.
     expect((await fetch(`${origin}/wrong-prefix/entry.js`)).status).toBe(404)
     expect((await fetch(`${origin}/assets/not-a-real-hash.js`)).status).toBe(404)
   })
@@ -402,12 +346,8 @@ describeRender('the Route A page in a real browser', () => {
     const { errors, cspErrors, text, session, url } = await render(HOST_ROUTE, SHELL_HOST.name)
     expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
-    // The tree that mounted is the one the shell handed a session to, and it says which.
     expect(session).toEqual({ sessionId: SHELL_SESSION_ID, buildId: SHELL_BUILD_ID })
-    // The document was served at `/`; the page put itself on the route the shell named.
     expect(url).toBe(HOST_ROUTE)
-    // The host the shell named, read through host-store.web.ts off `init.host`. Only that route's
-    // own component names the host; "Host not found" is what it paints without one.
     expect(text).toContain(SHELL_HOST.name)
     expect(text).not.toContain('Host not found')
     expect(text).not.toContain(UNMATCHED)
@@ -418,8 +358,7 @@ describeRender('the Route A page in a real browser', () => {
     await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
     await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
     const layout = await opened.page.evaluate(() => {
-      // The one control this route paints with no RPC answered. Positioned against the bottom of
-      // the root, so it is also the element a collapsed root moves furthest.
+      // No-RPC control at root bottom moves furthest if layout collapses.
       const fab = [...document.querySelectorAll('[role="button"]')].find(
         (element) => element.getAttribute('aria-label') === 'New workspace'
       )
@@ -438,14 +377,11 @@ describeRender('the Route A page in a real browser', () => {
     })
     await opened.page.close()
     expect(opened.errors).toEqual([])
-    // Nothing else here can see a collapsed root: the tree mounts, the text is in the DOM, and
-    // every assertion on `innerText` passes while the phone paints a blank list under the header.
-    // A height is the only thing that says the screen is on the screen.
+    // Measure height: mounted text/innerText can pass while collapsed root paints blank phone screen.
     expect(layout.rootHeight).toBe(layout.viewportHeight)
     expect(layout.fabTop).toBeGreaterThan(0)
     expect(layout.fabBottom).toBeLessThanOrEqual(layout.viewportHeight)
-    // Laid out is not reachable. A row inside a scroller the collapse clipped keeps its rect and
-    // takes no taps, which is what both phones found before this file could say so.
+    // Require reachable tap: clipped scroller rows retain layout rects.
     expect(layout.reachesTheControl).toBe(true)
   }, 60_000)
 
@@ -454,16 +390,12 @@ describeRender('the Route A page in a real browser', () => {
     expect(cspErrors).toEqual([])
     expect(errors).toEqual([])
     expect(session.sessionId).toBe(SHELL_SESSION_ID)
-    // app/h/[hostId]/tasks.tsx paints its header and its GitHub filter row.
     expect(text).toContain('Tasks')
     expect(text).toContain('Issues')
     expect(text).not.toContain(UNMATCHED)
   }, 60_000)
 
-  // Both files routes reach OrcaMobileWebShellView from their native file, whose module calls
-  // requireNativeViewManager at import and throws in a browser. The manifest defers every route
-  // behind `import()`, so that throw is invisible until the page opens this route — which is why
-  // it needs a `.web.tsx` sibling and why proving it costs a render of the route itself.
+  // Native files routes throw requireNativeViewManager at import; deferred import hides this until actual route opens, requiring web siblings.
   it('mounts the file explorer, which its native route module cannot do', async () => {
     const worktreeRoute = `${HOST_ROUTE}/files/worktree-a`
     const { errors, cspErrors, text } = await render(worktreeRoute, 'Files', {
@@ -485,28 +417,17 @@ describeRender('the Route A page in a real browser', () => {
       }
     })
     expect(cspErrors).toEqual([])
-    // Empty, and that is the point: React Native Web's BackHandler logs "not supported on web" for
-    // anyone who registers one, so this line is what proves the screen no longer does. Android back
-    // inside the page therefore pops the native stack without the unsaved-draft prompt, which lives
-    // on the page's own Back control.
+    // Require no unsupported RN-Web BackHandler registration; Android hardware Back pops native stack while page Back owns unsaved-draft prompt.
     expect(errors).toEqual([])
-    // The title is the last segment of the path param, so this says the param reached the screen
-    // with its last segment intact; `readme.md` is what a truncated or re-split path would also
-    // end in. The url assertion below pins the outbound leg — what the page encoded into its own
-    // history, `/` and space included — and no more: a screen that mis-decoded the middle of the
-    // path would satisfy both lines. The decode leg is proved where it can be read directly, in
-    // `mobile/src/files/mobile-file-path-route-encoding.test.ts`, which takes each hazard shape
-    // back out of the href, and `mobile/src/files/mobile-file-preview-route.test.ts`, which drives
-    // the normalizer the screen reads its params through.
+    // Title proves final path segment only; URL checks outbound encoding, not middle-segment decoding.
+    // Decode hazards are covered by mobile-file-path-route-encoding.test.ts and mobile-file-preview-route.test.ts.
     expect(text).toContain('readme.md')
     expect(url).toBe(`${previewRoute}?relativePath=docs%2Fmy+notes%2Freadme.md&source=worktree`)
     expect(text).not.toContain(UNMATCHED)
   }, 60_000)
 
   it('refuses a host-scoped path with no module rather than crashing', async () => {
-    // The catch-all owns every `/h/<id>/...` pathname the tree has no file for, so this no longer
-    // reaches expo-router's Unmatched: the refusal is what the page paints instead. Both halves are
-    // asserted, so the negative is known to discriminate rather than to pass on a blank screen.
+    // Catch-all host route must paint refusal and avoid Unmatched; both assertions distinguish refusal from blank screen.
     const refusal = 'This workspace screen is not available on this host.'
     const { errors, cspErrors, text } = await render(`${HOST_ROUTE}/not-a-route`, refusal)
     expect(cspErrors).toEqual([])
@@ -531,7 +452,7 @@ describeRender('the Route A page in a real browser', () => {
   }, 60_000)
 
   it('mounts nothing at all when no shell answered, which is what makes the rest real', async () => {
-    // Without this the checks above would pass against a page that ignores `init` entirely.
+    // Control catches pages ignoring init entirely.
     const { entry, errors, rootChildren } = await renderWithoutTree()
     expect(entry).toBe('unbridged')
     expect(rootChildren).toBe(0)
@@ -543,7 +464,7 @@ describeRender('the Route A page in a real browser', () => {
     expect(entry).toBe('shell-too-old')
     expect(errors).toEqual([])
     expect(text).toContain('Update Orca to open this workspace')
-    // Never the route tree at `/`: that is the Unmatched screen with a worse explanation.
+    // Missing route must not mount Unmatched tree at /.
     expect(text).not.toContain(UNMATCHED)
     expect(url).toBe('/')
   }, 60_000)
@@ -564,12 +485,9 @@ describeRender('the Route A page in a real browser', () => {
           { timeout: 30_000, polling: 250 }
         )
         .then((handle) => handle.jsonValue())
-      // The message the poisoned module threw, carried across the bridge as the shell sees it. A
-      // boundary that caught the throw and reported something else would pass an "any fault" check.
+      // Require poisoned module’s exact error; any-fault check could pass with wrong boundary report.
       expect(reported.join(' | ')).toContain(POISON_MESSAGE)
-      // And the screen never painted. The router's own shell commits before the deferred chunk
-      // rejects, so the entry does reach `mounted`; what the boundary takes away is everything
-      // below it, which is the difference between a reported failure and a blank page nobody hears.
+      // Router shell commits mounted before deferred rejection; require boundary removes screen beneath it.
       const text = await opened.page.evaluate(() => document.body.innerText)
       expect(text).not.toContain('Host not found')
       expect(text).not.toContain(UNMATCHED)
@@ -580,8 +498,7 @@ describeRender('the Route A page in a real browser', () => {
   }, 60_000)
 
   it('reports its frame from the route screen, not from the router shell above it', async () => {
-    // The gap the shell's cover exists for. The entry's wrapper commits against the suspense
-    // fallback of a chunk still in flight, so a report hung there uncovers an empty body.
+    // Suspense wrapper commits before route chunk arrives; reporting paint there would uncover empty body.
     const chunk = routeChunks['./h/[hostId]/index.tsx']
     expect(chunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
     const path = `/assets/${chunk}`
@@ -599,8 +516,7 @@ describeRender('the Route A page in a real browser', () => {
         () => document.documentElement.dataset.orcaWebEntry === 'mounted',
         { timeout: 30_000, polling: 250 }
       )
-      // Mounted, and nothing drawn: the body is the fallback's, which is what the old seam
-      // reported on.
+      // Mounted with empty fallback body reproduces premature paint signal.
       expect(await opened.page.evaluate(() => document.body.innerText)).not.toContain(
         SHELL_HOST.name
       )
@@ -625,8 +541,7 @@ describeRender('the Route A page in a real browser', () => {
   }, 120_000)
 
   it('says nothing for a redirect screen whose target is still behind its chunk', async () => {
-    // The `pr` route renders a `Redirect` into the source-control hub and nothing else. It commits,
-    // sends the document on, and stays mounted behind the target's fallback while that chunk loads.
+    // PR redirect remains mounted behind destination’s pending chunk; its own commit must not report screen paint.
     const target = routeChunks['./h/[hostId]/source-control/[worktreeId].tsx']
     expect(target, Object.keys(routeChunks).join(' ')).toBeTruthy()
     const path = `/assets/${target}`
@@ -649,7 +564,7 @@ describeRender('the Route A page in a real browser', () => {
         undefined,
         { timeout: 30_000, polling: 250 }
       )
-      // The router has moved on and the hub is still arriving, so the document is showing nothing.
+      // Router has moved but pending hub chunk still leaves document empty.
       await waitForPageFrames(opened.page)
       expect(await paintReports(opened.page, paintName)).toBe(0)
 
@@ -669,30 +584,22 @@ describeRender('the Route A page in a real browser', () => {
   }, 120_000)
 
   it('refuses a target the shell will not take, rather than opening it in the page', async () => {
-    // The double grants only `fault`, so `notifyNavigate` answers false -- the shell-disposed and
-    // older-shell cases reach the page the same way. Before C5.1 this left the host route and
-    // painted Unmatched; the bundle carries every route under app/h, so for a target like
-    // `session/[worktreeId]` the same fallback mounts a native-only screen on React Native Web.
+    // Fault-only grant makes notifyNavigate refuse like disposed/older shell; local fallback once mounted Unmatched or native-only session route.
     const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
     const { page, errors } = opened
     await page.goto(`${origin}/`, { waitUntil: 'load' })
     await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
-    // The one labelled control on this screen that leaves the page: `leaveHostRoute` dismisses to
-    // `/`, which is a native route and never one the page serves.
     await page.getByLabel('Back to hosts').click()
-    // Nothing to wait for but the absence of a navigation, so settle the microtask the handoff
-    // would have posted on and then read the page that is still there.
+    // Settle handoff microtask before asserting no navigation.
     await waitForPageFrames(page)
     expect(await page.evaluate(() => location.pathname)).toBe(HOST_ROUTE)
     const text = await page.evaluate(() => document.body.innerText)
     expect(text).toContain(SHELL_HOST.name)
     expect(text).not.toContain(UNMATCHED)
-    // The absence that says refused rather than handed off. A page that stayed put because the
-    // notify crossed and the shell did the pushing looks identical on this document otherwise;
-    // the case below it grants `navigate` and asserts this same frame present.
+    // Require no notify as well as unchanged page; successful shell handoff also leaves document in place.
     const notifies = await page.evaluate(() => globalThis.__orcaRenderCheckNotifies ?? [])
     expect(notifies.filter((frame) => frame.name === 'navigate')).toEqual([])
-    // Not a page fault either: a refused target is the page declining to move, not a throw.
+    // Refused target declines navigation without faulting page.
     expect(await page.evaluate(() => globalThis.__orcaRenderCheckFaults ?? [])).toEqual([])
     expect(errors).toEqual([])
     await page.close()
@@ -704,8 +611,7 @@ describeRender('the Route A page in a real browser', () => {
     await page.goto(`${origin}/`, { waitUntil: 'load' })
     await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
     const loadedForFirstRoute = [...scripts]
-    // What the shell will do in C1.2: the document is fetched once and every later route is a
-    // history entry, so the tasks screen can only arrive as a chunk fetched now.
+    // Shell fetches document once; later route must arrive as a chunk through in-page history navigation.
     await page.evaluate((to) => {
       history.pushState(null, '', to)
       dispatchEvent(new PopStateEvent('popstate'))
@@ -713,9 +619,7 @@ describeRender('the Route A page in a real browser', () => {
     await waitForRoute(opened, `${HOST_ROUTE}/tasks`, 'Issues')
     expect(new URL(page.url()).pathname).toBe(`${HOST_ROUTE}/tasks`)
     const fetchedOnNavigation = scripts.filter((path) => !loadedForFirstRoute.includes(path))
-    // Not "some script arrived": the chunk the builder put the tasks route in, named by the
-    // builder rather than guessed from the bytes, which is the only thing that says the route
-    // came over the wire now and not out of what the first route had already loaded.
+    // Require builder-identified tasks chunk, not any fetched script or code already loaded by entry.
     const tasksChunk = routeChunks['./h/[hostId]/tasks.tsx']
     expect(tasksChunk, Object.keys(routeChunks).join(' ')).toBeTruthy()
     expect(fetchedOnNavigation, scripts.join(' ')).toContain(`/assets/${tasksChunk}`)
@@ -728,30 +632,12 @@ describeRender('the Route A page in a real browser', () => {
   }, 60_000)
 })
 
-/**
- * What `useRouteHandoff().back()` rests on, measured in a browser rather than assumed.
- *
- * The handoff keeps a back this document can serve and hands the rest to the shell, and it asks
- * expo-router's `canGoBack()` which of the two it is holding. That answer is React Navigation's
- * (`expo-router/build/global-state/routing.js` returns `navigationRef.current.canGoBack()`), so it
- * is a fact about a mounted tree in a browser and no unit test can settle it.
- *
- * Read through `router.back()` rather than through `canGoBack()` directly, because the page exposes
- * no handle to call it on and a global added for a test is a surface the shipped page would carry
- * forever. `goBack()` queues React Navigation's `GO_BACK`, which is exactly what `canGoBack()`
- * gates: a Back that moves the page proves the answer was true, one that does not proves it was
- * false. `/h/[hostId]/edit` is the call site — a real route of this tree whose chevron is
- * expo-router's own `back()`, which is what the handoff falls through to.
- *
- * The first case is the presence precondition for the two below it. A tap that moved nothing and a
- * tap that never reached a handler look identical on the document, so one tap on this same screen
- * family is asserted to reach the shell before any absence is read as an answer.
- */
+// Probe mounted React Navigation canGoBack through real route chevron/router.back; page exposes no direct test hook.
+// First prove same-family tap reaches shell, since an inert handler and refused local Back both leave document unchanged.
 describeRender('the stack the page Back button rests on', () => {
   const EDIT_ROUTE = `${HOST_ROUTE}/edit`
   const BACK_ON_EDIT = '[aria-label="Back"]'
 
-  /** Clicks and then lets the router settle; a `GO_BACK` that changes nothing settles too. */
   async function clickAndSettle(page, selector) {
     await page.click(selector)
     await waitForPageFrames(page)
@@ -759,10 +645,7 @@ describeRender('the stack the page Back button rests on', () => {
   }
 
   it('carries a handoff the shell granted across the bridge from a real tap', async () => {
-    // The `navigate` grant is what `navigate-back` rides, and this chevron is the one control in
-    // the page tree that reaches the shell through `useRouteHandoff` today. It proves taps land,
-    // handlers run and a notify crosses — the mechanism `navigate-back` uses, and the reason the
-    // two absences below are evidence rather than silence.
+    // Grant navigate: this chevron proves handler/bridge path used by navigate-back before interpreting absent notifies.
     const opened = await openPage({
       shellRoute: { pathname: HOST_ROUTE },
       shellGrants: [faultGrant, 'navigate'],
@@ -778,8 +661,7 @@ describeRender('the stack the page Back button rests on', () => {
         )
       )
       .toEqual([{ v: bridgeVersion, type: 'notify', name: 'navigate', href: '/' }])
-    // Handed over, not taken: the page stayed where it was rather than routing to a screen it does
-    // not carry, which is what a fallthrough to the local router would have painted.
+    // Require page stays on served route; local fallthrough would mount a screen document cannot serve.
     expect(url).toBe(HOST_ROUTE)
     expect(opened.errors).toEqual([])
     await opened.page.close()
@@ -789,7 +671,6 @@ describeRender('the stack the page Back button rests on', () => {
     const opened = await openPage({ shellRoute: { pathname: EDIT_ROUTE } })
     await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
     await waitForRoute(opened, EDIT_ROUTE, 'Edit host')
-    // One control, so the tap below is known to be this route's chevron and not another screen's.
     expect(await opened.page.locator(BACK_ON_EDIT).count()).toBe(1)
     expect(await clickAndSettle(opened.page, BACK_ON_EDIT)).toBe(EDIT_ROUTE)
     expect(opened.errors).toEqual([])
@@ -797,11 +678,8 @@ describeRender('the stack the page Back button rests on', () => {
   }, 60_000)
 
   it('is given no stack by a location change either, only by a push this page makes itself', async () => {
-    // The entry opens every document with `replaceState`, and a later location change resets the
-    // router's state rather than stacking on it: the same chevron still has nowhere to go with a
-    // second entry in `history`. So `canGoBack()` is false for everything the shell or the browser
-    // can do to this page, and the handoff's local branch belongs to a push the page makes through
-    // `useRouteHandoff` — of which this tree has none today.
+    // Entry replaceState and external location changes reset router instead of stacking it; extra browser history cannot make canGoBack true.
+    // Local Back branch requires an in-page useRouteHandoff push, which this tree currently has none of.
     const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
     await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
     await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
@@ -813,8 +691,7 @@ describeRender('the stack the page Back button rests on', () => {
     await waitForRoute(opened, EDIT_ROUTE, 'Edit host')
     expect(await opened.page.evaluate(() => history.length)).toBe(entriesBefore + 1)
     expect(await clickAndSettle(opened.page, BACK_ON_EDIT)).toBe(EDIT_ROUTE)
-    // This case drives a synthetic `popstate`, so a throw under the fault boundary would leave the
-    // page exactly where the assertion above wants it and read as the absence this claims.
+    // Synthetic popstate faults could leave page unchanged; require no boundary fault to validate absence.
     expect(opened.errors).toEqual([])
     await opened.page.close()
   }, 60_000)

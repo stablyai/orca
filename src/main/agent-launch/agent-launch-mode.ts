@@ -68,7 +68,9 @@ const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  structured_unsupported_on_host: 'the execution host cannot create one here'
+  structured_unsupported_on_host: 'the execution host cannot create one here',
+  chat_runtime_not_installed:
+    "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)"
 }
 
 const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeReason> = {
@@ -82,10 +84,14 @@ const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeRe
   'client-capability': 'structured_sessions_unavailable'
 }
 
-const HOST_SUPPORT_REASON: Record<'agent' | 'remote' | 'wsl', AgentLaunchDowngradeReason> = {
+type HostSupportReason = 'agent' | 'remote' | 'wsl' | 'chat-program'
+type HostLaunchSupport = { supported: boolean; reason?: HostSupportReason }
+
+const HOST_SUPPORT_REASON: Record<HostSupportReason, AgentLaunchDowngradeReason> = {
   agent: 'structured_unsupported_on_host',
   remote: 'remote_execution_host',
-  wsl: 'wsl_execution_runtime'
+  wsl: 'wsl_execution_runtime',
+  'chat-program': 'chat_runtime_not_installed'
 }
 
 /** Apply shared feasibility policy to facts available before resolving the workspace. */
@@ -195,12 +201,15 @@ async function readStructuredCreateSupport(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   worktreeId: string,
   agent: TuiAgent | undefined
-): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null> {
+): Promise<HostLaunchSupport | null> {
   if (!agent || !REGISTERED_STRUCTURED_AGENTS.includes(agent)) {
     return { supported: false, reason: 'agent' }
   }
   try {
-    return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent)
+    // These launches have no chat tab to offer the install, so they keep the agent's own CLI.
+    return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent, {
+      requireInstalledChatProgram: true
+    })
   } catch {
     return null
   }
@@ -208,7 +217,7 @@ async function readStructuredCreateSupport(
 
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
-  support: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null,
+  support: HostLaunchSupport | null,
   vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
   context?: AgentLaunchModeSettlement
 ): AgentLaunchModeReceipt {

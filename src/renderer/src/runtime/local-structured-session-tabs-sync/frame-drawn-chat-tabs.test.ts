@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// Switch-on, this machine's chat listing leaves a frame-drawn workspace's tabs as main drew them
-// and only updates a drawn chat tab's label from the host's title.
+// Local chat listings preserve main-framed tab structure and update only host titles.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'

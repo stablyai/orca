@@ -1,10 +1,6 @@
 name: Windows packaged orcad serve switch E2E
 
-# Why: proves D7 on a real Windows install. The installed desktop app forks its terminal daemon
-# from the relocated %LOCALAPPDATA%\Orca\daemon-host; `orca serve` then serves the same profile
-# on orcad and must adopt that daemon, and the desktop must reattach the terminal afterwards and
-# still write its settings under orcad's data-root ACL. Unpackaged e2e cannot exercise the
-# relocation, which only packaged builds do. A CI runner is the only safe place to install.
+# D7 packaged Windows proof: relocated desktop daemon survives orcad serve adoption and desktop reattach, with settings writes after data-root ACL. Run install only on disposable CI; unpackaged E2E cannot exercise relocation.
 
 on:
   pull_request:

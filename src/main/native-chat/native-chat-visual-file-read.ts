@@ -7,12 +7,12 @@ import { basename, dirname, join } from 'node:path'
 import {
   NATIVE_CHAT_VISUAL_MAX_BYTES,
   isNativeChatVisualFileName
-} from '../../shared/native-chat-visual-directive'
+} from '../../shared/native-chat/native-chat-visual-directive'
 import type {
   AgentSessionReadVisualResult,
   AgentSessionVisualReadError
 } from '../../shared/rpc-contract/agent-session-visual-params'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { readLocalFileBounded } from '../ipc/filesystem/local-regular-file-read'
 
 // O_NOFOLLOW prevents final-component swaps; Windows relies on lstat and post-open identity checks.

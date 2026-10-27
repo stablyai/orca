@@ -1,9 +1,11 @@
-import { AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
-import { useEffect, useState } from 'react'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useAppStore } from '@/store'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
@@ -12,18 +14,54 @@ import {
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   ensureLocalRuntimeCapabilities,
-  readLocalRuntimeCapabilitiesOrUnknown
+  readLocalRuntimeCapabilitiesOrUnknown,
+  subscribeLocalRuntimeCapabilityObservation
 } from './local-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+import {
+  isRuntimeHostContactRevoked,
+  lastVerifiedRuntimeStatus
+} from '../../../shared/runtime-host-status'
 
 export function structuredAgentSessionHostKey(target: RuntimeClientTarget): string {
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-/** `unknown` until the host has answered, and after a failed probe: a failed probe is not
- *  evidence about the host. */
+/** Unknown before verification or after revocation; a contact outage retains the known build. */
 export type StructuredAgentSessionHostCapabilityState = 'unknown' | 'supported' | 'unsupported'
+
+/** Displays the existing host status; connection lifecycle owns probing. */
+export function useStructuredAgentSessionOwnPermissionState(
+  target: RuntimeClientTarget | null
+): StructuredAgentSessionHostCapabilityState {
+  const capability = AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
+  const environmentId = target?.kind === 'environment' ? target.environmentId : null
+  // Select the verdict, not the map: unrelated host flips must not rerender every chat.
+  const remote = useAppStore((state): StructuredAgentSessionHostCapabilityState => {
+    if (environmentId === null) {
+      return 'unknown'
+    }
+    const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
+    const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
+    return status
+      ? status.capabilities?.includes(capability)
+        ? 'supported'
+        : 'unsupported'
+      : 'unknown'
+  })
+  const local = useSyncExternalStore(
+    subscribeLocalRuntimeCapabilityObservation,
+    () => localCapabilityState(capability),
+    () => 'unknown' as const
+  )
+  useEffect(() => {
+    if (target?.kind === 'local') {
+      void ensureLocalRuntimeCapabilities()
+    }
+  }, [target?.kind])
+  return !target ? 'unknown' : environmentId === null ? local : remote
+}
 
 /** Whether the session's host advertises `capability`. A failed probe stays `unknown` and a remote
  *  host is asked again each time this client regains contact with it. */
@@ -158,10 +196,17 @@ export function useStructuredAgentSessionHostEditsQueuedImages(
   )
 }
 
-/** The API runtime owns Chat settings; on web the local API forwards to the active paired host. */
-export function useChatSettingsTypedPermissions(): boolean {
+/** Whether queue order can be changed by message ID on the execution host. */
+export function useStructuredAgentSessionHostReordersQueuedMessages(
+  target: RuntimeClientTarget
+): boolean {
   return useStructuredAgentSessionHostCapability(
-    { kind: 'local' },
-    AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY
+    target,
+    AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY
   )
+}
+
+/** The API runtime owns Chat settings; on web the local API forwards to the active paired host. */
+export function useChatSettingsOwnPermissions(): boolean {
+  return useStructuredAgentSessionOwnPermissionState({ kind: 'local' }) === 'supported'
 }

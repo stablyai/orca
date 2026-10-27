@@ -1,7 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
-import { toast } from 'sonner'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import HostedReviewActions from '../HostedReviewActions'
 import { GitHubPRStackMap } from '../GitHubPRStackMap'
@@ -12,7 +11,7 @@ import { resolveChecksPanelHostedReviewModifierDestination } from '../checks-pan
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control-launch-agent-selection'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
-import { getBrokenChecks } from '../../pr-checks-fix-prompt'
+import { getBrokenChecks } from '../../../../../shared/pr-checks-fix-prompt'
 import { PRTriageStrip } from './triage-strip'
 import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary'
 import { ChecksList } from './checks-list'
@@ -50,7 +49,6 @@ export function ChecksPanelActiveContent({
     commentsLoading,
     commentsSelectionClearRequest,
     conflictDetailsRefreshing,
-    consumeClaimedCommentResolutionAfterDeliveryRef,
     detachedHeadDisplay,
     editingTitle,
     getGitLabProjectRef,
@@ -59,8 +57,6 @@ export function ChecksPanelActiveContent({
     handleDeleteComment,
     handleEditComment,
     handleFixChecksWithAI,
-    handleLaunchAborted,
-    handleLaunchAccepted,
     handleLinkAnotherReview,
     handleLoadCheckDetails,
     handleOpenPR,
@@ -108,7 +104,7 @@ export function ChecksPanelActiveContent({
   )
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
-      {/* Why: surface a background-refresh failure over stale cached PR data so a GitHub outage doesn't look like a normal panel. GitHub-only. */}
+      {/* Show background GitHub failures above cached PR data so outages cannot look like a healthy panel. */}
       {activeReview?.provider === 'github' && prRefreshState?.status === 'error' ? (
         <div
           role="alert"
@@ -117,9 +113,7 @@ export function ChecksPanelActiveContent({
           {getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)}
         </div>
       ) : null}
-      {/* Hosted review header */}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
-        {/* Review number + state badge + refresh + open link */}
         <ChecksPanelReviewHeader
           review={activeReview}
           isRefreshing={isRefreshing}
@@ -141,7 +135,6 @@ export function ChecksPanelActiveContent({
           />
         ) : null}
 
-        {/* Review title */}
         {editingTitle ? (
           <div className="flex items-center gap-1">
             <ImeInput
@@ -185,14 +178,12 @@ export function ChecksPanelActiveContent({
           </div>
         )}
 
-        {/* Updated at */}
         {activeReview.updatedAt && (
           <ChecksPanelUpdatedAtMetadata
             reviewShortLabel={reviewShortLabel}
             updatedAt={activeReview.updatedAt}
           />
         )}
-        {/* Merge / Delete Workspace actions */}
         {activeReview && activeWorktree && repo && (
           <HostedReviewActions
             review={activeReview}
@@ -221,7 +212,7 @@ export function ChecksPanelActiveContent({
       )}
       {activeConflictReview && (
         <>
-          {/* Why: the triage strip owns the single Resolve action; the file list and fallback notice are informational. */}
+          {/* The triage strip owns Resolve; these sections only provide conflict information. */}
           <ConflictingFilesSection pr={activeConflictReview} />
           <MergeConflictNotice
             pr={activeConflictReview}
@@ -229,7 +220,7 @@ export function ChecksPanelActiveContent({
           />
         </>
       )}
-      {/* Why: with merge conflicts and no checks fetched, "No checks configured" is misleading — checks can't run until conflicts resolve. */}
+      {/* Conflicts can prevent checks running; do not claim no checks are configured before resolving them. */}
       {!(activeConflictReview && checks.length === 0 && !checksLoading) && (
         <ChecksList
           checks={checks}
@@ -278,9 +269,7 @@ export function ChecksPanelActiveContent({
         onOpenChange={(open) => {
           if (!open) {
             setAgentComposerState(null)
-            // Why: a launch in flight owns the payload (claimed ref). Any other close —
-            // cancel, or closing after a failed launch — must drop it so the next action
-            // (e.g. fix checks) does not post stale fixing replies.
+            // Keep accepted-launch payloads; other closes must drop them so later actions cannot post stale replies.
             if (!commentResolutionLaunchAcceptedRef.current) {
               pendingCommentResolutionRef.current = null
               claimedCommentResolutionRef.current = null
@@ -332,32 +321,7 @@ export function ChecksPanelActiveContent({
             : null
         }
         onSaveAgentDefault={saveLaunchActionDefault}
-        // Why: claims the ack payload when the tab exists; the host writes still wait for delivery.
-        onLaunchAccepted={handleLaunchAccepted}
-        onLaunchAborted={handleLaunchAborted}
-        onLaunched={() => {
-          // Why: prompt delivery succeeded — the only point at which host replies/resolves may run.
-          consumeClaimedCommentResolutionAfterDeliveryRef.current()
-          if (agentComposerState?.actionId === 'resolveConflicts') {
-            toast.success(
-              translate(
-                'auto.components.right.sidebar.ChecksPanel.a0181a8d76',
-                'Started an AI agent for the conflicts.'
-              )
-            )
-            return
-          }
-          if (agentComposerState?.actionId === 'resolveComments') {
-            // Why: resolve/reply toast is emitted by resolveSelectedThreadsAfterLaunch.
-            return
-          }
-          toast.success(
-            translate(
-              'auto.components.right.sidebar.ChecksPanel.2ef90c9819',
-              'Started an AI agent for the broken checks.'
-            )
-          )
-        }}
+        {...agentComposerState?.launchContext}
       />
     </div>
   )

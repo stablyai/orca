@@ -22,6 +22,8 @@ type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewM
 export type EditorPanelContentLoadOptions = {
   force?: boolean
   externalEventGeneration?: number
+  /** The active tab's load or its Retry: a user act that may start a stopped WSL distro. */
+  wakeWslDistro?: boolean
 }
 
 type UseEditorPanelExternalContentEventsParams = {
@@ -70,9 +72,7 @@ export function useEditorPanelExternalContentEvents({
 }: UseEditorPanelExternalContentEventsParams): void {
   useEffect(() => {
     const reloads = createEditorWatcherReloadCoalescer()
-    // Why: a coalesced follow-up starts later; re-check the tab. A closed tab is skipped; one that
-    // left the screen is marked stale so its queued change reloads on reveal; one edited meanwhile
-    // keeps its draft but records that disk moved, so autosave can't silently overwrite it.
+    // Recheck queued targets: skip closed tabs, invalidate hidden ones and mark newly dirty drafts as conflicting instead of reloading.
     const resolveReloadTarget = (fileId: string): OpenFile | 'stale' | null => {
       const file = openFilesRef.current.find((candidate) => candidate.id === fileId)
       if (!file) {
@@ -124,10 +124,7 @@ export function useEditorPanelExternalContentEvents({
       const storeState = useAppStore.getState()
       const siblingIds = externalChangeRecordViewIds(storeState, openFilesRef.current, detail)
       for (const file of openFilesRef.current.filter((tab) => siblingIds.has(tab.id))) {
-        // Why: a dirty file keeps its unsaved buffer (issue #7265) — it is
-        // marked changed-on-disk upstream and resolves via the editor banner,
-        // a save, or a later clean reload. Reloading here would clobber it. A
-        // clean tab of a model another tab is editing shows that buffer too.
+        // Preserve unsaved shared buffers, including clean sibling views; the conflict banner owns their resolution.
         if (
           file.isDirty ||
           (storeState.openFiles.some((tab) => tab.id === file.id) &&
@@ -140,8 +137,7 @@ export function useEditorPanelExternalContentEvents({
           continue
         }
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-          // Why: external writes must replace any in-flight pre-change read so
-          // the tab shows the new on-disk content, not a stale dedupe result.
+          // External changes must supersede reads started before the write instead of reusing stale dedupe results.
           reloads.run(`content:${file.id}`, () => runContentReload(file.id, eventGeneration))
           if (editorViewModeRef.current[file.id] === 'changes') {
             reloads.run(`diff:${file.id}`, () => runDiffReload(file.id, eventGeneration))
@@ -185,7 +181,7 @@ export function useEditorPanelExternalContentEvents({
       const recordViewIds = detail.recordViewIds ?? [detail.fileId]
       updateSavedPreviewTabs(openFilesRef.current, detail, setFileContents)
       if (!file) {
-        // Why: the saving tab closed mid-save; the record's other views still move to the disk text.
+        // Saved text still reaches record siblings after the saving view closes.
         setFileContents((prev) =>
           withRecordDiskText(prev, recordViewIds, detail.fileId, detail.content)
         )
@@ -288,8 +284,7 @@ export function usePruneClosedEditorContent(
         delete fileLoadRetryAttemptsRef.current[fileId]
       }
     }
-    // Why: conflict-review entry loads use absolute paths as content ids; only
-    // ids that have belonged to tabs are safe to prune as closed tabs.
+    // Conflict-review paths can be content IDs without tabs; prune only IDs known to have belonged to closed tabs.
     for (const fileId of Object.keys(fileReadGenerationRef.current)) {
       if (knownOpenFileIdsRef.current.has(fileId) && !openIds.has(fileId)) {
         delete fileReadGenerationRef.current[fileId]

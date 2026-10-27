@@ -11,6 +11,7 @@ import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/type
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
+  branchIntent?: CreateWorktreeArgs['branchIntent']
   /** Captured before background preparation so navigation cannot retarget creation. */
   executionHostId?: ExecutionHostId
   automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
@@ -43,8 +44,7 @@ export type HostAgentLaunch = {
 /** `hostPlannedStartup`: the host was asked to build the agent launch, so no desktop plan may run. */
 export type CreatedWorktreeResult = CreateWorktreeResult & { hostPlannedStartup?: true }
 
-/** Everything `createWorktree` received, packed once so both transports read from the same record.
- *  The per-attempt fields live on `WorktreeCreateAttempt` instead. */
+/** Pack create inputs once for both transports; retry-specific fields live in WorktreeCreateAttempt. */
 export type WorktreeCreateRequest = Omit<CreateWorktreeArgs, 'parentWorkspace' | 'manualOrder'> & {
   options?: CreateWorktreeCallOptions
 }
@@ -69,6 +69,7 @@ function sharedCreateFields(
     baseBranch: request.baseBranch,
     ...(request.compareBaseRef ? { compareBaseRef: request.compareBaseRef } : {}),
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
+    ...(request.branchIntent ? { branchIntent: request.branchIntent } : {}),
     setupDecision: request.setupDecision,
     ...(options?.setupOnly !== undefined ? { setupOnly: options.setupOnly } : {}),
     sparseCheckout: request.sparseCheckout,

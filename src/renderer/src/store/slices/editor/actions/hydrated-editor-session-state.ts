@@ -29,10 +29,7 @@ export type HydratedEditorSessionState = Pick<
   | 'activeTabTypeByWorktree'
 >
 
-/**
- * The editor state a stored session restores, and the file id each workspace's tabs must be
- * rekeyed to. `activeWorktreeId` is the store's, which workspace hydration may have nulled.
- */
+/** Restore editor state with per-workspace file rekeys; use current activeWorktreeId because workspace hydration may already have invalidated it. */
 export function buildHydratedEditorSessionState(
   session: WorkspaceSessionState,
   validWorktreeIds: ReadonlySet<string>,
@@ -70,7 +67,7 @@ export function buildHydratedEditorSessionState(
         continue
       }
       const legacyId = legacyFileIndex.resolve(pf, worktreeId)
-      // Why: floating/runtime-owned files need IDs that survive peers disappearing between restarts; collision-based IDs drift when the path is no longer open elsewhere.
+      // Floating/runtime IDs must survive peers disappearing; collision-derived IDs drift when other paths close.
       const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
       const id =
         shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
@@ -79,12 +76,12 @@ export function buildHydratedEditorSessionState(
         savedTabEntityIds(worktreeId).has(ownedId)
           ? ownedId
           : pf.filePath
-      // Why: the persisted schema allows repeated (path, worktree, runtime) tuples, and an owned id repeats verbatim — restoring both would put two files under one id.
+      // Schema permits duplicate owner/path tuples; restore only one or owned IDs collide.
       if (usedOpenFileIds.has(id)) {
         continue
       }
       usedOpenFileIds.add(id)
-      // Why: map from the collision-derived legacy id; keying by filePath would collapse same-path local/runtime tabs onto the last owner to hydrate.
+      // Remap legacy collision-derived IDs, not paths; path keys collapse local/runtime twins onto the last owner.
       addEditorFileIdMigration(editorFileIdMigrationsByWorktree, worktreeId, legacyId, id)
       legacyFileIndex.add({
         id: legacyId,
@@ -92,7 +89,7 @@ export function buildHydratedEditorSessionState(
         worktreeId,
         runtimeEnvironmentId: pf.runtimeEnvironmentId
       })
-      // Why: read-only tabs (AI Vault View Log) must restore clean — ignore any persisted dirty draft/baseline so they can't come back writable.
+      // Restore logs clean, ignoring persisted dirty/draft/baseline so read-only tabs cannot become writable.
       const isReadOnly = pf.readOnly === true
       if (!isReadOnly && pf.dirtyDraftContent !== undefined) {
         editorDrafts[id] = pf.dirtyDraftContent

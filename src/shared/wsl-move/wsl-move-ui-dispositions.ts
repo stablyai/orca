@@ -9,6 +9,10 @@ import {
 /** UI fields that name a repo, worktree, pane or path. Everything else in the UI state is global. */
 export const UI_STATE_DISPOSITIONS = {
   lastActiveRepoId: notApplicableDisposition(38, 'repoId is kept.'),
+  pendingRuntimeRepoRemovals: notApplicableDisposition(
+    38,
+    'Owed to a paired server; a WSL move only moves local projects.'
+  ),
   lastActiveWorktreeId: moveDisposition(38, { rewriteDesktopCopy: true }),
   manualRepoOrder: moveDisposition(38, {
     rewriteDesktopCopy: true,
@@ -72,7 +76,6 @@ export const UI_STATE_DISPOSITIONS = {
   taskResumeState: notApplicableDisposition(38)
 } as const satisfies Partial<Record<keyof PersistedUIState, WslMoveFieldDisposition>>
 
-/** UI fields with no repo, worktree, pane or path in them. */
 export const UI_STATE_GLOBAL_FIELDS = [
   'activeView',
   'sidebarWidth',
@@ -144,6 +147,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'browserDefaultSearchEngine',
   'browserDefaultZoomLevel',
   'browserKagiSessionLink',
+  'browserDevToolsDock',
   'windowBounds',
   'windowMaximized',
   'dashboardPopoutBounds',
@@ -166,7 +170,6 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'contextualToursSeenIds',
   'contextualToursAutoEligible',
   'osc52ClipboardDefaultOnNoticePending',
-  // One-shot migration flags.
   '_antigravityStatusBarDefaultAdded',
   '_cursorStatusBarDefaultAdded',
   '_expandedWorktreeCardPropertiesDefaulted',
@@ -187,7 +190,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_zcodeStatusBarDefaultAdded'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
-// Why: an unclassified UI field is exactly the kind of per-worktree state a move would strand.
+// Exhaustiveness prevents moves stranding newly added workspace state.
 type UnclassifiedUiField = Exclude<
   keyof PersistedUIState,
   keyof typeof UI_STATE_DISPOSITIONS | (typeof UI_STATE_GLOBAL_FIELDS)[number]

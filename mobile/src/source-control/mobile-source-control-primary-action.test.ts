@@ -92,6 +92,17 @@ describe('buildMobileSourceControlPrimaryAction', () => {
     expect(detached.disabled).toBe(true)
   })
 
+  it('does not republish a branch whose review is already merged, like desktop', () => {
+    const action = buildMobileSourceControlPrimaryAction(
+      args({
+        status: status({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } }),
+        review: { prState: 'merged', isPRStateLoading: false, reviewNumber: 7, pushTarget: null }
+      })
+    )
+    expect(action.disabled).toBe(true)
+    expect(action.accessibilityHint).toBe('Nothing to commit. The review is already merged.')
+  })
+
   it('dispatches force push with lease when the shared decision requires it', () => {
     const h = handlers()
     const action = buildMobileSourceControlPrimaryAction(

@@ -28,10 +28,7 @@ type CreateHostedReviewBasePickerProps = {
   baseSameAsBranch: boolean
 }
 
-/**
- * The composer's merge target: a labelled full-width combobox whose results stay
- * attached to it, plus the base-scoped errors.
- */
+/** Keep merge-target results and base-scoped errors attached to the full-width field. */
 export function CreateHostedReviewBasePicker({
   copy,
   base,
@@ -59,11 +56,9 @@ export function CreateHostedReviewBasePicker({
   const trimmedQuery = baseQuery.trim()
   const trimmedRepoDefault = repoDefaultBase?.trim() ?? ''
   const showResults = editing && baseResults.length > 0
-  // Why: emptying the field is how you say "not this branch"; name where it lands so
-  // the reset isn't an invisible behaviour.
+  // Name the default an emptied field will choose so resetting cannot be invisible.
   const showRepoDefaultHint = editing && trimmedQuery.length === 0 && trimmedRepoDefault.length > 0
-  // Why: only claim "no branches match" once a search has actually settled, so the
-  // debounce window can't report an absence the app hasn't observed yet.
+  // Wait for settled search evidence before claiming no matches; debounce alone proves no absence.
   const showNoResults =
     editing &&
     baseResults.length === 0 &&
@@ -79,9 +74,7 @@ export function CreateHostedReviewBasePicker({
   }
 
   const commitSearch = (value: string): void => {
-    // Why: an emptied field commits the repo default rather than silently restoring
-    // the branch the user just cleared. With no default resolved yet there is nothing
-    // honest to fall back to, so the committed base stands.
+    // Empty commits choose the repo default; before it resolves, preserve the committed base instead of guessing.
     const nextBase = value.trim() || trimmedRepoDefault
     if (nextBase) {
       setBase(nextBase)
@@ -98,16 +91,13 @@ export function CreateHostedReviewBasePicker({
   }
 
   const handleBlur = (): void => {
-    // Why: Enter and Escape blur the input themselves; without this they would
-    // re-enter the commit path below with the pre-close query still in scope.
+    // Enter/Escape already resolved their own blur; do not recommit the pre-close query.
     if (settledRef.current) {
       settledRef.current = false
       closeSearch()
       return
     }
-    // Why: clicking away from an emptied field means what pressing Enter on it
-    // means — land on the repo default instead of restoring what was cleared.
-    // A partial query still cancels; only an empty one is an instruction.
+    // Blur of an empty query also chooses the default; partial queries still cancel.
     if (trimmedQuery.length === 0 && trimmedRepoDefault) {
       setBase(trimmedRepoDefault)
     }
@@ -145,12 +135,9 @@ export function CreateHostedReviewBasePicker({
   }
 
   return (
-    // Why: the base owns the full sidebar width — branch names are long — and the
-    // head branch rides the label row instead of costing another line.
     <div className="space-y-1.5">
       <div className="flex min-w-0 items-baseline justify-between gap-2">
-        {/* Why: the label holds its line and the head branch absorbs the squeeze —
-            a wrapping two-word label next to a one-line ref reads as broken. */}
+        {/* Keep the label on one line and let long head refs absorb narrowing. */}
         <Label
           htmlFor={fieldId}
           className="shrink-0 whitespace-nowrap text-[11px] font-medium text-muted-foreground"
@@ -181,20 +168,17 @@ export function CreateHostedReviewBasePicker({
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={showResults}
-          // Why: the listbox only exists while results show, and an aria-controls
-          // IDREF that resolves to nothing is worse than no reference at all.
+          // Reference the results list only while its ID exists.
           aria-controls={showResults ? resultsId : undefined}
           aria-activedescendant={
             showResults && activeResult >= 0 ? `${resultsId}-${activeResult}` : undefined
           }
           aria-invalid={baseSameAsBranch || undefined}
-          // Why: an input can't ellipsize, and base refs routinely overflow the sidebar.
           title={editing ? undefined : base}
           value={editing ? baseQuery : base}
           disabled={fieldsLocked}
           onFocus={(event) => {
-            // Why: a programmatic blur that never fired would otherwise leave the
-            // flag set and swallow the next real one.
+            // Clear a stale programmatic-blur latch before the next real focus/blur cycle.
             settledRef.current = false
             setEditing(true)
             setBaseQuery(event.currentTarget.value)
@@ -205,8 +189,7 @@ export function CreateHostedReviewBasePicker({
             setActiveResult(-1)
           }}
           onKeyDown={handleKeyDown}
-          // Why: the placeholder is where an emptied field lands, so it has to be the
-          // repo's real default — a hardcoded "main" lies on a trunk-named repo.
+          // Name the actual default, which may be trunk rather than main.
           placeholder={
             trimmedRepoDefault ||
             translate('auto.components.right.sidebar.SourceControl.e64a632456', 'main')
@@ -273,8 +256,6 @@ export function CreateHostedReviewBasePicker({
         </p>
       ) : null}
 
-      {/* Why: base problems belong to the base field, not to the block of
-          operation errors above the submit button. */}
       {baseSameAsBranch ? (
         <CreateHostedReviewComposerMessage>
           {translate(

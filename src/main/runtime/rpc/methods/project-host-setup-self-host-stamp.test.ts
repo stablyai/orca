@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 
-// Why: a paired client addresses this runtime as `runtime:<its own env id>`. Persisting that
-// verbatim hides the row from every other client and defeats the (projectId, hostId) duplicate
-// check, so the request's host id has to be re-spelled as this machine's own `local`.
+// Restamp client-relative runtime ids as local; persisting them hides rows from other clients and breaks project/host deduplication.
 function parseParams(methodName: string, params: unknown): { hostId: string } {
   const method = PROJECT_RUNTIME_METHODS.find((candidate) => candidate.name === methodName)
   if (!method?.params) {
@@ -39,8 +37,7 @@ describe('project host setup self-host stamp', () => {
     expect(parseParams(name, { ...base, hostId: 'local' }).hostId).toBe('local')
   })
 
-  // Why: ssh targets are a different machine from the runtime handling the call, so they must
-  // keep their own identity — only `runtime:` means "you".
+  // Keep SSH target identity: it names another machine, while runtime here means this host.
   it.each(CREATING_METHODS)('$name preserves an ssh host', ({ name, base }) => {
     expect(parseParams(name, { ...base, hostId: 'ssh:box-1' }).hostId).toBe('ssh:box-1')
   })

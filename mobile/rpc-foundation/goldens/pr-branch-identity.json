@@ -4,6 +4,61 @@
   "family": "session.pr-branch-context",
   "namedDeltas": [],
   "values": {
+    "064ec5d09de8": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "branch": "feature",
+        "headSha": "head-sha-1",
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": 3,
+              "area": "unstaged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "head-sha-1",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
     "0fc11d9bf2a5": {
       "name": "worktree.show#1",
       "ordinal": 2,
@@ -286,7 +341,7 @@
       "ordinal": 5,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
     },
-    "f0e28a4b20aa": {
+    "eddcdff704c3": {
       "identity": {
         "branch": "feature",
         "headSha": "head-sha-1",
@@ -311,7 +366,13 @@
               },
               "path": "src/app.ts",
               "removed": 1,
-              "status": "modified"
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
             }
           ],
           "head": "head-sha-1",
@@ -332,55 +393,6 @@
         }
       },
       "repoContext": "unread"
-    },
-    "ffc37850babd": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "branch": "feature",
-        "headSha": "head-sha-1",
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": 3,
-              "area": "unstaged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": 1,
-              "status": "modified"
-            }
-          ],
-          "head": "head-sha-1",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
     }
   },
   "recording": {
@@ -404,9 +416,9 @@
           "sender": ["d0e28a73dae6", "0fc11d9bf2a5", "189a62313626", "c0f7fd87f4a5"],
           "payloads": ["d45add7a8589", "ea4c904bfb5f", "648638103acb", "622e5aadb43d"],
           "settlements": {
-            "identity": "ffc37850babd"
+            "identity": "064ec5d09de8"
           },
-          "state": "f0e28a4b20aa",
+          "state": "eddcdff704c3",
           "effects": []
         }
       }

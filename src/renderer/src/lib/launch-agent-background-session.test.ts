@@ -173,8 +173,7 @@ describe('launchAgentBackgroundSession', () => {
       recordInteraction: false
     })
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'pty-1')
-    // The incarnation rides along so a relay-recycled id cannot drain the previous owner's exit
-    // into this handler and tear the session down right after launch.
+    // Keep incarnation so recycled relay IDs cannot deliver a prior owner’s exit into the new session.
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith(
       'pty-1',
       expect.any(Function),
@@ -321,7 +320,7 @@ describe('launchAgentBackgroundSession', () => {
   })
 
   it('uses WSL launch quoting for Windows-path projects forced to WSL', async () => {
-    state.projects = [
+    state.endpointProjects = [
       {
         id: 'repo-1',
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
@@ -360,8 +359,7 @@ describe('launchAgentBackgroundSession', () => {
   })
 
   it('stamps hidden SSH status from renderer fallback when the kill switch is off', async () => {
-    // Why: with main side-effect authority disabled, this sidecar is the only
-    // OSC 9999 → store path for hidden SSH sessions.
+    // With main authority disabled, this hidden SSH sidecar is the sole OSC 9999 store writer.
     state.settings.terminalMainSideEffectAuthority = false
     state.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
     state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
@@ -389,9 +387,7 @@ describe('launchAgentBackgroundSession', () => {
   })
 
   it('skips the duplicate OSC store write under main side-effect authority', async () => {
-    // Why: main already routes OSC 9999 through the hook server to the store
-    // (agentStatus:set); a second write here would race the authoritative
-    // path. The automation onAgentStatus callback must still fire.
+    // Main already owns OSC 9999 store writes; avoid races while retaining automation completion callbacks.
     const onAgentStatus = vi.fn()
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
@@ -474,9 +470,7 @@ describe('launchAgentBackgroundSession', () => {
   })
 
   it('keeps the tab bound to its PTY when contact was lost rather than observed', async () => {
-    // Same rule the terminal panes follow: a -1 sentinel retires the transport
-    // only. Clearing the binding would leave a reconnect with nothing to adopt
-    // and let orphan cleanup sweep a tab whose agent may still be running.
+    // Synthetic -1 loss retires transport only; retain bindings for reconnect adoption and orphan-cleanup protection.
     mockSubscribeToPtyExit.mockReturnValue(vi.fn())
     const onExit = vi.fn()
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')

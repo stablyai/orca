@@ -58,10 +58,7 @@ export function bundledSkillInstallNeedsAttention(state: BundledSkillInstallStat
   return state.kind === 'failed' || (state.kind === 'done' && !state.summary.ok)
 }
 
-/**
- * Installs Orca's bundled skills for every detected agent on the host Update skills plans:
- * this machine or the paired server or SSH host (never this machine for it).
- */
+/** Install for every detected agent on the planned owner host; remote installs must never fall back to this client. */
 export function useBundledSkillInstall(
   options: { onFinished?: () => void; target?: BundledSkillTarget | null } = {}
 ): BundledSkillInstall {

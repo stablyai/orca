@@ -1,5 +1,5 @@
 import type { OpenFile } from '@/store/slices/editor'
-import type { PaletteDocument } from './palette-match/palette-document'
+import type { PaletteDocument } from '../../../shared/palette-match/palette-document'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
@@ -45,8 +45,7 @@ export type SearchableWorkspaceTab = {
   isCurrentWorktree: boolean
 }
 
-// Why search-only: the status/content icon already says "terminal"; a fixed
-// secondary crowds the row. Keep these matchable so typing "terminal" still finds them.
+// Keep terminal type aliases searchable but undisplayed; icons already communicate type.
 export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as const
 
 type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType

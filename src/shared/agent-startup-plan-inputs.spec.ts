@@ -120,9 +120,7 @@ describe('resolveAgentStartupPlanInputs', () => {
 })
 
 describe('a picked session option outranks configured launch arguments', () => {
-  // Why this composes rather than asserting the flag: the flag's name says what it sets, not what
-  // a user sees. What a user sees is one model flag on argv instead of two, and a chat surface
-  // that can name the model they picked.
+  // Compose the surfaces: prove one model flag reaches argv and the chat can name the selected model, beyond asserting the policy flag.
   function commandFor(settings: AgentStartupSettings) {
     return buildAgentStartupPlan({
       ...resolveAgentStartupPlanInputs({
@@ -196,3 +194,50 @@ describe('an Orca-driven launch skips the startup update prompt (#15814, #18153)
     expect(planFor('claude', true)?.launchCommand).toBe(planFor('claude', false)?.launchCommand)
   })
 })
+
+it('projects own permission without dropping unrelated arguments, model or environment on terminal fallback', () => {
+  const inputs = resolveAgentStartupPlanInputs({
+    agent: 'codex',
+    settings: {
+      agentPermissionDefault: 'full-access',
+      agentDefaultArgs: { codex: '--search' },
+      agentDefaultEnv: { codex: { KEEP: 'value' } }
+    },
+    platform: 'linux',
+    isRemote: false,
+    shell: 'posix',
+    sessionOptions: { permissionMode: 'own', model: 'gpt-5.5' }
+  })
+  const plan = buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true })
+  expect(plan?.launchCommand).toContain("'--search'")
+  expect(plan?.launchCommand).toContain("'-m' 'gpt-5.5'")
+  expect(plan?.launchCommand).not.toContain('bypass')
+  expect(plan?.env).toEqual({ KEEP: 'value' })
+  expect(plan?.sessionOptions?.permissionMode).toBe('own')
+})
+
+it.each([undefined, ''])(
+  'keeps a terminal-only choice from args %s and projects its flag once for a legacy launch',
+  (agentArgs) => {
+    const inputs = resolveAgentStartupPlanInputs({
+      agent: 'gemini',
+      settings: {},
+      agentArgs,
+      platform: 'win32',
+      isRemote: true,
+      shell: 'powershell',
+      sessionOptions: { permissionMode: 'full-access' }
+    })
+    const plan = buildAgentStartupPlan({ ...inputs, prompt: '', allowEmptyPromptLaunch: true })
+    expect(plan?.launchConfig.agentArgs.match(/--yolo/g)).toHaveLength(1)
+    expect(plan?.sessionOptions?.permissionMode).toBe('full-access')
+    const legacy = buildAgentStartupPlan({
+      ...inputs,
+      agentArgs: plan?.launchConfig.agentArgs,
+      sessionOptions: undefined,
+      prompt: '',
+      allowEmptyPromptLaunch: true
+    })
+    expect(legacy?.launchCommand.match(/--yolo/g)).toHaveLength(1)
+  }
+)

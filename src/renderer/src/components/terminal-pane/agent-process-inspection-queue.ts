@@ -4,11 +4,7 @@ type InspectionTask = {
   priority: InspectionPriority
   canRun: () => boolean
   run: () => Promise<void>
-  /**
-   * Reads served by one shared host observation. Every local pane's inspection resolves out of
-   * the same TTL-and-in-flight-deduped process-table snapshot, so a whole round of them costs
-   * the host one capture however many panes ride it.
-   */
+  /** Local panes share a TTL/in-flight-deduped host capture, so the round consumes one observation. */
   sharesHostObservation?: boolean
 }
 
@@ -21,10 +17,7 @@ let inspectionPumpTimer: ReturnType<typeof setTimeout> | null = null
 const inspectionStarts: number[] = []
 const inspectionQueue: InspectionTask[] = []
 
-/**
- * Host observations still admissible right now. A start is one observation, not one pane: a
- * shared-observation round costs one however many panes ride it, an unshared task costs one each.
- */
+/** Budget host observations: one per shared round or unshared task. */
 function availableInspectionStarts(now: number): number {
   if (inspectionStarts.length > 0 && now < inspectionStarts[0]!) {
     inspectionStarts.length = 0
@@ -38,11 +31,7 @@ function availableInspectionStarts(now: number): number {
   )
 }
 
-/**
- * Pump on a microtask, so a synchronous burst of enqueues forms one round. Pumping inline
- * spent a start per pane until the concurrency slots filled and then parked the rest of the
- * burst on the 100ms retry.
- */
+/** Batch synchronous enqueues in a microtask so a shared burst consumes one start rather than per-pane slots. */
 function queueInspectionPump(): void {
   if (inspectionPumpQueued) {
     return
@@ -92,11 +81,7 @@ function startInspectionRound(tasks: InspectionTask[], now: number): void {
     }
   }
   for (const task of tasks) {
-    // Started synchronously so every read in the round lands in the same tick, hitting one
-    // process-table capture instead of serializing one capture window apart.
-    // Why the catch before finally: an unreachable runtime rejects the inspection on a cadence, and a
-    // bare `.finally()` chain re-raises it as a renderer-global unhandledrejection. Coordinators own
-    // their own failure/backoff state, so the queue only has to keep its accounting running.
+    // Start shared reads in one tick for one capture; catch before finally to contain rejections while coordinators own failure/backoff.
     void task
       .run()
       .catch(() => {})
@@ -104,7 +89,6 @@ function startInspectionRound(tasks: InspectionTask[], now: number): void {
   }
 }
 
-/** Take every shared-observation task, in order, leaving the rest queued. */
 function takeSharedObservationRound(): InspectionTask[] {
   const round: InspectionTask[] = []
   let write = 0
@@ -122,7 +106,6 @@ function takeSharedObservationRound(): InspectionTask[] {
 }
 
 function pumpInspectionQueue(): void {
-  // Drop disposed tasks before slot/rate accounting.
   dropDisposedInspections()
   if (inspectionQueue.length === 0) {
     return
@@ -133,8 +116,7 @@ function pumpInspectionQueue(): void {
     scheduleInspectionPump(100)
     return
   }
-  // The whole shared-observation backlog goes on one start, so a pane's wait is bounded by the
-  // observation budget rather than by how many other panes are also due.
+  // Charge one start for the full shared backlog so pane count cannot stretch completion latency.
   const sharedRound = takeSharedObservationRound()
   if (sharedRound.length > 0) {
     startInspectionRound(sharedRound, now)

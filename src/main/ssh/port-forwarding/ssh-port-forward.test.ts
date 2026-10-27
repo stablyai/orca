@@ -418,7 +418,7 @@ describe('SshPortForwardManager', () => {
     const entry = await manager.addForward('conn-1', session, 3000, '127.0.0.1', 8080)
     const editing = manager.updateForward(entry.id, session, 3001, '127.0.0.1', 8080)
 
-    // The teardown snapshots nothing to start, and disposes the connection.
+    // Teardown must cover a pending start even after connection disposal.
     const teardown = manager.removeAllForwards('conn-1')
     conn.isDisposed.mockReturnValue(true)
     conn.usesSystemSshTransport.mockReturnValue(false)
@@ -459,16 +459,14 @@ describe('SshPortForwardManager', () => {
     const conn = createSystemSshConn()
 
     await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
-    // A long-lived forward against a chatty remote sshd: emit >64 KB of stderr.
+    // Keep only a bounded diagnostic tail from a long-lived chatty sshd.
     forward.process.stderr.emit('data', Buffer.from(`HEAD_MARKER${'x'.repeat(70 * 1024)}`))
     forward.process.stderr.emit('data', Buffer.from('TAIL_MARKER'))
     forward.process.emit('exit', 255)
 
     const detail = onForwardClosed.mock.calls[0]?.[1]?.detail as string
-    // The oldest bytes are trimmed; the most-recent tail is retained.
     expect(detail).toContain('TAIL_MARKER')
     expect(detail).not.toContain('HEAD_MARKER')
-    // Bounded well below the ~70 KB produced.
     expect(detail.length).toBeLessThan(66 * 1024)
   })
 

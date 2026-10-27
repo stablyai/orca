@@ -54,7 +54,6 @@ function splitSession(): WorkspaceSessionState {
   }
 }
 
-/** The phone's tabs for the split, as the window publishes them. */
 function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabsSnapshot {
   const parentLayout = session.terminalLayoutsByTabId.tab!
   const pane = (leafId: string, ptyId: string, isActive: boolean) => ({
@@ -79,7 +78,6 @@ function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabs
   }
 }
 
-/** A runtime over one stored session, with the window's two split panes registered. */
 function splitRuntime(): { runtime: OrcaRuntimeService; session: () => WorkspaceSessionState } {
   let session = splitSession()
   const runtime = new OrcaRuntimeService(
@@ -139,8 +137,7 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
     expect(panes(session())).toEqual([LEFT, RIGHT])
   })
 
-  // Switch-on variants (ruled behaviour): any negative code keeps the pane, as the window does;
-  // an asked-for close removes the pane through its own close command.
+  // Negative exits retain panes; explicit closes remove through the layout command.
   it('keeps a split pane on a -1 after a stop was asked for', async () => {
     const { runtime, session } = splitRuntime()
     runtime.markPtyStopRequested('pty-right')
@@ -181,7 +178,7 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
         retired: (tabs.retiredTerminalSurfaces ?? []).map((surface) => surface.leafId)
       }
     }
-    // Listing mints the panes' handles, which a retirement notice names.
+    // Listing mints the handles named by retirement notices.
     const closed = splitRuntime().runtime
     await phone(closed)
     await closed.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })

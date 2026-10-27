@@ -15,13 +15,7 @@ type QueryReplyGate = {
   setGeneration: (generation: number) => void
 }
 
-/**
- * The gate over a scope the case owns.
- *
- * The module is imported and handed a scope, so the two things the gate reaches outside itself are
- * seam fields: the notify goes to `postToHost`, and the write-queue boundary the gate enqueues is
- * read off the scope's own queue rather than intercepted.
- */
+// Drive the real gate with scope-owned notify and queue fields; execute its enqueued boundary to model replay drain.
 function createQueryReplyGate(notify: (message: unknown) => void): {
   gate: QueryReplyGate
   queuedBoundaries: (() => void)[]
@@ -32,8 +26,6 @@ function createQueryReplyGate(notify: (message: unknown) => void): {
     forward: (data) => forwardTerminalDataReply(scope, data),
     queueBoundary: (generation) => {
       enqueueTerminalDataReplyBoundary(scope, generation)
-      // The boundary the gate enqueued, taken off the document's own queue: the cases run it to
-      // stand for the replay draining.
       const queued = scope.writeQueue[scope.writeQueue.length - 1]
       if (typeof queued === 'function') {
         queuedBoundaries.push(queued)

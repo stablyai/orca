@@ -71,9 +71,7 @@ export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
 
 export function buildNewTabAgentMenuRows(args: {
   settings: NewTabAgentMenuSettings | null | undefined
-  /** The agents detected on the workspace's machine. */
   detectedOnHost: readonly TuiAgent[] | null
-  /** The agents Orca can open as a chat. */
   chatAgents: readonly TuiAgent[]
   hostChatAnswer: (agent: TuiAgent) => HostChatAnswer
   /** Whether the chat's own program runs there, which for some agents is not their CLI. */

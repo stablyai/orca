@@ -4,6 +4,7 @@ import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-regis
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { PublishedTab } from '../../../../shared/workspace-layout/workspace-layout-published'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../codex-restart-notice-state'
 import { ptyDataHandlers } from './pty-dispatcher'
 import { deliverPtyExitToHandlers } from './pty-exit-delivery'
@@ -58,7 +59,7 @@ function seedQueuedRestart(
 ): void {
   const leafId = opts.leafId === undefined ? LEAF_ID : opts.leafId
   useAppStore.setState({
-    settings: { activeRuntimeEnvironmentId: null } as never,
+    settings: getDefaultSettings('/home/dev'),
     worktreesByRepo: {
       repo1: [{ id: 'wt1', path: '/Users/dev/code/orca' }]
     } as never,
@@ -175,15 +176,13 @@ describe('codex detached pane restart executor', () => {
     expect(state.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({ [LEAF_ID]: NEW_PTY })
     expect(state.pendingPaneAccountRestarts).toEqual({})
     expect(state.suppressedPtyExitIds[OLD_PTY]).toBeUndefined()
-    // The whole point: the restart completed, so nothing may block input anymore.
     expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[OLD_PTY])).toBe(false)
     expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[NEW_PTY])).toBe(false)
   })
 
   it('adopts the replacement when the replaced PTY exit clears the tab binding mid-spawn', async () => {
     seedQueuedRestart()
-    // Main stops the replaced PTY before replying, so its exit reaches the renderer first; a
-    // background-launch exit sidecar answers that exit by clearing the tab's binding.
+    // Main’s replacement exit can clear the old tab binding before spawn replies through background sidecars.
     vi.mocked(window.api.pty.spawn).mockImplementation(async () => {
       useAppStore.getState().clearTabPtyId('tab-1', OLD_PTY)
       return { id: NEW_PTY }
@@ -216,7 +215,6 @@ describe('codex detached pane restart executor', () => {
 
     await sweepUnclaimedCodexPaneRestarts()
 
-    // Neither: the reveal reconnects by pane identity, which main answers with the replacement.
     expect(revealView).toEqual({ exitReplayed: false, sessionAdmitted: false })
     expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([NEW_PTY])
   })
@@ -327,15 +325,13 @@ describe('codex detached pane restart executor', () => {
   })
 
   it('rebuilds a rootless single-pane layout so the mount replays this leaf', async () => {
-    // Regression guard: replayTerminalLayout mints a fresh leaf when the root
-    // doesn't name this one, silently orphaning the respawned PTY on reveal.
+    // Missing root leaves would mint new identities on reveal and orphan the replacement PTY.
     seedQueuedRestart({ layoutRoot: 'none' })
 
     await sweepUnclaimedCodexPaneRestarts()
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main's layout holds the pane and its frame draws the root; the window places nothing, and
-      // only updateTabPtyId's binding moves.
+      // Main frames own the root; only the window’s PTY binding moves here.
       expect(useAppStore.getState().terminalLayoutsByTabId['tab-1']).toEqual(
         expect.objectContaining({ root: null, ptyIdsByLeafId: { [LEAF_ID]: NEW_PTY } })
       )
@@ -484,9 +480,7 @@ describe('codex detached pane restart executor', () => {
   })
 
   it('leaves a sleep-retained pending id alone so wake can migrate it', async () => {
-    // Why: hibernation unbinds a pane's PTY but keeps its pending restart, and
-    // wake moves that entry onto the respawned PTY. No notice means nothing is
-    // blocked, so consuming here would silently lose the accepted restart.
+    // Sleeping unbinds PTYs but retains queued restarts; consume only after wake migrates the request.
     useAppStore.setState({ pendingPaneAccountRestarts: { 'wt1@@sleeping': 'codex' } })
 
     await sweepUnclaimedCodexPaneRestarts()
@@ -506,7 +500,6 @@ describe('codex detached pane restart executor', () => {
     expect(window.api.pty.kill).not.toHaveBeenCalled()
     expect(state.ptyIdsByTabId['tab-1']).toEqual([OLD_PTY])
     expect(state.pendingPaneAccountRestarts).toEqual({})
-    // The question is back on screen; input stays blocked but never silently.
     expect(awaitsCodexRestartAnswer(state.codexRestartNoticeByPtyId[OLD_PTY])).toBe(true)
   })
 
@@ -544,6 +537,10 @@ describe('codex detached pane restart executor', () => {
 
   it('kills now and defers the Codex respawn to mount when the layout leaf is unknown', async () => {
     seedQueuedRestart({ leafId: null })
+    const command = String.raw`& 'C:\Program Files\Codex\codex.exe'`
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/dev'), agentCmdOverrides: { codex: command } }
+    })
 
     await sweepUnclaimedCodexPaneRestarts()
 
@@ -553,7 +550,7 @@ describe('codex detached pane restart executor', () => {
     expect(state.ptyIdsByTabId['tab-1']).toEqual([])
     expect(state.pendingStartupByTabId['tab-1']).toEqual(
       expect.objectContaining({
-        command: 'codex',
+        command,
         startupCommandDelivery: 'shell-ready',
         launchAgent: 'codex'
       })

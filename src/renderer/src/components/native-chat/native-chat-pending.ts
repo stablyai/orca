@@ -1,11 +1,6 @@
-// Pure logic for desktop optimistic "queued" composer sends (mobile parity).
-// A sent prompt is echoed immediately as a queued entry and pruned once its real
-// user turn lands in the transcript. Kept separate from the view so the prune
-// rule (match on normalized user-message content) is unit-testable without React.
-
 import { nativeChatContinuationSendText } from '../../../../shared/native-chat-continuation-send'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat/native-chat-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
@@ -22,27 +17,21 @@ import {
   type NativeChatUserRow
 } from './native-chat-pending-occurrence'
 
-/** An optimistic, not-yet-confirmed composer send. */
 export type NativeChatPendingSend = {
-  /** Renderer-minted id, unique per send, used as the list key. */
   id: string
   /** Definite send outcome; absent while the send is simply awaiting its transcript row. */
   delivery?: 'unconfirmed' | 'rejected'
   /** When a write's acknowledgment was lost, so a remount keeps the original hold deadline. */
   writeUnconfirmedAt?: number
-  /** The exact draft text the user submitted. */
   text: string
-  /** Image paths that were sent through the TUI image attachment paste path. */
   imagePaths?: string[]
   /** Epoch ms when the send was issued, so the queued bubble sorts to the end. */
   sentAt: number
-  /** Last authoritative transcript message visible when this send was issued.
-   * Matching starts after it so repeated prompts cannot bind to an old turn. */
+  /** Match only after the last authoritative row at send time so repeated prompts cannot bind older turns. */
   afterMessageId?: string | null
   /** Timestamp of that boundary in the transcript host's clock domain. */
   afterMessageTimestamp?: number | null
-  /** The provider session whose transcript had been read empty when this was sent, so every
-   *  row of that session is after it. Unset for a read still loading or no session yet. */
+  /** An authoritative empty read proves all session rows are newer; loading or absent sessions cannot claim this. */
   afterEmptyTranscriptSessionId?: string
   /** 1-based occurrence among identical sends sharing the same boundary. */
   matchingOccurrence?: number
@@ -76,9 +65,7 @@ export function writePendingSendCache(
   if (next.length === 0) {
     pendingSendCache.delete(key)
   } else {
-    // Why: the empty-drain path above clears keys on the normal confirm flow,
-    // but a pane closed with an unconfirmed send (agent crash / early close)
-    // would strand its entry forever. LRU-bound the key count too.
+    // Bound abandoned-send scope keys too; crash/early close can bypass normal empty-drain cleanup.
     setBoundedScopeCacheEntry(pendingSendCache, key, next)
   }
   return [...next]
@@ -119,15 +106,11 @@ function messagesAfterPendingBoundary(
   if (boundaryIndex !== -1) {
     return messages.slice(boundaryIndex + 1)
   }
-  // A bounded authoritative read can page the boundary out. Fall back to the
-  // send time instead of matching an arbitrary older identical prompt.
+  // If paging drops the boundary, use send time rather than binding arbitrary older identical prompts.
   return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
 }
 
-/**
- * Drop the empty-transcript claim from sends made in another provider session: that claim
- * describes one transcript, and a resumed one can hold an older identical turn.
- */
+/** Release claims from other provider sessions so resumed history cannot retire a newer identical send. */
 export function releaseEmptyTranscriptClaims(
   pending: NativeChatPendingSend[],
   sessionId: string | null
@@ -157,29 +140,18 @@ function messageIsAfterPendingTimestamp(
   message: NativeChatMessage,
   pending: NativeChatPendingSend
 ): boolean {
-  // Why: some transcripts (e.g. Grok) never carry timestamps. Excluding their
-  // rows would make the echo unmatchable forever, stranding a rank-pinned
-  // bubble at the list tail — which reads as the conversation reordering.
+  // Timestampless transcripts must still retire echoes or queued bubbles remain pinned forever.
   if (message.timestamp === null) {
     return true
   }
   const boundary = nativeChatPendingMatchingAfter(pending)
-  // A transcript-clock boundary describes an existing message, so exclude ties.
-  // Local send time has no existing record and remains inclusive.
+  // Exclude ties to existing transcript-clock boundaries; local send-time boundaries stay inclusive.
   return pending.afterMessageTimestamp == null
     ? message.timestamp >= boundary
     : message.timestamp > boundary
 }
 
-/**
- * Rows a glue match may consume, each tagged with the sends it landed after.
- * Unbounded, an older turn whose text happens to split across the queue ("fix
- * the bug" vs "fix the" + "bug") would retire sends issued long after it — so
- * every send carries its OWN boundary into the match, not just the oldest one
- * the run starts at (#14663 pruned newer queued prompts against older rows).
- * A missing message boundary falls back to send time: a fuzzy match must never
- * reach further back than an exact one.
- */
+/** Require each glued send’s own boundary; missing row boundaries fall back to send time, as exact matching does (#14663). */
 function gluedCandidateRows(
   messages: readonly NativeChatMessage[],
   open: readonly NativeChatPendingSend[],
@@ -195,8 +167,7 @@ function gluedCandidateRows(
   const newerRowIds = newer.map(
     (entry) => new Set(rowsOf(messagesAfterPendingBoundary(messages, entry)).map((row) => row.id))
   )
-  // The run always starts at the oldest open send, so its rows are the whole
-  // candidate set and index 0 is representable in every one of them.
+  // Every candidate follows the oldest send, which always starts the run.
   return rowsOf(messagesAfterPendingBoundary(messages, oldest)).map((row) => {
     const representablePendingIndices = new Set([0])
     newerRowIds.forEach((ids, index) => {
@@ -208,12 +179,7 @@ function gluedCandidateRows(
   })
 }
 
-/**
- * Drop any pending send only after the transcript has advanced beyond its real
- * user turn. Keeping the echo through the user-only transcript phase prevents a
- * first-turn empty-state flash if the live transcript briefly reports [] before
- * the assistant response lands.
- */
+/** Keep echoes until a later non-user turn to avoid first-turn flashes during transient empty reads. */
 export function prunePendingSends(
   pending: NativeChatPendingSend[],
   messages: NativeChatMessage[]
@@ -235,9 +201,7 @@ export function prunePendingSends(
     consumed.set(key, Math.max(used, occurrence))
     return occurrence > available
   })
-  // Why: when a lost Enter glued two optimistic sends onto one input line, the
-  // transcript carries one row ("joke"+"continue"→"jokecontinue") that no exact
-  // key matches. Drop those echoes once an assistant turn advances past it.
+  // Lost Enter can glue sends into one transcript row; retire them after the assistant advances.
   const stillOpen = pending.filter((_, index) => exactKeep[index])
   const gluedRepresented = selectPendingIndicesRepresentedByUserRows(
     stillOpen,
@@ -253,12 +217,7 @@ export function prunePendingSends(
   return next.length === pending.length ? pending : next
 }
 
-/**
- * Turn pending sends into chat messages so they render in the list as queued
- * user bubbles. They carry the `scrape` source (lowest priority) so the real
- * transcript turn always supersedes them if both are briefly present, and the
- * send time as the timestamp so they sort to the end (most recent) of the list.
- */
+/** Scrape-source echoes yield to real transcript rows; send timestamps keep queued bubbles at the end. */
 export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
   existingMessages: NativeChatMessage[] = []
@@ -280,8 +239,7 @@ export function pendingSendsAsMessages(
     consumed.set(key, Math.max(used, occurrence))
     return occurrence > represented
   })
-  // Hide optimistic echoes that were glued into a single transcript user row
-  // even before the assistant reply lands (matching, not advanced).
+  // Hide glued echoes once their user row exists, before assistant advancement permits pruning.
   const stillVisible = pending.filter((_, index) => exactVisible[index])
   const gluedRepresented = selectPendingIndicesRepresentedByUserRows(
     stillVisible,
@@ -307,14 +265,11 @@ export function pendingSendsAsMessages(
     }))
 }
 
-/** True when a message id was minted for an optimistic pending send. */
 export function isPendingMessageId(id: string): boolean {
   return id.startsWith('pending:')
 }
 
-// Why: the seeded prompt has a synthetic id that never matches the real turn's,
-// so dedup/prune match on normalized user-message text instead — this hides the
-// optimistic bubble once the transcript's own copy of the turn catches up.
+// Synthetic launch ids never match real turns; reconcile normalized user text instead.
 export function launchPromptAsMessage(
   entry: NativeChatLaunchPrompt | null,
   existingMessages: NativeChatMessage[] = []
@@ -322,8 +277,7 @@ export function launchPromptAsMessage(
   if (!entry) {
     return null
   }
-  // Why: a launch prompt seeds a brand-new session, so a matching user turn
-  // with no timestamp (e.g. Grok transcripts) can only be its own delivery.
+  // A new session’s timestampless matching row can only represent its launch prompt.
   const represented = matchingNativeChatUserContentCounts(
     existingMessages.filter(
       (message) => message.timestamp === null || message.timestamp >= entry.createdAt
@@ -341,9 +295,7 @@ export function launchPromptAsMessage(
   }
 }
 
-// Why: prune only once an assistant turn has landed after the matching user
-// text — keeping the optimistic bubble through the user-only phase avoids a
-// first-turn flash before the transcript's own copy of the turn catches up.
+// Wait for a later non-user turn to avoid a first-turn flash before the transcript catches up.
 export function shouldPruneLaunchPrompt(
   entry: NativeChatLaunchPrompt,
   messages: NativeChatMessage[]

@@ -8,10 +8,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
-// Why: anything in this group is deliberately unfinished or staff-only. The
-// orange treatment (header tint, label colors) is the shared visual signal
-// for hidden-experimental items so future entries inherit the same
-// affordance without another round of styling decisions.
+// Use shared orange styling to identify unfinished/staff-only controls.
 export function HiddenExperimentalGroup(): React.JSX.Element {
   const isMac = getShortcutPlatform() === 'darwin'
   const [renderDiagnosticsArmed, setRenderDiagnosticsArmed] = useState(

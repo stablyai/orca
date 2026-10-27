@@ -66,10 +66,18 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
           if (event.type === 'snapshot') {
             emit({
               ...event,
+              ...(event.conversationNames
+                ? {
+                    conversationNames: event.conversationNames.filter((note) => {
+                      const record = host.deps.store.getConversation(note.sessionId)
+                      return record && clientReadsStructuredSessionAgent(ctx, record.provider)
+                    })
+                  }
+                : {}),
               ...(event.namingActiveSessionIds
                 ? {
                     namingActiveSessionIds: event.namingActiveSessionIds.filter((sessionId) => {
-                      const record = host.deps.store.getRecord(sessionId)
+                      const record = host.deps.store.getConversation(sessionId)
                       return record && clientReadsStructuredSessionAgent(ctx, record.provider)
                     })
                   }

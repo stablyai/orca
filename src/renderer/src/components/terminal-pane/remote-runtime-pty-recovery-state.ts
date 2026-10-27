@@ -46,8 +46,7 @@ export class RemoteRuntimePtyRecoveryState {
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null
   private pendingRetry: ((epoch: number) => void) | null = null
   private pendingEpoch: number | null = null
-  // Why: only the wall-clock deadline proves the auto-recovery window was actually spent; a UI latch
-  // via markDisconnected() must not forge that evidence (#12683).
+  // Only wall-clock expiry proves spent recovery time; a UI latch cannot authorize fenced-handle reuse (#12683).
   private deadlineExpired = false
 
   constructor(private readonly onChange?: () => void) {}
@@ -187,9 +186,7 @@ export class RemoteRuntimePtyRecoveryState {
     return true
   }
 
-  // Why: the deadline can latch while an attempt is still in flight, before schedule() parked anything,
-  // so the late failure has no live epoch to join and must not begin a new one — that would re-arm a
-  // full-length window and the budget would never actually expire.
+  // Post-deadline failures park without beginning a new epoch, or silent RPC timeouts would re-arm the window forever.
   parkRetryAfterDeadline(retry: (epoch: number) => void): boolean {
     return this.phase === 'disconnected' && this.parkRetry(retry)
   }
@@ -254,9 +251,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return
     }
-    // Why: same latch the deadline arrives at, so it must be equally revivable — stop auto-retry but keep
-    // the parked retry registered for online/resume/reconnect. clearTimers() here would be strictly more
-    // destructive than exhausting the whole recovery budget.
+    // Fatal latching stops automatic work but preserves parked retry registration for online/resume/Reconnect, like deadline expiry.
     this.stopRetryTimer()
     this.clearDeadlineTimer()
     this.phase = 'disconnected'

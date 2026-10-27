@@ -35,11 +35,7 @@ function stripTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '')
 }
 
-/**
- * Mirrors Kimi Code 2.x resolveKimiCodeRuntimeAuth + resolveKimiCodeOAuthKey +
- * managedUsageUrl (@moonshot-ai/kimi-code dist/main.mjs): the token slot is derived
- * from the effective (oauthHost, baseUrl), so a stale config `oauth.key` is ignored.
- */
+/** Match Kimi Code 2.x (@moonshot-ai/kimi-code dist/main.mjs): effective OAuth host/base URL, not stale oauth.key, select the token. */
 export function resolveKimiCodeRuntimeAuth(
   configToml: string,
   env: NodeJS.ProcessEnv = process.env

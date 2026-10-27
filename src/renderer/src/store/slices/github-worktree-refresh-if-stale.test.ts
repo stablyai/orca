@@ -133,15 +133,12 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     store.getState().enqueueGitHubPRRefresh(worktreeId, 'active', 80)
     await Promise.resolve()
 
-    // Why 13: a merged PR confirmed to contain this worktree head is still the
-    // branch's PR; losing the fallback number would blank the panel whenever
-    // GitHub stops reporting the deleted head by branch name.
+    // Contained-head merged PR 13 remains a valid fallback after GitHub stops branch lookup for deleted heads.
     expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith(
       expect.objectContaining({
         candidate: expect.objectContaining({
           fallbackPRNumber: 13,
-          // Why: main can only head-gate fallback preservation when the
-          // candidate carries the worktree head it was built for.
+          // Carry candidate worktree head so main can gate merged fallback validity.
           currentHeadOid: 'behind-head'
         })
       })

@@ -1,7 +1,7 @@
 import type { CacheEntry } from '@/store/github/cache-model'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
-import { sortedStrings } from '../../task-page-work-item-signatures'
+import { sortedStrings } from '../task-page-work-item-signatures'
 
 type LinearIssueCache = Record<string, CacheEntry<LinearIssue>>
 type LinearSearchCache = Record<string, CacheEntry<LinearIssue[]>>

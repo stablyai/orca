@@ -11,7 +11,8 @@ import {
 import { wslExeProcessSpec, wslExeStdout } from './wsl-exe-process'
 import {
   _resetRunningWslDistroCacheForTests,
-  resolveRunningWslDistros
+  resolveRunningWslDistros,
+  type RunningWslDistroReadOptions
 } from './wsl-running-distro-cache'
 import {
   getWslDirectoryProbeArgs,
@@ -184,7 +185,7 @@ export async function listWslDistrosAsync(): Promise<string[]> {
 }
 
 export async function listRunningWslDistrosAsync(
-  options: { requireConfirmed?: boolean } = {}
+  options: RunningWslDistroReadOptions = {}
 ): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
@@ -267,6 +268,22 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
     })
   wslHomeProbeCache.set(distro, probe)
   return probe
+}
+
+/** Canonical guest path of a directory; Windows cannot follow guest symlinks over 9P. */
+export async function resolveWslGuestRealDirAsync(
+  distro: string,
+  guestDir: string
+): Promise<string | null> {
+  try {
+    // -m: a session's folder may not exist yet, but the profile symlink above it does.
+    const realDir = (
+      await runWslExe(buildWslExecArgs(distro, ['realpath', '-m', '--', guestDir]))
+    ).trim()
+    return realDir.startsWith('/') ? realDir : null
+  } catch {
+    return null
+  }
 }
 
 /** UNC home roots for distros that are running at discovery time. */

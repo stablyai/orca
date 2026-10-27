@@ -1,0 +1,19 @@
+import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
+
+export const STRUCTURED_CLIENT = {
+  clientKind: 'runtime' as const,
+  clientCapabilities: [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
+  ]
+}
+export const STRUCTURED_MOBILE_CLIENT = {
+  clientKind: 'mobile' as const,
+  clientCapabilities: [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
+  ]
+}

@@ -24,8 +24,7 @@ describe('isWordlessProviderFrame', () => {
     expect(isWordlessProviderFrame({ text: 'plain status' })).toBe(false)
   })
 
-  // Hosts before the output was read into the row's text stored `/usage` output only in the
-  // payload, so those rows still carry the label; they stay drawn with the payload behind them.
+  // Older hosts stored /usage output only in payload; keep their labeled rows visible.
   it("keeps a Claude local command's row an older host wrote with only the label", () => {
     expect(isWordlessProviderFrame(frameRow('claude', 'message:system:local_command_output'))).toBe(
       false

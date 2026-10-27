@@ -724,8 +724,7 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         capturedDataCallback.current?.('\x1b[?2031h')
         vi.advanceTimersByTime(50)
 
-        // Why the scanner and not xterm's CSI handler: xterm batches PTY chunks into one
-        // parse, so only this layer knows the chunk ended still subscribed (#9993).
+        // Scan chunk boundaries: xterm batches chunks and cannot observe each transient subscription state (#9993).
         expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
         expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(
           expect.stringMatching(/\?997/)
@@ -739,10 +738,6 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
       binding.dispose()
     })
 
-    // Why: fish 4.7.1 enables and disables 2031 around *every* prompt with no opt-out, so
-    // back-to-back chunks each carrying a toggle are the normal case. Subscribing is never
-    // answered (#9993) — these pin that silence plus the per-chunk subscription bookkeeping
-    // that theme-flip pushes depend on. xterm cannot do that bookkeeping: it parses several
-    // chunks in one synchronous batch and only sees the net result.
+    // Fish toggles 2031 every prompt; never answer subscriptions, but track each chunk for theme flips even when xterm batches away the toggles (#9993).
   })
 }

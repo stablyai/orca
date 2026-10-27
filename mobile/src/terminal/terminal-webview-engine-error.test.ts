@@ -42,8 +42,7 @@ vi.mock('lucide-react-native', () => ({
   RefreshCw: 'RefreshCw'
 }))
 
-// Why: mounting TerminalWebView arms the web-ready watchdog; tests must
-// unmount so the timer can't survive into later tests and fire in teardown.
+// Unmount every WebView so readiness watchdogs cannot survive into another test.
 let activeRenderer: ReactTestRenderer | null = null
 
 function createTerminalWebViewRenderer(
@@ -140,9 +139,7 @@ describe('TerminalWebView engine errors', () => {
     expect(renderedText(renderer)).not.toContain('watchdog cascade')
   })
 
-  // Why: if the document dies before the glue can post anything (or the RN
-  // bridge never comes up), no message and no native error handler fires —
-  // the watchdog must convert that silence into the visible fatal overlay.
+  // Watchdog silence catches failures before document code or the bridge can report anything.
   it('paints the fatal overlay when web-ready never arrives', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})

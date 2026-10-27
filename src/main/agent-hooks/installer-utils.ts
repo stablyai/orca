@@ -216,6 +216,18 @@ function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string
   return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
 }
 
+// Users may opt a managed hook into async; keep that choice when the hook is rewritten.
+export function withPreviousManagedAsync(
+  hook: HookCommandConfig,
+  definitions: HookDefinition[],
+  matches: (command: string | undefined) => boolean
+): HookCommandConfig {
+  const async = definitions
+    .flatMap((definition) => (Array.isArray(definition.hooks) ? definition.hooks : []))
+    .find((prev) => typeof prev.async === 'boolean' && hookHasManagedCommand(prev, matches))?.async
+  return async === undefined ? hook : { ...hook, async }
+}
+
 export function hookDefinitionHasManagedCommand(
   definition: HookDefinition,
   isManagedCommand: (command: string | undefined) => boolean
@@ -342,3 +354,5 @@ export function writeHooksJson(
     }
   }
 }
+
+export { writeHooksJsonAsync } from './hooks-json-write-async'

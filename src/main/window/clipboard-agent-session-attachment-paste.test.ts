@@ -1,5 +1,4 @@
-// A structured chat keeps pasted images in its host's attachment store, not in a temp directory: a
-// temp path has no owner, so nothing can tell a sent paste from an abandoned one.
+// Structured chats own pasted images in their host attachment store; temp paths cannot distinguish sent from abandoned pastes.
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

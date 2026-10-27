@@ -38,8 +38,7 @@ export function CursorAccountsSection(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Why a generation counter: two usage updates can overlap, and the slower read
-  // would otherwise land last and repaint the pane with the older account.
+  // Reject overlapping usage reads that finish late with older account state.
   const latestLoad = useRef(0)
 
   const loadStatus = useCallback(async (): Promise<void> => {
@@ -68,13 +67,12 @@ export function CursorAccountsSection(): React.JSX.Element {
     }
   }, [])
 
-  // Why: after a background usage fetch, sign-in state may change — reload status then.
+  // Background usage updates can change sign-in state; reload status on arrival.
   useEffect(() => {
     void loadStatus()
   }, [loadStatus, cursorUsage?.updatedAt])
 
-  // Why: the effect below already reloads status when the refresh lands a new
-  // snapshot, and each load is a keychain read for an item Orca does not own.
+  // Let the snapshot effect reload status once; each extra read touches an externally owned keychain item.
   const handleRefreshUsage = async (): Promise<void> => {
     setRefreshing(true)
     try {
@@ -89,17 +87,14 @@ export function CursorAccountsSection(): React.JSX.Element {
   const sourceLabel = credentialSourceLabel(status?.credentialSource ?? null)
   const pools = cursorUsage?.buckets ?? []
   const monthly = cursorUsage?.monthly ?? null
-  // Why: hiding the row entirely leaves signed-in users with no explanation when
-  // Cursor reports no allowance or the refresh failed — never let unknown usage
-  // read as healthy, and never let a failed fetch render as an empty section.
+  // Explain unknown/failed usage rather than hiding the signed-in account or implying healthy allowance.
   const unavailableReason =
     signedIn && pools.length === 0 && !monthly
       ? cursorUsage?.status === 'unavailable' || cursorUsage?.status === 'error'
         ? (cursorUsage.error ?? null)
         : null
       : null
-  // Why separate from the row above: a stale snapshot still renders its numbers,
-  // so the failure has to be said beside them rather than instead of them.
+  // Stale snapshots retain numbers; show their refresh failure beside them.
   const staleUsageError =
     signedIn && cursorUsage?.status === 'error' && (pools.length > 0 || monthly)
       ? (cursorUsage.error ?? null)

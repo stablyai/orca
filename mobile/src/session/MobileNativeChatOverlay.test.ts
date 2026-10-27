@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
-import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileImageSource } from '../platform/media-picker-contract'
 import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
@@ -14,8 +14,10 @@ vi.mock('react-native', () => ({
 
 vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
-vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
-vi.mock('./MobileNativeChatBackgroundTasks', () => ({
+vi.mock('./native-chat/input/MobileNativeChatQueuedMessages', () => ({
+  MobileNativeChatQueuedMessages: 'Queued'
+}))
+vi.mock('./native-chat/input/MobileNativeChatBackgroundTasks', () => ({
   MobileNativeChatBackgroundTasks: 'BackgroundTasks'
 }))
 vi.mock('./MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
@@ -27,15 +29,12 @@ function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
 }
 
-/** One render of the route: chat visible or not, the transcript it currently
- *  holds, and the agent-status stream behind it. */
 type Tick = {
   show?: boolean
   messages?: NativeChatMessage[]
   streamingText?: string
   streamLive?: boolean
   identity?: string
-  /** The host says a person's Stop is ending the turn. */
   stopping?: boolean
   acceptsImages?: boolean
   agent?: string
@@ -65,7 +64,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
     chatPending: [],
     chatImagePreviewsByMessageId: {},
-    chatComposerText: '',
+    chatDraftKey: null,
     setChatComposerText: vi.fn(),
     nativeChatQueued: {
       cards: [],
@@ -123,7 +122,6 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     })
   }
 
-  /** The bubble text handed to the chat list, or `'hidden'` when chat is off. */
   function streaming(): string | null | 'hidden' {
     const views = findAllByHostType(renderer!.root, 'ChatView')
     return views.length === 0 ? 'hidden' : (views[0].props.streaming as string | null)
@@ -155,9 +153,7 @@ describe('MobileNativeChatOverlay streaming gate', () => {
   })
 
   it('keeps the bubble across a peek at the terminal view', async () => {
-    // Toggling to the terminal unmounts the chat list and unsubscribes its
-    // transcript. The gate lives above that boundary, so the baseline survives
-    // and the repeated-prefix reply keeps streaming on the way back.
+    // Keep the baseline above chat-list unmounts so repeated-prefix replies still stream after terminal toggles.
     const prior = [assistantTurn('a1', 'Done.')]
     await render({ messages: prior })
     await update({ messages: prior, streamingText: 'Done.', streamLive: true })
@@ -165,8 +161,7 @@ describe('MobileNativeChatOverlay streaming gate', () => {
 
     await update({ show: false, messages: [], streamLive: true })
     expect(streaming()).toBe('hidden')
-    // Back on chat the session withholds its transcript until a fresh read
-    // settles, so the throttled stream text returns a round trip ahead of it.
+    // Status streaming returns before the transcript refresh; that round-trip gap must remain visible.
     await update({ messages: [], streamLive: true })
     await update({ messages: [], streamingText: 'Done.', streamLive: true })
     await update({ messages: prior, streamingText: 'Done.', streamLive: true })
@@ -175,8 +170,7 @@ describe('MobileNativeChatOverlay streaming gate', () => {
   })
 
   it('keeps the bubble across a peek at the terminal taken between turns', async () => {
-    // Same toggle, but taken while idle: the transcript empties before the next
-    // turn starts, so the gate has to reject that empty tail as a baseline.
+    // An idle toggle must not replace the baseline with an empty withheld transcript.
     const prior = [assistantTurn('a1', 'Done.')]
     await render({ messages: prior })
 
@@ -190,10 +184,7 @@ describe('MobileNativeChatOverlay streaming gate', () => {
   })
 
   it('hides a repeated part whose own turn landed during a mid-turn gap', async () => {
-    // Between parts the status frame carries no assistant text (a tool call), so
-    // the stream goes textless while the turn is still live and the part that
-    // just finished lands in the transcript. Re-anchoring on that tick would
-    // adopt it as history and render it a second time.
+    // Textless tool ticks must not adopt the just-finished part as history and draw it twice.
     const prior = [assistantTurn('a1', 'Done.')]
     await render({ messages: prior })
     await update({ messages: prior, streamingText: 'Done.', streamLive: true })
@@ -234,7 +225,6 @@ describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
       renderer = create(overlayElement(tick))
     })
     const view = findByHostType(renderer!.root, 'ChatView')
-    // The tray's second child is the queued box; the first is the child-work strip.
     return view.props.composerTray?.content?.props?.children?.[1]?.props?.steerHeld
   }
 

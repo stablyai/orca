@@ -46,8 +46,7 @@ function MobileOnboardingFlow({
 }) {
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])
-  // Why: an iPad modal is a centred sheet narrower than the window, so slides must
-  // follow the viewport; null holds the pager back until the first measurement.
+  // Measure pager viewport: iPad sheet is narrower than window; null waits for first layout.
   const [width, setWidth] = useState<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [busyChoice, setBusyChoice] = useState<MobileOnboardingBusyChoice>(null)
@@ -56,8 +55,7 @@ function MobileOnboardingFlow({
   const slideProgress = useRef(new Animated.Value(0)).current
   const reducedMotionEnabled = useReducedMotionEnabled()
 
-  // Why: onboarding requires an explicit choice for every planned step; disabling
-  // stack gestures alone still leaves Android hardware Back able to skip the flow.
+  // Block Android hardware Back too; stack gesture settings alone cannot require every onboarding choice.
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => true)
@@ -79,13 +77,11 @@ function MobileOnboardingFlow({
     setError(null)
     Animated.timing(slideProgress, {
       toValue: nextIndex,
-      // Why: the carousel should preserve continuity without overriding the
-      // device's reduced-motion preference.
+      // Preserve carousel continuity while honoring reduced motion.
       duration: reducedMotionEnabled === true ? 0 : SLIDE_DURATION_MS,
       useNativeDriver: true
     }).start(() => {
-      // Why: a cancelled cosmetic transition must not leave the next decision
-      // permanently disabled after the previous choice was already persisted.
+      // Cancelled cosmetic animation must not block the next choice after previous choice persisted.
       setBusyChoice(null)
       choiceInFlightRef.current = false
     })
@@ -93,8 +89,7 @@ function MobileOnboardingFlow({
 
   const chooseSessionView = useCallback(
     async (view: MobileSessionView) => {
-      // Why: state does not disable both buttons synchronously; the ref prevents
-      // rapid taps from persisting conflicting choices or advancing twice.
+      // Ref prevents rapid taps persisting conflicting choices before state disables buttons.
       if (choiceInFlightRef.current) {
         return
       }
@@ -140,7 +135,7 @@ function MobileOnboardingFlow({
   )
   const onViewportLayout = useCallback((event: LayoutChangeEvent) => {
     const measured = event.nativeEvent.layout.width
-    // Why: a transient zero-width pass must not collapse the slides to nothing.
+    // Ignore transient zero width to keep slides visible.
     if (measured > 0) {
       setWidth(measured)
     }

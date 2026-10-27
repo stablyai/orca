@@ -3,12 +3,13 @@ import { AiVaultSearchRequestSchema } from '../../shared/ai-vault-search-contrac
 import { fakeSearchService } from '../../shared/ai-vault-search-test-fixture'
 import {
   installSessionSearchScopeCatalogSource,
-  resetSessionSearchScopeCatalogForTests
+  resetSessionSearchScopeCatalogForTests,
+  type SessionSearchScopeCatalog
 } from './session-search-scope-catalog'
 import { searchSessionService, setSessionSearchService } from './session-search-service-registry'
 
-const CATALOG = {
-  repos: [{ id: 'repo-1', path: '/work/app' }],
+const CATALOG: SessionSearchScopeCatalog = {
+  repos: [{ id: 'repo-1', path: '/work/app', displayName: 'app', badgeColor: '', addedAt: 0 }],
   projects: [],
   projectHostSetups: [],
   worktreeMeta: { 'repo-1::/work/app': {} },
@@ -21,7 +22,7 @@ afterEach(() => {
 })
 
 describe('scope identity at the search choke point', () => {
-  it('narrows to the host’s own paths and acknowledges the scope it resolved', async () => {
+  it('forwards the host’s resolved paths to the service', async () => {
     const service = fakeSearchService()
     setSessionSearchService(service)
     installSessionSearchScopeCatalogSource(() => CATALOG)

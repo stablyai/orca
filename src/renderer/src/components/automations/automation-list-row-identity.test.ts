@@ -1,12 +1,4 @@
-/**
- * One automation ID under two authorities, followed from the cached host rows
- * all the way into the search index.
- *
- * These are the joins the list makes between a record and its host. Each one
- * used to be a bare automation ID, which is unique only inside one authority
- * (doc:38) — so the desktop's `a-1` and a runtime SSH host's `a-1` shared a
- * slot, and whichever was written last won it.
- */
+/** Follow colliding authority-local IDs from host cache through list/search joins so the last host cannot overwrite another’s row. */
 
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'

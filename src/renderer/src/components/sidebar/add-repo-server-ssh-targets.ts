@@ -14,7 +14,7 @@ function toRemoteRepoTarget(target: SshEditableTarget): RemoteRepoTarget {
   } = target
   return {
     ...rest,
-    // Why no state when absent: the server has none for it, which is not "disconnected" proof.
+    // Missing server state cannot establish disconnection.
     ...(connectionStatus
       ? {
           state: { targetId: target.id, status: connectionStatus, error: null, reconnectAttempt: 0 }
@@ -23,12 +23,10 @@ function toRemoteRepoTarget(target: SshEditableTarget): RemoteRepoTarget {
   }
 }
 
-/** The SSH hosts a paired server owns, for its Add Project flow. */
 export async function loadServerSshTargets(environmentId: string): Promise<RemoteRepoTarget[]> {
   return (await listRuntimeEditableSshTargets(environmentId)).map(toRemoteRepoTarget)
 }
 
-/** Overlays the server's pushed SSH states (mirrored in the store) onto the listed targets. */
 export function withServerSshStates(
   targets: RemoteRepoTarget[],
   states: ReadonlyMap<string, SshConnectionState> | undefined

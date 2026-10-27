@@ -189,8 +189,7 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
 
       it('discards a half-read escape prefix when the pane swaps PTYs', async () => {
         const { transport, deps, emit, dispose } = await connectVisiblePane()
-        // Why: the tail is a byte range from the old stream. Splicing it onto the first
-        // chunk of a replacement PTY fabricates a subscribe no program ever sent.
+        // Discard old stream tails on PTY replacement so concatenation cannot fabricate a subscription.
         transport.serializeBuffer = vi.fn().mockResolvedValue(null)
         emit('\x1b[?20')
         // droppedOutput latches the hidden-restore PTY id, which is what detects the swap.

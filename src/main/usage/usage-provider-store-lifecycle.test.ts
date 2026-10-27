@@ -171,7 +171,7 @@ describe('UsageProviderStoreLifecycle', () => {
     writeProbe.blocked = false
     writeProbe.waiters = []
     scan = vi.fn<TestScan>().mockResolvedValue(emptyScanResult())
-    // The real split, in-process: the worker only adds the thread around it.
+    // Run the real cache split in-process; the worker only wraps it in a thread.
     split = vi.fn<TestSplit>(splitUsageCacheFile)
     vi.spyOn(Date, 'now').mockReturnValue(NOW)
   })
@@ -305,7 +305,6 @@ describe('UsageProviderStoreLifecycle', () => {
     const persisted = readFileSync(cacheFile, 'utf-8')
     expect(JSON.parse(persisted)).not.toHaveProperty('processedSources')
     expect(JSON.parse(persisted).sessions).toEqual([{ id: 'session' }])
-    // Compact: the report is rewritten after every scan.
     expect(persisted).not.toContain('\n')
   })
 
@@ -337,7 +336,7 @@ describe('UsageProviderStoreLifecycle', () => {
 
   it('splits a large legacy cache on the worker before any reader or writer sees it', async () => {
     const cacheFile = join(tempDirectory, 'provider.json')
-    // Past the main-thread parse ceiling, the shape a pre-sidecar Claude history has.
+    // Exceed the main-thread parse ceiling like a pre-sidecar Claude history.
     const processedSources = Array.from({ length: 9_000 }, (_, index) => ({
       id: `source-${index}-${'x'.repeat(1_000)}`
     }))
@@ -356,7 +355,7 @@ describe('UsageProviderStoreLifecycle', () => {
     )
 
     const store = createStore(cacheFile)
-    // A write racing the load must not clobber the history being loaded.
+    // A write racing load must not overwrite the history being loaded.
     const disabled = store.setEnabled(false)
 
     await Promise.resolve()

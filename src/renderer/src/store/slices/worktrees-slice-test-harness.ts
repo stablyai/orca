@@ -150,7 +150,8 @@ export function createTestStore() {
           ]
         ]),
         repos: [],
-        projectHostSetups: [],
+        endpointProjects: [],
+        endpointProjectHostSetups: [],
         deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
         updateFolderWorkspace: vi.fn().mockResolvedValue(true),
         updateSettings: vi.fn().mockResolvedValue(undefined),
@@ -221,8 +222,7 @@ export function createLocalLineageTestStore(lineage: WorktreeLineage) {
   return store
 }
 
-// Why: both the metadata fallback and removeWorktree write this module-level memory, so a leaked entry from an
-// earlier describe would silently suppress a row here. Reset for every case, not just the fetch suites.
+// Reset removal memory per case: both metadata fallback and removeWorktree write it, so leaked entries silently suppress rows.
 export function resetWorktreeSliceModuleMemory() {
   resetAuthoritativelyRemovedWorktreeMemoryForTests()
   mockApi.worktrees.create.mockReset()

@@ -1,3 +1,4 @@
+import type { AiVaultSessionSources } from '../../ai-vault/cached-session-list'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
@@ -36,7 +37,6 @@ export type RuntimeConstructionDependencies = {
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
   getAgentProviderSessionSnapshot?: () => AgentStatusIpcPayload[]
   getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
-  /** Every change to the provider sessions the hook store holds, by pane; returns the release. */
   subscribeAgentProviderSessionChanges?: (
     listener: (sessions: readonly { paneKey: string; sessionId: string }[]) => void
   ) => () => void
@@ -59,6 +59,7 @@ export type RuntimeConstructionDependencies = {
   dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
   canRecoverPersistentLocalPtys?: () => boolean
   getPairedDeviceName?: (pairedDeviceId: string) => string | null
+  getProjectOwnershipCatalog?: AiVaultSessionSources['getProjectOwnershipCatalog']
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -76,7 +77,6 @@ export type RuntimeConstructionDependencies = {
   skillTransactionRecovery?: Promise<unknown>
   applySessionSearchSettings?: SessionSearchSettingsApply
   orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
-  /** The desktop's parts of a workspace's sleep; a headless server has none. */
   workspaceSleepPlatform?: WorkspaceSleepPlatform
 }
 

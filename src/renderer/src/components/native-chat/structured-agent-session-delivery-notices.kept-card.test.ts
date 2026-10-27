@@ -1,5 +1,4 @@
-// A send the host kept as a queued card is the card's from then on: its own row says nothing,
-// neither "Sending…" nor not sent, whatever phase the desktop's send is still in.
+// After host admission as a queued card, its own row must not show sending/failure regardless of local delivery phase.
 
 import { expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'

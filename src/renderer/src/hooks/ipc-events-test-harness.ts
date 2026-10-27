@@ -3,7 +3,6 @@ import type * as ReactModule from 'react'
 import type { HarnessStoreState } from './ipc-events-harness-store-state'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 
-// Re-exported so a suite needs one import for the harness and the store surface it seeds.
 export {
   createHarnessStoreState,
   type HarnessStoreState,
@@ -55,34 +54,24 @@ export type IpcEventsHarness = {
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
   focusEditorTab: (request: FocusEditorTabRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
-  /** Fire a main-process digit chord (zero-based index). */
   jumpToWorktreeIndex: (index: number) => void
   jumpToTabIndex: (index: number) => void
   navigationUpdate: (event: { browserPageId: string; url: string; title: string }) => void
   certificateFailureChanged: (event: { browserPageId: string; failure: unknown }) => void
-  /** Fire a host-local push of the pages a paired client renders for a worktree. */
   clientHostedBrowserRowsChanged: (event: ClientHostedBrowserRowsEvent) => void
-  /** Resolves the hydration round trip the hook starts, so buffered pushes drain. */
   settleClientHostedBrowserRowsSnapshot: () => Promise<void>
-  /** Standard (non-palette) target of a workspace digit chord. */
   activateAndRevealWorkspace: ReturnType<typeof vi.fn>
 }
 
 export type IpcEventsHarnessOptions = {
-  /** Sidebar order the workspace digit chord indexes into. */
   visibleWorktreeIds?: string[]
   visibleWorktreeTargets?: { id: string; executionHostId?: 'local' | `ssh:${string}` }[]
-  /** Snapshot the client-hosted row hydration round trip resolves with. */
   clientHostedBrowserRowsSnapshot?: ClientHostedBrowserRowsEvent[]
-  /** Rejects the hydration round trip instead of resolving it. */
   clientHostedBrowserRowsSnapshotError?: Error
   /** Extra `window.api.browser` members, e.g. a listener capture for a channel under test. */
   browserApi?: Record<string, unknown>
 }
 
-/**
- * Loads useIpcEvents against a stubbed preload API so IPC behavior is asserted through the hook.
- */
 export async function loadIpcEventsHarness(
   storeState: HarnessStoreState,
   options: IpcEventsHarnessOptions = {}
@@ -173,6 +162,7 @@ export async function loadIpcEventsHarness(
             createTerminalListener = listener
             return () => {}
           },
+          onLaunchRecipe: () => () => {},
           onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
             requestTerminalCreateListener = listener
             return () => {}
@@ -220,6 +210,7 @@ export async function loadIpcEventsHarness(
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           listRemovedTargetLabels: () => Promise.resolve({}),
           getState: () => Promise.resolve(null),

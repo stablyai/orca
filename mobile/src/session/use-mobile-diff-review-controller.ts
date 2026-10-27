@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useMobileSourceControlSettings } from '../source-control/mobile-source-control-settings'
 import type { FlatList } from 'react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
@@ -76,6 +77,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
+  const { compareAgainstUpstream } = useMobileSourceControlSettings(client, connState).settings
 
   const loadReviewData = useCallback(async () => {
     const generation = loadGenerationRef.current + 1
@@ -85,8 +87,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       setScreenState({ kind: 'error', message: 'Missing worktree' })
       return
     }
-    // Why (F10): a loaded review outlives a blip — the waiting state is for a screen with nothing
-    // to show, and this branch (not the one below it) is the one a drop actually reaches.
+    // Keep an existing review through disconnects; only empty screens need the waiting state.
     const keepReady = (fallback: ReviewScreenState) => (prev: ReviewScreenState) =>
       prev.kind === 'ready' ? prev : fallback
     if (!client || connState !== 'connected') {
@@ -95,7 +96,11 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     }
     setScreenState(keepReady({ kind: 'loading' }))
     try {
-      const nextState = await loadMobileDiffReviewSnapshot(client, worktreeId)
+      const nextState = await loadMobileDiffReviewSnapshot(
+        client,
+        worktreeId,
+        compareAgainstUpstream
+      )
       if (!isCurrent()) {
         return
       }
@@ -103,8 +108,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       setActionError(nextState.kind === 'ready' ? (nextState.branchError ?? null) : null)
     } catch (err) {
       if (isCurrent()) {
-        // Why (F10): a failed refresh after reconnect must not destroy the review
-        // already on screen; the error state is for a screen with nothing to show.
+        // Failed reconnect reads must not destroy an already loaded review.
         setScreenState(
           keepReady({
             kind: 'error',
@@ -113,7 +117,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
         )
       }
     }
-  }, [client, connState, worktreeId])
+  }, [client, compareAgainstUpstream, connState, worktreeId])
 
   useEffect(() => {
     void loadReviewData()
@@ -156,8 +160,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       return
     }
     seededInitialTargetRef.current = true
-    // Why: review data loads asynchronously; seed the tapped file only after the
-    // first real queue exists so the clamp effect cannot reset it back to zero.
+    // Seed the tapped file only once the queue exists or clamping would reset its selection.
     setCurrentIndex(findMobileDiffReviewInitialIndex(filteredQueue, initialTarget))
   }, [filteredQueue, initialTarget])
 
@@ -214,8 +217,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     return map
   }, [commentsForCurrentItem])
 
-  // Head branch + SHA for the PR sidebar come from git.status (the review snapshot),
-  // not the branchCompare base ref. headOid is the branch-compare fallback for the SHA.
+  // Use git.status for PR head identity; branchCompare’s base ref is not the head.
   const prSidebarBranch = screenState.kind === 'ready' ? (screenState.status.branch ?? null) : null
   const prSidebarHeadSha =
     screenState.kind === 'ready'
@@ -268,8 +270,6 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       statusPending: hostStatusPending,
       statusReadable: hostStatusReadable
     }),
-    // Exposed so the screen can thread the RPC client + worktree into the PR
-    // sidebar's lazy check-detail fetches (U5) and mutation actions (U6).
     client,
     connState,
     worktreeId,

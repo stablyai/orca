@@ -22,7 +22,6 @@ function checkRowValue(status: AppUpdateCheckRowStatus, lastCheckedAt: number | 
   return `Last checked ${ago === 'just now' ? ago : `${ago} ago`}`
 }
 
-/** Settings' version row and manual check; the update row stays after the home card is dismissed. */
 export function AppUpdateSettingsRows(props: {
   installedVersion: string | null
   available: KnownAppUpdate | null
@@ -68,7 +67,6 @@ export function AppUpdateSettingsRows(props: {
   )
 }
 
-// Same panel, rows and separator as MobileSettingsSection.
 const styles = StyleSheet.create({
   section: {
     backgroundColor: colors.bgPanel,

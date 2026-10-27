@@ -1,4 +1,4 @@
-import type { TaskPageWorkspaceActionsModel } from '../../use-task-page-workspace-actions'
+import type { TaskPageWorkspaceActionsModel } from '../use-task-page-workspace-actions'
 import { useCallback } from 'react'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toast } from 'sonner'
@@ -106,13 +106,11 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
         setNewIssueBody('')
         setNewIssueLabels([])
         setNewIssueAssignees([])
-        // Why: only a complete success discards the recovery draft; a partial body save keeps the text for recovery.
         clearNewIssueDraft()
       }
-      // Why: bump the nonce so the list refetches and shows the new issue.
       setTaskRefreshNonce((current) => current + 1)
 
-      // Why: auto-open the new issue with an optimistic stub for immediate content, then refine with the full workItem fetch.
+      // Open immediately from an optimistic stub, then refine it with the full work-item read.
       const stub: GitHubWorkItem = {
         id: `issue:${String(result.number)}`,
         repoId: newIssueTargetRepo.id,

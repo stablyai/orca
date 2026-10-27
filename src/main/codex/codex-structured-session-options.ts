@@ -28,7 +28,7 @@ export function restoredCodexSessionOptions(
   return new Map(Object.entries(options ?? {}).filter(([key]) => isCodexTurnOptionKey(key)))
 }
 
-/** Startup reports the thread's defaults together with the saved next-turn intent. */
+/** Report current child evidence together with the saved next-turn intent. */
 export function reportedCodexSessionOptions(
   session: CodexSession
 ): AgentSessionOptionsResult['current'] {
@@ -39,6 +39,7 @@ export function reportedCodexSessionOptions(
   const serviceTier = session.options.get('serviceTier')
   return {
     model,
+    reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
     ...(effort ? { effort } : {}),
     ...(serviceTier ? { serviceTier } : {})
   }
@@ -78,7 +79,14 @@ function composeLiveCodexCatalog(
         }
       : {})
   })
-  return { ...catalog, fastModeSupport: listing.fastModeSupport }
+  return {
+    ...catalog,
+    current: {
+      ...catalog.current,
+      reportedPermissionMode: session.reportedOptions.reportedPermissionMode
+    },
+    fastModeSupport: listing.fastModeSupport
+  }
 }
 
 export async function readLiveCodexSessionOptions(

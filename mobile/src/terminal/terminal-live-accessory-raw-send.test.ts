@@ -33,7 +33,7 @@ describe('terminal live accessory raw send', () => {
     expect(sendRequest).toHaveBeenCalledWith(
       'terminal.send',
       { terminal: 'terminal-a', text: '', enter: false, client: { id: 'tok', type: 'mobile' } },
-      // Why: an accessory key parked in the connect wait would fire into the PTY long after the tap.
+      // Never park accessory keys to fire into a reconnected PTY long after the tap.
       { failWhenDisconnected: true }
     )
     expect(sendRequest).toHaveBeenCalledTimes(2)

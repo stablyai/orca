@@ -137,4 +137,18 @@ describe('project registration dedupes only against rows on the same host', () =
     expect(added.id).toBe('own')
     expect(repos).toHaveLength(1)
   })
+
+  it('two adds of the same new folder at once register it once', async () => {
+    const folderPath = join(root, 'notes')
+    await mkdir(folderPath)
+    const { controller, repos } = createController([])
+
+    const [first, second] = await Promise.all([
+      controller.add(folderPath, 'folder', 'runtime:env'),
+      controller.add(folderPath, 'folder', 'runtime:env')
+    ])
+
+    expect(second.id).toBe(first.id)
+    expect(repos).toHaveLength(1)
+  })
 })

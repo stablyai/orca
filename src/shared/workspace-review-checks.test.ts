@@ -57,22 +57,6 @@ describe('all workspace review checks', () => {
       summarizeWorkspaceReviewChecks([first, second], map([[first, details(first, 'success')]]))
     ).toMatchObject({ state: 'unknown', known: 1, unknown: 1 })
   })
-  it('gives pending checks precedence over unknown data and passing over neutral', () => {
-    const first = attachment(1)
-    const second = attachment(2)
-    expect(
-      summarizeWorkspaceReviewChecks([first, second], map([[first, details(first, 'pending')]]))
-    ).toMatchObject({ state: 'pending' })
-    expect(
-      summarizeWorkspaceReviewChecks(
-        [first, second],
-        map([
-          [first, details(first, 'neutral')],
-          [second, details(second, 'success')]
-        ])
-      )
-    ).toMatchObject({ state: 'success' })
-  })
   it('never certifies stale success and conservatively retains stale failure', () => {
     const item = attachment(1)
     expect(

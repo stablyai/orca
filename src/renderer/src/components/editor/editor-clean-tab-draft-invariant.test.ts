@@ -1,5 +1,4 @@
-// Why: the invariant every transition must keep: a tab that is not dirty holds no draft of the disk
-// text, so no stale draft can later be restored into a shared model.
+// Clean tabs must not retain disk-text drafts that could later overwrite a shared model.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { requestEditorFileSave } from './editor-autosave'

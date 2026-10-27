@@ -1,5 +1,4 @@
-// Layout-owner build: a pane main is starting a terminal for never starts one of its own. It waits,
-// then attaches to main's terminal; a start that failed shows why.
+// Wait for main’s start and attach to its terminal; expose start failures without spawning a second terminal.
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'

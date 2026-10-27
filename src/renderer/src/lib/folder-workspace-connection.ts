@@ -23,8 +23,7 @@ export function getFolderWorkspaceConnectionId(
   switch (host.kind) {
     case 'ssh':
       return host.targetId
-    // Why the server's own target: like a project row there (`getRepoSshConnectionId`), so its
-    // SSH state is read inside that server rather than reading as local.
+    // Use the owning server’s SSH target so its status resolves there rather than reading as local.
     case 'runtime':
       return host.sshTargetId
     case 'local':

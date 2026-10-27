@@ -1,8 +1,5 @@
-// `resolveRuntimeFileTarget` read `store.getRepo(worktree.repoId)?.connectionId` and never looked
-// at `worktree.hostId`, so one arbitrarily chosen row decided the execution host for ~30 downstream
-// filesystem dispatches. `undefined` there meant "runtime host", "unresolved" and "genuinely local"
-// at once (#11163). These cases pin all four answers end to end; an `ssh:` host is refused by
-// name. Companion to runtime-git-target-execution-host.test.ts.
+// Pin execution-host resolution end to end (#11163): repo-only lookup ignored worktree.hostId and conflated runtime, unresolved and local as undefined.
+// Refuse ssh: hosts explicitly; companion to runtime-git-target-execution-host.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -76,8 +73,7 @@ describe('runtime file target execution host', () => {
     mocks.listMarkdownDocuments.mockReset().mockResolvedValue([])
   })
 
-  // The case whose absence let the original cross-host leak through review: two SSH hosts,
-  // and the rival row is the one `getRepo` returns first.
+  // Choose a rival SSH row first to expose repo-id-only cross-host resolution.
   it('routes an ssh workspace to the host it names, not to a rival row on another ssh host', async () => {
     const runtime = makeRuntime(
       [
@@ -99,8 +95,7 @@ describe('runtime file target execution host', () => {
     await expectRefusedFor(runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`), 'm4air')
   })
 
-  // `local` has no SSH namespace to nest in, so a surviving `connectionId` is a row contradicting
-  // itself. The old shape handed it out and read a local workspace off a remote host.
+  // Local rows cannot carry SSH connectionId; the old target incorrectly read local files on that remote host.
   it('ignores a stale connection on a row that declares itself local', async () => {
     const runtime = makeRuntime(
       [
@@ -119,7 +114,7 @@ describe('runtime file target execution host', () => {
     expect(mocks.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH, {})
   })
 
-  // A `runtime:` row's `connectionId` names a target in the *server's* namespace, never this client's.
+  // Runtime connectionId belongs to the server's target namespace, never this client's.
   it('refuses a runtime host whose row carries a nested ssh target', async () => {
     const runtime = makeRuntime(
       [
@@ -189,8 +184,7 @@ describe('runtime file target execution host', () => {
     expect(mocks.listMarkdownDocuments).not.toHaveBeenCalled()
   })
 
-  // The mutation guard recomputed the host from `connectionId`, so a client could satisfy a host
-  // expectation the workspace never named.
+  // Guard against recomputing host from connectionId and accepting expectations the workspace never named.
   it('rejects a mutation whose expected host is the row rather than the resolved one', async () => {
     const runtime = makeRuntime(
       [{ id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' }],

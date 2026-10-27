@@ -45,7 +45,6 @@ const baseArgs = {
   workspaceName: undefined,
   note: undefined,
   worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
-  // Existing cases keep pinning the legacy create; the launch cases opt in explicitly.
   agentLaunchSupported: false as const
 }
 
@@ -64,8 +63,6 @@ describe('createWorkspaceFromComposerSource', () => {
         repoId: 'repo-9'
       }
     }
-    // The composer supplies the title-derived name as workspaceName; with none,
-    // buildTaskWorkspaceCreateParams falls back to the "<type>-<number>" slug.
     const result = await createWorkspaceFromComposerSource({ client, selection, ...baseArgs })
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'issue-7' })
     expect(calls).toHaveLength(1)
@@ -294,8 +291,7 @@ describe('createWorkspaceFromComposerSource', () => {
   })
 
   it('sends startupAgent (not a pre-built command) for a non-blank agent', async () => {
-    // Why: regression — a bare startupCommand skipped the host's default
-    // `--dangerously-skip-permissions`; the host must resolve the launch args.
+    // Host launch resolution must retain configured permission flags; bare startup commands bypass them.
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-agent' } }), calls)
     const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
@@ -432,8 +428,6 @@ describe('createWorkspaceFromComposerSource', () => {
     })
 
     expect(calls.map((call) => call.method)).toEqual(['worktree.create'])
-    // The host picks the agent for a work item (desktop parity) and drafts the URL into it, so the
-    // payload carries `createdWithAgent` + `startupDraft` rather than a `startupAgent`.
     expect(calls[0]!.params).toMatchObject({
       createdWithAgent: 'claude',
       startupDraft: 'https://github.test/acme/app/issues/7'

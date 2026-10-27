@@ -1,15 +1,12 @@
 import { useMemo } from 'react'
-import { extractPendingMessageReplyAsk, formatAskAnswer } from '../../../../shared/native-chat-ask'
+import { extractPendingMessageReplyAsk } from '../../../../shared/native-chat/input/native-chat-ask'
+import { formatAskAnswer } from '../../../../shared/native-chat-ask-answer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
 
-/**
- * A question the agent asked without waiting (Codex's async one), pending until the next user
- * message. It sits above the composer rather than in its place, since the agent keeps working:
- * it is answered by an ordinary send, and Cancel only hides it.
- */
+/** Async questions leave the composer usable; the next ordinary send answers them and Cancel only hides them. */
 export function NativeChatStructuredAsyncQuestion({
   paneKey,
   session,

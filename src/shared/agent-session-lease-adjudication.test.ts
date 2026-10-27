@@ -207,8 +207,7 @@ describe('restart reconciliation', () => {
   })
 
   it('routes a surviving native owner to recovery instead of readopting a dead transport', () => {
-    // The native child's stdio belonged to the runtime that died; readoption would extend
-    // a lease no process can drive. Recovery stops the orphan and respawns at fence + 1.
+    // The runtime crash lost native stdio; stop the orphan and respawn at fence + 1 instead of readopting an undrivable child.
     expect(
       adjudicateAgentSessionRestart({ lease: lease(), probe: MATCHED, observedAt: 9_000 })
     ).toMatchObject({ disposition: 'recovering', stage: 'recovering' })
@@ -273,8 +272,7 @@ describe('restart reconciliation', () => {
   })
 
   it('frees a conflict whose named owner is proven gone', () => {
-    // Why: the conflict protects one specific process. Once that process is proven gone there is
-    // no claimant left, and a conflict with no exit is a session nobody can ever open again.
+    // Once this specific process is proven gone, retain no conflict that would permanently prevent reopening.
     expect(
       adjudicateAgentSessionRestart({
         lease: lease({ claimStatus: 'conflicted' }),
@@ -295,8 +293,7 @@ describe('restart reconciliation', () => {
   })
 
   it('frees a lease that names neither an owner nor a reservation, without moving the fence', () => {
-    // Why: an evicted lease has no owner and no token, so a restart has nothing to probe.
-    // Calling that an unproven reservation re-latched every released record on every boot.
+    // Evicted leases have neither owner nor token to probe; treating them as unproven reservations re-latches every released record.
     expect(
       adjudicateAgentSessionRestart({
         lease: lease({
@@ -314,8 +311,7 @@ describe('restart reconciliation', () => {
   it.each([null, 'recovering'] as const)(
     'releases an ownerless reservation at stage %s, with evidence only when a scan proved nothing spawned',
     (handoffStage) => {
-      // A child spawned before its identity was recorded lost its stdio with the runtime that
-      // crashed, and a token scan is the only proof there can be.
+      // Before identity is saved, a crashed child loses stdio and only a token scan can prove absence.
       const reserved = lease({ ownerProcess: null, claimStatus: 'reserved', handoffStage })
       expect(
         adjudicateAgentSessionRestart({ lease: reserved, probe: INDETERMINATE, observedAt: 9_000 })

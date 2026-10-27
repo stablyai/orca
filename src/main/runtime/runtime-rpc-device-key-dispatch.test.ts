@@ -1,4 +1,14 @@
-import { mkdtempSync } from 'node:fs'
+import {
+  openSessionSearchHarness,
+  addSyntheticSession
+} from '../ai-vault-search/session-search-engine-test-fixture'
+import { createSessionSearchService } from '../ai-vault-search/session-search-service'
+import { setSessionSearchService } from '../ai-vault-search/session-search-service-registry'
+import {
+  installSessionSearchScopeCatalogSource,
+  resetSessionSearchScopeCatalogForTests
+} from '../ai-vault-search/session-search-scope-catalog'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
@@ -50,7 +60,7 @@ function keyedServer() {
     const reply: unknown = JSON.parse(replies.at(-1)!)
     return reply
   }
-  return { server, registry, keyed, legacy, send }
+  return { server, registry, keyed, legacy, send, userDataPath }
 }
 
 describe('requests on a key-authenticated socket', () => {
@@ -134,4 +144,47 @@ describe('pairing.registerDeviceKey over the dispatcher', () => {
       ).toHaveLength(1)
     }
   )
+})
+
+it('carries canonical intent through the actual key-authenticated dispatch into native results', async () => {
+  const { send, userDataPath, server } = keyedServer()
+  const index = await openSessionSearchHarness('sta10541-key-native')
+  try {
+    addSyntheticSession(index.db, { id: 1, cwd: '/repo/app' })
+    addSyntheticSession(index.db, { id: 2, cwd: '/other' })
+    setSessionSearchService(
+      createSessionSearchService({
+        engine: index.engine,
+        indexer: {
+          status: () => {
+            throw new Error('not called')
+          },
+          reconcile: async () => undefined
+        }
+      })
+    )
+    installSessionSearchScopeCatalogSource(() => ({
+      repos: [{ id: 'app', path: '/repo/app', displayName: 'app', badgeColor: '', addedAt: 1 }],
+      projects: [],
+      projectHostSetups: [],
+      worktreeMeta: {},
+      settings: { workspaceDir: '', nestWorkspaces: false }
+    }))
+    expect(
+      await send({
+        id: 'key-search',
+        method: 'aiVault.searchSessions',
+        params: {
+          query: 'needle',
+          within: { kind: 'project', projectKey: 'repo:app', canonicalProjectKey: 'repo:app' }
+        }
+      })
+    ).toMatchObject({ ok: true, result: { kind: 'results', hits: [{ sessionId: '1' }] } })
+  } finally {
+    setSessionSearchService(null)
+    resetSessionSearchScopeCatalogForTests()
+    await index.close()
+    await server.stop()
+    rmSync(userDataPath, { recursive: true, force: true })
+  }
 })

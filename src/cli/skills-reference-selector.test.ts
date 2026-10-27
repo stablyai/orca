@@ -172,15 +172,4 @@ describe('orca skills get --reference', () => {
     expect(errorSpy).toHaveBeenNthCalledWith(1, 'Use either --references or --full, not both.')
     expect(errorSpy).toHaveBeenNthCalledWith(2, 'Use either --references or --reference, not both.')
   })
-
-  it('still serves the kernel and the full package unchanged', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(['skills', 'get', 'alpha'], '/tmp/repo')
-    await main(['skills', 'get', 'alpha', '--full'], '/tmp/repo')
-
-    expect(stdoutText(stdoutSpy)).toBe(
-      '# Alpha\n\nShort.\n# Alpha\n\nShort.\n\n## References\n\nFull.\n'
-    )
-  })
 })

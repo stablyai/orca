@@ -1,7 +1,4 @@
-/**
- * The pane's two frame layers as native shows them: a source or opacity is whatever was written
- * last, whether by a render or by `setNativeProps`, so a render that re-sends a stale prop is seen.
- */
+// Model native last-write source/opacity from renders and setNativeProps so stale rerender props are observable.
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -56,14 +53,8 @@ vi.mock('lucide-react-native', () => ({
   Smartphone: 'Smartphone'
 }))
 
-/**
- * One layer's native state, and the last value a render sent for each prop it models. A source
- * write that changes nothing loads nothing, as on Android and iOS; one that changes it owes one
- * answer, which reports the layer's current source, as Android's does.
- *
- * Keyed by the layer's `onLoad`, which is stable per layer: react-test-renderer builds a fresh mock
- * on every ref read, so the mock itself cannot hold state.
- */
+// Changed source owes one load/error answer; unchanged source loads nothing. Answer with current source like Android.
+// Key by stable onLoad: test renderer creates fresh ref mocks, so mock instance cannot own native state.
 type NativeLayer = {
   source: string | undefined
   loading: boolean

@@ -298,10 +298,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     expectPreferredOrRecognizedFallback
   )
 
-  // Why pin this: Orca answers "which remote has this URL" from one `git remote -v`
-  // instead of one `git remote get-url` per remote. That is only equivalent if both
-  // commands report the same URL — the insteadOf-expanded first `remote.<name>.url`,
-  // which a raw config read does not produce — on every supported Git.
+  // remote -v must match get-url’s insteadOf-expanded first fetch URL across supported Git versions; raw config is insufficient.
   it('reports the same fetch URL from remote -v as from remote get-url', async () => {
     await runGit(['config', 'url.git@example.invalid:.insteadOf', 'https://example.invalid/'])
     await runGit(['remote', 'add', 'compat-single', 'https://example.invalid/a/repo.git'])
@@ -342,11 +339,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       isNoWriteFetchHeadUnsupportedError
     )
     await expect(readFile(fetchHeadPath, 'utf-8')).resolves.toBe('sentinel\n')
-    // Why: ref search ships the excludes built by `getRemoteHeadExcludes`
-    // (src/main/git/repo-base-ref-search.ts) — a single-component wildcard plus
-    // an exact exclude per slash-containing remote name. The correctness of
-    // that split rests on `*` not crossing `/` under wildmatch, which only a
-    // real binary can prove.
+    // Ref-search excludes rely on * not crossing / under real Git wildmatch; slash-containing remotes need exact HEAD excludes.
     const commitOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     for (const ref of [
       'refs/remotes/origin/main',
@@ -383,8 +376,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         'refs/remotes/origin/compat-nested/HEAD',
         'refs/remotes/origin/main'
       ])
-      // The wildcard cannot reach a slash-containing remote's HEAD slot, which
-      // is the whole reason the exact excludes are emitted alongside it.
+      // The wildcard cannot reach slash-containing remotes, requiring the exact excludes.
       expect(await listRefs(wildcardExcludeArgv)).toContain('refs/remotes/foo/bar/HEAD')
     }
     await expect(
@@ -427,8 +419,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
-  // Why pin this: a scratch folder made around a Git that rejects --write-tree can outlive a crash,
-  // and Git before 2.35 never prunes it; only a Git known to write trees gets one.
+  // Unsupported --write-tree may leave crash debris that Git <2.35 cannot prune; create scratch stores only after support is known.
   it('makes a merge-tree scratch object store only once this Git is known to write trees', async () => {
     const branch = 'compat-cleanup-merged'
     await runGit(['branch', branch, 'HEAD'])
@@ -484,9 +475,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   it('packs loose refs and reads the maintenance opt-out at the baseline', async () => {
-    // Why: idle ref maintenance runs `pack-refs --all --prune` on every supported
-    // Git rather than the 2.45+ `--auto` form, and reads `maintenance.auto` to
-    // honour a user who disabled Git's own auto-maintenance. Both must work at 2.25.
+    // Pin baseline Git 2.25 pack-refs --all --prune (not 2.45+ --auto) and maintenance.auto opt-out reads.
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     const packedRef = 'refs/remotes/origin/compat-pack-refs'
     await runGit(['update-ref', packedRef, head])
@@ -494,7 +483,6 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
 
     await expect(runGit(['pack-refs', '--all', '--prune'])).resolves.toBeDefined()
 
-    // The loose file is gone and the ref still resolves through packed-refs.
     await expect(readFile(join(repoPath, '.git', packedRef), 'utf-8')).rejects.toMatchObject({
       code: 'ENOENT'
     })
@@ -505,7 +493,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       packedRef
     )
 
-    // `--get` exits 1 on an unset key; that absence must read as consent, not opt-out.
+    // Unset config exits 1; absence means consent, not opt-out.
     await expect(runGit(['config', '--bool', '--get', 'maintenance.auto'])).rejects.toMatchObject({
       code: 1
     })
@@ -603,10 +591,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
-  // Why pin this: --verify swallows --end-of-options but --symbolic-full-name echoes
-  // it deliberately, on every version tested (2.25 through 2.49). git-history.ts skips
-  // that line; if a future git stopped emitting it, the skip stays correct, but if this
-  // assertion ever flips the reason for the skip is worth re-reading.
+  // Git 2.25–2.49 echoes --end-of-options with --symbolic-full-name but consumes it with --verify; git-history skips the echoed line.
   it('echoes the option marker from rev-parse --symbolic-full-name', async () => {
     const result = await runGit(['rev-parse', '--symbolic-full-name', '--end-of-options', 'HEAD'])
     const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean)
@@ -615,10 +600,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
   })
 
-  // Why pin this: `show --end-of-options <oid>:<path>` is the only Git command on the
-  // pinned SSH branch-diff path, and both blob sides depend on it resolving against the
-  // named commit rather than live HEAD, and on failing (not falling back) for a path
-  // absent at that commit — that failure is what renders additions and deletions.
+  // Pinned SSH branch diffs require show <oid>:<path> to use that commit and reject missing paths; failure represents additions/deletions.
   it('reads a blob at a pinned object id', async () => {
     await writeFile(join(repoPath, 'pinned.txt'), 'pinned\n')
     await runGit(['add', 'pinned.txt'])
@@ -635,8 +617,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       runGit(['show', '--end-of-options', `${pinnedOid}:absent.txt`])
     ).rejects.toBeDefined()
   })
-  // Why pin this: an older Git echoes %(decorate:…) and exits zero, so only %D
-  // in the same record carries the badges (#15507). Asserts the echo and the recovery.
+  // Older Git echoes %(decorate:...) with exit 0; %D in the same record must recover badges (#15507).
   it('reads commit decorations on both sides of the %(decorate:...) boundary', async () => {
     await writeFile(join(repoPath, 'decorated.txt'), 'decorated\n')
     await runGit(['add', 'decorated.txt'])

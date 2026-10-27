@@ -74,7 +74,7 @@ function createProfile(profileId: string, theme: string): MigratedProfile {
     JSON.stringify({
       ...fixture,
       settings: { ...fixture.settings, theme },
-      // Keep enough unrelated data to make repeated complete-document commits meaningful.
+      // Unrelated payload makes complete-document commit costs meaningful.
       soakExtension: { bytes: 'x'.repeat(96 * 1024), nullable: null }
     })
   )

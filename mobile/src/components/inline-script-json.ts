@@ -1,9 +1,5 @@
-// JSON.stringify escapes quotes and control chars but leaves `<`, `>`, `&`, and
-// the U+2028/U+2029 line separators raw — so a value containing `</script>` would
-// close the inline <script> this is spliced into and let the rest execute as
-// markup. These characters only ever appear inside JSON string literals, so
-// escaping them to \uXXXX is always valid and always parses back to the exact
-// original text inside the WebView.
+// JSON.stringify leaves <,>,&,U+2028/U+2029 raw; escape them as Unicode so </script> cannot terminate inline script.
+// These occur only inside JSON strings, so decoding preserves exact WebView text.
 export function encodeJsonForScript(json: string): string {
   return json.replace(
     /[<>&\u2028\u2029]/g,

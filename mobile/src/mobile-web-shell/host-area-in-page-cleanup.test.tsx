@@ -1,11 +1,4 @@
-/**
- * Leaving a workspace inside the host-area page, where nothing native tears down.
- *
- * Natively a workspace screen's own unmount released its terminal streams and its microphone, and
- * a detail-route page got the same again from the bridge host's disposal. In the host-area page
- * the document and its bridge host outlive the workspace, so the screen's unmount must reach the
- * device and the desktop on its own. Driven through the real port pair, with the host left alive.
- */
+// Keep the real bridge host alive while leaving an in-page workspace: its unmount must release terminal streams and audio without native screen teardown.
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 

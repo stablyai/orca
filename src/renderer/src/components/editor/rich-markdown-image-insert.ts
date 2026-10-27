@@ -68,9 +68,7 @@ export async function insertRichMarkdownImageFromPath({
       return
     }
 
-    // Why: image bytes should live beside the note instead of inside markdown;
-    // this keeps rich-mode size checks based on document text, not binary data.
-    // Why: a document opened outside every project still gets its image beside it.
+    // Save image bytes beside the note, including outside projects, so rich-mode size checks measure document text only.
     const openDocument = state.openFiles.find(
       (file) => file.filePath === filePath && file.worktreeId === worktreeId
     )
@@ -128,8 +126,7 @@ export async function insertRichMarkdownImageFromPath({
 }
 
 function encodeMarkdownImageBasename(destPath: string): string {
-  // Why: unescaped spaces and delimiters in markdown image destinations make
-  // screenshot filenames render as literal text or broken partial paths.
+  // Escape filename spaces and delimiters or Markdown interprets them as broken destinations or literal text.
   return encodeURIComponent(basename(destPath))
 }
 

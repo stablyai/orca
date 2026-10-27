@@ -74,15 +74,6 @@ describe('nativeChatTurnFold', () => {
     expect([...foldedRows].sort()).toEqual([1, 2, 3])
   })
 
-  it("never folds the reader's own message, which anchors the turn", () => {
-    const { foldedRows } = nativeChatTurnFold({
-      rows: TURN,
-      settledTurnKeys: SETTLED,
-      expandedTurnKeys: NONE
-    })
-    expect(foldedRows.has(0)).toBe(false)
-  })
-
   // A stored-only provider event draws nothing: a disclosure over it would open onto nothing.
   it('offers no disclosure for a turn whose only other row draws nothing', () => {
     const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({

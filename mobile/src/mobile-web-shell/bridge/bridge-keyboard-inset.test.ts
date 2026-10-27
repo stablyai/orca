@@ -88,7 +88,6 @@ describe('a keyboard that moves under a live page', () => {
     }
     expect(seen).toEqual([312, 346, 0])
     unsubscribe()
-    // Same session: a keyboard update is not a replacement.
     expect(pair.client.getShellSession()?.sessionId).toBe(session?.sessionId)
     expect(pair.client.getShellSession()?.route).toEqual(session?.route)
   })

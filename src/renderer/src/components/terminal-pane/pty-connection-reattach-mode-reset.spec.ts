@@ -168,7 +168,6 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       )
       expect(tailWriteCall).toBeDefined()
       expect(resetWriteCall).toBeDefined()
-      // The dangling tail is written AFTER the reset.
       expect(resetWriteCall as number).toBeLessThan(tailWriteCall as number)
     })
 
@@ -213,7 +212,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       // Ordinary typed input must stay on the debounced path — never immediate.
       transport.sendInputImmediate.mockClear()
       sendTerminalInputThroughPane(pane, 'yes')
-      sendTerminalInputThroughPane(pane, '\x1b[A') // arrow-key auto-repeat stays batched
+      sendTerminalInputThroughPane(pane, '\x1b[A')
       expect(transport.sendInput).toHaveBeenCalledWith('yes', 'query-reply')
       expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A', 'query-reply')
       expect(transport.sendInputImmediate).not.toHaveBeenCalled()
@@ -278,7 +277,6 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       const tailIndex = writes.lastIndexOf('\x1b[3')
       expect(snapshotIndex).toBeGreaterThanOrEqual(0)
       expect(tailIndex).toBeGreaterThanOrEqual(0)
-      // The dangling tail is re-armed after the snapshot/reset, so the next live chunk completes it instead of rendering literally.
       expect(tailIndex).toBeGreaterThan(snapshotIndex)
       expect(writes.slice(tailIndex + 1)).toEqual([])
     })
@@ -364,10 +362,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it.each([false, true])('cold restore fallback notice: %s', async (fallback) => {
-      // Why: pane status and title are persisted, so after a cold restore they still
-      // describe the process that died and make the pane look agent-owned. Preserving
-      // "its" modes arms mouse/focus/paste reporting against the replacement shell,
-      // which then prints the reports as junk at the prompt (#12101).
+      // Persisted titles/status describe the dead agent after cold restore; preserving its modes sends junk reports to the replacement shell (#12101).
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -417,9 +412,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     })
 
     it('applies the fresh-shell reset when a spawn is answered with a cold-restore reattach', async () => {
-      // Why: main can answer a *spawn* with an adopted session, so the reattach handler
-      // is reachable by a second door that skips the restored-session path entirely. The
-      // cold-restore signal has to survive that door too, or #12101 returns on it.
+      // Main can adopt during apparent fresh spawn; cold-restore mode reset must survive this second entry path (#12101).
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       let activePtyId = 'tab-pty'
@@ -428,15 +421,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         if (sessionId === 'tab-pty') {
           throw new Error('restored session is gone')
         }
-        // Main answered the spawn by adopting a durable session instead; switch on, main's start
-        // bound the pane to it and the window's attach is answered so.
+        // Main’s start adopted a durable session; answer the window’s attach with that payload.
         activePtyId = 'adopted-pty'
         return {
           id: 'adopted-pty',
           isReattach: true,
-          // Keep this snapshot free of ?25l: the live agent reset is built from the
-          // payload and only equals the constant negated below when the cursor is left
-          // visible. Ending it hidden would quietly retire that assertion.
+          // Leave the cursor visible so the live-agent reset equals the constant this assertion negates.
           snapshot: '\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ',
           coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
         }
@@ -598,8 +588,7 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       })
     })
 
-    // Why: issue #8291 — the reattach reset wiped the mouse modes the daemon snapshot had just
-    // rehydrated, so xterm re-enabled its row-wise selection over a still-running TUI.
+    // Reattach must preserve snapshot-restored mouse modes or xterm selection overrides the live TUI (#8291).
     const reattachSnapshotResetFor = async (snapshot: string): Promise<string | undefined> => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')

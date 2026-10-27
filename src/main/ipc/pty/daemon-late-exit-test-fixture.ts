@@ -7,7 +7,7 @@ import {
   waitFor
 } from '../../daemon/daemon-pty-adapter-test-harness'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { setPtyHostBindings, type PtyIpcSurface } from '../pty-host-bindings'
+import { setPtyHostBindings, type PtyIpcSurface } from './pty-host-bindings'
 import { consumeSyntheticKillExit, rememberSyntheticKillExit } from './delivery/exit'
 import { installPtyKillIpcHandler } from './ipc/renderer-kill'
 import { bindProviderListeners } from './provider/bind-listeners'

@@ -1,5 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { AppState } from '@/store/types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 export type TerminalLinkStoreSettings = {
@@ -8,7 +9,10 @@ export type TerminalLinkStoreSettings = {
   activeRuntimeEnvironmentId?: string | null
 }
 
-export type TerminalLinkStoreState = {
+export type TerminalLinkStoreState = Pick<
+  AppState,
+  'repos' | 'endpointProjects' | 'endpointProjectHostSetups'
+> & {
   settings: TerminalLinkStoreSettings | undefined
   setActiveWorktree: Mock
   createBrowserTab: Mock
@@ -71,8 +75,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const setMarkdownViewModeMock = vi.fn()
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
-  // Why: specs assert the legacy openFile(file, options) shape; the link entry point delegates to it
-  // and records the view it "opened" so the guarded reveal can find it.
+  // Adapt legacy openFile assertions while recording the opened view for guarded reveal.
   const openFileForLinkMock = vi.fn(
     (
       file: { filePath: string; worktreeId: string },
@@ -97,6 +100,9 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     }
   )
   const storeState: TerminalLinkStoreState = {
+    repos: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     settings: undefined as TerminalLinkStoreSettings | undefined,
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock,

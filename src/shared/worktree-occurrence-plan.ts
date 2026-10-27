@@ -63,7 +63,7 @@ export function getLineagePlacementRows<Row>(args: {
   }
 }
 
-/** Placement and disclosure are facts of an uncollapsed section occurrence. */
+/** Compute placement/disclosure before collapse removes occurrences. */
 export function buildWorktreeOccurrencePlan<
   Row,
   Section extends WorktreeOccurrenceSection<Row>

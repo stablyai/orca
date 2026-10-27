@@ -3,8 +3,7 @@ import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 
 export type CommandCodeManagedScriptTarget = 'local' | 'posix'
@@ -24,13 +23,18 @@ export function buildCommandCodeManagedScript(
       ':sourceEndpointByPort',
       'if not defined APPDATA exit /b 0',
       'if exist "%APPDATA%\\orca-dev\\agent-hooks" for /r "%APPDATA%\\orca-dev\\agent-hooks" %%F in (endpoint.cmd) do call :maybeSourceEndpoint "%%~fF"',
+      // Per-worktree `pnpm dev` profiles live one level down; FOR /R cannot take a FOR variable as its root.
+      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" if exist "%APPDATA%\\orca-dev-wt" for /d %%P in ("%APPDATA%\\orca-dev-wt\\*") do call :scanEndpointDir "%%~fP\\agent-hooks"',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" if exist "%APPDATA%\\orca\\agent-hooks" for /r "%APPDATA%\\orca\\agent-hooks" %%F in (endpoint.cmd) do call :maybeSourceEndpoint "%%~fF"',
+      'exit /b 0',
+      ':scanEndpointDir',
+      'if not "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
+      'if exist "%~1" for /r "%~1" %%F in (endpoint.cmd) do call :maybeSourceEndpoint "%%~fF"',
       'exit /b 0',
       ':maybeSourceEndpoint',
       'if not "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'for /f "tokens=2 delims==" %%P in (\'findstr /b /c:"set ORCA_AGENT_HOOK_PORT=" "%~1" 2^>nul\') do if "%%P"=="%ORCA_AGENT_HOOK_PORT%" call "%~1" 2>nul',
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -108,6 +112,8 @@ export function buildCommandCodeManagedScript(
     '    "$HOME/Library/Application Support/orca-dev/agent-hooks/endpoint.env" \\',
     '    "${XDG_CONFIG_HOME:-$HOME/.config}/orca-dev/agent-hooks"/*/endpoint.env \\',
     '    "${XDG_CONFIG_HOME:-$HOME/.config}/orca-dev/agent-hooks/endpoint.env" \\',
+    '    "$HOME/Library/Application Support/orca-dev-wt"/*/agent-hooks/*/endpoint.env \\',
+    '    "${XDG_CONFIG_HOME:-$HOME/.config}/orca-dev-wt"/*/agent-hooks/*/endpoint.env \\',
     '    "$HOME/Library/Application Support/orca/agent-hooks/endpoint.env" \\',
     '    "${XDG_CONFIG_HOME:-$HOME/.config}/orca/agent-hooks/endpoint.env"; do',
     '    [ -r "$endpoint" ] || continue',

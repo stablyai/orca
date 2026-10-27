@@ -36,14 +36,7 @@ describe('init and state', () => {
     })
   })
 
-  /**
-   * The page cannot decide an in-page hop without knowing what the target needs.
-   *
-   * `pageRoutes` says which patterns this shell would render; it does not say what each one
-   * declared. A page that keeps a push local on the strength of the pattern alone runs the target
-   * under the opener's grants, which is how the tasks page reached the sidebar without
-   * `native.clipboard.write`. So `init` carries the manifest's own pairs.
-   */
+  // Route patterns alone cannot authorize local hops; init must carry manifest grant pairs so a target cannot run without capabilities such as clipboard.write.
   it('carries what every page route declared, not only which patterns exist', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
@@ -52,22 +45,12 @@ describe('init and state', () => {
     if (init.type !== 'init') {
       throw new Error('expected an init frame')
     }
-    // Every pattern the page is told it may keep has an entry saying what keeping it costs.
     expect((init.pageRouteGrants ?? []).map((entry) => entry.pathname)).toEqual([...PAGE_ROUTES])
     expect(init.pageRouteGrants).toEqual(PAGE_ROUTE_GRANTS)
   })
 
-  /**
-   * The publish path end to end, because each half of it looks correct alone.
-   *
-   * The phone reads a manifest route loosely and this schema is `.strict()`, so an entry carrying a
-   * field a newer desktop wrote refuses the pairs -- and the refusal is not the field being dropped,
-   * it is `createBridgeHost` refusing the route and the page never getting an `init` at all. Driven
-   * through `routeViewOf` rather than by handing the harness a pair, because the publish is the
-   * thing under test and a hand-built pair proves nothing about it.
-   */
+  // Drive manifest projection through routeViewOf: newer desktop fields must be stripped before strict pair parsing, or the whole init is refused.
   it('answers init for a route entry carrying a manifest field this build does not read', () => {
-    // A field no build here reads, which is the shape every later desktop field has.
     const declared = [
       {
         pathname: '/h/[hostId]',
@@ -84,22 +67,12 @@ describe('init and state', () => {
     if (init.type !== 'init') {
       throw new Error('expected an init frame')
     }
-    // The pairs still cross, so the page keeps the handoff rule it was built with rather than
-    // falling back to "nobody told me" and handing every hop to the shell.
     expect(init.pageRouteGrants).toEqual([
       { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }
     ])
   })
 
-  /**
-   * One object for the measure and the measured, read off one `init`.
-   *
-   * `grants.native` is what this session may do and each pair is what the page compares a hop
-   * against (`route-handoff.web.ts`). Both come from `routeViewOf`, so the pair for the pattern the
-   * session was opened on must be the same list `grants.native` carries minus the protocol's own
-   * grant. Two computations here is how a hop is kept local whose target then runs without the
-   * capability it asked for.
-   */
+  // Compare both lists from one init: the opener’s manifest pair must equal grants.native minus the protocol grant, including optional grants.
   it("grants a session exactly what it publishes as that pattern's pair", () => {
     const declared = [
       {
@@ -125,13 +98,11 @@ describe('init and state', () => {
     ])
     const pair = (init.pageRouteGrants ?? []).find((entry) => entry.pathname === '/h/[hostId]')
     expect(pair?.grants).toEqual(['navigate', 'storage', 'haptics', 'screencastBinary'])
-    // The optional name is in both, so the case is the lane and not two equal required lists.
     expect(init.grants.native).toContain('screencastBinary')
   })
 
   it('refuses a grant name the manifest grammar refuses, naming the field it came from', () => {
-    // The host reads the manifest through the same grammar the desktop wrote it under, so a name
-    // the bundle could not have declared cannot reach the page through this field either.
+    // Reject names the manifest grammar cannot declare.
     const bridge = harness({
       pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['native.clipboard'] }]
     })
@@ -139,17 +110,14 @@ describe('init and state', () => {
     expect(bridge.posted.length).toBe(0)
     expect(bridge.routeRefusals).toHaveLength(1)
     const [reason] = bridge.routeRefusals
-    // The prefix is the whole point: this route is well formed, so a reason that does not name the
-    // field sends whoever reads the refusal to look at a pathname that was never the problem.
+    // Name the refused field so a valid pathname cannot be mistaken for the cause.
     expect(reason.startsWith('pageRouteGrants: ')).toBe(true)
     expect(reason.slice('pageRouteGrants: '.length)).not.toBe('')
-    // The callback and the diagnostic are two readers of one verdict; they must not disagree.
     expect(bridge.diagnostics).toEqual([{ kind: 'route-refused', issue: reason }])
   })
 
   it('blames the route, not the pairs, when the route is the malformed one', () => {
-    // The control for the case above. Both refusals arrive through one string, so without an
-    // opener that fails for the other reason the prefix assertion holds on any reason at all.
+    // Use a pathname refusal as the control so an unconditional prefix cannot satisfy both cases.
     const bridge = harness({ route: { pathname: '/h/a?b' } })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     expect(bridge.routeRefusals).toHaveLength(1)
@@ -167,9 +135,7 @@ describe('init and state', () => {
   })
 
   it('refuses to open a session at all for a route the protocol does not allow', () => {
-    // The producer interpolates a host id into this pathname, so every one of these is reachable
-    // from a deep link. Without the check the page refuses the whole `init`, asks again on its
-    // backoff forever, and the shell un-hides a WebView that never paints.
+    // Deep-link host ids reach the producer’s interpolation; refusing them here avoids an init loop behind a blank WebView.
     for (const pathname of [
       '/h/a?b',
       '/h/a#b',
@@ -192,9 +158,7 @@ describe('init and state', () => {
   })
 
   it('answers a ready for a refused route with nothing at all', async () => {
-    // The page is still told it was heard, which is a different fact: a refused route has no
-    // honest `init` behind it, so the ask is answered with no frame rather than with an empty one.
-    // Unreachable from the session switch, which parses the route before it mounts the shell.
+    // Report ready even when the route cannot produce init; the session switch normally prevents this state before shell mount.
     const bridge = harness({ route: { pathname: '/h/a b' } })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     await Promise.resolve()
@@ -212,28 +176,19 @@ describe('init and state', () => {
       await Promise.resolve()
     }
     expect(bridge.diagnostics.map((diagnostic) => diagnostic.kind)).toContain('post-failed')
-    // Nothing is retried and nothing is held: the page's own backoff asks again, and that ask is
-    // answered with the route the shell holds then.
+    // Do not hold/retry the failed post; answer the page’s next ready with the current route.
     expect(bridge.posted).toHaveLength(1)
     bridge.host.receive(clientFrame({ type: 'ready' }))
     expect(bridge.posted).toHaveLength(2)
   })
 
-  /**
-   * The repair path, pinned rather than described (ruling 34 addendum).
-   *
-   * A post is refused only when no document holds the view, and every one of those is followed by
-   * a fresh document's `ready`. What makes that a repair is the held route advancing on `hold` as
-   * well as on `send`: the tap arrives while the page cannot be sent one, and the next document is
-   * answered with the route the tap wrote rather than the one the shell opened on.
-   */
+  // Advance the held route even when posting fails; the next document’s ready must repair delivery with the newest tap (ruling 34 addendum).
   it('answers the next document with the route a tap wrote while the view was gone', async () => {
     const view = { gone: true }
     const bridge = harness({
       route: { pathname: '/h/host-a/session/wt-1' },
       post: () => (view.gone ? Promise.reject(new Error('the view is gone')) : Promise.resolve())
     })
-    // The second `init` the tap sends is refused with the view, so only the held route is left.
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.publishRoute({
       pathname: '/h/host-a/session/wt-1',
@@ -243,7 +198,6 @@ describe('init and state', () => {
       await Promise.resolve()
     }
     expect(bridge.posted).toHaveLength(2)
-    // The next document over the same host: a reload, or the view coming back.
     view.gone = false
     bridge.host.receive(clientFrame({ type: 'ready' }))
     const init = bridge.last()
@@ -270,17 +224,13 @@ describe('init and state', () => {
     )
     expect(bridge.navigations).toEqual(['/h/host-a/session/wt-1?name=a+b'])
     expect(bridge.client.requests).toEqual([])
-    // Nothing is owed to the page for a notify, so nothing is posted back either.
     expect(bridge.frames().filter((frame) => frame.type === 'error')).toEqual([])
   })
 
   it('refuses a navigate frame that is not a path this app could open', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // The last three are shapes `replaceState` and the native push both normalise: `/h/../../etc/x`
-    // resolves out of the `/h/` prefix entirely, and with no `+not-found` file expo-router's
-    // Unmatched then paints over the shell. Whether the target names a screen that exists is not
-    // something shape can answer; that check is C1.7's.
+    // WHATWG normalization can move dot segments outside /h/; reject those shapes before Expo’s Unmatched replaces the shell. Screen existence is checked separately.
     const refused = [
       '//evil.example/h',
       'h/host-a',
@@ -333,8 +283,7 @@ describe('init and state', () => {
   })
 
   it('refuses a storage write for a key the page was never told about', () => {
-    // The whole app's preferences share one namespace, paired hosts included, so the allowlist is
-    // what stands between a page and state the native app owns.
+    // Preferences share a namespace across paired hosts; the allowlist protects native-owned state.
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
     for (const key of ['orca:pins:', 'orca:hosts']) {
@@ -349,7 +298,7 @@ describe('init and state', () => {
   it("refuses a write for another host's pinned list, which the envelope lets through", () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // `orca:pins:<any host>` is the right shape, so only the host knows this one is not the page's.
+    // The key shape is valid; only session scope identifies another host’s pinned list.
     bridge.host.receive(
       clientFrame({ type: 'notify', name: 'storage', key: 'orca:pins:other-host', value: '["x"]' })
     )
@@ -357,14 +306,7 @@ describe('init and state', () => {
     expect(bridge.diagnostics).toEqual([{ kind: 'storage-refused', key: 'orca:pins:other-host' }])
   })
 
-  /**
-   * The rollout half of ruling 33.6 (pullfrog).
-   *
-   * The page's own refusal only exists in a page built with it; a document served from an older
-   * desktop bundle ignores `storageOversize` and writes the key anyway, which is the clobber the
-   * ruling is about. The shell holds the same list on the `init` path, so it refuses there too and
-   * an old page is refused as well.
-   */
+  // Enforce oversized-key refusal in the shell too; older pages ignore storageOversize and could overwrite device state (ruling 33.6).
   it('refuses a write for a key it could not hand the page, whatever the page believes', () => {
     const journal = 'orca:mobileStructuredSendOperations:v1'
     const bridge = harness({
@@ -377,10 +319,9 @@ describe('init and state', () => {
     bridge.host.receive(
       clientFrame({ type: 'notify', name: 'storage', key: journal, value: '{"v":1,"entries":[]}' })
     )
-    // Nothing reaches native storage, so the entries the device holds survive the page.
     expect(bridge.storageWrites).toEqual([])
     expect(bridge.diagnostics).toEqual([{ kind: 'storage-refused', key: journal }])
-    // And a key it did hand over is still writable, so the refusal is the size and not the path.
+    // A handed-over key remains writable, proving refusal depends on size rather than key shape.
     bridge.host.receive(
       clientFrame({ type: 'notify', name: 'storage', key: 'orca:pins:host-a', value: '["two"]' })
     )
@@ -394,8 +335,7 @@ describe('init and state', () => {
     })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     pins = '["one","two"]'
-    // The document that reloads inside one mount asks again, and has to be primed from after its
-    // own writes rather than from the map the mount started with.
+    // Reloaded documents must see writes made since mount in their new init.
     bridge.host.receive(clientFrame({ type: 'ready' }))
     const inits = bridge.frames().filter((frame) => frame.type === 'init')
     expect(inits.map((frame) => (frame.type === 'init' ? frame.storage : null))).toEqual([
@@ -422,8 +362,7 @@ describe('init and state', () => {
     expect(bridge.pageReadyCount()).toBe(0)
     bridge.host.receive(clientFrame({ type: 'ready' }))
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // The shell bounds the wait for the first of these; a page on its backoff must not have to
-    // land a particular one to end it.
+    // Every ready ends the startup wait; a page’s backoff need not hit a particular ask.
     expect(bridge.pageReadyCount()).toBe(2)
   })
 

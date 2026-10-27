@@ -1,8 +1,4 @@
-/**
- * Invariant: a fresh profile discovers the managed official marketplace and
- * completes the Phase 1 language, VM-recipe, and keybinding journey through
- * production Git paths.
- */
+// Use production Git paths from a fresh profile for official marketplace discovery and Phase 1 language/VM/keybinding setup.
 
 import { execFile } from 'node:child_process'
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'

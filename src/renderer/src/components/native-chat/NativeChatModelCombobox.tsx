@@ -9,7 +9,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
-import type { SessionOptionSelectChoice } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionSelectChoice } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from './native-chat-session-option-labels'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
@@ -33,7 +33,6 @@ function modelChoiceFilter(value: string, search: string, keywords?: string[]): 
   return terms.every((term) => haystack.includes(term)) ? 1 : 0
 }
 
-/** The searchable model list of the session picker. */
 export function NativeChatModelCombobox({
   choices,
   currentValue,
@@ -58,11 +57,9 @@ export function NativeChatModelCombobox({
       ) : null}
       <CommandList
         animateHeight
-        // Why here as well: cmdk writes aria-disabled="false" on every row, which outranks the
-        // group's, so the list itself is what tells assistive tech the rows are waiting.
+        // cmdk rows override inherited aria-disabled, so announce pending writes on the list too.
         aria-busy={busy}
-        // Why: a row is not a focus target. The search takes focus instead, so typing still filters
-        // after a click and focus is never left on an option the picked model switches off or removes.
+        // Keep focus in search; model changes can remove or disable the clicked option.
         onMouseDown={(event) => {
           event.preventDefault()
           search.current?.focus()
@@ -97,8 +94,7 @@ export function NativeChatModelCombobox({
                     label={label}
                     description={choice.description}
                   />
-                  {/* Why always there: a row that gains the check must not re-wrap its text while
-                    the picker is open. */}
+                  {/* Reserve the check slot so selecting a model cannot rewrap its label. */}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
                     {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
                   </span>

@@ -16,8 +16,7 @@ import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-depende
 const projectDir = fileURLToPath(new URL('../../..', import.meta.url))
 const appDir = join(projectDir, 'mobile', 'app')
 
-// The sharded `test` job does not install mobile dependencies, so anything that runs esbuild over
-// the route tree is skipped there and run for real in pr.yml's mobile_web_app job.
+// Root shards omit mobile dependencies; route-tree builds run in mobile_web_app job.
 const itBundling = mobileWebAppDependenciesPresent() ? it : it.skip
 
 async function withScratch(run) {
@@ -37,8 +36,7 @@ describe('route manifest', () => {
     for (const key of keys.filter((key) => key !== './_layout.tsx')) {
       expect(key.startsWith(`./${MOBILE_WEB_APP_ROUTE_ROOT}/`)).toBe(true)
     }
-    // The native-only shell (pairing, settings, notifications) must not reach the page bundle: the
-    // root layout key is served by the page's own `_layout.web.tsx`, never the native file.
+    // Root key must resolve web layout or native pairing/settings/notifications enter page bundle.
     expect(routes.find((route) => route.key === './_layout.tsx')?.module).toBe(
       join(appDir, '_layout.web.tsx')
     )
@@ -60,7 +58,7 @@ describe('route manifest', () => {
   })
 
   it('excludes test files and API routes', async () => {
-    // mobile/app holds none of these today, so assert the rule against a tree that does.
+    // Synthetic tree exercises absent-today forbidden route exports.
     await withScratch(async (scratch) => {
       const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
       await mkdir(directory, { recursive: true })
@@ -95,15 +93,13 @@ describe('route manifest', () => {
     expect(routes.length).toBeGreaterThan(0)
     for (const { module } of routes) {
       const { named, starExports } = await routeModuleSynchronousExports(module)
-      // expo-router reads these off the namespace while it builds the tree, which a module behind
-      // import() cannot answer. Adding one to a page route needs a static import for that route.
+      // Synchronous namespace exports need a static route import; lazy import cannot serve them.
       expect(named, `${module} exports ${named.join(', ')}`).toEqual([])
       expect(starExports, `${module} re-exports all of ${starExports.join(', ')}`).toEqual([])
     }
   })
 
-  // Each of these puts the name on the namespace without declaring it, which is why the guard
-  // reads esbuild's parse instead of the source text.
+  // Alias/reexport controls require namespace parse, not declaration-name matching.
   it('reads the names off the namespace, not off a declaration', async () => {
     expect(ROUTE_MODULE_SYNCHRONOUS_EXPORTS).toEqual(['unstable_settings', 'ErrorBoundary'])
     await withScratch(async (scratch) => {
@@ -139,8 +135,7 @@ describe('route manifest', () => {
   it('refuses a star re-export rather than reading it as clean', async () => {
     await withScratch(async (scratch) => {
       const file = join(scratch, 'star.tsx')
-      // Nothing here says whether ./boundary exports ErrorBoundary, and answering would mean
-      // bundling the route. Reported as a violation so the guard fails closed.
+      // Unresolved export * cannot prove namespace clean without bundling; fail closed.
       await writeFile(file, 'export * from "./boundary"\nexport default null\n', 'utf8')
       const { named, starExports } = await routeModuleSynchronousExports(file)
       expect(named).toEqual([])
@@ -152,8 +147,7 @@ describe('route manifest', () => {
     'reads a .js route that carries JSX, which the app tree allows',
     async () => {
       await withScratch(async (scratch) => {
-        // React Native ships untranspiled JSX inside .js, and collectMobileWebAppRoutes accepts a
-        // .js route, so the guard has to parse one the same way the bundle does.
+        // Guard must accept JSX-in-.js routes like actual RN bundler.
         const file = join(scratch, 'jsx-route.js')
         await writeFile(
           file,
@@ -175,7 +169,7 @@ describe('route manifest', () => {
         { key: './h/index.tsx', module: join(directory, 'index.tsx') }
       ])
       await writeFile(join(directory, 'index.web.tsx'), 'export default function Route() {}\n')
-      // The key is still the native filename, so the override changes the code and not the URL.
+      // Preserve native key so web override changes implementation without changing URL.
       expect(await collectMobileWebAppRoutes(scratch)).toEqual([
         { key: './h/index.tsx', module: join(directory, 'index.web.tsx') }
       ])

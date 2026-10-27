@@ -182,8 +182,7 @@ export function getRuntimeServerConnectionState(
   if (details.compatibility?.kind === 'blocked') {
     return 'disconnected'
   }
-  // A compatibility verdict is positive runtime evidence even when an older
-  // client omitted the full status payload.
+  // Compatibility verdicts prove runtime availability even when older clients omit full status.
   if (
     details.status === 'ready' &&
     details.runtimeStatus === null &&
@@ -195,9 +194,7 @@ export function getRuntimeServerConnectionState(
     hasStatusEntry: true,
     status: details.runtimeStatus,
     remoteControl: details.remoteControl,
-    // A ready details phase is transport evidence only; status.get may still
-    // have failed or been omitted by an older peer. Error details need
-    // diagnostics to prove transport reachability.
+    // Ready details prove only transport; older/failed probes can omit runtime status, and errors need reachability diagnostics.
     transportStatus: details.status === 'ready' ? 'connected' : 'disconnected'
   })
 }

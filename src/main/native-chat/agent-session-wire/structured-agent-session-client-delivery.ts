@@ -49,7 +49,8 @@ export class StructuredAgentSessionClientDelivery {
     onAgentStarted: (sessionId: string) => void,
     onChildWorkChanged: (sessionId: string) => void,
     // Current clients interpret an absent opening roster as no tasks.
-    readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>
+    readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>,
+    starting?: (sessionId: string) => boolean
   ) {
     this.requestFailures = new StructuredAgentSessionRequestFailures({
       sessions,
@@ -63,6 +64,7 @@ export class StructuredAgentSessionClientDelivery {
     })
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,
+      starting,
       now,
       currentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       deps,

@@ -378,7 +378,14 @@ describe('TerminalHost', () => {
   })
 
   describe('kill', () => {
+    function sweepThenSignalRoot(): void {
+      killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+        killRoot()
+      })
+    }
+
     it('kills the session and tombstones it', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -386,12 +393,13 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      host.kill('session-1')
+      await host.kill('session-1')
       expect(lastSubprocess.kill).toHaveBeenCalled()
       expect(host.isKilled('session-1')).toBe(true)
     })
 
-    it('does not tombstone a session when graceful kill admission fails', async () => {
+    it('keeps a session attachable when its graceful kill signal is rejected', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -402,8 +410,7 @@ describe('TerminalHost', () => {
         throw new Error('signal rejected')
       })
 
-      expect(() => host.kill('session-1')).toThrow('signal rejected')
-      expect(host.isKilled('session-1')).toBe(false)
+      await expect(host.kill('session-1')).rejects.toThrow('signal rejected')
       await expect(
         host.createOrAttach({
           sessionId: 'session-1',
@@ -415,6 +422,7 @@ describe('TerminalHost', () => {
     })
 
     it('escalates an already-graceful termination and joins its physical exit', async () => {
+      sweepThenSignalRoot()
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,

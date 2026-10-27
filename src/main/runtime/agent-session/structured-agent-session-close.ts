@@ -1,15 +1,5 @@
-/**
- * Closing a structured agent session's provider child, and proving it went.
- *
- * Extracted from `stopStructuredWorker` so that orchestration settlement and worktree teardown
- * close a session the SAME way rather than one of them inventing a shorter version. Everything
- * dispatch-shaped — dropping the redrive subscription, the registry entry and the parked mail —
- * stays with the caller that has a dispatch; this is only the child.
- *
- * `host.close` returns void and keeps a failed close indexed for retry, so the only settlement
- * evidence is the observation AFTER it: a session the host no longer holds and whose lease is no
- * longer live is proven gone. Anything else is retained rather than settled.
- */
+// Share close/proof across orchestration and teardown; retain unproven sessions for retry.
+// Only absent host ownership and a non-live lease after close prove exit.
 
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -32,21 +22,9 @@ export type StructuredAgentSessionCloseOptions = {
     OrcaRuntimeService,
     'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
   >
-  /**
-   * Runs after the close is issued and BEFORE the proof is read.
-   *
-   * Not after: an unsettled close returns early, so a dispatch released there would keep its
-   * redrive subscription nudging a session no dispatch owns. Every settlement has to reach it.
-   */
+  // Run after close issuance even when unsettled, or released dispatches retain redrive subscriptions.
   afterClose?: () => void
-  /**
-   * Whether an unproven close may put the chat tab back in the durable restore index.
-   *
-   * On by default, which is the retryable case: a stop that refused and still took the user's tab
-   * away is the loss the rollback exists to undo. A caller that will discard the WORKSPACE
-   * whatever this close reports passes false — a tab put back there is a durable reference to a
-   * workspace about to be gone, and it republishes the chat at the next launch pointing at it.
-   */
+  // Restore visibility on unproven close unless the caller will delete the workspace regardless.
   restoreTabOnUnprovenClose?: boolean
 }
 
@@ -63,9 +41,7 @@ export async function closeStructuredAgentSessionChild(
       reason: 'The structured agent-session host is not installed; no session was closed.'
     }
   }
-  // Read BEFORE the hide, so a rollback puts the tab back exactly as it was, under the same id.
-  // Restoring unconditionally would publish a tab for a session that was already hidden — a worker
-  // started without a chat tab, or one the user had closed — which is a new side effect, not an undo.
+  // Capture visibility/id before hide so rollback restores only what existed, never an already-hidden worker/chat.
   const restoreTabIfCloseFails =
     options.restoreTabOnUnprovenClose !== false ? readPersistedTabId(host, sessionId) : null
   try {
@@ -87,9 +63,7 @@ async function closeHiddenStructuredAgentSessionChild(
   options: StructuredAgentSessionCloseOptions,
   restoreTabIfCloseFails: string | null
 ): Promise<StructuredAgentSessionCloseOutcome> {
-  // Set only once the close is actually issued: `setSessionTabVisibility` throwing first leaves a
-  // running child, and a receipt that still said `closed_agent_terminal` for it would be the
-  // close-that-never-happened this flag exists to rule out.
+  // Mark only issued closes; failed visibility writes leave live children and must not produce closed-agent receipts.
   let closeAttempted = false
   try {
     await host.setSessionTabVisibility?.(sessionId, false, undefined, { deferHiddenNotice: true })
@@ -97,8 +71,7 @@ async function closeHiddenStructuredAgentSessionChild(
     // A worktree teardown or an orchestration stop: not the user closing this chat.
     await host.close(sessionId, 'evict')
   } catch (error) {
-    // Only `closeAttempted` proves the hide landed: the store transaction restores its own state on
-    // failure, so a `setSessionTabVisibility` that threw hid nothing and has nothing to undo.
+    // Restore only after closeAttempted: failed hide transactions undo themselves.
     if (closeAttempted) {
       await restorePersistedTabVisibility(host, sessionId, restoreTabIfCloseFails)
     }
@@ -118,8 +91,7 @@ async function closeHiddenStructuredAgentSessionChild(
       reason: observation.reason ?? 'The structured session is still attached after close.'
     }
   }
-  // Only past the proof, and structurally unable to throw: the session's chat tab is retired from
-  // the live snapshot, which `setSessionTabVisibility(false)` above does not do.
+  // After proven exit, retire live snapshot rows too; durable hide alone leaves them visible.
   retireSettledStructuredWorkerTab(sessionId, options.runtime)
   return { stopped: true, closeAttempted: true }
 }
@@ -128,33 +100,13 @@ function readPersistedTabId(host: StructuredAgentSessionHost, sessionId: string)
   try {
     return host.deps.store.getSessionTabId(sessionId)
   } catch {
-    // Unreadable index: claim nothing. A rollback that cannot prove the tab was visible must not
-    // publish one, for the same reason the read exists at all.
+    // Unreadable visibility proves nothing; never restore a tab not known to have been visible.
     return null
   }
 }
 
-/**
- * Puts the chat tab back after a close that did not settle.
- *
- * The hide is the one visible side effect this function performs before the destructive step, so a
- * failed close that kept it left the user's chat tab gone from the durable restore index — the
- * conversation survived under `userData`, but nothing brought the tab back at the next launch.
- *
- * Re-observed first rather than restored outright: a close can throw PAST its own proof and still
- * have taken the child with it, and `closeStructuredSessionsForWorktree` reads exactly that,
- * counting such a session closed and retiring its tab. Republishing there would resurrect a tab for
- * a session that is demonstrably gone, at the next launch, pointing at a deleted workspace.
- *
- * That observation NARROWS the window; it does not close it. This one and the sweep's are taken a
- * store write apart, so a child that dies in between is unverifiable here and exited there — which
- * is why the sweep re-drops the tab reference when it takes that proof. Do not delete either half
- * on the strength of the other.
- *
- * Never throws: the caller's `reason` is what the user is asked to act on, and a rollback failure
- * must not replace it. `agent_session_identity_required` is the expected one — the record can be
- * gone by now, which is itself the exit this restore is declining to undo.
- */
+// Restore prior visibility only while exit is unproven; reobserve across the write to catch racing exits.
+// Never replace the actionable close failure; missing identity after exit is expected.
 async function restorePersistedTabVisibility(
   host: StructuredAgentSessionHost,
   sessionId: string,

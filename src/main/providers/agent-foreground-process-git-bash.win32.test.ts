@@ -30,7 +30,7 @@ async function proveIdlePromptCycle(
   expectedJobSize: number
 ): Promise<void> {
   const proc = spawned.process
-  let output = ''
+  let output = spawned.claimStartupEvents?.().data.join('') ?? ''
   let dead = false
   proc.onData((chunk) => {
     output += chunk
@@ -164,7 +164,7 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
     const env = createDaemonPtyEnvironment(opts)
     const spawned = await spawnPlannedPane(createPtyShellLaunchPlan(opts, env), env, opts)
     const proc = spawned.process
-    let output = ''
+    let output = spawned.claimStartupEvents?.().data.join('') ?? ''
     proc.onData((chunk) => {
       output += chunk
     })

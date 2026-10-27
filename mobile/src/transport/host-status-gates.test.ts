@@ -160,7 +160,7 @@ describe('useHostStatusGates', () => {
       await act(async () => {
         renderer?.update(createElement(Probe, { connState: 'disconnected' }))
       })
-      // Why (F10): the drop invalidates nothing the host already proved — capabilities survive it.
+      // Retain proven capabilities through drops while awaiting re-verification.
       expect(gates).toMatchObject({
         hostCapabilities: ['browser.screencast.v1'],
         floatingWorkspaceEnabled: true,

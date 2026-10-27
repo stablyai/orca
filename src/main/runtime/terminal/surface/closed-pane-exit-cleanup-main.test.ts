@@ -1,5 +1,4 @@
-// Layout-owner build (L80 Q2): main's close drops a pane before its terminal exits, so the exit
-// finds the pane in main's closed-pane record, on a host with or without a window.
+// Close drops panes before terminal exit; main must recover their closed-pane identity even headless (L80 Q2).
 import { expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
 
@@ -102,7 +101,6 @@ for (const host of ['no window', 'a window'] as const) {
       harness.runtime.onPtyExit('pty-b', 0, 'inc-b')
 
       expect(harness.reconciled).toContain(PANE_B)
-      // The exit that used the record removes it.
       expect(harness.store.getSession().closedTerminalPanesByPaneKey?.[PANE_B]).toBeUndefined()
       expect(await phoneShowsPane(harness.runtime, HEADLESS_SECOND_LEAF_ID)).toBe(false)
     })

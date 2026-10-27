@@ -1,4 +1,3 @@
-/** The relay-era SSH target as a migration source: keyed by its target id, paths unchanged. */
 import { ORCAD_MIGRATION_SSH_RELAY_SOURCE_KIND } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type { SshTarget } from '../../shared/ssh-types'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
@@ -28,12 +27,11 @@ type SshRelayCutoverDeps = {
   userDataPath: string
   store: OrcadMigrationPreflightStore
   claims: SshTargetOrcadClaims
-  /** Rebuilt for every check when `store` is a copy that would never see a later edit. */
+  /** Rebuild copied stores for every check so later edits remain visible. */
   freshSource?: () => OrcadMigrationPreflightStore
   signal?: AbortSignal
 }
 
-/** The fenced SSH target a journaled cutover names. */
 export function sshRelayMigrationCutoverPort(
   deps: SshRelayCutoverDeps
 ): OrcadMigrationSourceCutoverPort {

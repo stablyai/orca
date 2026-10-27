@@ -1,7 +1,4 @@
-/**
- * Writes a move's record through every phase up to its own, as the journal requires, starting
- * after the phase already on disk so a test can also advance an existing move.
- */
+/** Advance journal phases in order, starting after any persisted phase. */
 import {
   WSL_MOVE_CUTOVER_PHASES,
   type WslMoveCutover
@@ -19,15 +16,14 @@ export function seedWslMoveCutover(userDataPath: string, cutover: WslMoveCutover
   const from = existing ? WSL_MOVE_CUTOVER_PHASES.indexOf(existing.phase) + 1 : 0
   const to = WSL_MOVE_CUTOVER_PHASES.indexOf(cutover.phase)
   const rewriteFrom = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
-  // The ledger never shrinks: an unstated one keeps what the record already holds.
+  // Preserve the existing rewrite ledger when none is supplied.
   const ledger =
     cutover.rewrittenStores.length > 0 ? cutover.rewrittenStores : (existing?.rewrittenStores ?? [])
-  // Seeding stands in for a finished rewrite, whatever stores exist yet.
   const previous = setWslMoveDesktopRewriteRegistryCompleteForTests(true)
   try {
     for (const phase of WSL_MOVE_CUTOVER_PHASES.slice(from, to + 1)) {
       const index = WSL_MOVE_CUTOVER_PHASES.indexOf(phase)
-      // The ledger only grows inside the rewrite phase, so earlier phases carry none of it.
+      // Rewrites become visible only after the destination-committed phase.
       writeWslMoveCutover(userDataPath, {
         ...cutover,
         phase,

@@ -1,4 +1,5 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-lead-status-fold'
 import type { EnrichedAgentHookEventPayload } from '../server-types'
 
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
@@ -19,7 +20,14 @@ export function programStatusHookYieldEndsAt(
   if (!sameAgent && previous.payload.state === 'done') {
     return undefined
   }
-  if (payload.state === previous.payload.state) {
+  // Hook and program child rosters cannot settle or reopen each other's turns.
+  if (
+    payload.state === previous.payload.state ||
+    (previous.payload.state === 'done' && isAgentStatusHeldOpenByChildWork(payload)) ||
+    (payload.state === 'done' &&
+      payload.sessionBoundary !== true &&
+      isAgentStatusHeldOpenByChildWork(previous.payload))
+  ) {
     return Infinity
   }
   // Settled turns are naturally silent; a later wait must prove intervening program work.

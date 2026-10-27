@@ -26,7 +26,7 @@ export function BaseRefPicker({
   onSelect,
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
-  // Why: refs live on the repo's own host; with no host given, the repo row names it.
+  // Resolve refs on the explicit host or the repo row’s owner.
   const ownerHostId = useAppStore((state) => {
     if (hostId) {
       return hostId
@@ -34,22 +34,16 @@ export function BaseRefPicker({
     const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
     return repo ? getRepoExecutionHostId(repo) : null
   })
-  // Why: null until the IPC resolves (or when the repo has no default base ref
-  // available). We avoid seeding with 'origin/main' because that would display
-  // a fabricated default in repos that don't actually have origin/main.
+  // Leave unknown defaults null; origin/main may not exist.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
-  // Why: starts at 0 so the multi-remote hint stays suppressed until the IPC
-  // resolves. `0` is also the failure sentinel: if the main-process remote
-  // count throws, we prefer no hint over a wrong hint (fail-closed per
-  // docs/upstream-base-ref-design.md §4).
+  // Suppress multi-remote hints until a reliable count arrives; zero also represents failure (upstream-base-ref-design §4).
   const [remoteCount, setRemoteCount] = useState<number>(0)
   const [baseRefQuery, setBaseRefQuery] = useState('')
   const [baseRefResults, setBaseRefResults] = useState<string[]>([])
   const [isSearchingBaseRefs, setIsSearchingBaseRefs] = useState(false)
   const baseRefResultsListRef = useRef<HTMLDivElement>(null)
 
-  // Why: Radix Dialog scroll-lock cancels wheel events on in-dialog scroll
-  // regions, so we scroll the results list manually (same pattern as CommandList).
+  // Radix scroll-lock cancels list wheel events; scroll manually as CommandList does.
   useEffect(() => {
     const el = baseRefResultsListRef.current
     if (!el) {
@@ -90,9 +84,7 @@ export function BaseRefPicker({
 
     setBaseRefQuery('')
     setBaseRefResults([])
-    // Why: reset the previous repo's default ref before the new IPC resolves so
-    // we never attribute a stale "Following primary branch (<ref>)" label to
-    // the newly selected repo during the brief resolution window.
+    // Drop the previous repo’s default before loading so its Following label cannot describe the new repo.
     setDefaultBaseRef(null)
     setRemoteCount(0)
     void loadDefaultBaseRef()
@@ -171,17 +163,9 @@ export function BaseRefPicker({
                     'Pick a base branch below'
                   )}
           </p>
-          {/* Why: passive hint that fork workflows have other remotes worth
-              searching (e.g. `upstream`). Host-agnostic and remote-name-agnostic
-              by design — we don't hardcode `upstream` because a repo's source
-              remote could be named anything (`source`, `canonical`, etc.).
-              Suppressed when remoteCount <= 1 or when the IPC failed
-              (remoteCount === 0), preserving today's no-hint behavior.
-              See docs/upstream-base-ref-design.md §4. */}
+          {/* Hint only with multiple known remotes; avoid assuming source names such as upstream (upstream-base-ref-design §4). */}
           {remoteCount > 1 ? (
-            // Why: no aria-live — this is static instructional copy that renders
-            // whenever remoteCount>1, not a dynamic status update. aria-live would
-            // cause screen readers to re-announce it on every mount/repo switch.
+            // Static instructions need no aria-live; avoid repeat announcements on mount/repo changes.
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.BaseRefPicker.a5c16712c1',
@@ -238,11 +222,7 @@ export function BaseRefPicker({
                 <button
                   key={ref}
                   onClick={() => {
-                    // Why: clear the query so the picker returns to its
-                    // resting state after a selection. Leaving the query
-                    // populated would keep the results list rendered and
-                    // visually compete with the new "Pinned for this repo"
-                    // label, implying the selection is still pending.
+                    // Return to rest after selection so search results cannot imply the new pin is still pending.
                     setBaseRefQuery('')
                     setBaseRefResults([])
                     onSelect(ref)

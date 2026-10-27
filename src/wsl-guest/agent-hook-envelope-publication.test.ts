@@ -463,8 +463,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      // Without this marker the renderer overwrites a populated roster with undefined, blanking live
-      // subagent rows and unblocking hibernation for a pane that is still working.
+      // A shed roster must be marked or clients may erase live subagents and unblock pane hibernation.
       expect(published[0].shedFields).toEqual([
         'lastAssistantMessage',
         createShedSubagentsField(makeSubagents(40))
@@ -517,8 +516,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
 
       primary.blocked = false
       primary.drain()
-      // Nothing in the pipeline republishes a hook envelope: it is fire-and-forget, and the only
-      // other delivery path is the reattach replay.
+      // Queue-full snapshots need their bounded retry path; otherwise only reconnect replay can repair a stale row.
       expect(decodeEnvelopes(primary)).toHaveLength(0)
 
       vi.advanceTimersByTime(250)

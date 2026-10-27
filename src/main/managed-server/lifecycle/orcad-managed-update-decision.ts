@@ -1,3 +1,4 @@
+import { compareAppVersions, isValidAppVersion } from '../../../shared/app-version'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import {
   refuseOrcadHostDowngrade,
@@ -92,4 +93,33 @@ export function orcadUpdateSkipRefusal(
         'it again; choose Update or Force to retry it.'
     : `Orca ${record.activeAppVersion} last ran this host's server, newer than this ` +
         `Orca (${appVersion}). Update Orca to start it.`
+}
+
+/** Content hashes cannot order updates: compare Orca versions, or for legacy hosts offer only this desktop's previously deferred build. */
+export function availableManagedOrcadUpdate(input: {
+  record: OrcadActivationRecord
+  candidateVersion: string | null
+  appVersion: string
+  /** The build this desktop's last Update or connect deferred on this host. */
+  deferredCandidateVersion: string | null
+}): string | null {
+  const { record, candidateVersion, appVersion } = input
+  const hostAppVersion = record.activeAppVersion
+  if (!candidateVersion || record.active === null || !isValidAppVersion(appVersion)) {
+    return null
+  }
+  const ordered = hostAppVersion
+    ? isValidAppVersion(hostAppVersion) && compareAppVersions(appVersion, hostAppVersion) >= 0
+    : input.deferredCandidateVersion === candidateVersion
+  if (!ordered) {
+    return null
+  }
+  // Connect rules: a build the user rolled back from is not advertised again.
+  const plan = planManagedOrcadAutoUpdate({
+    record,
+    candidateVersion,
+    appVersion,
+    failedBefore: false
+  })
+  return plan.action === 'update' ? candidateVersion : null
 }

@@ -81,8 +81,7 @@ export class InventoryLifecycleRuntime extends OrcaRuntimeService {
 
 export function createInventoryRuntime(listProcesses: InventoryListing) {
   const runtime = new InventoryLifecycleRuntime()
-  // Main's layout is the only answer to which pane holds a terminal; it lives in the store session.
-  // An empty store otherwise, as the null store reads.
+  // Main resolves terminal ownership from its session layout; keep the rest of the store empty.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     Reflect.set(runtime, 'store', {
       getRepos: () => [],

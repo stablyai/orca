@@ -15,7 +15,6 @@ function rpcSuccess(files: string[]): Awaited<ReturnType<RpcClient['sendRequest'
   }
 }
 
-/** The hook reaches only the two members each case supplies, so the rest of the client is a fake. */
 type FileSearchClientParts = { sendRequest: unknown; getGeneration?: () => number }
 
 function fakeClient(parts: FileSearchClientParts): RpcClient {
@@ -114,21 +113,18 @@ describe('useMobileNativeChatFileSearch', () => {
     )
     await mount(fakeClient({ sendRequest }))
 
-    // Populate the cache for 'app'.
     act(() => state?.loadNativeChatFiles('app'))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
 
-    // Schedule 'beta' (debounced, unresolved), then hit the cache for 'app'.
     act(() => {
       state?.loadNativeChatFiles('beta')
       state?.loadNativeChatFiles('app')
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
 
-    // The cancelled 'beta' request must never fire and overwrite the cached result.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })
@@ -175,16 +171,13 @@ describe('useMobileNativeChatFileSearch', () => {
     expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
     expect(listCalls()).toBe(1)
 
-    // Control: a fresh query under the same epoch is answered from the inventory already held.
     act(() => state?.loadNativeChatFiles('readme'))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })
     expect(listCalls()).toBe(1)
 
-    // `migrateTo` advanced the logical authority epoch. The client is the same object and the
-    // workspace did not change, so the epoch in the scope is the only thing that can retire the
-    // inventory the host under the old authority gave us.
+    // Logical authority can change behind the same client/workspace; its epoch must invalidate the old host inventory.
     generation = 2
     act(() => state?.loadNativeChatFiles('guide'))
     await act(async () => {

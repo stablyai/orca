@@ -135,6 +135,28 @@ describe('createShutdownCheckpointGuard', () => {
     expect(failed).toHaveBeenCalledTimes(1)
   })
 
+  it('reports only browser-initiated unloads vetoed by checkpoint failure (#21017)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const eventTarget = new EventTarget()
+    const onNativeUnloadVetoed = vi.fn()
+    const guard = createShutdownCheckpointGuard(() => {
+      throw new Error('stage rejected')
+    })
+    eventTarget.addEventListener(
+      'beforeunload',
+      createShutdownCheckpointBeforeUnloadHandler(guard, onNativeUnloadVetoed)
+    )
+
+    expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
+    expect(onNativeUnloadVetoed).not.toHaveBeenCalled()
+
+    const reload = new Event('beforeunload', { cancelable: true })
+    // Electron's reloadIgnoringCache dispatches a trusted beforeunload; synthetic close/restart dispatches are untrusted.
+    Object.defineProperty(reload, 'isTrusted', { value: true })
+    expect(eventTarget.dispatchEvent(reload)).toBe(false)
+    expect(onNativeUnloadVetoed).toHaveBeenCalledTimes(1)
+  })
+
   it('retries after a prevented reload resets the completed checkpoint', () => {
     const eventTarget = new EventTarget()
     const persist = vi.fn()

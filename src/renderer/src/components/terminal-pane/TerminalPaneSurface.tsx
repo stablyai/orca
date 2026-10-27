@@ -194,8 +194,7 @@ export function TerminalPaneSurface({
         pane={activePane}
         tabId={tabId}
       />
-      {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
-          toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
+      {/* Let SSH recovery own its strip instead of covering it with the raw connection-error toast. */}
       {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
         ? createPortal(
             <TerminalErrorToast
@@ -215,6 +214,7 @@ export function TerminalPaneSurface({
               onOpenNewTerminal={() => {
                 openTerminalBesideTab(tabId)
               }}
+              onClosePane={() => handleRequestClosePane(activePane.id)}
             />,
             activePane.container,
             `terminal-error-${activePane.id}`

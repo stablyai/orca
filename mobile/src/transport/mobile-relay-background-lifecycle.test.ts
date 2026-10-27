@@ -159,7 +159,10 @@ describe('mobile Relay background lifecycle', () => {
     expect(logical.getState()).toBe('connected')
 
     supervisor.setForeground(true)
-    await vi.waitFor(() => expect(openRelay).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(deps.writeBundle).toHaveBeenCalledTimes(2))
+    expect(logical.migrateTo).toHaveBeenCalledTimes(2)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.getActivePath()).toBe('relay')
     expect(logical.getState()).toBe('connected')
     supervisor.stop()
   })
@@ -184,9 +187,14 @@ describe('mobile Relay background lifecycle', () => {
     finishWrite?.()
     await starting
     supervisor.setForeground(true)
-    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(59_999)
+    expect(openRelay).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
 
-    await vi.waitFor(() => expect(openRelay).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(deps.writeBundle).toHaveBeenCalledTimes(2))
+    expect(logical.migrateTo).toHaveBeenCalledTimes(2)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.getActivePath()).toBe('relay')
     expect(logical.getState()).toBe('connected')
     supervisor.stop()
   })

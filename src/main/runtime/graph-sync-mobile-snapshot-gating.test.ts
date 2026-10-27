@@ -1,9 +1,4 @@
-/**
- * Graph-sync mobile snapshot gating: the serve-only hydrate fast-path must
- * never hide a serve-owned terminal or a headless browser tab, and the
- * changed-worktree coalesced fanout must emit every real change while
- * suppressing no-op syncs entirely.
- */
+/** Preserve serve/browser rows through hydration while emitting real changes and suppressing no-op syncs. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -203,9 +198,7 @@ describe('graph-sync mobile snapshot gating', () => {
     expect(events).toHaveLength(1)
     expect(buildSpy).not.toHaveBeenCalled()
 
-    // Re-sync with fresh IPC-style structured clones of the same publication
-    // (same epoch + version = the renderer's unchanged-content resend): zero
-    // emits, even though object identity never survives IPC.
+    // IPC clones lose object identity; unchanged epoch/version resends must still suppress emission.
     events.length = 0
     for (let i = 0; i < 5; i++) {
       sync([structuredClone(snapshot)])
@@ -222,8 +215,6 @@ describe('graph-sync mobile snapshot gating', () => {
     vi.advanceTimersByTime(300)
     events.length = 0
 
-    // Byte-identical content, but a fresh version: a higher version is the
-    // renderer saying "this worktree changed", so it must emit.
     sync([makeRendererSnapshot({ version: 2 })])
     vi.advanceTimersByTime(60)
     expect(events).toHaveLength(1)
@@ -278,9 +269,6 @@ describe('graph-sync mobile snapshot gating', () => {
     vi.advanceTimersByTime(300)
     events.length = 0
 
-    // Worktree A republishes with a new version; unchanged B arrives as a fresh
-    // structured clone with the same (epoch, version) pair, exactly as the
-    // renderer's per-worktree snapshot cache produces over IPC.
     sync([makeRendererSnapshot({ version: 3, title: 'Renamed' }), structuredClone(snapshotB)])
     vi.advanceTimersByTime(60)
 
@@ -292,8 +280,6 @@ describe('graph-sync mobile snapshot gating', () => {
     const { events, sync } = createRuntime(makeSession())
 
     sync([makeRendererSnapshot({ version: 1 })])
-    // Pending coalesced notify exists (no timer advance yet). Removing the
-    // worktree must emit the removed frame NOW and cancel the pending notify.
     sync([])
 
     const removed = events.filter((event) => 'removed' in event && event.removed === true)
@@ -309,7 +295,6 @@ describe('graph-sync mobile snapshot gating', () => {
     const { runtime, events, sync } = createRuntime(makeSession())
 
     sync([makeRendererSnapshot({ version: 1 })])
-    // Mid-window: the notify is armed but has not fired.
     vi.advanceTimersByTime(20)
     expect(events).toHaveLength(0)
 
@@ -318,11 +303,9 @@ describe('graph-sync mobile snapshot gating', () => {
     const drainedOnSubscribe = events.length
 
     vi.advanceTimersByTime(500)
-    // The new subscriber's initial snapshot already folded that state in, so it
-    // must never see the armed notify — otherwise the timer lands as a stale
-    // `updated` frame carrying pre-subscribe state.
+    // Subscribe includes armed state in its initial snapshot; do not replay it as a stale update.
     expect(lateEvents).toEqual([])
-    // Drained on subscribe, not cancelled: no existing subscriber loses it.
+    // Drain rather than cancel so existing subscribers receive the pending change.
     expect(drainedOnSubscribe).toBe(1)
     expect(events).toHaveLength(1)
   })
@@ -334,8 +317,7 @@ describe('graph-sync mobile snapshot gating', () => {
     vi.advanceTimersByTime(300)
     events.length = 0
 
-    // Re-schedule every 20ms: the 50ms trailing edge never settles, so the
-    // 250ms cap must force the emit (the schedule at t>=250 fires inline).
+    // Sustained 20ms churn never reaches the trailing edge; the 250ms cap must emit.
     let version = 2
     for (let elapsed = 0; elapsed <= 300; elapsed += 20) {
       sync([makeRendererSnapshot({ version: version++, title: `spin-${version}` })])
@@ -346,8 +328,7 @@ describe('graph-sync mobile snapshot gating', () => {
 
   it('emits ready when a graph-only sync binds a restored leaf under an unchanged snapshot pair', () => {
     const { events, sync } = createRuntime(makeSession())
-    // Renderer restore: the saved layout ptyId is in the snapshot, but the
-    // graph leaf has not re-bound yet (null ptyId) — client sees pending-handle.
+    // Restored layout has a PTY id before the graph leaf binds, yielding pending-handle.
     const snapshot = makeRendererSnapshot({ version: 1, ptyId: 'pty-restored' })
     const nullLeaf = {
       tabId: 'tab-1',
@@ -362,9 +343,7 @@ describe('graph-sync mobile snapshot gating', () => {
     expect(events[0]?.tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
     const pendingVersion = events[0]!.snapshotVersion
 
-    // A later graph-only sync binds the leaf while the renderer resends the
-    // exact same (epoch, version) pair. The payload is a function of leaf state
-    // too, so the subscriber must receive ready + a terminal handle.
+    // Leaf binding changes payload even when the renderer resends the same epoch/version.
     events.length = 0
     sync([structuredClone(snapshot)], { leaves: [{ ...nullLeaf, ptyId: 'pty-restored' }] })
     vi.advanceTimersByTime(60)
@@ -375,7 +354,6 @@ describe('graph-sync mobile snapshot gating', () => {
     })
     expect(events[0]?.snapshotVersion).toBeGreaterThan(pendingVersion)
 
-    // Once bound, further byte-identical no-op syncs stay fully suppressed.
     events.length = 0
     sync([structuredClone(snapshot)], { leaves: [{ ...nullLeaf, ptyId: 'pty-restored' }] })
     vi.advanceTimersByTime(500)
@@ -388,8 +366,7 @@ describe('graph-sync mobile snapshot gating', () => {
     vi.advanceTimersByTime(300)
     events.length = 0
 
-    // Several OSC/status chunks touch the stored snapshot: version 1 → 6,
-    // while the renderer's counter is still at 1.
+    // Main touches advance stored version beyond the renderer's independent counter.
     const internals = runtime as unknown as RuntimeInternals & {
       touchMobileSessionSnapshotsForPty: (ptyId: string) => void
     }
@@ -400,17 +377,13 @@ describe('graph-sync mobile snapshot gating', () => {
     expect(internals.mobileSessionTabsByWorktree.get(WT)?.snapshotVersion).toBe(6)
     events.length = 0
 
-    // The renderer's next real change publishes version 2 — lower than main's 6.
-    // It must merge (renderer ordering, not stored-version ordering) and the
-    // emitted version must stay strictly monotonic so clients don't drop it.
+    // Accept newer renderer revisions even below main's counter; emitted versions must remain monotonic.
     sync([makeRendererSnapshot({ version: 2, ptyId: 'pty-live', title: 'Renamed tab' })])
     vi.advanceTimersByTime(60)
     expect(events).toHaveLength(1)
     expect(events[0]?.tabs[0]).toMatchObject({ title: 'Renamed tab' })
     expect(events[0]?.snapshotVersion).toBeGreaterThan(6)
 
-    // Byte-identical graph-sync resends of that revision are no-op suppressed
-    // and never resurrect the pre-rename content.
     events.length = 0
     const emittedVersion = internals.mobileSessionTabsByWorktree.get(WT)?.snapshotVersion
     for (let i = 0; i < 3; i++) {
@@ -434,9 +407,6 @@ describe('graph-sync mobile snapshot gating', () => {
     const internals = runtime as unknown as RuntimeInternals
     const stored = internals.mobileSessionTabsByWorktree.get(WT)
 
-    // Byte-identical re-syncs: the serve-only hydrate rebuilds the projection
-    // but must retain the existing snapshot object/epoch/version, so the
-    // identity-based no-op gating emits nothing.
     events.length = 0
     for (let i = 0; i < 5; i++) {
       sync([])
@@ -475,9 +445,7 @@ describe('graph-sync mobile snapshot gating', () => {
     expect(events).toHaveLength(0)
     expect(internals.mobileSessionTabsByWorktree.get(WT)).toBe(stored)
 
-    // A real browser change (a newly opened page) must still emit. Same-page
-    // navigation is delivered via the browser-bridge notify path, not graph
-    // sync, so a new tab is the graph-sync-visible browser change.
+    // Graph sync observes new browser tabs; same-page navigation uses the bridge notify path.
     internals.agentBrowserBridge = {
       tabList: vi.fn(() => ({
         tabs: [
@@ -507,13 +475,10 @@ describe('graph-sync mobile snapshot gating', () => {
     const { runtime, events, sync, setSession } = createRuntime(makeSession())
     const internals = runtime as unknown as RuntimeInternals
 
-    // Renderer publishes desktop tab A with no serve terminals anywhere.
     sync([makeRendererSnapshot({ version: 1 })])
     vi.advanceTimersByTime(300)
     expect(events).toHaveLength(1)
 
-    // A serve-owned terminal appears in the persisted session; the serve-only
-    // hydrate merges it into the stored RENDERER publication (mixed snapshot).
     setSession(
       makeSession({
         tabsByWorktree: { [WT]: [makeTerminalTab('serve-tab', 'serve-pty-1')] }
@@ -529,9 +494,7 @@ describe('graph-sync mobile snapshot gating', () => {
       'serve-tab'
     ])
 
-    // Desktop closes tab A: the next renderer publication omits it. The merge
-    // must NOT resurrect A from the mixed snapshot, but the serve tab (not
-    // renderer-owned) must survive.
+    // Drop the closed renderer tab while retaining only the still-bound serve tab.
     events.length = 0
     sync([
       {
@@ -550,8 +513,6 @@ describe('graph-sync mobile snapshot gating', () => {
       expect.objectContaining({ type: 'terminal', parentTabId: 'serve-tab' })
     ])
 
-    // The serve binding itself disappears from persistence (and no live PTY
-    // backs it): the next renderer publication must stop preserving it too.
     setSession(makeSession())
     events.length = 0
     sync([
@@ -581,7 +542,6 @@ describe('graph-sync mobile snapshot gating', () => {
     vi.advanceTimersByTime(300)
     expect(events).toHaveLength(1)
     const mergedVersion = events[0]!.snapshotVersion
-    // The renderer sent no groups, so the serve tab keeps its group's lead and the strip follows.
     expect(events[0]?.tabs.map((tab) => ('parentTabId' in tab ? tab.parentTabId : tab.id))).toEqual(
       ['serve-tab', 'tab-1']
     )
@@ -596,8 +556,6 @@ describe('graph-sync mobile snapshot gating', () => {
     ])
     expect(events[0]?.snapshotVersion).toBeGreaterThan(mergedVersion)
 
-    // Recomputing the preservation on further omitted syncs is a genuine
-    // no-op: the preservedIsNoOp identity gate keeps the entry, zero fanout.
     events.length = 0
     for (let i = 0; i < 3; i++) {
       sync([])
@@ -610,8 +568,6 @@ describe('graph-sync mobile snapshot gating', () => {
     const { runtime, events, sync, setSession } = createRuntime(makeSession())
     const internals = runtime as unknown as RuntimeInternals
 
-    // Renderer publishes (epoch, version 1) while a serve binding exists; the
-    // serve-only hydrate merges the serve tab and version 1 becomes accepted.
     setSession(
       makeSession({
         tabsByWorktree: { [WT]: [makeTerminalTab('serve-tab', 'serve-pty-1')] }
@@ -627,11 +583,8 @@ describe('graph-sync mobile snapshot gating', () => {
         ?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'serve-tab')
     ).toBe(true)
 
-    // The serve binding disappears from persistence (no live PTY backs it)
-    // while desktop tabs are unchanged, so the renderer correctly resends the
-    // SAME (epoch, version 1). The accepted-revision no-op gate must not keep
-    // the stale preserved serve tab published: the resend must re-merge, drop
-    // the tab, and publish a newer snapshot version.
+    // An unchanged desktop resends the same epoch/version after an unbacked serve binding vanishes;
+    // re-merge and publish a newer snapshot rather than preserving the stale serve tab.
     setSession(makeSession())
     events.length = 0
     sync([makeRendererSnapshot({ version: 1 })])
@@ -647,7 +600,6 @@ describe('graph-sync mobile snapshot gating', () => {
         ?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'serve-tab')
     ).toBe(false)
 
-    // Further byte-identical resends of the accepted revision stay suppressed.
     events.length = 0
     for (let i = 0; i < 3; i++) {
       sync([makeRendererSnapshot({ version: 1 })])
@@ -668,7 +620,6 @@ describe('graph-sync mobile snapshot gating', () => {
     }
     internals.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT)
 
-    // Renderer attaches: the SSH tab merges into the accepted renderer revision.
     sync([makeRendererSnapshot({ version: 1 })])
     vi.advanceTimersByTime(300)
     expect(
@@ -677,9 +628,7 @@ describe('graph-sync mobile snapshot gating', () => {
         ?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'ssh-tab')
     ).toBe(true)
 
-    // The persisted SSH binding is removed with no renderer-visible change, so
-    // the renderer resends the unchanged version 1 after the bounded HUB-restart
-    // recovery grace — the tab must still drop.
+    // After HUB-recovery grace, missing persistence must drop SSH tabs even with unchanged renderer version.
     setSession(makeSession())
     vi.advanceTimersByTime(30_001)
     sync([makeRendererSnapshot({ version: 1 })])
@@ -699,15 +648,12 @@ describe('graph-sync mobile snapshot gating', () => {
     )
     const internals = runtime as unknown as RuntimeInternals
 
-    // Headless-built snapshot (serve hydrate, no renderer publication yet).
     sync([])
     vi.advanceTimersByTime(300)
     expect(
       internals.mobileSessionTabsByWorktree.get(WT)?.publicationEpoch.startsWith('headless')
     ).toBe(true)
 
-    // A renderer attaches and publishes an unrelated tab: the headless-built
-    // tab must be preserved into the merged renderer snapshot (broad rule).
     sync([makeRendererSnapshot({ version: 1 })])
     vi.advanceTimersByTime(60)
     const merged = internals.mobileSessionTabsByWorktree.get(WT)
@@ -729,15 +675,11 @@ describe('graph-sync mobile snapshot gating', () => {
     const internals = runtime as unknown as RuntimeInternals & {
       hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (worktreeId?: string) => Set<string>
     }
-    // Full headless hydrate (SSH tabs never come from the serve-only path)
-    // builds the SSH tab into a headless-built snapshot.
     internals.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT)
     expect(internals.mobileSessionTabsByWorktree.get(WT)?.tabs).toEqual([
       expect.objectContaining({ type: 'terminal', parentTabId: 'ssh-tab' })
     ])
 
-    // A renderer attaches and publishes an unrelated tab: the SSH tab is merged
-    // into the renderer epoch (broad headless-built preservation).
     sync([makeRendererSnapshot({ version: 1 })])
     vi.advanceTimersByTime(300)
     const merged = internals.mobileSessionTabsByWorktree.get(WT)
@@ -745,9 +687,7 @@ describe('graph-sync mobile snapshot gating', () => {
       merged?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'ssh-tab')
     ).toBe(true)
 
-    // A newer renderer revision still omits the still-runtime-owned SSH tab.
-    // Its binding remains persisted, so it must remain published — this is the
-    // regression: serve-only preservation dropped app-scoped ssh:@@ bindings.
+    // Persisted app-scoped ssh:@@ bindings survive later renderer omissions too.
     sync([makeRendererSnapshot({ version: 2, title: 'Renamed' })])
     vi.advanceTimersByTime(60)
     expect(
@@ -756,8 +696,6 @@ describe('graph-sync mobile snapshot gating', () => {
         ?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'ssh-tab')
     ).toBe(true)
 
-    // Once the recovery grace expires and the SSH binding disappears from
-    // persistence (with no live PTY), the next revision must stop preserving it.
     setSession(makeSession())
     vi.advanceTimersByTime(30_001)
     sync([makeRendererSnapshot({ version: 3, title: 'Renamed again' })])
@@ -815,17 +753,12 @@ describe('graph-sync mobile snapshot gating', () => {
       ]
     })
 
-    // Renderer publishes a two-group split while a serve binding exists; the
-    // merged snapshot must carry the renderer's split layout.
     sync([makeSplitRendererSnapshot()])
     vi.advanceTimersByTime(300)
     expect(events).toHaveLength(1)
     expect(events[0]?.tabGroupLayout).toEqual(splitLayout)
     expect(internals.mobileSessionTabsByWorktree.get(WT)?.tabGroupLayout).toEqual(splitLayout)
 
-    // A second identical renderer pair: the serve-only hydrate rebuild runs
-    // (serve PTY present) and must carry the stored split layout forward, so
-    // the sync is a full no-op — stored layout unchanged, zero fanout.
     events.length = 0
     sync([makeSplitRendererSnapshot()])
     vi.advanceTimersByTime(500)

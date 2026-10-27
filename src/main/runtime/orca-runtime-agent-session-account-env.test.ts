@@ -50,7 +50,7 @@ function createRuntime() {
   return runtime
 }
 
-/** createTerminal up to its spawn: records the launch the host planner made of each create. */
+/** Capture each host-planned create before spawning. */
 function planCreates(runtime: OrcaRuntimeService) {
   const planned: TerminalCreateOptions[] = []
   const createTerminal = vi
@@ -101,8 +101,6 @@ describe('agent-session creates with a desktop-prepared accountEnv', () => {
     expect(planned[0]?.env).toMatchObject({ CODEX_HOME: '/stale' })
   })
 
-  // The account the user picked wins over a per-agent env override in Settings, as on the host
-  // planner's other launches.
   it('puts the host-selected account over Settings agent env', async () => {
     const runtime = createRuntime()
     runtime.setHostAccountLaunchEnv(

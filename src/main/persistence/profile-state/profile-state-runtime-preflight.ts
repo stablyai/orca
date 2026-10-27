@@ -15,7 +15,7 @@ export type ProfileStateRuntimePreflightResult = {
   revision: number
 }
 
-/** Qualify the installed writer and backup without opening an existing user profile. */
+/** Test installed writers/backups without opening user profiles. */
 export async function preflightProfileStateRuntime(
   options: { workerPath?: string; backupWorkerPath?: string; timeoutMs?: number } = {}
 ): Promise<ProfileStateRuntimePreflightResult> {

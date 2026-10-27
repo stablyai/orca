@@ -11,8 +11,7 @@ vi.mock('electron', () => ({
 import { OrcaRuntimeService } from './orca-runtime'
 import { partialRuntimeStore, storeWorktreeMeta } from './runtime-store-partial-fixture'
 
-// BUG-9: a network drop to a relay host made `worktree ps` print `live:0 pty:no` for a terminal
-// that was still running. Lost contact is `unverifiable`, never zero.
+// BUG-9: lost relay contact must report unverifiable, never live:0/pty:no for a surviving terminal.
 
 const CONNECTION_ID = 'conn-1'
 const REPO_PATH = '/home/user/app'

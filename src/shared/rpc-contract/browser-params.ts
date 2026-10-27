@@ -83,15 +83,8 @@ export const Eval = BrowserTarget.extend({
 
 export const TabList = z.object({ worktree: OptionalString })
 
-// Why: --index xor --page must be present. The refine guards that invariant
-// so the dispatcher surfaces a single legible error instead of either shape
-// leaking into the runtime.
-//
-// `focus` is opt-in: when true, the runtime sends `browser:pane-focus` to
-// the renderer after the switch lands. The renderer surfaces the browser
-// pane only if the user is already on the targeted worktree; otherwise it
-// pre-stages per-worktree state silently. This avoids cross-worktree screen
-// theft when multiple agents drive browsers in parallel worktrees.
+// Require exactly one of index/page. Opt-in focus reveals only within the current worktree;
+// other worktrees silently stage selection so parallel agents cannot steal the screen.
 export const TabSwitch = BrowserTarget.extend({
   index: z
     .unknown()

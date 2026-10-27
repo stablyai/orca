@@ -132,10 +132,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
                   style={[
                     styles.repoDot,
                     {
-                      backgroundColor: getRepoBadgeColor(
-                        repo ?? undefined,
-                        row.content.repository ?? 'project'
-                      )
+                      backgroundColor: getRepoBadgeColor(repo ?? undefined)
                     }
                   ]}
                 />

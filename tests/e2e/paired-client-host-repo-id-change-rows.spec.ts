@@ -1,13 +1,4 @@
-/**
- * STA-12076: a server whose catalog relists the same checkouts under a new project id (a project
- * copied into another profile, then that profile switched to) left the paired desktop showing each
- * workspace twice, the old copies under no project.
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/paired-client-host-repo-id-change-rows.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// STA-12076: profile switches relisted checkouts under new project IDs, leaving duplicate orphan rows on paired desktops.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

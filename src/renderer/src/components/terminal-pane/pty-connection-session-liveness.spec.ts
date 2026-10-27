@@ -167,7 +167,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('does NOT tear down a newborn pane when liveness was requested before it bound', async () => {
-        // Why (regression): a liveness request made before the spawn bound cannot prove the fresh ptyId dead (boundAt wiring).
+        // Liveness requested before binding cannot prove the fresh PTY dead.
         const { connectPanePty } = await import('./pty-connection')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
@@ -324,7 +324,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('still closes the replacement PTY after a suppressed restart rebinds the pane', async () => {
-        // Why (regression): the exit guard is scoped to the exiting ptyId, not a one-shot boolean, so a rebound replacement's later real exit still tears down.
+        // Scope exit guards by PTY ID so a rebound replacement’s later exit still tears down.
         const { connectPanePty } = await import('./pty-connection')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
@@ -336,7 +336,6 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         )
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
-        // First exit is suppressed (intentional restart); later exits are real.
         const consumeSuppressedPtyExit = vi
           .fn<(ptyId: string) => boolean>()
           .mockImplementationOnce(() => true)
@@ -353,7 +352,6 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           | ((ptyId: string) => void)
           | undefined
 
-        // Suppressed exit of the original PTY: pane stays mounted.
         onPtyExit?.('pty-pane-2')
         expect(manager.closePane).not.toHaveBeenCalled()
 
@@ -399,7 +397,6 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         onPtyExit?.('pty-pane-2')
 
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-          // The racing exit must not re-run the teardown that registered main's close.
           expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledTimes(1)
           await expectMainFrameClosesExitedSplitPaneOnce(manager)
         } else {
@@ -420,7 +417,6 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         )
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
-        // consumeSuppressedPtyExit always returns false for this genuinely-dead id.
         const deps = createDeps({
           restoredLeafId: LEAF_2,
           consumeSuppressedPtyExit: vi.fn(() => false),
@@ -437,7 +433,6 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         await flushAsyncTicks()
         onPtyExit?.('pty-pane-2')
 
-        // Observable outcome: single close, pane was treated as dead (closed).
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
           expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledTimes(1)
           await expectMainFrameClosesExitedSplitPaneOnce(manager)

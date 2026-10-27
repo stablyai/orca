@@ -86,12 +86,7 @@ import type { BrowserTab } from '../../../../shared/browser-workspace-types'
     }
   }
 
-  /**
-   * Pins the invariant documented in hooks/agent-auto-ack-targets.ts: the floating panel is an
-   * overlay above the active workspace, and its active tab must never become global selection.
-   * Workspace-scoped activation (the second argument) writes only the owner's per-workspace state
-   * when the owner is not the globally active workspace.
-   */
+  /** Floating selection stays workspace-local while another workspace owns globals, preserving agent-auto-ack targeting (hooks/agent-auto-ack-targets.ts). */
   describe('workspace-scoped activation keeps floating selection off global state', () => {
     function seedFloatingOverMain(store: ReturnType<typeof createTestStore>): void {
       seedStore(store, {

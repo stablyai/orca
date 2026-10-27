@@ -111,8 +111,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
-      // The restore index is bookkeeping: one that cannot be written (a newer Orca's records, a
-      // failing disk) is reported, and the tab still opens.
+      // Restore-index failures (newer records/disk errors) are reported without preventing tab open.
       await host
         .setSessionTabVisibility(input.sessionId, true, ...(input.tabId ? [input.tabId] : []))
         .catch((error: unknown) => {
@@ -123,7 +122,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
           })
         })
     }
-    // Switch point: main leaves a window's chat to the window's open, the one placement decision.
+    // Window creates retain the window's own placement decision.
     if (!(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)) {
       this.saveWindowlessAgentSessionTab(input.workspaceId, input)
     }
@@ -141,8 +140,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
-      // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
-      // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
+      // Background republish does not write/emit; healing missing client mirrors needs activate or explicit republish.
       if (!input.activate) {
         return
       }
@@ -231,9 +229,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       throw new Error('terminal_gone')
     }
     if (this.ptyController.inspectProcess) {
-      // Preserve the legacy one-argument call shape when no incarnation
-      // fence was requested; some providers use arity to distinguish the
-      // compatibility path from the fenced remote inspection.
+      // Preserve one-argument unfenced calls; providers may use arity to select legacy versus fenced inspection.
       const inspection =
         options === undefined
           ? await this.ptyController.inspectProcess(leaf.ptyId)

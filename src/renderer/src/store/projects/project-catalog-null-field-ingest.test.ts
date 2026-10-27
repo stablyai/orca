@@ -5,10 +5,7 @@ import { getProjectHostSetupProjectionFromState } from '../project-host-setup-se
 import { fetchProjectHostSetupCompatibility } from './project-host-routing'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 
-// Crash 3bcc5be3 (v1.4.188, Linux, page.settings boundary): a setup row whose repoId arrived
-// null reached Settings' projectByRepoId useMemo and threw "Cannot read properties of null
-// (reading 'trim')". Normalizing at ingest is what must make that unreachable — by the time a
-// row is in the store, its declared field types hold.
+// Normalize wire catalog fields at ingest so null repoId/path cannot crash Settings/sidebar trim/grouping readers (3bcc5be3, v1.4.188 Linux).
 const repos = [
   { id: 'repo-1', path: '/Users/alice/orca', displayName: 'orca', badgeColor: '#000', addedAt: 1 }
 ] satisfies Repo[]
@@ -45,8 +42,7 @@ function checkoutIdentityLikeSidebar(setup: ProjectHostSetup): string {
   return setup.path.trim() || setup.repoId || setup.id
 }
 
-// Why Reflect.set and not a cast: the second row deliberately violates its declared types, which
-// is exactly what an older host publishes over the wire.
+// Reflect.set models older-host malformed fields without asserting them valid.
 function badSetups(): ProjectHostSetup[] {
   const base = (id: string, displayName: string): ProjectHostSetup => ({
     id,
@@ -86,8 +82,7 @@ describe('project catalog ingest with non-string row fields', () => {
     expect(row?.path).toBe('')
   })
 
-  // Why: a remote host on a different Orca version is a first-class source of these rows, and
-  // decoders hand them over verbatim — the client cannot assume the host already repaired them.
+  // Mixed-version remote decoders pass rows verbatim; ingest cannot assume hosts normalized them.
   it('coerces on the remote adoption boundary too', () => {
     const adopted = adoptFromEndpoint(
       { kind: 'environment', environmentId: 'env-1' },
@@ -103,8 +98,8 @@ describe('project catalog ingest with non-string row fields', () => {
     const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
     const projection = getProjectHostSetupProjectionFromState({
       repos,
-      projects: [...ingested.projects],
-      projectHostSetups: [...ingested.setups]
+      endpointProjects: [...ingested.projects],
+      endpointProjectHostSetups: [...ingested.setups]
     })
     expect(() =>
       buildProjectByRepoIdLikeSettings(projection.setups, projection.projects)
@@ -115,8 +110,7 @@ describe('project catalog ingest with non-string row fields', () => {
     expect([...byRepoId.keys()]).toEqual(['repo-1'])
   })
 
-  // Why: a null path takes down the whole main window rather than one error boundary, because
-  // the sidebar grouping index is built on every render.
+  // Null path crashes main-window sidebar grouping, beyond Settings’ error boundary.
   it('lets the sidebar checkout identity run instead of throwing on a null path', async () => {
     stubProjectsApi(badSetups())
     const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
@@ -146,16 +140,15 @@ describe('project catalog ingest with non-string row fields', () => {
     const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
     const args = {
       repos,
-      projects: [...ingested.projects],
-      projectHostSetups: [...ingested.setups]
+      endpointProjects: [...ingested.projects],
+      endpointProjectHostSetups: [...ingested.setups]
     }
     expect(getProjectHostSetupProjectionFromState(args)).toBe(
       getProjectHostSetupProjectionFromState(args)
     )
   })
 
-  // Why: nothing else in the ingest path allocates, so a clean catalog must hand back the very
-  // rows it was given — TerminalPane and TabBarQuickCommandsButton use them as useMemo deps.
+  // Clean ingest must retain rows: TerminalPane/quick-command memos depend on their identity.
   it('preserves row identity when the catalog is already clean', async () => {
     const clean = badSetups()
     ;(clean[1] as { repoId: string; path: string }).repoId = ''

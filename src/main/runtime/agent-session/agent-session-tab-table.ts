@@ -1,13 +1,13 @@
+import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session-surface-tab-id'
+import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
-import type { AgentSessionStoreState } from '../agent-session-store-state'
+import {
+  hasAgentSessionConversation,
+  type AgentSessionStoreState
+} from '../agent-session-store-state'
 
-/**
- * Which conversation each structured chat tab shows, keyed by the host tab id.
- *
- * Membership is visibility: a session with an entry has a chat tab, and the key is that tab's id.
- * An id names one conversation, and a session maps back to at most one tab.
- */
+/** Tab membership defines visibility; tab and session ids form a one-to-one mapping. */
 export class AgentSessionTabTable {
   private readonly sessionByTab = new Map<string, string>()
   private readonly tabBySession = new Map<string, string>()
@@ -26,7 +26,7 @@ export class AgentSessionTabTable {
     return this.sessionByTab.get(tabId)
   }
 
-  /** Sessions that have a tab, in the order their tabs were given out. */
+  /** Visible sessions in tab issuance order. */
   sessionIds(): string[] {
     return [...this.sessionByTab.values()]
   }
@@ -35,10 +35,7 @@ export class AgentSessionTabTable {
     return [...this.sessionByTab.entries()]
   }
 
-  /**
-   * Gives a session a tab unless it already has one. Without a reserved id it gets the id clients
-   * derive for it.
-   */
+  /** Show once, using the reserved id or the id clients derive. */
   show(sessionId: string, tabId?: string): void {
     if (this.tabBySession.has(sessionId)) {
       return
@@ -47,7 +44,6 @@ export class AgentSessionTabTable {
     this.put(tabId ?? derived, sessionId)
   }
 
-  /** Returns the id the session's tab had, if it had one. */
   hide(sessionId: string): string | undefined {
     const tabId = this.tabBySession.get(sessionId)
     if (tabId !== undefined) {
@@ -84,9 +80,10 @@ export class AgentSessionTabTable {
   }
 }
 
-/** The sessions whose chat tab is shown, in tab order, skipping any without a record. */
 export function listVisibleAgentSessionIds(state: AgentSessionStoreState): string[] {
-  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) => state.records.has(sessionId))
+  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
+    hasAgentSessionConversation(state, sessionId)
+  )
 }
 
 export function agentSessionVisibleTabIndex(state: AgentSessionStoreState): {
@@ -102,7 +99,7 @@ export function setAgentSessionTabVisibility(
   visible: boolean,
   tabId?: string
 ): void {
-  if (visible && !state.records.has(sessionId)) {
+  if (visible && !hasAgentSessionConversation(state, sessionId)) {
     throw agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
   }
   state.sessionTabs ??= new AgentSessionTabTable()
@@ -118,10 +115,29 @@ export function showAgentSessionTabs(
   sessionIds: readonly string[]
 ): void {
   for (const sessionId of sessionIds) {
-    if (state.records.has(sessionId)) {
+    if (hasAgentSessionConversation(state, sessionId)) {
       setAgentSessionTabVisibility(state, sessionId, true)
     }
   }
 }
 
 export type PersistedAgentSessionTab = { tabId: string; sessionId: string }
+
+/** Check tab-id conflicts before spawn; claim only on publication so failed creates leave no restorable tab. */
+export function assertReservedTabUnheld(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest
+): void {
+  if (request.surfaceTabId === undefined) {
+    return
+  }
+  if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'requestMalformed'
+    })
+  }
+  const holder = state.sessionTabs?.sessionIdFor(request.surfaceTabId)
+  if (holder !== undefined && holder !== request.sessionId) {
+    throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
+  }
+}

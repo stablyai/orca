@@ -13,7 +13,6 @@ import { MobileNativeChatDisclosureContext } from './mobile-native-chat-disclosu
 
 const RootAddress = createContext<{ id: string; address: string; owner: string } | null>(null)
 
-/** Every vertical transcript viewport declares its owner, even before it overflows. */
 export function MobileNativeChatOwnedScrollView({
   positionKey,
   rootIdentity = positionKey,

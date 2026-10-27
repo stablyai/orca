@@ -132,8 +132,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     incoming: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined
   ): void {
-    // Why no headless-built exemption: the first renderer publication after a restart lands on a
-    // disk-hydrated base, and skipping it left a retired paired tab owned until the next sync (STA-4897).
+    // First renderer frames after restart must prune disk-hydrated retired tabs too (STA-4897).
     if (!existing) {
       return
     }
@@ -195,7 +194,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     return {
       ...existing,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
-      // Why: mint a fresh version or clients' same-epoch gate drops the prune frame.
+      // Bump version or clients discard same-epoch prune frames.
       snapshotVersion: existing.snapshotVersion + 1,
       activeGroupId: existing.activeGroupId ?? getHeadlessMobileSessionGroupId(existing.worktree),
       activeTabId: activeTab?.id ?? null,

@@ -221,7 +221,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
         expect.objectContaining({ method: 'files.stat' })
       )
     )
-    // Why: a macrotask drains the whole stat → cleanup microtask chain, however many hops the runtime client adds.
+    // Drain entire stat/cleanup microtask chain through a macrotask, independent of RPC hop count.
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(runtimeEnvironmentCallMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.delete' })
@@ -587,9 +587,7 @@ describe('closeFile host mirroring', () => {
 
     store.getState().closeFile(fileId)
 
-    // Why: closeFile is the single chokepoint, so a mirrored tab closed via any
-    // surface (tab strip, bulk close, save/discard) reaches the host. The notifier
-    // itself no-ops for non-mirrored files; here we assert the wiring + local close.
+    // All mirrored close surfaces pass closeFile; require host notification plus local removal, with nonmirrors gated by notifier.
     expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(
       expect.anything(),
       'wt-1',
@@ -630,8 +628,7 @@ describe('closeFile host mirroring', () => {
 
     store.getState().closeAllFiles()
 
-    // Why: closeAllFiles mutates openFiles directly instead of calling closeFile,
-    // so it must still run the host close hook for every removed mirrored editor.
+    // closeAllFiles bypasses closeFile; require host close hooks for every directly removed mirror.
     expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledTimes(1)
     expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(expect.anything(), 'wt-1', a)
     expect(store.getState().openFiles).toHaveLength(1)

@@ -15,7 +15,7 @@ import {
 } from '@/components/task-page-jira-status-order'
 import { createTaskPageJiraLoadFailureState } from '@/components/task-page-jira-load-state'
 import { searchTaskPageJiraIssues } from '@/components/task-page-jira-search'
-import { JIRA_ITEM_LIMIT } from './task-page-source-context'
+import { JIRA_ITEM_LIMIT } from './task-page/task-page-source-context'
 import { useTaskSearchDebouncedApply } from './task-page/use-task-search-debounced-apply'
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
@@ -290,7 +290,7 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
     setSelectedJiraIssueKey
   ])
 
-  // Why: Linear ids are strings (e.g. "ENG-123") but the provider-generic shape needs a numeric number, so the adapter uses 0 as placeholder.
+  // Linear string IDs need the provider-generic numeric placeholder 0.
   return model
 }
 export type TaskPageJiraListEffectsModel = ReturnType<typeof useTaskPageJiraListEffects>

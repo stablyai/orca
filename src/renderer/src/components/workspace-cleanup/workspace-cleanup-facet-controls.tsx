@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { parseWorkspaceCleanupFacetNumber } from './workspace-cleanup-facet-panel-model'
 
-/** One facet group inside the filter panel, with its own match count. */
 export function FacetSection({
   title,
   matchCount,
@@ -82,7 +81,6 @@ export function FacetToggleList<T extends string>({
   )
 }
 
-/** Single-choice segmented control for tri-state / presence / enum facets. */
 export function FacetChoice<T extends string>({
   label,
   value,
@@ -122,7 +120,6 @@ export function FacetChoice<T extends string>({
   )
 }
 
-/** Free-form numeric threshold — deliberately not a fixed 30/90 enum. */
 export function FacetNumberField({
   label,
   value,
@@ -139,10 +136,7 @@ export function FacetNumberField({
   return (
     <FacetField label={label}>
       <div className="flex items-center gap-1.5">
-        {/* Why text, not number: Chromium mutates a focused number input on every
-            wheel tick, which silently walked a threshold up inside the scrollable
-            facet panel. preventDefault would stop that but also stop the panel
-            scrolling, re-breaking #14629. */}
+        {/* Text avoids Chromium wheel-changing numeric thresholds without blocking panel scrolling (#14629). */}
         <Input
           type="text"
           inputMode="numeric"

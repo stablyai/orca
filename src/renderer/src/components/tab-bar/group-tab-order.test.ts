@@ -130,10 +130,7 @@ describe('getGroupVisibleTabOrder', () => {
   })
 
   it('walks tabs in the reordered group.tabOrder sequence (regression: drag-reordered tabs)', () => {
-    // Original visual order was [term-1, term-2, term-3]; user dragged
-    // term-1 to the end so tabOrder is now [tab-t2, tab-t3, tab-t1]. The
-    // pre-fix keyboard nav read the stale tabBarOrderByWorktree and cycled
-    // 3 → 1 → 2 instead of 3 → 2 → 1. This walks the new canonical order.
+    // Reordered group.tabOrder must override stale legacy order for keyboard cycling.
     const group: TabGroup = {
       id: 'g1',
       worktreeId: 'wt',
@@ -326,7 +323,6 @@ describe('getActiveTabNavOrder', () => {
       id: 'g1',
       worktreeId: 'wt',
       activeTabId: 'tab-t1',
-      // Drag-reordered: canonical order is [t2, t3, t1]
       tabOrder: ['tab-t2', 'tab-t3', 'tab-t1']
     }
     const tabs: Tab[] = [
@@ -338,7 +334,7 @@ describe('getActiveTabNavOrder', () => {
       activeGroupIdByWorktree: { wt: 'g1' },
       groupsByWorktree: { wt: [group] },
       unifiedTabsByWorktree: { wt: tabs },
-      // Stale legacy order still in insertion order:
+      // Keep legacy insertion order stale to expose accidental fallback.
       tabBarOrderByWorktree: { wt: ['term-1', 'term-2', 'term-3'] },
       tabsByWorktree: {
         wt: [

@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store'
+import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
+import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { mainStartsPane } from './main-starts-pane'
@@ -11,10 +13,7 @@ export function isDeferredSplitInputHold(session: ConnectPanePtySession): boolea
   return Boolean(session.deps.cwdPromise || session.deps.preconnectInput?.length)
 }
 
-/**
- * Startup work the shell runs after it binds: a startup command, an agent resume (sleeping record or
- * live status entry), or a launch main picks for a pane it starts, unseen here.
- */
+/** Startup command, agent resume, or main-owned launch that runs after PTY binding. */
 export function paneHasStartupWork(session: ConnectPanePtySession): boolean {
   return paneHasKnownStartupWork(session) || mainStartsPane(session)
 }
@@ -28,12 +27,8 @@ function paneHasKnownStartupWork(session: ConnectPanePtySession): boolean {
   )
 }
 
-/**
- * Plain shells and deferred splits hold keys typed before their PTY binds (a first spawn can wait
- * seconds on the host). Why not panes with startup work: held keys would flush ahead of it, so a
- * typed prompt would run as a shell command or corrupt the launch line; agent panes keep them as
- * a draft instead (agent-pre-ready-typed-draft.ts).
- */
+/** Hold pre-bind keys only for plain/deferred shells. Flushing ahead of startup work could run a prompt
+ * as a shell command or corrupt the launch; agent panes retain a draft (agent-pre-ready-typed-draft.ts). */
 function holdsInputUntilConnect(session: ConnectPanePtySession): boolean {
   if (isDeferredSplitInputHold(session)) {
     // Why not mainStartsPane: a deferred split keeps holding under the layout-owner build, as before.
@@ -42,7 +37,45 @@ function holdsInputUntilConnect(session: ConnectPanePtySession): boolean {
   return !paneHasStartupWork(session)
 }
 
-/** The spawn/attach options a pane hands its PTY transport. */
+/**
+ * Whether the pane may show an old terminal: it mirrors a host's tab, or saved history was replayed
+ * into it (a cleared binding can still replay). Before its first connect, also: its leaf names a
+ * terminal or it shows output. Those are not re-read at bind, where the fresh create causes both.
+ */
+function paneMayShowOldTerminal(session: ConnectPanePtySession, atBind: boolean): boolean {
+  if (
+    isWebTerminalSurfaceTabId(session.deps.tabId) ||
+    terminalShowsReplayedHistory(session.pane.terminal)
+  ) {
+    return true
+  }
+  if (atBind) {
+    return false
+  }
+  const state = useAppStore.getState()
+  return Boolean(
+    session.restoredPtyIdForTransport ||
+    state.terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[session.pane.leafId] ||
+    terminalShowsOutput(session.pane.terminal)
+  )
+}
+
+function terminalShowsOutput(terminal: ConnectPanePtySession['pane']['terminal']): boolean {
+  const buffer = terminal.buffer?.active
+  if (!buffer) {
+    return false
+  }
+  if (buffer.baseY > 0) {
+    return true
+  }
+  for (let row = 0; row < buffer.length; row += 1) {
+    if (buffer.getLine(row)?.translateToString(true)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
   const holdsInput = holdsInputUntilConnect(session)
   return {
@@ -54,6 +87,13 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
           bufferInputUntilConnect: true,
           // Why: a resume source can land between mount and bind; keys must not flush ahead of it.
           releasePreconnectInput: () => holdsInputUntilConnect(session)
+        }
+      : {}),
+    // Why: typing on old pixels must never reach a fresh shell (#10065).
+    ...(holdsInput
+      ? {
+          keepTypeAheadForNewTerminal: (phase: 'connect' | 'bind') =>
+            !paneMayShowOldTerminal(session, phase === 'bind')
         }
       : {}),
     // Why gated: a seed alone arms the transport hold, which would flush ahead of startup work.
@@ -73,9 +113,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.startupCommandDelivery,
     executionHostId: session.executionHostId,
     worktreeId: session.deps.worktreeId,
-    // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
-    // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
-    // pty:spawn returns.
+    // Flush pane↔PTY binding before spawn reply so a SIGKILL cannot lose it.
     tabId: session.deps.tabId,
     leafId: session.pane.leafId,
     ...(session.deps.placement ? { placement: session.deps.placement } : {}),
@@ -90,6 +128,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : {}),
     ...(session.paneStartup?.resumeProviderSession
       ? { resumeProviderSession: session.paneStartup.resumeProviderSession }
+      : {}),
+    ...(session.paneStartup?.resumeOrigin
+      ? { resumeOrigin: session.paneStartup.resumeOrigin }
       : {}),
     ...((session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt)
       ? {
@@ -143,10 +184,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
           onAgentBecameWorking: session.onAgentBecameWorking,
           onAgentExited: session.onAgentExited
         }),
-    // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
-    // parses OSC 9999 before renderer delivery and forwards through the hook
-    // server with local/SSH identity. Remote-runtime streams do not pass through
-    // local main, so the renderer remains their status owner for now.
+    // Local main owns OSC 9999 and forwards hook identity; remote-runtime streams bypass main and retain renderer ownership.
     ...(session.shouldOwnAgentStatusInRenderer
       ? { onAgentStatus: session.handleRendererOwnedAgentStatus }
       : {})

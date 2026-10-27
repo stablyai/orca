@@ -57,7 +57,6 @@ describe('GitHubUserAvatar', () => {
     act(() => {
       container?.querySelector('img')?.dispatchEvent(new Event('error'))
     })
-    // Emoji word is skipped entirely rather than split into a broken half.
     expect(container.textContent).toBe('D')
   })
 
@@ -70,16 +69,11 @@ describe('GitHubUserAvatar', () => {
   })
 
   it('retries when avatarUrl changes after an earlier src failed (late-arriving avatar)', () => {
-    // Why: PR detail enrichment supplies avatar_url after first paint. A row that
-    // 404s on the early login-based URL must recover once the real URL lands.
     ;({ root, container } = render(<GitHubUserAvatar login="enterprise-user" />))
-    // First src is the login fallback; simulate the GHE 404.
     act(() => {
       container?.querySelector('img')?.dispatchEvent(new Event('error'))
     })
     expect(container.querySelector('img')).toBeNull()
-    // Enriched avatar_url arrives → component must render the new image, not the
-    // latched placeholder.
     const url = 'https://avatars.example.com/u/7?v=4'
     act(() => {
       root?.render(<GitHubUserAvatar login="enterprise-user" avatarUrl={url} />)

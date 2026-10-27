@@ -8,14 +8,14 @@ import {
 import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
-} from './native-chat-session-option-defaults'
+} from './native-chat/input/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
 import { usesInstalledAgentModelCatalog } from './agent-model-catalog-ownership'
 import {
   structuredAgentSessionDescribedModel,
   structuredAgentSessionShownModel
 } from './structured-agent-session-option-snapshot'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult
@@ -50,28 +50,26 @@ export function structuredAgentSessionOptionCatalog(
 
 export type StructuredAgentSessionOptionState = {
   catalog: AgentSessionOptionCatalog | null
-  /** What answered `catalog`, not proof of current child eligibility. `seed` is the
-   *  built-in list before the host answered (shown as the quiet placeholder); `builtin` is the
-   *  same list once the host said it has none, usable but naming nothing the host may replace. */
+  /** Catalog provenance, not current-child eligibility: seed stays a placeholder until the host answers;
+   * builtin then enables the static list without naming a model the host may replace. */
   catalogSource: 'seed' | 'builtin' | 'host' | 'live' | null
-  /** The rows of a live answer its agent's own listing names; a row outside them is the chat's
-   *  own model, which no list describes. Absent from an older host. */
+  /** Live-answer IDs verified by the agent’s listing; extra rows name the chat’s own model, not listed capabilities. Old hosts omit this. */
   verifiedModelIds?: readonly string[]
   record: StructuredAgentSessionOptionRecord
   /** The last answer came from a host that marks no defaults, whose own tier rule it shows. */
   olderHost?: true
-  /** A resumed chat names the default its host marks but never sends it: its next start runs the
-   *  agent's own. A new chat sends the default it shows, so its first send pins it. */
+  /** Resumed chats show host defaults without sending them; new chats pin their shown default on first send. */
   defaultsUnsent?: true
   /** The permission mode the host or launch last stated; null shows no picker. */
   permissionMode: string | null
+  reportedPermissionMode?: string | null
+  permissionOwnSupported?: boolean | null
   pendingId: string | null
   listingInProgress?: boolean
   fastModeRestricted?: boolean
 }
 
-/** With `seedCatalog`, the state holds the static seed from the first frame, but the picker shows
- *  the quiet placeholder until the host answers; every later source only upgrades it. */
+/** Install a static seed immediately, but show the placeholder until the host answers; later sources only upgrade it. */
 export function createStructuredAgentSessionOptionState(
   agent = 'codex',
   seedCatalog?: AgentSessionOptionCatalog | null
@@ -85,8 +83,7 @@ export function createStructuredAgentSessionOptionState(
   }
 }
 
-/** The host answered with no list (none saved, a failed read, or an older host): the built-in
- *  list becomes usable, still naming nothing until a host or session list does. */
+/** A missing/failed/old-host list enables built-in controls but names no model until a host/session list does. */
 export function settleStructuredAgentSessionBuiltinCatalog(
   state: StructuredAgentSessionOptionState,
   listingInProgress = state.listingInProgress
@@ -120,11 +117,7 @@ export function finishedListingIds(catalog: AgentSessionModelCatalogResult): str
     : undefined
 }
 
-/**
- * Applies the host's stored model catalog: models only, no current selection
- * and no record writes, so nothing here reads as a committed value — the pick
- * stays provisional until an options result confirms it.
- */
+/** Install models only; no record writes or committed picks until an options result confirms them. */
 export function applyStructuredAgentSessionModelCatalog(
   state: StructuredAgentSessionOptionState,
   seed: AgentSessionOptionCatalog,
@@ -148,15 +141,13 @@ export function applyStructuredAgentSessionModelCatalog(
   if (catalog.origin === 'unknown' || (!installed && models.length === 0)) {
     return settleStructuredAgentSessionBuiltinCatalog(state)
   }
-  // The host says whether its listed default is what this launch runs; an older host never says,
-  // so the client's own knowledge of the agent stands in. A reopened chat may keep its own model.
+  // Only new launches may name the listing default; use host evidence, or agent knowledge for old hosts. Reopened chats may retain another model.
   const namesDefault =
     options.newLaunch &&
     (catalog.listingNamesConfiguredModel ?? seed.hostListingNamesConfiguredModel === true)
   return {
     ...state,
-    // `isDefault` came from a real listing, so a launch's CLI default is nameable —
-    // as a provisional `default`-source value, never a confirmed one.
+    // Real-listing defaults are nameable but provisional, never confirmed picks.
     catalog: {
       ...(state.catalogSource === 'live' ? (state.catalog ?? seed) : seed),
       models,
@@ -171,13 +162,12 @@ export function applyStructuredAgentSessionOptions(
   state: StructuredAgentSessionOptionState,
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult,
-  /** Whether this view started the chat, which runs the default it shows until its first send.
-   *  Absent reads as a chat it did not start, which never names a default as its own. */
+  /** Absent means this view did not start the chat, so listing defaults never become its own values. */
   launch: { newLaunch: boolean; coherentCatalog?: boolean } = { newLaunch: false }
 ): StructuredAgentSessionOptionState {
   const { current } = result
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
-  // A value the host supplied from a catalog default is context for the picker, not the chat's own.
+  // Catalog defaults supply picker context without claiming the chat chose them.
   replaceStructuredAgentSessionAnsweredValues(
     state.record,
     {
@@ -208,7 +198,8 @@ export function applyStructuredAgentSessionOptions(
       : result.listedModelIds?.length
         ? result.listedModelIds
         : undefined,
-    permissionMode: result.current.permissionMode ?? null
+    permissionMode: result.current.permissionMode ?? null,
+    reportedPermissionMode: result.current.reportedPermissionMode
   }
 }
 
@@ -228,7 +219,7 @@ export function commitStructuredAgentSessionOption(
   value: string
 ): StructuredAgentSessionOptionState {
   if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
-    return { ...state, permissionMode: value, pendingId: null }
+    return { ...state, permissionMode: value, reportedPermissionMode: undefined, pendingId: null }
   }
   if (!state.catalog) {
     return state
@@ -237,14 +228,13 @@ export function commitStructuredAgentSessionOption(
   if (decoded === null) {
     return { ...state, pendingId: null }
   }
-  // Each value is the chat's own: a model pick leaves the others for the host to reconcile.
+  // Keep other picks after a model change; the host reconciles independent values.
   state.record.values[id] = { value: decoded, source: 'dispatched' }
   return { ...state, pendingId: null }
 }
 
-/** Whether a pick of `modelId` held before launch keeps another held value (decoded or encoded):
- *  no host exists yet to reconcile it, so only what the model's controls offer stays. A model the
- *  list does not describe keeps every value, since nothing says what it takes. */
+/** Before launch no host can reconcile held picks; keep only values offered by the model’s controls.
+ * An undescribed model preserves all values because no listing can disprove them. */
 export function structuredAgentSessionModelOffers(
   state: Pick<StructuredAgentSessionOptionState, 'catalog' | 'verifiedModelIds'>,
   modelId: string,
@@ -281,20 +271,8 @@ export type StructuredSessionOptionPick = {
   value: SessionOptionValue
 }
 
-/**
- * The picks a mutation must remember so the next launch starts where the user left off.
- * Keyed off the same ids the launch seed reads back, so a pick this surface cannot
- * re-seed is never written.
- *
- * Model and effort travel as a pair: a launch resolves a stored effort only under a
- * stored model, so an effort-only pick adopts the model it was chosen against. Values
- * come from what the provider committed, not what was requested — it reconciles an
- * effort the newly selected model cannot run before reporting back.
- *
- * `state` may still be pre-commit: a changed model arrives in `committed`, and an
- * unchanged one is already what the record tracks, so neither reading depends on the
- * commit having landed.
- */
+/** Persist only reseedable IDs, using provider-committed values after reconciliation. Effort-only picks adopt their controls’ model
+ * because launch reads effort only under a stored model. Pre-commit state is valid: committed supplies changed model, record supplies unchanged model. */
 export function structuredAgentSessionOptionPicks(
   state: StructuredAgentSessionOptionState,
   committed: Readonly<Record<string, string>>

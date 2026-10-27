@@ -3,7 +3,7 @@ import {
   type SessionOptionDescriptor,
   type SessionOptionDisabledReason,
   type SessionOptionSelectChoice
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import { translate } from '@/i18n/i18n'
 
 export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor): string {
@@ -51,7 +51,6 @@ export function nativeChatSessionChoiceLabel(
   }
 }
 
-/** Compact labels for effort segments and the model pill. */
 export function nativeChatSessionChoiceShortLabel(
   choice: SessionOptionSelectChoice,
   optionId?: string
@@ -68,7 +67,6 @@ export function nativeChatSessionChoiceShortLabel(
   }
 }
 
-/** The label of a value-less action row; see `SessionOptionDescriptor.action`. */
 export function nativeChatSessionOptionActionLabel(descriptor: SessionOptionDescriptor): string {
   // Why: flip-only without a baseline is an action — never claim On/Off.
   return descriptor.action?.type === 'toggle-command'
@@ -81,8 +79,6 @@ export function nativeChatSessionOptionActionLabel(descriptor: SessionOptionDesc
 export function nativeChatSessionOptionDisabledReason(
   reason: SessionOptionDisabledReason | undefined
 ): string | null {
-  // Exhaustive over SessionOptionDisabledReason: a new key is a compile error
-  // here, so the localized label can never silently drift from the producer.
   switch (reason) {
     case 'set-when-session-starts':
       return translate(
@@ -100,10 +96,7 @@ export function nativeChatSessionOptionDisabledReason(
 }
 
 export function nativeChatModelPillLabel(descriptor: SessionOptionDescriptor): string {
-  // Why: show the value only (Codex/Conductor style). "Model:" is redundant —
-  // the control's aria-label/tooltip already names the category.
-  // Only `unknown` withholds the value; a `default` source still names the model
-  // the launch will use, so it renders like any observed one.
+  // The tooltip names the category; default sources still identify a model, while unknown sources do not.
   if (
     descriptor.valueSource === 'unknown' ||
     descriptor.kind.type !== 'select' ||
@@ -129,8 +122,7 @@ export function nativeChatOptionsPillTitle(
     : translate('components.native-chat.composer.sessionOptions', 'Session options')
 }
 
-/** The options' values as the pill shows them after the model, e.g. `High · Fast`; empty when
- *  none has a value worth showing. */
+/** Join displayable option values after the model, e.g. High · Fast. */
 export function nativeChatOptionValuesLabel(
   descriptors: readonly SessionOptionDescriptor[]
 ): string {
@@ -162,6 +154,5 @@ export function nativeChatOptionValuesLabel(
       )
     }
   }
-  // Why: values only (no "Effort:" prefix) — the category lives on the tooltip.
   return labels.join(' · ')
 }

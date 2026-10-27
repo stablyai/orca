@@ -6,10 +6,8 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { createTestStore, makeWorktree, makeTab, makeLayout, TEST_REPO } from './store-test-helpers'
 import { createStoreSessionMockApi, makeBrowserTab } from './store-session-test-harness'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -73,24 +71,19 @@ describe('hydrateWorkspaceSession', () => {
 
     const s = store.getState()
 
-    // Valid worktree tabs restored
     expect(s.tabsByWorktree[validWt]).toHaveLength(1)
     expect(s.tabsByWorktree[validWt][0].id).toBe('tab-valid')
 
-    // Invalid worktree tabs dropped
     expect(s.tabsByWorktree[invalidWt]).toBeUndefined()
 
-    // activeWorktreeId is null because it referenced an invalid worktree
     expect(s.activeWorktreeId).toBeNull()
 
-    // activeTabId is null because it referenced an invalid tab
     expect(s.activeTabId).toBeNull()
 
-    // Terminal layouts only contain valid tabs
     expect(s.terminalLayoutsByTabId['tab-valid']).toBeDefined()
     expect(s.terminalLayoutsByTabId['tab-invalid']).toBeUndefined()
 
-    // Why: two-phase hydration keeps workspaceSessionReady false until reconnectPersistedTerminals() flips it after eager spawns.
+    // Workspace readiness stays false until the reconnect phase completes.
     expect(s.workspaceSessionReady).toBe(false)
   })
 

@@ -62,7 +62,18 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     // Exclude the overlay from hit testing to find the page element underneath.
     host.style.pointerEvents = 'none';
     var el = document.elementFromPoint(e.clientX, e.clientY);
-    host.style.pointerEvents = 'all';
+    // Document hit-testing stops at a shadow host; closed roots stay opaque.
+    // Page code can shadow shadowRoot (e.g. a form control named "shadowRoot"); keep the deepest real hit.
+    try {
+      while (el && el.shadowRoot) {
+        var inner = el.shadowRoot.elementFromPoint(e.clientX, e.clientY);
+        if (!inner || inner === el) break;
+        el = inner;
+      }
+    } catch (err) {
+    } finally {
+      host.style.pointerEvents = 'all';
+    }
     if (el) {
       requestAnimationFrame(function() { updateHighlight(el); });
     }
@@ -76,6 +87,7 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   var previousSelectedValue = null;
   var frozenFrame = 0;
   var frozenResizeObserver = null;
+  var frozenShadowRoots = [];
 
   function refreshFrozenHighlight() {
     frozenFrame = 0;
@@ -93,6 +105,10 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
 
   function stopTrackingSelection() {
     window.removeEventListener('scroll', scheduleFrozenHighlight, true);
+    frozenShadowRoots.forEach(function(root) {
+      root.removeEventListener('scroll', scheduleFrozenHighlight, true);
+    });
+    frozenShadowRoots = [];
     window.removeEventListener('resize', scheduleFrozenHighlight, true);
     if (frozenResizeObserver) frozenResizeObserver.disconnect();
     frozenResizeObserver = null;
@@ -127,6 +143,10 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
       selectedEl.setAttribute(selectedAttribute, selectionId);
       highlightBox.style.transition = 'none';
       window.addEventListener('scroll', scheduleFrozenHighlight, true);
+      frozenShadowRoots = shadowRootsAbove(selectedEl);
+      frozenShadowRoots.forEach(function(root) {
+        root.addEventListener('scroll', scheduleFrozenHighlight, true);
+      });
       window.addEventListener('resize', scheduleFrozenHighlight, true);
       if (typeof ResizeObserver === 'function') {
         frozenResizeObserver = new ResizeObserver(scheduleFrozenHighlight);

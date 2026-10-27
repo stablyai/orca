@@ -169,7 +169,15 @@ function renameWithRetry(from, to) {
 }
 
 const removeTree = (target) => fs.rmSync(target, { recursive: true, force: true, maxRetries: 5 })
-const removeTreeAsync = (target) => fs.promises.rm(target, { recursive: true, force: true, maxRetries: 5 })
+// Async rm retries each nested entry separately (multiplying per level); retry whole passes instead.
+async function removeTreeAsync(target) {
+  for (const delay of [0, 100, 200, 300, 400, 500]) {
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
+    try { await fs.promises.rm(target, { recursive: true, force: true }); return } catch (error) {
+      if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(error.code) || delay === 500) throw error
+    }
+  }
+}
 
 Object.assign(ops, {
   'snapshot-capture': withStateMutationLock(async (root, snapshotDir) => {

@@ -79,8 +79,7 @@ describe('MobileHostCard', () => {
   })
 
   it('keeps rendering the last proven counts after a failed refresh', async () => {
-    // The regression this card shipped once: the caller dropped the counts the
-    // failure path deliberately preserved.
+    // Regress caller dropping counts deliberately preserved on failure.
     expect(await renderCard(markHomeWorktreeCatalogUnavailable(loaded, 'host-1'))).toContain(
       'Last known: 12 worktrees · 2 active'
     )

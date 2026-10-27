@@ -15,14 +15,17 @@ type UseFileExplorerTreeLoadEffectsParams = {
   loadingDirPaths: ReadonlySet<string>
   rootError: string | null
   isDirStale: (dirPath: string) => boolean
-  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  loadDir: (
+    dirPath: string,
+    depth: number,
+    options?: { force?: boolean; wakeWslDistro?: boolean }
+  ) => Promise<boolean>
   refreshTree: () => Promise<unknown>
-  resetAndLoad: () => void
+  resetAndLoad: (options?: { wakeWslDistro?: boolean }) => void
   resetSelection: () => void
   setNameFilterQuery: Dispatch<SetStateAction<string>>
 }
 
-/** Reset/retry/stale-dir loads for the currently visible worktree tree. */
 export function useFileExplorerTreeLoadEffects({
   visibleFilesWorktreePath,
   displayRootPath = visibleFilesWorktreePath,
@@ -71,8 +74,7 @@ export function useFileExplorerTreeLoadEffects({
     if (!visibleFilesWorktreePath) {
       return
     }
-    // Why: the sidebar remains mounted while closed to preserve caches, but
-    // loading the hidden tree would probe every clicked workspace on macOS.
+    // The hidden sidebar stays mounted for caches; avoid probing every clicked workspace while closed.
     if (
       !shouldResetFileExplorerForVisibleWorktree(
         lastResetWorktreePathRef.current,
@@ -84,15 +86,12 @@ export function useFileExplorerTreeLoadEffects({
     lastResetWorktreePathRef.current = visibleFilesWorktreePath
     resetSelection()
     setNameFilterQuery('')
-    resetAndLoad()
+    // Opening a workspace is a user act: it may start its stopped WSL distro.
+    resetAndLoad({ wakeWslDistro: true })
     clearFileExplorerUndoHistory()
   }, [visibleFilesWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Why: on app startup the file explorer loads before SSH providers are
-  // registered, so readDir fails for remote worktrees. When the SSH
-  // connection is later established, sshConnectedGeneration bumps and this
-  // effect retries the load. Only retries when there was a prior error to
-  // avoid redundant reloads for local worktrees.
+  // Retry prior errors after SSH providers register; explorer startup may precede connection readiness.
   const sshGenRef = useRef(sshConnectedGeneration)
   useEffect(() => {
     if (sshConnectedGeneration > sshGenRef.current) {
@@ -123,13 +122,11 @@ export function useFileExplorerTreeLoadEffects({
       return
     }
     for (const dirPath of expanded) {
-      // Why first: a refresh wave marks every dir it owns before its first read lands, and without
-      // this the effect would fan out an unbounded loadDir per dir on the next `expanded` change.
+      // Refresh waves premark owned dirs; skip them to prevent unbounded duplicate loadDir fan-out.
       if (loadingDirPaths.has(dirPath)) {
         continue
       }
-      // Why: a full refresh (watcher overflow) re-reads only root and the dirs expanded at the time,
-      // so a listing cached while collapsed is unverified — re-read it here instead of trusting it.
+      // Collapsed caches are unverified after watcher overflow; only root/expanded dirs were refreshed.
       if (dirCache[dirPath]?.error) {
         continue
       }
@@ -138,7 +135,11 @@ export function useFileExplorerTreeLoadEffects({
         continue
       }
       const depth = splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
-      void loadDir(dirPath, depth, decision === 'reload' ? { force: true } : undefined)
+      // Runs when the user expands a folder or opens the workspace: a user act may start WSL.
+      void loadDir(dirPath, depth, {
+        wakeWslDistro: true,
+        ...(decision === 'reload' ? { force: true } : {})
+      })
     }
   }, [expanded, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 

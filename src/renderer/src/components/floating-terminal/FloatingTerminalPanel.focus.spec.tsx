@@ -60,7 +60,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
     mocks.setFloatingFocus.mockClear()
     mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped()
-    // No refocus target: both bits false (atomic payload, F7).
     expect(mocks.setFloatingFocus).toHaveBeenCalledWith({
       panelFocused: false,
       terminalFocused: false
@@ -72,7 +71,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     }
     Object.setPrototypeOf(newerFloatingInput, HTMLElement.prototype)
     mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped(newerFloatingInput)
-    // Relatched onto the floating xterm: panel ⊇ terminal, both true.
     expect(mocks.setFloatingFocus).toHaveBeenLastCalledWith({
       panelFocused: true,
       terminalFocused: true
@@ -192,9 +190,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(() => runEffects()).not.toThrow()
   })
 
-  // F3 (a)/(b): a panel-owned close that empties the panel reclaims keyboard focus for the next
-  // Cmd/Ctrl+T. The emptying close arms the one-shot intent (via closeTerminalTab's onClosed); the
-  // count→0 effect consumes it on the now-empty re-render and focuses the panel root.
   it('reclaims panel keyboard focus after a focused last-pane close empties the panel', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
@@ -216,7 +211,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
     runEffects()
 
-    // The last-tab close authority (strip close → confirmed close) runs while the panel owns focus.
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
@@ -224,7 +218,6 @@ describe('FloatingTerminalPanel close behavior', () => {
       expect.objectContaining({ onClosed: expect.any(Function) })
     )
 
-    // Panel is now empty: the count→0 effect consumes the armed intent and reclaims focus.
     setFloatingTabs([])
     const emptyElement = await renderPanel(true)
     attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
@@ -256,20 +249,17 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
-    // Emptying schedules the reclaim frame (id 42, callback not yet run); unmounting cancels it.
+    // Schedule reclaim without firing it so unmount must cancel the pending frame.
     setFloatingTabs([])
     const emptyElement = await renderPanel(true)
     attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
     runEffects()
     attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, null)
 
-    // The reclaim frame (42) is canceled on unmount so its deferred focus never runs. (The
-    // synchronous empty-panel open-focus effect is orthogonal and not scheduled through this frame.)
+    // Only deferred reclaim uses frame 42; the empty panel’s separate open-focus effect is synchronous.
     expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
   })
 
-  // F3 (g): a close that leaves another tab does not empty the panel, so no intent is armed and
-  // the surviving tab keeps focus instead of the panel root stealing it.
   it('does not arm a reclaim when a focused close leaves another floating tab', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
@@ -295,10 +285,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(panelElement.focus).not.toHaveBeenCalled()
   })
 
-  // F3 arm-timing: arming is gated on closeTerminalTab's onClosed (the *actual* close), not on
-  // close-initiation. A pinned/deferred close whose confirm is pending or cancelled never fires
-  // onClosed, so an emptying, panel-owned close must still leave the intent unarmed — otherwise a
-  // later empty-panel mount would reclaim focus for a close that never happened.
   it('does not arm a reclaim when an emptying close is deferred and onClosed never fires', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
@@ -309,8 +295,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     })
-    // Model closeTerminalTab deferring to its pin-confirm dialog (or the user cancelling): the close
-    // does not complete this tick, so the onClosed arming callback is never invoked.
+    // Model a deferred/canceled pin confirmation by never firing onClosed.
     mocks.closeTerminalTab.mockImplementationOnce(() => {})
     const element = await renderPanel(true)
     attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
@@ -319,8 +304,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
-    // The panel owned focus and this close would empty it, yet arming rides on the real close via
-    // onClosed — which never fired — so no intent is armed and nothing can reclaim later.
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({ onClosed: expect.any(Function) })
@@ -328,7 +311,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(consumeFloatingPanelReclaimIntent()).toBe(false)
   })
 
-  // The central save queue runs the captured reaction only after a dirty file actually closes.
   it('reclaims panel keyboard focus after a deferred dirty-editor close empties the panel', async () => {
     setFloatingEditorTabs([makeFile({ id: 'file-a', isDirty: true })])
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
@@ -346,14 +328,11 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-file-a')
 
-    // The close is parked on the save dialog: nothing closed yet, so nothing reclaims focus yet.
     const onClosed = requestedEditorCloseReaction()
     expect(mocks.closeFile).not.toHaveBeenCalledWith('file-a')
     expect(window.requestAnimationFrame).not.toHaveBeenCalled()
 
-    // The central queue resolves and the file leaves the panel. Its callback arms reclaim on
-    // the now-empty count and the count→0 effect consumes it. The deferred reclaim frame is the
-    // signal here — the empty panel's own open-focus effect focuses synchronously, without a frame.
+    // The close callback arms reclaim after removal; its deferred frame distinguishes it from synchronous open-focus.
     setFloatingEditorTabs([])
     onClosed()
     const emptyElement = await renderPanel(true)
@@ -412,14 +391,12 @@ describe('FloatingTerminalPanel close behavior', () => {
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-file-a')
     requestedEditorCloseReaction()
 
-    // Cancel never invokes onClosed; a later removal from another path must not reclaim focus.
     setFloatingEditorTabs([])
     const emptyElement = await renderPanel(true)
     attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
     runEffects()
 
-    // No intent armed and no deferred reclaim frame; the empty panel's synchronous open-focus
-    // effect still runs, which is orthogonal to the reclaim.
+    // The empty panel’s synchronous open-focus may run, but no reclaim frame should be armed.
     expect(consumeFloatingPanelReclaimIntent()).toBe(false)
     expect(window.requestAnimationFrame).not.toHaveBeenCalled()
   })

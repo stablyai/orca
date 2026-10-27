@@ -1,10 +1,6 @@
-// The queued-draft surface the structured session exposes: cards derived from
-// the published list and the Send-now / Delete / Edit actions. Shown whatever
-// the queue capability says: a host that does not queue sends still publishes a
-// message it kept as a card across a restart or a close, and only queueing a new
-// send is gated. A host older than the queue publishes no list, so shows no cards.
-// Nothing here is durable: the host owns the queue, and the published list is
-// the only truth a card action ever needs.
+import type { DragReorderMove } from '../components/drag-reorder-positions'
+import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
+// The host owns queued drafts; render its published cards even when it cannot queue new sends.
 
 import { useCallback, useMemo } from 'react'
 import type {
@@ -36,25 +32,19 @@ import {
 
 const CLEAR_DELETE_CONCURRENCY = 8
 
-/** `onCopied` runs once the card's text is in the composer, before its Delete leaves. */
+// Notify only after copying into the composer, before Delete leaves.
 export type MobileQueuedMessageEdit = (messageId: string, onCopied?: () => void) => Promise<boolean>
 
 export type MobileStructuredQueuedMessageControls = {
-  /** Host-held drafts as cards above the composer. */
   cards: MobileQueuedMessageCard[]
-  /** Send-now: dispatch this draft into or ahead of the running turn. */
   send: (messageId: string) => Promise<boolean>
-  /** Discard the draft. */
   delete: (messageId: string) => Promise<boolean>
   clear: (messageIds: string[]) => Promise<boolean>
-  /** Edit in the card; an older host falls back to the composer copy. */
   edit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
-  /** The whole queue's pause, shown above the cards; null when it sends on its own. */
+  move?: (move: DragReorderMove) => Promise<boolean>
   pause: MobileQueuePause
-  /** Lift the queue's pause, so the waiting cards drain. */
   resume: () => Promise<boolean>
-  /** The conversation these belong to; the card list's in-flight guards never outlive it. */
   sessionKey: string
 }
 
@@ -65,19 +55,17 @@ export function useMobileStructuredQueuedMessageControls(args: {
   chatActive: boolean
   enabled: boolean
   editCapable: boolean | null
+  reorderCapable?: boolean
   agentName?: string
   journalItems?: readonly AgentJournalRenderItem[]
   queuedMessages: MobileQueuedMessageFeed
   queuePause: MobileQueuePause
   submissions: readonly AgentJournalSubmission[]
-  /** The chat shows the agent working: a command card offers no send then. */
   agentWorking?: boolean
   mutate: MobileStructuredAgentMutate
-  /** The active pane's live composer, Edit's copy target; absent = Edit refuses. False when
-   *  nothing was copied. */
+  // Without a live composer or a successful copy, Edit must refuse.
   appendComposerText: ((text: string) => boolean) | undefined
   onSendError: (message: string) => void
-  /** Called on any accepted card action, so the route can retire a held failure banner. */
   onActionResolved?: () => void
 }): MobileStructuredQueuedMessageControls {
   const {
@@ -90,17 +78,23 @@ export function useMobileStructuredQueuedMessageControls(args: {
     sessionKey,
     submissions
   } = args
+  const composerActions = useMobileQueuedMessageComposerActions({
+    ...args,
+    messages: queuedMessages,
+    reorderCapable: args.reorderCapable === true
+  })
+  const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
   const cards = useMemo(
     () =>
-      mobileQueuedMessageCards(queuedMessages, submissions, {
+      mobileQueuedMessageCards(orderedMessages, submissions, {
         agentWorking,
         agentName: args.agentName,
         statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
           ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
           : []
       }),
-    [agentWorking, args.agentName, args.journalItems, queuedMessages, submissions]
+    [agentWorking, args.agentName, args.journalItems, orderedMessages, queuedMessages, submissions]
   )
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({
     ...args,
@@ -141,8 +135,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
         return false
       }
       if (!result.value.deleted && result.value.disposition === 'dispatched') {
-        // Delete raced the drain; the message went out and is in the transcript. After Edit's
-        // copy, say so, or the composer's text reads as unsent and goes out twice.
+        // Delete can race dispatch; after Edit’s copy, disclose that it sent so the copy is not resent.
         onSendError(
           copied
             ? 'Already sent — your text is still in the composer.'
@@ -202,12 +195,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
         return beginInlineEdit(messageId)
       }
       const card = cards.find((candidate) => candidate.messageId === messageId)
-      // Copy-first: the text is in the composer before any RPC can fail, so no
-      // Delete outcome — including a lost answer — can lose it. A failed Delete
-      // leaves the card beside the copy, visibly, never a silent duplicate. No
-      // copy (no composer yet, or an empty card) means no Delete: Edit never
-      // removes text it did not keep.
-      // A command's text is not a draft: edited, it would become a message.
+      // Copy before Delete so refusal or lost reply cannot lose text; failed deletion leaves both copies visible.
+      // Never delete without a copy, and never turn command text into an editable message draft.
       if (!card || card.command || !appendComposerText?.(card.text)) {
         return false
       }
@@ -224,7 +213,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
       onSendError
     ]
   )
-  // Through the same mutation seam as Delete: a refusal reaches the send-error banner.
   const resume = useCallback(
     async (): Promise<boolean> =>
       resolved(
@@ -238,7 +226,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
       ),
     [mutate, resolved]
   )
-  // The header shows only while Resume would send something, as on desktop.
   const pause = mobileQueueHasResumableCard(cards) ? queuePause : null
   return {
     cards,
@@ -247,6 +234,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     clear,
     edit: args.editCapable === null ? undefined : edit,
     editor,
+    move: composerActions.move,
     pause,
     resume,
     sessionKey

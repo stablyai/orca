@@ -52,8 +52,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    // Why: manual sleep keeps tab.ptyId as a wake hint, so a remount would take the
-    // REATTACH arm and the daemon would respawn a shell for the dead id (#10205).
+    // Manual sleep retains tab.ptyId as a wake hint; unguarded remount would reattach and respawn its dead shell (#10205).
     it('does not reattach a slept pane through its retained session id', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')

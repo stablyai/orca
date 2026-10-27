@@ -1,10 +1,4 @@
-/**
- * The elements the document's modules reach for by id: the surface xterm is opened on, the
- * scroll indicator, and the selection overlay with its two handles and its menu pill.
- *
- * They are read as the modules are parsed, so whatever hosts the document — the WebView's body
- * or the page's own container — has to have planted this first.
- */
+// Plant markup before document startup reads its host-scoped elements.
 export const TERMINAL_DOCUMENT_MARKUP = `<div id="terminal-container">
   <div id="terminal-surface"></div>
 </div>

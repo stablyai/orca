@@ -46,7 +46,7 @@ function repo(id: string, path: string): Repo {
   }
 }
 
-/** A host moved and committed: its manifest is the source as it stood, its rows kept and hidden. */
+/** Commit the initial source manifest while retaining hidden desktop rows. */
 function movedHost(): void {
   const manifest = createOrcadMigrationManifest(store, store.getSshTarget(TARGET.id)!, {
     migrationId: 'm-1',

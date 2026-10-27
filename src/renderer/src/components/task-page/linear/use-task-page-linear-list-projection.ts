@@ -6,7 +6,7 @@ import {
   LINEAR_ISSUE_LIST_MAX
 } from '../../../../../shared/linear/issue-read-limits'
 import { compareLinearIssues } from './task-page-linear-jira-list-model'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import { useTaskPageLinearListPresentation } from './use-task-page-linear-list-presentation'
 export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearListSelectionModel) {
   const {
@@ -42,8 +42,7 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
       linearMode === 'in-orca'
         ? filterLinearIssuesBySearchQuery(displayedLinearIssues, appliedLinearSearch)
         : displayedLinearIssues
-    // Why: 'in-orca' is scoped by local workspace links, not by team, and it has no "Fetch more" —
-    // a team filter would silently drop a linked ticket with no way to recover it.
+    // Linked-workspace mode has no fetch-more path; team filtering would silently hide linked tickets.
     if (activeLinearIssueContextLabel || linearMode === 'in-orca') {
       return searchedIssues
     }

@@ -19,6 +19,8 @@
     "src/renderer/src/main.tsx",
     "src/renderer/src/popout.tsx",
     "src/renderer/src/web/main.tsx",
+    "src/renderer/src/component-fixtures/component-fixture-explorer.tsx",
+    "src/renderer/src/**/*.fixture.tsx",
     "src/renderer/src/**/*.worker.ts",
     "src/cli/index.ts",
     "src/wsl-guest/wsl-agent-hook-relay.ts",

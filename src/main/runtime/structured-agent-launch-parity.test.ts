@@ -1,6 +1,5 @@
-// Parity oracle for native-chat launches: the exact child every agent spawns, read at the spawn
-// boundary, with production's own dependency wiring. A refactor of the launch path must leave the
-// snapshot file unchanged.
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+// Capture native-chat children at the spawn boundary with production wiring; launch-path refactors must preserve these snapshots.
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -466,6 +465,19 @@ function eventSink(): StructuredAgentSessionEventSink {
 function adapterContext(): StructuredAgentAdapterContext {
   const store = {
     getRecord: (sessionId: string) => records.get(sessionId) ?? null,
+    selectWritableRecord: (sessionId: string) => {
+      const record = records.get(sessionId)
+      return record ? { kind: 'writable' as const, record } : { kind: 'missing' as const }
+    },
+    requireWritableRecord: (sessionId: string) => {
+      const record = records.get(sessionId)
+      if (!record) {
+        throw agentSessionRefusalError('agent_session_identity_required', {
+          reason: 'recordMissing'
+        })
+      }
+      return record
+    },
     pinLaunchDirectory: async (sessionId: string, directory: string) => {
       pins.push({ sessionId, directory })
       const record = records.get(sessionId)
@@ -599,8 +611,7 @@ beforeAll(async () => {
     logger: { warn: () => {}, error: () => {} },
     resolveWorkspacePath: async (workspaceId) =>
       join(root, workspaceId === FLOATING_TERMINAL_WORKTREE_ID ? 'floating' : 'worktree'),
-    // The login shell's variables, read once per host like production's snapshot: its own PATH,
-    // one variable the configured cases name and one they do not.
+    // Model the host-captured shell PATH plus one inherited and one excluded named variable.
     resolveEnvironment: async () => ({
       PATH: `${join(root, 'bin')}:/opt/login-shell/bin:/usr/bin:/bin`,
       HOME: join(root, 'home'),
@@ -618,8 +629,7 @@ beforeAll(async () => {
   }
 })
 
-// Again after the shared setup's own per-test environment, so this app's CLI paths are the run's;
-// and each case inherits the same environment whatever ran before it.
+// Reinstall app CLI paths after shared setup so every launch case inherits the same environment.
 beforeEach(() => {
   installAppEnvironment()
   process.env = inheritedEnvironment()

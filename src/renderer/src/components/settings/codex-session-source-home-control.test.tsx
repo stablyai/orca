@@ -46,8 +46,7 @@ describe('buildCodexSessionSourceHomeControl', () => {
   })
 
   it('reads a stored WSL value when the reported distro casing differs', () => {
-    // Stored as "Ubuntu"; the runtime reports "ubuntu". The launch-time resolver
-    // matches case-insensitively, so the UI must surface the active value too.
+    // Match launch-time case-insensitive distro resolution so the UI exposes the active stored override.
     const control = buildCodexSessionSourceHomeControl(
       settingsWith({
         codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.codex' } },
@@ -70,7 +69,6 @@ describe('buildCodexSessionSourceHomeControl', () => {
     )
 
     control.onSave('/home/me/.config/codex')
-    // No stray "ubuntu" key alongside "Ubuntu".
     expect(updateSettings).toHaveBeenCalledWith({
       codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.config/codex' } }
     })
@@ -87,7 +85,6 @@ describe('buildCodexSessionSourceHomeControl', () => {
     )
 
     control.onSave('')
-    // Removing the only key leaves no dangling wsl object.
     expect(updateSettings).toHaveBeenCalledWith({
       codexSessionSourceHome: { wsl: undefined }
     })

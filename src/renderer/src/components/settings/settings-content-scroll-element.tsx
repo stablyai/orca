@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 
-// Why: long Settings lists window their rows against the page's one scroller (VirtualizedList).
+// Virtualized Settings lists share the page scroller.
 const SettingsContentScrollElementContext = createContext<HTMLDivElement | null>(null)
 
 export const SettingsContentScrollElementProvider = SettingsContentScrollElementContext.Provider

@@ -29,8 +29,7 @@ import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-to
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
-// Why: activePendingCreationId can outlive the terminal route when the user
-// switches app views; only the terminal route renders the creation panel.
+// The pending pointer can survive app-view changes; only terminal view actually displays creation UI.
 function isPendingCreationSurfaceVisible(creationId: string): boolean {
   const state = useAppStore.getState()
   return state.activeView === 'terminal' && state.activePendingCreationId === creationId
@@ -103,6 +102,7 @@ export async function executeWorktreeCreation(
         preparedRequest.compareBaseRef,
         {
           setupOnly: preparedRequest.setupOnly,
+          ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
           executionHostId: creationHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
@@ -129,8 +129,7 @@ export async function executeWorktreeCreation(
         }
       )
   } catch (error) {
-    // Why: a missing entry means the user cancelled mid-flight — abandon
-    // silently rather than surfacing an error for work they already dismissed.
+    // Missing entry means mid-flight user cancellation; stop silently instead of reporting dismissed work as failure.
     if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
       return
     }
@@ -138,15 +137,13 @@ export async function executeWorktreeCreation(
       await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    // Why: an error must stay on the same creation surface that owns the faux
-    // tab strip, rather than falling back to stale previous-workspace tabs.
+    // Keep failures on the owning creation surface, never stale previous-workspace tabs.
     useAppStore.getState().updatePendingWorktreeCreation(creationId, {
       status: 'error',
       error: message,
       ...(preparedRequest.ephemeralVmRecipe ? { request } : {})
     })
-    // Why: only toast when the panel isn't already showing this error (the user
-    // navigated away), so a visible failure isn't announced twice.
+    // Toast only after navigation away; inline errors already announce visible failures.
     if (!isPendingCreationSurfaceVisible(creationId)) {
       toast.error(message)
     }
@@ -164,19 +161,15 @@ export async function executeWorktreeCreation(
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true
-  const windowStartup = windowStartupAfterCreate(preparedRequest, result, backendSpawned)
+  const windowStartup = windowStartupAfterCreate(creationId, preparedRequest, result)
   const startupOpt = windowStartup.startup
 
-  // Why: only a user still watching the creation surface (or already on the new
-  // workspace) is handed it; anyone who moved on (another workspace or an app
-  // view) keeps their place and gets a toast instead (#9944).
+  // Hand off only if still viewing creation/new workspace; preserve later navigation and toast instead (#9944).
   const shouldActivateOnCompletion = isCreatedWorkspaceInView(creationId, worktree.id)
   const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
   const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 
-  // Why: the worktree exists past this point and nothing awaits this caller, so
-  // each follow-up step is best-effort — an escaped throw would strand the
-  // creation surface over the finished workspace instead of reaching completion.
+  // Contain post-create follow-ups independently; fire-and-forget throws otherwise strand creation UI over a completed workspace.
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null = null
   if (shouldActivateOnCompletion && !structuredLaunch) {
@@ -189,15 +182,13 @@ export async function executeWorktreeCreation(
         ...(defaultTabs ? { defaultTabs } : {}),
         ...(startupOpt ? { startup: startupOpt } : {}),
         ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
-        ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {}),
+        ...windowStartup.terminalOptions,
         ...(setupIsOnlySurface ? { providesInitialSurface: true } : {})
       })
       primaryTabId = activation === false ? null : activation.primaryTabId
     } catch (error) {
       console.error('worktree create: activate-and-reveal failed', worktree.id, error)
-      // Activation can publish the worktree before a later step throws. Do not
-      // infer a primary tab from default-tab ordering; only a fresh seed may
-      // return one here.
+      // Activation can publish then throw; only freshly seeded/stamped startup tabs prove primary ownership, never default order.
       const stateAfterActivationFailure = useAppStore.getState()
       const existingTabs = stateAfterActivationFailure.tabsByWorktree[worktree.id] ?? []
       const launchAgent = startupOpt?.launchAgent ?? preparedRequest.agent
@@ -208,7 +199,7 @@ export async function executeWorktreeCreation(
         // Startup terminal ids and stamped agent tabs are the only safe primary
         // ids when activation returned no result.
         primaryTabId = verifiedLaunchTabId
-      } else if (existingTabs.length === 0) {
+      } else if (existingTabs.length === 0 || startupOpt) {
         try {
           primaryTabId = ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),
@@ -218,7 +209,7 @@ export async function executeWorktreeCreation(
             preparedRequest.issueCommand,
             defaultTabs,
             // Activation failed before providing its promised surface, so recovery must seed one.
-            { ...onCreationHost, ...(backendSpawned && { backendStartupTerminalSpawned: true }) }
+            { ...onCreationHost, ...windowStartup.terminalOptions }
           )
         } catch (recoveryError) {
           console.error('worktree create: recovery seed failed', worktree.id, recoveryError)
@@ -259,7 +250,7 @@ export async function executeWorktreeCreation(
             activateCreatedTabs: false,
             ...onCreationHost,
             ...(callerProvidesSurface ? { callerProvidesSurface: true } : {}),
-            ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+            ...windowStartup.terminalOptions
           }
         )
       } catch (error) {
@@ -301,8 +292,7 @@ export async function executeWorktreeCreation(
         primaryTabId
       })
     } catch (error) {
-      // Why: plan.launch is guarded inside, but its sync prologue is not; treat
-      // an escaped throw like a failed launch (accepted) and still complete.
+      // Guard plan.launch’s synchronous prologue too; treat escaped failure as accepted and still finish creation.
       console.error('worktree create: structured session launch failed', worktree.id, error)
     }
     if (structuredSession) {

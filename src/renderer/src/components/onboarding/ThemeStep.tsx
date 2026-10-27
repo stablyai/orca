@@ -23,15 +23,11 @@ export function applyOnboardingThemeSelection(
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 ): void {
   onThemeChange(id)
-  // Why: later onboarding controls also save settings. Persist the theme at
-  // selection time so those unrelated writes cannot reapply the old theme.
+  // Persist immediately so later onboarding setting writes cannot reapply the old theme.
   void updateSettings({ theme: id })
 }
 
-// The two UI-only states (`'idle'`, `'detecting'`) never fire telemetry. The
-// remaining states are exactly `DiscoveryStatusEmitted`, which is the
-// schema-side enum the compile-time guard in
-// `src/shared/telemetry-events.ts` locks against.
+// Idle/detecting emit no telemetry; other states match the guarded DiscoveryStatusEmitted schema.
 export type DiscoveryState =
   | { status: 'idle' }
   | { status: 'detecting' }
@@ -65,14 +61,9 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
   const [discovery, setDiscovery] = useState<DiscoveryState>({ status: 'idle' })
   const mountedRef = useMountedRef()
 
-  // Why: read-only IPC. Auto-detect on step mount so the user sees a clear
-  // "we found your Ghostty config" prompt instead of a buried Import button.
-  // Settings are not applied until the user clicks Import (per design doc).
+  // Preview on mount for discovery; apply settings only after explicit Import.
   useEffect(() => {
-    // Why: Ghostty config-import is darwin-only (see src/main/ghostty/discovery.ts).
-    // Skip the IPC + telemetry emission entirely on non-Mac so the
-    // `_discovered: absent` rate measured by the Mac-cohort dashboard isn't
-    // polluted by a population that cannot have a Ghostty config.
+    // Import is macOS-only; skip other platforms’ IPC/telemetry so absence rates reflect eligible hosts.
     if (!navigator.userAgent.includes('Mac')) {
       return
     }
@@ -84,10 +75,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         if (cancelled) {
           return
         }
-        // Why: hide the row when there's nothing to import. An empty diff can
-        // mean "settings already match" *or* "every key in the config was
-        // unsupported by the mapper" (e.g. theme = some-named-theme); we can't
-        // tell, so don't make a claim either way.
+        // Empty diffs can mean matching settings or unsupported keys; hide without claiming which.
         if (!preview.found || Object.keys(preview.diff).length === 0) {
           setDiscovery({ status: 'absent' })
           track('onboarding_ghostty_discovered', {
@@ -122,9 +110,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     if (!settings || importing) {
       return
     }
-    // Why: track AFTER the busy guard so a double-click during an in-flight
-    // import doesn't inflate the click counter when no second import attempt
-    // actually proceeds.
+    // Track after the busy guard so ignored double-clicks cannot inflate import attempts.
     track('onboarding_ghostty_import_clicked', {})
     setImporting(true)
     try {
@@ -152,8 +138,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
             }
           : {})
       })
-      // Why: parent controller holds local `theme` state that overwrites
-      // settings.theme on Continue; sync it so the import isn't clobbered.
+      // Sync the controller’s local theme so Continue cannot overwrite the imported theme.
       if (resolved.diff.theme && mountedRef.current) {
         onThemeChange(resolved.diff.theme)
       }
@@ -269,10 +254,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
 }
 
 function humanFields(diff: Partial<GlobalSettings>): string[] {
-  // Why: chip labels are a friendly summary, not a strict 1:1 of mapper keys.
-  // Group related diff keys (font weight + family + size → "Font") so the row
-  // stays tidy. Anything in the diff that doesn't match a label still gets
-  // imported; it just isn't surfaced as a chip.
+  // Group related fields into summary chips; unlabeled diff keys still import.
   const groups: { label: string; keys: (keyof GlobalSettings)[] }[] = [
     {
       label: translate('auto.components.onboarding.ThemeStep.cc1858e19e', 'Font'),

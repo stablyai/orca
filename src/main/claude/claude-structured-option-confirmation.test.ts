@@ -6,7 +6,7 @@ import {
 } from '../../shared/structured-agent-session-options'
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../shared/native-chat/input/native-chat-session-options'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { PROVIDER_SESSION_ID, acquired, fakeClaude } from './claude-structured-session-test-support'

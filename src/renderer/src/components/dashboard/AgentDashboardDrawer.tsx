@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
+import { isXtermHelperTextarea } from '../terminal-pane/regular-terminal-focus-ownership'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
   isWorkspaceBoardKeepOpenTarget,
@@ -18,9 +19,7 @@ import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
 import { translate } from '@/i18n/i18n'
 
-// Why: Escape should dismiss interactive nested overlays (e.g. the terminal
-// preview dialog) before this companion sheet, which is excluded by its own
-// data attribute because Radix marks it role="dialog" as well.
+// Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
   '[data-slot="dropdown-menu-content"][data-state="open"]',
   '[data-slot="context-menu-content"][data-state="open"]',
@@ -31,43 +30,44 @@ const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
   '[role="listbox"][data-state="open"]'
 ].join(', ')
 
-/** The in-window Agent Dashboard body. Mounted only while open so the live
- *  snapshot derivation stays off the hot path when the drawer is closed. */
+/** Mount only while open to keep live snapshot derivation off the closed path. */
 function AgentDashboardDrawerBody({
   onClose,
+  onFocusHandoff,
   onMenuOpenChange
 }: {
   onClose: () => void
+  onFocusHandoff: () => void
   onMenuOpenChange: (open: boolean) => void
 }): React.JSX.Element {
   const snapshot = useLiveDashboardSnapshot()
   useAgentDashboardTelemetry('in_window')
 
-  // In-window ack/reveal act on the local store directly — the pop-out's IPC
-  // relay is gated to the pop-out renderer and would reject calls from here.
+  // Pop-out IPC rejects this renderer; in-window reads/reveals must use the store directly.
   const handleAckAgent = useCallback((paneKey: string, intent: AgentSubjectReadIntent) => {
     useAppStore.getState().acknowledgeAgents([paneKey], undefined, intent)
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
-      revealDashboardAgent(args)
-      onClose()
+      if (revealDashboardAgent(args)) {
+        onFocusHandoff()
+      } else {
+        onClose()
+      }
     },
-    [onClose]
+    [onClose, onFocusHandoff]
   )
 
-  // Switching to pop-out from the board hands the surface over rather than
-  // leaving an in-window board that the setting says should be a window.
+  // Hand off to pop-out mode instead of retaining a drawer inconsistent with the setting.
   const handleSwitchToPopout = useCallback(() => {
-    onClose()
+    onFocusHandoff()
     void window.api.dashboard.openPopout?.()
-  }, [onClose])
+  }, [onFocusHandoff])
 
   return (
     <AgentKanbanBoard
       snapshot={snapshot}
-      // Why: bg-transparent lets the sheet's worktree-sidebar surface through
-      // so the board reads as the same companion panel as the workspace board.
+      // Let the companion sheet’s sidebar surface show through.
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
@@ -87,11 +87,7 @@ type AgentDashboardDrawerProps = {
   statusBarVisible: boolean
 }
 
-/**
- * The in-window Agent Dashboard surface: the same board as the pop-out window,
- * presented like the workspace kanban board — a non-modal companion sheet that
- * expands from the sidebar edge and keeps the rest of the app interactive.
- */
+/** Share the pop-out board in a non-modal sidebar companion sheet, leaving the rest of the app interactive. */
 export function AgentDashboardDrawer({
   leftSidebarStyle,
   statusBarVisible
@@ -101,16 +97,44 @@ export function AgentDashboardDrawer({
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const [menuOpen, setMenuOpen] = useState(false)
-  // Why: like closeWorkspaceBoard, reset the menu flag on close — Radix never
-  // reports close for a menu unmounted with the sheet (e.g. the pop-out
-  // hand-off), and a stale true would block outside-dismiss on reopen.
+  const boardRef = useRef<HTMLDivElement | null>(null)
+  const focusReturnRef = useRef<{ opener: HTMLElement | null; handoff: boolean }>({
+    opener: null,
+    handoff: false
+  })
+
+  // Capture per open transition: a reopen during the exit animation reuses the Sheet without open autofocus.
+  useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+    const focusReturn = focusReturnRef.current
+    focusReturn.handoff = false
+    const active = document.activeElement
+    if (!boardRef.current?.closest('[data-slot="sheet-content"]')?.contains(active)) {
+      focusReturn.opener = active instanceof HTMLElement && active !== document.body ? active : null
+    }
+  }, [open])
+
+  // No Radix trigger exists for this store-driven drawer, so return focus only when unmount dropped it to body.
+  const handleCloseAutoFocus = useCallback((event: Event) => {
+    event.preventDefault()
+    const { opener, handoff } = focusReturnRef.current
+    if (!handoff && (!document.activeElement || document.activeElement === document.body)) {
+      opener?.focus({ preventScroll: true })
+    }
+  }, [])
+  // Radix does not report close for unmounted menus; reset or the next drawer open could block outside dismissal.
   const close = useCallback(() => {
     setMenuOpen(false)
     setOpen(false)
   }, [setOpen])
-  // Why: sidebar collapse (Cmd+B) and workspace-board exclusivity close the
-  // drawer through the store setter, bypassing close(); sync the flag so a
-  // menu unmounted that way can't block outside-dismiss on the next open.
+  // Outside dismissal, agent reveal and pop-out move focus themselves.
+  const closeForFocusHandoff = useCallback(() => {
+    focusReturnRef.current.handoff = true
+    close()
+  }, [close])
+  // Store-driven closes bypass close(); clear menu state for sidebar collapse and workspace-board exclusivity too.
   useEffect(() => {
     if (!open) {
       setMenuOpen(false)
@@ -118,22 +142,18 @@ export function AgentDashboardDrawer({
   }, [open])
   const handleSheetOpenChange = useCallback(
     (nextOpen: boolean) => {
-      // Why: Radix also requests dismissal for unguardable interactions (focus
-      // moving outside has no pointer coordinates), so like the workspace board
-      // only the drawer's own escape/outside/close paths may close it.
+      // Radix can request coordinate-free dismissal; allow only the drawer’s guarded Escape/outside/close paths.
       if (nextOpen) {
         setOpen(true)
       }
     },
     [setOpen]
   )
-  const boardRef = useRef<HTMLDivElement | null>(null)
-
   useWorkspaceKanbanOutsideDismiss({
     open,
     boardRef,
     preserveOpenForMenu: menuOpen,
-    onOpenChange: setOpen
+    onOpenChange: closeForFocusHandoff
   })
 
   useEffect(() => {
@@ -148,10 +168,13 @@ export function AgentDashboardDrawer({
         return
       }
       event.preventDefault()
+      // xterm ignores defaultPrevented; stop only its Escape so other targets keep theirs (rename/drag cancel).
+      if (isXtermHelperTextarea(event.target)) {
+        event.stopPropagation()
+      }
       close()
     }
-    // Why: the board is a non-modal companion panel, so focus may be outside
-    // the sheet when Escape should still dismiss it.
+    // The non-modal drawer must hear Escape even when focus is outside it.
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [close, open])
@@ -160,8 +183,7 @@ export function AgentDashboardDrawer({
   const drawerLeftCss = sidebarOpen
     ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
     : '0px'
-  // Why: App reserves a bottom status row while visible; the portalled board
-  // must share that viewport bound instead of covering the status controls.
+  // Reserve the same status-row space as App so the portal cannot cover its controls.
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
 
   const guardSidebarInteraction = (
@@ -169,8 +191,7 @@ export function AgentDashboardDrawer({
   ): void => {
     const originalEvent = event.detail.originalEvent
     if (menuOpen || isWorkspaceBoardKeepOpenTarget(originalEvent.target)) {
-      // Why: the first outside click should close a board menu, not also
-      // dismiss the board that owns it.
+      // The first outside click dismisses the board menu only.
       event.preventDefault()
       return
     }
@@ -214,18 +235,21 @@ export function AgentDashboardDrawer({
         }
         data-agent-dashboard-sheet=""
         onOpenAutoFocus={(event) => {
-          // Why: Radix focuses the first header button on open, which shows
-          // hover-style affordances without hover and makes the drawer noisy.
+          // Suppress default header focus, which reveals hover-style affordances without a pointer.
           event.preventDefault()
         }}
+        onCloseAutoFocus={handleCloseAutoFocus}
         onPointerDownOutside={guardSidebarInteraction}
         onInteractOutside={guardSidebarInteraction}
       >
         <SheetTitle className="sr-only">{translate('dashboardPopout.title', 'Agents')}</SheetTitle>
-        {/* Radix unmounts SheetContent while closed, so the live snapshot
-            derivation in the body stays off the closed path. */}
+        {/* Closed SheetContent unmounts the live snapshot body, avoiding closed-path derivation. */}
         <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
-          <AgentDashboardDrawerBody onClose={close} onMenuOpenChange={setMenuOpen} />
+          <AgentDashboardDrawerBody
+            onClose={close}
+            onFocusHandoff={closeForFocusHandoff}
+            onMenuOpenChange={setMenuOpen}
+          />
         </div>
       </SheetContent>
     </Sheet>

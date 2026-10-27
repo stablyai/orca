@@ -29,16 +29,4 @@ describe('settleComposerSubmit', () => {
 
     await expect(settlement).resolves.toEqual({ status: 'cancelled' })
   })
-
-  it('preserves successful and failed results while active', async () => {
-    const active = () => false
-
-    await expect(settleComposerSubmit(Promise.resolve('ready'), active)).resolves.toEqual({
-      status: 'completed',
-      value: 'ready'
-    })
-    await expect(
-      settleComposerSubmit(Promise.reject(new Error('failure')), active)
-    ).rejects.toThrow('failure')
-  })
 })

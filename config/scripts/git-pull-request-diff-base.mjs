@@ -23,10 +23,7 @@ export function resolvePullRequestDiffBase(
   return selectPullRequestDiffBase(requestedBase, headParents, eventName)
 }
 
-// Why a CLI: the workflow's inline gates used `git diff --merge-base "$BASE_SHA" "$HEAD_SHA"`,
-// which needs the payload base to be reachable and so forced a full-history checkout. Printing
-// the resolved base lets those steps diff against `HEAD^1` with the same logic the Node gates
-// already use, instead of each one open-coding it.
+// Print shared gate’s resolved base so workflow shell gates can use merge-ref HEAD^1 instead of requiring full history for payload merge-base.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const resolved = resolvePullRequestDiffBase(process.cwd(), process.argv[2])
   if (!resolved) {

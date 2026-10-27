@@ -4,7 +4,6 @@ import type {
   CookieClearPartitionKey,
   CookieImportWriteStore
 } from './browser-cookie-import-clear'
-import { registrableFamily } from './browser-cookie-import-policy'
 import type { SourcePartitionRead } from './sources/browser-cookie-source-partition'
 
 export type ImportedCookieFields = {
@@ -29,14 +28,14 @@ export function importedCookieIdentity(
   cookie: ImportedCookieFields,
   partitionKey: CookieClearPartitionKey | undefined
 ): CookieClearIdentity {
-  // __Host- cookies require path=/ and no domain attribute; hostOnly omits domain in CDP.
+  // Source host-only cookies must omit domain in CDP to avoid widening their scope.
   const isHostPrefixed = cookie.name.startsWith(HOST_PREFIX)
   return {
     url: cookie.url,
     name: cookie.name,
     value: cookie.value,
     domain: cookie.domain,
-    hostOnly: isHostPrefixed,
+    hostOnly: isHostPrefixed || !cookie.domain.startsWith('.'),
     path: isHostPrefixed ? '/' : cookie.path,
     secure: cookie.secure,
     httpOnly: cookie.httpOnly,
@@ -62,23 +61,12 @@ export function planImportedCookieWrite(
   }
 }
 
-// Rollback removal is path-sensitive; use the resolved identity path.
-export function importedCookieRemovalKey(identity: CookieClearIdentity): {
-  url: string
-  name: string
-} {
-  const removalUrl = new URL(identity.url)
-  const path = identity.path ?? '/'
-  removalUrl.pathname = path.startsWith('/') ? path : '/'
-  return { url: removalUrl.toString(), name: identity.name }
-}
-
 export type SourceCookieToWrite = ImportedCookieFields & { partition: SourcePartitionRead }
 
 export type ImportWritePhase = {
-  attemptedKeys: { url: string; name: string }[]
   importedCount: number
   writeRejected: number
+  expired: number
   partitionSkipped: number
   domains: Set<string>
   failure: unknown
@@ -86,9 +74,9 @@ export type ImportWritePhase = {
 
 export function emptyImportWritePhase(): ImportWritePhase {
   return {
-    attemptedKeys: [],
     importedCount: 0,
     writeRejected: 0,
+    expired: 0,
     partitionSkipped: 0,
     domains: new Set<string>(),
     failure: null
@@ -105,46 +93,21 @@ export type ImportWriteSkip<T extends PlannableCookie = SourceCookieToWrite> = {
 export type ImportWritePlanResult<T extends PlannableCookie = SourceCookieToWrite> = {
   writes: T[]
   skips: ImportWriteSkip<T>[]
-  skippedFamilies: Set<string>
-  /** Refuse before mutation if a skipped family cannot be protected from removal. */
-  hasUnrepresentableSkip: boolean
 }
 
-/** Classify all skips before emitting writes so later unreadable rows also suppress earlier siblings. */
 export function planImportWrites<T extends PlannableCookie>(
   cookies: readonly T[]
 ): ImportWritePlanResult<T> {
-  const provisional: T[] = []
+  const writes: T[] = []
   const skips: ImportWriteSkip<T>[] = []
-  const skippedFamilies = new Set<string>()
-  let hasUnrepresentableSkip = false
-
   for (const cookie of cookies) {
     if (cookie.partition.status === 'unreadable') {
-      const family = registrableFamily(cookie.domain)
-      if (family === null) {
-        hasUnrepresentableSkip = true
-      } else {
-        skippedFamilies.add(family)
-      }
       skips.push({ cookie, reason: cookie.partition.reason })
-      continue
+    } else {
+      writes.push(cookie)
     }
-    provisional.push(cookie)
   }
-
-  // Suppress readable siblings too, or their removal scope would erase skipped sessions.
-  const writes: T[] = []
-  for (const cookie of provisional) {
-    const family = registrableFamily(cookie.domain)
-    if (family !== null && skippedFamilies.has(family)) {
-      skips.push({ cookie, reason: 'family partition unreadable' })
-      continue
-    }
-    writes.push(cookie)
-  }
-
-  return { writes, skips, skippedFamilies, hasUnrepresentableSkip }
+  return { writes, skips }
 }
 
 function summaryDomain(domain: string): string {
@@ -161,15 +124,23 @@ function firstNonPrintable(value: string): string {
   return 'none found'
 }
 
-/** Stop on the first failure after replacement so the caller can roll back the entire import. */
+export function isExpiredImportRow(cookie: Pick<ImportedCookieFields, 'expirationDate'>): boolean {
+  return cookie.expirationDate !== undefined && cookie.expirationDate <= Date.now() / 1_000
+}
+
 export async function writeImportedCookies(
   store: Pick<CookieImportWriteStore, 'writeCookieIdentity'>,
   cookies: readonly SourceCookieToWrite[],
-  options: { stopOnFailure: boolean; log: (message: string) => void }
+  options: { log: (message: string) => void }
 ): Promise<ImportWritePhase> {
   const phase = emptyImportWritePhase()
 
   for (const cookie of cookies) {
+    // Chromium treats an expired set as deletion of the destination coordinate.
+    if (isExpiredImportRow(cookie)) {
+      phase.expired += 1
+      continue
+    }
     const plan = planImportedCookieWrite(cookie, cookie.partition)
     if (plan.status === 'skip') {
       phase.partitionSkipped += 1
@@ -178,8 +149,6 @@ export async function writeImportedCookies(
       )
       continue
     }
-    // Record before dispatch: a rejected CDP command may already have written the cookie.
-    phase.attemptedKeys.push(importedCookieRemovalKey(plan.identity))
     try {
       await store.writeCookieIdentity(plan.identity)
       phase.importedCount += 1
@@ -191,9 +160,6 @@ export async function writeImportedCookies(
         options.log(
           `  cookie write REJECTED: domain=${summaryDomain(cookie.domain)} valLen=${cookie.value.length} badChar=${firstNonPrintable(cookie.value)} err=${String(err)}`
         )
-      }
-      if (options.stopOnFailure) {
-        break
       }
     }
   }

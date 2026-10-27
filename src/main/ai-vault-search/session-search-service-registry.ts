@@ -6,6 +6,12 @@ import {
 } from '../../shared/ai-vault-search-contract'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
 import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
+import { resolveProjectHostSetupProjection } from '../../shared/project-host-setup-hydration'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import {
+  compileSessionSearchProjectOwnership,
+  materializeSessionSearchOwnership
+} from './session-search-project-ownership'
 import { resolveSessionSearchScope } from './session-search-scope-resolution'
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
 import {
@@ -60,20 +66,60 @@ export async function searchSessionService(
             agents: compatibleAgents
           }
         }
-  const hostScope = within
-    ? resolveSessionSearchScope(within, sessionSearchScopeCatalog())
-    : undefined
-  const retrievalScope =
-    compatibleAgents.length === 0 && hostScope?.kind !== 'unknown'
-      ? { kind: 'resolved' as const, paths: [''] }
-      : hostScope
   const freshness =
     request.freshness === 'wait-until-current'
       ? await reconcileWithin(current, freshnessTimeoutMs)
       : false
+  const canonical = within?.kind === 'project' && within.canonicalProjectKey
+  const catalog = within ? sessionSearchScopeCatalog() : null
+  const input = canonical ? materializeSessionSearchOwnership(catalog) : null
+  const snapshot = JSON.stringify(input)
+  const selection =
+    canonical && catalog && input
+      ? await compileSessionSearchProjectOwnership(catalog, canonical, input)
+      : null
+  const legacy =
+    catalog &&
+    within &&
+    !canonical &&
+    resolveProjectHostSetupProjection(catalog.repos, catalog.projects, catalog.projectHostSetups)
+  const legacyCatalog =
+    catalog && legacy
+      ? {
+          ...catalog,
+          settings: {
+            workspaceDir: catalog.settings.workspaceDir,
+            nestWorkspaces: catalog.settings.nestWorkspaces
+          },
+          projects: legacy.projects,
+          projectHostSetups: legacy.setups.filter(
+            (setup) => setup.hostId === (catalog.executionHostId ?? 'local')
+          ),
+          repos: catalog.repos.filter(
+            (repo) => getRepoExecutionHostId(repo) === (catalog.executionHostId ?? 'local')
+          )
+        }
+      : null
+  const hostScope = selection
+    ? { kind: 'canonical' as const, selection }
+    : within
+      ? resolveSessionSearchScope(within, legacyCatalog)
+      : undefined
+  const retrievalScope =
+    compatibleAgents.length === 0 && hostScope?.kind !== 'unknown'
+      ? { kind: 'resolved' as const, paths: [''] }
+      : hostScope
+  const moved = () =>
+    snapshot !== JSON.stringify(materializeSessionSearchOwnership(sessionSearchScopeCatalog()))
+  if (canonical && moved()) {
+    return { kind: 'stale-cursor', generation: 0 }
+  }
   const result = AiVaultSearchResponseSchema.parse(
     await current.search(compatibleRequest, retrievalScope)
   )
+  if (canonical && moved()) {
+    return { kind: 'stale-cursor', generation: result.kind === 'results' ? result.generation : 0 }
+  }
   if (result.kind !== 'results') {
     return result
   }

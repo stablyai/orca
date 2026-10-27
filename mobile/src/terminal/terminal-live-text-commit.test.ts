@@ -13,11 +13,9 @@ describe('terminal live special key decision', () => {
   })
 
   it('Given Backspace with any field text Then edits locally so the mirror diff handles the PTY erase', () => {
-    // Held syllable present
     expect(
       getTerminalLiveSpecialKeyDecision({ key: 'Backspace', heldText: '한', sentText: '' })
     ).toEqual({ kind: 'local-edit' })
-    // Only mirrored text present — native edit fires onChangeText and the diff erases
     expect(
       getTerminalLiveSpecialKeyDecision({ key: 'Backspace', heldText: '', sentText: 'abc' })
     ).toEqual({ kind: 'local-edit' })

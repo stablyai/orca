@@ -31,7 +31,7 @@ function releaseExitedProcessPipes(proc: ChildProcess): void {
   }
 }
 
-function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
+export function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
   if (hasExited(proc)) {
     return Promise.resolve(true)
   }
@@ -136,9 +136,7 @@ async function forceKillPidTree(pid: number): Promise<void> {
     return
   }
 
-  // Why: CI showed orphaned Electron renderer and shell children after the
-  // parent close path returned. Capture the tree before killing the root so
-  // descendants do not get reparented out from under the cleanup.
+  // Capture descendants before killing the root or reparenting can strand Electron/shell children.
   const pids = [...readPosixDescendantPids(pid), pid]
   for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGTERM')
@@ -169,14 +167,7 @@ async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
   await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
 }
 
-/**
- * Force-quit: SIGKILL the app and every helper process under it, with no SIGTERM first and no
- * chance to run shutdown code. Killing the whole tree matches what an OS force-quit does, and keeps
- * orphaned renderer/GPU children from outliving the test worker.
- *
- * Use `closeElectronAppForE2E` for an ordinary quit — this exists for specs that need a client to
- * vanish without unwinding its sockets or subscriptions.
- */
+// SIGKILL the whole tree without shutdown hooks for force-quit scenarios; use ordinary close for graceful persistence.
 export async function forceQuitElectronAppForE2E(
   app: ElectronApplication,
   options: { preserveDaemons?: boolean } = {}
@@ -215,11 +206,7 @@ export async function forceQuitElectronAppForE2E(
   ).catch(() => undefined)
 }
 
-/**
- * Stops an `orca serve` process the way a supervisor does, so its detached PTY daemon and terminals
- * survive for the next serve. Why not closeElectronAppForE2E: macOS serve vetoes Playwright's
- * unmarked app.quit() (#15537), and that close's fallback kills the whole tree, daemon included.
- */
+// Stop serve like a supervisor so its detached PTYs survive; macOS vetoes unmarked app.quit and ordinary close may kill the daemon (#15537).
 export async function stopServeElectronAppForE2E(app: ElectronApplication): Promise<void> {
   const proc = app.process()
   // Why: Windows has no catchable SIGTERM, and its serve has no native-quit veto to bypass.
@@ -334,9 +321,7 @@ function readDaemonPidFiles(userDataDir: string): number[] {
 }
 
 export async function cleanupE2EDaemons(userDataDir: string): Promise<void> {
-  // Why: app quit intentionally leaves daemon PTYs alive for warm reattach.
-  // E2E temp profiles are deleted after each test, so their detached daemons
-  // must be stopped explicitly or CI accumulates orphan Electron/shell trees.
+  // Ordinary quit retains daemon PTYs; disposable profiles must explicitly stop them to avoid leaked CI process trees.
   const started = performance.now()
   const pids = readDaemonPidFiles(userDataDir)
   try {

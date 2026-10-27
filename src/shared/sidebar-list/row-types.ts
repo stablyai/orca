@@ -109,10 +109,7 @@ export type FolderWorkspaceRow = {
   groupDepth: number
 }
 
-/** Minimal shape planSidebarRows needs for an in-flight create. Deliberately not the
- *  full PendingWorktreeCreation: row identity depends only on which creates
- *  exist and their repo, so callers can subscribe on this stable shape and keep
- *  progress-field churn (phase/loaderVisible) from rebuilding the whole list. */
+/** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */
 export type PendingCreationRef = { creationId: string; repoId: string }
 
 export type Row =

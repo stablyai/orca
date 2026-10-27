@@ -1,5 +1,4 @@
-// Desktop words for a failure fact: each piece of the shared sentence translated whole, with the
-// shared English as its fallback, so the host's row and desktop's notice never say it differently.
+// Translate shared failure sentence pieces whole with shared English fallbacks to keep host and desktop wording aligned.
 
 import { translate } from '@/i18n/i18n'
 import {
@@ -148,6 +147,23 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.runtimeNotInstalled',
         COPY.runtimeNotInstalled,
+        values
+      ),
+    fullAccessAsRoot: (values) =>
+      translate(
+        'components.native-chat.failureWords.fullAccessAsRoot',
+        COPY.fullAccessAsRoot,
+        values
+      ),
+    conversationOpenElsewhere: () =>
+      translate(
+        'components.native-chat.failureWords.conversationOpenElsewhere',
+        COPY.conversationOpenElsewhere
+      ),
+    conversationOpenInTerminal: (values) =>
+      translate(
+        'components.native-chat.failureWords.conversationOpenInTerminal',
+        COPY.conversationOpenInTerminal,
         values
       ),
     chooseClaudeAccount: () =>

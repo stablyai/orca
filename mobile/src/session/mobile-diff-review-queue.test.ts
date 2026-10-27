@@ -67,8 +67,6 @@ describe('mobile diff review queue', () => {
   })
 
   it('leaves out a status entry whose staging area it does not know', () => {
-    // An unknown `area` degrades to absent, and every queue scope is a staging area — there is no
-    // section to file the row under, so it does not enter the queue.
     const queue = buildMobileDiffReviewQueue({
       worktreeId: 'wt-1',
       statusEntries: [

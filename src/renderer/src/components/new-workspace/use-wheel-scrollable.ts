@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 
-/**
- * Restores mouse-wheel scrolling for a scroll container inside a portaled
- * popover, and hands back the node.
- *
- * Radix Dialog applies react-remove-scroll, which calls preventDefault() on
- * wheel events for elements outside the dialog's DOM tree — the scrollbar
- * renders and drags fine, but the wheel does nothing. A non-passive listener on
- * the container scrolls it manually instead. `ui/command`'s CommandList carries
- * the same shim; this is the equivalent for a plain scroll pane.
- */
+/** Manually scroll portaled panes with a nonpassive listener because Radix Dialog blocks their wheel defaults; CommandList carries the same shim. */
 export function useWheelScrollable<T extends HTMLElement>(): {
   ref: MutableRefObject<T | null>
   setNode: (node: T | null) => void

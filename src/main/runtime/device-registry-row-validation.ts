@@ -64,18 +64,15 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     token: typeof device.token === 'string' ? device.token : undefined,
     pairedAt: device.pairedAt,
     lastSeenAt: device.lastSeenAt,
-    // Why: older registries only existed for phone pairing. Treat missing
-    // scope as mobile so legacy device tokens do not gain new CLI powers.
+    // Legacy registries held phones only; missing scope must not grant CLI powers.
     scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
     grants: validGrants(device.grants, device.scope === 'runtime' ? 'runtime' : 'mobile'),
     relayBinding: validRelayBinding(device.relayBinding, device.deviceId),
     mobilePairingConnectionMode:
       device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
-    // Why: registries written before this field existed only ever held network-reach grants (phones and
-    // LAN links), so a missing value must keep binding every interface on reconnect.
+    // Older grants reached the network; preserve all-interface binding on reconnect.
     pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
-    // Why: a malformed row must degrade to "no background push", never fail the load
-    // and strand every paired device.
+    // Bad push metadata must not fail registry load and strand all devices.
     pushRegistration: parseMobilePushRegistration(device.pushRegistration),
     parentDeviceId: typeof device.parentDeviceId === 'string' ? device.parentDeviceId : undefined,
     phoneKey: typeof device.phoneKey === 'string' ? device.phoneKey : undefined,
@@ -93,7 +90,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
   }
 }
 
-// Why: a malformed keyed row stays keyed (so it never falls back to a token) but cannot authenticate.
+// Malformed keyed rows stay keyed and unauthenticatable; never fall back to bearer auth.
 function validDeviceKeyFields(
   device: Record<string, unknown>
 ): Pick<DeviceEntry, 'credentialKind' | 'devicePublicKeyB64' | 'forkedFrom' | 'ephemeral'> {

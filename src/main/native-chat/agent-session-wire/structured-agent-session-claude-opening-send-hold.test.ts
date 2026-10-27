@@ -3,7 +3,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
@@ -34,6 +34,11 @@ import { recordingStructuredAgentSessionLogger } from './structured-agent-sessio
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
+import * as unheld from './structured-agent-session-unheld-turns'
 import { claudeUnwrittenUserMessageError } from '../../claude/claude-agent-sdk-user-message-queue'
 
 const CALLER = { callerKey: 'client-1' }
@@ -45,19 +50,36 @@ let adapter: ClaudeStructuredSessionAdapter
 let store: AgentSessionRecordStore
 let claude: ReturnType<typeof fakeClaude>
 
-beforeEach(async () => {
+let startupGate: ReturnType<typeof Promise.withResolvers<void>>
+const session = () => host.collaboratorsForTests().sessions.get(SESSION)!
+const loop = () => host.collaboratorsForTests().conversationDelivery.loop
+const ready = () =>
+  vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
+const init = (fields: Record<string, unknown>) =>
+  frame(claude.connections.at(-1)!, { type: 'system', subtype: 'init', ...fields })
+const idle = () => init({ subtype: 'session_state_changed', state: 'idle' })
+function echo() {
+  const connection = claude.connections.at(-1)!
+  frame(connection, { ...connection.sent.at(-1)!, isReplay: true, parent_tool_use_id: null })
+}
+
+beforeEach(async ({ task }) => {
+  const imported = task.name.includes('history items')
+  const selections = task.name.includes('fallback')
+  startupGate = Promise.withResolvers<void>()
   root = await mkdtemp(join(tmpdir(), 'orca-claude-opening-send-'))
   resetHostTestOperationIds()
   const log = recordingStructuredAgentSessionLogger()
   claude = fakeClaude({
     replayUuid: null,
+    ...(selections ? { initModel: 'claude-haiku-4-5' } : {}),
     routes: { interrupt: () => ({ still_queued: [], cancelled: [] }) }
   })
   const lifecycle: Promise<void>[] = []
   adapter = new ClaudeStructuredSessionAdapter({
-    resolveLaunch: async () => ({
+    resolveLaunch: async ({ permissionMode }) => ({
       pathToClaudeCodeExecutable: 'claude',
-      options: {},
+      options: { permissionMode: permissionMode === 'auto' ? 'auto' : 'default' },
       cwd: root,
       claudeConfigDir: join(root, 'claude-home'),
       providerSessionId: PROVIDER_SESSION_ID,
@@ -87,18 +109,30 @@ beforeEach(async () => {
     logger: log.logger,
     now: () => NOW
   })
+  if (imported) {
+    const open = adapter.open.bind(adapter)
+    vi.spyOn(adapter, 'open').mockImplementation(async (input) => {
+      await startupGate.promise
+      return open(input)
+    })
+  }
   const params = hostTestAttachParams(null, {
     provider: 'claude',
     agent: 'claude',
+    ...(selections ? { options: { permissionMode: 'auto', model: 'haiku' } } : {}),
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(root, 'claude-home') },
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
-  await Promise.all(lifecycle)
+  if (!imported) {
+    await ready()
+    await Promise.all(lifecycle)
+  }
 })
 
 afterEach(async () => {
+  startupGate.resolve()
+  vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await rm(root, { recursive: true, force: true })
@@ -107,8 +141,12 @@ afterEach(async () => {
 const eventually = <T>(assertion: () => T | Promise<T>) =>
   vi.waitFor(assertion, { timeout: 10_000 })
 
-async function send(text: string): Promise<string> {
-  const body = hostTestMessage(text)
+async function send(
+  text: string,
+  options?: Record<string, string>,
+  from?: AgentJournalMessageItem['from']
+): Promise<string> {
+  const body = { ...hostTestMessage(text), ...(from ? { from } : {}) }
   const sent = await host.send(CALLER, {
     envelope: {
       sessionId: SESSION,
@@ -117,10 +155,11 @@ async function send(text: string): Promise<string> {
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
         sessionId: SESSION,
-        fields: { body }
+        fields: { body: hostTestMessage(text), ...(options ? { options } : {}) }
       })
     },
-    body
+    body,
+    ...(options ? { options } : {})
   })
   if (!sent.ok) {
     throw new Error(JSON.stringify(sent.refusal))
@@ -445,3 +484,162 @@ it('sends a message that joins an unproven Stop close to the resumed child, and 
   frame(resumed, { ...written(resumed, 'Carry on.')!, isReplay: true, parent_tool_use_id: null })
   await eventually(() => expect(written(resumed, 'And this.')).toBeDefined())
 })
+
+async function sendChoice(
+  text: string,
+  options: Record<string, string>,
+  from?: AgentJournalMessageItem['from']
+) {
+  await send(text, options, from)
+  await eventually(() => expect(written(claude.connections.at(-1)!, text)).toBeDefined())
+  echo()
+  await host.flushStreamedEvents(SESSION)
+  await eventually(() => expect(loop().isRunning(SESSION)).toBe(false))
+}
+
+it('preserves saved Auto through fallback, reopens once for a changed captured model, then reuses', async () => {
+  const first = claude.connections[0]!
+  init({ parent_tool_use_id: 'child', permissionMode: 'auto' })
+  init({ permissionMode: 'default', model: 'claude-haiku-4-5' })
+  init({ permissionMode: 'auto', model: 'claude-opus-5-5[1m]' })
+  await sendChoice('same fallback', { model: 'haiku' })
+  expect(claude.connections).toHaveLength(1)
+  const picked = { model: 'opus[1m]', effort: 'high', fastMode: 'true' }
+  await sendChoice('busy choice', picked)
+  expect(claude.connections).toHaveLength(1)
+  idle()
+  await sendChoice('mail notice', picked, {
+    kind: 'agent',
+    senders: [],
+    orchestration: {
+      message: 'mail-notice',
+      mailbox: 'agent:worker',
+      dispatchId: null,
+      messages: []
+    }
+  })
+  expect(claude.connections).toHaveLength(1)
+  idle()
+  await sendChoice('new choice', picked)
+  expect(first.closeCount).toBe(1)
+  const replacement = claude.connections[1]!
+  expect(replacement.launch.options).toMatchObject({
+    permissionMode: 'auto',
+    model: 'opus[1m]',
+    effort: 'high'
+  })
+  expect(replacement.launch.options.settings).toEqual({ fastMode: true })
+  idle()
+  await sendChoice('reuse choice', picked)
+  expect(claude.connections).toHaveLength(2)
+  expect(replacement.sent).toHaveLength(2)
+  expect(store.getRecord(SESSION)?.permissionMode).toBe('auto')
+})
+
+it('does not infer fallback from unknown init or a missing captured model', async () => {
+  init({ model: 'claude-haiku-4-5' })
+  init({ permissionMode: 'default' })
+  await sendChoice('unknown permission', { model: 'opus[1m]' })
+  expect(
+    adapter.requiresModelTransitionRestart({
+      sessionId: SESSION,
+      fence: session().child!.fence
+    })
+  ).toBe(false)
+  expect(claude.connections).toHaveLength(1)
+})
+
+it.each([10, 100])(
+  'recovers imported running roots before readiness and drains waiting input once (%i history items)',
+  async (n) => {
+    const { journal, child } = session()
+    expect(adapter.liveTurnId(SESSION)).toBeNull()
+    const { fence, generation } = child!
+    assert(typeof generation === 'string')
+    const turn = (id: string, ownFence = fence, agentId?: string) =>
+      journal.appendItem(
+        { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: id },
+        { kind: 'turn', turnId: id, state: 'running', startedAt: 1 },
+        {
+          fence,
+          ownerFence: ownFence,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+          ...(agentId ? { agentId } : {})
+        }
+      )
+    for (let i = 0; i < n; i++) {
+      await journal.appendItem(
+        { provider: 'claude', sessionId: PROVIDER_SESSION_ID, uuid: `history-${i}` },
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: `Earlier reply ${i}` }]
+        },
+        { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
+    const stale = await turn('imported-root')
+    const foreign = await turn('foreign-root', fence - 1)
+    const subagent = await turn('child-root', fence, 'child')
+    let visits = 0
+    let scanning = false
+    const settle = unheld.settleUnheldStructuredAgentSessionTurns
+    const scans = vi
+      .spyOn(unheld, 'settleUnheldStructuredAgentSessionTurns')
+      .mockImplementation(async (...args) => {
+        scanning = true
+        try {
+          await settle(...args)
+        } finally {
+          scanning = false
+        }
+      })
+    const visit = journal.visitItemsWithLinkage.bind(journal)
+    vi.spyOn(journal, 'visitItemsWithLinkage').mockImplementation((visitor) =>
+      visit((...args) => {
+        if (scanning) {
+          visits++
+        }
+        visitor(...args)
+      })
+    )
+    const batch = vi.spyOn(journal, 'appendPlannedLifecycleBatch')
+    expect(await send('after the update')).toBeTruthy()
+    expect(claude.connections[0]!.sent).toHaveLength(0)
+    const before = visits
+    startupGate.resolve()
+    await ready()
+    await vi.waitFor(() => expect(claude.connections[0]!.sent).toHaveLength(1))
+    echo()
+    await vi.waitFor(() => expect(journal.submissions()[0]?.dispatchState).toBe('accepted'))
+    await vi.waitFor(() => expect(loop().isRunning(SESSION)).toBe(false))
+    expect(journal.item(stale.itemId)?.body).toMatchObject({ state: 'interrupted' })
+    expect(journal.item(foreign.itemId)?.body).toMatchObject({ state: 'running' })
+    expect(journal.item(subagent.itemId)?.body).toMatchObject({ state: 'running' })
+    expect(batch).toHaveBeenCalledTimes(1)
+    expect(batch.mock.calls[0]![0].plan().mutations).toHaveLength(1)
+    // Count the actual startup scan, independently of pre-existing current-work reads.
+    expect(visits - before).toBe(n + 4)
+    const reconcile = (liveId: string | null | undefined) =>
+      unheld.settleUnheldStructuredAgentSessionTurns(journal, SESSION, fence, generation, liveId)
+    const scanned = visits
+    const cursor = journal.cursor()
+    await reconcile(undefined)
+    expect(visits).toBe(scanned)
+    const live = adapter.liveTurnId(SESSION)
+    expect(live).toBeTruthy()
+    await reconcile(live)
+    expect(journal.cursor()).toEqual(cursor)
+    expect(batch).toHaveBeenCalledTimes(1)
+    const scanCount = scans.mock.calls.length
+    const finalVisits = visits
+    idle()
+    await host.flushStreamedEvents(SESSION)
+    expect(scans).toHaveBeenCalledTimes(scanCount)
+    expect(visits).toBe(finalVisits)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(claude.connections[0]!.sent).toHaveLength(1)
+    expect(host.currentWork(SESSION)?.activeTurnId()).toBeNull()
+    expect(host.readStatusSummary(SESSION)?.status).not.toBe('working')
+  }
+)

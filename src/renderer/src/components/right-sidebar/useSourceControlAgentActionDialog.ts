@@ -1,32 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  pickSourceControlLaunchAgent,
-  resolveSourceControlLaunchAgentScope
-} from '../../../../shared/source-control-launch-agent-selection'
+import { useCallback, useMemo, useState } from 'react'
+import { resolveSourceControlLaunchAgentScope } from '../../../../shared/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
+import { savedSurfaceForPick } from '@/lib/source-control-agent-picker'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
-import { sourceControlLaunchAppliesAgentArgs } from './source-control-launch-agent-args-applicability'
-import { useSourceControlLaunchableAgents } from './use-source-control-launchable-agents'
-import { AgentLaunchChoiceCancelled } from '@/lib/host-chat-program-acquisition'
-import { useSavedSourceControlAgentActionAutoStart } from './useSavedSourceControlAgentActionAutoStart'
 import {
   buildSourceControlAgentSaveTargets,
   buildSourceControlAgentScopeNote,
-  buildSourceControlAgentStatusCopy,
-  buildSourceControlAgentAvailability
+  buildSourceControlAgentStatusCopy
 } from './source-control-agent-action-dialog-support'
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
+import { useSourceControlActionAgentChoice } from './use-source-control-action-agent-choice'
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
-type DiscoveryOutcome = 'pending' | 'success' | 'cancelled' | 'failed'
 
 export function useSourceControlAgentActionDialog({
   open,
+  initialRecipe: capturedRecipe,
   onOpenChange,
   actionId,
   baseCommandInput,
@@ -49,224 +45,118 @@ export function useSourceControlAgentActionDialog({
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
   const repo = useRepoById(repoId ?? null)
-  const launchAgentScope = useMemo(
-    () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
-    [actionId, repo, settings]
-  )
-  // Why: when this repo already overrides the global default, default the save
-  // scope to the repo so saving the corrected agent updates that override in
-  // place instead of writing a global default the override would still shadow.
-  const defaultSaveTargetValue =
-    launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
-  const [commandTemplate, setCommandTemplate] = useState(
-    savedCommandInputTemplate ?? '{basePrompt}'
-  )
-  const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
-  const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
-  const openCycleRef = useRef(0)
-  const wasOpenRef = useRef(false)
-  const [openCycle, setOpenCycle] = useState(0)
-  // The open cycle's current discovery attempt; only its success may auto-pick or auto-start.
-  const [discovery, setDiscovery] = useState<{ cycle: number; outcome: DiscoveryOutcome }>()
-  const saveTargets = useMemo(() => buildSourceControlAgentSaveTargets(repoId), [repoId])
-  const [saveLaunchRecipe, setSaveLaunchRecipe] = useState(true)
-  const [saveTargetValue, setSaveTargetValue] = useState(defaultSaveTargetValue)
-
-  const disabledAgents = settings?.disabledTuiAgents
-  const connectionUnavailable = Boolean(worktreeId && connectionId === undefined)
-
-  const executionHostId = repo ? getRepoExecutionHostId(repo) : undefined
-  const { detecting, refreshAgents, refreshLaunchableAgents, launchableAgents } =
-    useSourceControlLaunchableAgents({
-      target: { worktreeId, repoId, executionHostId },
-      connectionId,
-      connectionUnavailable,
-      active: open
-    })
-
-  useEffect(() => {
-    if (!open) {
-      wasOpenRef.current = false
-      return
+  const initialRecipe = useCallback((): SourceControlActionRecipe => {
+    if (capturedRecipe) {
+      return capturedRecipe
     }
-    const cycle = wasOpenRef.current ? openCycleRef.current : openCycleRef.current + 1
-    if (!wasOpenRef.current) {
-      openCycleRef.current = cycle
-      setOpenCycle(cycle)
-    }
-    wasOpenRef.current = true
-    setDiscovery({ cycle, outcome: 'pending' })
-    setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
-    setAgentArgs(savedAgentArgs ?? '')
-    setSelectedAgent(savedAgentId ?? null)
-    setSaveLaunchRecipe(true)
-    setSaveTargetValue(defaultSaveTargetValue)
-    let stale = false
-    // Why: whether CLI arguments apply is read synchronously from the local runtime's
-    // capabilities; settling them alongside detection keeps the field from appearing for a
-    // frame on a launch that turns out to be structured.
-    void refreshAgents().then(
-      ({ detected, launchable }) => {
-        if (stale || openCycleRef.current !== cycle) {
-          return
-        }
-        setSelectedAgent(
-          (current) =>
-            current ??
-            pickSourceControlLaunchAgent({
-              savedAgent: savedAgentId,
-              defaultAgent: settings?.defaultTuiAgent,
-              detectedAgents: detected,
-              disabledAgents,
-              chosenOpensAsChat: (agent) => launchable.includes(agent)
-            })
-        )
-        setDiscovery({ cycle, outcome: 'success' })
-      },
-      (error: unknown) => {
-        if (!stale && openCycleRef.current === cycle) {
-          const cancelled = error instanceof AgentLaunchChoiceCancelled
-          setDiscovery({ cycle, outcome: cancelled ? 'cancelled' : 'failed' })
-        }
-      }
-    )
-    return () => {
-      stale = true
+    const { surface, ...resolved } = resolveSourceControlActionRecipe({ settings, repo, actionId })
+    const agentId = savedAgentId ?? null
+    return {
+      ...resolved,
+      // A saved chat-or-CLI pick belongs to the saved agent, like its model.
+      ...(surface && resolved.agentId === agentId ? { surface } : {}),
+      agentId,
+      commandInputTemplate: savedCommandInputTemplate ?? '{basePrompt}',
+      ...(savedAgentArgs != null ? { agentArgs: savedAgentArgs } : {})
     }
   }, [
-    defaultSaveTargetValue,
-    disabledAgents,
-    open,
-    refreshAgents,
+    capturedRecipe,
+    settings,
+    repo,
+    actionId,
     savedAgentId,
-    savedAgentArgs,
     savedCommandInputTemplate,
-    repoId,
-    settings?.defaultTuiAgent
+    savedAgentArgs
   ])
+  const [recipe, setRecipe] = useState(initialRecipe)
+  const [livePick, setLivePick] = useState<AgentLaunchSurface | undefined>(undefined)
+  const commandTemplate = recipe.commandInputTemplate ?? '{basePrompt}'
+  const agentArgs = recipe.agentArgs ?? ''
+  const saveTargets = useMemo(() => buildSourceControlAgentSaveTargets(repoId), [repoId])
+  const [saveLaunchRecipe, setSaveLaunchRecipe] = useState(true)
+  const [explicitSaveTarget, setSaveTargetValue] = useState<string>()
+  const connectionUnavailable = Boolean(worktreeId && connectionId === undefined)
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 
-  const { agentOptions, selectedAgentUnavailable, hasEnabledAgents } = useMemo(
+  const choice = useSourceControlActionAgentChoice({
+    open,
+    worktreeId,
+    repoId,
+    repo,
+    recipe,
+    livePick,
+    settings
+  })
+  const launchAgentScope = useMemo(
     () =>
-      buildSourceControlAgentAvailability({
-        detectedAgents: launchableAgents,
-        disabledAgents,
-        selectedAgent
+      resolveSourceControlLaunchAgentScope({
+        settings: { ...settings, ...choice.observation.preferences },
+        repo,
+        actionId
       }),
-    [launchableAgents, disabledAgents, selectedAgent]
+    [actionId, repo, settings, choice.observation.preferences]
   )
+  // Update existing repo overrides in place; a new global default would remain shadowed.
+  const defaultSaveTargetValue =
+    launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
+  const saveTargetValue = explicitSaveTarget ?? defaultSaveTargetValue
+  const { selectedAgent, detectedAgents, detecting, selection } = choice
   const commandInput = renderSourceControlActionCommandTemplate(commandTemplate, {
     basePrompt: baseCommandInput
   })
   const trimmedCommandInput = commandInput.trim()
-  // Why: a structured native chat session reads no CLI arguments, so the field is absent on
-  // launches that would take that route and present on the terminal launches that apply them.
-  // Resolved on every render rather than memoised: it reads the live store and the local
-  // runtime's capabilities, neither of which is in a dependency list.
-  const agentArgsApply = sourceControlLaunchAppliesAgentArgs({
-    agent: selectedAgent,
-    worktreeId,
-    repoId,
-    ...(repo ? { executionHostId: getRepoExecutionHostId(repo) } : {})
-  })
-
-  const {
-    deliveryPlan,
-    resetDeliveryPlan,
-    cancelStart,
-    isStarting,
-    handleStart,
-    startWithDetectedAgents
-  } = useSourceControlAgentActionStart({
-    open,
-    connectionId,
-    selectedAgent,
-    commandInput,
-    trimmedCommandInput,
-    agentArgs,
-    agentArgsApply,
-    commandTemplate,
-    saveLaunchRecipe,
-    saveTargetValue,
-    actionId,
-    repoId,
-    settings,
-    repo,
-    worktreeId,
-    groupId,
-    promptDelivery,
-    launchPlatform,
-    // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-    // label aligned with the real remote launch (no `orca-ide` rename).
-    isRemote: typeof connectionId === 'string',
-    launchSource,
-    recoveryContext,
-    connectionUnavailable,
-    refreshDetectedAgents: refreshLaunchableAgents,
-    onStart,
-    onSaveAgentDefault,
-    onLaunchAccepted,
-    onLaunchAborted,
-    onLaunched,
-    onClose: closeDialog
-  })
+  const { deliveryPlan, resetDeliveryPlan, cancelStart, isStarting, handleStart } =
+    useSourceControlAgentActionStart({
+      open,
+      connectionId,
+      selectedAgent,
+      commandInput,
+      trimmedCommandInput,
+      agentArgs: recipe.agentArgs,
+      agentArgsApply: choice.launchAppliesAgentArgs,
+      recipe: choice.canSaveSurface ? recipe : (({ surface: _surface, ...rest }) => rest)(recipe),
+      saveLaunchRecipe,
+      saveTargetValue,
+      actionId,
+      repoId,
+      settings,
+      agentLaunchPreferences: choice.observation.preferences,
+      repo,
+      worktreeId,
+      groupId,
+      promptDelivery,
+      launchPlatform,
+      // Why: an SSH host runs the plain `orca` shim; keep the previewed command
+      // label aligned with the real remote launch (no `orca-ide` rename).
+      isRemote: typeof connectionId === 'string',
+      launchSource,
+      recoveryContext,
+      connectionUnavailable,
+      detectedAgents,
+      launchChoice: selection.choice,
+      onStart,
+      onSaveAgentDefault,
+      onLaunchAccepted,
+      onLaunchAborted,
+      onLaunched,
+      onClose: closeDialog
+    })
 
   const canStart =
-    Boolean(trimmedCommandInput && selectedAgent) &&
-    !selectedAgentUnavailable &&
+    Boolean(trimmedCommandInput) &&
+    Boolean(selectedAgent) &&
+    !choice.selectedAgentUnavailable &&
     !connectionUnavailable &&
     !detecting &&
+    selection.ready &&
     !isStarting
-
-  const handleOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (!nextOpen) {
-        cancelStart()
-        resetDeliveryPlan()
-        setSaveLaunchRecipe(true)
-        setSaveTargetValue(defaultSaveTargetValue)
-      }
-      onOpenChange(nextOpen)
-    },
-    [cancelStart, defaultSaveTargetValue, onOpenChange, resetDeliveryPlan]
-  )
-
-  const discoveryOutcome = discovery?.cycle === openCycle ? discovery.outcome : 'pending'
-  const { autoLaunchPending } = useSavedSourceControlAgentActionAutoStart({
-    open,
-    openCycle,
-    detectionReady: discoveryOutcome === 'success',
-    detectionFailed: discoveryOutcome === 'cancelled' || discoveryOutcome === 'failed',
-    actionId,
-    baseCommandInput,
-    savedAgentId,
-    savedCommandInputTemplate,
-    savedAgentArgs,
-    settings,
-    repo,
-    repoId,
-    worktreeId,
-    connectionId,
-    selectedAgent,
-    trimmedCommandInput,
-    connectionUnavailable,
-    detecting,
-    isStarting,
-    detectedAgents: launchableAgents,
-    disabledAgents,
-    onAutoStart: ({ detectedAgents: agentsForLaunch, saveTargetValue: matchedTargetValue }) =>
-      startWithDetectedAgents({
-        detectedAgents: agentsForLaunch,
-        saveTargetValueOverride: matchedTargetValue
-      })
-  })
 
   const statusCopy = buildSourceControlAgentStatusCopy({
     selectedAgent,
-    selectedAgentUnavailable,
+    selectedAgentUnavailable: choice.selectedAgentUnavailable,
     connectionUnavailable,
-    hasEnabledAgents,
+    hasEnabledAgents: choice.hasEnabledAgents,
     detecting
   })
 
@@ -279,11 +169,23 @@ export function useSourceControlAgentActionDialog({
       },
     [resetDeliveryPlan]
   )
-  const onSelectedAgentChange = useMemo(() => resetPlanAfter(setSelectedAgent), [resetPlanAfter])
-  const onAgentArgsChange = useMemo(() => resetPlanAfter(setAgentArgs), [resetPlanAfter])
-  const onCommandTemplateChange = useMemo(
-    () => resetPlanAfter(setCommandTemplate),
-    [resetPlanAfter]
+  // A pick changes route even for the same agent, so it always invalidates the previewed plan.
+  const onAgentPick = (agent: TuiAgent, surface?: AgentLaunchSurface): void => {
+    const saved = savedSurfaceForPick(choice.observation.model, agent, surface)
+    setLivePick(surface)
+    setRecipe(({ launchPreferences, surface: _previous, ...current }) => ({
+      ...current,
+      agentId: agent,
+      ...(launchPreferences?.agentId === agent ? { launchPreferences } : {}),
+      ...(saved ? { surface: saved } : {})
+    }))
+    resetDeliveryPlan()
+  }
+  const onAgentArgsChange = resetPlanAfter((agentArgs: string) =>
+    setRecipe((current) => ({ ...current, agentArgs }))
+  )
+  const onCommandTemplateChange = resetPlanAfter((commandInputTemplate: string) =>
+    setRecipe((current) => ({ ...current, commandInputTemplate }))
   )
   const onSaveLaunchRecipeChange = useMemo(
     () => resetPlanAfter(setSaveLaunchRecipe),
@@ -296,17 +198,29 @@ export function useSourceControlAgentActionDialog({
   )
 
   return {
-    handleOpenChange,
-    shouldRenderDialog: !autoLaunchPending,
+    handleOpenChange: (nextOpen) => {
+      if (!nextOpen) {
+        cancelStart()
+      }
+      onOpenChange(nextOpen)
+    },
     agentScopeNote,
-    agentOptions,
+    agentOptions: choice.agentOptions,
     selectedAgent,
-    hasEnabledAgents,
+    hasEnabledAgents: choice.hasEnabledAgents,
     detecting,
+    surfaceRows: {
+      model: choice.observation.model,
+      selection: choice.pickerSelection,
+      contextKey: choice.observation.contextKey,
+      surface: choice.liveSurface,
+      onPick: onAgentPick
+    },
     statusCopy,
     agentArgs,
-    agentArgsApply,
+    agentArgsApply: choice.launchAppliesAgentArgs,
     commandTemplate,
+    recipe,
     saveLaunchRecipe,
     saveTargetValue,
     saveTargets,
@@ -315,7 +229,7 @@ export function useSourceControlAgentActionDialog({
     deliveryPlan,
     canStart,
     isStarting,
-    onSelectedAgentChange,
+    onAgentPick,
     onAgentArgsChange,
     onCommandTemplateChange,
     onSaveLaunchRecipeChange,

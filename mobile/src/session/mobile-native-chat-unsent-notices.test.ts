@@ -66,10 +66,18 @@ describe("the phone's line under a not-sent message", () => {
 
   it('says only that it was not sent when a loaded row already says why', () => {
     const notices = mobileNativeChatUnsentNotices(
-      { items: [startRow], submissions: [submission('lost', { rejection: startFailed })] },
+      {
+        items: [startRow],
+        submissions: [
+          submission('lost', { rejection: startFailed }),
+          submission('later', { dispatchState: 'pending', resolvedAt: null })
+        ]
+      },
       'claude'
     )
-    expect(notices.get(agentJournalSubmissionKey('lost'))).toBe('Your message was not sent.')
+    expect([...notices]).toEqual([
+      [agentJournalSubmissionKey('lost'), 'Your message was not sent.']
+    ])
   })
 
   it('gives one shared empty map when no send failed, a Stop taking one back included', () => {

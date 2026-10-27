@@ -27,17 +27,9 @@ export type HeadlessPairedRuntimeHost = {
   client: RuntimeClient
   dispose: () => Promise<void>
   offer: RuntimeDesktopPairingOffer
-  /**
-   * Quits the serve process and starts a new one on the same user-data directory,
-   * pairing keys, and WebSocket port, so an already-paired client reconnects to the
-   * same environment record without a fresh offer. Requires `pinnedServePort: true`.
-   */
+  // Reuse profile, pairing keys and port on serve restart; requires pinnedServePort to preserve existing client identity.
   restartServeProcess: (options?: {
-    /**
-     * Runs with no serve process alive, before the replacement launches. The only safe window to
-     * edit the profile: the quitting process flushes its own state on the way out, and the
-     * replacement reads the file at startup.
-     */
+    // Edit only between processes: the old host flushes on quit and the replacement reads on startup.
     betweenProcesses?: () => void | Promise<void>
   }) => Promise<void>
   userDataDir: string
@@ -75,11 +67,7 @@ async function cleanupHeadlessHostResources(cleanups: HeadlessHostCleanup[]): Pr
   }
 }
 
-/**
- * Loopback port that is free right now, so a serve process can be relaunched onto the
- * same endpoint an already-paired client recorded. `--serve-port 0` cannot: the kernel
- * hands the second process a different port and the paired client keeps dialing the old one.
- */
+// Reserve a stable port for relaunch; --serve-port 0 would strand clients on the previous endpoint.
 async function reserveFreeLoopbackPort(): Promise<number> {
   const probe = createServer()
   try {
@@ -102,10 +90,7 @@ export async function launchHeadlessPairedRuntimeHost(
     executablePath?: string
     /** Host-only env seams (e.g. a forced-unavailable snapshot) the paired client must not inherit. */
     extraEnv?: Record<string, string>
-    /**
-     * `mobile` makes `offer` a phone pairing (`orca serve --mobile-pairing`). It is the host's only
-     * offer, so no desktop can pair to such a host: a desktop plus a direct phone is unsupported.
-     */
+    // Mobile scope creates the host’s only offer; desktop plus direct-phone pairing is unsupported.
     pairingScope?: 'runtime' | 'mobile'
     /** Bind a stable loopback port so `restartServeProcess` can reclaim it. */
     pinnedServePort?: boolean
@@ -166,8 +151,7 @@ export async function launchHeadlessPairedRuntimeHost(
       ).then((home) => assertElectronResolvedIsolatedHome(home, isolation))
     ])
     let serveProcess = launchedApp
-    // Why: a failed relaunch leaves only the already-closed app, which dispose must not close again
-    // (that throw would replace the launch error).
+    // Do not re-close an app after failed relaunch or disposal can replace the launch error.
     let serveProcessOpen = true
     return {
       get app() {

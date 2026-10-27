@@ -62,8 +62,7 @@ export function ConfirmationDialogProvider({
   const isFreshClick = (event: React.MouseEvent): boolean => !guarded || event.detail <= 1
 
   useEffect(() => {
-    // Why: this provider's dialog is not represented by activeModal. Block
-    // contextual tours so they cannot appear behind confirmation prompts.
+    // This dialog bypasses activeModal; block contextual tours explicitly while it is open.
     setContextualToursBlockingSurfaceVisible(activeRequest !== null)
     return () => setContextualToursBlockingSurfaceVisible(false)
   }, [activeRequest, setContextualToursBlockingSurfaceVisible])
@@ -134,6 +133,7 @@ export function ConfirmationDialogProvider({
         onOpenChange={(open) => !open && settleActiveRequest(false)}
       >
         <DialogContent
+          surface={displayedRequest?.options.surface}
           showCloseButton={false}
           size={compact ? 'compact' : 'default'}
           className={cn('sm:max-w-md', Icon && 'gap-6')}

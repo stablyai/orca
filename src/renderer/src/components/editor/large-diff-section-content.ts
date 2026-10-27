@@ -22,8 +22,7 @@ export function getStoredTextDiffResult(
     return result
   }
 
-  // Why: after the fallback has enough metadata, retaining multi-MB bodies in
-  // section/view caches recreates the memory pressure the fallback avoids.
+  // Drop multi-MB bodies before caching or fallback viewers recreate the memory pressure they avoid.
   const pruned: GitDiffResult = { ...result, originalContent: '', modifiedContent: '' }
   prunedTextDiffResults.add(pruned)
   return pruned

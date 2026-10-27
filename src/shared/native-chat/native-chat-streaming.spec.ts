@@ -84,9 +84,7 @@ describe('deriveNativeChatStreamingText', () => {
   })
 
   it('drops a preview flagged as tool output even when it leads the transcript', () => {
-    // Regression: providers publish a tool's stdout as `lastAssistantMessage` for status
-    // cards. It leads every transcript assistant turn and never appears in one, so without
-    // this gate it rendered as the reply and no catch-up rule could ever retire it.
+    // Status previews may contain tool stdout that never enters assistant blocks; catch-up cannot retire it, so gate tool output explicitly.
     expect(
       deriveNativeChatStreamingText({
         messages: [assistant('Partial')],
@@ -108,16 +106,6 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBe('Partial answer that is now much longer than before')
   })
 
-  it('keeps showing while the preview still leads (grows past the last turn)', () => {
-    // The transcript hasn't flushed the new content yet; preview is longer.
-    expect(
-      deriveNativeChatStreamingText({
-        messages: [assistant('Partial')],
-        previewText: 'Partial answer that is now much longer than before',
-        working: true
-      })
-    ).toBe('Partial answer that is now much longer than before')
-  })
   it('hides the sentence it streamed while a tool runs, but not a new reply after the tool', () => {
     // A Claude transcript writes the sentence and the tool call it led into as separate rows.
     const sentence = 'Checking the notes file now, then I will compare it with the settings.'

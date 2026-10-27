@@ -3,8 +3,6 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import { normalizeLoadedProjectCatalog } from './normalize-loaded-state-collections'
 
-// Why Reflect.set and not a cast: these rows deliberately violate their declared types, which is
-// exactly what a stale on-disk catalog does.
 function corrupt<T extends object>(row: T, overrides: Record<string, unknown>): T {
   for (const [key, value] of Object.entries(overrides)) {
     Reflect.set(row, key, value)
@@ -42,8 +40,6 @@ describe('normalizeLoadedProjectCatalog', () => {
     expect(result.projectHostSetups[0]?.path).toBe('')
   })
 
-  // Why: without a save the bad rows stay on disk, get repaired again every launch, and this
-  // host keeps publishing them to paired clients. Marking dirty is the migration.
   it('marks the profile dirty so the repair is persisted', () => {
     const markNeedsSave = vi.fn()
     normalizeLoadedProjectCatalog(makeParsed([makeBadSetup()]), markNeedsSave)

@@ -43,7 +43,15 @@ export type TuiAgentConfig = {
   /** Claude Code follows pasted text only where the user's typed words ask, so dispatch briefs need a typed lead line. */
   pasteNeedsTypedRequest?: boolean
   /** Trust Orca pre-writes at PTY spawn (agent-workspace-trust.ts) so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste. */
-  preflightTrust?: 'claude' | 'cursor' | 'copilot' | 'codex' | 'antigravity' | 'qoder' | 'qoder-cn'
+  preflightTrust?:
+    | 'claude'
+    | 'cursor'
+    | 'copilot'
+    | 'codex'
+    | 'antigravity'
+    | 'qoder'
+    | 'qoder-cn'
+    | 'kimi'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteMarkerSignal
   /** Signal before a paste that Enter follows, for agents that show their composer before it can submit; defaults to `draftPasteReadySignal`. */
@@ -56,6 +64,8 @@ export type TuiAgentConfig = {
   composerReadyCaptures?: readonly string[]
   /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
   submitRetryDelayMs?: number
+  /** How long an agent-prompt send keeps re-pressing Enter at `submitRetryDelayMs` while its composer holds the prompt, for TUIs that paint it before their session can submit (dsh). */
+  submitRetryBudgetMs?: number
   /** Extra ms per logical prompt line before Enter, for TUIs that expand multiline paste slowly (antigravity). */
   submitLineSettleMsPerLine?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */

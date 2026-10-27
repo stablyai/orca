@@ -1,9 +1,4 @@
-// One keyed table of the status store, as a mutation sees it.
-//
-// A mutation writes into a draft over the committed map instead of a copy of it: the draft holds
-// only the keys the mutation touched, so a refused mutation is dropped without undoing anything,
-// and an accepted one lands in place. Map order is part of the store's observable state (snapshot
-// order, tombstone compaction), so the draft reproduces exactly the order a copied map would have.
+// Draft only touched keys; refusal discards drafts, acceptance commits in place. Preserve copied-Map ordering for snapshots/tombstone compaction, including delete/reappend.
 
 export type AgentStatusStoreTable<V> = {
   readonly size: number

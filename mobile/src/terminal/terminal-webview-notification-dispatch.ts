@@ -1,3 +1,5 @@
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import {
   parseTerminalKeyboardAvoidanceMetrics,
   type TerminalSelectionEvents
@@ -10,14 +12,11 @@ export type TerminalWebViewNotificationHandlers = Omit<
   reportEngineError: (message: string, fatal: boolean) => void
 }
 
-// Fans WebView notification messages out to the RN prop callbacks. Readiness and
-// measure replies stay in TerminalWebView because they mutate its refs.
 export function dispatchTerminalWebViewNotification(
   msg: Record<string, unknown>,
   handlers: TerminalWebViewNotificationHandlers
 ) {
   if (msg.type === 'log') {
-    // Surface fit-scale diagnostics in the RN/Metro console.
     const tag = typeof msg.tag === 'string' ? msg.tag : '[fit]'
     console.log(tag, msg.payload)
   } else if (msg.type === 'error') {
@@ -47,7 +46,10 @@ export function dispatchTerminalWebViewNotification(
       altScreen: !!msg.altScreen,
       mouseTrackingMode,
       sgrMouseMode: !!msg.sgrMouseMode,
-      sgrMousePixelsMode: !!msg.sgrMousePixelsMode
+      sgrMousePixelsMode: !!msg.sgrMousePixelsMode,
+      applicationCursorKeysMode: !!msg.applicationCursorKeysMode,
+      kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(msg.kittyKeyboardFlags) ?? 0,
+      modifyOtherKeys: typeof msg.modifyOtherKeys === 'number' ? msg.modifyOtherKeys : 0
     })
   } else if (msg.type === 'terminal-input') {
     const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
@@ -61,11 +63,9 @@ export function dispatchTerminalWebViewNotification(
   } else if (msg.type === 'terminal-tap') {
     handlers.onTerminalTap?.()
   } else if (msg.type === 'terminal-file-tap') {
-    const pathText = typeof msg.pathText === 'string' ? msg.pathText : ''
-    if (pathText.length > 0) {
-      const line = typeof msg.line === 'number' ? msg.line : null
-      const column = typeof msg.column === 'number' ? msg.column : null
-      handlers.onFileTap?.(pathText, line, column)
+    const candidates = parseFileTapCandidates(msg.candidates)
+    if (candidates.length > 0) {
+      handlers.onFileTap?.(candidates)
     }
   } else if (msg.type === 'open-url') {
     const url = typeof msg.url === 'string' ? msg.url : ''
@@ -87,4 +87,24 @@ export function dispatchTerminalWebViewNotification(
   } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
     console.warn('[mobile-clip] selection cancelled by pinch')
   }
+}
+
+function parseFileTapCandidates(value: unknown): ParsedFileLinkLocation[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const candidates: ParsedFileLinkLocation[] = []
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) {
+      continue
+    }
+    const pathText = 'pathText' in item && typeof item.pathText === 'string' ? item.pathText : ''
+    if (pathText.length === 0) {
+      continue
+    }
+    const line = 'line' in item && typeof item.line === 'number' ? item.line : null
+    const column = 'column' in item && typeof item.column === 'number' ? item.column : null
+    candidates.push({ pathText, line, column })
+  }
+  return candidates
 }

@@ -13,7 +13,7 @@ import type {
 } from '../../../shared/jira/jira-types'
 import type { TaskPageJiraLoadError } from '@/components/task-page-jira-load-state'
 import type { TaskPageJiraJqlRejection } from '@/components/task-page-jira-search'
-import type { JiraPresetId } from '@/components/task-page-localized-options'
+import type { JiraPresetId } from '@/components/task-page/task-page-localized-options'
 import type {
   JiraIssueSortColumn,
   JiraIssueSortDirection,
@@ -58,7 +58,6 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     model.accountBackedTaskSourceHostId,
     selectedJiraSiteId
   )
-  // Jira tab state
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [jiraLoading, setJiraLoading] = useState(false)
   const [jiraError, setJiraError] = useState<TaskPageJiraLoadError | null>(null)

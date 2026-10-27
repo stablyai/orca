@@ -1,6 +1,4 @@
-// POSIX-only: the guest relay runs inside the Linux distro and materializes
-// overlays under a real $HOME. On a Windows dev host tmpdir() yields C:\ paths
-// the overlay logic is not meant to serve; live coverage comes from the rig.
+// Run off Windows: guest overlays use POSIX home paths; live Windows-to-WSL coverage belongs to the rig.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -30,6 +28,40 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     }
     return dir
   }
+
+  it('scopes opted-in Claude mods to versioned relay storage and remembers shortcut removal', () => {
+    withHome((home) => {
+      const config = join(home, 'claude-profile')
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home,
+        CLAUDE_CONFIG_DIR: config,
+        ORCA_WSL_HOOK_INSTANCE: 'claude-test'
+      })
+      expect(install({ claudeAgentViewSource: '' }).overlayDirs.claudeAgentView).toBeUndefined()
+      expect(existsSync(config)).toBe(false)
+      const source = 'export function register() {}'
+      const first = install({ claudeAgentViewSource: source }).overlayDirs.claudeAgentView
+      if (!first) {
+        throw new Error('Claude mod was not installed')
+      }
+      expect(first.startsWith(join(home, '.orca-relay'))).toBe(true)
+      expect(readFileSync(join(first, 'hooks', 'register.js'), 'utf8')).toBe(source)
+      expect(existsSync(join(config, 'skills'))).toBe(false)
+      const second = install({ claudeAgentViewSource: `${source}\n// new version` }).overlayDirs
+        .claudeAgentView
+      expect(second).not.toBe(first)
+      expect(readFileSync(join(first, 'hooks', 'register.js'), 'utf8')).toBe(source)
+      expect(install({ claudeAgentViewSource: '' }).overlayDirs.claudeAgentView).toBeUndefined()
+      expect(JSON.parse(readFileSync(join(config, 'keybindings.json'), 'utf8')).bindings).toEqual(
+        []
+      )
+      expect(install({ claudeAgentViewSource: source }).overlayDirs.claudeAgentView).toBe(first)
+      writeFileSync(join(config, 'keybindings.json'), '{"bindings": []}')
+      install({ claudeAgentViewSource: '' })
+      expect(install({ claudeAgentViewSource: source }).overlayDirs.claudeAgentView).toBeUndefined()
+      expect(readFileSync(join(config, 'keybindings.json'), 'utf8')).toBe('{"bindings": []}')
+    })
+  })
 
   it('writes orca-opencode-status.js into the overlay and returns that dir', () => {
     withHome((home) => {
@@ -90,12 +122,10 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       const source = '// v1\n'
       const dir = requireOverlayDir(install({ opencodePluginSource: source }).overlayDirs.opencode)
 
-      // Why: a wipe-and-rebuild would delete this alongside the rest of the tree,
-      // pulling the config root out from under an agent already running against it.
+      // Keep the existing config root under running agents; a wipe/rebuild would remove this canary.
       const canary = join(dir, 'opencode.json')
       writeFileSync(canary, '{"model":"user-set"}')
 
-      // The host re-ships on every reinstall (60s one-shot, later pane spawns).
       expect(install({ opencodePluginSource: source }).overlayDirs.opencode).toBe(dir)
       expect(install({}).overlayDirs.opencode).toBe(dir)
       expect(existsSync(canary)).toBe(true)
@@ -104,9 +134,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
 
   it('rebuilds if the resolved source dir ever changes (defensive)', () => {
     withHome((home) => {
-      // The relay's env is fixed for its lifetime, so nothing in production reaches
-      // this branch today; it exists so a plugin-only overlay can't outlive a source
-      // dir becoming resolvable. Simulated by mutating the env the factory captured.
+      // Mutate captured env to model a newly resolvable source dir; production relay env stays fixed for its lifetime.
       const userConfig = join(home, 'my-opencode')
       const env: NodeJS.ProcessEnv = { HOME: home, ORCA_WSL_HOOK_INSTANCE: 'inst1' }
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), env)
@@ -130,8 +158,7 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       })
       const source = '// v1\n'
       const dir = requireOverlayDir(install({ opencodePluginSource: source }).overlayDirs.opencode)
-      // Why: a rebuild that failed after the wipe leaves the dir but not the plugin;
-      // an existsSync on the dir alone would call that a cache hit forever.
+      // A failed rebuild can leave an empty directory; only the plugin file proves a cache hit.
       rmSync(join(dir, 'plugins', 'orca-opencode-status.js'))
 
       expect(install({ opencodePluginSource: source }).overlayDirs.opencode).toBe(dir)

@@ -10,12 +10,7 @@ const FAILURE = {
   canProceed: true
 }
 
-/**
- * The blanket runtime-active guard on this channel came from the streamed-only era, where a
- * connected runtime meant every browser page's state arrived through the host's tab sync. A
- * client-hosted page is a local Electron webview whose certificate challenge is raised by THIS
- * main process, so the same guard silently emptied its "Proceed Anyway" affordance.
- */
+/** Client-hosted certificate challenges originate from local webviews; the former runtime-active guard silently removed Proceed Anyway. */
 describe('browser certificate failures while a runtime environment is active', () => {
   it('stores a client-hosted page failure', async () => {
     const setBrowserPageCertificateFailure = vi.fn()

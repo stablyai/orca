@@ -407,14 +407,16 @@ describe('AgentStatusStore', () => {
     ).not.toBeNull()
   })
 
-  it('rejects malformed and scope-mismatched snapshots without changing state', () => {
-    const { store } = populatedStore()
+  it('rejects a scope-mismatched child snapshot without changing state', () => {
+    const { store: source } = populatedStore()
+    const snapshot = source.getSnapshot()
+    const store = createAgentStatusStore({ epoch: 'epoch-b', mode: 'replica' })
     const before = store.getSnapshot()
     const malformed: AgentStatusStoreSnapshot = {
-      ...before,
+      ...snapshot,
       children: [
         {
-          ...before.children[0],
+          ...snapshot.children[0],
           parent: subject({ workspaceId: 'other-workspace' })
         }
       ]

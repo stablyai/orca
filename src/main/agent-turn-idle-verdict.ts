@@ -54,6 +54,16 @@ export function findMissingCommandLine(
   )
 }
 
+/** The agent's own report that the turn sent at `sentAt` ended; a connect-time `done` reports no turn. */
+export function isTurnDoneSince(row: AgentTurnStatusRow, sentAt: number): boolean {
+  return (
+    !row.providerSessionOnly &&
+    row.state === 'done' &&
+    !row.sessionBoundary &&
+    row.stateStartedAt >= sentAt
+  )
+}
+
 export function judgeIdleAgentTurn(
   evidence: IdleAgentTurnEvidence,
   now: number
@@ -61,13 +71,7 @@ export function judgeIdleAgentTurn(
   const { sentAt } = evidence
   // Resume identity is no status report.
   const rows = evidence.rows.filter((row) => !row.providerSessionOnly)
-  if (
-    rows.some(
-      (row) =>
-        // A connect-time `done` reports no turn.
-        row.state === 'done' && !row.sessionBoundary && row.stateStartedAt >= sentAt
-    )
-  ) {
+  if (rows.some((row) => isTurnDoneSince(row, sentAt))) {
     return { kind: 'completed' }
   }
   const missing = findMissingCommandLine(evidence.tail, evidence.readAgentCommands())

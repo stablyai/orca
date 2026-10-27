@@ -45,8 +45,7 @@ export function syncPRChecksStatus(
   if (!prEntry?.data) {
     return null
   }
-  // Why: fork PR rediscovery can retarget the branch cache while an older
-  // checks request is still in flight; only the matching PR repo may update it.
+  // Fork rediscovery can retarget branch cache mid-check request; update only matching PR repo identity.
   if (prRepo !== undefined && !samePRRepo(prEntry.data.prRepo, prRepo)) {
     return null
   }

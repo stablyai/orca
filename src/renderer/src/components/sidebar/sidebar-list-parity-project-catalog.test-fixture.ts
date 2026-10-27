@@ -18,8 +18,7 @@ const ORCA_UPSTREAM = { owner: 'stablyai', repo: 'orca' }
 const isServerHost = (hostId: string | null | undefined): boolean =>
   parseExecutionHostId(hostId)?.kind === 'runtime'
 
-// The server's own answers, as its repo.list and projectGroup.list send them: no host stamps, and
-// a copy of the grouped orca project that names no group.
+// Model unstamped server catalog responses, including an ungrouped copy of the grouped Orca project.
 const SERVER_ORCA = repo('orca-srv', 'orca', { path: '/srv/orca', upstream: ORCA_UPSTREAM })
 const SERVER_ANSWERS = {
   'repo.list': { repos: [repo('api', 'api'), SERVER_ORCA] },
@@ -40,7 +39,7 @@ const SAVED_REPO_ORDER = [
   { hostId: 'local' as const, repoId: 'lab' }
 ]
 
-/** The window's catalog for this world, folded from the server's answers by the window's own fetch path. */
+/** Build the window catalog through its production server-response fold. */
 export function windowCatalogFromServerAnswers(base: Partial<AppState>): Partial<AppState> {
   const target = { kind: 'environment', environmentId: ENVIRONMENT_ID } as const
   const local = (base.repos ?? [])
@@ -52,7 +51,10 @@ export function windowCatalogFromServerAnswers(base: Partial<AppState>): Partial
     SAVED_REPO_ORDER
   )
   const rows = mergeFetchedHostProjectCatalog({
-    previous: { projects: base.projects ?? [], projectHostSetups: base.projectHostSetups ?? [] },
+    previous: {
+      projects: base.endpointProjects ?? [],
+      projectHostSetups: base.endpointProjectHostSetups ?? []
+    },
     // An older server answers no project.list, so both sides derive its projection.
     fetched: projectHostSetupProjectionFromRepos(fetched),
     repos,
@@ -60,8 +62,8 @@ export function windowCatalogFromServerAnswers(base: Partial<AppState>): Partial
   })
   return {
     repos,
-    projects: [...rows.projects],
-    projectHostSetups: [...rows.projectHostSetups],
+    endpointProjects: [...rows.projects],
+    endpointProjectHostSetups: [...rows.projectHostSetups],
     manualRepoOrder: SAVED_REPO_ORDER,
     projectGroups: [
       ...(base.projectGroups ?? []),
@@ -87,10 +89,7 @@ function answer(method: string): Promise<RuntimeRpcResponse<unknown>> {
   )
 }
 
-/**
- * Main's catalog for this world: this host's own rows, the server's answers read the way main's
- * paired-server producer reads them, and the saved manual order (not the window's sorted one).
- */
+/** Build main’s catalog from owned rows, server responses and saved manual order. */
 export async function projectCatalogFromWindowState(state: AppState) {
   const own = <T extends { executionHostId?: string | null }>(rows: readonly T[]): T[] =>
     rows.filter((row) => !isServerHost(row.executionHostId))
@@ -102,17 +101,17 @@ export async function projectCatalogFromWindowState(state: AppState) {
     {
       repos: own(state.repos),
       projectGroups: own(state.projectGroups ?? []),
-      projects: (state.projects ?? []).filter((project) =>
+      projects: (state.endpointProjects ?? []).filter((project) =>
         project.sourceRepoIds.some((id) => own(state.repos).some((entry) => entry.id === id))
       ),
-      setups: (state.projectHostSetups ?? []).filter((setup) => !isServerHost(setup.hostId))
+      setups: (state.endpointProjectHostSetups ?? []).filter((setup) => !isServerHost(setup.hostId))
     },
     [server],
     { manualRepoOrder: state.manualRepoOrder, projectOrderBy: state.projectOrderBy }
   )
 }
 
-/** The projectCatalog domain over that catalog: its server read is awaited once, before the first read. */
+/** Await the server catalog once before serving feed reads. */
 export function projectCatalogDomain(state: AppState): SidebarInputsFeedDomain {
   let catalog: Awaited<ReturnType<typeof projectCatalogFromWindowState>> | null = null
   return {

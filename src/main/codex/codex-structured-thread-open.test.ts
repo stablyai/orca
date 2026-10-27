@@ -1,9 +1,10 @@
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-frame-size-error'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
 function connectionFor(
@@ -13,6 +14,88 @@ function connectionFor(
 }
 
 describe('openCodexThread', () => {
+  it('retains the compiled Auto sandbox on start and resume', async () => {
+    const sandbox = {
+      type: 'workspaceWrite',
+      writableRoots: ['/workspace', '/extra-root'],
+      networkAccess: true,
+      excludeTmpdirEnvVar: true,
+      excludeSlashTmp: true
+    }
+    const connection = connectionFor(vi.fn(async () => ({ thread: { id: 'thread' }, sandbox })))
+    for (const resumeThreadId of [null, 'thread']) {
+      const opened = await openCodexThread(
+        connection,
+        {
+          cwd: '/workspace',
+          resumeThreadId,
+          permissionPolicy: codexStructuredPermissionPolicy('auto')
+        },
+        2_000
+      )
+      expect(opened.sandbox).toEqual(sandbox)
+    }
+  })
+
+  it.each([
+    ['workspaceWrite', 'on-request', 'auto_review', 'auto'],
+    ['readOnly', 'on-request', 'auto_review', 'read-only'],
+    ['read-only', 'on-request', 'auto_review', 'read-only'],
+    ['readOnly', 'on-request', 'user', 'ask'],
+    ['dangerFullAccess', 'never', 'user', 'full-access'],
+    ['workspaceWrite', 'on-request', 'user', 'ask'],
+    ['readOnly', 'untrusted', 'user', 'read-only'],
+    ['dangerFullAccess', 'never', 'auto_review', 'full-access'],
+    ['workspaceWrite', 'on-request', undefined, null],
+    [undefined, undefined, undefined, null]
+  ])(
+    'leaves own policy omitted on start/resume and reports %s/%s/%s',
+    async (sandboxType, approvalPolicy, approvalsReviewer, expected) => {
+      const request = vi.fn(async () => ({
+        thread: { id: 'own-thread' },
+        approvalPolicy,
+        sandbox: sandboxType ? { type: sandboxType } : undefined,
+        approvalsReviewer
+      }))
+      for (const resumeThreadId of [null, 'own-thread']) {
+        const opened = await openCodexThread(
+          connectionFor(request),
+          { cwd: '/workspace', resumeThreadId },
+          2_000
+        )
+        expect(opened.reportedPermissionMode).toBe(expected)
+      }
+      expect(request).toHaveBeenNthCalledWith(
+        1,
+        'thread/start',
+        { cwd: '/workspace' },
+        { timeoutMs: 2_000 }
+      )
+      expect(request).toHaveBeenNthCalledWith(
+        2,
+        'thread/resume',
+        { cwd: '/workspace', threadId: 'own-thread', excludeTurns: true },
+        { timeoutMs: 2_000 }
+      )
+    }
+  )
+
+  it('recognizes snake-case exact settings without changing the custom-policy fallback', async () => {
+    const request = vi.fn(async () => ({
+      thread: { id: 'configured' },
+      approval_policy: 'on-request',
+      approvals_reviewer: 'user',
+      sandbox: 'read-only'
+    }))
+    const opened = await openCodexThread(
+      connectionFor(request),
+      { cwd: '/workspace', resumeThreadId: 'configured' },
+      2_000
+    )
+    expect(opened.reportedPermissionMode).toBe('ask')
+    expect(request.mock.calls).toHaveLength(1)
+  })
+
   it('applies the resolved permission policy when starting and resuming a thread', async () => {
     const request = vi.fn(async (method: string) => ({
       thread: { id: method === 'thread/start' ? 'thread-created' : 'thread-existing' }
@@ -73,7 +156,7 @@ describe('openCodexThread', () => {
     const params = request.mock.calls[0]?.[1] ?? {}
     expect(params).toMatchObject({
       approvalPolicy: 'on-request',
-      sandbox: 'workspace-write',
+      sandbox: 'read-only',
       approvalsReviewer: 'user'
     })
     expect(Object.keys(params)).toEqual(
@@ -96,6 +179,7 @@ describe('openCodexThread', () => {
       openCodexThread(connectionFor(standard), { cwd: '/workspace', resumeThreadId: null }, 2_000)
     ).resolves.toEqual({
       threadId: 'thread-standard',
+      reportedPermissionMode: null,
       thread: { id: 'thread-standard' },
       serviceTier: null
     })
@@ -315,4 +399,44 @@ describe('openCodexThread', () => {
       }
     })
   })
+})
+
+it('keeps an exact active-writer refusal typed through cleanup wrapping', async () => {
+  const error = new CodexAppServerRequestError(
+    'thread/resume',
+    -32600,
+    'thread C already has an active writer'
+  )
+  const request = vi.fn().mockRejectedValue(error)
+  let refused: unknown
+  try {
+    await openCodexThread(connectionFor(request), { cwd: '/workspace', resumeThreadId: 'C' }, 2_000)
+  } catch (caught) {
+    refused = caught
+  }
+  expect(refused).toMatchObject({ reason: 'conversationOpenElsewhere' })
+  expect(providerStartupFailureFact(new AggregateError([refused], 'cleanup failed'))).toMatchObject(
+    {
+      kind: 'conversationOpenElsewhere',
+      detail: { text: error.message, audience: 'log' }
+    }
+  )
+  expect(request).toHaveBeenCalledOnce()
+})
+
+it.each([
+  ['thread/resume', -32600, 'thread D already has an active writer'],
+  ['thread/start', -32600, 'thread C already has an active writer'],
+  ['thread/resume', -32600, 'thread C is archived'],
+  ['thread/resume', -32600, 'unrelated invalid request'],
+  ['thread/resume', -1, 'thread C already has an active writer']
+] as const)('does not broaden writer refusal for %s/%s/%s', async (method, code, message) => {
+  const error = new CodexAppServerRequestError(method, code, message)
+  await expect(
+    openCodexThread(
+      connectionFor(vi.fn().mockRejectedValue(error)),
+      { cwd: '/workspace', resumeThreadId: 'C' },
+      2_000
+    )
+  ).rejects.toBe(error)
 })

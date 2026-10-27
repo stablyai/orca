@@ -13,10 +13,6 @@ import {
   type MiniMaxUsageSnapshot
 } from './minimax-fetcher-data'
 
-// Why: split out of minimax-fetcher.ts so the transport + routing file
-// stays under the 300-line cap (AGENTS.md disallows max-lines disables).
-// Pure data-shape → ProviderRateLimits translation; no I/O.
-
 export type MiniMaxUsageResponse = {
   base_resp?: {
     status_code?: unknown
@@ -34,8 +30,7 @@ export type MiniMaxUsageResponse = {
   }[]
 }
 
-// Why: MiniMax answers an expired cookie/key with HTTP 200 + base_resp.status_code 1004,
-// so the credential-expiry signal has to be read from the payload, not the status line.
+// Expired MiniMax credentials return HTTP 200 with payload status_code 1004.
 const MINIMAX_UNAUTHENTICATED_STATUS_CODE = 1004
 
 function makeMiniMaxExpiredCredentialError(fetchResult: MiniMaxFetchResponse): ProviderRateLimits {
@@ -119,10 +114,7 @@ export async function parseMiniMaxUsageResponse(
   if (payloadError) {
     return payloadError
   }
-  // Why: a non-array `model_remains` (object / string) throws inside `.map`
-  // and surfaces as a 'network' error rather than 'parse'. Treat any
-  // non-array as an empty list and let the snapshot selection flag the
-  // missing usage.
+  // Non-array model_remains must become a parse failure, not a thrown .map/network error.
   const rawItems = Array.isArray(payload.model_remains) ? payload.model_remains : []
   const snapshots = rawItems
     .map(parseMiniMaxUsageItem)

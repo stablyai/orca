@@ -20,9 +20,7 @@ const mockStore = vi.hoisted(() => ({
   openModal: vi.fn()
 }))
 
-// Counts invocations of the memo'd card's inner render function. A bail-out
-// (React.memo shallow-equal props) does NOT invoke it — which is the claim
-// under test: order-preserving epoch bumps must not re-render cards.
+// Count inner renders so React.memo bailouts remain observable across order-preserving epoch changes.
 const cardRenderSpy = vi.hoisted(() => vi.fn())
 
 type WorktreeListComponent = React.ComponentType<{
@@ -215,6 +213,8 @@ function setFlatWorktreeState(): void {
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [repo],
     retainedAgentsByPaneKey: {},
     revealWorktreeInSidebar: vi.fn(),
@@ -253,9 +253,7 @@ const mountedRoots: Root[] = []
 
 async function renderList(root: Root): Promise<void> {
   await act(async () => {
-    // Why fresh ref objects each render: they defeat WorktreeList's own memo
-    // like a store-subscription re-render would, so the test exercises a full
-    // parent re-render and isolates whether the CARDS bail.
+    // Fresh ref props bypass the list’s own memo to isolate whether individual cards bail out.
     root.render(
       <WorktreeList scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
     )
@@ -290,14 +288,11 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
     await renderList(root)
     expect(container.querySelectorAll('[data-mock-worktree-card]')).toHaveLength(2)
 
-    // Baseline: a parent re-render with unchanged store state must not
-    // re-invoke card render functions.
     const countAfterMount = cardRenderSpy.mock.calls.length
     await renderList(root)
     expect(cardRenderSpy.mock.calls.length).toBe(countAfterMount)
 
-    // Order-preserving epoch bump: same worktrees, same order, new epoch.
-    // Manual sort applies the bump without the smart-sort settle debounce.
+    // Manual sort applies the order-preserving epoch immediately without smart-sort debounce.
     mockStore.state = { ...mockStore.state, sortEpoch: 1 }
     await renderList(root)
 
@@ -323,7 +318,6 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
     }
     await renderList(root)
 
-    // The changed card re-renders; identity reuse must not freeze real updates.
     expect(cardRenderSpy.mock.calls.length).toBeGreaterThan(countAfterMount)
     expect(cardRenderSpy).toHaveBeenCalledWith('wt-a')
   })

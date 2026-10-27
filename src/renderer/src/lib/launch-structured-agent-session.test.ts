@@ -419,8 +419,7 @@ describe('structured agent session launch', () => {
     expect(retryStructuredAgentSessionLaunchIntent(intent).seedOptions).toEqual({ model: 'opus' })
   })
 
-  /** A worktree is not resolvable for a beat after createWorktree resolves, so the probe fails with
-   *  selector_not_found instead of answering. That is "not ready", not "no". */
+  /** selector_not_found immediately after creation means not ready, not refusal; the new workspace may still be hydrating. */
   it('retries a probe the host cannot answer yet, then creates', async () => {
     const notResolvableYet = Object.assign(new Error('selector_not_found'), {
       code: 'selector_not_found'
@@ -542,8 +541,7 @@ describe('structured agent session launch', () => {
     expect(error).toMatchObject({ code: 'agent_session_operation_unknown' })
   })
 
-  /** The class is the verdict, so a refusal message that happens to end in a definitive token
-   *  must not be re-read into one by the transport-error matcher. */
+  /** Typed refusal class wins even if its message ends in a token that the transport matcher would misclassify. */
   it('keeps an unknown outcome unknown even when its message ends in a definitive token', async () => {
     mockSupportedCreate(() => ({
       ok: false,
@@ -586,8 +584,7 @@ describe('structured agent session launch', () => {
     expect(transportError).not.toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
   })
 
-  // Pins the thrown-error half (round-2 S5): a host that flattened the refusal to runtime_error
-  // still ends it with the token, and client-minted codes never prove nothing was created.
+  // Flattened runtime_error can retain the host’s definitive token; client-minted errors never prove no session was created.
   it('reads a definitive token from a flattened runtime_error message', async () => {
     mockSupportedCreate(() => {
       throw Object.assign(new Error('structured_agent_session_unsupported'), {

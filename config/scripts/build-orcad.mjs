@@ -6,7 +6,7 @@ import {
   buildOrcadEntry,
   buildOrcadCli,
   buildOrcadLauncher,
-  externalNativeAddons,
+  ORCAD_BUNDLE_PLUGINS,
   ORCAD_EXTERNAL_MODULES,
   ORCAD_CHILD_ENTRY_POINTS,
   ORCAD_COMMONJS_MODULE_OPTIONS,
@@ -67,9 +67,7 @@ const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = process.env.ORCAD_OUT_DIR
   ? resolve(process.env.ORCAD_OUT_DIR)
   : join(ROOT, 'out', 'orcad')
-// Why beside orcad.js: every forked child and worker resolves its entry in the app root, and a
-// deployment has no desktop out/main to fall back to. A missing one only shows on a host as a
-// feature that never starts (the daemon's absence makes every restart kill every terminal).
+// Ship fork/worker entries beside orcad.js: remote deployments have no desktop out/main fallback, and a missing daemon loses terminals on restart.
 const childOutFile = (role) =>
   join(OUT_DIR, orcadChildOutputFilename(ORCAD_CHILD_ENTRY_POINTS[role]))
 const WATCHER_OUT_FILE = childOutFile('watcher')
@@ -217,9 +215,7 @@ for (const artifact of ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS) {
 }
 stageOrcadMobileWebBundle(OUT_DIR)
 
-/** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
- *  directory under `outdir`, and both children must land flat beside orcad.js — that is where
- *  their runtime resolvers look for them. */
+// Build children individually to land flat beside orcad.js; multi-entry outdir mirrors source directories and breaks runtime resolution.
 function buildForkedChild(entryPoint, outfile) {
   return build({
     ...ORCAD_COMMONJS_MODULE_OPTIONS,
@@ -230,7 +226,7 @@ function buildForkedChild(entryPoint, outfile) {
     format: 'cjs',
     outfile,
     external: ORCAD_EXTERNAL_MODULES,
-    plugins: [externalNativeAddons],
+    plugins: ORCAD_BUNDLE_PLUGINS,
     metafile: true,
     minify: true,
     sourcemap: false,
@@ -264,12 +260,7 @@ const launcherResult = await buildOrcadLauncher(OUT_FILE)
 const output = Object.values(result.metafile.outputs).find(
   (o) => o.entryPoint === 'src/main/orcad/main.ts'
 )
-// Why check `original` and not just `path`: when electron is bundleable, esbuild
-// rewrites `path` to the resolved file under node_modules and the naive check passes
-// while the package is very much in the bundle.
-// Why both metafiles: the forked children ship in the same deployment and runtime. A
-// daemon-entry that reached electron would fail at fork time, on the
-// path whose whole point is that terminals survive.
+// Check metafile original specifiers, not resolved paths, to catch bundled Electron; inspect children too or daemon fork silently fails.
 function collectImporters(metafiles, matches) {
   const importers = new Set()
   for (const metafile of metafiles) {
@@ -295,6 +286,10 @@ const electronImporters = collectImporters(
   (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
 )
 const sqliteImporters = collectImporters(metafiles, (specifier) => specifier === 'node:sqlite')
+// A bundled UMD factory keeps its relative requires, which fail beside the single-file bundle (#33592).
+const umdInputs = metafiles.flatMap((metafile) =>
+  Object.keys(metafile.inputs).filter((file) => /[\\/]lib[\\/]umd[\\/]/.test(file))
+)
 
 const graphErrors = []
 if (electronImporters.size > 0) {
@@ -311,24 +306,21 @@ if (sqliteImporters.size > 0) {
       .join('\n')}`
   )
 }
+if (umdInputs.length > 0) {
+  graphErrors.push(
+    `${umdInputs.length} UMD module(s) in the bundle; resolve their ESM build in ORCAD_BUNDLE_PLUGINS:\n${umdInputs
+      .map((file) => `  - ${file}`)
+      .join('\n')}`
+  )
+}
 
 if (graphErrors.length > 0) {
   console.error(`[build-orcad] ${graphErrors.join('\n')}`)
-  // Why this can exceed the ratchet baseline: the ratchet measures the graph reachable
-  // from orca-runtime + runtime-rpc, but this entry also imports ipc/pty directly to
-  // install the PTY controller. Once orcad ships, it should become a ratchet entry
-  // point so the two numbers cannot drift.
+  // Entry directly imports ipc/pty beyond runtime ratchet graph; add orcad as ratchet entry to prevent the measurements drifting.
   process.exitCode = 1
 } else {
-  // Why smoke-load and not just read the metafile: the import scan proves no module
-  // *names* electron, but the rollback graph can still fail to resolve under plain Node — a
-  // dynamic require, a missing native, a top-level throw. The plain-node-entry-guard
-  // smoke-loads its entries for exactly this reason, and orcad cannot join that guard
-  // because it is an esbuild artifact rather than a rollup input.
-  // Why an exit code and not a message match: these bundles are minified onto one line, so
-  // Node's uncaught-exception report echoes that whole line — which contains every string
-  // literal in the bundle. A crash therefore "matches" any expected message, and a textual
-  // assertion passes against a bundle that never loaded.
+  // Smoke plain-Node resolution beyond Electron-name scans: dynamic requires/natives/top-level throws can still fail.
+  // Assert exit code: minified crash reports echo the whole bundle line, falsely matching any expected message.
   const smoke = spawnSync(process.execPath, [SERVER_OUT_FILE, '--orcad-smoke-load-check'], {
     encoding: 'utf8',
     timeout: 60_000
@@ -354,11 +346,8 @@ if (graphErrors.length > 0) {
     )
     process.exitCode = 1
   }
-  // Why require + parseArgs and not a real daemon: requiring the bundle evaluates every
-  // top-level import, and calling its exported argv parser proves the entry's own code is
-  // there rather than a graph that merely resolved. Booting one would need a socket, a
-  // token and a PTY — `smoke:orcad-terminal` does that end to end, through orcad.
-  // The verdict is carried by the exit code for the same minification reason as above.
+  // Require bundle then call exported parseArgs to prove entry code evaluates; socket/token/PTY lifecycle belongs to smoke:orcad-terminal.
+  // Assert exit code because minified exception text includes unrelated bundle strings.
   const daemonSmoke = spawnSync(
     process.execPath,
     [
@@ -411,10 +400,7 @@ for (const { label, smoke } of workerSmokes) {
   }
 }
 
-// Why a content hash and not ORCAD_VERSION alone: the remote install directory is keyed on
-// this string, so two different builds carrying one version would share a directory — and an
-// already-`.install-complete` dir is never re-uploaded. The deploy would silently run stale
-// bytes while reporting the new version.
+// Remote install directories key by content hash; version alone would reuse install-complete directories with stale bytes.
 if (process.exitCode !== 1) {
   const fullVersion = computeOrcadFullVersion(OUT_DIR, {
     target: BUILD_TARGET,
@@ -456,8 +442,7 @@ async function smokeLoadWatcherChild(runtimePath) {
         }
       })
       child.on('error', (error) => settle(`fork failed: ${error.message}`))
-      // Why exit and not disconnect: the child exits 0 on disconnect, so a non-zero code
-      // or a signal here is a load failure rather than a clean teardown.
+      // Disconnect exits 0; nonzero/signal before that is a load failure.
       child.on('exit', (code, signal) =>
         settle(
           code === 0 && subscribed

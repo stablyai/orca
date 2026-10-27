@@ -58,7 +58,6 @@ describe('document preview sharing', () => {
     expect(mocks.readFile).not.toHaveBeenCalled()
   })
 
-  // Why: a read without the connection id would share a local file instead.
   it('keeps an SSH grant on its connection, so the read fails closed', async () => {
     mocks.readFile.mockRejectedValue(new Error('SSH host is not served here'))
 

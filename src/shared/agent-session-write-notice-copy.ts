@@ -16,8 +16,7 @@ import type {
   AgentSessionFailureWordsContext
 } from './agent-session-failure-words'
 
-/** Every sentence a notice is made of. Desktop translates each whole sentence with this as its
- *  fallback; mobile shows it as is. */
+/** Translate whole sentences on desktop with English fallbacks; mobile displays them directly. */
 export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneReadHistory: "This chat's history couldn't be loaded.",
   notDoneSend: 'Your message was not sent.',
@@ -29,7 +28,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneAnswer: 'Your answer was not sent.',
   notDoneOption: "The setting wasn't changed.",
   notDoneCommand: "The command didn't run.",
-  notDoneGoal: "The goal wasn't changed.",
+  notDoneGoalChangeIncomplete: "Couldn't finish changing the goal. Check the chat.",
   notDoneQueuedEdit: "Your edit wasn't saved.",
   restartFailed: "The agent couldn't restart.",
   capacity:
@@ -105,8 +104,7 @@ export type AgentSessionWriteNoticeFailurePart = {
   surface: AgentSessionFailureSurface
   context: AgentSessionFailureWordsContext
 }
-/** A notice as whole sentences, each translated on its own; `text` is words someone else wrote: a
- *  provider's, or a host's sentence with no fact beside it. */
+/** Translate each notice sentence independently; text is provider/host wording without a typed fact. */
 export type AgentSessionWriteNoticePart =
   | AgentSessionWriteNoticeSentence
   | { text: string }

@@ -68,8 +68,8 @@ export type StructuredAgentSessionChildExitContext<
   wakeDelivery?: (sessionId: string) => void
   startupAttempts?: Pick<StructuredAgentSessionStartupAttempts, 'childEnded'>
   /** Retain exits between background-start spawn and publication. */
-  startFlights?: Pick<StructuredAgentSessionStartFlights, 'deferExit'>
-  abortOpen?: (sessionId: string) => void
+  startFlights?: Pick<StructuredAgentSessionStartFlights, 'deferExit' | 'ownsChild'>
+  abortBound?: (sessionId: string) => void
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   logger: StructuredAgentSessionLogger
@@ -141,8 +141,8 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   const observedAt = observation?.observedAt ?? exit.observedAt ?? context.now()
   // Host phase classifies startup failure even if adapters omit the flag.
   const exitedDuringStartup = child.phase === 'starting'
-  if (child.phase === 'starting') {
-    context.abortOpen?.(sessionId)
+  if (child.phase === 'starting' || !expected) {
+    context.abortBound?.(sessionId)
   }
   // Personal Stop cancels startup; host Stop fails it; preserve the close initiator.
   const startClose = expected && exitedDuringStartup ? close?.cause : undefined
@@ -245,7 +245,12 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
           )),
       ...(startFailure ? { exitFailure: startFailure } : {}),
       ...(startFailed && child.generation
-        ? { exitedDuringStartup: { generation: child.generation } }
+        ? {
+            exitedDuringStartup: {
+              generation: child.generation,
+              flightOwned: context.startFlights?.ownsChild(sessionId, child)
+            }
+          }
         : {}),
       exit: watched,
       ...(unrunRejection ? { unrunRejection } : {})

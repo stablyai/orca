@@ -43,9 +43,6 @@ describe('acquireSingleInstanceLock', () => {
 
     expect(acquired).toBe(false)
     expect(fake.requestSingleInstanceLock).toHaveBeenCalledTimes(1)
-    // Why: if we registered the listener on a losing process, focusing the
-    // existing window would become our job even though the primary owns
-    // that UX surface. Verify no listener was added.
     expect(fake.on).not.toHaveBeenCalled()
     expect(fake.listeners['second-instance']).toBeUndefined()
   })
@@ -80,15 +77,14 @@ describe('acquireSingleInstanceLock', () => {
 
 describe('shouldActivateDesktopForSecondInstance', () => {
   it('ignores a duplicate serve launch but still activates for a desktop launch', () => {
-    // Why: a supervisor respawning `orca serve` must not open a window on a display-less host (#11935).
+    // Supervisor serve restarts must not open desktop windows on displayless hosts (#11935).
     const serveArgv = ['/opt/orca/orca-linux.AppImage', '--serve']
     expect(shouldActivateDesktopForSecondInstance(serveArgv)).toBe(false)
     expect(shouldActivateDesktopForSecondInstance(['/Applications/Orca.app/orca'])).toBe(true)
   })
 
   it('ignores a duplicate CLI-form serve launch the CLI redirect never rewrote', () => {
-    // Why: the documented systemd unit is `<binary> serve --port 6768 …`; an extracted AppRun/binary
-    // start reaches Electron in that shape, so a flag-only check would open a window on the live server.
+    // Systemd uses CLI-form serve argv; flag-only detection would activate a headless server.
     expect(
       shouldActivateDesktopForSecondInstance([
         '/opt/orca/squashfs-root/orca-ide',
@@ -99,7 +95,6 @@ describe('shouldActivateDesktopForSecondInstance', () => {
         '100.64.1.20'
       ])
     ).toBe(false)
-    // A path argument that merely contains `serve` is still a desktop launch.
     expect(
       shouldActivateDesktopForSecondInstance(['/opt/orca/orca-ide', '/home/u/serve-repo'])
     ).toBe(true)
@@ -162,7 +157,6 @@ describe('logSingleInstanceLockFailure', () => {
     expect(line.trimEnd()).not.toContain('\n')
     expect(line).toContain(`the profile at ${userDataPath}`)
     expect(line).toContain('ORCA_DEV_USER_DATA_PATH=')
-    // A background or serve instance shows no window, so the line claims none.
     expect(line).not.toMatch(/focus|window/i)
   })
 })

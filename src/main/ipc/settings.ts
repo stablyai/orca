@@ -1,3 +1,4 @@
+import { getClaudeAgentViewService } from '../claude/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -17,6 +18,7 @@ import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hoo
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
+import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
@@ -92,9 +94,9 @@ export function registerSettingsHandlers(
     }
   })
 
-  ipcMain.handle('settings:get', () => {
-    return readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
-  })
+  ipcMain.handle('settings:get', () =>
+    readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+  )
 
   ipcMain.handle(
     'settings:update-pr-bot-author-override',
@@ -200,15 +202,11 @@ export function registerSettingsHandlers(
       ('httpProxyBypassRules' in sanitizedArgs &&
         before.httpProxyBypassRules !== result.httpProxyBypassRules)
     if (proxySettingsChanged) {
-      // Start both authorities before yielding so requests cannot enter between their barriers.
-      const defaultSessionApply = applyElectronProxySettings(result)
-      const browserSessionsApply = applyBrowserSessionProxies(
-        browserSessionRegistry.listProfiles(),
-        result
-      )
+      // Start every authority before yielding so requests cannot enter between their barriers.
       const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
-        defaultSessionApply,
-        browserSessionsApply
+        applyElectronProxySettings(result),
+        applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), result),
+        applyProxyToElectronUpdaterSession(result)
       ])
       if (defaultSessionResult.status === 'rejected') {
         console.warn('[settings] failed to apply network proxy settings')
@@ -225,6 +223,7 @@ export function registerSettingsHandlers(
         normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
       )
     }
+    await getClaudeAgentViewService().reconcile(result)
     const hookSettingChanged =
       ('agentStatusHooksEnabled' in sanitizedArgs &&
         before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
@@ -304,9 +303,7 @@ export function registerSettingsHandlers(
     }
   )
 
-  ipcMain.handle('settings:listFonts', () => {
-    return listSystemFontFamilies()
-  })
+  ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
   ipcMain.handle('settings:previewGhosttyImport', () => {
     return previewGhosttyImport(store)

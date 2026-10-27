@@ -1,11 +1,4 @@
-/**
- * E2E test for the overflowing tab strip in real browser layout: the active tab docks to the edge
- * it would scroll past, and a tab arriving off screen is revealed beside it without the strip
- * visibly scrolling or the active tab flickering out of view.
- *
- * Why E2E: the unit tests mock slot geometry, so they assume `position: sticky` clamps the active
- * tab to the viewport. Only Chromium layout proves the dock is actually drawn at the edge.
- */
+// Require real Chromium sticky layout to dock an overflowed active tab and reveal arrivals without scrolling/flicker; mocked unit geometry cannot prove the drawn dock.
 
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -79,6 +72,172 @@ test.describe('Tab strip active-tab dock', () => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+  })
+
+  test('fits titles without resizing neighbors when tabs open and close in spare space', async ({
+    orcaPage
+  }) => {
+    const worktreeId = await waitForActiveWorktree(orcaPage)
+    const tabIds = await orcaPage.evaluate((worktreeId) => {
+      const state = window.__store!.getState()
+      const short = state.createTab(worktreeId, undefined, undefined, { activate: false })
+      const long = state.createTab(worktreeId, undefined, undefined, { activate: false })
+      state.setTabCustomTitle(short.id, 'Terminal 1')
+      state.setTabCustomTitle(
+        long.id,
+        'Measure the effect of the new tab layout on conversation navigation'
+      )
+      return { short: short.id, long: long.id }
+    }, worktreeId)
+    const short = orcaPage.locator(slotSelector(tabIds.short))
+    const long = orcaPage.locator(slotSelector(tabIds.long))
+    const width = (tab: typeof short): Promise<number> =>
+      tab.evaluate((element) => element.getBoundingClientRect().width)
+
+    await expect(short).toContainText('Terminal 1')
+    await expect(long).toContainText(
+      'Measure the effect of the new tab layout on conversation navigation'
+    )
+    expect(await width(short)).toBeLessThan(140)
+    expect(await width(long)).toBeGreaterThan(384)
+    const label = long.locator('span.truncate')
+    expect(await label.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    const geometry = (): Promise<number[][]> =>
+      orcaPage.evaluate(
+        (ids) =>
+          ids.map((id) => {
+            const slot = document.querySelector(`[data-tab-strip-slot="${id}"]`)!
+            const tab = slot.getBoundingClientRect()
+            const close = slot.querySelector('[data-tab-close-button]')!.getBoundingClientRect()
+            return [tab.x, close.x]
+          }),
+        [tabIds.short, tabIds.long]
+      )
+    const before = await geometry()
+    const added = await orcaPage.evaluate((worktreeId) => {
+      const state = window.__store!.getState()
+      const tab = state.createTab(worktreeId, undefined, undefined, { activate: false })
+      state.setTabCustomTitle(tab.id, 'Go')
+      return tab.id
+    }, worktreeId)
+    await expect(orcaPage.locator(slotSelector(added))).toContainText('Go')
+    for (let frame = 0; frame < 4; frame++) {
+      await nextFrames(orcaPage, 1)
+      expect(await geometry()).toEqual(before)
+    }
+    await long.locator('[data-testid="sortable-tab"]').click()
+    await expect(long.locator('[data-active="true"]')).toHaveCount(1)
+    expect(await geometry()).toEqual(before)
+    await orcaPage.locator(`${slotSelector(added)} [data-tab-close-button]`).click()
+    await expect(orcaPage.locator(slotSelector(added))).toHaveCount(0)
+    for (let frame = 0; frame < 4; frame++) {
+      await nextFrames(orcaPage, 1)
+      expect(await geometry()).toEqual(before)
+    }
+
+    await orcaPage.evaluate(
+      ({ id }) => {
+        window.__store!.getState().setTabCustomTitle(id, 'Chat')
+      },
+      { id: tabIds.long }
+    )
+    await expect(long).toContainText('Chat')
+    await expect.poll(() => width(long)).toBeLessThanOrEqual(100)
+
+    await orcaPage.evaluate(
+      ({ id }) => {
+        window
+          .__store!.getState()
+          .setTabCustomTitle(id, 'A very long conversation title '.repeat(20))
+      },
+      { id: tabIds.long }
+    )
+    await expect(long).toContainText('A very long conversation title')
+    await expect.poll(() => width(long)).toBeGreaterThan(384)
+    const strip = orcaPage.locator(STRIP).first()
+    expect(await strip.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    const stripBox = await strip.boundingBox()
+    const buttonBox = await orcaPage
+      .getByRole('button', { name: 'New tab', exact: true })
+      .first()
+      .boundingBox()
+    expect(stripBox).not.toBeNull()
+    expect(buttonBox).not.toBeNull()
+    expect(buttonBox!.x - stripBox!.x - stripBox!.width).toBeGreaterThanOrEqual(0)
+    expect(buttonBox!.x - stripBox!.x - stripBox!.width).toBeLessThanOrEqual(12)
+  })
+
+  test('keeps tab and close-button positions stable through agent detection and activity changes', async ({
+    orcaPage
+  }) => {
+    const worktreeId = await waitForActiveWorktree(orcaPage)
+    const ids = await orcaPage.evaluate((worktreeId) => {
+      const store = window.__store!
+      const agent = store
+        .getState()
+        .createTab(worktreeId, undefined, undefined, { activate: false })
+      const next = store.getState().createTab(worktreeId, undefined, undefined, { activate: false })
+      store.getState().setTabCustomTitle(agent.id, 'Agent conversation')
+      store.getState().setTabCustomTitle(next.id, 'Neighbor')
+      return [agent.id, next.id]
+    }, worktreeId)
+    const agent = orcaPage.locator(slotSelector(ids[0]))
+    await expect(agent.locator('[data-shell-icon]')).toBeVisible()
+    await expect(orcaPage.locator(slotSelector(ids[1]))).toContainText('Neighbor')
+    const geometry = (): Promise<number[][]> =>
+      orcaPage.evaluate(
+        (ids) =>
+          ids.map((id) => {
+            const slot = document.querySelector(`[data-tab-strip-slot="${id}"]`)!
+            const tab = slot.getBoundingClientRect()
+            const close = slot.querySelector('[data-tab-close-button]')!.getBoundingClientRect()
+            return [tab.x, tab.width, close.x]
+          }),
+        ids
+      )
+    const before = await geometry()
+
+    for (const stage of ['working', 'unread', 'idle'] as const) {
+      await orcaPage.evaluate(
+        ({ tabId, worktreeId, stage }) => {
+          const store = window.__store!
+          const paneKey = `${tabId}:00000000-0000-4000-8000-000000000001`
+          store.setState((state) => {
+            const agentStatusByPaneKey = { ...state.agentStatusByPaneKey }
+            const unreadTerminalTabs = { ...state.unreadTerminalTabs }
+            delete agentStatusByPaneKey[paneKey]
+            delete unreadTerminalTabs[tabId]
+            if (stage === 'working') {
+              agentStatusByPaneKey[paneKey] = {
+                paneKey,
+                worktreeId,
+                agentType: 'codex',
+                state: 'working',
+                prompt: '',
+                updatedAt: Date.now(),
+                stateStartedAt: Date.now(),
+                stateHistory: []
+              }
+            } else if (stage === 'unread') {
+              unreadTerminalTabs[tabId] = true
+            }
+            return { agentStatusByPaneKey, unreadTerminalTabs }
+          })
+        },
+        { tabId: ids[0], worktreeId, stage }
+      )
+      await expect(agent.locator('[data-testid="tab-agent-activity-indicator"]')).toHaveCount(
+        stage === 'working' ? 1 : 0
+      )
+      await expect(agent.locator('[data-testid="tab-activity-bell"]')).toHaveCount(
+        stage === 'unread' ? 1 : 0
+      )
+      await expect(agent.locator('[data-agent-icon="codex"]')).toHaveCount(
+        stage === 'working' ? 1 : 0
+      )
+      await expect(agent).toContainText('Agent conversation')
+      await expect.poll(geometry).toEqual(before)
+    }
   })
 
   test('docks an offscreen active tab and reveals an arriving tab beside it without flicker', async ({

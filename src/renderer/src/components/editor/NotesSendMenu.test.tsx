@@ -406,7 +406,7 @@ describe('NotesSendMenu', () => {
     vi.useFakeTimers()
     vi.setSystemTime(600_000)
     try {
-      // Issued 10 minutes ago and never consumed: clear it, do not pop the menu.
+      // Expired, unconsumed requests must clear without opening.
       renderMenu({ openRequestNonce: 1, openRequestExpiresAt: 5_000, onOpenRequestHandled })
     } finally {
       vi.useRealTimers()
@@ -468,7 +468,6 @@ describe('NotesSendMenu notes in flight', () => {
       formatPrompt: (sent: readonly TestNote[]) => sent.map((entry) => entry.id).join('+')
     }
   ]
-  /** Calls a rendered callback prop, failing the test if it is missing. */
   const invoke = (props: Record<string, unknown>, name: string, ...args: unknown[]): unknown => {
     const callback = props[name]
     if (typeof callback !== 'function') {
@@ -508,7 +507,6 @@ describe('NotesSendMenu notes in flight', () => {
     second.onPromptDelivered()
     await Promise.resolve()
 
-    // Each send clears only its own note; a repeated clear of A is a no-op for its owner.
     expect(onDelivered).not.toHaveBeenCalledWith([noteA, noteB])
     expect(onDelivered).toHaveBeenCalledWith([noteA])
     expect(onDelivered).toHaveBeenCalledWith([noteB])
@@ -562,7 +560,7 @@ describe('NotesSendMenu notes in flight', () => {
     expect(findByType(tree, 'button').props.title).toBe('Sending…')
   })
 
-  // A failed new chat's Retry delivers them after the send's own callback is gone.
+  // Retry can report delivery after the original send callback is gone.
   it('clears notes whose send reports delivery later', async () => {
     const onDelivered = vi.fn()
     const delivered = Promise.resolve({ delivered: true })
