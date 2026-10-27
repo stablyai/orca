@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import {
-  getLinkedWorkItemPromptTemplate,
+  getDesktopLinkedWorkItemPromptTemplate,
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import type { ComposerModel } from './composer-model'
@@ -143,7 +143,11 @@ export async function prepareQuickComposerStartup(
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     input.agent ? input.linkedWorkItem : null,
     input.note,
-    getLinkedWorkItemPromptTemplate(useAppStore.getState(), input.repoId)
+    getDesktopLinkedWorkItemPromptTemplate(
+      useAppStore.getState(),
+      input.repoId,
+      input.executionHostId ?? undefined
+    )
   )
   return {
     prompt,
