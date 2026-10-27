@@ -15,7 +15,7 @@ import {
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
 
-function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
+export function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
   return {
     repoPath: repo.path,
     repoId: repo.id,

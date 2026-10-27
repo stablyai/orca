@@ -1,3 +1,6 @@
+import { useShallow } from 'zustand/react/shallow'
+import { selectTaskProviderConnections } from '@/store/task-provider-connections'
+import type { TaskProviderConnections } from '../../../../shared/task-providers'
 import { useAppStore } from '@/store'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
@@ -232,4 +235,8 @@ export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
     jiraStatusContextKey,
     providerRuntimeContextKey
   })
+}
+
+export function useTaskProviderConnections(): TaskProviderConnections {
+  return useAppStore(useShallow(selectTaskProviderConnections))
 }

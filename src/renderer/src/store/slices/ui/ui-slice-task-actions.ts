@@ -9,6 +9,7 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items'
 import { isGitRepoKind } from '../../../../../shared/repo-kind'
 import { presetToQuery } from './ui-slice-hydration-sanitizers'
+import { selectTaskProviderConnections } from '../../task-provider-connections'
 
 const LINEAR_TASK_PREFETCH_LIMIT = 36
 
@@ -113,7 +114,8 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: state.preflightStatus?.glab?.installed === true,
-          linearConnected: state.linearStatus?.connected === true
+          linearConnected: state.linearStatus?.connected === true,
+          connected: selectTaskProviderConnections(state)
         },
         state.settings?.defaultTaskSource
       )

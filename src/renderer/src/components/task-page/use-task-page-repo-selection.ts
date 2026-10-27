@@ -9,11 +9,13 @@ import {
 import { areStringSetsEqual } from '@/components/task-page/task-page-string-set-equality'
 import { buildSelectedReposKey } from '@/components/task-page/task-page-work-item-pagination'
 import {
+  areAllTaskProvidersDisconnected,
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider,
   type TaskProvider
 } from '../../../../shared/task-providers'
+import { useTaskProviderConnections } from '@/components/feature-wall/use-integration-connection-status'
 import {
   getSourceOptions,
   getGitHubModeButtons,
@@ -127,23 +129,31 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     [settings?.visibleTaskProviders]
   )
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
+  const taskProviderConnections = useTaskProviderConnections()
   const visibleTaskProviders = useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearConnected === true
+          linearConnected: linearConnected === true,
+          connected: taskProviderConnections
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
       linearConnected,
+      taskProviderConnections,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
       preflightStatus?.glab?.installed
     ]
+  )
+  // Why: a connected saved default can be restored outside the preferred list; pending sources keep the page.
+  const noTaskProviderConnected = areAllTaskProvidersDisconnected(
+    [...preferredVisibleTaskProviders, ...visibleTaskProviders],
+    taskProviderConnections
   )
   const sourceOptions = getSourceOptions()
   const githubModeButtons = getGitHubModeButtons()
@@ -217,6 +227,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     linearOrderOptions: typeof linearOrderOptions
     linearDisplayPropertyOptions: typeof linearDisplayPropertyOptions
     visibleSourceOptions: typeof visibleSourceOptions
+    noTaskProviderConnected: boolean
     hideTaskSource: typeof hideTaskSource
   }
   nextModel.eligibleRepos = eligibleRepos
@@ -250,6 +261,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   nextModel.linearDisplayPropertyOptions = linearDisplayPropertyOptions
   nextModel.visibleSourceOptions = visibleSourceOptions
   nextModel.hideTaskSource = hideTaskSource
+  nextModel.noTaskProviderConnected = noTaskProviderConnected
   return nextModel
 }
 export type TaskPageRepoSelectionModel = ReturnType<typeof useTaskPageRepoSelection>

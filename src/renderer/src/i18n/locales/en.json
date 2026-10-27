@@ -14551,7 +14551,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "quickTasks": "Tasks"
           },
           "right": {
             "panel": {
@@ -18504,6 +18505,22 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "QuickTasksPanel": {
+          "createWorkspace": "Create workspace",
+          "openInBrowser": "Open in browser",
+          "loadFailed": "Could not load tasks.",
+          "empty": "No open issues.",
+          "noRepos": "Open a git workspace to see its tasks here.",
+          "refresh": "Refresh",
+          "noSource": "Sign in to GitHub, GitLab or Jira to see this project’s tasks.",
+          "emptyReviews": "No open merge requests.",
+          "emptyPullRequests": "No open pull requests.",
+          "emptyJira": "No matching issues.",
+          "issues": "Issues",
+          "mergeRequests": "MRs",
+          "pullRequests": "PRs",
+          "loading": "Loading…"
         }
       },
       "link": {
@@ -19150,6 +19167,13 @@
         "cancelled": "This plain SSH terminal was closed before it started.",
         "terminalUnavailable": "Orca couldn’t open a terminal here.",
         "openHint": "Keeps you working on the host while Orca can’t set up there."
+      },
+      "task-page": {
+        "NoConnectedSource": {
+          "title": "Connect a task source",
+          "description": "Sign in to GitHub or GitLab, or connect Jira or Linear, to browse and start work from your tasks here.",
+          "action": "Open integrations"
+        }
       },
       "ClaudeAgentViewIndicator": {
         "viewing": "Currently viewing",
