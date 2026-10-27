@@ -17,6 +17,7 @@ import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
 import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
 import {
   useRemoteFileBrowserProjectFolderKeys,
+  useRemoteFileBrowserHomeAnchor,
   useRemoteFileBrowserProjectFolders
 } from './use-remote-file-browser-project-folders'
 import { translate } from '@/i18n/i18n'
@@ -189,6 +190,7 @@ export function RemoteFileBrowser({
     resolvedPath,
     !loading && !error && filter === '' && preview === null
   )
+  useRemoteFileBrowserHomeAnchor(projectFolders.length > 0, fetchListing, homePathRef, setHomePath)
   // Folder rows sit above the entries; the default highlight stays on the entries so Enter keeps its target.
   const defaultEntryIndex = initialRemoteFileBrowserHighlight(
     displayEntries,
