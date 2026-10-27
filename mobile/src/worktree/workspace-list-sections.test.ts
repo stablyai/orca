@@ -12,6 +12,7 @@ import {
 } from './workspace-list-sections'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../src/shared/workspace-statuses'
 import { getMobileWorkspaceLineageGroupKey } from './mobile-workspace-lineage'
+import { getWorktreeDotStatus } from './workspace-list-ordering'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
@@ -250,6 +251,16 @@ describe('getWorktreeStatus', () => {
         })
       )
     ).toBe('active')
+  })
+})
+
+describe('getWorktreeDotStatus', () => {
+  it('shows the host’s agent verdict and keeps the phone rule for activity and unknown states', () => {
+    const row = worktree({ status: 'active', hasHostSidebarActivity: true })
+    expect(getWorktreeDotStatus({ ...row, sidebarStatus: 'failed' })).toBe('failed')
+    expect(getWorktreeDotStatus({ ...row, sidebarStatus: 'inactive' })).toBe('active')
+    expect(getWorktreeDotStatus({ ...row, sidebarStatus: 'from-a-newer-host' })).toBe('active')
+    expect(getWorktreeDotStatus(row)).toBe('active')
   })
 })
 
@@ -649,7 +660,8 @@ describe('buildSections', () => {
       [
         worktree({ worktreeId: 'none', linkedPR: null }),
         worktree({ worktreeId: 'open', linkedPR: { number: 1, state: 'open' } }),
-        worktree({ worktreeId: 'merged', linkedPR: { number: 2, state: 'merged' } })
+        worktree({ worktreeId: 'merged', linkedPR: { number: 2, state: 'merged' } }),
+        worktree({ worktreeId: 'uncached', linkedPR: { number: 3, state: 'unknown' } })
       ],
       'name',
       { ...NO_WORKSPACE_ROW_FILTERS },
@@ -662,6 +674,7 @@ describe('buildSections', () => {
       { key: 'pr:in-review', title: 'In review' },
       { key: 'pr:in-progress', title: 'In progress' }
     ])
+    expect(sections.at(-1)?.data.map((row) => row.worktreeId)).toEqual(['none', 'uncached'])
   })
 
   it('groups by desktop workspace status labels and order', () => {

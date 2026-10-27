@@ -34,14 +34,18 @@ export function toWslHostStatus(
     environmentId: record.environmentId,
     distro: record.distro,
     state: status.state,
-    detail: status.state === 'failed' || status.state === 'unverifiable' ? status.reason : null,
+    detail:
+      status.state === 'failed' || status.state === 'unverifiable'
+        ? status.reason
+        : (record.pendingStop?.reason ?? null),
     // Ready serves the incumbent; deferred serves nothing, so retain its Update/Force explanation.
     deferredUpdate:
       status.state === 'ready'
         ? (connection?.deferredUpdate ?? null)
         : status.state === 'failed'
           ? (status.deferredUpdate ?? null)
-          : null
+          : null,
+    ...(record.pendingStop ? { removalPending: true } : {})
   }
 }
 

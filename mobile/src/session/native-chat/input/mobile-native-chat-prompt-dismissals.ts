@@ -2,7 +2,9 @@ import { createPromptDismissalStore } from '../../../../../src/shared/prompt-dis
 
 export type MobileNativeChatPromptDismissal = {
   sessionKey: string | null
-  promptKey: string
+  content: string
+  /** The host wait's start for a status-backed prompt; null for a transcript-only one. */
+  startedAt: number | null
   state: 'answered' | 'collapsed'
 }
 

@@ -71,7 +71,7 @@ export function useMobileStructuredPromptResponses(args: {
   const sendAnswers = useCallback(
     (
       target: { itemId: string; expectedRevision: number },
-      body: Pick<AgentJournalQuestionItem, 'questions'>,
+      body: Pick<AgentJournalQuestionItem, 'questions' | 'freeTextInput'>,
       answers: AgentSessionQuestionAnswer[]
     ): Promise<StructuredAgentSessionMutationResult<AgentSessionPromptResult> | null> => {
       const send = (fields: Record<string, unknown>) =>
@@ -146,7 +146,7 @@ export function useMobileStructuredPromptResponses(args: {
       }
       const result = await sendAnswers(
         { itemId: target.itemId, expectedRevision: target.expectedRevision },
-        {},
+        prompt?.itemId === target.itemId ? prompt.body : {},
         [target.answer]
       )
       if (!result) {

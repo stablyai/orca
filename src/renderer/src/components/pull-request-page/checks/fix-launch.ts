@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import { buildFixBrokenChecksPrompt } from '@/components/pr-checks-fix-prompt'
+import { buildFixBrokenChecksPrompt } from '../../../../../shared/pr-checks-fix-prompt'
 import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control-ai-recipe-save'
 import { saveSourceControlAiActionRecipeForTarget } from '../../right-sidebar/source-control/ai/recipe-persistence'
 import type {

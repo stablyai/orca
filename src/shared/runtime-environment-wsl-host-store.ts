@@ -18,7 +18,8 @@ import { findCollidingEnvironmentName } from './runtime-environment-name-collisi
 import {
   readWslHostDeployments,
   writeWslHostDeployment,
-  type WslHostDeploymentRecord
+  type WslHostDeploymentRecord,
+  type WslHostPendingStop
 } from './wsl-host-deployment-store'
 
 type WslHostPorts = Pick<WslHostDeploymentRecord, 'localPort' | 'remotePort'>
@@ -162,6 +163,20 @@ export function refreshWslHostPairing(
     environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId),
     pairingChanged
   }
+}
+
+/** Marks (or with null, clears) a Remove that could not prove the host's server stopped. */
+export function setWslHostPendingStop(
+  userDataPath: string,
+  environmentId: string,
+  pendingStop: WslHostPendingStop | null
+): void {
+  const record = findWslHostDeployment(userDataPath, environmentId)
+  if (!record) {
+    throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not a WSL host.')
+  }
+  const { pendingStop: _previous, ...rest } = record
+  writeWslHostDeployment(userDataPath, environmentId, pendingStop ? { ...rest, pendingStop } : rest)
 }
 
 /** Environment first: a crash between the writes leaves an ownerless record, never a bare server. */

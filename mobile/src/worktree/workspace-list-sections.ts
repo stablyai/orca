@@ -1,3 +1,4 @@
+import { prGroupOfPsLinkedPR } from '../../../src/shared/sidebar-list/workspace-review-facts'
 import {
   buildWorktreeOccurrencePlan,
   type WorktreeOccurrenceSection
@@ -14,7 +15,6 @@ import {
   getMobileWorkspaceLineageChildren
 } from './mobile-workspace-lineage'
 import {
-  getPRGroupKeyForState,
   getPRLaneKey,
   PR_GROUP_LABELS,
   PR_GROUP_ORDER
@@ -263,7 +263,7 @@ export function buildMobileWorkspacePlan(
       } else if (groupMode === 'pr-status') {
         const byGroup = new Map<string, Worktree[]>()
         for (const w of canonicalGroupWorktrees) {
-          const key = getPRGroupKeyForState(w.linkedPR?.state)
+          const key = prGroupOfPsLinkedPR(w.linkedPR)
           const list = byGroup.get(key)
           if (list) {
             list.push(w)

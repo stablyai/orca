@@ -1,5 +1,6 @@
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
 import { isGitHubPRSuppressed } from '../../../src/shared/worktree/github-pr-suppression'
@@ -18,6 +19,8 @@ export type PrSidebarData = {
   checks: PRCheckDetail[]
   // Contain check failures so the remaining PR controls still render.
   checksError: string | null
+  // Source Control gates pushes on the review's own push target, as desktop does.
+  pushTarget: GitPushTarget | null
 }
 
 // Separate permanent auth/permission failures from transient errors to avoid endless revert/retry loops.
@@ -173,12 +176,24 @@ export async function loadPrSidebarData(
     if (!checksOutcome.ok) {
       return {
         kind: 'ready',
-        data: { pr, details: null, checks: [], checksError: checksOutcome.error }
+        data: {
+          pr,
+          details: null,
+          checks: [],
+          checksError: checksOutcome.error,
+          pushTarget: link.pushTarget
+        }
       }
     }
     return {
       kind: 'ready',
-      data: { pr, details: null, checks: checksOutcome.result, checksError: null }
+      data: {
+        pr,
+        details: null,
+        checks: checksOutcome.result,
+        checksError: null,
+        pushTarget: link.pushTarget
+      }
     }
   } catch (err) {
     // Rejected dependencies must settle as UI errors rather than unhandled rejections.

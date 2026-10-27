@@ -78,7 +78,8 @@ describe('stopWslHostServer', () => {
     expect(result).toEqual({
       stopped: false,
       reason:
-        'Terminals that refused to close: term_1 (gone::/home/me/old): selector_not_found 1 terminal session kept running. Orca’s server kept running: 1 terminal is still running on this host.'
+        'Terminals that refused to close: term_1 (gone::/home/me/old): selector_not_found 1 terminal session kept running. Orca’s server kept running: 1 terminal is still running on this host.',
+      verdict: 'live'
     })
   })
 
@@ -91,7 +92,26 @@ describe('stopWslHostServer', () => {
         reason: 'the orcad this computer was connected to is not the one the distro records'
       }))
     })
-    await expect(stopWslHostServer(all)).resolves.toMatchObject({ stopped: false })
+    await expect(stopWslHostServer(all)).resolves.toMatchObject({
+      stopped: false,
+      verdict: 'unverifiable'
+    })
+  })
+
+  it('calls a census that did not answer unverifiable, not live', async () => {
+    const { all } = steps({
+      census: vi.fn(async () => census(null)),
+      decommission: vi.fn(async (): Promise<OrcadDecommissionResult> => ({
+        outcome: 'refused',
+        verdict: 'unverifiable',
+        code: 'orcad_decommission_census_unavailable',
+        reason: 'The terminal daemon did not answer a session count.'
+      }))
+    })
+    await expect(stopWslHostServer(all)).resolves.toMatchObject({
+      stopped: false,
+      verdict: 'unverifiable'
+    })
   })
 
   it('reports a daemon that did not retire', async () => {
@@ -103,7 +123,8 @@ describe('stopWslHostServer', () => {
     })
     await expect(stopWslHostServer(all)).resolves.toEqual({
       stopped: false,
-      reason: 'Orca’s server stopped, but its terminal daemon is still running.'
+      reason: 'Orca’s server stopped, but its terminal daemon is still running.',
+      verdict: 'live'
     })
   })
 })

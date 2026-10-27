@@ -9,7 +9,7 @@ import {
 } from '@/components/github-checks-tab-state'
 import { getGitHubRuntimeRepoId, type GitHubRuntimeHost } from '@/lib/github-source-runtime-context'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
-import { buildFixBrokenChecksPrompt } from '@/components/pr-checks-fix-prompt'
+import { buildFixBrokenChecksPrompt } from '../../../../../shared/pr-checks-fix-prompt'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'

@@ -275,6 +275,28 @@ describe('useMobileStructuredPromptResponses', () => {
       })
     })
 
+    it('packs an allowed empty answer for a host that predates answers', async () => {
+      const base = singlePrompt()
+      const prompt: StructuredQuestionItem = {
+        ...base,
+        body: { ...base.body, freeTextInput: { allowEmpty: true } }
+      }
+      const { mutate, sent } = recordingMutate()
+      mount(prompt, mutate, false)
+
+      await act(async () => {
+        await hook().respondQuestion(
+          formatQuestionFreeTextAnswer(projectStructuredQuestion(prompt)!, '')
+        )
+      })
+
+      expect(sentFields(sent)).toEqual({
+        itemId: 'item-s',
+        expectedRevision: 3,
+        optionId: 'notes:'
+      })
+    })
+
     it('tries structured answers for an answer too long to pack while support is unknown', async () => {
       const prompt = singlePrompt()
       const { mutate, sent } = recordingMutate()

@@ -80,7 +80,7 @@ describe('a WSL bridge pane exit', () => {
     subprocesses[0]!._simulateExit(1)
 
     await waitFor(() => exits.length > 0)
-    expect(exits).toEqual([{ id, code: -1, incarnationId: expect.any(String) }])
+    expect(exits).toEqual([{ id, code: -1, incarnationId: expect.any(String), hostLost: true }])
     // Ending its history would refuse the cold restore the kept tab needs.
     expect(clear).toHaveBeenCalledWith(id, -1, expect.any(String), { closeHistory: false })
   })
@@ -93,6 +93,7 @@ describe('a WSL bridge pane exit', () => {
 
     await waitFor(() => exits.length > 0)
     expect(exits[0]).toMatchObject({ id, code: 1, cause: { kind: 'exited', exitCode: 1 } })
+    expect(exits[0]).not.toHaveProperty('hostLost')
   })
 
   it('stays a normal exit when the running list cannot answer', async () => {

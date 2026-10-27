@@ -5,7 +5,7 @@ import {
   hasUsableHostedReviewPushTarget,
   resolveHostedReviewActionUpstreamStatus,
   resolveHostedReviewStateForActions
-} from './source-control/review/hosted-review-push-target'
+} from './hosted-review-push-target'
 
 const unrelatedUpstream = {
   hasUpstream: true,

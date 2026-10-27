@@ -1,4 +1,5 @@
 import type { Worktree } from './workspace-list-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import type { WorkspaceSortBy } from '../../../src/shared/workspace-view/workspace-view-options'
 import {
   buildWorkspaceRowComparator,
@@ -113,4 +114,23 @@ export function getWorktreeStatus(
     return 'active'
   }
   return 'inactive'
+}
+
+// Only the host sees agent verdicts; older hosts omit sidebarStatus, and activity stays the phone's rule above.
+const HOST_VERDICT_DOT_STATUSES: ReadonlySet<string> = new Set<WorktreeStatus>([
+  'permission',
+  'failed',
+  'working',
+  'monitoring',
+  'unconfirmed',
+  'interrupted',
+  'done'
+])
+
+function isHostVerdictDotStatus(value: string | undefined): value is WorktreeStatus {
+  return value !== undefined && HOST_VERDICT_DOT_STATUSES.has(value)
+}
+
+export function getWorktreeDotStatus(w: Worktree): WorktreeStatus {
+  return isHostVerdictDotStatus(w.sidebarStatus) ? w.sidebarStatus : getWorktreeStatus(w)
 }

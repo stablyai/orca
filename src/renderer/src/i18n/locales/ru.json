@@ -4082,7 +4082,8 @@
           "turnedOff": "Компьютеры WSL отключены в Настройки → Экспериментальные",
           "turnedOffShort": "Отключено в Настройки → Экспериментальные",
           "serverFilesMissing": "Эта сборка Orca не может запускать компьютеры WSL: отсутствуют файлы сервера.",
-          "serverFilesMissingShort": "Эта сборка не может запускать компьютеры WSL"
+          "serverFilesMissingShort": "Эта сборка не может запускать компьютеры WSL",
+          "removalPending": "Удаление не завершено"
         },
         "LocalGitToolchainScanBanner": {
           "copyCommand": "Копировать команду",
@@ -4323,7 +4324,8 @@
           "added": "Добавлено: {{value0}}."
         },
         "wslHostRemoval": {
-          "partial": "Компьютер убран, но в дистрибутиве что-то ещё работает: {{value0}}"
+          "partial": "Компьютер убран, но в дистрибутиве что-то ещё работает: {{value0}}",
+          "pending": "Orca пока не удалила хост: {{value0}} Повторите удаление или подключитесь, чтобы оставить его."
         },
         "addRepoWslHostFolderPicker": {
           "otherDistro": "Эта папка находится в {{value0}}, а не в {{value1}}.",

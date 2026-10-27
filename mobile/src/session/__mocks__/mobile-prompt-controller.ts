@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { Pressable, Text } from 'react-native'
+import { Pressable } from 'react-native'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
 import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
@@ -180,15 +180,13 @@ export const baseTab = {
     paneKey: 'tab-1:leaf-1',
     stateHistory: [],
     stateStartedAt: 10,
-    providerSession: { id: 'session-1', key: 'session_id' },
-    lastAssistantMessage: 'Pick destination?\n1. East\n2. West'
+    providerSession: { id: 'session-1', key: 'session_id' }
   }
 } satisfies MobileNativeChatTab
 export const permissionTab = {
   ...baseTab,
   agentStatus: {
     ...baseTab.agentStatus,
-    lastAssistantMessage: '',
     interactivePrompt: JSON.stringify({ approval: { tool: 'Bash', summary: 'echo yes' } })
   }
 } satisfies MobileNativeChatTab
@@ -256,11 +254,6 @@ export function permissionAction(index = 1) {
   return getTree()
     .root.findByProps({ testID: 'native-chat-approval-actions' })
     .findAllByType(Pressable)[index]
-}
-export function questionOption() {
-  return getTree()
-    .root.findAllByType(Pressable)
-    .find((node) => node.findAllByType(Text).some((text) => text.children.includes('East')))
 }
 export async function unmount() {
   await act(async () => tree?.unmount())

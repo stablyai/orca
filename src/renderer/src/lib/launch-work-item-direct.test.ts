@@ -94,7 +94,6 @@ vi.mock('@/lib/new-workspace', () => ({
               : `issue-${args.workItem.number}`
         }
       : null,
-  getSetupConfig: vi.fn(() => null),
   getWorkspaceSeedName: ({ explicitName }: { explicitName?: string }) => explicitName ?? '',
   isGitLabIssueUrl: vi.fn(() => false)
 }))

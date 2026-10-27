@@ -1,11 +1,9 @@
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
-import type { AskPrompt } from '../../../src/shared/native-chat-ask-types'
-import type { parseAskFromStatus } from '../../../src/shared/native-chat-ask'
-import type { detectAgentPermission } from './native-chat/input/mobile-native-chat-permission'
-import type { parseAgentQuestion } from './native-chat/input/mobile-native-chat-question'
+import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
+import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
@@ -52,12 +50,13 @@ export type MobileNativeChatController = {
   // Keep stream liveness independent of whether chat is visible.
   nativeChatStreamLive: boolean
   nativeChatStreamScopeKey: string
-  nativeChatPermission: ReturnType<typeof detectAgentPermission>
+  nativeChatPermission: MobileChatPermission | null
   // A new prompt occurrence resets local card submission state only.
   nativeChatPromptKey: string | null
-  nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
+  /** Only a structured chat's journal question; a terminal chat's questions are asks. */
+  nativeChatQuestion: MobileChatQuestion | null
   // Keep dismissal above chat-view unmounts so toggling views cannot resurrect an answered ask.
-  nativeChatAsk: ReturnType<typeof parseAskFromStatus>
+  nativeChatAsk: AskPrompt | null
   nativeChatAskKey: string | null
   dismissNativeChatAsk: () => void
   handleNativeChatAnswerAsk: (
@@ -79,7 +78,7 @@ export type MobileNativeChatController = {
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
-  handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>
+  handleNativeChatQuestionAnswer?: (text: string) => Promise<boolean>
   handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>
   // Preserve unknown outcomes to heal orphaned image pastes; share their deadline with text and retain the original pre-paste sentAt.
   handleNativeChatSendWithOutcome: (

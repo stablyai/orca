@@ -6,7 +6,7 @@ import { getWorktreeLabel } from '../session/worktree-label'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
-import { buildMobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
+import type { MobileSourceControlPrimaryActionArgs } from './mobile-source-control-primary-action'
 import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
 import { useMobileSourceControlCreatePrAction } from './use-mobile-source-control-create-pr-action'
 import { useMobileSourceControlKeyboardLift } from './use-mobile-source-control-keyboard-lift'
@@ -202,36 +202,26 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     recordCommitFailure,
     onOpenHistory
   })
-  const createPrAction = useMobileSourceControlCreatePrAction({
-    client,
-    connState,
-    hostId,
-    worktreeId,
-    status,
-    hasUncommittedChanges: entries.length > 0,
-    busyAction,
-    createPr: runners.createPr
-  })
-  const primaryAction = useMemo(
-    () =>
-      buildMobileSourceControlPrimaryAction({
-        status,
-        hasUnresolvedConflicts,
-        stageablePaths,
-        stagedCount,
-        unstagedCount,
-        commitMessage,
-        busyAction,
-        openingPath,
-        openingBranchPath,
-        branchCompareResult,
-        handlers: {
-          commit: runners.commit,
-          stageAll: runners.stageAll,
-          runActionSheetGitSequence: runners.runActionSheetGitSequence,
-          runActionSheetGitSync: runners.runActionSheetGitSync
-        }
-      }),
+  // The panel adds the branch's review before building the action, so only the inputs live here.
+  const primaryActionArgs = useMemo(
+    (): MobileSourceControlPrimaryActionArgs => ({
+      status,
+      hasUnresolvedConflicts,
+      stageablePaths,
+      stagedCount,
+      unstagedCount,
+      commitMessage,
+      busyAction,
+      openingPath,
+      openingBranchPath,
+      branchCompareResult,
+      handlers: {
+        commit: runners.commit,
+        stageAll: runners.stageAll,
+        runActionSheetGitSequence: runners.runActionSheetGitSequence,
+        runActionSheetGitSync: runners.runActionSheetGitSync
+      }
+    }),
     [
       branchCompareResult,
       busyAction,
@@ -249,6 +239,14 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       unstagedCount
     ]
   )
+  const createPrAction = useMobileSourceControlCreatePrAction({
+    client,
+    connState,
+    hostId,
+    worktreeId,
+    commitArea: primaryActionArgs,
+    createPr: runners.createPr
+  })
 
   return {
     client,
@@ -298,7 +296,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     upstream,
     upstreamKnown,
     syncLabel,
-    primaryAction,
+    primaryActionArgs,
     createPrAction,
     loadStatus,
     openFile,

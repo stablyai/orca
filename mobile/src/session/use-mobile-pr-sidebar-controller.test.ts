@@ -103,7 +103,7 @@ describe('loadPrSidebarData', () => {
     })
     expect(out).toEqual({
       kind: 'ready',
-      data: { pr: PR, details: null, checks: CHECKS, checksError: null }
+      data: { pr: PR, details: null, checks: CHECKS, checksError: null, pushTarget: null }
     })
     expect(d.fetchWorkItemDetails).not.toHaveBeenCalled()
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', {
@@ -150,7 +150,7 @@ describe('loadPrSidebarData', () => {
     })
     expect(out).toEqual({
       kind: 'ready',
-      data: { pr: merged, details: null, checks: CHECKS, checksError: null }
+      data: { pr: merged, details: null, checks: CHECKS, checksError: null, pushTarget: null }
     })
   })
 
@@ -272,7 +272,7 @@ describe('loadPrSidebarData', () => {
     )
     expect(out).toEqual({
       kind: 'ready',
-      data: { pr: PR, details: null, checks: [], checksError: '403 forbidden' }
+      data: { pr: PR, details: null, checks: [], checksError: '403 forbidden', pushTarget: null }
     })
   })
 
@@ -291,7 +291,8 @@ describe('loadPrSidebarData', () => {
         pr: PR,
         details: null,
         checks: [],
-        checksError: 'The host sent a reply this app could not read (github.prChecks)'
+        checksError: 'The host sent a reply this app could not read (github.prChecks)',
+        pushTarget: null
       }
     })
     expect(sendRequest).toHaveBeenCalledOnce()

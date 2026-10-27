@@ -206,6 +206,15 @@ describe('runtimeEnvironments:remove by host kind', () => {
     expect(mocks.retire).not.toHaveBeenCalled()
   })
 
+  it('carries what the WSL service kept, so the UI can say the host stays', async () => {
+    useHost('wsl')
+    const serverStop = { stopped: false, reason: 'busy', verdict: 'live', kept: true }
+    mocks.wsl.service!.remove.mockResolvedValueOnce(serverStop)
+    await expect(
+      handler('runtimeEnvironments:remove')(null, { selector: 'wsl:ubuntu' })
+    ).resolves.toEqual({ removed: redacted('wsl'), serverStop })
+  })
+
   it('removes a WSL host generically when no service exists', () => {
     useHost('wsl')
     mocks.wsl.service = null

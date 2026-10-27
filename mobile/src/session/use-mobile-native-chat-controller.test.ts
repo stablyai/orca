@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import type { MobileNativeChatPrompts } from './native-chat/input/use-mobile-native-chat-prompts'
 
 const acceptSend = vi.fn()
 const captureSendOrigin = vi.fn()
@@ -66,11 +67,10 @@ const structuredSessionState = {
   loadingEarlier: false,
   loadEarlier: vi.fn()
 }
-const promptsState = {
-  permission: null as unknown,
-  question: null as unknown,
-  detectedAsk: null as unknown,
-  ask: null as unknown
+const promptsState: Pick<MobileNativeChatPrompts, 'permission' | 'ask' | 'waitStartedAt'> = {
+  permission: null,
+  ask: null,
+  waitStartedAt: null
 }
 
 // Isolate send outcomes and draft accounting by stubbing unrelated controller hooks.
@@ -387,7 +387,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(sendWithOutcome).not.toHaveBeenCalled()
 
     await act(async () => {
-      expect(await controller!.handleNativeChatQuestionAnswer('choice-a')).toBe(true)
+      expect(await controller!.handleNativeChatQuestionAnswer?.('choice-a')).toBe(true)
     })
     expect(structuredRespondQuestion).toHaveBeenCalledWith('choice-a')
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
@@ -477,19 +477,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(onSendError).toHaveBeenCalledWith('Message not sent')
     expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, 'look')
   })
-
-  it('does not restore a rejected question answer into the composer', async () => {
-    sendWithOutcome.mockResolvedValue('rejected')
-    let accepted = true
-    await act(async () => {
-      accepted = await controller!.handleNativeChatQuestionAnswer('1')
-    })
-
-    expect(accepted).toBe(false)
-    expect(clearDraftForSend).not.toHaveBeenCalled()
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent')
-  })
 })
 
 describe('useMobileNativeChatController ask dismissal across a transcript reload', () => {
@@ -542,7 +529,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     mobileNativeChatPromptDismissals.clearForTests()
     viewMode.isTabChatView = () => true
     setTranscript('ready')
-    Object.assign(promptsState, { ask: PROMPT, detectedAsk: PROMPT })
+    promptsState.ask = PROMPT
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -552,7 +539,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     act(() => renderer?.unmount())
     renderer = null
     controller = null
-    Object.assign(promptsState, { ask: null, detectedAsk: null })
+    promptsState.ask = null
     setTranscript('ready', 0)
     viewMode.isTabChatView = () => true
     activeTab.id = 'tab-1'
@@ -578,29 +565,13 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     activeTab.sessionId = 'session-2'
     setTranscript('loading')
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).not.toBeNull()
-  })
-
-  it('retires the dismissal only on the ungated prompt, not the gated one', () => {
-    // Paused gating hides sticky prompts without proving they cleared; detection must preserve the dismissal.
-    act(() => controller?.dismissNativeChatAsk())
-    expect(controller?.nativeChatAsk).toBeNull()
-
-    promptsState.ask = null
-    step()
-
-    promptsState.ask = PROMPT
-    step()
-
-    expect(controller?.nativeChatAsk).toBeNull()
   })
 
   it('keeps the dismissal while the re-subscribed transcript is still empty', () => {
@@ -611,7 +582,6 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
 
     viewMode.isTabChatView = () => false
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     viewMode.isTabChatView = () => true
@@ -620,7 +590,6 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
 
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()
@@ -645,11 +614,9 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     expect(controller?.nativeChatAsk).toBeNull()
 
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).not.toBeNull()
@@ -662,12 +629,10 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
 
     setTranscript('idle')
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()
@@ -680,12 +645,10 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
 
     setTranscript('error', 0)
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()
@@ -698,11 +661,9 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
 
     setTranscript('error')
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).not.toBeNull()
@@ -715,12 +676,10 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
 
     setTranscript('waiting-session')
     promptsState.ask = null
-    promptsState.detectedAsk = null
     step()
 
     setTranscript('ready')
     promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()

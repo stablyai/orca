@@ -9,6 +9,7 @@ import {
 } from '../../shared/runtime-environment-store'
 import { getEnvironmentStorePath } from '../../shared/runtime-environment-store-file'
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
+import { getWslHostDeploymentStorePath } from '../../shared/wsl-host-deployment-store'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { WslHostStatus } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
@@ -317,22 +318,6 @@ describe('WslHostService', () => {
     expect(listEnvironments(userDataPath)).toEqual([])
     expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')).toBeNull()
     expect(removed).toHaveBeenCalledWith('wsl:ubuntu')
-  })
-
-  it('reports what removing left running, and removes the host anyway', async () => {
-    const connector = makeConnector([UBUNTU])
-    connector.stopServer.mockResolvedValueOnce({
-      stopped: false,
-      reason: '1 terminal kept running'
-    })
-    const service = makeService(connector)
-    await service.add({ distro: 'Ubuntu' })
-
-    await expect(service.remove('wsl:ubuntu')).resolves.toEqual({
-      stopped: false,
-      reason: '1 terminal kept running'
-    })
-    expect(listEnvironments(userDataPath)).toEqual([])
   })
 
   it('keeps a host whose removal failed usable and removable again', async () => {
@@ -739,15 +724,35 @@ describe('WslHostService', () => {
     expect(wakeRememberedWslHosts(userDataPath, vi.fn())).toEqual([])
   })
 
-  it('adopts holders at startup only when a WSL host exists', async () => {
+  it('keeps the startup holders of its hosts and releases orphans', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
-    await service.start()
-    expect(connector.adoptHolders).not.toHaveBeenCalled()
-
     await service.add({ distro: 'Ubuntu' })
     await service.start()
-    expect(connector.adoptHolders).toHaveBeenCalledTimes(1)
+    const [isWanted] = connector.adoptHolders.mock.calls[0]
+    expect(isWanted('ubuntu')).toBe(true)
+    // A failed add or remove left a holder for a distro that is no longer a host.
+    expect(isWanted('Debian')).toBe(false)
+  })
+
+  it('keeps every startup holder when the host records cannot all be read', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    writeFileSync(getWslHostDeploymentStorePath(userDataPath), '{not json')
+    await service.start()
+    const [isWanted] = connector.adoptHolders.mock.calls[0]
+    expect(isWanted('Debian')).toBe(true)
+  })
+
+  it('releases every startup holder while WSL hosts are off', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    enabled = false
+    await service.start()
+    const [isWanted] = connector.adoptHolders.mock.calls[0]
+    expect(isWanted('Ubuntu')).toBe(false)
   })
 
   it.each([

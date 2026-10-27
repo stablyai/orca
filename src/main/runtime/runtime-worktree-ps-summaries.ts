@@ -5,6 +5,9 @@ import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
 import { getWorkspaceRowKindFacts } from '../../shared/worktree/workspace-kinds'
+import { readWorkspaceReviewPR } from '../../shared/sidebar-list/workspace-review-facts'
+import { withOwnerRepos } from '../../shared/sidebar-list/workspace-rows'
+import { UNCACHED_LINKED_PR_STATE } from '../../shared/runtime-worktree-contracts'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
@@ -13,27 +16,27 @@ export function buildRuntimeWorktreePsSummaries(args: {
   resolvedWorktrees: readonly ResolvedWorktree[]
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
 }): Map<string, RuntimeWorktreePsSummary> {
-  const repoById = new Map((args.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
   const ghCache = args.store?.getGitHubCache?.()
-  for (const worktree of args.resolvedWorktrees) {
+  for (const { worktree, repo } of withOwnerRepos(
+    args.resolvedWorktrees,
+    args.store?.getRepos() ?? []
+  )) {
     const meta =
       args.store?.getWorktreeMeta?.(worktree.id) ?? args.store?.getAllWorktreeMeta()[worktree.id]
-    const repo = repoById.get(worktree.repoId)
-    let linkedPR: RuntimeWorktreePsSummary['linkedPR'] = null
-    const branch = worktree.branch.replace(/^refs\/heads\//, '')
-    if (branch && ghCache) {
-      const cached =
-        (repo?.id ? ghCache.pr[`${repo.id}::${branch}`] : undefined) ??
-        (repo?.path ? ghCache.pr[`${repo.path}::${branch}`] : undefined)
-      if (cached?.data) {
-        const { number, state, title, url, checksStatus } = cached.data
-        linkedPR = { number, state, title, url, checksStatus }
-      }
-    }
-    if (!linkedPR && meta?.linkedPR != null) {
-      linkedPR = { number: meta.linkedPR, state: 'unknown' }
-    }
+    // Why: read the cache entry the desktop's PR lanes read; an uncached link keeps its badge as state 'unknown'.
+    const cachedPR = ghCache ? readWorkspaceReviewPR(worktree, repo, ghCache.pr) : null
+    const linkedPR: RuntimeWorktreePsSummary['linkedPR'] = cachedPR
+      ? {
+          number: cachedPR.number,
+          state: cachedPR.state,
+          title: cachedPR.title,
+          url: cachedPR.url,
+          checksStatus: cachedPR.checksStatus
+        }
+      : meta?.linkedPR != null
+        ? { number: meta.linkedPR, state: UNCACHED_LINKED_PR_STATE }
+        : null
     const lineage = worktree.lineage
     const priorWorktreeIds = meta?.priorWorktreeIds ?? worktree.priorWorktreeIds
     summaries.set(worktree.id, {

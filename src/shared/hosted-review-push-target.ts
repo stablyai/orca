@@ -1,9 +1,9 @@
-import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
-import type { GitPushTarget } from '../../../../../../shared/worktree/types'
-import type { HostedReviewState } from '../../../../../../shared/hosted-review'
-import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
-import { getPublishTargetDisplayName } from '../../../../../../shared/git-publish-target-status'
-import { gitRefTargetsBranchName } from '../../../../../../shared/git-remote-branch-name'
+import type { GitUpstreamStatus } from './git-status-types'
+import type { GitPushTarget } from './worktree/types'
+import type { HostedReviewState } from './hosted-review'
+import { isPositiveHostedReviewNumber } from './hosted-review'
+import { getPublishTargetDisplayName } from './git-publish-target-status'
+import { gitRefTargetsBranchName } from './git-remote-branch-name'
 
 export function hasUsableHostedReviewPushTarget(args: {
   pushTarget?: GitPushTarget
@@ -92,4 +92,44 @@ export function resolveHostedReviewStateForActions(args: {
   }
   // SSH links without live state still block Publish Branch until their target is usable.
   return args.hasResolvableHostedReviewPushTargetLink ? 'open' : null
+}
+
+export type HostedReviewPushTargetForActions = {
+  canUseHostedReviewPushTarget: boolean
+  hostedReviewStateForActions: HostedReviewState | null
+  upstreamStatusForActions: GitUpstreamStatus | undefined
+}
+
+/** The commit area's view of a linked review: whether its own target can be pushed, and which upstream to act on. */
+export function resolveHostedReviewPushTargetForActions(args: {
+  hasHostedReviewLink: boolean
+  hasResolvableHostedReviewPushTargetLink: boolean
+  hostedReviewState?: HostedReviewState | null
+  isHostedReviewStateLoading: boolean
+  pushTarget?: GitPushTarget
+  upstreamStatus?: GitUpstreamStatus
+  branchName?: string
+}): HostedReviewPushTargetForActions {
+  const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+    pushTarget: args.pushTarget,
+    upstreamStatus: args.upstreamStatus,
+    hasResolvableHostedReviewPushTargetLink: args.hasResolvableHostedReviewPushTargetLink,
+    branchName: args.branchName
+  })
+  const hostedReviewStateForActions = resolveHostedReviewStateForActions({
+    hostedReviewState: args.hostedReviewState ?? null,
+    hasResolvableHostedReviewPushTargetLink: args.hasResolvableHostedReviewPushTargetLink
+  })
+  return {
+    canUseHostedReviewPushTarget,
+    hostedReviewStateForActions,
+    upstreamStatusForActions: resolveHostedReviewActionUpstreamStatus({
+      hasHostedReviewLink: args.hasHostedReviewLink,
+      hasResolvableHostedReviewPushTargetLink: args.hasResolvableHostedReviewPushTargetLink,
+      hostedReviewState: hostedReviewStateForActions,
+      isHostedReviewStateLoading: args.isHostedReviewStateLoading,
+      canUseHostedReviewPushTarget,
+      upstreamStatus: args.upstreamStatus
+    })
+  }
 }

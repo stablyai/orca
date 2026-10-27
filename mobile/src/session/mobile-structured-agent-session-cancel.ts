@@ -1,27 +1,19 @@
-import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session-current-requests'
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
-import {
-  isActionableStructuredAgentSessionPrompt,
-  runningStructuredAgentSessionTurnId
-} from '../../../src/shared/structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,
   type StructuredAgentSessionMutationCallResult
 } from './mobile-structured-agent-session-rpc'
+import { actionableStructuredPrompts } from './mobile-structured-actionable-prompt'
 
 type PromptIdentity = { itemId: string; expectedRevision: number }
 
 export function pendingStructuredPromptIdentity(
   state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'actionablePromptIds'>
 ): PromptIdentity | undefined {
-  const prompt = selectAgentSessionCurrentRequests(state).find((item) =>
-    item.body.kind === 'approval' || item.body.kind === 'question'
-      ? item.body.resolution.state === 'pending' &&
-        isActionableStructuredAgentSessionPrompt(item.itemId, state.actionablePromptIds)
-      : false
-  )
+  const [prompt] = actionableStructuredPrompts(state)
   return prompt ? { itemId: prompt.itemId, expectedRevision: prompt.revision } : undefined
 }
 

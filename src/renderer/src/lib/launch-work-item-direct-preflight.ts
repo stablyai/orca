@@ -10,7 +10,7 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchRequest
 } from './agent-session-launch-plan'
-import { getSetupConfig } from '@/lib/new-workspace'
+import { getDefaultSetupDecision, getSetupConfig } from '../../../shared/orca-hook-setup-config'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -61,14 +61,11 @@ export async function resolveDirectSetupDecision(
     // No configured setup means no setup decision, matching callers that omit it.
     return { kind: 'decided', decision: 'inherit' }
   }
-  const policy = repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  if (policy === 'ask') {
-    return { kind: 'needs-modal' }
-  }
-  return {
-    kind: 'decided',
-    decision: policy === 'run-by-default' ? 'run' : 'skip'
-  }
+  const decision = getDefaultSetupDecision(
+    true,
+    repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
+  )
+  return decision ? { kind: 'decided', decision } : { kind: 'needs-modal' }
 }
 
 export type DirectLaunchOwnerRow = {

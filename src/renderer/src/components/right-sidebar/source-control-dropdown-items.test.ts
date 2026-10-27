@@ -6,7 +6,7 @@ import type { DropdownActionInputs, DropdownItem } from './source-control-dropdo
 import {
   hasUsableHostedReviewPushTarget,
   resolveHostedReviewActionUpstreamStatus
-} from './source-control/review/hosted-review-push-target'
+} from '../../../../shared/hosted-review-push-target'
 
 function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionInputs {
   return {

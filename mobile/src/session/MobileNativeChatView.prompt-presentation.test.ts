@@ -100,22 +100,18 @@ type Overrides = Partial<ComponentProps<typeof MobileNativeChatView>> & {
 function Harness(overrides: Overrides) {
   const shown = useMobileNativeChatPromptPresentation({
     permission: overrides.permission ?? null,
-    question: overrides.question ?? null,
     waitStartedAt: overrides.waitStartedAt ?? 10,
     scopeKey: 'tab-1',
     sessionKey: overrides.sessionKey ?? 'session-1',
     observing: true,
-    respondPermission: overrides.onRespondPermission ?? (async () => false),
-    answerQuestion: overrides.onAnswerQuestion ?? (async () => false)
+    respondPermission: overrides.onRespondPermission ?? (async () => false)
   })
   return createElement(MobileNativeChatView, {
     ...props,
     ...overrides,
     permission: shown.permission,
-    question: shown.question,
     promptKey: shown.occurrenceKey,
-    onRespondPermission: shown.respondPermission,
-    onAnswerQuestion: shown.answerQuestion
+    onRespondPermission: shown.respondPermission
   })
 }
 const render = async (overrides: Overrides) => {

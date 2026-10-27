@@ -23,13 +23,13 @@ describe('useMobileNativeChatAskDismiss', () => {
 
   function Harness({
     prompt,
-    detectedPrompt = prompt,
+    startedAt = null,
     scopeKey = 'tab-1',
     sessionKey = 'session-1',
     observing = true
   }: {
     prompt: AskPrompt | null
-    detectedPrompt?: AskPrompt | null
+    startedAt?: number | null
     scopeKey?: string | null
     sessionKey?: string | null
     observing?: boolean
@@ -37,7 +37,7 @@ describe('useMobileNativeChatAskDismiss', () => {
     renders += 1
     state = useMobileNativeChatAskDismiss({
       ask: prompt,
-      detectedAsk: detectedPrompt,
+      startedAt,
       scopeKey,
       sessionKey,
       observing
@@ -80,13 +80,30 @@ describe('useMobileNativeChatAskDismiss', () => {
     expect(state?.showAsk).toBe(true)
   })
 
-  it('keeps a dismissal while status gating hides a still-detected prompt', async () => {
-    await mount({ prompt: first })
+  it('shows an identical status-backed prompt again in a new wait', async () => {
+    await mount({ prompt: first, startedAt: 10 })
+    act(() => state?.dismissAsk())
+
+    await update({ prompt: first, startedAt: 20 })
+
+    expect(state?.showAsk).toBe(true)
+  })
+
+  it('accepts an answer that settles after the status handed the prompt to the transcript', async () => {
+    await mount({ prompt: first, startedAt: 10 })
     const acceptedDismiss = state!.dismissAsk
 
-    await update({ prompt: null, detectedPrompt: first })
+    await update({ prompt: first, startedAt: null })
     act(() => acceptedDismiss())
-    await update({ prompt: first })
+
+    expect(state?.showAsk).toBe(false)
+  })
+
+  it('keeps an answered status-backed prompt hidden once only the transcript still holds it', async () => {
+    await mount({ prompt: first, startedAt: 10 })
+    act(() => state?.dismissAsk())
+
+    await update({ prompt: first, startedAt: null })
 
     expect(state?.showAsk).toBe(false)
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
+import { nativeChatCardDismissKey } from './native-chat-prompt-dismiss-key'
 
 describe('nativeChatCardDismissKey', () => {
   it('returns null for no card', () => {

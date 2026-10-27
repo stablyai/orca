@@ -49,6 +49,62 @@
         }
       }
     },
+    "0d6e25838291": {
+      "data": {
+        "checks": [],
+        "checksError": "The host sent a reply this app could not read (github.prChecks)",
+        "details": {
+          "$rpc": "null"
+        },
+        "pr": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "stack": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        },
+        "pushTarget": {
+          "$rpc": "null"
+        }
+      },
+      "kind": "ready"
+    },
     "0e35af4e1fa3": {
       "name": "github.prForBranch#1",
       "ordinal": 7,
@@ -115,59 +171,6 @@
           }
         }
       }
-    },
-    "1ee023d0211e": {
-      "data": {
-        "checks": [],
-        "checksError": "The host sent a reply this app could not read (github.prChecks)",
-        "details": {
-          "$rpc": "null"
-        },
-        "pr": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "checksStatus": "pending",
-          "confirmedContainedHeadOid": {
-            "$rpc": "undefined"
-          },
-          "headDivergedFromMergedPRAtOid": {
-            "$rpc": "undefined"
-          },
-          "headRefName": {
-            "$rpc": "undefined"
-          },
-          "headSha": "head-sha-1",
-          "mergeMethodSettings": {
-            "$rpc": "undefined"
-          },
-          "mergeQueueRequired": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "prRepo": {
-            "$rpc": "undefined"
-          },
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "stack": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "title": "Recorded",
-          "updatedAt": "",
-          "url": "https://x/12"
-        }
-      },
-      "kind": "ready"
     },
     "4777f063108d": {
       "name": "github.prForBranch#1",
@@ -319,7 +322,13 @@
       "status": "pending",
       "startedAt": 0
     },
-    "97047904c149": {
+    "dcec20ae0055": {
+      "name": "github.prChecks#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
+    },
+    "e169ebaf642b": "unloaded",
+    "ecc073fe6e31": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
@@ -372,17 +381,14 @@
             "title": "Recorded",
             "updatedAt": "",
             "url": "https://x/12"
+          },
+          "pushTarget": {
+            "$rpc": "null"
           }
         },
         "kind": "ready"
       }
-    },
-    "dcec20ae0055": {
-      "name": "github.prChecks#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
-    },
-    "e169ebaf642b": "unloaded"
+    }
   },
   "recording": {
     "scenario": "pr-sidebar-checks-refused",
@@ -417,9 +423,9 @@
           "sender": ["07639c4f1e7f", "7cbf1de78fc1", "1c1552d03dfc", "54d7c17a92f3"],
           "payloads": ["4b26820600b0", "5dbd52d6a1c7", "0e35af4e1fa3", "dcec20ae0055"],
           "settlements": {
-            "load": "97047904c149"
+            "load": "ecc073fe6e31"
           },
-          "state": "1ee023d0211e",
+          "state": "0d6e25838291",
           "effects": ["15c9074079de"]
         }
       }

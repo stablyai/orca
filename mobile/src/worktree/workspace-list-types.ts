@@ -80,6 +80,8 @@ export type Worktree = {
   linkedItems?: RuntimeWorktreePsSummary['linkedItems']
   comment?: string
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
+  /** Unchecked wire data: a newer host may send a state this build does not know. */
+  sidebarStatus?: string
   workingMode?: AgentWorkingMode
   agents?: RuntimeWorktreeAgentRow[]
 }

@@ -3187,6 +3187,15 @@
   },
   "components": {
     "native-chat": {
+      "approval": {
+        "allow": "Allow",
+        "deny": "Deny",
+        "plan": {
+          "refineHint": "Refine plan closes the review so you can send what to change.",
+          "reviewTitle": "Review proposed plan"
+        },
+        "title": "Allow {{value0}}?"
+      },
       "ask": {
         "asked": "Asked:",
         "awaiting": "Awaiting user input:",

@@ -1,6 +1,5 @@
 import { act } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { AskPrompt } from '../../../src/shared/native-chat-ask'
@@ -15,7 +14,6 @@ import {
   unmount,
   sendButton,
   permissionAction,
-  questionOption,
   getController,
   askCancel,
   askAnswer,
@@ -46,57 +44,7 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-function option() {
-  const found = questionOption()
-  if (!found) {
-    throw new Error('question choice missing')
-  }
-  return found
-}
-
 describe('prompt cards through the production controller, send contract and view', () => {
-  it.each(['lost', 'unverifiable'])(
-    'keeps a question actionable after %s acknowledgment',
-    async (mode) => {
-      vi.mocked(client.sendRequest).mockImplementation(async (method, params) => {
-        if (
-          method === 'terminal.send' &&
-          typeof params === 'object' &&
-          params !== null &&
-          'enter' in params &&
-          params.enter === true
-        ) {
-          if (mode === 'lost') {
-            throw markRpcDeliveryUnknown(new Error('lost acknowledgment'))
-          }
-          return response(false, 'unverifiable')
-        }
-        return response()
-      })
-      await render()
-      await act(async () => {
-        await option().props.onPress()
-      })
-      expect(getController().nativeChatQuestion).not.toBe(null)
-      expect(sendButton().props.disabled).toBe(true)
-      expect(option().props.disabled).toBeFalsy()
-    }
-  )
-
-  it('hides the acknowledged question and enables ordinary Send with stale host status', async () => {
-    await render()
-    await act(async () => {
-      await option().props.onPress()
-    })
-    expect(getController().nativeChatQuestion).toBe(null)
-    expect(sendButton().props.disabled).toBe(false)
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'terminal.send',
-      expect.objectContaining({ requireWriteSettlement: true, enter: true }),
-      expect.any(Object)
-    )
-  })
-
   it('finishes an older-host selector once and dismisses it like an acknowledged answer', async () => {
     vi.useFakeTimers()
     const prompt: AskPrompt = {
@@ -109,7 +57,6 @@ describe('prompt cards through the production controller, send contract and view
         ...baseTab,
         agentStatus: {
           ...baseTab.agentStatus,
-          lastAssistantMessage: '',
           toolName: 'AskUserQuestion',
           interactivePrompt: JSON.stringify(prompt)
         }
@@ -185,7 +132,6 @@ describe('prompt cards through the production controller, send contract and view
               ...baseTab,
               agentStatus: {
                 ...baseTab.agentStatus,
-                lastAssistantMessage: '',
                 toolName: 'AskUserQuestion',
                 interactivePrompt: JSON.stringify({
                   questions: [
@@ -242,22 +188,6 @@ describe('prompt cards through the production controller, send contract and view
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
-  it('shows an identical heuristic question again after a new wait in terminal view', async () => {
-    await render({ tab: baseTab })
-    act(() => {
-      getTree().root.findByProps({ accessibilityLabel: 'Collapse' }).props.onPress()
-    })
-    visible.value = false
-    await render({ tab: { ...baseTab, agentStatus: { ...baseTab.agentStatus, state: 'working' } } })
-    await render({
-      tab: { ...baseTab, agentStatus: { ...baseTab.agentStatus, stateStartedAt: 40 } }
-    })
-    visible.value = true
-    await render()
-    expect(getController().nativeChatQuestion).not.toBe(null)
-    expect(sendButton().props.disabled).toBe(true)
-  })
-
   it('shows a collapsed prompt again as a new wait', async () => {
     await render({ tab: permissionTab })
     act(() => {
@@ -270,13 +200,12 @@ describe('prompt cards through the production controller, send contract and view
     expect(getController().nativeChatCollapsedPrompt).toBe(null)
   })
 
-  it('collapses an ask without writing and hides the heuristic card read from the same wait', async () => {
+  it('collapses an ask to a strip without writing', async () => {
     await render({
       tab: {
         ...baseTab,
         agentStatus: {
           ...baseTab.agentStatus,
-          lastAssistantMessage: 'Before I proceed I want to confirm a choice.',
           toolName: 'AskUserQuestion',
           interactivePrompt: JSON.stringify({
             questions: [{ question: 'Pick?', options: [{ label: 'East' }] }]
@@ -288,8 +217,6 @@ describe('prompt cards through the production controller, send contract and view
       askCollapse()
     })
     expect(getController().nativeChatAsk).not.toBe(null)
-    expect(getController().nativeChatPermission).toBe(null)
-    expect(getController().nativeChatQuestion).toBe(null)
     expect(getController().nativeChatCollapsedPrompt?.title).toBe('Pick?')
     expect(sendButton().props.disabled).toBe(false)
     expect(client.sendRequest).not.toHaveBeenCalled()

@@ -5,8 +5,9 @@ vi.mock('../../../terminal/worker-terminal-takeover-report', () => ({
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AskPrompt } from '../../../../../src/shared/native-chat-ask-types'
-import type { AgentType } from '../../../../../src/shared/agent-status-types'
+import type { AskPrompt } from '../../../../../src/shared/native-chat-ask'
+import type { AgentType } from '../../../../../src/shared/native-chat-types'
+import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat-paste-bytes'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../../../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
@@ -214,7 +215,7 @@ describe('useMobileNativeChatAnswerSend', () => {
     expect(timeouts).toEqual([15_000, 9_000, 3_000])
   })
 
-  it('free text: opens "Type something", types the sanitized answer, then Enter', async () => {
+  it('free text: opens "Type something", pastes the multi-line answer, then Enter', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount(stubRpcClient({ sendRequest }), vi.fn())
 
@@ -229,7 +230,7 @@ describe('useMobileNativeChatAnswerSend', () => {
     await expect(result).resolves.toBe(true)
     expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
       expect.objectContaining({ text: '3', enter: false }),
-      expect.objectContaining({ text: 'zeta spaces', enter: false }),
+      expect.objectContaining({ text: buildNativeChatPasteBytes('zeta\nspaces'), enter: false }),
       expect.objectContaining({ text: '\r', enter: false })
     ])
   })

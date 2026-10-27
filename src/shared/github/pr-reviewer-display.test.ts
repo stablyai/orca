@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from './work-item-types'
 import {
   GITHUB_PR_REVIEWER_INPUT_MAX_BYTES,
   getGitHubPRPrimaryReviewer,
@@ -8,7 +8,7 @@ import {
   getGitHubPRReviewLabel,
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
-} from './github-pr-reviewer-display'
+} from './pr-reviewer-display'
 
 function item(patch: Partial<GitHubWorkItem>): GitHubWorkItem {
   return patch as GitHubWorkItem

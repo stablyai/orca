@@ -9,10 +9,6 @@ import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import type { RepoSummary } from './mobile-tasks-provider-detail-types'
 import type { TaskSort } from './mobile-tasks-view-state-types'
 
-export function isFailedGitHubCheck(check: { conclusion?: string | null }): boolean {
-  return ['failure', 'cancelled', 'timed_out'].includes(check.conclusion ?? '')
-}
-
 export function repositoryCount(count: number): string {
   return `${count} ${count === 1 ? 'repository' : 'repositories'}`
 }

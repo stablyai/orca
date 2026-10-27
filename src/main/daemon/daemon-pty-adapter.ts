@@ -253,7 +253,11 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
       this.finishExit(sessionId, exit)
       return
     }
-    const hostLoss = { code: WSL_DISTRO_LOSS_EXIT_CODE, incarnationId: exit.incarnationId }
+    const hostLoss = {
+      code: WSL_DISTRO_LOSS_EXIT_CODE,
+      incarnationId: exit.incarnationId,
+      hostLost: true as const
+    }
     this.hostLossSessionIds.add(sessionId)
     this.clearExitedSessionState(sessionId, hostLoss.code, hostLoss.incarnationId, {
       closeHistory: false

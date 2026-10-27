@@ -1,5 +1,5 @@
-/** What the WSL host service drives: the C3 holder, C5 connections and C6 liveness, or an e2e fake. */
-import type { WslHostServerStop } from '../../shared/wsl-host-types'
+/** What the WSL host service drives (the C3 holder, C5 connections and C6 liveness, or an e2e fake), and its dependencies. */
+import type { WslHostServerStop, WslHostStatus } from '../../shared/wsl-host-types'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectIntent } from './wsl-orcad-connection-status'
@@ -26,7 +26,23 @@ export type WslHostConnector = {
   disconnect(distro: string): Promise<void>
   /** Ends the host's terminals, orcad and its terminal daemon; never boots a stopped distro. */
   stopServer(distro: string, environmentId: string): Promise<WslHostServerStop>
+  /** The current name by GUID (a rename) or name; false when gone, null when unreadable. Never boots. */
+  resolveDistroName(distro: string, distroId?: string): Promise<string | false | null>
   releaseHolder(distro: string): Promise<void>
-  adoptHolders(): Promise<void>
+  /** Startup: keeps the holders an earlier run left and releases those `isWanted` refuses. */
+  adoptHolders(isWanted: (distro: string) => boolean): Promise<void>
   dispose(): Promise<void>
+}
+
+export type WslHostServiceDependencies = {
+  userDataPath: () => string
+  isEnabled: () => boolean
+  /** Whether this build ships the orcad template a WSL host deploys from. */
+  hasServerFiles: () => boolean
+  publish: (status: WslHostStatus) => void
+  /** The environment's pairing changed: transports that authenticate with the old one retire. */
+  pairingChanged: (environmentId: string) => void
+  /** A connection came up: verify the server now rather than on the status owner's backoff. */
+  ready: (environmentId: string) => void
+  removed: (environmentId: string) => Promise<void> | void
 }

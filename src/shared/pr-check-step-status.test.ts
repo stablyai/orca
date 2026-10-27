@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveStepOutcome, summarizeJobSteps } from './check-job-step-status'
+import { resolveStepOutcome, summarizeJobSteps } from './pr-check-step-status'
 
 describe('resolveStepOutcome', () => {
   it('prefers conclusion over status', () => {
