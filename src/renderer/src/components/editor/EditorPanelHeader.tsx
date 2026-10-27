@@ -1,5 +1,14 @@
 import { useMemo } from 'react'
-import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Columns2,
+  Eye,
+  FileText,
+  ListOrdered,
+  ListTree,
+  Rows2
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useVisibleWorktreeDiffComments } from '../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor'
@@ -30,6 +39,7 @@ type EditorPanelHeaderProps = {
   isMarkdown: boolean
   isCsv: boolean
   isNotebook: boolean
+  canToggleLineNumbers?: boolean
   hasEditorToggle: boolean
   availableEditorToggleModes: readonly EditorToggleValue[]
   effectiveToggleValue: EditorToggleValue
@@ -64,6 +74,7 @@ export function EditorPanelHeader({
   isMarkdown,
   isCsv,
   isNotebook,
+  canToggleLineNumbers = false,
   hasEditorToggle,
   availableEditorToggleModes,
   effectiveToggleValue,
@@ -94,7 +105,18 @@ export function EditorPanelHeader({
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
+  const editorLineNumbers = useAppStore((s) => s.settings?.editorLineNumbers !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const isLineNumbersDisabled =
+    (isMarkdown || isCsv || isNotebook) && effectiveToggleValue === 'rich'
+  const lineNumbersLabel = isLineNumbersDisabled
+    ? translate(
+        'auto.components.editor.EditorPanelHeader.lineNumbersUnavailable',
+        'Line numbers are available in source or diff mode'
+      )
+    : editorLineNumbers
+      ? translate('auto.components.editor.EditorPanelHeader.hideLineNumbers', 'Hide line numbers')
+      : translate('auto.components.editor.EditorPanelHeader.showLineNumbers', 'Show line numbers')
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
     [activeFile.relativePath, diffComments]
@@ -317,6 +339,31 @@ export function EditorPanelHeader({
           createRequest={createArtifactRequest}
         />
       ) : null}
+      {canToggleLineNumbers ? (
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={`p-1 rounded hover:bg-accent hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground ${
+                  editorLineNumbers && !isLineNumbersDisabled
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground'
+                }`}
+                onClick={() => void updateSettings({ editorLineNumbers: !editorLineNumbers })}
+                disabled={isLineNumbersDisabled}
+                aria-label={lineNumbersLabel}
+                aria-pressed={editorLineNumbers && !isLineNumbersDisabled}
+              >
+                <ListOrdered size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {lineNumbersLabel}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : null}
       <EditorPanelActionsMenu
         fileLocationActions={
           activeFile.mode === 'edit' ||
@@ -329,6 +376,9 @@ export function EditorPanelHeader({
         diffWordWrap={diffWordWrap}
         diffShowWhitespace={diffShowWhitespace}
         editorWordWrap={editorWordWrap}
+        editorLineNumbers={editorLineNumbers}
+        canToggleLineNumbers={canToggleLineNumbers}
+        isLineNumbersDisabled={isLineNumbersDisabled}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
@@ -338,6 +388,9 @@ export function EditorPanelHeader({
           void updateSettings({ diffShowWhitespace: !diffShowWhitespace })
         }
         onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
+        onToggleEditorLineNumbers={() =>
+          void updateSettings({ editorLineNumbers: !editorLineNumbers })
+        }
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

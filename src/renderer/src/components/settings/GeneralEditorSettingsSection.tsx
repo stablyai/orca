@@ -19,6 +19,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
+import { EditorLineNumbersSetting } from './EditorLineNumbersSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import {
@@ -232,6 +233,8 @@ export function GeneralEditorSettingsSection({
       />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+
+      <EditorLineNumbersSetting settings={settings} updateSettings={updateSettings} />
 
       <DiffShowWhitespaceSetting settings={settings} updateSettings={updateSettings} />
 

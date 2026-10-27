@@ -71,6 +71,7 @@ export default function DiffViewer({
   const terminalFontSize = settings?.terminalFontSize ?? 13,
     diffEditorFontSize = computeDiffEditorFontSize(terminalFontSize, editorFontZoomLevel)
   const diffWordWrap = settings?.diffWordWrap
+  const editorLineNumbers = settings?.editorLineNumbers !== false
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
@@ -217,7 +218,11 @@ export default function DiffViewer({
         )
       })
       lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(
+        diffEditor,
+        sideBySide,
+        editorLineNumbers
+      )
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
@@ -273,7 +278,16 @@ export default function DiffViewer({
         diffEditor.focus()
       }
     },
-    [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
+    [
+      editable,
+      editorLineNumbers,
+      setupCopy,
+      modelKey,
+      filePath,
+      sideBySide,
+      registerDiffEditor,
+      unregisterDiffEditor
+    ]
   )
 
   // Snapshot on layout cleanup before unmount, avoiding scroll-time writes.
@@ -298,7 +312,11 @@ export default function DiffViewer({
       }
     }
     lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(
+      diffEditor,
+      sideBySide,
+      editorLineNumbers
+    )
     wordWrapOptionsSubRef.current?.dispose()
     wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(diffEditor, diffWordWrap)
     return () => {
@@ -308,7 +326,7 @@ export default function DiffViewer({
       wordWrapOptionsSubRef.current?.dispose()
       wordWrapOptionsSubRef.current = null
     }
-  }, [diffWordWrap, sideBySide])
+  }, [diffWordWrap, editorLineNumbers, sideBySide])
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -346,7 +364,7 @@ export default function DiffViewer({
               scrollBeyondLastLine: false,
               fontSize: diffEditorFontSize,
               fontFamily: resolveEditorFontFamily(settings),
-              lineNumbers: 'on',
+              lineNumbers: editorLineNumbers ? 'on' : 'off',
               ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
               ...buildDiffEditorWhitespaceOptions(settings?.diffShowWhitespace),
               ...buildDiffEditorHideUnchangedOptions(settings?.diffCollapseUnchangedRegions),
