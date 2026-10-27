@@ -5881,6 +5881,7 @@
           "0d224eff10": "기본 작업 트리",
           "ca74db7550": "SSH를 통한 원격 프로젝트",
           "021538e1d1": "SSH 연결이 끊어졌습니다.",
+          "boardStatusTooltip": "보드 상태: {{value0}}",
           "runtimeHostDisconnected": "서버 연결 끊김",
           "runtimeHostDisconnectedNamed": "{{hostName}} 연결 끊김",
           "runtimeHostProject": "Orca 서버의 프로젝트",

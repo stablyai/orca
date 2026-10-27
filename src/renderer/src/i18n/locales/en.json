@@ -6368,6 +6368,7 @@
           "0d224eff10": "Primary worktree",
           "ca74db7550": "Project on SSH host",
           "021538e1d1": "SSH disconnected",
+          "boardStatusTooltip": "Board status: {{value0}}",
           "runtimeHostDisconnected": "Server disconnected",
           "runtimeHostDisconnectedNamed": "{{hostName}} disconnected",
           "runtimeHostProject": "Project on Orca server",

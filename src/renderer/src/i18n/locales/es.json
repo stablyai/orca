@@ -5915,6 +5915,7 @@
           "0d224eff10": "Worktree principal",
           "ca74db7550": "Proyecto en host SSH",
           "021538e1d1": "SSH desconectado",
+          "boardStatusTooltip": "Estado del tablero: {{value0}}",
           "runtimeHostDisconnected": "Servidor desconectado",
           "runtimeHostDisconnectedNamed": "{{hostName}} está desconectado",
           "runtimeHostProject": "Proyecto en servidor de Orca",
