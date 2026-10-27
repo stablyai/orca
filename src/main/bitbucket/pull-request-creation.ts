@@ -46,7 +46,8 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.'
+        'Create PR failed: Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.',
+      reason: 'auth_required'
     }
   }
   // Duplicate branches return HTTP 400, so inspect the message.
@@ -54,14 +55,16 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
     return {
       ok: false,
       code: 'already_exists',
-      error: 'A pull request already exists for this branch.'
+      error: 'A pull request already exists for this branch.',
+      reason: 'existing_review'
     }
   }
   if (error instanceof HostedReviewApiRequestError && error.timedOut) {
     return {
       ok: false,
       code: 'unknown_completion',
-      error: 'PR creation may have completed. Refreshing branch review state...'
+      error: 'PR creation may have completed. Refreshing branch review state...',
+      reason: 'creation_unconfirmed'
     }
   }
   if (status === 400 || status === 422) {
@@ -69,7 +72,8 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'validation',
       error:
-        'Create PR failed: Bitbucket rejected the pull request. Check the base branch and branch state, then try again.'
+        'Create PR failed: Bitbucket rejected the pull request. Check the base branch and branch state, then try again.',
+      reason: 'rejected'
     }
   }
   if (status === 404) {
@@ -77,13 +81,15 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'validation',
       error:
-        'Create PR failed: Bitbucket could not find the repository. Check that the credential has write access to it.'
+        'Create PR failed: Bitbucket could not find the repository. Check that the credential has write access to it.',
+      reason: 'repository_not_found'
     }
   }
   return {
     ok: false,
     code: 'unknown',
-    error: 'Create PR failed: Bitbucket could not create the pull request. Try again in a moment.'
+    error: 'Create PR failed: Bitbucket could not create the pull request. Try again in a moment.',
+    reason: 'create_failed'
   }
 }
 
@@ -113,7 +119,8 @@ export async function createBitbucketPullRequest(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating reviews for this provider is not supported yet.'
+      error: 'Creating reviews for this provider is not supported yet.',
+      reason: 'provider_not_supported'
     }
   }
 
@@ -126,7 +133,8 @@ export async function createBitbucketPullRequest(
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Bitbucket is not connected. Next step: connect Bitbucket in Settings > Integrations.'
+        'Create PR failed: Bitbucket is not connected. Next step: connect Bitbucket in Settings > Integrations.',
+      reason: 'auth_required'
     }
   }
 
@@ -139,7 +147,8 @@ export async function createBitbucketPullRequest(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating pull requests requires a Bitbucket remote.'
+      error: 'Creating pull requests requires a Bitbucket remote.',
+      reason: 'unsupported_provider'
     }
   }
 
@@ -157,7 +166,8 @@ export async function createBitbucketPullRequest(
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
+      error: 'Create PR failed: choose a different base branch before creating a pull request.',
+      reason: 'same_base_branch'
     }
   }
   // Ignore saved draft defaults because Bitbucket's composer has no control to clear them.
@@ -200,7 +210,8 @@ export async function createBitbucketPullRequest(
       : {
           ok: false,
           code: 'unknown_completion',
-          error: 'PR creation may have completed. Refreshing branch review state...'
+          error: 'PR creation may have completed. Refreshing branch review state...',
+          reason: 'creation_unconfirmed'
         }
   } catch (error) {
     const classified = classifyCreateError(error)
@@ -216,6 +227,7 @@ export async function createBitbucketPullRequest(
           ok: false,
           code: 'already_exists',
           error: 'A pull request already exists for this branch.',
+          reason: 'existing_review',
           existingReview: existing
         }
       }

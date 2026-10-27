@@ -20956,6 +20956,36 @@
     },
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculada"
+    },
+    "createReviewFailure": {
+      "authRequiredCommand": "{{providerName}} no está autenticado. Siguiente paso: ejecuta {{command}} en este entorno.",
+      "authRequiredVariable": "{{providerName}} no está autenticado. Siguiente paso: define {{variable}} en este entorno.",
+      "authRequiredBitbucket": "Bitbucket no está autenticado. Siguiente paso: conecta Bitbucket en Ajustes > Integraciones o define ORCA_BITBUCKET_* en este entorno.",
+      "signInHintCommand": "Ejecuta {{command}} en este entorno",
+      "signInHintVariable": "Define {{variable}} en este entorno",
+      "signInHintBitbucket": "Conecta Bitbucket en Ajustes > Integraciones",
+      "dirty": "haz commit de los cambios locales o descártalos antes de crear {{reviewLabel}}.",
+      "detachedHead": "cambia a una rama antes de crear {{reviewLabel}}.",
+      "defaultBranch": "elige una rama de características antes de crear {{reviewLabel}}.",
+      "noUpstream": "publica esta rama antes de crear {{reviewLabel}}.",
+      "needsPush": "haz push de esta rama antes de crear {{reviewLabel}}.",
+      "needsSync": "sincroniza esta rama antes de crear {{reviewLabel}}.",
+      "refreshStatus": "actualiza el estado del control de código fuente y vuelve a intentarlo.",
+      "namedBaseNotOnRemote": "la rama base \"{{base}}\" no se ha enviado al remoto. Elige una base que ya esté en el remoto o haz push de ella primero.",
+      "baseNotOnRemote": "la rama base no se ha enviado al remoto. Elige una base que ya esté en el remoto o haz push de ella primero.",
+      "branchChanged": "vuelve a la rama seleccionada antes de crear {{reviewLabel}}.",
+      "branchStatusUnverified": "no se pudo verificar el estado de la rama. Actualiza el control de código fuente y vuelve a intentarlo.",
+      "reviewLookupUnavailable": "Orca no pudo confirmar si esta rama ya tiene {{reviewLabel}}. Reintenta cuando la consulta a {{providerName}} funcione.",
+      "sameBaseBranch": "elige otra rama base antes de crear {{reviewLabel}}.",
+      "rejected": "{{providerName}} rechazó la creación de {{reviewLabel}}. Comprueba la rama base y el estado de la rama, y vuelve a intentarlo.",
+      "repositoryNotFound": "{{providerName}} no encontró el repositorio. Comprueba que la credencial tenga acceso de escritura a él.",
+      "createFailed": "{{providerName}} no pudo crear {{reviewLabel}}. Vuelve a intentarlo en un momento.",
+      "unsupportedProvider": "Para crear {{reviewLabel}} se necesita un remoto alojado en {{providerName}}.",
+      "providerNotSupported": "Todavía no se admite crear revisiones para este proveedor.",
+      "existingReview": "Esta rama ya tiene {{reviewLabel}}.",
+      "creationUnconfirmed": "Puede que la creación de {{shortLabel}} se haya completado. Actualizando el estado de revisión de la rama...",
+      "withDetail": "No se pudo crear {{shortLabel}}: {{detail}}",
+      "pushFailed": "El push falló. Resuelve el error de push y vuelve a intentarlo."
     }
   },
   "aiVault": {

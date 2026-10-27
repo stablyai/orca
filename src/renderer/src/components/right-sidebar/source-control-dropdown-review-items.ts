@@ -6,11 +6,8 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-import {
-  canClickBlockedCreateReviewReason,
-  resolveHostedReviewAuthInstruction
-} from './source-control-create-review-blocked-action'
-import type { PrimaryActionInputs } from './source-control-primary-action'
+import { canClickBlockedCreateReviewReason } from './source-control-create-review-blocked-action'
+import { hostedReviewSignInHint } from './hosted-review-create-failure-copy'
 import type { DropdownItem } from './source-control-dropdown-item-types'
 import type { DropdownActionContext } from './source-control-dropdown-action-context'
 
@@ -19,22 +16,13 @@ export type HostedReviewDropdownItems = {
   pushCreatePR: DropdownItem
 }
 
-function reviewCopy(
-  provider: NonNullable<PrimaryActionInputs['hostedReviewCreation']>['provider'] | undefined
-): ReturnType<typeof localizedHostedReviewCopy> & {
-  authInstruction: string
-} {
-  return {
-    ...localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider)),
-    authInstruction: resolveHostedReviewAuthInstruction(provider ?? 'github')
-  }
-}
-
 export function buildHostedReviewDropdownItems(
   ctx: DropdownActionContext
 ): HostedReviewDropdownItems {
   const { hostedReviewCreation, globalBusy, upstreamLoading, shouldForcePushWithLease } = ctx
-  const createReviewCopy = reviewCopy(hostedReviewCreation?.provider)
+  const createReviewCopy = localizedHostedReviewCopy(
+    resolveSupportedHostedReviewCopyProvider(hostedReviewCreation?.provider)
+  )
 
   const createBlockedHint = ((): string => {
     switch (hostedReviewCreation?.blockedReason) {
@@ -74,11 +62,7 @@ export function buildHostedReviewDropdownItems(
               'Sync first'
             )
       case 'auth_required':
-        return translate(
-          'auto.components.right.sidebar.source.control.dropdown.items.blockedAuthRequired',
-          '{{authInstruction}} in this environment',
-          { authInstruction: createReviewCopy.authInstruction }
-        )
+        return hostedReviewSignInHint(hostedReviewCreation?.provider)
       case 'unsupported_provider':
         return translate(
           'auto.components.right.sidebar.source.control.dropdown.items.blockedUnsupportedProvider',

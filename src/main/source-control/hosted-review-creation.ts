@@ -53,7 +53,8 @@ async function validateCurrentBranchCanCreateReview(
     return {
       ok: false,
       code: 'validation',
-      error: `Create ${copy.shortLabel} failed: switch back to the selected branch before creating a ${copy.reviewLabel}.`
+      error: `Create ${copy.shortLabel} failed: switch back to the selected branch before creating a ${copy.reviewLabel}.`,
+      reason: 'branch_changed'
     }
   }
 
@@ -81,7 +82,8 @@ async function validateCurrentBranchCanCreateReview(
       return {
         ok: false,
         code: 'validation',
-        error: `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
+        error: `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`,
+        reason: 'review_lookup_unavailable'
       }
     }
     // Recheck stale renderer eligibility in main before submission.
@@ -91,7 +93,8 @@ async function validateCurrentBranchCanCreateReview(
     return {
       ok: false,
       code: 'validation',
-      error: `Create ${copy.shortLabel} failed: could not verify branch status. Refresh source control and try again.`
+      error: `Create ${copy.shortLabel} failed: could not verify branch status. Refresh source control and try again.`,
+      reason: 'branch_status_unverified'
     }
   }
 }
@@ -239,7 +242,8 @@ export async function getHostedReviewCreationEligibility(
 export const UNSUPPORTED_HOSTED_REVIEW_PROVIDER: CreateHostedReviewResult = {
   ok: false,
   code: 'unsupported_provider',
-  error: 'Creating reviews for this provider is not supported yet.'
+  error: 'Creating reviews for this provider is not supported yet.',
+  reason: 'provider_not_supported'
 }
 
 export async function createHostedReview(
@@ -261,7 +265,8 @@ export async function createHostedReview(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: `Creating ${copy.reviewLabel}s requires a ${copy.providerName} remote.`
+      error: `Creating ${copy.reviewLabel}s requires a ${copy.providerName} remote.`,
+      reason: 'unsupported_provider'
     }
   }
   const blocked = await validateCurrentBranchCanCreateReview(
