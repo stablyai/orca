@@ -334,8 +334,6 @@ function setAgentLineageState(options: {
     workspaceHostScope: 'all',
     workspacePortScan: null,
     workspaceStatuses: [],
-    hostWorkspaceStatuses: {},
-    removedRuntimeEnvironmentIds: new Set(),
     worktreeCardProperties: [
       'status',
       'pr',

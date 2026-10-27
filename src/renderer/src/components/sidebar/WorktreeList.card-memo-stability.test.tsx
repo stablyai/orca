@@ -241,8 +241,6 @@ function setFlatWorktreeState(): void {
     workspaceHostScope: 'all',
     workspacePortScan: null,
     workspaceStatuses: [],
-    hostWorkspaceStatuses: {},
-    removedRuntimeEnvironmentIds: new Set(),
     worktreeCardProperties: ['status', 'pr', 'comment'] satisfies WorktreeCardProperty[],
     worktreeLineageById: {},
     worktreesByRepo: {

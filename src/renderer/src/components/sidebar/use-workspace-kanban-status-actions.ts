@@ -2,13 +2,15 @@ import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { getWorkspaceStatus } from './workspace-status'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 
 type WorkspaceStatuses = ReturnType<typeof useAppStore.getState>['workspaceStatuses']
 
 export function useWorkspaceKanbanStatusActions(args: {
   allWorktrees: readonly Worktree[]
   workspaceStatuses: WorkspaceStatuses
+  /** Local plus paired hosts' columns: cards resolve and new ids stay unique against these. */
+  boardStatuses: readonly WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatuses) => void
   updateWorktreeMeta: ReturnType<typeof useAppStore.getState>['updateWorktreeMeta']
 }) {
@@ -71,7 +73,7 @@ export function useWorkspaceKanbanStatusActions(args: {
     const label = `Status ${args.workspaceStatuses.length + 1}`
     args.setWorkspaceStatuses([
       ...args.workspaceStatuses,
-      { id: makeWorkspaceStatusId(label, args.workspaceStatuses), label }
+      { id: makeWorkspaceStatusId(label, args.boardStatuses), label }
     ])
     recordInteraction()
   }, [args])
@@ -89,7 +91,7 @@ export function useWorkspaceKanbanStatusActions(args: {
       args.setWorkspaceStatuses(next)
       recordInteraction()
       for (const worktree of args.allWorktrees) {
-        if (getWorkspaceStatus(worktree, args.workspaceStatuses) === statusId) {
+        if (getWorkspaceStatus(worktree, args.boardStatuses) === statusId) {
           void args.updateWorktreeMeta(
             worktree.id,
             { workspaceStatus: fallbackStatus },

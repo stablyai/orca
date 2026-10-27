@@ -214,6 +214,19 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   }
 }
 
+/** The status every context worktree shares, or '' when they differ or there are none. */
+export function getSharedWorkspaceStatus(
+  worktrees: readonly Worktree[],
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+): WorkspaceStatus {
+  const [first, ...rest] = worktrees
+  if (!first) {
+    return ''
+  }
+  const status = getWorkspaceStatus(first, workspaceStatuses)
+  return rest.every((item) => getWorkspaceStatus(item, workspaceStatuses) === status) ? status : ''
+}
+
 export type WorkspaceStatusAssignmentPlan =
   | { readonly kind: 'board-sync'; readonly worktreeIds: readonly string[] }
   | { readonly kind: 'local-only'; readonly localWriteIds: readonly string[] }

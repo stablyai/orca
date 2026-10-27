@@ -88,8 +88,6 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
     updateWorktreesMeta: vi.fn(),
     workspaceHostScope: 'all',
     workspaceStatuses: [],
-    hostWorkspaceStatuses: {},
-    removedRuntimeEnvironmentIds: new Set(),
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {},
     worktreesByRepo: {

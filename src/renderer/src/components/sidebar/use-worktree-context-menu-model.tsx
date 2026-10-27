@@ -6,7 +6,7 @@ import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
-import { getWorkspaceStatus } from './workspace-status'
+import { useWorkspaceBoardStatuses } from './use-workspace-board-statuses'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import {
   hasSleepableWorkspaceActivity,
@@ -25,6 +25,7 @@ import {
   EMPTY_UNIFIED_TABS_BY_WORKTREE,
   EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY,
   EMPTY_WORKTREE_LINEAGE_BY_ID,
+  getSharedWorkspaceStatus,
   hasWorktreeParentLink,
   isContextWorktreeDeletable,
   selectMenuScopedMap,
@@ -61,7 +62,7 @@ export function useWorktreeContextMenuModel({
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
   const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
-  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const workspaceStatuses = useWorkspaceBoardStatuses()
   const openModal = useAppStore((s) => s.openModal)
   const projectGroups = useAppStore((s) => s.projectGroups)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
@@ -180,16 +181,10 @@ export function useWorktreeContextMenuModel({
     (item) => getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)?.isDeleting
   )
   const contextDeletePending = isMultiContext ? deletingContext : deletingSubtree
-  const contextWorkspaceStatus = useMemo(() => {
-    const [first, ...rest] = activeContextWorktrees
-    if (!first) {
-      return ''
-    }
-    const status = getWorkspaceStatus(first, workspaceStatuses)
-    return rest.every((item) => getWorkspaceStatus(item, workspaceStatuses) === status)
-      ? status
-      : ''
-  }, [activeContextWorktrees, workspaceStatuses])
+  const contextWorkspaceStatus = useMemo(
+    () => getSharedWorkspaceStatus(activeContextWorktrees, workspaceStatuses),
+    [activeContextWorktrees, workspaceStatuses]
+  )
   const batchDeleteWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) => {

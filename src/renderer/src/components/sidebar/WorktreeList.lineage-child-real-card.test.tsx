@@ -338,8 +338,6 @@ function setLineageState(
     workspaceHostScope: 'all',
     workspacePortScan: null,
     workspaceStatuses: [],
-    hostWorkspaceStatuses: {},
-    removedRuntimeEnvironmentIds: new Set(),
     worktreeCardProperties: [
       'status',
       'pr',

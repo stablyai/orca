@@ -106,8 +106,6 @@ function setProjectGroupWithoutWorktreeRowsState(
     updateWorktreesMeta: vi.fn(),
     workspaceHostScope: 'all',
     workspaceStatuses: [],
-    hostWorkspaceStatuses: {},
-    removedRuntimeEnvironmentIds: new Set(),
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {},
     worktreesByRepo: {

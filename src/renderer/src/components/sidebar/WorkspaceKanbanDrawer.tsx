@@ -62,7 +62,7 @@ function WorkspaceKanbanDrawerContent({
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const localWorkspaceStatuses = useAppStore((s) => s.workspaceStatuses)
-  const workspaceStatuses = useWorkspaceBoardStatuses()
+  const boardStatuses = useWorkspaceBoardStatuses()
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
   const syncTaskStatusFromWorkspaceBoard = useAppStore((s) => s.syncTaskStatusFromWorkspaceBoard)
   const setSyncTaskStatusFromWorkspaceBoard = useAppStore(
@@ -98,7 +98,7 @@ function WorkspaceKanbanDrawerContent({
     open,
     repoMap,
     sortBy,
-    workspaceStatuses
+    workspaceStatuses: boardStatuses
   })
   const {
     selectedWorktreeIds,
@@ -122,7 +122,7 @@ function WorkspaceKanbanDrawerContent({
   const maybeSyncWorkspaceBoardTaskStatuses = useWorkspaceBoardTaskStatusSync({
     enabled: syncTaskStatusFromWorkspaceBoard,
     worktreesById: worktreeById,
-    workspaceStatuses
+    workspaceStatuses: boardStatuses
   })
   const {
     dropPointerDraggedWorktreesInStatus,
@@ -140,7 +140,7 @@ function WorkspaceKanbanDrawerContent({
     sortBy,
     updateWorktreeMeta,
     updateWorktreesMeta,
-    workspaceStatuses,
+    workspaceStatuses: boardStatuses,
     worktreeById,
     manualOrderCatalog,
     worktreesByStatus
@@ -205,6 +205,7 @@ function WorkspaceKanbanDrawerContent({
   } = useWorkspaceKanbanStatusActions({
     allWorktrees,
     workspaceStatuses: localWorkspaceStatuses,
+    boardStatuses,
     setWorkspaceStatuses,
     updateWorktreeMeta
   })
@@ -272,7 +273,7 @@ function WorkspaceKanbanDrawerContent({
       }}
       laneGridProps={{
         laneScrollerRef,
-        statuses: workspaceStatuses,
+        statuses: boardStatuses,
         laneViews,
         laneFullWorktreeIds,
         hasQuery,

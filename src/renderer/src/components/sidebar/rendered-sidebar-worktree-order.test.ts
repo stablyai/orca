@@ -248,6 +248,22 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     ])
   })
 
+  it("orders a card in a paired host's own column by that column, not the default", () => {
+    const today = makeWorktree('wt-today', { workspaceStatus: 'status-6', sortOrder: 0 })
+    const todo = makeWorktree('wt-todo', { workspaceStatus: 'todo', sortOrder: 1 })
+    const doing = makeWorktree('wt-doing', { workspaceStatus: 'in-progress', sortOrder: 2 })
+    seedStore([today, todo, doing], {
+      groupBy: 'workspace-status',
+      workspaceStatuses: [
+        { id: 'in-progress', label: 'In progress' },
+        { id: 'todo', label: 'Todo' }
+      ],
+      hostWorkspaceStatuses: { 'env-1': [{ id: 'status-6', label: '🔥 今天收尾' }] }
+    })
+
+    expect(getVisibleWorktreeIds()).toEqual(['wt-doing', 'wt-todo', 'wt-today'])
+  })
+
   it('keeps the sort layer intact for smart and comparator sort modes', () => {
     const main = makeMainWorktree('wt-main')
     const older = makeWorktree('wt-older', { displayName: 'b-older', lastActivityAt: 1 })
