@@ -286,7 +286,7 @@ describe('SortableTabContextMenu', () => {
     }
   )
 
-  it('offers Move Into Tab for a terminal tab, but not for a native chat tab', () => {
+  it('offers Move Into Tab for a terminal tab, but not for a chat-view or agent-session tab', () => {
     const { container } = renderMenu()
     expect(container.querySelector('[data-testid="move-into-tab"]')).toMatchObject({
       dataset: { tabId: 'term-1', worktreeId: 'wt-1' }
@@ -294,6 +294,13 @@ describe('SortableTabContextMenu', () => {
 
     const chatView = renderMenu({ isChatView: true })
     expect(chatView.container.querySelector('[data-testid="move-into-tab"]')).toBeNull()
+
+    // A structured agent-session tab renders this menu with no terminal behind it.
+    const agentSession = renderMenu({
+      canSplitTerminal: false,
+      nativeChat: { sessionId: 'orca-chat-1', agent: 'codex' }
+    })
+    expect(agentSession.container.querySelector('[data-testid="move-into-tab"]')).toBeNull()
   })
 
   it('hides Move Into Tab in a layout-owner build, where main draws every move', () => {
