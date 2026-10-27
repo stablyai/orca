@@ -6,6 +6,7 @@ import {
   type ProviderProcessExit
 } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import { PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS } from '../provider-process/provider-process-supervisor'
 import { AcpConnectionClosedError, AcpSignInPromptError } from './acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
@@ -175,6 +176,24 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   stderrTail(): string {
     return this.managed.stderrTail().trim()
+  }
+
+  async stderrTailAfterExit(): Promise<string> {
+    const stderr = this.managed.child.stderr
+    if (this.exited && !stderr.readableEnded && !stderr.destroyed) {
+      await new Promise<void>((resolve) => {
+        const finish = (): void => {
+          clearTimeout(timer)
+          stderr.removeListener('end', finish)
+          stderr.removeListener('close', finish)
+          resolve()
+        }
+        const timer = setTimeout(finish, PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS)
+        stderr.once('end', finish)
+        stderr.once('close', finish)
+      })
+    }
+    return this.stderrTail()
   }
 
   onExit(listener: (exit: ProviderProcessExit) => void): void {
