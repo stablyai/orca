@@ -31,7 +31,7 @@ const testState = vi.hoisted(() => ({
   replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
-  settledWrites: [] as { ptyId: string; data: string }[],
+  settledWrite: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
 }))
@@ -71,7 +71,7 @@ vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
     options?: { requireWriteSettlement?: true }
   ) => {
     if (options?.requireWriteSettlement) {
-      testState.settledWrites.push({ ptyId, data })
+      testState.settledWrite(ptyId, data)
     }
     return testState.sendRuntimePtyInputVerified(ptyId, data)
   }
@@ -117,7 +117,7 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
-    testState.settledWrites = []
+    testState.settledWrite.mockReset()
     testState.inspectRuntimeTerminalProcess.mockReset()
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'bash',
@@ -670,9 +670,9 @@ describe('pasteDraftWhenAgentReady', () => {
       PASTED_ISSUE_URL
     )
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, 'pty-right', '\r')
-    expect(testState.settledWrites).toEqual([
-      { ptyId: 'pty-right', data: PASTED_ISSUE_URL },
-      { ptyId: 'pty-right', data: '\r' }
+    expect(testState.settledWrite.mock.calls).toEqual([
+      ['pty-right', PASTED_ISSUE_URL],
+      ['pty-right', '\r']
     ])
   })
 
