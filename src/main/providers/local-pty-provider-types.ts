@@ -1,8 +1,8 @@
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 export type LocalPtyProviderOptions = {
-  /** Why: `ctx.command` (pi/omp/claude) must drive overlay source-dir selection — a disk-presence fallback shadows the other agent's extensions. */
+  /** Agent command selects overlay directories; disk-presence fallback can shadow another agent. */
   buildSpawnEnv?: (
     id: string,
     baseEnv: Record<string, string>,
@@ -16,13 +16,11 @@ export type LocalPtyProviderOptions = {
       isWsl?: boolean
       wslDistro?: string | null
     }
-    // Why (#16441): Codex launch prep grants hook trust through a codex
-    // app-server session. `spawn` already awaits, so returning a promise keeps
-    // the Electron main thread responsive instead of blocking on spawnSync.
+    // Async Codex hook/trust preparation must keep Electron main responsive (#16441).
   ) => Record<string, string> | Promise<Record<string, string>>
-  /** Whether worktree-scoped shell history is enabled; when true (or absent) with a worktreeId, HISTFILE is scoped per-worktree. */
+  /** Defaults to history isolation when a workspace id is present. */
   isHistoryEnabled?: () => boolean
-  /** Why: COMSPEC is always cmd.exe, so this callback injects the user's persisted shell preference. Undefined when none set. */
+  /** Persisted preference; COMSPEC identifies cmd.exe regardless of the chosen shell. */
   getWindowsShell?: () => string | undefined
   getDefaultShell?: () => string | undefined
   getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined

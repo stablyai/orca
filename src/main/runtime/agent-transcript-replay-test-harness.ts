@@ -1,4 +1,3 @@
-// Replays captured PTY bytes the way onPtyData does, for suites asserting a rule on every frame.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -11,7 +10,7 @@ import { visibleNonBlankTerminalLines } from './terminal-tail-read'
 
 const DEFAULT_CHUNK_CHARS = 64
 
-/** `screenLines` are readLiveTerminalScreenLines' rows; `ruledScreenLines` readScreenRuledLines'. */
+/** Live emulator rows and trusted ruled-grid rows, respectively. */
 export type TranscriptReplayFrame = {
   screenLines: string[]
   ruledScreenLines: string[]
@@ -22,10 +21,42 @@ export function readRuntimeFixture(name: string): string {
   return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
 }
 
-/** Resizes the grid before chunk `atChunk`, as a PTY resize landing mid-paint would. */
+export type TimedRuntimeFixture = {
+  chunks: string[]
+  /** Milliseconds since spawn. */
+  times: number[]
+  promptSentAtMs?: number
+  /** Recording end; no bytes arrived after the final read. */
+  recordedUntilMs?: number
+}
+
+export function readTimedRuntimeFixture(name: string): TimedRuntimeFixture {
+  const data = readRuntimeFixture(name)
+  const timing: {
+    chunks: [number, number][]
+    promptSentAtMs?: number
+    recordedUntilMs?: number
+  } = JSON.parse(readFileSync(join(__dirname, '__fixtures__', `${name}.timing.json`), 'utf8'))
+  const chunks: string[] = []
+  let offset = 0
+  for (const [, length] of timing.chunks) {
+    chunks.push(data.slice(offset, offset + length))
+    offset += length
+  }
+  if (offset !== data.length) {
+    throw new Error(`${name}.timing.json covers ${offset} of ${data.length} chars`)
+  }
+  return {
+    chunks,
+    times: timing.chunks.map(([at]) => at),
+    ...(timing.promptSentAtMs !== undefined ? { promptSentAtMs: timing.promptSentAtMs } : {}),
+    ...(timing.recordedUntilMs !== undefined ? { recordedUntilMs: timing.recordedUntilMs } : {})
+  }
+}
+
 export type TranscriptReplayResize = { atChunk: number; cols: number; rows: number }
 
-/** A string is cut into fixed 64-char chunks; an array replays the recorded PTY chunks as-is. */
+/** Strings use 64-character chunks; arrays preserve recorded PTY read boundaries. */
 export async function* replayTranscript(
   data: string | readonly string[],
   cols: number,
@@ -77,7 +108,7 @@ export async function finalReplayFrame(
   return last
 }
 
-/** The final screen as `terminal read --screen` projects it, composer draft blanked. */
+/** terminal read --screen projection with composer draft blanked. */
 export async function finalReadProjection(
   name: string,
   cols: number,
@@ -94,7 +125,6 @@ export async function finalReadProjection(
   }
 }
 
-/** The fixed-size chunks a string transcript replays as, for suites driving their own sink. */
 export function splitTranscriptIntoChunks(data: string): string[] {
   const chunks: string[] = []
   for (let offset = 0; offset < data.length; offset += DEFAULT_CHUNK_CHARS) {

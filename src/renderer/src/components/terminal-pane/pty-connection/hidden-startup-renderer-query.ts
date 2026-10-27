@@ -7,12 +7,12 @@ export function shouldKeepHiddenStartupRendererQueriesLive(
 ): boolean {
   return (
     Boolean(startup?.telemetry?.agent_kind && startup.telemetry.agent_kind !== 'other') ||
+    Boolean(startup?.agentLaunch) ||
     isKnownTuiAgentTerminalStartupCommand(startup?.command ?? '')
   )
 }
 
 export function containsHiddenStartupRendererQuery(data: string): boolean {
-  // Why: hidden Codex startup must not live-render ordinary redraw floods, but
-  // query chunks still need xterm's built-in terminal replies to unblock TUIs.
+  // Hidden startup skips redraw floods but query chunks still need replies to unblock TUIs.
   return containsCsiRendererQuery(data) || data.includes('\x1b]10;?') || data.includes('\x1b]11;?')
 }

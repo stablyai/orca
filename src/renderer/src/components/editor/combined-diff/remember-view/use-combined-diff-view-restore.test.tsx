@@ -7,10 +7,18 @@ import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { DiffSection } from '../../diff-section-types'
 import { useCombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
-import { combinedDiffViewStateCache } from './combined-diff-view-memory'
+import {
+  claimCombinedDiffView,
+  clearCombinedDiffViewMemory,
+  readCombinedDiffViewMemory,
+  releaseCombinedDiffView,
+  rememberCombinedDiffView,
+  type CombinedDiffViewSuccession
+} from './combined-diff-view-cache'
 import { useCombinedDiffViewRestore } from './use-combined-diff-view-restore'
-import { disposeClosedEditorTabs } from '../../closed-editor-tab-disposal'
-import type { MonacoModelRegistry } from '../../diff-monaco-model-disposal'
+import { createStore } from 'zustand/vanilla'
+import { createEditorModelRegistry } from '@/lib/editor-model-registry'
+import { attachClosedEditorTabCleanup } from '../../closed-editor-tab-controller'
 import type { OpenFile } from '@/store/slices/editor'
 
 function buildAllModeEntrySet(
@@ -36,7 +44,11 @@ function buildAllModeEntrySet(
   }
 }
 
-function restoreSections(entrySet: CombinedDiffEntrySet, viewStateKey: string): DiffSection[] {
+function restoreSections(
+  entrySet: CombinedDiffEntrySet,
+  viewStateKey: string,
+  succession?: CombinedDiffViewSuccession
+): DiffSection[] {
   let sections: DiffSection[] = []
   renderHook(() => {
     const registry = useCombinedDiffSectionLoadRegistry([])
@@ -50,7 +62,9 @@ function restoreSections(entrySet: CombinedDiffEntrySet, viewStateKey: string): 
         sections = typeof value === 'function' ? value(sections) : value
       },
       setSideBySide: () => {},
-      viewStateKey
+      succession,
+      viewStateKey,
+      worktreeId: 'wt-1'
     })
   })
   return sections
@@ -59,12 +73,11 @@ function restoreSections(entrySet: CombinedDiffEntrySet, viewStateKey: string): 
 describe('useCombinedDiffViewRestore deferral', () => {
   afterEach(() => {
     cleanup()
-    combinedDiffViewStateCache.clear()
+    clearCombinedDiffViewMemory()
   })
 
   it('keeps uncommitted rows deferred when only the branch pass counted', () => {
-    // combined-all concatenates two independent passes: the uncommitted numstat
-    // can fail (or be skipped at the entry cap) while the compare diff succeeds.
+    // All mode combines independent passes; successful compare counts cannot prove the uncommitted pass ran.
     const sections = restoreSections(
       buildAllModeEntrySet(
         [
@@ -78,11 +91,8 @@ describe('useCombinedDiffViewRestore deferral', () => {
     expect(sections.map((section) => section.loadOnDemand)).toEqual([true, true, false])
   })
 
-  it('restores a closed combined-diff tab from the view-state cache when it is reopened', () => {
-    // Why this test exists: combined-diff tab ids are deterministic
-    // (`<worktreeId>::all-diffs::uncommitted`), so closing and reopening the review hits the same
-    // viewStateKey and restores loaded bodies + scroll with no refetch. Sweeping the combined-diff
-    // view-state caches on tab close would therefore change what the user sees on reopen.
+  it('restores a closed combined-diff tab with a cold model registry when reopened', async () => {
+    // Closing must preserve loaded bodies and scroll for reopening, even after the model registry is cleared.
     const entrySet = buildAllModeEntrySet(
       [{ path: 'src/app.ts', status: 'modified', area: 'unstaged', added: 5 }],
       []
@@ -104,33 +114,93 @@ describe('useCombinedDiffViewRestore deferral', () => {
         largeDiffRenderLimit: null
       }
     ]
-    combinedDiffViewStateCache.set(viewStateKey, {
-      entrySignature: entrySet.entrySignature,
-      gitStatusSignature: '',
-      sections: loadedSections,
-      sectionHeights: {},
-      loadedIndices: [0],
-      scrollTop: 0,
-      sideBySide: false
+    const lease = claimCombinedDiffView(viewStateKey, 'wt-1')
+    rememberCombinedDiffView(lease, {
+      view: {
+        entrySignature: entrySet.entrySignature,
+        gitStatusSignature: '',
+        sections: loadedSections,
+        sectionHeights: {},
+        loadedIndices: [0],
+        sideBySide: false
+      }
     })
+    releaseCombinedDiffView(lease)
     cleanup()
 
-    const closedTab = {
+    const closedTab: OpenFile = {
       id: viewStateKey,
       mode: 'diff',
       diffSource: 'combined-uncommitted',
       filePath: '/repo',
-      worktreeId: 'wt-1'
-    } as unknown as OpenFile
-    disposeClosedEditorTabs(
-      {
-        editor: { getModel: () => null, getModels: () => [] },
-        Uri: { parse: (v: string) => v }
-      } as unknown as MonacoModelRegistry,
-      [closedTab]
-    )
+      worktreeId: 'wt-1',
+      relativePath: '',
+      language: 'plaintext',
+      isDirty: false
+    }
+    const store = createStore(() => ({ openFiles: [closedTab] }))
+    const detach = attachClosedEditorTabCleanup(store, createEditorModelRegistry())
+    try {
+      store.setState({ openFiles: [] })
+      await Promise.resolve()
+      store.setState({ openFiles: [closedTab] })
+      expect(restoreSections(entrySet, viewStateKey)).toEqual(loadedSections)
+    } finally {
+      detach()
+    }
+  })
 
-    expect(restoreSections(entrySet, viewStateKey)).toEqual(loadedSections)
+  it('restores a closed tab-scoped review in the fresh tab that reopens it', () => {
+    const entrySet = buildAllModeEntrySet(
+      [{ path: 'src/app.ts', status: 'modified', area: 'unstaged', added: 5 }],
+      []
+    )
+    const contentKey = 'wt-1::all-diffs::uncommitted'
+    const tabSuccession = (scopeId: string): CombinedDiffViewSuccession => ({
+      contentKey,
+      scopeId,
+      isScopeOpen: (id) => id === 'tab-reopened'
+    })
+    const loadedSections: DiffSection[] = [
+      {
+        key: 'unstaged:src/app.ts',
+        path: 'src/app.ts',
+        status: 'modified',
+        area: 'unstaged',
+        added: 5,
+        originalContent: 'before',
+        modifiedContent: 'after',
+        collapsed: false,
+        loading: false,
+        dirty: false,
+        diffResult: null,
+        largeDiffRenderLimit: null
+      }
+    ]
+    const lease = claimCombinedDiffView(
+      `${contentKey}::tab-closed`,
+      'wt-1',
+      tabSuccession('tab-closed')
+    )
+    rememberCombinedDiffView(lease, {
+      scrollTop: 900,
+      view: {
+        entrySignature: entrySet.entrySignature,
+        gitStatusSignature: '',
+        sections: loadedSections,
+        sectionHeights: {},
+        loadedIndices: [0],
+        sideBySide: false
+      }
+    })
+    releaseCombinedDiffView(lease)
+
+    const reopenedKey = `${contentKey}::tab-reopened`
+    expect(restoreSections(entrySet, reopenedKey, tabSuccession('tab-reopened'))).toEqual(
+      loadedSections
+    )
+    expect(readCombinedDiffViewMemory(reopenedKey)?.scrollTop).toBe(900)
+    expect(readCombinedDiffViewMemory(`${contentKey}::tab-closed`)).toBeUndefined()
   })
 
   it('auto-loads an uncounted tracked row once its own pass counted something', () => {

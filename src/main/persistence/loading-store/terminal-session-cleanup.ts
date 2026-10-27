@@ -8,11 +8,7 @@ import {
   type TerminalScrollbackSnapshotStorage
 } from '../../terminal-scrollback-snapshots'
 
-// Why localOnlyScrollbackByTabId is deliberately NOT here despite TERMINAL_SCROLLBACK_SESSION_HOMES
-// pairing it with terminalLayoutsByTabId: full normalization reaches the fail-closed strip in
-// workspace-session-terminal-buffers.ts, which drops a leaf whose worktree main cannot attribute —
-// the renderer already capped that field with attribution in hand, and re-stripping it here is the
-// scrollback loss the local-only home exists to prevent. Add it only together with that strip.
+// Exclude local-only scrollback: normalization lacks renderer attribution and would strip valid leaf buffers.
 const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceSessionState>([
   'tabsByWorktree',
   'terminalLayoutsByTabId'
@@ -27,14 +23,16 @@ export function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSess
 export function deleteRemovedTerminalScrollbackSnapshots(
   prior: WorkspaceSessionState | undefined,
   next: WorkspaceSessionState,
-  storage?: TerminalScrollbackSnapshotStorage
+  storage?: TerminalScrollbackSnapshotStorage,
+  /** Pending migration exports retain refs even after their session rows disappear. */
+  retainedRefs: ReadonlySet<string> = new Set()
 ): void {
   if (!prior) {
     return
   }
   const nextRefs = collectTerminalScrollbackSnapshotRefs(next)
   for (const ref of collectTerminalScrollbackSnapshotRefs(prior)) {
-    if (!nextRefs.has(ref)) {
+    if (!nextRefs.has(ref) && !retainedRefs.has(ref)) {
       deleteTerminalScrollbackSnapshotSync(ref, storage)
     }
   }

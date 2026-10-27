@@ -37,8 +37,7 @@ function makeStatus(runtimeId: string): RuntimeStatus {
 
 let lastVerified: RuntimeStatus | null = null
 
-// As the host-status snapshot does: an outage keeps the last verified status, so a same-runtime
-// return moves only the contact epoch, not the connection generation.
+// Same-runtime return retains verified status and advances contact epoch, not connection generation.
 function publish(status: RuntimeStatus | null, checkedAt: number): void {
   lastVerified = status ?? lastVerified
   useAppStore.getState().setRuntimeEnvironmentStatus('env-a', {

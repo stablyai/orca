@@ -1,8 +1,8 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
-import { RepositoryPane } from './RepositoryPane'
+import { RepositoryPane } from './repository/RepositoryPane'
 import { SettingsSection } from './SettingsSection'
-import { getSettingsProjectHostRepo } from './settings-project-list'
+import { getSettingsEntryHostSelection, getSettingsProjectHostRepo } from './settings-project-list'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
 
@@ -10,12 +10,17 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
   const { model, navigation, terminal, view } = context
   return model.settingsProjectList.map((settingsProject) => {
     const repoSectionId = `repo-${settingsProject.representativeRepoId}`
-    // Why: use the switcher-selected host's repo so identity/host-specific edits follow "Available Hosts".
+    // Identity edits must follow the selected Available Hosts entry.
+    const hostSelection = getSettingsEntryHostSelection(
+      settingsProject,
+      model.settingsProjectHostSelection,
+      model.settingsProjectSetupSelection
+    )
     const repo = getSettingsProjectHostRepo(
       settingsProject,
       model.repos,
-      model.settingsProjectHostSelection[settingsProject.projectId],
-      model.settingsProjectSetupSelection[settingsProject.projectId]
+      hostSelection.hostId,
+      hostSelection.setupId
     )
     if (!repo) {
       return null
@@ -37,7 +42,7 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
         searchEntries={navigation.getSectionSearchEntries(repoSectionId)}
       >
         {view.isSectionMounted(repoSectionId) ? (
-          // Why: re-key per host so same-id hosts don't reuse the prior host's drafts/effects.
+          // Re-key by host so same-ID hosts cannot inherit drafts/effects.
           <RepositoryPane
             key={repoHostIdentity}
             repo={repo}
@@ -48,7 +53,7 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
             updateRepo={model.updateRepo}
             removeProject={() => void model.removeProjectAllHosts(settingsProject.setups)}
             project={project}
-            selectedProjectSetupId={model.settingsProjectSetupSelection[settingsProject.projectId]}
+            selectedProjectSetupId={hostSelection.setupId}
             isLocalWindowsProject={
               getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
               terminal.isWindowsTerminalHost
@@ -56,7 +61,9 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
             wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}
             wslDistros={terminal.windowsTerminalCapabilities.wslDistros}
             wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
-            updateProject={model.updateProject}
+            updateProject={(projectId, updates) =>
+              model.updateProject(projectId, updates, getRepoExecutionHostId(repo))
+            }
           />
         ) : null}
       </SettingsSection>

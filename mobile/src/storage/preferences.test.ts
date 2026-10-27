@@ -1,21 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  HOST_DOCK_MAX_WIDTH,
-  HOST_DOCK_MIN_WIDTH,
-  HOST_SIDEBAR_DEFAULT_WIDTH,
   HOST_SIDEBAR_MAX_WIDTH,
   HOST_SIDEBAR_MIN_WIDTH,
   clampHostDockWidth,
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
-  loadMobileWebShellEnabled,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
-  mobileShellBuildKind,
-  mobileWebShellFlagCanBeOn,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles,
@@ -33,12 +27,13 @@ import {
   updateSessionViewOverride
 } from './session-view-preferences'
 
-// A store rather than two bare spies: the mirrored write path reads a key back after writing it,
-// so a `setItem` that answers with nothing is not a store any caller could have (ruling 35).
+const stored = vi.hoisted(() => new Map<string, string>())
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: vi.fn(),
-    setItem: vi.fn(async () => undefined)
+    getItem: vi.fn(async (key: string) => stored.get(key) ?? null),
+    setItem: vi.fn(async (key: string, value: string) => {
+      stored.set(key, value)
+    })
   }
 }))
 
@@ -52,8 +47,15 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 describe('session view preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('defaults to terminal and persists the chat default', async () => {
@@ -61,7 +63,9 @@ describe('session view preference', () => {
     await expect(loadDefaultSessionView()).resolves.toBe('terminal')
     expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:defaultSessionView')
 
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => stored.get(key) ?? null)
     await saveDefaultSessionView('chat')
+    await expect(loadDefaultSessionView()).resolves.toBe('chat')
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:defaultSessionView', 'chat')
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('bogus')
@@ -181,9 +185,11 @@ describe('session view preference', () => {
   it('orders per-tab mutations across callers without losing saved siblings', async () => {
     let stored = JSON.stringify({ saved: 'chat' })
     const firstWrite = deferred<void>()
+    const firstStarted = deferred<void>()
     vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
     vi.mocked(AsyncStorage.setItem)
       .mockImplementationOnce(async (_key, value) => {
+        firstStarted.resolve()
         await firstWrite.promise
         stored = value
       })
@@ -192,7 +198,7 @@ describe('session view preference', () => {
       })
 
     const first = updateSessionViewOverride('host', 'worktree', 'first', 'terminal')
-    await vi.waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1))
+    await firstStarted.promise
     const second = updateSessionViewOverride('host', 'worktree', 'second', 'chat')
     const reloaded = loadSessionViewOverrides('host', 'worktree')
 
@@ -279,8 +285,15 @@ describe('session view preference', () => {
 
 describe('push notification preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it.each(['true', 'false'])('requires fresh consent for legacy choice %s', async (legacy) => {
@@ -334,8 +347,15 @@ describe('push notification preference', () => {
 
 describe('terminal autocomplete preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('defaults to disabled when unset', async () => {
@@ -364,18 +384,27 @@ describe('terminal autocomplete preference', () => {
   it('persists the selected value', async () => {
     await saveTerminalAutocompleteEnabled(true)
 
+    await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(true)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'true')
 
     await saveTerminalAutocompleteEnabled(false)
 
+    await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(false)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'false')
   })
 })
 
 describe('terminal live input disabled handles preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('defaults to no disabled handles when unset', async () => {
@@ -420,6 +449,9 @@ describe('terminal live input disabled handles preference', () => {
       'folder:C:\\repo',
       new Set(['pty-2', 'pty-1'])
     )
+    await expect(
+      loadDisabledTerminalLiveInputHandles('host/one', 'folder:C:\\repo')
+    ).resolves.toEqual(new Set(['pty-2', 'pty-1']))
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'orca:terminalLiveInputDisabled:host%2Fone:folder%3AC%3A%5Crepo',
@@ -430,28 +462,35 @@ describe('terminal live input disabled handles preference', () => {
 
 describe('host sidebar width preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('clamps saved widths to the supported sidebar range', () => {
-    expect(clampHostSidebarWidth(HOST_SIDEBAR_MIN_WIDTH - 10)).toBe(HOST_SIDEBAR_MIN_WIDTH)
-    expect(clampHostSidebarWidth(HOST_SIDEBAR_MAX_WIDTH + 10)).toBe(HOST_SIDEBAR_MAX_WIDTH)
+    expect(clampHostSidebarWidth(270)).toBe(280)
+    expect(clampHostSidebarWidth(570)).toBe(560)
     expect(clampHostSidebarWidth(337.6)).toBe(338)
   })
 
-  it('falls back to the default width for missing, invalid, or unreadable storage', async () => {
+  it('has no saved width for missing, invalid, or unreadable storage', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
+    await expect(loadHostSidebarWidth()).resolves.toBeNull()
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-a-number')
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
+    await expect(loadHostSidebarWidth()).resolves.toBeNull()
 
     vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
 
-    await expect(loadHostSidebarWidth()).resolves.toBe(HOST_SIDEBAR_DEFAULT_WIDTH)
+    await expect(loadHostSidebarWidth()).resolves.toBeNull()
   })
 
   it('loads and persists clamped sidebar widths', async () => {
@@ -470,16 +509,23 @@ describe('host sidebar width preference', () => {
 
 describe('host dock width preference', () => {
   it('clamps saved widths to the supported dock range', () => {
-    expect(clampHostDockWidth(HOST_DOCK_MIN_WIDTH - 10)).toBe(HOST_DOCK_MIN_WIDTH)
-    expect(clampHostDockWidth(HOST_DOCK_MAX_WIDTH + 10)).toBe(HOST_DOCK_MAX_WIDTH)
+    expect(clampHostDockWidth(270)).toBe(280)
+    expect(clampHostDockWidth(570)).toBe(560)
     expect(clampHostDockWidth(337.6)).toBe(338)
   })
 })
 
 describe('terminal link open mode preference', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    vi.mocked(AsyncStorage.setItem).mockReset()
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem)
+      .mockReset()
+      .mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem)
+      .mockReset()
+      .mockImplementation(async (key, value) => {
+        stored.set(key, value)
+      })
   })
 
   it('defaults to Orca browser when unset', async () => {
@@ -503,151 +549,31 @@ describe('terminal link open mode preference', () => {
     await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
   })
 
+  it('orders writes across settings mounts and makes readers wait for the latest choice', async () => {
+    const firstWrite = deferred<void>()
+    let stored: string | null = 'orca-browser'
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (_key, value) => {
+      if (value === 'phone-browser') {
+        await firstWrite.promise
+      }
+      stored = value
+    })
+    const firstMount = saveTerminalLinkOpenMode('phone-browser')
+    const secondMount = saveTerminalLinkOpenMode('orca-browser')
+    const reader = loadTerminalLinkOpenMode()
+    await Promise.resolve()
+    expect(stored).toBe('orca-browser')
+    firstWrite.resolve()
+    await Promise.all([firstMount, secondMount])
+    await expect(reader).resolves.toBe('orca-browser')
+    expect(stored).toBe('orca-browser')
+  })
+
   it('persists the selected mode', async () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
+    await expect(loadTerminalLinkOpenMode()).resolves.toBe('phone-browser')
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
-  })
-})
-
-/** `__DEV__` is a React Native global, absent outside that runtime; assigned rather than cast so
- *  the test says which build kind it is running as without asserting a type on `globalThis`. */
-function setDevelopmentBuild(isDevelopmentBuild: boolean | undefined): void {
-  if (isDevelopmentBuild === undefined) {
-    Reflect.deleteProperty(globalThis, '__DEV__')
-    return
-  }
-  Object.assign(globalThis, { __DEV__: isDevelopmentBuild })
-}
-
-/** The build-time constant the release workflow sets. Under Metro this name is inlined before the
- *  bundle is written, so these cases measure the answer the inlined value produces, not the read. */
-function setShellBuildSwitch(value: string | undefined): void {
-  if (value === undefined) {
-    Reflect.deleteProperty(process.env, 'EXPO_PUBLIC_MOBILE_SHELL')
-    return
-  }
-  process.env.EXPO_PUBLIC_MOBILE_SHELL = value
-}
-
-describe('the mobile shell build kind', () => {
-  beforeEach(() => {
-    setShellBuildSwitch(undefined)
-  })
-
-  it('is native when the build set no switch at all, which is every default build', () => {
-    expect(mobileShellBuildKind()).toBe('native')
-  })
-
-  it.each([[''], ['native'], ['OTA'], [' ota'], ['ota-preview'], ['true']])(
-    'is native for %p, so only the exact word opts in',
-    (value) => {
-      setShellBuildSwitch(value)
-
-      expect(mobileShellBuildKind()).toBe('native')
-    }
-  )
-
-  it('is ota when the build set exactly that', () => {
-    setShellBuildSwitch('ota')
-
-    expect(mobileShellBuildKind()).toBe('ota')
-  })
-})
-
-describe('whether the hybrid shell flag can be on', () => {
-  beforeEach(() => {
-    setDevelopmentBuild(undefined)
-    setShellBuildSwitch(undefined)
-  })
-
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('cannot be on in %s with no switch set', (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-
-    expect(mobileWebShellFlagCanBeOn()).toBe(false)
-  })
-
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('can be on in %s built with the switch set to ota', (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-    setShellBuildSwitch('ota')
-
-    expect(mobileWebShellFlagCanBeOn()).toBe(true)
-  })
-
-  it('can be on in a development build whatever the switch says', () => {
-    setDevelopmentBuild(true)
-
-    expect(mobileWebShellFlagCanBeOn()).toBe(true)
-  })
-})
-
-describe('hybrid shell flag', () => {
-  beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    setDevelopmentBuild(undefined)
-    setShellBuildSwitch(undefined)
-  })
-
-  it('reads the developer toggle in a development build', async () => {
-    setDevelopmentBuild(true)
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(true)
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:mobileWebShellEnabled')
-  })
-
-  it('is off in a development build until the toggle writes it on', async () => {
-    setDevelopmentBuild(true)
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
-  })
-
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('is off in %s even with the key left on, and never reads it', async (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-    // The value a development build, or an OTA build this one was installed over, left behind in
-    // a container the install-over kept. The ability comes from the build, so the key cannot
-    // revive it — this is the case a native build shipped over an OTA build has to survive.
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
-    expect(AsyncStorage.getItem).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('is on in %s built for ota with the key never written', async (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-    setShellBuildSwitch('ota')
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(true)
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:mobileWebShellEnabled')
-  })
-
-  it('obeys an explicit off written by the Troubleshoot toggle in an ota build', async () => {
-    setDevelopmentBuild(false)
-    setShellBuildSwitch('ota')
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
-  })
-
-  it('is off in an ota build whose store cannot be read at all', async () => {
-    setDevelopmentBuild(false)
-    setShellBuildSwitch('ota')
-    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('no store'))
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
   })
 })

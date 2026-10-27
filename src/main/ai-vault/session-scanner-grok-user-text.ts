@@ -1,12 +1,4 @@
-// Shared Grok user-turn text helpers for AI Vault (list preview + full first-prompt
-// copy). Kept out of the native-chat decoder so vault scanners stay free of that
-// dependency while matching its bootstrap / user_query rules.
-
-/**
- * Prefer the body of a Grok `<user_query>` envelope when present (closing tag
- * optional). Bootstrap `<user_info>`-only rows return null so a later real ask
- * can seed the first prompt.
- */
+/** Extract the user_query body, accepting a missing closer; ignore bootstrap-only user_info rows. */
 export function extractGrokFirstUserPromptText(value: unknown): string | null {
   const raw = flattenGrokUserContent(value)
   if (!raw) {
@@ -20,8 +12,7 @@ export function extractGrokFirstUserPromptText(value: unknown): string | null {
   if (!trimmed || isGrokBootstrapContextText(trimmed)) {
     return null
   }
-  // Why: if the turn is still just a user_info dump (no query envelope), it is
-  // not the prompt the user typed and must not be copied as "first prompt".
+  // Bootstrap context without a query is not a copyable user prompt.
   if (
     startsWithIgnoreCaseTag(trimmed, 'user_info') &&
     !containsIgnoreCaseTag(trimmed, 'user_query')
@@ -68,7 +59,7 @@ export function stripGrokUserQueryEnvelope(text: string): string {
   }
   const bodyStart = start + opener.length
   const end = lower.indexOf(closer, bodyStart)
-  // Why: incomplete closing tag still holds the real ask after the opener.
+  // A missing closer can reflect an incomplete write; retain the ask after the opener.
   if (end === -1) {
     return text.slice(bodyStart).trim()
   }
@@ -82,12 +73,10 @@ export function isGrokBootstrapContextText(text: string): boolean {
   }
   const userInfoEnd = normalized.indexOf('</user_info>')
   if (userInfoEnd === -1) {
-    // Open-ended user_info dump with no query: treat as bootstrap noise.
     return !normalized.includes('<user_query>')
   }
   const remainder = normalized.slice(userInfoEnd + '</user_info>'.length).trim()
-  // Why: Grok appends a git snapshot to the bootstrap row; reject that envelope
-  // so real prompts mentioning either tag still count as user asks.
+  // Grok may append a git snapshot to bootstrap context; other trailing text can be a real prompt.
   return (
     remainder.length === 0 ||
     (remainder.startsWith('<git_status>') && remainder.endsWith('</git_status>'))

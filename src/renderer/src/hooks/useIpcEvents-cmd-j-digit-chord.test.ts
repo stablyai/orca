@@ -17,8 +17,7 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
     })
   }
 
-  // Why imported after the harness: it resets the module registry, so the bus the hook publishes on
-  // is only the same instance when it's loaded on the far side of that reset.
+  // Import the bus after harness reset so assertions observe the same instance as the hook.
   async function loadRowJumpBus(): Promise<CmdJRowIndexJumpModule> {
     return import('@/lib/cmd-j-row-index-jump')
   }
@@ -53,7 +52,8 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
     expect(rowJumps).toEqual([])
     // Why assert the activation and not just the silent bus: a premature return would also emit nothing.
     expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-c', {
-      navigationIntent: 'user-open'
+      navigationIntent: 'user-open',
+      showWorkspaceList: true
     })
   })
 
@@ -70,6 +70,7 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
 
     expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::path', {
       navigationIntent: 'user-open',
+      showWorkspaceList: true,
       executionHostId: 'ssh:box'
     })
   })

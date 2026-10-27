@@ -11,31 +11,13 @@ import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
-  runtimeEnvironmentSupportsCapability,
-  type RuntimeClientTarget
+  runtimeEnvironmentSupportsCapability
 } from './runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const SKILL_DISCOVERY_TIMEOUT_MS = 15_000
 
-/**
- * Discover skills on the runtime that actually runs them: the local desktop host
- * (or its WSL/project runtime) by default, or a connected remote Orca runtime
- * when one is active. This keeps install badges in sync with where the skill
- * files land instead of always reading the client's disk (#6789).
- *
- * The target is otherwise dropped for a remote call. Every target any caller can
- * currently produce describes the *client's* host — a WSL distro or a local
- * project-runtime resolution — and forwarding those would ask a Linux server to
- * resolve a WSL distro it does not have. The server does honour `cwd` and
- * `worktreeId` (see `main/runtime/rpc/methods/skills.ts`), so if a caller ever
- * supplies workspace identity, forward those two fields rather than widening
- * this to the whole target.
- *
- * `refresh` is the exception and must be forwarded: it describes the *request*,
- * not the client's host, and it is the only way an explicit re-check reaches
- * past the remote host's shared scans to its disk.
- * Portable inventory filters also apply to the remote disk being scanned.
- */
+/** Scan where skills execute (#6789). Current targets describe client-local WSL/project hosts, so omit them remotely; future workspace callers may forward cwd/worktreeId, not whole targets. Forward request-scoped refresh and portable inventory filters so explicit rechecks reach remote disk beyond shared scans. */
 export async function discoverSkillsForRuntimeTarget(
   runtimeTarget: RuntimeClientTarget,
   target?: SkillDiscoveryTarget
@@ -71,8 +53,7 @@ export async function runtimeTargetSupportsSkillDelete(
     return false
   }
   if (runtimeTarget.kind === 'local') {
-    // Desktop answers true immediately; on web the "local" host is a remote
-    // server that updates independently, so the preload probes its capability.
+    // Desktop supports immediately; web’s local API is an independently updated server and must probe.
     return window.api.skills.deleteSupported()
   }
   return runtimeEnvironmentSupportsCapability(runtimeTarget.environmentId, SKILL_DELETE_CAPABILITY)
@@ -92,9 +73,7 @@ async function assertSkillDeleteSupported(runtimeTarget: RuntimeClientTarget): P
       SKILL_DELETE_UPDATE_REQUIRED_MESSAGE
     )
   } catch (error) {
-    // A capability change racing the gate has no main-process hook to reuse:
-    // `recordSkillCapabilityAbsence` imports the main tracer and its capability
-    // parameter is a closed union over main-side capabilities.
+    // This capability race cannot reuse recordSkillCapabilityAbsence: it imports main tracing and accepts only main’s closed capability union.
     console.warn('[skills] delete capability absent at call time', error)
     throw error
   }

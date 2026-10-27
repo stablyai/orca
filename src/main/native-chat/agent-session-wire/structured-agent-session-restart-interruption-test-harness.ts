@@ -1,6 +1,8 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// A chat interrupted mid-turn by a restart, rebuilt on a fresh host over the same store, for the
-// restart-resume ownership and failure tests.
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem
+} from '../../../shared/agent-session-journal-types'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -13,6 +15,8 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import * as reducer from '../agent-session-journal/journal-reducer'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
@@ -35,9 +39,11 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 
-/** Starts the agent explicitly — the attach a client's ensure makes — for a test that needs a
- *  running child before its next step. Nothing else starts one ahead of a send. */
+export const QUEUED_BEFORE_QUIT = ['card A', 'card B'] as const
+
 export async function startAgent(state: {
   host: StructuredAgentSessionHost
   store: AgentSessionRecordStore
@@ -50,12 +56,12 @@ export async function startAgent(state: {
 }
 
 export async function interruptedRestart(
-  work: 'turn' | 'submission' | 'send-after-reply' | 'children' = 'turn',
-  historyBoundaryConsistent = true,
+  work: 'turn' | 'submission' | 'send-after-reply' | 'children' | 'queued-cards' = 'turn',
   /** What the restarted host proves about the recorded owner; gone unless a test says otherwise. */
   probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']> = async () => ({
     outcome: 'pid-absent'
-  })
+  }),
+  agents: StructuredAgentRegistry = claudeAndCodexDeclared()
 ) {
   const previous = hostTestState()
   let children: AgentChildWorkView[] = []
@@ -68,7 +74,7 @@ export async function interruptedRestart(
     throw new Error('missing provider event sink')
   }
   if (work === 'send-after-reply') {
-    // An earlier exchange had finished; the user's next send had not opened a turn yet.
+    // Prior exchange ended; the next send has no turn yet.
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'earlier-turn', ordinal: 1 },
       { kind: 'turn', turnId: 'earlier-turn', state: 'completed' },
@@ -80,7 +86,6 @@ export async function interruptedRestart(
     previous.dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const body = hostTestMessage('Perform the original task')
     await previous.host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
-    // Accepted first, handed over after: the work in flight is a send the provider took.
     await vi.waitFor(() => expect(previous.dispatch).toHaveBeenCalledOnce())
   } else if (work === 'children') {
     events.appendItem(
@@ -107,7 +112,7 @@ export async function interruptedRestart(
     })
     events.appendItem(group, roster('working'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     children = [childRecord({ id: 'child-1', kind: 'agent', description: 'Review loop 4' })]
-    // As the real adapters do: the child's own close settles the children it can no longer hear.
+    // Match adapter close: settle child work once its transport is gone.
     previous.host.deps.adapter.closeSession = async () => {
       events.appendItem(group, roster('unverifiable'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       return true
@@ -120,28 +125,27 @@ export async function interruptedRestart(
     )
   }
   await previous.host.flushStreamedEvents(SESSION)
+  if (work === 'queued-cards') {
+    for (const text of QUEUED_BEFORE_QUIT) {
+      const body = hostTestMessage(text)
+      const fields = { body, delivery: 'queue-if-active' as const }
+      const queued = await previous.host.send(CALLER, {
+        envelope: envelope('agentSession.send', fields),
+        ...fields
+      })
+      expect(queued).toMatchObject({ ok: true, value: { queued: expect.anything() } })
+    }
+  }
   await previous.host.flushAllStreamedEvents()
   const store = await openTestAgentSessionRecordStore(previous.root)
   const closeSession = vi.fn(async () => true)
-  // The relaunch comes after the quit that recorded the offer.
   const clock = { now: NOW + 1 }
   const log = recordingProductionStructuredAgentSessionLogger()
   const host = new StructuredAgentSessionHost({
+    agents,
     logger: log.logger,
     store,
-    adapter: {
-      ...adapter(),
-      closeSession,
-      ...(work === 'submission' || work === 'send-after-reply'
-        ? {
-            providerHistoryWindow: async () => ({
-              items: [],
-              boundaryConsistent: historyBoundaryConsistent,
-              turnInFlight: false
-            })
-          }
-        : {})
-    },
+    adapter: { ...adapter(), closeSession },
     journalDatabase: openTestJournalHostDatabase(previous.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
@@ -160,15 +164,57 @@ export async function interruptedRestart(
   return { ...hostTestState(), host, store, log, closeSession, marker, clock }
 }
 
+/** Commit/fold the only upcoming continuation submission, then throw to exercise replay. */
+export function throwAfterContinuationAccepted(): void {
+  const append = AgentSessionJournal.prototype.appendSubmission
+  vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission').mockImplementation(async function (
+    this: AgentSessionJournal,
+    ...args: Parameters<AgentSessionJournal['appendSubmission']>
+  ) {
+    await append.apply(this, args)
+    throw new Error('the accepted continuation could not be answered')
+  })
+}
+
+/** Fail folding after continuation commit to model uncertain readback; install immediately before sending. */
+export function continuationCannotFold(): void {
+  const fold = reducer.applyJournalRow
+  vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
+    if (row.kind !== 'submission') {
+      fold(state, row)
+      return
+    }
+    // Advance sequence/fence before failure, matching reducer ordering.
+    state.lastSequence = Math.max(state.lastSequence, row.seq)
+    state.highestFence = Math.max(state.highestFence, row.fence)
+    throw new Error('the accepted continuation could not fold')
+  })
+}
+
 export async function statusNotes(host: StructuredAgentSessionHost) {
-  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+  return notesOf((await host.journalSnapshot(SESSION)).items)
+}
+
+export async function readerNotes(host: StructuredAgentSessionHost) {
+  return notesOf(
+    withNativeChatCutTurnNotices((await host.journalSnapshot(SESSION)).items, {
+      agentName: 'Codex'
+    })
+  )
+}
+
+function notesOf(items: readonly AgentJournalRenderItem[]) {
+  return items.flatMap((item) =>
     item.body.kind === 'status' ? [{ text: item.body.text, tone: item.body.tone }] : []
   )
 }
 
-/** A continuation the host refuses because the user's own message was accepted first: another
- *  client's send lands after the action reserved the offer, just before the continuation is
- *  accepted. `userAnswers` instead has the user send before or after the whole attempt. */
+export const QUIT_CUT_NOTICE = {
+  text: 'Codex stopped while this response was in progress. You can continue in this conversation.',
+  tone: 'error'
+}
+
+/** Inject acceptance after reservation so the user wins; userAnswers moves the send outside the attempt. */
 export async function supersededRefusal(userAnswers?: 'before' | 'after') {
   const { host, store, acquire, dispatch, root } = await interruptedRestart()
   await host.restartResume.list()

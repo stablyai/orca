@@ -24,8 +24,7 @@ type TableContext = {
 }
 
 function cellPositionAtDocumentPosition(editor: Editor, position: number): number | null {
-  // Why: callers dispatch cached positions, so the doc may have shrunk since
-  // capture and resolve() throws past the end.
+  // Cached positions can outlive a document shrink; resolve would throw beyond its new end.
   if (position < 0 || position > editor.state.doc.content.size) {
     return null
   }
@@ -188,8 +187,7 @@ function selectedTableCoverage(
   return { columns, rows, includesHeader }
 }
 
-// Why: mutates the caller's transaction so the rebalance lands in the same
-// undo step as the insertion it follows.
+// Rebalance on the insertion transaction so both changes share one undo step.
 function rebalanceAddedColumn(
   transaction: Transaction,
   tablePosition: number,

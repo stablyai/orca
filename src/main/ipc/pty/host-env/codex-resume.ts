@@ -30,6 +30,7 @@ export type PrepareCodexResumeHomeArgs = {
   providerSession?: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
+  useSelectedAccount?: boolean
 }
 
 export function prepareCodexResumeHome(
@@ -48,13 +49,13 @@ export function prepareCodexResumeHome(
     preparation: prepareCodexSessionResume({
       providerSession,
       target: args.target,
-      launchEnv: args.launchEnv
+      launchEnv: args.launchEnv,
+      ...(args.useSelectedAccount ? { useSelectedAccount: true } : {})
     })
   }
 }
 
-/** Kept separate from resolveCodexResumeLaunch so non-Codex spawns never await:
- *  an extra tick reorders the pane-spawn reservation races this handler arbitrates. */
+/** Keep non-Codex preparation synchronous: an extra await changes pane-reservation race ordering. */
 export function noCodexResumeLaunch(command: string | undefined): CodexResumeLaunch {
   return {
     codexResumeHome: null,
@@ -65,8 +66,6 @@ export function noCodexResumeLaunch(command: string | undefined): CodexResumeLau
   }
 }
 
-/** The command a Codex launch actually runs: unchanged when provenance is verified,
- *  stripped of `resume <id>` when it is not. */
 export function resolveCodexResumeLaunch(
   command: string | undefined,
   preparation: PreparedCodexResumeHome
@@ -90,8 +89,7 @@ export function resolveCodexResumeLaunch(
     return {
       codexResumeHome: null,
       command: dropped.command,
-      // Why: staying silent only makes sense for metadata that positively belongs to
-      // another agent; a resume with no transcript path at all still owes the user a notice.
+      // Notify missing provenance too; only positively other-agent metadata can fail silently.
       notifyResumeUnavailable:
         dropped.droppedResumeArgv &&
         (prepared.claimedCodexProvenance || !providerSession.transcriptPath),
@@ -115,8 +113,7 @@ export async function reconcileSharedRuntimeResumeHome(
   return resumeHome.codexHomePath
 }
 
-/** Why: buildPtyHostEnv prefers ORCA_SEQUENCED_STARTUP_COMMAND over the launch command
- *  and the sequenced wrapper `eval`s it, so a dropped resume argv has to go there too. */
+/** Sequenced startup overrides the launch command and is evaluated by the wrapper; strip its resume arguments too. */
 export function stripSequencedStartupResumeArgv<T extends Record<string, string> | undefined>(
   env: T,
   launch: CodexResumeLaunch

@@ -1,9 +1,15 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionHistoryPage } from '../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { MAX_RETAINED_OWN_ITEMS } from '../../shared/structured-agent-session-item-retention'
 import {
   latestStructuredAgentContextFacts,
   selectStructuredAgentContextUsage
@@ -16,7 +22,6 @@ import {
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
@@ -28,6 +33,12 @@ import {
 } from './claude-context-usage-test-support'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import {
+  claudeAndCodexAgents,
+  NO_STRUCTURED_AGENTS
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 
 const SESSION = 'orca-session'
 const journals = createTrackedJournalOpener()
@@ -49,7 +60,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'claude',
-      providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
+      providerHandle: claudeProviderHandle('claude-session', null)
     },
     now: () => 9_000,
     stateDirectory: join(root, SESSION)
@@ -66,7 +77,6 @@ function translate(journal: AgentSessionJournal) {
   return { translator, settle }
 }
 
-/** A turn long enough that a small tail page starts after its turn row. */
 function runTurn(
   translator: ReturnType<typeof translate>['translator'],
   turnId: string,
@@ -80,29 +90,33 @@ function runTurn(
   })
 }
 
-function readOptions(
-  journal: AgentSessionJournal,
-  adapter: Partial<StructuredAgentSessionAdapter>
-) {
+function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegistry) {
   const running = {
     journal,
     child: { fence: 1, generation: 'generation-1' },
     params: { provider: 'claude' }
   }
+  const record = {
+    ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION, runtimeFence: 1 })),
+    options: { model: 'opus' }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the options read touches only these members.
   const context = {
     deps: {
       adapter: {
-        readOptions: async () => ({ models: [], current: { model: 'opus' } }),
-        ...adapter
+        readOptions: async () => ({ models: [], current: { model: 'opus' } })
       },
-      store: { getRecord: () => undefined }
+      agents,
+      store: {
+        requireWritableRecord: () => record,
+        getConversation: () => agentSessionConversationView(record)
+      }
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => running,
     conversation: async () => running
   } as unknown as StructuredAgentSessionMutationContext
-  return readStructuredAgentSessionOptions(context, SESSION)
+  return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
 }
 
 function attachTail(journal: AgentSessionJournal, limit: number): StructuredAgentSessionState {
@@ -170,7 +184,7 @@ describe('context usage for a turn row outside the loaded page', () => {
     const state = attachTail(journal, 3)
     expect(state.hasOlder).toBe(true)
     expect(hasTurnRow(state)).toBe(false)
-    const options = await readOptions(journal, { recordsContextUsage: () => true })
+    const options = await readOptions(journal, claudeAndCodexAgents())
 
     expect(options.contextUsage?.current).toEqual(
       latestStructuredAgentContextFacts(journal.snapshot().items)
@@ -189,9 +203,9 @@ describe('context usage for a turn row outside the loaded page', () => {
     runTurn(translator, 'turn-a', 1_000, [120_000, 130_000, 140_000])
     await settle()
 
-    const options = await readOptions(journal, {})
+    const options = await readOptions(journal, NO_STRUCTURED_AGENTS)
     expect(options).not.toHaveProperty('contextUsage')
-    // An older host answers the same way, so the ring reads only the loaded page, as before.
+    // Older hosts omit context facts, so clients fall back to loaded rows.
     expect(selectStructuredAgentContextUsage(attachTail(journal, 2).items)).toBeNull()
   })
 
@@ -212,7 +226,7 @@ describe('context usage for a turn row outside the loaded page', () => {
 
     expect(hasTurnRow(live)).toBe(false)
     expect(live.unloadedTurnRevisions).toBe(1)
-    const options = await readOptions(journal, { recordsContextUsage: () => true })
+    const options = await readOptions(journal, claudeAndCodexAgents())
     expect(
       selectStructuredAgentContextUsage(live.items, options.contextUsage?.current)
     ).toMatchObject({ usedTokens: 250_000, windowTokens: 1_000_000 })
@@ -226,22 +240,23 @@ describe('context usage for a turn row outside the loaded page', () => {
     runTurn(translator, 'turn-b', 3_000, [])
     await settle()
     const hostAnswer = async () =>
-      (await readOptions(journal, { recordsContextUsage: () => true })).contextUsage?.current
-    // The client reads the host once per turn, and again whenever its window loses a turn row.
+      (await readOptions(journal, claudeAndCodexAgents())).contextUsage?.current
     let state = attachTail(journal, 200)
     let host = await hostAnswer()
     const respond = (index: number): void => {
       translator.handle(assistantFrame(`turn-b-reply-${index}`, 4_000 + index, 200_000 + index))
     }
     let index = 0
-    for (; index < 1_900; index += 1) {
+    for (; index < MAX_RETAINED_OWN_ITEMS - 20; index += 1) {
       respond(index)
+      if (index % 100 === 99) {
+        await settle()
+      }
     }
     await settle()
     state = catchUp(journal, state)
     expect(hasTurnRow(state)).toBe(true)
 
-    // Step one response at a time across the batch that trims the turn row out, and past it.
     let stepsAfterTrim = 0
     while (stepsAfterTrim < 5 && index < 3_000) {
       respond(index++)

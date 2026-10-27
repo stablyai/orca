@@ -21,10 +21,33 @@ export async function getWorkItem(
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference
 ): Promise<MainWorkItem | null> {
+  const { item } = await getWorkItemWithRepository(
+    repoPath,
+    number,
+    type,
+    connectionId,
+    localGitOptions,
+    preference
+  )
+  return item
+}
+
+export type WorkItemRepositoryLookup = {
+  item: MainWorkItem | null
+  repository: GitHubApiRepository | null
+}
+
+export async function getWorkItemWithRepository(
+  repoPath: string,
+  number: number,
+  type?: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  preference?: IssueSourcePreference
+): Promise<WorkItemRepositoryLookup> {
   await acquire()
   try {
-    // Why: listWorkItems uses resolveIssueGitHubApiRepositorySource; open-by-number
-    // must share that preference so origin/upstream toggles cannot disagree.
+    // Number-based issue lookup must honor the same selected source as its list.
     if (type === 'issue') {
       const { source } = await resolveIssueGitHubApiRepositorySource(
         repoPath,
@@ -32,21 +55,26 @@ export async function getWorkItem(
         connectionId,
         localGitOptions
       )
-      // Why: explicit origin with no origin identity must not bare-lookup ambient gh
-      // (same fail-closed rule as origin-pinned PR candidate resolution).
+      // Explicit origin cannot fall back to ambient gh repository discovery.
       if (!source && preference === 'origin') {
-        return null
+        return { item: null, repository: null }
       }
-      return await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions)
+      return {
+        item: await fetchIssueWorkItem(repoPath, source, number, connectionId, localGitOptions),
+        repository: source
+      }
     }
     if (type === 'pr') {
-      return await fetchPullRequestWorkItemFromCandidates(
-        repoPath,
-        number,
-        connectionId,
-        localGitOptions,
-        preference
-      )
+      return {
+        item: await fetchPullRequestWorkItemFromCandidates(
+          repoPath,
+          number,
+          connectionId,
+          localGitOptions,
+          preference
+        ),
+        repository: null
+      }
     }
 
     try {
@@ -65,25 +93,28 @@ export async function getWorkItem(
           localGitOptions
         )
         if (issue) {
-          return issue
+          return { item: issue, repository: source }
         }
       }
     } catch (err) {
-      // Why: only fall through to PR #N on a genuine 404; re-throw transient errors so a flake can't surface an unrelated PR.
+      // Only genuine issue 404s permit trying a same-number PR; preserve transient failures.
       const stderr = err instanceof Error ? err.message : String(err)
       if (classifyGhError(stderr).type !== 'not_found') {
         throw err
       }
     }
-    return await fetchPullRequestWorkItemFromCandidates(
-      repoPath,
-      number,
-      connectionId,
-      localGitOptions,
-      preference
-    )
+    return {
+      item: await fetchPullRequestWorkItemFromCandidates(
+        repoPath,
+        number,
+        connectionId,
+        localGitOptions,
+        preference
+      ),
+      repository: null
+    }
   } catch {
-    return null
+    return { item: null, repository: null }
   } finally {
     release()
   }
@@ -113,8 +144,7 @@ export async function getWorkItemByOwnerRepo(
   const matchedRepository = candidates.find(
     (candidate) => githubRepoIdentityKey(candidate) === requestedKey
   )
-  // Why: this lookup is reachable from pasted links. Restricting it to a
-  // configured remote prevents gh from sending credentials to an arbitrary host.
+  // Pasted hosts must match configured remotes before receiving credentials.
   if (!matchedRepository) {
     return null
   }

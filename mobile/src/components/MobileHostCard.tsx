@@ -1,5 +1,5 @@
 import { Monitor, MoreVertical } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import { verdictDisplayLabel } from '../transport/connection-health'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
@@ -7,6 +7,8 @@ import { useHostDisplay } from '../transport/use-host-display'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { StatusDot } from './StatusDot'
 
@@ -16,13 +18,13 @@ export function MobileHostCard(props: {
   state: ConnectionState
   verdict: ConnectionVerdict
   path: MobileConnectionPath
-  // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
-  // away (STA-3123 shipped that bug once already).
+  // Card owns fresh/stale/unavailable wording so callers cannot hide retained counts again (STA-3123).
   worktreeInfo?: HostWorktreeInfo
   onPress: () => void
   onLongPress: () => void
   onOpenActions: () => void
 }) {
+  useMobileColorScheme()
   const credentialUnavailable = props.credentialStatus === 'temporarily-unavailable'
   const credentialMissing = props.credentialStatus === 'missing'
   const connected = props.state === 'connected' && !credentialUnavailable && !credentialMissing
@@ -143,7 +145,7 @@ export function MobileHostCard(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -198,4 +200,4 @@ const styles = StyleSheet.create({
   actionButtonPressed: {
     backgroundColor: colors.bgRaised
   }
-})
+}))

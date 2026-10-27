@@ -28,10 +28,8 @@ describe('stripTerminalControls', () => {
   })
 
   it('turns horizontal cursor moves into a URL-invalid guard', () => {
-    // A differential redraw steps the cursor over the on-screen `o` instead of
-    // reprinting it. Deleting the move would splice `localh` + `st` into `localhst`.
+    // Redraw skips the existing o; deleting its cursor move would invent the plausible host localhst.
     expect(stripTerminalControls('http://localh\x1b[1Cst:5199/')).toBe('http://localh[st:5199/')
-    // Absolute column (G) and position (H) moves are neutralized the same way.
     expect(stripTerminalControls('localh\x1b[8Gst')).toBe('localh[st')
     expect(stripTerminalControls('localh\x1b[1;9Hst')).toBe('localh[st')
   })
@@ -52,7 +50,6 @@ describe('extractUrlCandidates', () => {
   it('parses IPv6 with brackets', () => {
     const urls = extractUrlCandidates('Local: http://[::1]:5173/')
     expect(urls).toHaveLength(1)
-    // Node returns IPv6 hostnames with brackets retained.
     expect(urls[0].hostname.replace(/^\[|\]$/g, '')).toBe('::1')
     expect(urls[0].port).toBe('5173')
   })
@@ -63,9 +60,6 @@ describe('extractUrlCandidates', () => {
   })
 
   it('does not capture a corrupted host from a cursor-skip redraw', () => {
-    // Regression: a CLI redrawing `http://localhost:5199/` via a cursor-forward
-    // over the already-drawn `o` must not yield the plausible-but-wrong
-    // `localhst` host that `new URL()` would otherwise accept verbatim.
     const cleaned = stripTerminalControls('  >  Local: http://localh\x1b[1Cst:5199/\r\n')
     const urls = extractUrlCandidates(cleaned)
     expect(urls).toHaveLength(0)
@@ -165,7 +159,6 @@ describe('AdvertisedUrlWatcher.ingest', () => {
   it('reassembles an ANSI escape split across two chunks', () => {
     const watcher = bindFresh()
     watcher.ingest(PTY, '\x1b[32mhttps://example.com:3001/\x1b')
-    // Partial ESC at end keeps everything buffered; nothing emitted yet.
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
     watcher.ingest(PTY, '[0m\n')
     expect(watcher.lookup(WORKTREE, 3001)?.origin).toBe('https://example.com:3001')
@@ -276,12 +269,10 @@ describe('AdvertisedUrlWatcher.ingest', () => {
   it('unbindPty drops buffered state for the PTY', () => {
     const watcher = bindFresh()
     watcher.ingest(PTY, 'cached https://cached.example.com:3002/\n')
-    watcher.ingest(PTY, 'partial https://example.com:3001') // no newline → buffered
+    watcher.ingest(PTY, 'partial https://example.com:3001')
     const events: { worktreeId: string; port: number }[] = []
     watcher.onDidChange((event) => events.push(event))
     watcher.unbindPty(PTY)
-    // After unbind, the buffer is gone, so a completing chunk on a fresh
-    // binding would have to repeat the URL.
     watcher.bindPty(PTY, WORKTREE)
     watcher.ingest(PTY, '/now\n')
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
@@ -383,14 +374,11 @@ describe('AdvertisedUrlWatcher.ingest', () => {
 
   it('caps the pre-bind pending buffer at 32 distinct PTY IDs', () => {
     const watcher = new AdvertisedUrlWatcher({ now: () => 1_000 })
-    // 33 distinct unbound IDs; the first should be evicted before bind.
     for (let i = 0; i < 33; i++) {
       watcher.ingest(`pty-${i}`, `https://h${i}.example.com:300${i % 10}/\n`)
     }
-    // Bind the first ID now; if it was evicted (LRU), no URL should appear.
     watcher.bindPty('pty-0', WORKTREE)
     expect(watcher.lookup(WORKTREE, 3000)).toBeUndefined()
-    // Bind the most-recent ID; its pending data must still be there.
     watcher.bindPty('pty-32', WORKTREE)
     expect(watcher.lookup(WORKTREE, 3002)?.host).toBe('h32.example.com')
   })

@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
 import { SettingsSwitchRow } from './SettingsFormControls'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 type HowToStep = { key: string; title: string; description: string }
 
@@ -14,7 +15,6 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const signedIn = authStatus?.state === 'connected'
   const isWebClient = isWebClientLocation()
   const agentSharingEnabled = settings?.agentSkillSharingEnabled === true
@@ -131,22 +131,17 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
             </p>
           </div>
           {!isWebClient ? (
-            <Button
-              type="button"
-              size="sm"
-              disabled={authStatus?.configured !== true}
-              onClick={() => void connect()}
-            >
+            <OrcaSignInButton size="sm" disabled={authStatus?.configured !== true}>
               {authStatus?.state === 'reconnect-required'
                 ? translate('auto.components.settings.shareSkills.signInAgain', 'Sign in again')
                 : translate('auto.components.settings.shareSkills.signIn', 'Sign in to Orca')}
-            </Button>
+            </OrcaSignInButton>
           ) : null}
+          {!isWebClient ? <OrcaSignInWaitNotice className="basis-full" /> : null}
         </section>
       ) : null}
 
-      {/* Why: the link inventory grows without bound and belongs with the page
-          that publishes it; settings keeps the preference and the way over. */}
+      {/* Keep unbounded link inventory on its publishing page; Settings retains the preference and navigation. */}
       {signedIn && !isWebClient ? (
         <section className="flex flex-wrap items-center gap-4 py-5">
           <div className="min-w-0 flex-1 space-y-1">

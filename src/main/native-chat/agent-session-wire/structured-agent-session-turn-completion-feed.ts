@@ -1,21 +1,15 @@
-// The host's answer to "a request just finished", derived once per journal commit. A request is
-// the one the status row reports: a turn, or a send the agent or its start refused.
-//
-// WHY THE HOST DERIVES IT: a structured session runs on the execution host and keeps journalling
-// whether or not any renderer has a reader mounted. A client that derived completions itself would
-// see none for a backgrounded chat — which is the case this exists to serve.
-//
-// WHY IT IS LIVE-ONLY: nothing here is retained, replayed or queued. A subscriber learns what
-// finishes while it is subscribed and nothing else. That is the deliberate opposite of the status
-// feed next door, which replays every session on subscribe: a status is state a late reader still
-// needs, a completion is an edge that has already passed. Keeping a queue would create a durable
-// obligation with nothing to retire it.
+// Derive attention edges on the host so background chats work without a renderer reader.
+// Completion and prompt events are live-only; late subscribers receive no replay.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionAttentionEdge,
+  StructuredAttentionState
+} from '../../../shared/agent-session-attention'
 import type { StructuredAgentSessionLatestRequest } from '../../../shared/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-feed'
@@ -23,6 +17,10 @@ import type { StructuredAgentSessionStatusState } from './structured-agent-sessi
 export type StructuredAgentSessionTurnCompletionSubscriber = {
   id: string
   emit: (event: AgentSessionTurnCompletionEvent) => void
+  /** Older clients misread prompt arms, so delivery requires opt-in. */
+  includePrompts?: boolean
+  /** In-process reconciliation on restore and prompt removal. */
+  onState?: (state: StructuredAttentionState) => void
 }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
@@ -35,7 +33,7 @@ type CompletionFeedSession = {
 export type StructuredAgentSessionTurnCompletionFeedDeps = {
   sessions: ReadonlyMap<string, CompletionFeedSession>
   now: () => number
-  /** The status feed's projection for this commit, so the event follows the request its row reports. */
+  /** Reuse this commit’s status projection so events identify the request shown in the row. */
   readStatusState: (
     sessionId: string,
     journal?: AgentSessionJournal
@@ -44,9 +42,11 @@ export type StructuredAgentSessionTurnCompletionFeedDeps = {
 
 type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 
-/** Per-session baseline. `settled` is the last settled request this feed has accounted for;
- *  absence of the whole entry — not a null field — is what makes the first observation silent. */
-type SessionBaseline = CompletionFeedCursor & { settled: RequestMark | null }
+/** Missing baseline makes first observation silent; settled/prompts track already-accounted edges. */
+type SessionBaseline = CompletionFeedCursor & {
+  settled: RequestMark | null
+  prompts: ReadonlySet<string>
+}
 
 function settledMark(request: StructuredAgentSessionLatestRequest | null): RequestMark | null {
   return request && request.turnState !== 'running' ? { kind: request.kind, id: request.id } : null
@@ -58,7 +58,6 @@ export class StructuredAgentSessionTurnCompletionFeed {
 
   constructor(private readonly deps: StructuredAgentSessionTurnCompletionFeedDeps) {}
 
-  /** No snapshot arm, by decision: see the file header. A subscriber starts empty. */
   subscribe(subscriber: StructuredAgentSessionTurnCompletionSubscriber): () => void {
     this.subscribers.set(subscriber.id, subscriber)
     return () => this.unsubscribe(subscriber.id)
@@ -77,21 +76,18 @@ export class StructuredAgentSessionTurnCompletionFeed {
     }
   }
 
-  /** The session is no longer held here, so its baseline must go with it — a re-attached session
-   *  baselines again rather than re-announcing the turn it was already holding. */
+  /** Reattachments baseline silently instead of announcing old work. */
   forget(sessionId: string): void {
     this.baselines.delete(sessionId)
   }
 
-  /**
-   * One journal publication. Emits at most one completion, and only on the transition into a
-   * settled request this feed has not already accounted for.
-   *
-   * The first observation of a session only records where it is, so restore, restart, rewind and
-   * a re-read of history all pass through silently. An already-settled request republished by an
-   * in-place revision carries the same identity and so cannot fire twice.
-   */
-  observe(sessionId: string, journal?: AgentSessionJournal): void {
+  /** When prompt and clean completion coincide, keep prompt identity; send completion only to legacy clients.
+   * Failures reach everyone; first/historical observations and repeated identities stay silent. */
+  observe(
+    sessionId: string,
+    journal?: AgentSessionJournal,
+    options?: { historical?: boolean }
+  ): void {
     const session = this.deps.sessions.get(sessionId)
     const state = session ? this.deps.readStatusState(sessionId, journal) : null
     if (!session || !state) {
@@ -99,62 +95,113 @@ export class StructuredAgentSessionTurnCompletionFeed {
     }
     const cursor = (journal ?? session.journal).cursor()
     const request = state.latestRequest
+    const prompts = new Set(state.pendingPromptIds)
     const baseline = this.baselines.get(sessionId)
-    if (!baseline) {
-      // Baseline only. Whatever the session was already holding is history, not news.
-      this.baselines.set(sessionId, { ...cursor, settled: settledMark(request) })
+    if (!baseline || options?.historical || [...baseline.prompts].some((id) => !prompts.has(id))) {
+      this.publishState(session, sessionId, state.pendingPromptIds)
+    }
+    if (!baseline || options?.historical) {
+      this.baselines.set(sessionId, { ...cursor, settled: settledMark(request), prompts })
       return
     }
     if (baseline.epoch !== cursor.epoch || cursor.sequence < baseline.sequence) {
-      // Epoch replacement (rewind, repair, or legacy import) republishes history with a new
-      // identity. It is not a provider edge, so re-baseline silently instead of announcing the
-      // newest settled row as a fresh completion.
+      // Rewind/import changes identity without a provider edge; silently replace the baseline.
       baseline.epoch = cursor.epoch
       baseline.sequence = cursor.sequence
       baseline.settled = settledMark(request)
+      baseline.prompts = prompts
       return
     }
     baseline.sequence = cursor.sequence
-    if (request?.turnState === 'running') {
-      // A running turn clears the mark, so this detector fires on each running → settled
-      // transition rather than on an id it happens not to have seen.
-      baseline.settled = null
+    const raised = state.pendingPromptIds.find((id) => !baseline.prompts.has(id))
+    baseline.prompts = prompts
+    const completion = this.settledCompletion(sessionId, session, state, baseline)
+    if (completion) {
+      completion.journalCursor = cursor
+      const restatesPrompt = completion.awaitingUser === true && completion.outcome === 'success'
+      this.broadcast({ type: 'completion', completion }, restatesPrompt ? 'legacy' : 'all')
+      if (!restatesPrompt) {
+        return
+      }
+    }
+    if (raised === undefined) {
       return
     }
-    // Owed work waits, so sends refused one commit at a time announce once, when the last is
-    // answered. A pending prompt does not wait (structured chat has no other attention producer):
-    // the event says so itself, and answering it keeps the same identity.
-    // A withdrawn send leaves the older request latest.
+    this.broadcast(
+      {
+        type: 'prompt',
+        prompt: {
+          scope: session.params.location,
+          sessionId,
+          promptId: raised,
+          journalCursor: cursor,
+          raisedAt: this.deps.now()
+        }
+      },
+      'prompt-aware'
+    )
+  }
+
+  private publishState(
+    session: CompletionFeedSession,
+    sessionId: string,
+    pendingPromptIds: readonly string[]
+  ): void {
+    for (const subscriber of this.subscribers.values()) {
+      try {
+        subscriber.onState?.({ scope: session.params.location, sessionId, pendingPromptIds })
+      } catch {
+        // Delivery bookkeeping cannot cost this commit its attention edge.
+      }
+    }
+  }
+
+  private settledCompletion(
+    sessionId: string,
+    session: CompletionFeedSession,
+    state: StructuredAgentSessionStatusState,
+    baseline: SessionBaseline
+  ): AgentSessionTurnCompletion | null {
+    const request = state.latestRequest
+    if (request?.turnState === 'running') {
+      // Clear on running so each running-to-settled transition can fire, even for a reused ID.
+      baseline.settled = null
+      return null
+    }
+    // Wait until all owed sends are answered; pending prompts announce immediately.
+    // Withdrawn sends expose the older request without making it news.
     if (
       state.owesWork ||
       !request ||
       (baseline.settled?.kind === request.kind && baseline.settled.id === request.id)
     ) {
-      return
+      return null
     }
     baseline.settled = settledMark(request)
-    // ABSENT OUTCOME IS UNKNOWN: a turn the host only saw stop carries no verdict and gets no
-    // event. Inferring success here is the one mistake that would light the dot on a failure.
+    // No outcome means unknown; inferring success would alert on failures.
     if (!request.outcome) {
-      return
+      return null
     }
-    this.broadcast({
-      type: 'completion',
-      completion: {
-        scope: session.params.location,
-        sessionId,
-        turnId: request.id,
-        outcome: request.outcome,
-        completedAt: this.deps.now(),
-        // Stated here, not joined from the status stream: remote clients receive the two unordered.
-        ...(state.summary.status === 'attention' ? { awaitingUser: true } : {})
-      }
-    })
+    return {
+      scope: session.params.location,
+      sessionId,
+      turnId: request.id,
+      outcome: request.outcome,
+      completedAt: this.deps.now(),
+      // Include attention here: remote clients receive status and completion streams unordered.
+      ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {})
+    }
   }
 
-  private broadcast(event: { type: 'completion'; completion: AgentSessionTurnCompletion }): void {
-    // A Map skips entries deleted mid-iteration, so a failing subscriber can drop itself here.
+  private broadcast(
+    event: AgentSessionAttentionEdge,
+    audience: 'all' | 'legacy' | 'prompt-aware'
+  ): void {
     for (const subscriber of this.subscribers.values()) {
+      const promptAware = subscriber.includePrompts === true
+      if ((audience === 'legacy' && promptAware) || (audience === 'prompt-aware' && !promptAware)) {
+        continue
+      }
       try {
         subscriber.emit(event)
       } catch {

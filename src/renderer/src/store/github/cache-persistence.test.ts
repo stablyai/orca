@@ -1,7 +1,6 @@
-import { setImmediate } from 'node:timers/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createTestStore } from '../slices/store-test-helpers'
-import { debouncedSaveCache } from './cache-persistence'
+import { persistGitHubCacheChanges } from './cache-persistence'
 
 const setGitHub = vi.fn()
 
@@ -17,48 +16,34 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('releases unrelated discarded renderer state while the cache save is pending', async () => {
+const prEntry = (fetchedAt: number) => ({ data: null, fetchedAt })
+
+it('writes main within a second of a change, never before one', () => {
   const store = createTestStore()
-  const schedule = () => {
-    const drafts = { closedFile: Buffer.alloc(8 * 1024 * 1024, 65).toString('utf8') }
-    const state = { ...store.getState(), editorDrafts: drafts }
-    debouncedSaveCache(state)
-    return { state: new WeakRef(state), drafts: new WeakRef(drafts) }
-  }
-  const discarded = schedule()
-  if (!global.gc) {
-    throw new Error('config/vitest.config.ts must pass --expose-gc')
-  }
-  for (let turn = 0; turn < 3; turn += 1) {
-    await setImmediate()
-    global.gc()
-  }
-
+  persistGitHubCacheChanges(store)
+  vi.advanceTimersByTime(5000)
   expect(setGitHub).not.toHaveBeenCalled()
-  expect(discarded.state.deref() === undefined).toBe(true)
-  expect(discarded.drafts.deref() === undefined).toBe(true)
-  vi.advanceTimersByTime(1000)
-  expect(setGitHub).toHaveBeenCalledOnce()
-})
 
-it('persists the latest requested cache maps once after the trailing second', () => {
-  const state = createTestStore().getState()
-  const first = { ...state, prCache: {}, issueCache: {} }
-  const latest = { ...state, prCache: {}, issueCache: {} }
-  debouncedSaveCache(first)
+  store.setState({ prCache: { a: prEntry(1) } })
   vi.advanceTimersByTime(999)
-  expect(setGitHub).not.toHaveBeenCalled()
-
-  debouncedSaveCache(latest)
-  vi.advanceTimersByTime(999)
-  expect(setGitHub).not.toHaveBeenCalled()
+  // A later change rides the open window instead of pushing the write back.
+  store.setState({ prCache: { a: prEntry(2) } })
   vi.advanceTimersByTime(1)
   expect(setGitHub).toHaveBeenCalledOnce()
-  expect(setGitHub.mock.calls[0][0]).toEqual({
-    cache: { pr: latest.prCache, issue: latest.issueCache }
-  })
-  expect(setGitHub.mock.calls[0][0].cache.pr).toBe(latest.prCache)
-  expect(setGitHub.mock.calls[0][0].cache.issue).toBe(latest.issueCache)
+  expect(setGitHub.mock.calls[0][0].cache.pr).toBe(store.getState().prCache)
+  expect(setGitHub.mock.calls[0][0].cache.issue).toBe(store.getState().issueCache)
+})
+
+it('ignores state that is not a GitHub cache and installs once per store', () => {
+  const store = createTestStore()
+  persistGitHubCacheChanges(store)
+  persistGitHubCacheChanges(store)
+
+  store.setState({ checksCache: {} })
+  vi.advanceTimersByTime(1000)
+  expect(setGitHub).not.toHaveBeenCalled()
+
+  store.setState({ issueCache: {} })
   vi.advanceTimersByTime(1000)
   expect(setGitHub).toHaveBeenCalledOnce()
 })

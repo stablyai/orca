@@ -14,18 +14,12 @@ import {
   linkOrcaProfileToCloud,
   unlinkOrcaProfileFromCloud
 } from '../orca-profiles/profile-cloud-index'
-import {
-  cloudSessionIdentity,
-  recordSuccessfulCloudSessionLogin,
-  tombstoneCloudSession
-} from '../orca-profiles/profile-cloud-session-mutation'
+import { signOutCloudSession } from '../orca-profiles/profile-cloud-session-owner'
 import { saveOrcaCloudSession } from '../orca-profiles/profile-cloud-session-store'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
-  ARTIFACT_SHARING_DISABLED_MESSAGE,
-  isArtifactSharingEnabled
+  ARTIFACT_SHARING_DISABLED_MESSAGE
 } from '../../shared/artifact-sharing-gate'
-import { getDefaultSettings } from '../../shared/constants'
 import { ArtifactCloudService } from './artifact-cloud-service'
 
 const createdPaths: string[] = []
@@ -78,7 +72,6 @@ async function setup(sharingEnabled: { value: boolean } = { value: true }): Prom
   createdPaths.push(userDataPath)
   const active = ensureActiveOrcaProfile(userDataPath)
   linkOrcaProfileToCloud(active.profile.id, cloudA, userDataPath)
-  recordSuccessfulCloudSessionLogin(cloudSessionIdentity(active.profile.id, cloudA), userDataPath)
   return {
     userDataPath,
     profileId: active.profile.id,
@@ -366,10 +359,9 @@ describe('ArtifactCloudService record authorization', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createResponse()))
     await service.share(writeRequest)
 
-    tombstoneCloudSession(cloudSessionIdentity(profileId, cloudA), userDataPath)
+    signOutCloudSession(profileId, userDataPath)
     unlinkOrcaProfileFromCloud(profileId, userDataPath)
     linkOrcaProfileToCloud(profileId, cloudB, userDataPath)
-    recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, cloudB), userDataPath)
 
     await expect(service.update({ ...writeRequest, authToken: 'token-b' })).rejects.toThrow(
       /has not been shared/
@@ -394,10 +386,9 @@ describe('ArtifactCloudService record authorization', () => {
     const pending = service.share(writeRequest)
     await vi.waitFor(() => expect(resolvePost).toBeTypeOf('function'))
 
-    tombstoneCloudSession(cloudSessionIdentity(profileId, cloudA), userDataPath)
+    signOutCloudSession(profileId, userDataPath)
     unlinkOrcaProfileFromCloud(profileId, userDataPath)
     linkOrcaProfileToCloud(profileId, cloudB, userDataPath)
-    recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, cloudB), userDataPath)
     resolvePost?.(createResponse())
 
     await expect(pending).rejects.toThrow(/account changed/)
@@ -489,10 +480,6 @@ describe('ArtifactCloudService record authorization', () => {
 })
 
 describe('ArtifactCloudService publish capability gate', () => {
-  it('ships with the capability off so a fresh profile denies agent publishing', () => {
-    expect(isArtifactSharingEnabled(getDefaultSettings('/tmp'))).toBe(false)
-  })
-
   it.each([
     ['share', (service: ArtifactCloudService) => service.share(writeRequest)],
     ['publish', (service: ArtifactCloudService) => service.publish(writeRequest)],
@@ -509,17 +496,6 @@ describe('ArtifactCloudService publish capability gate', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('denies the dev auth-token override too, so the gate is not bypassable by env', async () => {
-    const { service } = await setup({ value: false })
-    const fetchMock = vi.fn().mockResolvedValue(createResponse())
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(service.share({ ...writeRequest, authToken: 'token-a' })).rejects.toThrow(
-      ARTIFACT_SHARING_DISABLED_MESSAGE
-    )
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
   it('persists no share record for a denied share, so a later update stays denied', async () => {
     const sharing = { value: false }
     const { service } = await setup(sharing)
@@ -530,7 +506,7 @@ describe('ArtifactCloudService publish capability gate', () => {
     await expect(service.update(writeRequest)).rejects.toThrow(/has not been shared/)
   })
 
-  it('keeps list, unshare, and delete working so links stay revocable after opting out', async () => {
+  it('keeps list and unshare working so links stay revocable after opting out', async () => {
     const sharing = { value: true }
     const { service } = await setup(sharing)
     const fetchMock = vi

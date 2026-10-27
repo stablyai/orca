@@ -1,5 +1,4 @@
-// Fence ranges depend only on the scanned string, so callers scanning one body
-// repeatedly compute them once and share them across sibling matches.
+// Share fence ranges across sibling scans of the same string to avoid rescanning.
 export type MarkdownFenceRanges = readonly (readonly [number, number])[]
 
 export function markdownFenceRanges(content: string): MarkdownFenceRanges {
@@ -32,8 +31,7 @@ export function markdownFenceRanges(content: string): MarkdownFenceRanges {
         }
         openFence = {
           closingPattern: new RegExp(
-            // CommonMark 4.5: a closing fence may be followed only by spaces or
-            // tabs, unlike `\s`, which also matches non-ASCII whitespace.
+            // CommonMark 4.5 permits only spaces/tabs after closing fences; generic whitespace also accepts invalid non-ASCII characters.
             `^ {0,3}${openingFenceMatch[1][0]}{${openingFenceMatch[1].length},}[ \\t]*$`
           ),
           start: offset
@@ -51,10 +49,6 @@ export function markdownFenceRanges(content: string): MarkdownFenceRanges {
   return ranges
 }
 
-export function isInsideRange(index: number, ranges: MarkdownFenceRanges): boolean {
-  return ranges.some(([start, end]) => index >= start && index < end)
-}
-
 function rangeEndAt(index: number, ranges: MarkdownFenceRanges): number {
   for (const [start, end] of ranges) {
     if (index >= start && index < end) {
@@ -64,12 +58,7 @@ function rangeEndAt(index: number, ranges: MarkdownFenceRanges): number {
   return -1
 }
 
-// CommonMark code spans: a backtick run only closes on a run of the same
-// length, so `` `<details>` `` is one span even though `<details>` alone
-// isn't. Mirrors the tick-matching in raw-markdown-html.ts's inline scan.
-// Fenced blocks are skipped whole — their delimiters and content are not
-// inline code, and scanning them pairs a fence backtick with a later prose
-// one, swallowing everything between. Blank lines are not span boundaries.
+// Pair exact-length backtick runs outside fences; fenced content cannot open spans, while blank lines may remain inside spans.
 export function markdownCodeSpanRanges(
   content: string,
   fenceRanges: MarkdownFenceRanges = markdownFenceRanges(content)

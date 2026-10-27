@@ -33,7 +33,7 @@ export const CheckParams = z
     terminalPaneKey: OptionalString,
     unread: OptionalBoolean,
     peek: OptionalBoolean,
-    // Why: `all` surfaces every message and skips mark-read; legacy encoding was the `{unread: false}` trick (design doc §3.2/§3.3).
+    // all skips mark-read; legacy clients encoded it as unread:false.
     all: OptionalBoolean,
     types: OptionalString,
     format: OptionalBoolean,
@@ -71,7 +71,7 @@ export const ReplyParams = z.object({
 
 export const InboxParams = z.object({
   limit: OptionalFiniteNumber,
-  // Why: filters the inbox to a handle so inbox and check --all give agreeing results (design doc §3.3).
+  // Filter inbox by handle to agree with check --all.
   terminal: OptionalString
 })
 
@@ -109,6 +109,12 @@ export const DispatchParams = z.object({
 /** An Orca agent session id; the answer is its conversation's Orca session ID. */
 export const SessionAddressParams = z.object({
   sessionId: requiredString('Missing sessionId')
+})
+
+/** Resolve earlier-run mailbox handles through the message’s recorded sender pane. */
+export const PartyLocationParams = z.object({
+  address: requiredString('Missing address'),
+  messageIds: z.array(z.string().min(1).max(256)).max(50).optional()
 })
 
 export const DispatchShowParams = z.object({

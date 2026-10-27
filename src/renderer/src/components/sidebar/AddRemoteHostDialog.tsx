@@ -13,6 +13,7 @@ import {
 import { AddRemoteHostSshConfigPicker } from './AddRemoteHostSshConfigPicker'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { AddRemoteHostServerFormPanel } from './AddRemoteHostServerFormPanel'
+import { AddWslHostDialogBody } from './AddWslHostDialogBody'
 import {
   addAllSshConfigHostsToOrca,
   loadSshConfigHostsForPicker,
@@ -20,7 +21,7 @@ import {
   saveNewSshHostFromForm
 } from './add-remote-host-ssh-actions'
 
-export type AddRemoteHostMode = 'ssh' | 'server'
+export type AddRemoteHostMode = 'ssh' | 'server' | 'wsl'
 
 type AddRemoteHostDialogProps = {
   mode: AddRemoteHostMode | null
@@ -34,9 +35,7 @@ export function AddRemoteHostDialog({
   onOpenChange
 }: AddRemoteHostDialogProps): React.JSX.Element {
   const open = mode !== null
-  // Why: `mode` drives both open-state and which form renders. On close it goes null while the
-  // dialog is still animating out, so the title/fields would flash to the SSH default. Latch the
-  // last non-null mode for rendering so the closing dialog keeps showing what the user saw.
+  // Latch non-null mode so the closing animation cannot flash SSH fields after mode clears.
   const [renderMode, setRenderMode] = useState<AddRemoteHostMode>(mode ?? 'ssh')
   if (mode !== null && mode !== renderMode) {
     setRenderMode(mode)
@@ -73,7 +72,7 @@ export function AddRemoteHostDialog({
 
   const busy = isSaving || isBulkImporting || resolvingConfigAlias !== null
 
-  // Why: a pending resolve must never write into a form the user has moved on from.
+  // Invalidate pending resolution when navigation makes its form obsolete.
   const invalidatePendingConfigResolve = () => {
     configResolveGeneration.current += 1
     setResolvingConfigAlias(null)
@@ -98,7 +97,7 @@ export function AddRemoteHostDialog({
   }
 
   const close = () => {
-    // Why: a stuck resolve must not trap the dialog open — reset() invalidates it instead.
+    // A stuck resolve must not block closing; reset invalidates it.
     if (isSaving || isBulkImporting) {
       return
     }
@@ -152,7 +151,7 @@ export function AddRemoteHostDialog({
 
   const openSshConfigPicker = async () => {
     setSshView('config-picker')
-    // Why: re-read ~/.ssh/config on open; the filter keystrokes reuse that parse.
+    // Refresh SSH config on open; filtering reuses that parse.
     await loadSshConfigHosts('', { refresh: true })
   }
 
@@ -165,7 +164,7 @@ export function AddRemoteHostDialog({
     const generation = configResolveGeneration.current + 1
     configResolveGeneration.current = generation
     setResolvingConfigAlias(host.alias)
-    // Why: a slower earlier pick must not overwrite the host the user settled on.
+    // Earlier slow selections must not overwrite the latest chosen host.
     const isStale = () => generation !== configResolveGeneration.current
     let resolved: Awaited<ReturnType<typeof prefillFormFromSshConfigHost>>
     try {
@@ -228,8 +227,7 @@ export function AddRemoteHostDialog({
         return
       }
       if (result.kind === 'already-synced') {
-        // Why: reuse the loader so the refresh keeps the active filter and stays inside the
-        // generation guard against an in-flight debounced search.
+        // Reuse the loader to retain filtering and generation guards against in-flight searches.
         await loadSshConfigHosts(configSearchQuery.current)
       }
     } finally {
@@ -285,7 +283,16 @@ export function AddRemoteHostDialog({
       setRuntimeEnvironments(environments)
       await readRuntimeHostStatusSnapshots()
       toast.success(
-        translate('auto.components.sidebar.AddRemoteHostDialog.serverSaved', 'Remote server added.')
+        result.updatedExisting
+          ? translate(
+              'auto.components.sidebar.AddRemoteHostDialog.serverAlreadyPaired',
+              'This server is already paired as {{value0}}; updated its connection.',
+              { value0: result.environment.name }
+            )
+          : translate(
+              'auto.components.sidebar.AddRemoteHostDialog.serverSaved',
+              'Remote server added.'
+            )
       )
       reset()
       onOpenChange(null)
@@ -339,6 +346,16 @@ export function AddRemoteHostDialog({
               onAddAllToOrca={() => void addAllConfigHostsToOrca()}
             />
           </div>
+        ) : renderMode === 'wsl' ? (
+          <AddWslHostDialogBody
+            adding={isSaving}
+            onAddingChange={setIsSaving}
+            onAdded={() => {
+              reset()
+              onOpenChange(null)
+            }}
+            onCancel={close}
+          />
         ) : renderMode === 'ssh' ? (
           <AddRemoteHostSshFormPanel
             form={sshForm}

@@ -1,16 +1,5 @@
-/**
- * Monotonic allocation of SSH target *registration* generations.
- *
- * A generation identifies one registration incarnation of a target ID: it
- * advances when a target is created, deleted and re-created, or explicitly
- * re-adopted. Connect, reconnect, and status transitions never advance it —
- * that is `SshConnectionState.connectionGeneration`, a different counter.
- *
- * The persisted counter is the *highest generation ever issued*. On load it is
- * reloaded as a high-water mark over the counter, every stored target, and
- * every generation an automation already captured, so a counter lost to a
- * rollback can never reissue a generation an automation is still fenced on.
- */
+/** Registration generations advance on create/re-create/re-adopt, never reconnect (connectionGeneration).
+ * Restore the high-water mark across counter, targets and captured automation generations so rollback cannot reuse a fenced incarnation. */
 
 export const FIRST_SSH_TARGET_GENERATION = 1
 
@@ -24,11 +13,9 @@ export function sanitizeSshTargetGeneration(value: unknown): number | undefined 
 }
 
 export type SshTargetGenerationHighWaterInput = {
-  /** Highest generation the persisted counter claims to have issued. */
   persistedCounter?: number | null
-  /** Generations stamped on stored SSH targets. */
   targetGenerations: Iterable<number | null | undefined>
-  /** Generations captured by stored automations — the reason a rollback cannot be trusted. */
+  /** Captured automation fences survive counter rollback. */
   capturedGenerations: Iterable<number | null | undefined>
 }
 

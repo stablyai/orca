@@ -1,3 +1,5 @@
+import { isAgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
   getDefaultSettings,
@@ -17,11 +19,18 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import {
+  DEFAULT_TUI_AGENT_ARGS,
+  DEFAULT_TUI_AGENT_ENV,
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../../shared/tui-agent-launch-defaults'
+import { hasTypedAgentPermission } from '../../../../shared/tui-agent-permission-choice'
+import { migrateAgentPermissionChoice } from '../../../../shared/tui-agent-permission-lift'
+import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/osc52-clipboard-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
+import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
 
@@ -62,15 +71,18 @@ export function mergeHostWebUIState(
   local: PersistedUIState,
   incoming: PairedUiState
 ): PersistedUIState {
-  // Why `satisfies Record<...>` rather than a `Pick<...>` annotation: every member is optional in
-  // PersistedUIState, so Pick would accept a literal that silently skipped a newly added member.
+  // All PersistedUIState members are optional; satisfies Record catches newly omitted keys that Pick would accept.
   const pinned = {
     automationHostFilter: local.automationHostFilter,
     hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
+    sidebarOpen: local.sidebarOpen,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,
+    agentsHideWorkspacesFromOtherDevices: local.agentsHideWorkspacesFromOtherDevices === true,
+    agentsHideAutomationGeneratedWorkspaces: local.agentsHideAutomationGeneratedWorkspaces === true,
+    agentsHideCliCreatedWorkspaces: local.agentsHideCliCreatedWorkspaces === true,
     agentsShowChildAgents: local.agentsShowChildAgents,
     agentsCompactMode: local.agentsCompactMode,
     agentsShowSearch: local.agentsShowSearch,
@@ -79,7 +91,12 @@ export function mergeHostWebUIState(
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
     manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
-  return { ...mergeWebUIState(local, incoming), ...pinned }
+  return {
+    ...mergeWebUIState(local, incoming),
+    ...pinned,
+    // Old hosts omit this field; a cached arm must not make their strict ui.set reject mode changes.
+    statusBarCompactChangeNoticeDismissed: incoming.statusBarCompactChangeNoticeDismissed !== false
+  }
 }
 
 export function mergeFeatureInteractionState(
@@ -129,6 +146,33 @@ export function mergeOsc52ClipboardNoticePending(
   )
 }
 
+/** A browser-saved settings blob with each load-time migration applied. */
+export function migrateStoredWebSettings(stored: Partial<GlobalSettings>): Partial<GlobalSettings> {
+  return {
+    ...stored,
+    ...migrateBrowserSavedAgentPermission(stored),
+    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
+    ...normalizeTerminalCursorStyleDefault(stored),
+    ...normalizeOsc52ClipboardDefaultOn(stored),
+    terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
+    ...migratePortugueseUiLanguageOnLoad(stored)
+  }
+}
+
+/** Move legacy browser-saved permission flags so stored defaults cannot duplicate them; missing keys used the shipped default. */
+function migrateBrowserSavedAgentPermission(stored: Partial<GlobalSettings>) {
+  if (hasTypedAgentPermission(stored) || (!stored.agentDefaultArgs && !stored.agentDefaultEnv)) {
+    return {}
+  }
+  return migrateAgentPermissionChoice(
+    {
+      agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS, ...stored.agentDefaultArgs },
+      agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV, ...stored.agentDefaultEnv }
+    },
+    null
+  )
+}
+
 export function mergeSettings(
   base: GlobalSettings,
   updates: Partial<GlobalSettings>,
@@ -139,6 +183,8 @@ export function mergeSettings(
     ...base,
     ...updates,
     notifications: {
+      // Why: browser-stored settings can predate a newer notification field.
+      ...defaults.notifications,
       ...base.notifications,
       ...updates.notifications
     },
@@ -163,6 +209,11 @@ export function mergeSettings(
     terminalCustomThemes: normalizeTerminalCustomThemes(
       updates.terminalCustomThemes ?? base.terminalCustomThemes
     ),
+    nativeChatAppearance: normalizeNativeChatAppearanceSettings(
+      Object.hasOwn(updates, 'nativeChatAppearance')
+        ? updates.nativeChatAppearance
+        : base.nativeChatAppearance
+    ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }
   return {
@@ -171,4 +222,14 @@ export function mergeSettings(
       preserveExplicitValue: options.preserveAutoRenameBranchFromWorkUpdate
     })
   }
+}
+
+/** The host's new-chat permission default (the host seeds from it), kept only when a known mode. */
+export function runtimeChatPermissionSetting(
+  settings: Partial<GlobalSettings>,
+  _includeAgentOverrides = true
+): Pick<GlobalSettings, 'nativeChatPermissionMode'> {
+  return isAgentChatPermissionMode(settings.nativeChatPermissionMode)
+    ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
+    : {}
 }

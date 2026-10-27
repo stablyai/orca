@@ -5,7 +5,7 @@ import type {
   SshConnectionState,
   SshProviderEpoch
 } from '../../../../shared/ssh-types'
-import { createDirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
+import { makeTab, makeWorktree } from '@/store/slices/store-test-helpers'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 
 function connectedState(
@@ -40,6 +40,46 @@ async function settle(): Promise<void> {
 const originalStore = useAppStore.getState()
 const cleanups: (() => void)[] = []
 
+const WORKTREE_ID = 'repo-ssh::/work/demo'
+const TAB_ID = 'tab-ssh'
+const PTY_ID = 'ssh:target-a@@pty-1'
+
+function seedSshTab(): void {
+  useAppStore.setState({
+    repos: [
+      {
+        id: 'repo-ssh',
+        path: '/work/demo',
+        displayName: 'demo',
+        badgeColor: '#000',
+        addedAt: 1,
+        connectionId: 'target-a',
+        executionHostId: 'ssh:target-a'
+      }
+    ],
+    worktreesByRepo: {
+      'repo-ssh': [
+        makeWorktree({
+          id: WORKTREE_ID,
+          repoId: 'repo-ssh',
+          path: '/work/demo',
+          hostId: 'ssh:target-a'
+        })
+      ]
+    },
+    tabsByWorktree: {
+      [WORKTREE_ID]: [makeTab({ id: TAB_ID, worktreeId: WORKTREE_ID, ptyId: PTY_ID })]
+    },
+    ptyIdsByTabId: { [TAB_ID]: [PTY_ID] }
+  })
+}
+
+function expectSshTabBound(): void {
+  const state = useAppStore.getState()
+  expect(state.tabsByWorktree[WORKTREE_ID][0].ptyId).toBe(PTY_ID)
+  expect(state.ptyIdsByTabId[TAB_ID]).toEqual([PTY_ID])
+}
+
 async function createHarness(
   initialStates: readonly SshConnectionState[] = [],
   reconciledStates: readonly SshConnectionState[] = []
@@ -68,6 +108,7 @@ async function createHarness(
         listRemovedTargetLabels: async () => ({}),
         getState,
         listPortForwards: async () => [],
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: async () => [],
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},
@@ -80,30 +121,17 @@ async function createHarness(
       }
     }
   })
-  const store = useAppStore.getState()
-  const invalidate = vi.spyOn(store, 'invalidateStaleDirectSshTargetPtyBindings').mockReturnValue(1)
-  const retry = vi.spyOn(store, 'retryDirectSshTargetPanes').mockReturnValue(1)
-  const clearBindings = vi.spyOn(store, 'clearDirectSshTargetPtyBindings').mockReturnValue(1)
-  const runtime = createDirectSshBridgeRuntime()
-  const requestReconnect = vi.spyOn(runtime.reconnectCoordinator, 'requestReconnect')
-  const prepareAndSync = vi.spyOn(runtime, 'prepareAndSync')
   const unsubs: (() => void)[] = []
+  const stop = registerDirectSshStateIpcBridge(unsubs)
   cleanups.push(() => {
     for (const unsubscribe of unsubs) {
       unsubscribe()
     }
-    runtime.stop()
+    stop()
   })
-  registerDirectSshStateIpcBridge(unsubs, runtime)
   await settle()
   return {
-    runtime,
     getState,
-    invalidate,
-    retry,
-    clearBindings,
-    requestReconnect,
-    prepareAndSync,
     emit: (state: SshConnectionState) => {
       if (!stateListener) {
         throw new Error('SSH state listener was not registered')
@@ -130,10 +158,11 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-describe('direct SSH connect reply routing', () => {
+describe('direct SSH connected-state routing', () => {
   it.each(['reply-first', 'push-first'] as const)(
-    'retries through the real coordinator once when connection ordering is %s',
+    'keeps the target bindings on connected pushes when ordering is %s',
     async (ordering) => {
+      seedSshTab()
       const harness = await createHarness()
       const state = connectedState()
       if (ordering === 'reply-first') {
@@ -143,92 +172,38 @@ describe('direct SSH connect reply routing', () => {
       if (ordering === 'push-first') {
         harness.applyConnectReply(state)
       }
-
-      expect(harness.requestReconnect).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.invalidate).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.retry).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.runtime.reconnectAuthorityByTarget.get(state.targetId)).toEqual(
-        authority(state)
-      )
       await settle()
-
-      harness.retry.mockClear()
       harness.emit({ ...state })
 
-      expect(harness.requestReconnect).toHaveBeenCalledOnce()
-      expect(harness.invalidate).toHaveBeenCalledOnce()
-      expect(harness.retry).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.prepareAndSync).toHaveBeenLastCalledWith(authority(state), 'wake-refresh')
+      expectSshTabBound()
     }
   )
 
-  it('keeps hydration preparation-only and corrects its duplicate without requesting reconnect', async () => {
-    const state = connectedState()
-    const harness = await createHarness([state])
-
-    expect(harness.prepareAndSync).toHaveBeenCalledExactlyOnceWith(
-      authority(state),
-      'initial-hydration'
-    )
-    expect(harness.requestReconnect).not.toHaveBeenCalled()
-    expect(harness.invalidate).not.toHaveBeenCalled()
-    expect(harness.retry).not.toHaveBeenCalled()
-
-    harness.emit({ ...state })
-
-    expect(harness.requestReconnect).not.toHaveBeenCalled()
-    expect(harness.retry).toHaveBeenCalledExactlyOnceWith(authority(state))
-    expect(harness.runtime.reconnectAuthorityByTarget.size).toBe(0)
-
-    const next = connectedState(state.targetId, 2)
-    harness.applyConnectReply(next)
-    harness.retry.mockClear()
-    harness.emit(next)
-
-    expect(harness.requestReconnect).toHaveBeenCalledExactlyOnceWith(authority(next))
-    expect(harness.retry).toHaveBeenCalledExactlyOnceWith(authority(next))
-  })
-
   it.each(['disconnected', 'error'] as const)(
-    'forgets a routed authority after %s even when the next connect reply reaches the store first',
+    'keeps bindings on %s and on the next connected push',
     async (status) => {
+      seedSshTab()
       const state = connectedState()
       const harness = await createHarness([state])
       harness.emit({ ...state, status })
+      // Loss of contact is not evidence the remote PTY exited.
+      expectSshTabBound()
 
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
       harness.applyConnectReply(state)
       harness.emit(state)
-
-      expect(harness.requestReconnect).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.retry).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.runtime.reconnectAuthorityByTarget.get(state.targetId)).toEqual(
-        authority(state)
-      )
+      expectSshTabBound()
     }
   )
 
   it.each(['providerEpoch', 'connectionGeneration'] as const)(
-    'preserves initial hydration routing when %s must be reconciled',
+    'reconciles a partial %s on initial hydration',
     async (missingField) => {
       const state = connectedState()
       const partial: SshConnectionState = { ...state }
       delete partial[missingField]
-      const harness = await createHarness([partial], [state])
+      await createHarness([partial], [state])
 
       expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toEqual(state)
-      expect(harness.prepareAndSync).toHaveBeenCalledExactlyOnceWith(
-        authority(state),
-        'initial-hydration'
-      )
-      expect(harness.requestReconnect).not.toHaveBeenCalled()
-      expect(harness.retry).not.toHaveBeenCalled()
-
-      harness.emit(state)
-
-      expect(harness.requestReconnect).not.toHaveBeenCalled()
-      expect(harness.retry).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.runtime.reconnectAuthorityByTarget.size).toBe(0)
     }
   )
 
@@ -248,44 +223,14 @@ describe('direct SSH connect reply routing', () => {
       const partial: SshConnectionState = { ...state }
       delete partial[missingField]
       harness.emit(partial)
+      expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toEqual(partial)
 
-      expect(harness.requestReconnect).not.toHaveBeenCalled()
-      expect(harness.retry).not.toHaveBeenCalled()
       resolveState(state)
       await settle()
 
-      expect(harness.requestReconnect).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.invalidate).toHaveBeenCalledExactlyOnceWith(authority(state))
-      expect(harness.retry).toHaveBeenCalledWith(authority(state))
-      harness.emit(state)
-      expect(harness.requestReconnect).toHaveBeenCalledOnce()
+      expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toMatchObject(
+        authority(state)
+      )
     }
   )
-
-  it('keeps routed authorities and disconnect cleanup separate for each target', async () => {
-    const harness = await createHarness()
-    const first = connectedState('target-a')
-    const second = connectedState('target-b')
-    for (const state of [first, second]) {
-      harness.applyConnectReply(state)
-      harness.emit(state)
-    }
-    await settle()
-    expect(harness.requestReconnect.mock.calls).toEqual([[authority(first)], [authority(second)]])
-
-    harness.emit({ ...first, status: 'disconnected' })
-    harness.retry.mockClear()
-    harness.emit(second)
-
-    expect(harness.requestReconnect).toHaveBeenCalledTimes(2)
-    expect(harness.retry).toHaveBeenCalledExactlyOnceWith(authority(second))
-    expect(harness.runtime.reconnectAuthorityByTarget.get(second.targetId)).toEqual(
-      authority(second)
-    )
-    expect(harness.runtime.reconnectAuthorityByTarget.has(first.targetId)).toBe(false)
-
-    harness.applyConnectReply(first)
-    harness.emit(first)
-    expect(harness.requestReconnect).toHaveBeenNthCalledWith(3, authority(first))
-  })
 })

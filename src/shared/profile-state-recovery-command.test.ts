@@ -4,6 +4,7 @@ import { profileStateRecoveryRequestSchema } from './profile-state-recovery-comm
 describe('offline recovery source selection', () => {
   it.each([
     { kind: 'current-json' },
+    { kind: 'latest-json' },
     { kind: 'json', revision: 1 },
     { kind: 'sqlite', backupId: 'selected-backup' }
   ])('accepts an explicit source: %j', (selector) => {
@@ -16,6 +17,8 @@ describe('offline recovery source selection', () => {
     { kind: 'current-json', revision: 1 },
     { kind: 'current-json', backupId: 'selected-backup' },
     { kind: 'current-json', path: '../different-profile/orca-data.json' },
+    { kind: 'latest-json', revision: 1 },
+    { kind: 'latest-json', backupId: 'selected-backup' },
     { kind: 'json', revision: null },
     { kind: 'json', revision: 0 },
     { kind: 'sqlite' },

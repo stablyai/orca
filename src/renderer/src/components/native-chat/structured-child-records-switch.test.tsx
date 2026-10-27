@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// The switch, wired end to end in the renderer: a host that publishes its child records reaches the
-// sidebar through the status bridge and the chat strip through the session channel, and both read
-// one child the same way — including once the parent's transport is lost or its row goes stale.
+// Verify sidebar/status and chat/channel child views agree through parent transport loss and stale rows.
 
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -51,10 +49,6 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null
-}))
-
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClientModule>()),
   runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
@@ -73,7 +67,7 @@ vi.mock('@/components/sidebar/CacheTimer', () => ({
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
-import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
+import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
 import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -155,7 +149,6 @@ function readRow(root: Element, separator: string): RenderedRow {
   }
 }
 
-/** The sidebar's rows for the session, built exactly as the worktree card builds them. */
 function sidebarRows(): RenderedRow[] {
   const entry = row()
   const terminalTab: TerminalTab = {
@@ -182,7 +175,6 @@ function sidebarRows(): RenderedRow[] {
   )
 }
 
-/** The strip's rows, from the real session-status component over the channel's roster. */
 function stripRows(container: HTMLElement): RenderedRow[] {
   return [...container.querySelectorAll('[data-native-chat-background-tasks] li')]
     .filter((item) => item.querySelector(':scope > span.truncate'))
@@ -195,15 +187,10 @@ function Surfaces(props: { roster: AgentSessionBackgroundTaskState | null }): Re
       <StructuredAgentSessionStatusBridge />
       <NativeChatStructuredSessionStatus
         sessionId={tab.entityId}
-        agentLabel="Claude"
-        startupPhase="ready"
-        startupChildKey={null}
         paneKey={PANE_KEY}
-        error={null}
-        composerError={null}
         isVisible
         backgroundTasks={structuredSessionBackgroundTasksView(props.roster, null)}
-        stopBackgroundTask={async () => undefined}
+        stopBackgroundTask={async () => null}
       />
     </TooltipProvider>
   )
@@ -265,12 +252,9 @@ describe('the switch: both surfaces read the host child records', () => {
     expect(row().subagents).toEqual([
       expect.objectContaining({ id: 'codex-agent:thread-b', state: 'working' })
     ])
-    // An idle lead held open by a live subagent reads working, from the records.
     expect(row()).toMatchObject({ state: 'working' })
   })
 
-  // The live-entry builder copies fields one by one; an unchanged list keeps its identity so the
-  // rows derived from it do not re-render, and a changed one replaces it.
   it("keeps the row's child list when a summary repeats it, and replaces it when it changes", async () => {
     const children = [view('a')]
     await mountWith(children)
@@ -298,7 +282,6 @@ describe('the switch: both surfaces read the host child records', () => {
     expect(sidebarRows()).toEqual([live])
     expect(stripRows(container)).toEqual([live])
 
-    // The status stream drops: the host is not heard from, so neither surface vouches for it.
     act(() => feed()({ type: 'end' }))
     const lost = { dot: 'No recent update', lead: 'Audit a', trail: 'No update in 2m' }
     await waitFor(() => expect(sidebarRows()).toEqual([lost]))
@@ -332,13 +315,12 @@ describe('the switch: both surfaces read the host child records', () => {
     expect(stripRows(container)).toHaveLength(1)
     const strip = () => container.querySelector('[data-native-chat-background-tasks]')
 
-    // The child finishes: the host sends no running children, so no roster and no summary rows.
     rerender(<Surfaces roster={null} />)
     act(() => feed()({ type: 'status', session: summary({ children: undefined }) }))
     expect(strip()).toBeNull()
     expect(sidebarRows()).toEqual([])
 
-    // An older host sends its own task list, and clears it the same way.
+    // Legacy hosts use their task list and must clear it through the same surfaces.
     rerender(
       <Surfaces roster={{ state: 'monitoring', tasks: [{ id: 'task-1', kind: 'command' }] }} />
     )

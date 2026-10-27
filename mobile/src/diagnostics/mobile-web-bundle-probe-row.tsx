@@ -3,6 +3,7 @@ import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { Package } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import {
   useMobileWebBundleProbe,
@@ -10,7 +11,6 @@ import {
 } from './use-mobile-web-bundle-probe'
 import type { HostProfile } from '../transport/types'
 
-/** Dialling the host is part of the tap, so the label says which half is still running. */
 function buttonLabel(state: MobileWebBundleProbeState, awaitingHost: boolean): string {
   if (state.status !== 'running') {
     return 'Fetch mobile web bundle'
@@ -18,8 +18,8 @@ function buttonLabel(state: MobileWebBundleProbeState, awaitingHost: boolean): s
   return awaitingHost ? 'Connecting…' : 'Fetching bundle…'
 }
 
-/** One `label — detail` line in the same row shape the diagnostic checks use. */
 function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
+  useMobileColorScheme()
   return (
     <View style={styles.checkRow}>
       <Text style={styles.checkLabel}>{label}</Text>
@@ -29,6 +29,7 @@ function ProbeLine({ label, detail, failed }: { label: string; detail: string; f
 }
 
 function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; hostName: string }) {
+  useMobileColorScheme()
   if (state.status === 'idle' || state.status === 'running') {
     return null
   }
@@ -54,18 +55,10 @@ function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; ho
   )
 }
 
-/**
- * Development-only: fetches the whole mobile web bundle from a paired desktop and reports what came
- * back. Phase A ships no production path that renders a bundle, and this row is the only thing that
- * exercises the operations end to end on a device.
- *
- * `app/troubleshoot.tsx` mounts it behind `__DEV__`, so a shipped build never runs the host lookup.
- *
- * The screen carries no host parameter and troubleshoots every paired host, one reachability check
- * each, so there is no host it is "on". The probe takes the first paired host and names it in the
- * result rather than implying it speaks for all of them.
- */
+// Dev-only end-to-end bundle fetch; troubleshoot.tsx gates this behind __DEV__. It neither caches nor renders the bundle.
+// Troubleshoot has no selected host, so probe the first paired host and name it explicitly.
 export function MobileWebBundleProbeRow() {
+  useMobileColorScheme()
   const [hosts, setHosts] = useState<readonly HostProfile[]>([])
   useEffect(() => {
     let stale = false

@@ -11,6 +11,8 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -25,7 +27,7 @@ beforeEach(async () => {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: root
   })
@@ -62,25 +64,24 @@ describe('structured send idempotency', () => {
         sessionId: 'session-1',
         journal,
         fence: 2,
+        agents: NO_STRUCTURED_AGENTS,
+        agent: 'codex',
         adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
         persistOptions: async () => undefined,
         resolvedBy: 'caller',
         publish: vi.fn(),
-        flushStreamedEvents: async () => undefined,
         now: () => 1
       },
       input
     )
 
-    // The recorded outcome comes back verbatim: no dispatch, no new row, and the
-    // doubt is neither cleared nor sharpened into a rejection.
+    // Replay uncertainty without dispatch or reclassifying the recorded outcome.
     expect(dispatch).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown', reason } }
     })
     expect(journal.snapshot()).toEqual(before)
-    // And the refusal does not resurrect a recovered submission as still working.
     expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions(), 2)).toBe(false)
   })
 
@@ -104,11 +105,12 @@ describe('structured send idempotency', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'caller',
       publish: vi.fn(),
-      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
     const input = {
@@ -124,8 +126,6 @@ describe('structured send idempotency', () => {
     await performSend(context, input)
     const replay = await performSend(context, input)
 
-    // Acceptance records the one submission; the reused id answers with it and writes nothing.
-    // Handing it over is the delivery loop's, never a second accept's.
     expect(replay).toMatchObject({
       ok: true,
       value: {

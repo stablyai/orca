@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
+import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 
 const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
@@ -30,7 +31,7 @@ function releaseExitedProcessPipes(proc: ChildProcess): void {
   }
 }
 
-function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
+export function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
   if (hasExited(proc)) {
     return Promise.resolve(true)
   }
@@ -112,6 +113,15 @@ function killPid(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
+function hasPidExited(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'ESRCH'
+  }
+}
+
 async function forceKillPidTree(pid: number): Promise<void> {
   if (!pid) {
     return
@@ -126,14 +136,22 @@ async function forceKillPidTree(pid: number): Promise<void> {
     return
   }
 
-  // Why: CI showed orphaned Electron renderer and shell children after the
-  // parent close path returned. Capture the tree before killing the root so
-  // descendants do not get reparented out from under the cleanup.
+  // Capture descendants before killing the root or reparenting can strand Electron/shell children.
   const pids = [...readPosixDescendantPids(pid), pid]
   for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGTERM')
   }
-  await delay(FORCE_KILL_WAIT_MS)
+  const deadline = performance.now() + FORCE_KILL_WAIT_MS
+  while (true) {
+    if (pids.every(hasPidExited)) {
+      return
+    }
+    const remainingMs = deadline - performance.now()
+    if (remainingMs <= 0) {
+      break
+    }
+    await delay(Math.min(50, remainingMs))
+  }
   for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGKILL')
   }
@@ -149,14 +167,7 @@ async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
   await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
 }
 
-/**
- * Force-quit: SIGKILL the app and every helper process under it, with no SIGTERM first and no
- * chance to run shutdown code. Killing the whole tree matches what an OS force-quit does, and keeps
- * orphaned renderer/GPU children from outliving the test worker.
- *
- * Use `closeElectronAppForE2E` for an ordinary quit — this exists for specs that need a client to
- * vanish without unwinding its sockets or subscriptions.
- */
+// SIGKILL the whole tree without shutdown hooks for force-quit scenarios; use ordinary close for graceful persistence.
 export async function forceQuitElectronAppForE2E(
   app: ElectronApplication,
   options: { preserveDaemons?: boolean } = {}
@@ -195,10 +206,58 @@ export async function forceQuitElectronAppForE2E(
   ).catch(() => undefined)
 }
 
-export async function closeElectronAppForE2E(app: ElectronApplication): Promise<void> {
+// Stop serve like a supervisor so its detached PTYs survive; macOS vetoes unmarked app.quit and ordinary close may kill the daemon (#15537).
+export async function stopServeElectronAppForE2E(app: ElectronApplication): Promise<void> {
   const proc = app.process()
-  const releasePipes = (): void => releaseExitedProcessPipes(proc)
+  // Why: Windows has no catchable SIGTERM, and its serve has no native-quit veto to bypass.
+  if (process.platform === 'win32' || !proc.pid) {
+    await closeElectronAppForE2E(app)
+    return
+  }
+  if (!hasExited(proc)) {
+    proc.kill('SIGTERM')
+  }
+  if (!(await waitForExit(proc, GRACEFUL_CLOSE_TIMEOUT_MS))) {
+    throw new Error(`orca serve ${proc.pid} did not exit after SIGTERM`)
+  }
+  releaseExitedProcessPipes(proc)
+  // Playwright close can remain pending after the process exits on its own.
+  await withTimeout(
+    app.close(),
+    PROCESS_EXIT_TIMEOUT_MS,
+    'Timed out releasing stopped serve process'
+  ).catch(() => undefined)
+}
+
+export async function closeElectronAppForE2E(
+  app: ElectronApplication,
+  options: { cleanupDaemonsForUserDataDir?: string } = {}
+): Promise<void> {
+  const proc = app.process()
+  const started = performance.now()
+  let rootExitMs: number | null = hasExited(proc) ? 0 : null
+  let pipesClosedMs: number | null = null
+  let outcome = 'closed'
+  let daemonCleanup: Promise<void> | undefined
+  const startDaemonCleanup = (): void => {
+    if (options.cleanupDaemonsForUserDataDir && !daemonCleanup) {
+      daemonCleanup = cleanupE2EDaemons(options.cleanupDaemonsForUserDataDir)
+      void daemonCleanup.catch(() => undefined)
+    }
+  }
+  const releasePipes = (): void => {
+    if (hasExited(proc)) {
+      rootExitMs ??= performance.now() - started
+      // Linux daemon trees retain Chromium sockets that block Playwright's public close.
+      startDaemonCleanup()
+    }
+    releaseExitedProcessPipes(proc)
+  }
+  const pipesClosed = (): void => {
+    pipesClosedMs = performance.now() - started
+  }
   proc.once('exit', releasePipes)
+  proc.once('close', pipesClosed)
   releasePipes()
   try {
     await withTimeout(app.close(), GRACEFUL_CLOSE_TIMEOUT_MS, 'Timed out closing Electron app')
@@ -209,13 +268,23 @@ export async function closeElectronAppForE2E(app: ElectronApplication): Promise<
       }
     }
   } catch {
+    outcome = 'fallback'
     if (proc) {
       await forceKillProcessTree(proc)
     }
   } finally {
     proc.off('exit', releasePipes)
+    proc.off('close', pipesClosed)
     releasePipes()
+    recordElectronShutdownTiming('close', started, {
+      pid: proc.pid,
+      outcome,
+      rootExitMs,
+      pipesClosedMs
+    })
   }
+  startDaemonCleanup()
+  await daemonCleanup
 }
 
 function readDaemonPidFiles(userDataDir: string): number[] {
@@ -229,14 +298,20 @@ function readDaemonPidFiles(userDataDir: string): number[] {
     if (!entry.endsWith('.pid')) {
       continue
     }
+    let raw: string
     try {
-      const raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
+      raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
+    } catch {
+      // Why: an exiting daemon removes its pid file between readdir and read.
+      continue
+    }
+    try {
       const parsed = JSON.parse(raw) as { pid?: unknown }
       if (typeof parsed.pid === 'number' && Number.isInteger(parsed.pid)) {
         pids.push(parsed.pid)
       }
     } catch {
-      const pid = Number(readFileSync(path.join(daemonDir, entry), 'utf8').trim())
+      const pid = Number(raw)
       if (Number.isInteger(pid)) {
         pids.push(pid)
       }
@@ -246,11 +321,15 @@ function readDaemonPidFiles(userDataDir: string): number[] {
 }
 
 export async function cleanupE2EDaemons(userDataDir: string): Promise<void> {
-  // Why: app quit intentionally leaves daemon PTYs alive for warm reattach.
-  // E2E temp profiles are deleted after each test, so their detached daemons
-  // must be stopped explicitly or CI accumulates orphan Electron/shell trees.
-  for (const pid of readDaemonPidFiles(userDataDir)) {
-    await forceKillPidTree(pid)
+  // Ordinary quit retains daemon PTYs; disposable profiles must explicitly stop them to avoid leaked CI process trees.
+  const started = performance.now()
+  const pids = readDaemonPidFiles(userDataDir)
+  try {
+    for (const pid of pids) {
+      await forceKillPidTree(pid)
+    }
+    cleanupE2ECrashpad(userDataDir)
+  } finally {
+    recordElectronShutdownTiming('daemon-cleanup', started, { daemonCount: pids.length })
   }
-  cleanupE2ECrashpad(userDataDir)
 }

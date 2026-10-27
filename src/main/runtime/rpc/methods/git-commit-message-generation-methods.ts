@@ -6,7 +6,7 @@ import {
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   WorktreeSelector
-} from './git-params'
+} from '../../../../shared/rpc-contract/git-params'
 
 type CommitMessageGenerationOverride = {
   commitMessageAi?: GlobalSettings['commitMessageAi']
@@ -17,8 +17,7 @@ type CommitMessageGenerationOverride = {
   commitMessageDiscoveryHostKey?: string
 }
 
-// Why: generateCommitMessage and generatePullRequestFields share the same optional
-// override fields; returning undefined when none are set keeps the no-override call path.
+// Share optional overrides across commit/PR generation; undefined preserves the no-override path.
 function buildCommitMessageGenerationOverride(params: {
   commitMessageAi?: unknown
   sourceControlAi?: unknown
@@ -65,6 +64,7 @@ function buildCommitMessageGenerationOverride(params: {
 export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.generateCommitMessage',
+    permission: 'workspace',
     params: GitGenerateCommitMessage,
     handler: async (params, { runtime }) => {
       const override = buildCommitMessageGenerationOverride(params)
@@ -76,6 +76,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   }),
   defineMethod({
     name: 'git.discoverCommitMessageModels',
+    permission: 'workspace',
     params: GitDiscoverCommitMessageModels,
     handler: async (params, { runtime }) =>
       runtime.discoverRuntimeCommitMessageModels(
@@ -90,12 +91,14 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   }),
   defineMethod({
     name: 'git.cancelGenerateCommitMessage',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) =>
       runtime.cancelRuntimeGenerateCommitMessage(params.worktree)
   }),
   defineMethod({
     name: 'git.generatePullRequestFields',
+    permission: 'workspace',
     params: GitGeneratePullRequestFields,
     handler: async (params, { runtime }) => {
       const input = {
@@ -115,6 +118,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   }),
   defineMethod({
     name: 'git.cancelGeneratePullRequestFields',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) =>
       runtime.cancelRuntimeGeneratePullRequestFields(params.worktree)

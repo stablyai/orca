@@ -5,7 +5,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   USER_MESSAGE,
@@ -58,8 +58,7 @@ describe('a requested stop of a structured Claude chat', () => {
         { type: 'tool_use', id: 'tool-1', name: 'Bash', input: { command: 'sleep 120' } }
       ])
     )
-    // What Claude 2.1.283 emitted within 35 ms of the supervised SIGTERM mid-tool, recorded
-    // against the real CLI: the killed tool's result, a status frame, and no `result` frame.
+    // Captured from Claude 2.1.283 after mid-tool SIGTERM: tool/status frames without a result.
     connection.close = async () => {
       connection.handlers.onMessage?.(
         frame('user', 'user-2', [
@@ -85,6 +84,6 @@ describe('a requested stop of a structured Claude chat', () => {
     expect(turns.at(-1)).toMatchObject({ turnId: 'turn-1', state: 'interrupted' })
     const ended = events.filter((event) => event.type === 'ended')
     expect(ended).toEqual([expect.objectContaining({ reason: 'claude session closed' })])
-    expect(ended[0]).not.toHaveProperty('cause')
+    expect(ended[0]).toMatchObject({ cause: 'requested-close' })
   })
 })

@@ -1,19 +1,9 @@
-/** Durable single-writer session records and their operation ledger, as rows in the host's chat
- *  journal database. */
-
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import {
-  commitConversationClearRecord,
-  commitConversationCommandRecord,
-  type AgentSessionConversationClear
-} from './agent-session-conversation-command-record'
-import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
-
+import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
+import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
+import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
   agentSessionOperationKey,
-  type AgentSessionOperationClaim,
   type AgentSessionOperationDecision,
-  type AgentSessionOperationOutcome,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
@@ -22,14 +12,16 @@ import {
   evaluateAgentSessionMutationOperation,
   admitAgentSessionOperationInto,
   claimAgentSessionOperationInto,
+  admitAndClaimAgentSessionOperationInto,
+  type ClaimAfterAdmission,
   settleAgentSessionOperationInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
-} from './agent-session-operation-admission'
+} from './agent-session/ownership/agent-session-operation-admission'
 import {
   isAgentSessionClaimKeyVerifiable,
   retireAgentSessionClaimKey
-} from './agent-session-claim-key-retention'
+} from './agent-session/ownership/agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
@@ -43,7 +35,7 @@ import {
   evictAgentSessionOwner,
   proveAgentSessionOwner,
   type AgentSessionProcessIdentityCommit
-} from './agent-session-lease-transitions'
+} from './agent-session/ownership/agent-session-lease-transitions'
 import {
   settleFailedAgentSessionAcquisition,
   settleFailedAgentSessionPostAcquisitionAttachment,
@@ -53,94 +45,149 @@ import {
 import {
   renewAgentSessionLeases,
   type AgentSessionLeaseRenewal
-} from './agent-session-lease-renewal'
+} from './agent-session/ownership/agent-session-lease-renewal'
 import {
   applyAgentSessionRestartProbes,
   collectAgentSessionRestartProbes,
   type AgentSessionRestartProbeArgs
-} from './agent-session-restart-reconciliation'
+} from './agent-session/ownership/agent-session-restart-reconciliation'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
 import {
   commitAgentSessionReservation,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
-} from './agent-session-reservation-admission'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
-import { setAgentSessionTabVisibility, showAgentSessionTabs } from './agent-session-tab-table'
+} from './agent-session/ownership/agent-session-reservation-admission'
+import {
+  getAgentSessionConversation,
+  selectWritableAgentSessionRecord,
+  listAgentSessionConversations,
+  requireWritableAgentSessionRecord,
+  heldAgentSessionIds,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
+import {
+  agentSessionVisibleTabIndex,
+  listVisibleAgentSessionIds,
+  setAgentSessionTabVisibility,
+  showAgentSessionTabs
+} from './agent-session/agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
+import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import { createAgentSessionFoundingStore } from './agent-session-founding-store'
+import {
+  compareAndSetAgentSessionRecordName,
+  type AgentSessionUserNameWrite,
+  type CompareAndSetConversationName,
+  setAgentSessionRecordConversationName,
+  setAgentSessionRecordUserNameThrough
+} from './agent-session-record-conversation-name'
+import { AgentSessionRecordPublication } from './agent-session-record-publication'
+
+/** Single-writer records/operation ledger in the host chat-journal database. */
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
 
-export class AgentSessionRecordStore {
-  private readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
-  private readonly firstRecordListeners = new Set<() => void>()
+export class AgentSessionRecordStore extends AgentSessionRecordPublication {
+  readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
 
   private constructor(
-    private readonly transactions: AgentSessionStoreTransactions,
+    transactions: AgentSessionStoreTransactions,
     readonly hostId: string
-  ) {}
+  ) {
+    super(transactions)
+    this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
+    this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
+  }
 
-  /** Reads every row once; nothing re-reads them. `hostId` is the execution host this runtime is. */
+  /** Structural readability does not depend on which agents this host can launch. */
   static open(args: {
     journalDatabase: JournalHostDatabase
     hostId: string
   }): AgentSessionRecordStore {
-    const loaded = loadAgentSessionStoreRows(args.journalDatabase.db, args.hostId)
-    return new AgentSessionRecordStore(
-      new AgentSessionStoreTransactions(args.journalDatabase, loaded),
-      args.hostId
-    )
+    const rows = loadAgentSessionStoreRows(args.journalDatabase.db)
+    const transactions = new AgentSessionStoreTransactions(args.journalDatabase, rows, args.hostId)
+    return new AgentSessionRecordStore(transactions, args.hostId)
   }
 
   private get state(): AgentSessionStoreState {
     return this.transactions.state
   }
 
-  /** A newer Orca wrote the database: every read answers, and every write is refused. */
+  /** Newer-build databases permit reads, never writes. */
   get readOnly(): boolean {
     return this.transactions.readOnly
   }
 
+  backfillChatPermissionModes = (ranWithFullAccess: (provider: string) => boolean): Promise<void> =>
+    backfillAgentSessionPermissionModes(this.transactions, ranWithFullAccess)
+
   getRecord = (sessionId: string): AgentSessionRecord | null =>
     this.state.records.get(sessionId) ?? null
 
+  getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
+  listConversations = () => listAgentSessionConversations(this.state)
+  selectWritableRecord = (sessionId: string) =>
+    selectWritableAgentSessionRecord(this.state, sessionId)
+  requireWritableRecord = (sessionId: string) =>
+    requireWritableAgentSessionRecord(this.state, sessionId)
+
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
-  /** Whether this host has recorded a chat, readable or not. Nothing removes a record row. */
+  /** Replaced runtimes captured at load; absent for sessions this runtime created. */
+  replacedRuntime = (sessionId: string) => this.transactions.replacedRuntimes.get(sessionId)
+
+  /** Include unreadable records in presence queries. */
+  listHeldSessionIds = (): string[] => heldAgentSessionIds(this.state)
+
+  /** Record presence is permanent, including unreadable rows. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
-  listVisibleSessionIds = (): string[] =>
-    (this.state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
-      this.state.records.has(sessionId)
-    )
+  listVisibleSessionIds = (): string[] => listVisibleAgentSessionIds(this.state)
 
-  /** Unrecorded, `sessionIds` are the tab rows a chat opened while the import was owed left. */
-  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
-    present: this.state.sessionTabs !== null,
-    sessionIds: this.state.sessionTabs
-      ? this.listVisibleSessionIds()
-      : (this.state.unrecordedSessionTabs?.sessionIds() ?? []).filter((sessionId) =>
-          this.state.records.has(sessionId)
-        )
-  })
+  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
+    agentSessionVisibleTabIndex(this.state)
 
-  /** The id of the chat tab showing this conversation, if one does. */
   getSessionTabId = (sessionId: string): string | null =>
     this.state.sessionTabs?.tabIdFor(sessionId) ?? null
 
-  /**
-   * Persist the user-visible tab reference separately from the rollback-sensitive profile tabs.
-   * Showing keeps a tab the session already has; `tabId` puts a hidden one back under its old id.
-   */
-  setSessionTabVisibility(sessionId: string, visible: boolean, tabId?: string): Promise<void> {
-    return this.transact((draft) => setAgentSessionTabVisibility(draft, sessionId, visible, tabId))
+  /** Persist chat-tab identity separately from rollback-sensitive profile tabs; explicit tabId restores hidden tabs under their old ids. */
+  setSessionTabVisibility(
+    sessionId: string,
+    visible: boolean,
+    tabId?: string,
+    check?: () => void
+  ): Promise<void> {
+    return this.transact((draft) => {
+      check?.()
+      return setAgentSessionTabVisibility(draft, sessionId, visible, tabId)
+    })
   }
 
-  /** Shows each session that still has a record, in one write: an index written part way would
-   *  read as complete at the next launch and drop the rest. */
+  setSwitchedSessionTabVisibility(
+    sessionId: string,
+    tabId: string,
+    visible: boolean,
+    admit: () => boolean
+  ): Promise<boolean> {
+    return this.transact((draft) => {
+      if (
+        (visible
+          ? draft.sessionTabs?.tabIdFor(sessionId) !== undefined
+          : draft.sessionTabs?.tabIdFor(sessionId) !== tabId) ||
+        !admit()
+      ) {
+        return false
+      }
+      setAgentSessionTabVisibility(draft, sessionId, visible, tabId)
+      return true
+    })
+  }
+
+  /** Publish the complete tab index in one write; a partial index would drop remaining chats on restart. */
   showSessionTabs(sessionIds: readonly string[]): Promise<void> {
     return this.transact((draft) => showAgentSessionTabs(draft, sessionIds))
   }
@@ -150,31 +197,27 @@ export class AgentSessionRecordStore {
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
   }
 
-  setConversationCommand(
-    sessionId: string,
-    fence: number,
-    command: NonNullable<AgentSessionRecord['conversationCommand']>
-  ): Promise<void> {
-    return this.transact((draft) =>
-      commitConversationCommandRecord(draft, sessionId, fence, command)
-    )
-  }
-
-  /** A committed /clear and the at-rest conversation it continues in, in one write. */
-  commitConversationClear = (clear: AgentSessionConversationClear): Promise<void> =>
-    this.transact((draft) => commitConversationClearRecord(draft, clear))
-
-  /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
-   *  writer lease. `null` clears it. */
+  /** Names are metadata, not ownership: write unfenced; null clears. */
   setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
     this.mutate(sessionId, (record) =>
       setAgentSessionRecordConversationName(record, name, Date.now())
     )
 
-  /** A record this build cannot validate: readable as present, never grantable as a writer. */
-  isSessionUnreadable(sessionId: string): boolean {
-    return this.state.unreadableRecords.has(sessionId)
-  }
+  /** The user's name for the conversation; see `AgentSessionUserNameWrite`. */
+  setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
+    setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
+
+  compareAndSetConversationName: CompareAndSetConversationName = (id, name, expected, context) =>
+    compareAndSetAgentSessionRecordName((apply) => this.mutate(id, apply), name, expected, context)
+
+  /** Launch history is metadata and does not contend with the writer lease. */
+  pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) =>
+      pinAgentSessionRecordLaunchDirectory(record, launchDirectory, Date.now())
+    )
+
+  /** Unreadable records still count as present and can never grant writers. */
+  isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
 
@@ -184,43 +227,38 @@ export class AgentSessionRecordStore {
   isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
 
-  async reserveOwner(request: AgentSessionReserveRequest): Promise<AgentSessionReserveResult> {
-    return this.transact((draft) =>
-      commitAgentSessionReservation(draft, request, AGENT_SESSION_LEASE_TTL_MS)
-    )
-  }
+  reserveOwner = (
+    request: AgentSessionReserveRequest,
+    check?: () => void
+  ): Promise<AgentSessionReserveResult> =>
+    this.transact((draft) => {
+      check?.()
+      return commitAgentSessionReservation(draft, request, AGENT_SESSION_LEASE_TTL_MS)
+    })
 
-  async commitProcessIdentity(
-    args: AgentSessionProcessIdentityCommit
-  ): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) =>
-      commitAgentSessionProcessIdentity({ ...args, record })
-    )
-  }
+  readonly founding: ReturnType<typeof createAgentSessionFoundingStore>
+
+  commitProcessIdentity = (args: AgentSessionProcessIdentityCommit): Promise<AgentSessionRecord> =>
+    this.mutate(args.sessionId, (record) => commitAgentSessionProcessIdentity({ ...args, record }))
 
   async proveOwner(args: {
     sessionId: string
     fence: number
-    link: AgentSessionProviderHandleLink
+    link?: AgentSessionProviderHandleLink
     now: number
     leaseTtlMs?: number
-    options?: Readonly<Record<string, string>>
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) => {
-      const proved = proveAgentSessionOwner({
+    return this.mutate(args.sessionId, (record) =>
+      proveAgentSessionOwner({
         record,
         fence: args.fence,
-        link: args.link,
+        ...(args.link ? { link: args.link } : {}),
         now: args.now,
         leaseTtlMs: args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
       })
-      return args.options
-        ? replaceAgentSessionRecordOptions(proved, { ...args, options: args.options })
-        : proved
-    })
+    )
   }
 
-  /** Settle the failed attach and its reservation in one durable transaction. */
   settleFailedAcquisition = (args: AgentSessionFailedAcquisitionSettlement) =>
     this.transact((draft) => settleFailedAgentSessionAcquisition(draft, args))
 
@@ -228,10 +266,8 @@ export class AgentSessionRecordStore {
     args: AgentSessionFailedPostAcquisitionAttachmentSettlement
   ) => this.transact((draft) => settleFailedAgentSessionPostAcquisitionAttachment(draft, args))
 
-  async renewLease(args: AgentSessionLeaseRenewal): Promise<AgentSessionRecord> {
-    const [renewed] = await this.renewLeases([args])
-    return renewed
-  }
+  renewLease = (args: AgentSessionLeaseRenewal): Promise<AgentSessionRecord> =>
+    this.renewLeases([args]).then(([renewed]) => renewed)
 
   async renewLeases(renewals: readonly AgentSessionLeaseRenewal[]): Promise<AgentSessionRecord[]> {
     return this.transact((draft) =>
@@ -248,33 +284,23 @@ export class AgentSessionRecordStore {
     return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
   }
 
-  async transitionHandoff(
+  transitionHandoff = (
     sessionId: string,
     transition: (record: AgentSessionRecord) => AgentSessionRecord
-  ): Promise<AgentSessionRecord> {
-    return this.mutate(sessionId, transition)
-  }
+  ): Promise<AgentSessionRecord> => this.mutate(sessionId, transition)
 
-  /**
-   * Adjudicate every lease this host loaded. No lease grants a writer until it appears here. On a
-   * database a newer Orca wrote, the verdicts are kept in memory only: they are re-derived at every
-   * start, and none grants a writer there, since every grant is a write.
-   */
-  async reconcileOnRestart(
-    args: AgentSessionRestartProbeArgs
-  ): Promise<Map<string, AgentSessionRecord>> {
-    const pending = this.listRecords().filter((record) => record.lease.unreconciled)
-    const probes = await collectAgentSessionRestartProbes(pending, args)
+  /** Reconcile loaded leases before writer admission. Newer databases keep verdicts in memory only and cannot grant writers. */
+  async reconcileOnRestart(args: AgentSessionRestartProbeArgs) {
+    const probes = await collectAgentSessionRestartProbes(this, args)
     return this.transact((draft) => applyAgentSessionRestartProbes(draft, probes, args.now), {
       inMemoryWhenReadOnly: true
     })
   }
 
-  /** Admits one non-reservation mutation through the durable ledger. */
   admitOperation = (args: AgentSessionOperationAdmission): Promise<AgentSessionOperationDecision> =>
     this.transact((draft) => admitAgentSessionOperationInto(draft, args))
 
-  /** Send ids stay global after a caller reconnects under a different identity. */
+  /** Global send ids survive caller reconnect/identity changes. */
   admitGlobalOperation = (
     args: AgentSessionOperationAdmission
   ): Promise<AgentSessionOperationDecision> =>
@@ -283,29 +309,54 @@ export class AgentSessionRecordStore {
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     this.transact((draft) => admitAgentSessionMutationOperation(draft, args))
 
-  /** The ledger's answer alone, placing nothing; `admitMutationOperation` is the transaction. */
+  /** Replay evaluation writes nothing; admitMutationOperation owns the transaction. */
   evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     evaluateAgentSessionMutationOperation(this.state, args)
 
-  /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both
-   *  read `pending`, and only a conditional swap tells the one that may run from the one that must
-   *  replay. */
-  claimOperation = (args: {
-    callerKey: string
-    operationId: string
-  }): Promise<AgentSessionOperationClaim> =>
+  /** Durable CAS decides which pending replay may run its effect; reading pending alone cannot grant it. */
+  claimOperation = (args: Parameters<typeof claimAgentSessionOperationInto>[1]) =>
     this.transact((draft) => claimAgentSessionOperationInto(draft, args))
 
-  async recordOperationOutcome(args: {
-    callerKey?: string
-    operationId: string
-    outcome: AgentSessionOperationOutcome
-  }): Promise<void> {
-    await this.transact((draft) => settleAgentSessionOperationInto(draft, args))
+  admitAndClaimOperation = (
+    args: Parameters<typeof admitAndClaimAgentSessionOperationInto>[1],
+    claimAfter: ClaimAfterAdmission
+  ) => this.transact((draft) => admitAndClaimAgentSessionOperationInto(draft, args, claimAfter))
+
+  recordOperationOutcome = (
+    args: Parameters<typeof settleAgentSessionOperationInto>[1]
+  ): Promise<void> => this.transact((draft) => settleAgentSessionOperationInto(draft, args))
+
+  /** Commit settlement with the journal write; new submissions also clear Sleep in that draft. */
+  operationOutcomeReceipt = (args: Parameters<typeof agentSessionOperationOutcomeReceipt>[1]) =>
+    agentSessionOperationOutcomeReceipt(this.transactions, args)
+
+  /** Automatic queue admission uses the same record transition as a client's send receipt. */
+  submissionReceipt = (sessionId: string) =>
+    this.transactions.receipt(() => {}, { submissionSessionId: sessionId })
+
+  onAcceptedSend = (listener: (sessionId: string) => void): (() => void) => {
+    this.transactions.acceptedSendListeners.add(listener)
+    return () => {
+      this.transactions.acceptedSendListeners.delete(listener)
+    }
   }
+
+  admittedSendCount = (sessionId: string) => this.transactions.admittedSendCount(sessionId)
+
+  commitOperationReceipt = (receipt: JournalOperationReceipt) =>
+    this.transactions.commitReceipt(receipt)
+
+  readCommandReceipt = (...args: Parameters<AgentSessionStoreTransactions['readCommandReceipt']>) =>
+    this.transactions.readCommandReceipt(...args)
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
+
+  /** Evaluate options against the record held by this ordered write. */
+  reviseSessionOptions = <A extends { sessionId: string }>(
+    revise: (record: AgentSessionRecord, args: A) => AgentSessionRecord,
+    args: A
+  ) => this.mutate(args.sessionId, (record) => revise(record, args))
 
   async retireClaimKey(keyId: string, now: number): Promise<void> {
     await this.transact((draft) => retireAgentSessionClaimKey(draft, keyId, now))
@@ -316,59 +367,10 @@ export class AgentSessionRecordStore {
     apply: (record: AgentSessionRecord) => AgentSessionRecord
   ): Promise<AgentSessionRecord> {
     return this.transact((draft) => {
-      const record = draft.records.get(sessionId)
-      if (!record) {
-        throw draft.unreadableRecords.has(sessionId)
-          ? agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
-          : agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
-      }
+      const record = requireWritableAgentSessionRecord(draft, sessionId)
       const next = apply(record)
       draft.records.set(sessionId, next)
       return next
     })
-  }
-
-  /** Told, once committed, of each session a transaction wrote a proof of death for — whichever
-   *  transition wrote it, since every one lands here. Must not throw. */
-  onDeathEvidence(listener: (sessionId: string) => void): () => void {
-    this.deathEvidenceListeners.add(listener)
-    return () => this.deathEvidenceListeners.delete(listener)
-  }
-
-  /** Told, once committed, when the store records its first chat. Must not throw. */
-  onFirstRecord(listener: () => void): () => void {
-    this.firstRecordListeners.add(listener)
-    return () => this.firstRecordListeners.delete(listener)
-  }
-
-  /** Serializes every mutation. `apply` changes only the draft it is given; readers see the change
-   *  once its rows have committed. */
-  private transact = async <T>(
-    apply: (draft: AgentSessionStoreState) => T,
-    options?: { inMemoryWhenReadOnly?: boolean }
-  ): Promise<T> => {
-    let proven: string[] = []
-    let heldBefore = true
-    const result = await this.transactions.transact((draft) => {
-      heldBefore = this.holdsRecords()
-      if (this.deathEvidenceListeners.size === 0) {
-        return apply(draft)
-      }
-      const before = new Map(
-        [...draft.records].map(([id, record]) => [id, record.lease.deathEvidence])
-      )
-      const applied = apply(draft)
-      proven = [...draft.records]
-        .filter(([id, { lease }]) => lease.deathEvidence && lease.deathEvidence !== before.get(id))
-        .map(([id]) => id)
-      return applied
-    }, options)
-    for (const sessionId of proven) {
-      this.deathEvidenceListeners.forEach((listener) => listener(sessionId))
-    }
-    if (!heldBefore && this.holdsRecords()) {
-      this.firstRecordListeners.forEach((listener) => listener())
-    }
-    return result
   }
 }

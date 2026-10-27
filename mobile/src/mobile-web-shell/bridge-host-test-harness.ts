@@ -1,5 +1,5 @@
-/** One bridge host wired to a fake client, read back through the page's own reader.
- *  Shared because the suites that exercise it are split by concern, not by fixture. */
+// Parse fake-client host frames with the page’s real reader so both halves meet in these tests.
+import { afterEach } from 'vitest'
 import {
   bridgeId,
   clientFrame,
@@ -25,6 +25,14 @@ import type { TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { PageStorageForInit } from './page-storage-keys'
 
+const hosts = new Set<BridgeHost>()
+afterEach(() => {
+  for (const host of hosts) {
+    host.dispose()
+  }
+  hosts.clear()
+})
+
 export const ID = bridgeId(1)
 export const OTHER = bridgeId(2)
 
@@ -33,25 +41,17 @@ export type Harness = {
   client: FakeRpcClient
   posted: string[]
   diagnostics: BridgeHostDiagnostic[]
-  /** The running total after each dropped screencast frame, which is what the dev facts render. */
   droppedBinaryFrames: number[]
   navigations: string[]
-  /** Every URL the page asked the shell to open outside the app, in order. */
   externalLinks: string[]
-  /** Every haptic the page asked the shell to play, in order. */
   haptics: BridgeHapticsKind[]
-  /** Every text the page wrote to the pasteboard through a native verb, in order. */
+  nativeCalls: { verb: BridgeNativeVerb; params: unknown }[]
   clipboardWrites: string[]
-  /** One entry per `navigate-back` the host answered, in order, with what the shell did. */
   backPops: BridgeNavigateBackOutcome[]
   storageWrites: { key: string; value: string | null }[]
   pageReadyCount: () => number
   pagePaintCount: () => number
-  /** Every claim the host reported, in order, including the false it sends when a document ends. */
   backClaims: boolean[]
-  /** What each answered `ready` declared it reports, in order. */
-  /** One entry per `ready` answered, saying whether its `init` reached the page. Filled as each
-   *  post settles, so a case reads it after awaiting the turn the post resolves on. */
   /** Every clear the page asked for, in order. */
   routeParamClears: () => readonly { param: string; value: string }[]
   routeRefusals: string[]
@@ -60,12 +60,9 @@ export type Harness = {
   last: () => BridgeHostMessage
 }
 
-/** This device's identity to the host, as the shell reads it off the native client. */
 export const HARNESS_CLIENT_IDENTITY = 'device-token-a'
 export const ROUTE = { pathname: '/h/host-a' }
 export const PAGE_ROUTES = ['/h/[hostId]']
-/** What those patterns declared, as the manifest would carry it, `haptics` included: it is on every
- *  real entry, so a pair without it is a shape the host never receives. */
 export const PAGE_ROUTE_GRANTS = [
   { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }
 ]
@@ -76,33 +73,21 @@ export function harness(
     client?: FakeRpcClient
     post?: (json: string) => Promise<void>
     route?: BridgeInitRoute
-    onNavigate?: (href: string) => void
+    onNavigate?: (href: string, replace: boolean) => void
     onNavigateBack?: () => BridgeNavigateBackOutcome
     storage?: Readonly<Record<string, string>>
-    /** For the suites that need the map to change between two `init` answers. */
     readStorage?: () => PageStorageForInit
     onPageFault?: (error: BridgeErrorCapture) => void
-    /**
-     * Whether to answer a `ready` before the case runs, which is what a real page does first: the
-     * host serves no request until it has issued an `init`. Off by default so a case about the
-     * pre-ready refusals can still be written.
-     */
     /** What the mounted route declared; everything this shell implements unless a case narrows it. */
     routeGrants?: readonly string[]
-    /** The manifest pairs this shell would send; a case may hand it a malformed one. */
     pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
-    /** Stands for a host rebuilt under a page whose session already handshook. */
     sessionEstablished?: boolean
-    /** This device's identity to the host; `null` stands for one the shell cannot read yet. */
     clientIdentity?: string | null
+    // Off by default for pre-ready refusal cases; real pages ask ready before opening requests.
     ready?: boolean
-    /** What the pasteboard answers a read with. */
     clipboardText?: string
-    /** Replaces the whole verb handler, for the arm where a device call fails. */
     serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
-    /** Drives the held-stream silence clock, so a case fires it instead of waiting on it. */
     terminalTimers?: TerminalBacklogTimers
-    /** Stands for a host rebuilt over a session that already declared and claimed the Back key. */
     sessionBack?: BridgeSessionBack
   } = {}
 ): Harness {
@@ -112,14 +97,13 @@ export function harness(
   const navigations: string[] = []
   const externalLinks: string[] = []
   const haptics: BridgeHapticsKind[] = []
+  const nativeCalls: { verb: BridgeNativeVerb; params: unknown }[] = []
   const clipboardWrites: string[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   const backClaims: boolean[] = []
   let pageReadies = 0
   let pagePaints = 0
-  /** What each answered `ready` declared it reports, in order. */
-  /** One entry per `ready` answered, saying whether an `init` actually went out for it. */
   const routeParamClears: { param: string; value: string }[] = []
   const routeRefusals: string[] = []
   const pageFaults: BridgeErrorCapture[] = []
@@ -148,6 +132,7 @@ export function harness(
       pageReadies += 1
     },
     onPageBackClaim: (claimed) => backClaims.push(claimed),
+    onPageLocation: () => {},
     onPagePainted: () => {
       pagePaints += 1
     },
@@ -157,6 +142,7 @@ export function harness(
     onExternalLink: (url) => externalLinks.push(url),
     onHaptic: (kind) => haptics.push(kind),
     serveNativeVerb: (verb, params) => {
+      nativeCalls.push({ verb, params })
       if (options.serveNativeVerb !== undefined) {
         return options.serveNativeVerb(verb, params)
       }
@@ -181,11 +167,11 @@ export function harness(
     onBinaryFramesDropped: (total) => droppedBinaryFrames.push(total),
     terminalTimers: options.terminalTimers
   })
+  hosts.add(host)
   if (options.ready === true) {
     host.receive(clientFrame({ type: 'ready' }))
   }
-  // Read back through the page's own reader: a frame the host sends that the page would refuse is
-  // a frame that never arrives, and this is the only place both halves meet in one test.
+  // Use the page’s reader: a host frame it refuses must fail the harness, not pass as a hand-built expected shape.
   const frames = (): BridgeHostMessage[] =>
     posted.map((json) => {
       const read = readBridgeHostMessage(json)
@@ -203,6 +189,7 @@ export function harness(
     navigations,
     externalLinks,
     haptics,
+    nativeCalls,
     clipboardWrites,
     backPops,
     storageWrites,

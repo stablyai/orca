@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { FilePlus, FolderPlus } from 'lucide-react'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +13,7 @@ function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
     return
   }
-  // Why: the synthetic trigger sits at the cursor; the right-button release
-  // can otherwise land on "New File" and select it immediately.
+  // Right-button release over the cursor-positioned trigger must not immediately select New File.
   event.preventDefault()
   event.stopPropagation()
 }

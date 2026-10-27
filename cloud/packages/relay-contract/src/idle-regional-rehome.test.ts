@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  GLOBAL_IDLE_REGIONAL_REHOME_DEFER_REASONS,
   IDLE_REGIONAL_REHOME_DEFER_REASONS,
   IdleRegionalRehomeResponseSchema,
   isGlobalIdleRegionalRehomeDeferral
@@ -39,13 +38,18 @@ describe('idle regional rehome response', () => {
   })
 
   it('classifies only the poll-wide deferrals as global', () => {
-    for (const reason of IDLE_REGIONAL_REHOME_DEFER_REASONS) {
-      expect(isGlobalIdleRegionalRehomeDeferral(reason)).toBe(
-        GLOBAL_IDLE_REGIONAL_REHOME_DEFER_REASONS.some((global) => global === reason)
-      )
+    for (const [reason, expected] of [
+      ['control-closed', true],
+      ['budget-closed', true],
+      ['concurrency-limit', true],
+      ['cohort-closed', true],
+      ['fleet-safety', true],
+      ['candidate-ineligible', false],
+      ['host-unsupported', false],
+      ['director-safety-stale', false],
+      [undefined, false]
+    ] as const) {
+      expect(isGlobalIdleRegionalRehomeDeferral(reason), reason).toBe(expected)
     }
-    expect(isGlobalIdleRegionalRehomeDeferral(undefined)).toBe(false)
-    expect(GLOBAL_IDLE_REGIONAL_REHOME_DEFER_REASONS).toContain('concurrency-limit')
-    expect(isGlobalIdleRegionalRehomeDeferral('candidate-ineligible')).toBe(false)
   })
 })

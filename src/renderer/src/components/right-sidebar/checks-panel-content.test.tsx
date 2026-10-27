@@ -12,7 +12,6 @@ import {
 import { ConflictTriageStrip, PRTriageStrip } from './checks-panel/triage-strip'
 import { getFailedChecksForDetails } from './checks-panel/check-details-model'
 import { ChecksList } from './checks-panel/checks-list'
-import { isMutablePRConversationComment } from './checks-panel/comment-controls'
 import { PRCommentsList } from './checks-panel/comments-list'
 import { CheckJobLogTail } from './check-job-log-tail'
 
@@ -194,8 +193,7 @@ describe('ChecksList', () => {
     expect(markup).not.toContain('Open details')
   })
 
-  // Why: the pill above this list already calls skipped checks passing; a "2 passing" header on the
-  // same 2-success/3-skipped PR contradicts its own "5/5 passed" pill.
+  // Include skipped checks so the passing header matches the pill's 5/5 count.
   it('counts skipped checks in the passing header, matching the checks pill', () => {
     const markup = renderToStaticMarkup(
       React.createElement(
@@ -219,8 +217,6 @@ describe('ChecksList', () => {
     expect(markup).not.toContain('2 passing')
   })
 
-  // Why: a completed check with no conclusion will never resolve, so calling it pending kept an
-  // amber spinner next to a grey "Unresolved checks" pill reading the same list.
   it('reports a completed check with no conclusion as unresolved, not pending', () => {
     const markup = renderToStaticMarkup(
       React.createElement(
@@ -253,8 +249,6 @@ describe('PRTriageStrip check counts', () => {
     )
   }
 
-  // Why: the strip and the checks pill read the same list, so a check that completed without a
-  // verdict must not spin here as pending while the pill calls it unresolved.
   it('shows a completed check with no conclusion as unresolved instead of pending', () => {
     const markup = renderStrip([
       { name: 'legacy', status: 'completed', conclusion: null, url: null }
@@ -271,8 +265,7 @@ describe('PRTriageStrip check counts', () => {
     expect(markup).toContain('1 check pending')
   })
 
-  // Why: one unresolved check must not demote a PR that has a passing one — that is the same
-  // rollup rule the pill uses, so both keep saying the PR is green.
+  // Match the pill: unresolved checks must not demote a PR with a passing check.
   it('keeps a passing check green even when another check is unresolved', () => {
     const markup = renderStrip([
       { name: 'build', status: 'completed', conclusion: 'success', url: null },
@@ -284,70 +277,7 @@ describe('PRTriageStrip check counts', () => {
   })
 })
 
-describe('isMutablePRConversationComment', () => {
-  it('allows top-level conversation comments but not review threads or summaries', () => {
-    expect(
-      isMutablePRConversationComment({
-        id: 12,
-        author: 'alice',
-        authorAvatarUrl: '',
-        body: 'Looks good',
-        createdAt: '2026-05-14T00:00:00Z',
-        url: 'https://github.com/acme/widgets/pull/42#issuecomment-12'
-      })
-    ).toBe(true)
-    expect(
-      isMutablePRConversationComment({
-        id: 34,
-        author: 'alice',
-        authorAvatarUrl: '',
-        body: 'Inline note',
-        createdAt: '2026-05-14T00:00:00Z',
-        url: 'https://github.com/acme/widgets/pull/42#discussion_r34',
-        threadId: 'thread-1',
-        path: 'src/a.ts'
-      })
-    ).toBe(false)
-    expect(
-      isMutablePRConversationComment({
-        id: 99,
-        author: 'alice',
-        authorAvatarUrl: '',
-        body: 'LGTM',
-        createdAt: '2026-05-14T00:00:00Z',
-        url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-99'
-      })
-    ).toBe(false)
-  })
-})
-
 describe('PRCommentsList', () => {
-  it('pins the comments header while scrolling the sidebar', () => {
-    const comments: PRComment[] = [
-      {
-        id: 1,
-        author: 'AmethystLiang',
-        authorAvatarUrl: '',
-        body: 'Existing review context',
-        createdAt: '2026-05-14T00:00:00Z',
-        url: 'https://github.com/acme/widgets/pull/42#issuecomment-1'
-      }
-    ]
-
-    const markup = renderWithTooltips(
-      React.createElement(PRCommentsList, {
-        comments,
-        commentsLoading: false,
-        onAddComment: () => Promise.resolve({ ok: true as const })
-      })
-    )
-
-    const commentsHeaderIndex = markup.indexOf('Comments')
-    const stickyIndex = markup.indexOf('sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm')
-    expect(stickyIndex).toBeGreaterThan(-1)
-    expect(stickyIndex).toBeLessThan(commentsHeaderIndex)
-  })
-
   it('places the collapsed add-comment action in the comments header', () => {
     const comments: PRComment[] = [
       {
@@ -468,11 +398,43 @@ describe('getFailedChecksForDetails', () => {
 })
 
 describe('CheckJobLogTail', () => {
+  it.each([
+    ['completed', 'failure', 'No log excerpt is available.'],
+    ['in_progress', null, 'Log output is not available yet.'],
+    ['completed', 'success', null],
+    ['completed', 'skipped', null]
+  ])(
+    'shows truthful legacy absence for %s / %s without empty Copy',
+    (status, conclusion, expected) => {
+      const markup = renderWithTooltips(
+        React.createElement(CheckJobLogTail, {
+          job: { status, conclusion, logTail: null },
+          surface: 'sidebar'
+        })
+      )
+      if (expected) {
+        expect(markup).toContain(expected)
+      } else {
+        expect(markup).toBe('')
+      }
+      expect(markup).not.toContain('Copy log excerpt')
+      expect(markup).not.toContain('expired')
+    }
+  )
   it('renders a labeled monospace log tail with copy affordance', () => {
     const markup = renderToStaticMarkup(
-      React.createElement(CheckJobLogTail, {
-        logTail: 'Error: expected true to be false'
-      })
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(CheckJobLogTail, {
+          surface: 'sidebar',
+          job: {
+            logTail: 'Error: expected true to be false',
+            status: 'completed',
+            conclusion: 'failure'
+          }
+        })
+      )
     )
 
     expect(markup).toContain('Log excerpt')
@@ -482,10 +444,19 @@ describe('CheckJobLogTail', () => {
 
   it('uses a taller viewport when expanded for failed-job details', () => {
     const markup = renderToStaticMarkup(
-      React.createElement(CheckJobLogTail, {
-        logTail: 'Error: expected true to be false',
-        expanded: true
-      })
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(CheckJobLogTail, {
+          surface: 'details',
+          job: {
+            logTail: 'Error: expected true to be false',
+            status: 'completed',
+            conclusion: 'failure'
+          },
+          expanded: true
+        })
+      )
     )
 
     expect(markup).toContain('min-h-48')

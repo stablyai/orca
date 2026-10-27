@@ -133,6 +133,7 @@ describe('prepared worktree creation with real Git', () => {
     const barrier = new Promise<void>((resolve) => {
       release = resolve
     })
+    const barrierSubscribed = vi.spyOn(barrier, 'then')
     const spy = vi.spyOn(gitRunner, 'gitExecFileAsync')
     const preparing = prepareWorktreeCreateCheckout(
       repoPath,
@@ -147,6 +148,11 @@ describe('prepared worktree creation with real Git', () => {
       await vi.waitFor(() => expect(existsSync(join(preparedPath, '.git'))).toBe(true))
       const lock = git(preparedPath, ['rev-parse', '--git-path', 'locked'])
       await vi.waitFor(async () => expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`))
+      await vi.waitFor(() =>
+        expect(
+          barrierSubscribed.mock.calls.some(([onFulfilled]) => typeof onFulfilled === 'function')
+        ).toBe(true)
+      )
       controller.abort(new Error('expired while fetching'))
       await assertion
       expect(existsSync(preparedPath)).toBe(false)
@@ -156,6 +162,7 @@ describe('prepared worktree creation with real Git', () => {
       expect(spy.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
     } finally {
       release()
+      barrierSubscribed.mockRestore()
       spy.mockRestore()
     }
   })
@@ -634,7 +641,6 @@ describe('prepared worktree creation with real Git', () => {
     git(repoPath, ['commit', '--quiet', '-m', 'local main'])
     const localMainHead = git(repoPath, ['rev-parse', 'HEAD'])
 
-    // A remote-tracking `main` that diverged: different content, an extra file, and one deletion.
     git(repoPath, ['checkout', '--quiet', '-b', 'upstream-main'])
     await writeFile(join(repoPath, 'version.txt'), 'two\n')
     await writeFile(join(repoPath, 'only-upstream.txt'), 'upstream\n')
@@ -665,7 +671,6 @@ describe('prepared worktree creation with real Git', () => {
     )
 
     expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(localMainHead)
-    // A retarget that left stale files behind would be a wrong checkout, not just a slow one.
     expect(git(finalPath, ['status', '--porcelain'])).toBe('')
     expect((await readFile(join(finalPath, 'version.txt'), 'utf8')).replaceAll('\r\n', '\n')).toBe(
       'one\n'

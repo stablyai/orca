@@ -11,7 +11,7 @@ import type { TreeNode } from './file-explorer-types'
 
 vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOwnerUnresolvedMessage: () => 'unresolved',
-  requireMatchingFileExplorerOperationRoute: () => ({ settings: {} })
+  requireMatchingFileExplorerOperationRoute: () => ({ target: { kind: 'local' } })
 }))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector({})
@@ -53,7 +53,6 @@ function createHandlerParams(toggleDir: (worktreeId: string, dirPath: string) =>
     toggleDir,
     loadDir: vi.fn().mockResolvedValue(true),
     statPath: vi.fn().mockResolvedValue({ isDirectory: true }),
-    authorizeExternalPath: vi.fn(),
     markPathAsDirectory: vi.fn(),
     setSelectedPath: vi.fn(),
     scrollRef: createRef<HTMLDivElement>()
@@ -66,7 +65,6 @@ function renderHandlers(toggleDir: (worktreeId: string, dirPath: string) => void
   return { ...hook, openFile: params.openFile, setSelectedPath: params.setSelectedPath }
 }
 
-// Wires a row like the explorer does so clicks resolve timing in handleRowClick.
 function renderRow(node: TreeNode, toggleDir: (worktreeId: string, dirPath: string) => void) {
   const params = createHandlerParams(toggleDir)
   function Row() {
@@ -135,7 +133,7 @@ describe('instant directory toggle', () => {
 
       await clickAndSettle(getByTestId('name'), 1)
 
-      // Why: no timer may be involved — a delay here is what read as lag on the folder name.
+      // No timer: delaying the folder-name click made the explorer feel laggy.
       expect(toggleDir).toHaveBeenCalledWith('wt-1', directoryNode.path)
       expect(vi.getTimerCount()).toBe(0)
     } finally {
@@ -151,7 +149,7 @@ describe('instant directory toggle', () => {
     await clickAndSettle(getByTestId('name'), 2)
 
     expect(toggleDir).toHaveBeenCalledTimes(1)
-    // Why: the rename about to start still needs the row selected.
+    // Keep the row selected for the rename about to start.
     expect(setSelectedPath).toHaveBeenLastCalledWith(directoryNode.path)
   })
 
@@ -169,7 +167,7 @@ describe('instant directory toggle', () => {
     const toggleDir = vi.fn()
     const { getByTestId, setSelectedPath } = renderRow(symlinkDirectoryNode, toggleDir)
 
-    // Why: both clicks land before the first stat resolves, as in a real double-click.
+    // Real double-clicks can land before the first stat resolves.
     await act(async () => {
       fireEvent.click(getByTestId('name'), { detail: 1 })
       fireEvent.click(getByTestId('name'), { detail: 2 })

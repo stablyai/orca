@@ -10,6 +10,7 @@ import {
   MAX_FEEDBACK_IMAGE_COUNT,
   MAX_FEEDBACK_IMAGE_TOTAL_BYTES
 } from '../../../shared/feedback-image-limits'
+import { shrinkFeedbackImage } from './feedback-image-shrink'
 
 export {
   MAX_FEEDBACK_IMAGE_BYTES,
@@ -26,6 +27,12 @@ export const SUPPORTED_FEEDBACK_IMAGE_TYPES = [
 
 export const FEEDBACK_IMAGE_FILE_ACCEPT = SUPPORTED_FEEDBACK_IMAGE_TYPES.join(',')
 const MAX_FEEDBACK_IMAGE_DETAIL_ERRORS = 4
+// Why: an oversized image is read whole before it can be shrunk, so cap the read.
+export const MAX_FEEDBACK_IMAGE_SOURCE_BYTES = 32 * 1024 * 1024
+// Why: a nearly spent budget is unlikely to fit a full-resolution PNG re-encode.
+export const MIN_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES = 64 * 1024
+// Why: reserve room for another image instead of filling the budget with one optimization.
+export const MAX_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / 2
 
 export type FeedbackImageDraft = {
   id: string
@@ -41,26 +48,85 @@ function isSupportedType(contentType: string): boolean {
   return (SUPPORTED_FEEDBACK_IMAGE_TYPES as readonly string[]).includes(contentType)
 }
 
-/**
- * Whether a paste should be consumed. Extraction stays broad so unsupported
- * image types still reach the rejection toast, but swallowing the paste when
- * nothing is attachable would also discard any text riding along on the
- * clipboard. Every limit readFeedbackImageFiles enforces has to be mirrored
- * here, or a doomed paste eats the co-pasted text on its way to a rejection.
- */
+function feedbackImageFitBytes(remainingBytes: number): number {
+  return Math.min(MAX_FEEDBACK_IMAGE_BYTES, remainingBytes)
+}
+
+function feedbackImageShrinkTargetBytes(fitBytes: number): number {
+  return Math.min(MAX_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES, fitBytes)
+}
+
+// Walk PNG chunks: acTL before first IDAT marks APNG, which shrinking would flatten; metadata may contain misleading bytes.
+function isAnimatedPng(data: Uint8Array): boolean {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+  for (let offset = 8; offset + 8 <= data.byteLength; offset += 12 + view.getUint32(offset)) {
+    const type = String.fromCharCode(...data.subarray(offset + 4, offset + 8))
+    if (type === 'acTL') {
+      return true
+    }
+    if (type === 'IDAT') {
+      return false
+    }
+  }
+  return false
+}
+
+function canAttachWithin(file: File, fitBytes: number): boolean {
+  if (file.size <= fitBytes) {
+    return true
+  }
+  // Why: re-encoding flattens an animated GIF or WebP, losing what it was attached to show.
+  return (
+    feedbackImageShrinkTargetBytes(fitBytes) >= MIN_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES &&
+    file.type !== 'image/gif' &&
+    file.type !== 'image/webp' &&
+    file.size <= MAX_FEEDBACK_IMAGE_SOURCE_BYTES
+  )
+}
+
+/** Consume only attachable image pastes and mirror synchronous type/size gates. Byte-dependent checks cannot run here, so mixed-text pastes require an as-is fit to avoid losing text. */
 export function hasAttachableFeedbackImage(
   files: readonly File[],
   existingCount = 0,
-  existingBytes = 0
+  existingBytes = 0,
+  options: { allowShrinking?: boolean } = {}
 ): boolean {
-  const remainingBytes = Math.min(
-    MAX_FEEDBACK_IMAGE_BYTES,
-    MAX_FEEDBACK_IMAGE_TOTAL_BYTES - existingBytes
-  )
+  const fitBytes = feedbackImageFitBytes(MAX_FEEDBACK_IMAGE_TOTAL_BYTES - existingBytes)
   return (
     existingCount < MAX_FEEDBACK_IMAGE_COUNT &&
-    files.some((file) => isSupportedType(file.type) && file.size > 0 && file.size <= remainingBytes)
+    files.some(
+      (file) =>
+        isSupportedType(file.type) &&
+        file.size > 0 &&
+        (file.size <= fitBytes ||
+          (options.allowShrinking !== false && canAttachWithin(file, fitBytes)))
+    )
   )
+}
+
+/** Upper bound independent of earlier files shrinking, failing, or freeing slots. */
+export function maxFeedbackImageBatchBytes(
+  files: readonly File[],
+  existingCount: number,
+  existingBytes: number
+): number {
+  if (existingCount >= MAX_FEEDBACK_IMAGE_COUNT) {
+    return 0
+  }
+  const remainingBytes = Math.max(0, MAX_FEEDBACK_IMAGE_TOTAL_BYTES - existingBytes)
+  const fitBytes = feedbackImageFitBytes(remainingBytes)
+  let batchBytes = 0
+  for (const file of files) {
+    if (!isSupportedType(file.type) || file.size === 0 || !canAttachWithin(file, fitBytes)) {
+      continue
+    }
+    const fileBytes = file.size <= fitBytes ? file.size : feedbackImageShrinkTargetBytes(fitBytes)
+    batchBytes += fileBytes
+    if (batchBytes >= remainingBytes) {
+      return remainingBytes
+    }
+  }
+  return batchBytes
 }
 
 export function releaseFeedbackImageDraft(draft: FeedbackImageDraft): void {
@@ -79,18 +145,15 @@ function feedbackImageDisplayName(file: File): string {
   )
 }
 
-/**
- * Converts picked/pasted/dropped files into drafts. Rejections come back as
- * messages rather than being skipped, because silently dropping an attachment
- * is the exact failure this feature exists to fix.
- */
+/** Build drafts, shrinking oversized images to full-resolution PNG; return rejection/compression messages so attachment loss or degradation is never silent. */
 export async function readFeedbackImageFiles(
   files: readonly File[],
   existingCount: number,
   existingBytes = 0
-): Promise<{ images: FeedbackImageDraft[]; errors: string[] }> {
+): Promise<{ images: FeedbackImageDraft[]; errors: string[]; notices: string[] }> {
   const images: FeedbackImageDraft[] = []
   const errors: string[] = []
+  const notices: string[] = []
   let remaining = MAX_FEEDBACK_IMAGE_COUNT - existingCount
   let remainingBytes = MAX_FEEDBACK_IMAGE_TOTAL_BYTES - existingBytes
   let omittedErrorCount = 0
@@ -123,19 +186,6 @@ export async function readFeedbackImageFiles(
         )
         continue
       }
-      if (file.size > MAX_FEEDBACK_IMAGE_BYTES) {
-        addError(() =>
-          translate(
-            'auto.lib.feedback.image.attachments.tooLarge',
-            '{{fileName}} is larger than {{maxSize}}.',
-            {
-              fileName,
-              maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_BYTES)
-            }
-          )
-        )
-        continue
-      }
       if (remaining <= 0) {
         addError(() =>
           translate(
@@ -146,20 +196,35 @@ export async function readFeedbackImageFiles(
         )
         break
       }
-      if (file.size > remainingBytes) {
+      // Use size-only refusal only if the entire budget could not fit it; otherwise name space used by other attachments.
+      const addSizeError = (fitsWholeBudget: boolean): void =>
+        addError(() =>
+          fitsWholeBudget
+            ? translate(
+                'auto.lib.feedback.image.attachments.totalTooLarge',
+                '{{fileName}} would bring the attachments over {{maxSize}} in total.',
+                { fileName, maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_TOTAL_BYTES) }
+              )
+            : translate(
+                'auto.lib.feedback.image.attachments.tooLarge',
+                '{{fileName}} is larger than {{maxSize}}.',
+                { fileName, maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_BYTES) }
+              )
+        )
+      const addInvalidImageError = (): void =>
         addError(() =>
           translate(
-            'auto.lib.feedback.image.attachments.totalTooLarge',
-            '{{fileName}} would bring the attachments over {{maxSize}} in total.',
-            {
-              fileName,
-              maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_TOTAL_BYTES)
-            }
+            'auto.lib.feedback.image.attachments.invalidImage',
+            '{{fileName}} is not a valid supported image.',
+            { fileName }
           )
         )
+      const fitBytes = feedbackImageFitBytes(remainingBytes)
+      if (!canAttachWithin(file, fitBytes)) {
+        addSizeError(canAttachWithin(file, MAX_FEEDBACK_IMAGE_BYTES))
         continue
       }
-      const data = new Uint8Array(await file.arrayBuffer())
+      let data = new Uint8Array(await file.arrayBuffer())
       try {
         assertRasterImagePreviewWithinLimits(data, file.type)
       } catch (error) {
@@ -174,33 +239,62 @@ export async function readFeedbackImageFiles(
           continue
         }
         if (error instanceof Error && error.message === INVALID_RASTER_IMAGE_PREVIEW_ERROR) {
-          addError(() =>
-            translate(
-              'auto.lib.feedback.image.attachments.invalidImage',
-              '{{fileName}} is not a valid supported image.',
-              { fileName }
-            )
-          )
+          addInvalidImageError()
           continue
         }
         throw error
       }
+      let image: Blob = file
+      if (file.size > fitBytes) {
+        let shrunk: Blob | null = null
+        const animated = file.type === 'image/png' && isAnimatedPng(data)
+        const targetBytes = feedbackImageShrinkTargetBytes(fitBytes)
+        if (!animated) {
+          try {
+            // Why: runs after the dimension check above, which bounds the decode.
+            shrunk = await shrinkFeedbackImage(file, targetBytes)
+          } catch {
+            // Why: its header passed the check above, but the browser could not decode it.
+            addInvalidImageError()
+            continue
+          }
+        }
+        if (!shrunk) {
+          // Why: with the target at its cap, an empty budget would have refused it too.
+          addSizeError(
+            file.size <= MAX_FEEDBACK_IMAGE_BYTES ||
+              (!animated && targetBytes < MAX_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES)
+          )
+          continue
+        }
+        image = shrunk
+        data = new Uint8Array(await shrunk.arrayBuffer())
+        notices.push(
+          translate(
+            'auto.lib.feedback.image.attachments.compressed',
+            '{{fileName}} was compressed from {{originalSize}} to {{size}} to fit the attachment limit.',
+            {
+              fileName,
+              originalSize: formatFeedbackImageSize(file.size),
+              size: formatFeedbackImageSize(shrunk.size)
+            }
+          )
+        )
+      }
       remaining -= 1
-      remainingBytes -= file.size
+      remainingBytes -= image.size
       images.push({
-        // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN
-        // web client over plain HTTP); createBrowserUuid falls back safely.
+        // Use createBrowserUuid because plain-HTTP LAN clients lack crypto.randomUUID.
         id: `${file.name}-${file.size}-${createBrowserUuid()}`,
         name: fileName,
-        contentType: file.type,
-        bytes: file.size,
+        contentType: image.type,
+        bytes: image.size,
         data,
-        previewUrl: URL.createObjectURL(file)
+        previewUrl: URL.createObjectURL(image)
       })
     }
   } catch (error) {
-    // Why: a rejected read never returns these drafts, and an un-revoked object
-    // URL pins its blob for the life of the renderer.
+    // Rejected reads return no drafts; revoke their object URLs or blobs stay pinned for the renderer’s lifetime.
     images.forEach(releaseFeedbackImageDraft)
     throw error
   }
@@ -215,7 +309,7 @@ export async function readFeedbackImageFiles(
     )
   }
 
-  return { images, errors }
+  return { images, errors, notices }
 }
 
 export function extractImageFilesFromDataTransfer(data: DataTransfer | null): File[] {

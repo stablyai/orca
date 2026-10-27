@@ -1,38 +1,73 @@
-import {
-  isAgentSessionConversationCommand,
-  type AgentSessionConversationCommand,
-  type AgentSessionConversationCommandResult
-} from '../../../../shared/agent-session-conversation-command'
-import {
-  readWholeAgentSessionFailureFact,
-  type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
-import { translate } from '@/i18n/i18n'
+import type {
+  AgentSessionConversationCommand,
+  AgentSessionConversationCommandResult
+} from '../../../../shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { agentSessionFailureStatedByStartRow } from './structured-agent-session-delivery-notices'
+import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
+import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
+import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
+import type {
+  StructuredAgentSessionCommandOutcome,
+  StructuredAgentSessionCommandRefusalCause
+} from '../../../../shared/structured-agent-session-composer'
+import {
+  conversationCommandReply,
+  heldConversationCommandParts,
+  structuredConversationCommandHold,
+  type StructuredConversationCommandHold
+} from '../../../../shared/structured-conversation-command-hold'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
+
+type CommandOutcome = Omit<StructuredAgentSessionCommandOutcome, 'handled'>
+
+export type StructuredConversationCommandCauses = Readonly<
+  Record<StructuredAgentSessionCommandRefusalCause, boolean>
+>
 
 export async function sendStructuredConversationCommand(input: {
   command: AgentSessionConversationCommand
-  /** The chat's agent, as a failed command names it. */
   agentName: string
   pending: { current: boolean }
-  blocked: boolean
+  hold: StructuredConversationCommandHold | null
+  /** Name a refusal’s cause only if visible at keypress; otherwise it could disappear before the reader sees it. */
+  causes: StructuredConversationCommandCauses
   /** What the chat's loaded start-failure rows state, read when the reply lands. */
   startFailures: () => readonly AgentSessionFailureFact[]
   send: (
     command: AgentSessionConversationCommand
   ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
-}): Promise<{ accepted: boolean; error: string | null }> {
-  if (input.pending.current || input.blocked) {
+}): Promise<CommandOutcome> {
+  const refused = (
+    error: string | null,
+    cause: StructuredAgentSessionCommandRefusalCause | undefined
+  ): CommandOutcome => ({
+    accepted: false,
+    error,
+    ...(error && cause && input.causes[cause] ? { refusedWhile: cause } : {})
+  })
+  // A command on its way is the agent's work in flight.
+  if (input.pending.current) {
     return {
       accepted: false,
-      error: translate(
-        'components.native-chat.conversationCommand.pendingWork',
-        'Wait for pending work and messages to finish before using this command.'
-      )
+      error: agentSessionWriteNoticeText(heldConversationCommandParts(input.command, 'working'))
     }
+  }
+  // The message ahead reads as sending, and Send is busy until the host has it; nothing is armed.
+  if (input.hold === 'ahead') {
+    return { accepted: false, error: null }
+  }
+  if (input.hold !== null) {
+    return refused(
+      agentSessionWriteNoticeText(heldConversationCommandParts(input.command, input.hold)),
+      input.hold
+    )
   }
   input.pending.current = true
   try {
@@ -44,41 +79,81 @@ export async function sendStructuredConversationCommand(input: {
     if (outcome.kind === 'dropped') {
       return { accepted: false, error: null }
     }
-    const { value } = outcome
-    // The chat's own start failed and its loaded row already says why, as for a message that start
-    // rejected. A /clear's failed start is its new chat's, whose row this pane never shows, and a
-    // command this build doesn't know may be either, so its host's words are shown.
-    if (
-      isAgentSessionConversationCommand(value.command) &&
-      value.command !== 'clear' &&
-      agentSessionFailureStatedByStartRow(value.failure, input.startFailures())
-    ) {
-      return { accepted: false, error: null }
-    }
-    const error = conversationCommandFailureText(value, input.agentName)
-    return { accepted: value.state === 'completed' && !error, error }
+    const reply = conversationCommandReply(outcome.value, {
+      agentName: input.agentName,
+      startFailures: input.startFailures(),
+      say: sayAgentSessionFailureTranslated
+    })
+    return reply.accepted ? { accepted: true, error: null } : refused(reply.error, reply.cause)
   } finally {
     input.pending.current = false
   }
 }
 
-/** The host's sentence in the reader's language, from the fact beside it; with no fact (an older
- *  host), one this build can't read whole, or a command it doesn't know, the sentence as written. */
-function conversationCommandFailureText(
-  result: AgentSessionConversationCommandResult,
+export function structuredConversationCommandRunner(args: {
   agentName: string
-): string | null {
-  const fact = isAgentSessionConversationCommand(result.command)
-    ? readWholeAgentSessionFailureFact(result.failure)
-    : undefined
-  if (!fact) {
-    return result.error ?? null
+  pending: { current: boolean }
+  /** The host holds a /compact as a card, and this client renders the queue. */
+  commandsWait: boolean
+  chat: {
+    turnId: string | null
+    isWorking: boolean
+    /** The queue's send is the host's next update: the pane reads working. */
+    queueSendsNext: boolean
+    backgroundTasks: { isMonitoring: boolean; show: boolean }
+    submissions: readonly AgentJournalSubmission[]
   }
-  // As the host words it: naming the chat's agent and the command a failed start was for.
-  return agentSessionFailureSentence(
-    fact,
-    'row',
-    { agentName, command: result.command },
-    sayAgentSessionFailureTranslated
-  )
+  /** The chat's pending prompts: a card would wait forever on ones this build cannot answer. */
+  prompts: readonly StructuredPromptItem[]
+  rewindInFlight: { readonly current: boolean }
+  sends: readonly StructuredAgentSessionPendingSend[]
+  /** The loaded rows, read when the reply lands, for the start failures they state. */
+  items: () => readonly AgentJournalRenderItem[]
+  send: (
+    command: AgentSessionConversationCommand,
+    delivery?: 'queue-if-active'
+  ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
+}): {
+  runConversationCommand: (command: AgentSessionConversationCommand) => Promise<CommandOutcome>
+  commandRefusalCauses: StructuredConversationCommandCauses
+} {
+  const promptPending = args.prompts.length > 0
+  const agentWorking = args.chat.turnId !== null || args.chat.isWorking || args.chat.queueSendsNext
+  const sendPending = args.sends.some((entry) => entry.phase === 'sending')
+  const causes: StructuredConversationCommandCauses = {
+    working: agentWorking,
+    prompt: promptPending,
+    // The strip, mid-turn included: what a host refusing on background tasks points at.
+    background: args.chat.backgroundTasks.show || args.chat.backgroundTasks.isMonitoring,
+    sending: sendPending,
+    retry: false
+  }
+  const run = (command: AgentSessionConversationCommand) => {
+    const waitsInLine =
+      command === 'compact' &&
+      args.commandsWait &&
+      !(promptPending && pendingPromptsAllUnanswerableHere(args.prompts))
+    return sendStructuredConversationCommand({
+      command,
+      agentName: args.agentName,
+      pending: args.pending,
+      hold: structuredConversationCommandHold({
+        waitsInLine,
+        agentWorking,
+        promptPending,
+        // A rewind on its way holds a command as background work does, in the same words.
+        backgroundTasksRunning:
+          args.chat.backgroundTasks.isMonitoring || args.rewindInFlight.current,
+        sendPending
+      }),
+      causes,
+      startFailures: () => structuredAgentSessionStartFailureFacts(args.items()),
+      send: (command) =>
+        args.send(
+          command,
+          command === 'compact' && args.commandsWait ? 'queue-if-active' : undefined
+        )
+    })
+  }
+  return { runConversationCommand: run, commandRefusalCauses: causes }
 }

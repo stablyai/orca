@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const wslMocks = vi.hoisted(() => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(),
-  listRunningWslHomeDirsAsync: vi.fn()
+  listRunningWslHomeDirsAsync: vi.fn(),
+  resolveWslGuestRealDirAsync: vi.fn()
 }))
 
-vi.mock('../wsl', () => ({ listRunningWslHomeDirsAsync: wslMocks.listRunningWslHomeDirsAsync }))
+vi.mock('../wsl', () => ({
+  listRunningWslHomeDirsAsync: wslMocks.listRunningWslHomeDirsAsync,
+  resolveWslGuestRealDirAsync: wslMocks.resolveWslGuestRealDirAsync
+}))
 vi.mock('../wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: wslMocks.filterPathsToRunningWslDistrosAsync
 }))
@@ -16,7 +20,7 @@ import {
   needsWslHostTranslation,
   resetHostReadableTranscriptPathCacheForTests,
   toHostReadableTranscriptPath,
-  wslCodexSessionsDirs
+  wslAgentSessionsDirs
 } from './host-readable-transcript-path'
 import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
@@ -33,6 +37,7 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation(async (paths: readonly string[]) => [...paths])
   wslMocks.listRunningWslHomeDirsAsync.mockReset().mockResolvedValue([])
+  wslMocks.resolveWslGuestRealDirAsync.mockReset().mockResolvedValue(null)
 })
 
 describe('isGuestAbsoluteLinuxPath', () => {
@@ -69,8 +74,7 @@ describe('toHostReadableTranscriptPath', () => {
   })
 
   it('never probes the bare guest path on Windows', async () => {
-    // Why: Win32 resolves `/home/...` against the current drive (`C:\home\...`),
-    // so probing first could bind chat to a local look-alike file.
+    // Win32 probes /home against the current drive, risking a local look-alike transcript.
     const seen: string[] = []
     await expect(
       toHostReadableTranscriptPath('/home/ada/x.jsonl', {
@@ -208,7 +212,6 @@ describe('toHostReadableTranscriptPath', () => {
   })
 
   it('prefers a later distro hit over an earlier gate refusal', async () => {
-    // Guest path under Debian's $HOME so the refusing Debian probe ranks first.
     await expect(
       toHostReadableTranscriptPath('/home/other/x.jsonl', {
         platform: 'win32',
@@ -252,8 +255,7 @@ describe('toHostReadableTranscriptPath', () => {
   })
 
   it('enumerates WSL homes once across repeated resolve-poll ticks', async () => {
-    // Why: getWslHomeAsync does not cache failures; re-spawning wsl.exe on every
-    // 500ms poll tick would hammer the main process.
+    // Failed WSL home discovery is uncached; polling must not spawn wsl.exe every 500ms.
     const listWslHomeDirs = vi.fn(async () => [UBUNTU_HOME])
     for (let tick = 0; tick < 5; tick += 1) {
       await toHostReadableTranscriptPath(ROLLOUT_LINUX, {
@@ -262,14 +264,12 @@ describe('toHostReadableTranscriptPath', () => {
         listWslHomeDirs
       })
     }
-    await wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs })
+    await wslAgentSessionsDirs('codex', { platform: 'win32', listWslHomeDirs })
     expect(listWslHomeDirs).toHaveBeenCalledTimes(1)
   })
 
   it('re-probes after the TTL so a distro that was booting is not excluded forever', async () => {
-    // Why: getWslHomeAsync returns null for a distro whose 5s $HOME probe timed
-    // out on a cold boot. Latching that partial list for the process lifetime
-    // would leave that distro's transcripts permanently unresolvable (#10326).
+    // Retry cold-boot discovery failures instead of excluding that distro for the session.
     vi.useFakeTimers()
     try {
       const listWslHomeDirs = vi
@@ -312,16 +312,157 @@ describe('toHostReadableTranscriptPath', () => {
   })
 })
 
-describe('wslCodexSessionsDirs', () => {
+describe('toHostReadableTranscriptPath through guest symlinks', () => {
+  // Orca's Claude profile links `<profile>/home/projects` to `~/.claude/projects`; Windows cannot follow it.
+  const PROFILE_DIR = '/home/ada/.local/share/orca/claude-profiles/acct/home/projects/-home-ada-app'
+  const REAL_DIR = '/home/ada/.claude/projects/-home-ada-app'
+  const LINKED_PATH = `${PROFILE_DIR}/sess.jsonl`
+  const REAL_UNC =
+    '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-app\\sess.jsonl'
+  const resolveGuestRealDir = async (_distro: string, dir: string): Promise<string | null> =>
+    dir === PROFILE_DIR ? REAL_DIR : dir
+
+  it('reads an attested transcript through a guest directory symlink', async () => {
+    await expect(
+      toHostReadableTranscriptPath(LINKED_PATH, {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists: async (candidate) => candidate === REAL_UNC,
+        resolveGuestRealDir
+      })
+    ).resolves.toBe(REAL_UNC)
+  })
+
+  it('reads an unattested transcript through a guest directory symlink', async () => {
+    await expect(
+      toHostReadableTranscriptPath(LINKED_PATH, {
+        platform: 'win32',
+        pathExists: async (candidate) => candidate === REAL_UNC,
+        listWslHomeDirs: async () => [UBUNTU_HOME],
+        resolveGuestRealDir
+      })
+    ).resolves.toBe(REAL_UNC)
+  })
+
+  it('does not ask the guest when the literal path is readable', async () => {
+    const resolver = vi.fn(resolveGuestRealDir)
+    await toHostReadableTranscriptPath(LINKED_PATH, {
+      platform: 'win32',
+      wslDistro: 'Ubuntu',
+      pathExists: async () => true,
+      resolveGuestRealDir: resolver
+    })
+    expect(resolver).not.toHaveBeenCalled()
+  })
+
+  it('resolves each directory once across resolve-poll ticks', async () => {
+    // A transcript that does not exist yet must not spawn wsl.exe on every poll.
+    const resolver = vi.fn(resolveGuestRealDir)
+    for (let tick = 0; tick < 5; tick += 1) {
+      await toHostReadableTranscriptPath(ROLLOUT_LINUX, {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists: async () => false,
+        resolveGuestRealDir: resolver
+      })
+    }
+    expect(resolver).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns null when the guest cannot resolve the directory', async () => {
+    const pathExists = vi.fn(async () => false)
+    await expect(
+      toHostReadableTranscriptPath(LINKED_PATH, {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists,
+        resolveGuestRealDir: async () => null
+      })
+    ).resolves.toBeNull()
+    expect(pathExists).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares one guest resolution between concurrent lookups of the same directory', async () => {
+    const resolver = vi.fn(resolveGuestRealDir)
+    const lookups = Array.from({ length: 3 }, () =>
+      toHostReadableTranscriptPath(LINKED_PATH, {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists: async (candidate) => candidate === REAL_UNC,
+        resolveGuestRealDir: resolver
+      })
+    )
+    await expect(Promise.all(lookups)).resolves.toEqual([REAL_UNC, REAL_UNC, REAL_UNC])
+    expect(resolver).toHaveBeenCalledTimes(1)
+  })
+
+  it('follows a retargeted symlink within 30 seconds', async () => {
+    vi.useFakeTimers()
+    try {
+      const MOVED_UNC = REAL_UNC.replace('.claude', '.claude-moved')
+      let target = REAL_DIR
+      const call = (): Promise<string | null> =>
+        toHostReadableTranscriptPath(LINKED_PATH, {
+          platform: 'win32',
+          wslDistro: 'Ubuntu',
+          pathExists: async (candidate) => candidate === REAL_UNC || candidate === MOVED_UNC,
+          resolveGuestRealDir: async () => target
+        })
+
+      await expect(call()).resolves.toBe(REAL_UNC)
+      target = REAL_DIR.replace('.claude', '.claude-moved')
+      vi.setSystemTime(Date.now() + 31_000)
+      await expect(call()).resolves.toBe(MOVED_UNC)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries a directory the guest could not resolve only after a short delay', async () => {
+    // The project directory may not exist until Claude writes the first turn.
+    vi.useFakeTimers()
+    try {
+      const resolver = vi
+        .fn<(distro: string, dir: string) => Promise<string | null>>()
+        .mockResolvedValueOnce(null)
+        .mockImplementation(resolveGuestRealDir)
+      const call = (): Promise<string | null> =>
+        toHostReadableTranscriptPath(LINKED_PATH, {
+          platform: 'win32',
+          wslDistro: 'Ubuntu',
+          pathExists: async (candidate) => candidate === REAL_UNC,
+          resolveGuestRealDir: resolver
+        })
+
+      await expect(call()).resolves.toBeNull()
+      await expect(call()).resolves.toBeNull()
+      expect(resolver).toHaveBeenCalledTimes(1)
+
+      vi.setSystemTime(Date.now() + 31_000)
+      await expect(call()).resolves.toBe(REAL_UNC)
+      expect(resolver).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('wslAgentSessionsDirs', () => {
   it('returns nothing off Windows', async () => {
     await expect(
-      wslCodexSessionsDirs({ platform: 'darwin', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'darwin',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toEqual([])
   })
 
   it('lists the managed and system Codex roots per distro home', async () => {
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'win32',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toEqual([
       `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`,
       `${UBUNTU_HOME}\\.codex\\sessions`
@@ -335,7 +476,10 @@ describe('wslCodexSessionsDirs', () => {
     })
 
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'win32',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toContain(`${accountHome}\\sessions`)
   })
 
@@ -346,7 +490,7 @@ describe('wslCodexSessionsDirs', () => {
     wslMocks.filterPathsToRunningWslDistrosAsync.mockResolvedValue([])
 
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [] })
+      wslAgentSessionsDirs('codex', { platform: 'win32', listWslHomeDirs: async () => [] })
     ).resolves.toEqual([])
   })
 })

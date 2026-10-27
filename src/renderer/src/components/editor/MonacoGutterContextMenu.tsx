@@ -1,4 +1,6 @@
 import React from 'react'
+import type { IRange } from 'monaco-editor'
+import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { Copy, ExternalLink } from 'lucide-react'
 import {
   DropdownMenu,
@@ -9,15 +11,18 @@ import {
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-client'
+import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-working-tree-client'
 import { formatPathLineReference } from './line-copy-path'
 import { translate } from '@/i18n/i18n'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getRemoteUrlLineRange } from './selection-copy'
 
 type MonacoGutterContextMenuProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   point: { x: number; y: number }
   line: number
+  selection: IRange | null
   filePath: string
   relativePath: string
 }
@@ -27,6 +32,7 @@ export function MonacoGutterContextMenu({
   onOpenChange,
   point,
   line,
+  selection,
   filePath,
   relativePath
 }: MonacoGutterContextMenuProps): React.JSX.Element {
@@ -68,19 +74,27 @@ export function MonacoGutterContextMenu({
             if (!activeFile) {
               return
             }
-            const worktree = findWorktreeById(state.worktreesByRepo, activeFile.worktreeId)
+            const worktree = findWorktreeById(selectWorktreesByRepo(state), activeFile.worktreeId)
             if (!worktree) {
               return
             }
             const connectionId = getConnectionId(activeFile?.worktreeId ?? null) ?? undefined
+            const target = getRuntimeTargetForFileOwner(
+              state,
+              activeFile.worktreeId,
+              activeFile.runtimeEnvironmentId
+            )
+            if (!target) {
+              return
+            }
             const url = await getRuntimeGitRemoteFileUrl(
               {
-                settings: state.settings,
+                target,
                 worktreeId: activeFile.worktreeId,
                 worktreePath: worktree.path,
                 connectionId
               },
-              { relativePath, line }
+              { relativePath, ...getRemoteUrlLineRange(line, selection) }
             )
             if (url) {
               window.api.ui.writeClipboardText(url)

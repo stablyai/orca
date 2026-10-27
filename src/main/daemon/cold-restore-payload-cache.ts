@@ -1,4 +1,6 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 
 export type ColdRestorePayload = {
   scrollback: string
@@ -10,13 +12,34 @@ export type ColdRestorePayload = {
   lastTitle?: string
 }
 
-// Why: restore payloads remain sticky only for remount safety; cap their aggregate main-process footprint.
+export function coldRestorePayloadFromInfo(
+  restoreInfo: ColdRestoreInfo
+): ColdRestorePayload | null {
+  // Rehydrate enters alt-screen; the appended ground exits it and would discard the recovered frame.
+  const scrollback = restoreInfo.modes.alternateScreen
+    ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
+    : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+  if (!scrollback) {
+    return null
+  }
+  return {
+    // Main seeds its mirror from this payload, so it needs grounding too.
+    scrollback: `${scrollback}${PROCESS_BOUNDARY_GROUND}`,
+    cwd: restoreInfo.cwd,
+    cols: restoreInfo.cols,
+    rows: restoreInfo.rows,
+    oscLinks: restoreInfo.oscLinks,
+    ...(restoreInfo.lastTitle ? { lastTitle: restoreInfo.lastTitle } : {})
+  }
+}
+
+// Keep remount-safe payloads sticky while bounding their aggregate main-process footprint.
 export const MAX_COLD_RESTORE_CACHE_BYTES = 16 * 1024 * 1024
 
 export function getColdRestorePayloadBytes(payload: ColdRestorePayload): number {
   const oscLinkBytes =
     payload.oscLinks?.reduce((bytes, link) => bytes + link.uri.length * 2 + 24, 0) ?? 0
-  // Why: code-unit sizing bounds V8 string storage without rescanning or flattening multi-MB ropes.
+  // UTF-16 code-unit estimates avoid flattening or rescanning multi-MB string ropes.
   return (
     payload.scrollback.length * 2 +
     payload.cwd.length * 2 +

@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useCallback } from 'react'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../../../shared/git-upstream-status'
-import type { DropdownActionKind } from '../../source-control-dropdown-item-types'
+import type { DropdownActionKind } from '../../../../../../shared/source-control-dropdown-item-types'
 import type { SourceControlCommitAction } from '../commit/use-commit-action'
 import { handleSourceControlCommitShortcut } from '../commit/commit-shortcut'
 import type { SourceControlFileListing } from '../listing/use-file-listing'
@@ -11,10 +11,7 @@ import type { SourceControlRemoteActionRunner } from '../sync/use-remote-action-
 import type { SourceControlActionModel } from './use-action-model'
 import type { SourceControlHostedReviewCreation } from './use-hosted-review-creation'
 
-/**
- * Routes the primary button, the dropdown, the header Create-review affordance and the commit
- * shortcut to one shared dispatcher, so every entry point obeys the same in-flight guard.
- */
+/** Share the in-flight guard across primary/dropdown/header actions and the commit shortcut. */
 export function useSourceControlActionDispatch({
   createPrHeaderAction,
   handleAbortMerge,
@@ -48,7 +45,6 @@ export function useSourceControlActionDispatch({
   runCreatePrIntent: () => Promise<void>
   runRemoteAction: SourceControlRemoteActionRunner['runRemoteAction']
 }) {
-  // Dispatch primary + dropdown action kinds to their handlers.
   const handleActionInvoke = useCallback(
     (kind: DropdownActionKind): void => {
       if (prGenerating || isCreatingPr || isCreatePrIntentInFlight) {
@@ -101,14 +97,14 @@ export function useSourceControlActionDispatch({
     ]
   )
 
-  // Why: 'stage' routes to a primary-only handler since handleActionInvoke is typed to DropdownActionKind (compound commit_* kinds are dropdown-only).
+  // Stage is primary-only; the dropdown dispatcher accepts compound commit kinds instead.
   const handlePrimaryClick = useCallback((): void => {
     switch (primaryAction.kind) {
       case 'stage':
         void handleStageAllPrimary()
         return
       case 'push':
-        // Why: primary labels "Force Push" but keeps kind 'push', so invoke the explicit force path when lease force is required.
+        // Force Push retains kind push in the primary model; dispatch the explicit force path.
         handleActionInvoke(
           shouldForcePushWithLeaseForUpstream(remoteStatusForActions ?? remoteStatus)
             ? 'force_push'

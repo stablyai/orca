@@ -65,10 +65,7 @@ export function decideWebSessionTabsSnapshot(
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   if ((snapshot as { removed?: unknown }).removed === true) {
     // Why: removed worktrees can stop publishing, so clean up their tracking now instead of waiting for a replacement snapshot that may never arrive.
-    // A retraction is not a handover. The generation that published this worktree is still the live
-    // one and republishes the moment a client recreates a terminal, so retiring it here would fence
-    // a publisher that never died out of its own worktree. A genuinely delayed predecessor frame is
-    // separated from that live republication by receivedFrame, not by epoch identity.
+    // Retraction does not retire the live publisher; its same-epoch republication must return. receivedFrame fences delayed predecessors instead.
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
     return WEB_SESSION_TABS_FRAME_APPLIED
@@ -115,9 +112,7 @@ export function decideWebSessionTabsSnapshot(
   }
   rememberHostTerminalTabCount(environmentId, snapshot)
   replayableSessionTabsSnapshotByWorktree.delete(key)
-  // A frame that affirms nothing about the worktree has not taken over publishing it, so it must
-  // not be noted. It still applies: rejecting it outright would drop the terminal reconciliation
-  // that legitimately rides on it (host-session-snapshot-authority.ts).
+  // Unpublished frames affirm no takeover: apply terminal reconciliation but do not note a new publisher (host-session-snapshot-authority.ts).
   if (hostSnapshotAffirmsWorktreeContents(snapshot)) {
     noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
   }
@@ -139,19 +134,17 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
   snapshotIsFresh: boolean
   localTerminalCount: number
   hasPersistedTerminalState: boolean
+  /** No earlier frame in this subscription affirmed the worktree's contents. */
+  firstHostAnswer: boolean
 }): boolean {
   return (
     args.snapshotIsFresh &&
-    args.event.type === 'snapshot' &&
-    // Why: a synthesized unpublished frame (`UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH` at version 0)
-    // is the runtime saying "ask me later", not a host with zero terminals. Seeding on it can
-    // duplicate a pane the host is about to republish after a restart — the same "ask me later"
-    // frame the tombstone write already refuses to treat as the user emptying the workspace.
+    // Why the second arm: after an "ask me later" snapshot, the host's real answer arrives as an update.
+    (args.event.type === 'snapshot' || (args.event.type === 'updated' && args.firstHostAnswer)) &&
+    // Synthesized unpublished means ask later; seeding can duplicate panes a restarting host will republish.
     hostSnapshotAffirmsWorktreeContents(args.event) &&
     args.event.tabs.length === 0 &&
-    // Why the shared predicate: the host owning the terminals does not change what an empty
-    // workspace means. A missing row is "never initialized", an explicit empty row is "the user
-    // closed the last terminal", and only the local seeder used to read the difference (STA-6173).
+    // Use local seeder semantics remotely too: missing means never initialized, explicit empty means user-closed-last-terminal (STA-6173).
     shouldAutoCreateInitialTerminal(args.localTerminalCount, args.hasPersistedTerminalState) &&
     !args.requestedInitialTerminal &&
     args.activeWorktreeId === args.event.worktree

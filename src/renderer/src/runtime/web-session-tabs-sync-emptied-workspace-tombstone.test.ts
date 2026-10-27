@@ -4,7 +4,8 @@ import {
   type RuntimeMobileSessionTabsRemovedResult
 } from '../../../shared/runtime-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -47,12 +48,7 @@ const emptySnapshot = (
     ...overrides
   })
 
-/**
- * STA-6173. The seeders read a missing terminal row as "never initialized" and an explicit empty
- * one as "the user closed the last terminal" (initial-terminal.ts). The mirror used to delete the
- * key, so a runtime-owned workspace could never record the second state and was re-seeded on every
- * focus.
- */
+// Missing tabs row means never initialized; explicit empty means user closed the last terminal. Preserve that tombstone or every focus reseeds (STA-6173, initial-terminal.ts).
 describe('applyWebSessionTabsSnapshot emptied-workspace tombstone', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
@@ -111,8 +107,7 @@ describe('applyWebSessionTabsSnapshot emptied-workspace tombstone', () => {
     expect(Object.hasOwn(patch.tabsByWorktree!, WT)).toBe(false)
   })
 
-  // Why: a runtime that has published nothing for a worktree still answers a forced snapshot with a
-  // synthesized empty frame. That is "ask me later", not "the user emptied this".
+  // Synthesized empty frames from unpublished worktrees mean ask later, not user-emptied.
   it('does not tombstone from a synthesized unpublished frame', () => {
     const mirrored = applyWebSessionTabsSnapshot(
       makeState(),

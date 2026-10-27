@@ -1,12 +1,9 @@
-import type { CodexAppServerHostKey } from './codex-app-server-capability-cache'
+import type { CodexAppServerHostKey } from './app-server/codex-app-server-capability-cache'
 
-// Why: a transiently hung app-server must not block launch prep on every pane.
-// The legacy lane remains available while a short, host-scoped cooldown runs.
+// Use legacy trust during the host cooldown so a hung server cannot delay every pane.
 export const CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS = 5 * 60_000
 const MAX_TRANSIENT_TRUST_COOLDOWNS = 256
 
-// Why launch-path grants only: a background grant's retry is scheduled by its
-// caller's lane, so a second schedule here could only disagree with it.
 const retryAfterByHost = new Map<string, number>()
 
 export function isCodexTrustGrantCoolingDown(hostKey: CodexAppServerHostKey): boolean {
@@ -33,7 +30,6 @@ export function startCodexTrustGrantCooldown(hostKey: CodexAppServerHostKey): vo
   }
 }
 
-/** A success or a proven-missing surface, from either lane, ends the host's cooldown. */
 export function clearCodexTrustGrantCooldown(hostKey: CodexAppServerHostKey): void {
   retryAfterByHost.delete(hostKey)
 }

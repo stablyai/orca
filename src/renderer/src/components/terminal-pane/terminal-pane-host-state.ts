@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   resolveWorktreeHostConnection,
@@ -22,6 +23,19 @@ export type TerminalPaneHostState = {
   sshReconnectTargetRemoved: boolean
 }
 
+/** An unserved local host's translated reason; main's error stays the English twin. */
+function reconnectErrorText(
+  state: AppState,
+  environmentId: string | null,
+  targetId: string,
+  error: string | null
+): string | null {
+  if (error === null || environmentId !== null) {
+    return error
+  }
+  return sshConnectFailureText(state.sshConnectionStates.get(targetId), error)
+}
+
 function computeTerminalPaneHostState(state: AppState, worktreeId: string): TerminalPaneHostState {
   const connectionId = getConnectionIdFromState(state, worktreeId)
   const nativeChatTranscriptIsLocalReadableResult =
@@ -42,10 +56,11 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   return {
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
     sshReconnectEnvironmentId,
-    sshReconnectError: selectRuntimeAwareSshError(
+    sshReconnectError: reconnectErrorText(
       state,
       sshReconnectEnvironmentId,
-      sshReconnectTargetId
+      sshReconnectTargetId,
+      selectRuntimeAwareSshError(state, sshReconnectEnvironmentId, sshReconnectTargetId)
     ),
     sshReconnectStatus: host.publishedStatus,
     sshReconnectTargetId,
@@ -79,20 +94,7 @@ let cachedState: WeakRef<AppState> | null = null
 let cachedByWorktreeId = new Map<string, TerminalPaneHostState>()
 let previousByWorktreeId = new Map<string, TerminalPaneHostState>()
 
-/**
- * Per-worktree memo of the host state one TerminalPane needs.
- *
- * Why keyed on the whole `state` object and nothing narrower: resolving the
- * execution host walks repos, worktree owners, folder-workspace routes, and the
- * runtime/SSH slices, so no hand-written input list can be shown to be complete
- * — and an incomplete one would hand an SSH pane a stale host. Zustand mints a
- * new state object for every publication, so state identity is an exact,
- * conservative key: a write can never be missed, and within one published state
- * every mounted tab of a worktree resolves the host once instead of once each.
- *
- * The previous result is returned when nothing changed, so the shallow-equal
- * subscriber compares by identity and the selector stops allocating per publication.
- */
+/** Memoize host resolution by whole store identity: ownership spans repo, folder, runtime and SSH state, so narrower keys can miss changes. Resolve once per worktree/publication and reuse unchanged results to avoid per-pane allocations. */
 export function selectTerminalPaneHostState(
   state: AppState,
   worktreeId: string
@@ -113,7 +115,6 @@ export function selectTerminalPaneHostState(
   return result
 }
 
-/** Test seam: drops the memo so a suite can measure a cold resolve. */
 export function resetTerminalPaneHostStateMemoForTests(): void {
   cachedState = null
   cachedByWorktreeId = new Map()

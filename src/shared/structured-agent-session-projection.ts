@@ -5,11 +5,14 @@ import {
 } from './agent-status-field-normalization'
 import {
   AGENT_JOURNAL_MESSAGE_SEND_MODES,
+  AGENT_JOURNAL_MESSAGE_STATES,
+  type AgentJournalMessageItem,
   type AgentJournalMessageSendMode,
   type AgentJournalRenderItem,
   type AgentJournalSubmission
 } from './agent-session-journal-types'
 import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
+import { agentJournalToolCallLifecycle } from './agent-journal-tool-call-lifecycle'
 import { agentJournalLinkageFields } from './agent-session-journal-producer'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
 import { agentJournalItemRowOrigin } from './agent-session-journal-position'
@@ -17,7 +20,7 @@ import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
 } from './agent-status-types'
-import { describeToolInput } from './native-chat-tool-summary'
+import { describeToolInput } from './native-chat/tools/native-chat-tool-summary'
 import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
 import {
   hasStructuredAgentSessionRequest,
@@ -33,32 +36,40 @@ import {
 
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
+import { readAgentMessageSource } from './agent-session/agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
+import type { StructuredAgentSessionWorkScope } from './structured-agent-session-main-agent-working'
+import { agentSessionCurrentContextRows } from './agent-session-context-clear'
 
-// Re-exported so the live-turn readers' and the unanswered-send rule's existing consumers keep one
-// import site.
+// Keep existing live-turn/unanswered-send consumers on one import path.
 export {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
 } from './structured-agent-session-live-turn'
 export { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
-function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
-  return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
+/** Only transport-clipped output has a fetchable remainder; older saved truncations have none. */
+function toolResult(
+  item: AgentJournalRenderItem,
+  payload: { head: string; truncated: boolean; byteLength: number },
+  callId: string | undefined
+) {
+  return {
+    type: 'tool-result' as const,
+    output: payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head,
+    callId,
+    ...(item.shortened && payload.truncated ? { fullOutputItemId: item.itemId } : {})
+  }
 }
 
-/** The markers a clipped payload carries in its own text, anchored to the end
- *  so nothing that merely looks like one inside the body can match. */
+/** Anchor truncation markers at the end so body lookalikes remain content. */
 const BOUNDED_TEXT_MARKERS = [
-  /\n… \(\d+ bytes\)$/,
-  /\n\[Orca: output truncated — \d+ bytes total, digest [0-9a-f]+\]$/
+  /\n\u2026 \(\d+ bytes\)$/,
+  /\n\[Orca: output truncated \u2014 \d+ bytes total, digest [0-9a-f]+\]$/
 ]
 
-/** Recovers the clipped body from a bounded payload's text, and says whether a
- *  marker was there. A reader that treats the text as content renders the
- *  marker as a line of it — with a line number, which reads as a real position
- *  in the file — and reports the body as complete. */
+/** Strip clipping markers and retain truncation state; otherwise file viewers render the marker as a real numbered line and claim completeness. */
 export function stripBoundedTextMarker(text: string): { text: string; truncated: boolean } {
   const stripped = BOUNDED_TEXT_MARKERS.reduce((value, marker) => value.replace(marker, ''), text)
   return { text: stripped, truncated: stripped.length !== text.length }
@@ -73,12 +84,11 @@ function itemBlocks(item: AgentJournalRenderItem): {
     return { role: body.role, blocks: body.blocks }
   }
   if (isStructuredAgentSessionToolAction(body)) {
-    const call = structuredAgentSessionToolCallBlock(body)
+    const call = structuredAgentSessionToolCallBlock(body, item.itemId)
+    // Call/result share one row; use its call ID to pair them.
+    const { callId } = call
     if (body.kind === 'diff') {
-      return {
-        role: 'assistant',
-        blocks: [call, { type: 'tool-result', output: boundedText(body.patch) }]
-      }
+      return { role: 'assistant', blocks: [call, toolResult(item, body.patch, callId)] }
     }
     return {
       role: 'assistant',
@@ -87,11 +97,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
         ...(body.output
           ? [
               {
-                type: 'tool-result' as const,
-                output: boundedText(body.output),
-                isError: body.state === 'failed',
-                // The call and its output are one journal row, so the result names its call.
-                ...(body.callId !== undefined ? { callId: body.callId } : {})
+                ...toolResult(item, body.output, callId),
+                // Interrupted output is not an error reported by the tool.
+                isError: agentJournalToolCallLifecycle(body) === 'failed'
               }
             ]
           : [])
@@ -122,24 +130,37 @@ function itemBlocks(item: AgentJournalRenderItem): {
       blocks: [{ type: 'text', text: `${body.question}\n${choices}`.trim() }]
     }
   }
-  // A turn record is timing, not content; a kind this build does not know is
-  // never painted as text either, so a newer host can add kinds freely.
+  // Turn records are timing only; unknown newer-host kinds must not become text.
   if (body.kind !== 'status' || body.turnLifecycle) {
     return null
   }
-  return { role: 'system', blocks: [structuredAgentSessionStatusBlock(body)] }
+  return {
+    role: 'system',
+    blocks: [structuredAgentSessionStatusBlock(body, item.turnScope, item.itemId)]
+  }
 }
 
 function isAgentJournalMessageSendMode(value: string): value is AgentJournalMessageSendMode {
   return AGENT_JOURNAL_MESSAGE_SEND_MODES.some((mode) => mode === value)
 }
 
+/** A state this build cannot name reads as completed: a newer host's row is never live here. */
+function messageLifecycle(
+  body: AgentJournalMessageItem
+): Pick<NativeChatMessage, 'state' | 'completedAt'> {
+  const state: string | undefined = body.state
+  if (state === undefined) {
+    return {}
+  }
+  return {
+    state: AGENT_JOURNAL_MESSAGE_STATES.find((known) => known === state) ?? 'completed',
+    ...(body.completedAt !== undefined ? { completedAt: body.completedAt } : {})
+  }
+}
+
 const projectedItems = new WeakMap<AgentJournalRenderItem, NativeChatMessage | null>()
 
-/** Deliberately NOT scoped by producer: every agent's rows are projected, and
- *  each message keeps its row's linkage so the transcript can keep a subagent's
- *  rows with that subagent. Every "what is this agent doing right now" scan
- *  renders only the session's own agent's. */
+/** Render all producers and retain linkage for child sections; current-status readers separately scope to the root agent. */
 export function projectStructuredItemsToNativeChat(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatMessage[] {
@@ -163,6 +184,10 @@ export function projectStructuredItemToNativeChat(
   // Reducer updates replace journal items, so unchanged rows keep their render caches.
   const projected = itemBlocks(item)
   const sentAs = item.body.kind === 'message' ? item.body.sentAs : undefined
+  const lifecycle = item.body.kind === 'message' ? messageLifecycle(item.body) : {}
+  const command = item.body.kind === 'message' ? item.body.command : undefined
+  // Validate wire-origin sender fields from any host version.
+  const from = item.body.kind === 'message' ? readAgentMessageSource(item.body.from) : undefined
   const message: NativeChatMessage | null = projected
     ? {
         ...agentJournalItemRowOrigin(item),
@@ -170,7 +195,11 @@ export function projectStructuredItemToNativeChat(
         role: projected.role,
         blocks: projected.blocks,
         // A send mode this build cannot name renders as an ordinary message.
-        ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {})
+        ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {}),
+        ...lifecycle,
+        ...(command ? { command } : {}),
+        ...(from && projected.role === 'user' ? { from } : {}),
+        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {})
       }
     : null
   projectedItems.set(item, message)
@@ -183,25 +212,33 @@ export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
 
+/** Ignore prompts from ended generations when the host scope proves no child can answer them. */
+function pendingStructuredAgentSessionPrompt(
+  scope?: StructuredAgentSessionWorkScope
+): (item: AgentJournalRenderItem) => boolean {
+  return (item) =>
+    (item.body.kind === 'approval' || item.body.kind === 'question') &&
+    item.body.resolution.state === 'pending' &&
+    (!scope || scope.isCurrentItem(item.itemId))
+}
+
+/** Host scope excludes ended-generation work from Working/attention. */
 export function projectStructuredAgentSessionStatus(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
-  currentFence?: number | null
+  currentFence?: number | null,
+  scope?: StructuredAgentSessionWorkScope
 ): StructuredAgentSessionProjectedStatus {
-  if (
-    items.some(
-      (item) =>
-        (item.body.kind === 'approval' || item.body.kind === 'question') &&
-        item.body.resolution.state === 'pending'
-    )
-  ) {
+  ;({ items, submissions } = agentSessionCurrentContextRows(items, submissions))
+  if (items.some(pendingStructuredAgentSessionPrompt(scope))) {
     return 'attention'
   }
-  return owesStructuredAgentSessionWork(items, submissions, currentFence) ? 'working' : 'idle'
+  return owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
+    ? 'working'
+    : 'idle'
 }
 
-/** The activity fields a sidebar row shows beside the prompt, named as the agent-status
- *  entry names them so the client can hand them straight to a row. */
+/** Name sidebar activity fields like agent-status entries for direct row consumption. */
 export type StructuredAgentSessionStatusProjection = {
   status: StructuredAgentSessionProjectedStatus | null
   latestPrompt: string
@@ -210,19 +247,13 @@ export type StructuredAgentSessionStatusProjection = {
   toolName?: string
   toolInput?: string
   lastAssistantMessage?: string
-  /** The latest request's verdict: its turn's, or `failure` for a send the agent or its start
-   *  refused. A turn the provider gave none reads as its host-observed end. Present only while
-   *  `status` is idle. */
+  /** Idle-only latest-request verdict: turn outcome, host-observed end if absent, or refused-send failure. */
   turnOutcome?: AgentTurnOutcome
   statusStartedAt?: number
 }
 
-/** One projection shared by host and client: null status means "no turn yet", not idle.
- *  Every text field is bounded to the same preview an agent-status row carries — a send
- *  admits 256 KB, and one status frame carries every retained session at once. The
- *  assistant line is bounded harder than the hook field it stands in for (a preview, not
- *  the 8 KB body): a streamed reply re-projects on every journal checkpoint, so the frame
- *  has to stay small even though the row only ever renders one line of it. */
+/** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;
+ * bound assistant prose below the hook’s 8 KB body because every streaming checkpoint republishes a one-line preview. */
 export function projectStructuredAgentSessionStatusSummary(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
@@ -231,22 +262,31 @@ export function projectStructuredAgentSessionStatusSummary(
   return projectStructuredAgentSessionStatusState(items, submissions, currentFence).summary
 }
 
-/** The summary plus the latest request it was read from, whatever the status, so the host's
- *  completion feed follows the same request the row reports without scanning again. */
+/** Return the summary and its request together so the host completion feed cannot diverge or rescan. */
 export function projectStructuredAgentSessionStatusState(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
-  currentFence?: number | null
+  currentFence?: number | null,
+  scope?: StructuredAgentSessionWorkScope
 ): {
   summary: StructuredAgentSessionStatusProjection
   latestRequest: StructuredAgentSessionLatestRequest | null
   /** Whether a running turn or an unanswered send is still owed, even beneath a pending prompt. */
   owesWork: boolean
+  /** Item ids of the approvals and questions waiting on the user: what makes the status `attention`. */
+  pendingPromptIds: string[]
 } {
+  const latestPrompt = latestStructuredAgentSessionPrompt(items)
   if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
-    return { summary: { status: null, latestPrompt: '' }, latestRequest: null, owesWork: false }
+    return {
+      summary: { status: null, latestPrompt: '' },
+      latestRequest: null,
+      owesWork: false,
+      pendingPromptIds: []
+    }
   }
-  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
+  ;({ items, submissions } = agentSessionCurrentContextRows(items, submissions))
+  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence, scope)
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
   const toolName = statusToolCall
     ? normalizeOptionalField(statusToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
@@ -262,7 +302,7 @@ export function projectStructuredAgentSessionStatusState(
     AGENT_STATUS_MAX_FIELD_LENGTH
   )
   const latestRequest = latestStructuredAgentSessionRequest(items, submissions)
-  // A verdict is a fact about a finished request: only an idle session has one to report.
+  // Only idle sessions report a finished-request verdict.
   const request = status === 'idle' ? latestRequest : null
   const turnOutcome = request
     ? agentTurnVerdict({ state: request.turnState, outcome: request.outcome })
@@ -276,10 +316,15 @@ export function projectStructuredAgentSessionStatusState(
   )
   return {
     latestRequest,
-    owesWork: status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence),
+    owesWork:
+      status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence, scope),
+    pendingPromptIds:
+      status === 'attention'
+        ? items.filter(pendingStructuredAgentSessionPrompt(scope)).map((item) => item.itemId)
+        : [],
     summary: {
       status,
-      latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
+      latestPrompt: normalizePromptField(latestPrompt),
       ...(toolName ? { toolName } : {}),
       ...(toolInput ? { toolInput } : {}),
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),

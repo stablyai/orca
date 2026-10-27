@@ -21,9 +21,7 @@ import {
 } from '../../src/main/ai-vault-search/session-search-synthetic-corpus'
 import { sessionCandidate } from '../../src/main/ai-vault-search/session-search-transcript-fixtures'
 
-// What a query costs, and what the session candidate limit buys. Everything
-// runs through the real store and the real engine over a synthetic corpus;
-// never point this at a real transcript tree.
+// Measure real engine/store on synthetic corpus only; never use real transcripts.
 
 const WARMUP = 5
 const SAMPLES = 25
@@ -77,8 +75,7 @@ async function indexCorpus(
   }
   return {
     corpus,
-    // The handle a composed reader gets. Every read here is one synchronous
-    // statement, which is the contract that comes with it.
+    // Composed reader performs one synchronous statement per read, preserving its handle contract.
     db: store.connection,
     release: () => {
       unregister()
@@ -107,13 +104,7 @@ function scopeReport(db: SyncDatabase, scope: SessionSearchScope): Record<string
   return { ...timing(everything), perQuery }
 }
 
-/**
- * The candidate limit only costs anything once there are more matching sessions
- * than the limit, so this runs over many short sessions rather than the wide
- * corpus above. Limits are interleaved sample by sample: run back to back, the
- * first configuration pays for every page the OS cache had not seen yet and the
- * ordering alone moves p95 by more than the limit does.
- */
+// Interleave candidate limits over many short sessions to make limit bind without favoring second arm’s warmed OS cache.
 function candidateSweep(db: SyncDatabase, limits: readonly number[]): Record<string, unknown> {
   const request: SessionSearchRequest = { query: 'index', limit: 20 }
   const engines = new Map(
@@ -153,8 +144,7 @@ try {
   wide.release()
   await rm(wide.corpus.root, { recursive: true, force: true })
 
-  // Many short sessions: what makes the candidate limit binding is the session
-  // count, not the byte count.
+  // Session count, not byte volume, makes candidate limit binding.
   const many = await indexCorpus({ sessions: 2500, turnsPerSession: 1, seed: 7 })
   try {
     report = JSON.stringify(
@@ -183,8 +173,7 @@ try {
   throw error
 }
 
-// Why a file as well as stdout: a runner that intercepts console output
-// (vitest does) would otherwise swallow the whole report.
+// Write report file too: test runners may intercept console output.
 const out = process.env.BENCH_OUT
 if (out) {
   await writeFile(out, `${report}\n`)

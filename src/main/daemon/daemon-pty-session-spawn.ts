@@ -1,6 +1,3 @@
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
-import { CODEX_SHELL_READY_TIMEOUT_MS } from './session-shell-ready-barrier'
 import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
@@ -19,13 +16,22 @@ import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult 
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
 import { resolveUnixShellPath } from '../providers/local-pty-utils'
-import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
+  // Checked again in doSpawn: retirement can close admission while spawn awaits.
+  private assertSpawnAdmission(): void {
+    if (this.idleRetirementAdmissionClosed) {
+      throw new Error('Terminal daemon is decommissioning')
+    }
+  }
+
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    this.assertSpawnAdmission()
     const spawnOpts = this.withHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
     const operation: PendingDaemonSpawnOperation = {
@@ -105,6 +111,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     operation: PendingDaemonSpawnOperation,
     historyRecovery: HistoryRecoveryContext
   ): Promise<PtySpawnResult> {
+    this.assertSpawnAdmission()
     if (
       opts.agentSessionEnsure &&
       this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
@@ -112,7 +119,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       throw new Error('agent_session_claim_unavailable')
     }
     const requestedSessionId = opts.sessionId!
-    // Why: v30 daemons survive upgrades; reject their accidental create result before publication.
+    // Surviving v30 daemons can accidentally create on attach; reject that result before publishing.
     const attachOnly = opts.attachOnly === true
     const emulateLegacyAttachOnly =
       attachOnly && this.protocolVersion < STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
@@ -162,14 +169,19 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       if (!restoreInfo) {
         return null
       }
+      const requestedCwd = opts.cwd ?? resolveSafePtyDefaultCwd()
+      const recoveredCwd = normalizeWslColdRestoreCwd({
+        recoveredCwd: restoreInfo.cwd,
+        requestedCwd,
+        wslDistro: recoveryWslDistro
+      })
+      // Keep an unverified recovered cwd; fall back when the folder probe proves it missing.
       return {
         ...restoreInfo,
         cwd:
-          normalizeWslColdRestoreCwd({
-            recoveredCwd: restoreInfo.cwd,
-            requestedCwd: opts.cwd ?? resolveSafePtyDefaultCwd(),
-            wslDistro: recoveryWslDistro
-          }) ?? ''
+          recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
+            ? recoveredCwd
+            : requestedCwd
       }
     }
 
@@ -184,15 +196,12 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
 
     await this.ensureConnected()
-    // Why before createOrAttach: a preserved daemon may still think this session is backgrounded — from
-    // a v19 that thins without a recoverable seq, or (#9993) from a pre-v29 that a previous desktop
-    // handed 2031 scan authority to and can never retract it. Clear it before any bytes are attached.
+    // Clear stale background state before attach when the preserved daemon cannot safely thin or retract 2031 facts.
     if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(sessionId, false)
     }
 
-    // Why detect crash-recovery history before spawning: the revived shell should inherit the recovered cwd/dims, not the renderer's mount-time request.
-    // Why probe aliveness first: detectColdRestore replays up to ~5MB on the main process, but a live session's snapshot supersedes disk, so the replay would be wasted.
+    // Recover cwd and geometry before spawning; live snapshots supersede costly disk replay.
     let restoreInfo: ColdRestoreInfo | null = null
     let restoreSkippedForLiveSession = false
     const historyProbe = opts.attachOnly
@@ -219,16 +228,6 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
         : ''
     const shellReadySupported = shellPathSupportsPtyStartupBarrier(effectiveShellPath)
     const immediateMarker = shellReadyMarkerComesFromLineEditor(effectiveShellPath)
-    const shellReadyTimeoutMs =
-      shellReadySupported &&
-      !immediateMarker &&
-      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex' &&
-      !shouldUseShellReadyStartupDelivery({
-        command: opts.command,
-        startupCommandDelivery: opts.startupCommandDelivery
-      })
-        ? CODEX_SHELL_READY_TIMEOUT_MS
-        : undefined
     const context: DaemonPtySpawnContext = {
       // Older daemons also need the existing hint to enable their ready marker.
       opts:
@@ -246,7 +245,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       effectiveCols,
       effectiveRows,
       shellReadySupported,
-      shellReadyTimeoutMs,
+      shellReadyTimeoutMs: undefined,
       historySeedSegments: restoreInfo ? getRecoveredHistorySeedSegments(restoreInfo) : null,
       detectColdRestore
     }
@@ -255,7 +254,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     if (result.isNew && !attachOnly) {
       // Not awaited: the app-side read behind it can sit on an unanswered macOS folder prompt.
       void reportDaemonPtyCwdVerdict({
-        cwd: effectiveCwd,
+        cwd: context.effectiveCwd,
         cwdReadableByDaemon: result.cwdReadableByDaemon,
         pidPath: this.pidPath,
         daemonIdentity: this.client.getDaemonIdentity()
@@ -287,7 +286,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       this.sessionIncarnations.set(sessionId, result.incarnationId)
     }
     this.clearExitedSessionState(sessionId, matchingExit.code, result.incarnationId)
-    // Why: stream exit can beat the control reply or post-reply recovery work; return proof without republishing dead state.
+    // Exit can beat control or recovery work; return its proof without republishing dead session state.
     const exitedResult: PtySpawnResult = {
       id: sessionId,
       exitedBeforeSpawnReply: true,

@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: feedback viewer details are loaded through GitHub IPC after the dialog receives the issue URL. */
 import React, { useRef, useState } from 'react'
 import { ExternalLink, Github } from 'lucide-react'
 import { toast } from 'sonner'
@@ -62,10 +61,7 @@ export function SidebarFeedbackDialog({
   open,
   onOpenChange
 }: SidebarFeedbackDialogProps): React.JSX.Element {
-  // Why: the draft lives in the app store, not component state. This dialog
-  // renders inside the sidebar subtree, so collapsing the sidebar unmounts it
-  // and would otherwise discard a report the user has not managed to send yet
-  // (orca#22466).
+  // Store drafts survive sidebar collapse, which unmounts this dialog.
   const feedback = useAppStore((s) => s.feedbackDraft.feedback)
   const submitAnonymously = useAppStore((s) => s.feedbackDraft.submitAnonymously)
   const setFeedbackDraft = useAppStore((s) => s.setFeedbackDraft)
@@ -88,8 +84,7 @@ export function SidebarFeedbackDialog({
     getReservedImageCapacity
   } = useSidebarFeedbackImages({ open, isSubmitting, mountedRef })
 
-  // Why: reads the committed draft at call time so a late-resolving prefill
-  // cannot overwrite characters typed while it was in flight.
+  // Read committed text at call time so late prefill cannot overwrite typing.
   const setFeedback = React.useCallback(
     (updater: (current: string) => string) => {
       setFeedbackDraft({ feedback: updater(useAppStore.getState().feedbackDraft.feedback) })
@@ -155,11 +150,7 @@ export function SidebarFeedbackDialog({
     setIsSubmitting(true)
     try {
       const identity = getSubmitIdentity(viewer, submitAnonymously)
-      // Why: submission is proxied through the main process via IPC because
-      // the packaged Mac build loads the renderer from file://, which makes
-      // cross-origin fetch() fail CORS preflight. Electron's net module in
-      // the main process has no CORS restrictions and works uniformly in dev
-      // and prod.
+      // Main-process IPC avoids packaged file-renderer CORS restrictions during submission.
       const result = await window.api.feedback.submit({
         feedback: trimmed,
         submitAnonymously,
@@ -175,13 +166,7 @@ export function SidebarFeedbackDialog({
         throw new Error(`Feedback request failed: ${result.error}`)
       }
 
-      // Why: the report landed, so the draft has to go even if the sidebar
-      // collapsed mid-flight — otherwise it reappears on remount and invites a
-      // duplicate send. Store actions outlive the component but `mountedRef`
-      // does not, so this runs unguarded and instead compares what the user
-      // wrote: a different report typed after a remount must survive this
-      // stale handler. The env footer is stripped from both sides because the
-      // remount's prefill re-appends it on its own.
+      // Clear delivered text even after unmount, but preserve newer drafts; strip regenerated environment footers before comparing.
       if (
         stripClientEnvironmentFooter(useAppStore.getState().feedbackDraft.feedback).trim() ===
         userText
@@ -190,14 +175,10 @@ export function SidebarFeedbackDialog({
       }
 
       if (mountedRef.current) {
-        // Why: the text reached us but the screenshots did not. The dialog
-        // closes either way, so the copy states the outcome rather than
-        // implying the screenshots are still recoverable from here.
+        // The dialog closes after delivery; report lost screenshots without implying they remain recoverable here.
         if (result.imagesFailure) {
           toast.warning(
-            // Why: only 413 means the upload was over the host's size limit.
-            // The other shed-the-attachment statuses (403 from a corporate
-            // filter, 415, 422…) would be a false explanation.
+            // Only 413 proves the size limit; other attachment refusals need different explanations.
             result.imagesFailure.status === FEEDBACK_PAYLOAD_TOO_LARGE_STATUS
               ? translate(
                   'auto.components.sidebar.SidebarFeedbackDialog.imagesRejected',
@@ -252,24 +233,25 @@ export function SidebarFeedbackDialog({
           event.preventDefault()
           feedbackTextareaRef.current?.focus()
         }}
-        // Why: paste is bound on the dialog rather than the textarea so a
-        // screenshot lands whether or not the caret is in the message box.
+        // Handle image paste across the dialog even without a textarea caret.
         onPaste={(event) => {
           const pasted = extractImageFilesFromDataTransfer(event.clipboardData)
           if (pasted.length === 0) {
             return
           }
-          // Why: consume the paste only when something is actually attachable.
-          // An unsupported image still routes through for its rejection toast,
-          // but preventing default there would silently eat co-pasted text.
+          // Consume only attachable image pastes; rejection toasts must not cost co-pasted text.
           const reserved = getReservedImageCapacity()
-          if (hasAttachableFeedbackImage(pasted, reserved.count, reserved.bytes)) {
+          // An optimistic shrink may fail; let co-pasted text insert now rather than restore it later.
+          if (
+            hasAttachableFeedbackImage(pasted, reserved.count, reserved.bytes, {
+              allowShrinking: event.clipboardData.getData('text/plain').length === 0
+            })
+          ) {
             event.preventDefault()
           }
           handleAddFiles(pasted)
         }}
-        // Why: dragenter/leave fire per nested child; the hook counts depth so
-        // the highlight only clears once the pointer leaves the dialog.
+        // Nested drag events need depth tracking so highlights persist until the pointer leaves the dialog.
         {...dragHandlers}
       >
         <DialogHeader>
@@ -352,6 +334,7 @@ export function SidebarFeedbackDialog({
 
         <SidebarFeedbackImageAttachments
           images={images}
+          pendingCount={pendingImageReadCount}
           disabled={isSubmitting}
           isDragActive={isDragActive}
           onAddFiles={handleAddFiles}

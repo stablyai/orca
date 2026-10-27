@@ -1,9 +1,8 @@
-import { WifiOff, Shield, Monitor, Clock, Globe, Bell } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { WifiOff, Shield, Monitor, Clock, Globe, Bell, type LucideIcon } from 'lucide-react-native'
 
 export type TroubleshootSection = {
   id: string
-  icon: React.ReactNode
+  icon: LucideIcon
   title: string
   steps: string[]
 }
@@ -11,7 +10,7 @@ export type TroubleshootSection = {
 export const troubleshootCommonIssues: TroubleshootSection[] = [
   {
     id: 'notifications',
-    icon: <Bell size={16} color={colors.textSecondary} />,
+    icon: Bell,
     title: 'Push Notifications',
     steps: [
       'Check that system settings allow Orca notifications and that Focus or Do Not Disturb is off.',
@@ -21,7 +20,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
 
   {
     id: 'wifi',
-    icon: <WifiOff size={16} color={colors.textSecondary} />,
+    icon: WifiOff,
     title: 'Different WiFi Networks',
     steps: [
       'Both devices must be on the same LAN (unless connected through Tailscale).',
@@ -31,7 +30,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'firewall',
-    icon: <Shield size={16} color={colors.textSecondary} />,
+    icon: Shield,
     title: 'Firewall Blocking Port 6768',
     steps: [
       'macOS: System Settings → Network → Firewall — allow Orca.',
@@ -42,7 +41,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'desktop',
-    icon: <Monitor size={16} color={colors.textSecondary} />,
+    icon: Monitor,
     title: 'Desktop App Not Running',
     steps: [
       'Orca must be open on your desktop to accept connections.',
@@ -52,7 +51,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'timeout',
-    icon: <Clock size={16} color={colors.textSecondary} />,
+    icon: Clock,
     title: 'Connection Timeout',
     steps: [
       'Check WiFi signal strength on your phone.',
@@ -62,7 +61,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'tailscale',
-    icon: <Globe size={16} color={colors.textSecondary} />,
+    icon: Globe,
     title: 'Tailscale Host Unreachable',
     steps: [
       'Host addresses like 100.x.x.x or *.ts.net connect through Tailscale — keep it ON.',
@@ -73,7 +72,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'vpn',
-    icon: <Shield size={16} color={colors.textSecondary} />,
+    icon: Shield,
     title: 'Other VPN Interference',
     steps: [
       'Non-Tailscale VPNs can route local traffic through a remote server.',

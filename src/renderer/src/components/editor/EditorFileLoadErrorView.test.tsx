@@ -11,8 +11,7 @@ describe('EditorFileLoadErrorView', () => {
   afterEach(cleanup)
 
   it('offers Retry as its only action', () => {
-    // Why: closing must stay with the tab strip, whose path carries the pin, shared-
-    // reference, and unsaved-changes checks; a second close control here would not.
+    // Only the tab-strip close path enforces pins, shared references and unsaved-change checks.
     const onRetry = vi.fn()
 
     render(<EditorFileLoadErrorView message="selector_not_found" onRetry={onRetry} />)
@@ -23,9 +22,20 @@ describe('EditorFileLoadErrorView', () => {
     expect(onRetry).toHaveBeenCalledOnce()
   })
 
+  it('drops the IPC wrapper from a stored host error', () => {
+    render(
+      <EditorFileLoadErrorView
+        message="Error invoking remote method 'runtimeEnvironments:call': Error: WSL hosts are turned off in Settings → Experimental."
+        onRetry={vi.fn()}
+      />
+    )
+
+    screen.getByText('WSL hosts are turned off in Settings → Experimental.')
+    expect(screen.queryByText(/Error invoking remote method/)).toBeNull()
+  })
+
   it('localizes the host-unresolved state by its sentinel code, not by the stored text', () => {
-    // Why: the stored `loadError` is an English fallback; the code is what selects the
-    // localized copy, so a translated catalog cannot desynchronize from the comparison.
+    // Select localized text by machine code so stored English cannot affect state classification.
     render(
       <EditorFileLoadErrorView
         message="stored fallback text"
@@ -36,5 +46,12 @@ describe('EditorFileLoadErrorView', () => {
 
     screen.getByText(WORKTREE_HOST_UNRESOLVED_ERROR)
     expect(screen.queryByText('stored fallback text')).toBeNull()
+  })
+
+  it("explains a host's file_too_large code instead of showing it", () => {
+    render(<EditorFileLoadErrorView message="file_too_large" onRetry={vi.fn()} />)
+
+    screen.getByText('This file is too large to open from its host.')
+    expect(screen.queryByText('file_too_large')).toBeNull()
   })
 })

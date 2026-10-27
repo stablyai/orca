@@ -18,14 +18,7 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('./mobile-source-control-styles', () => ({ styles: new Proxy({}, { get: () => ({}) }) }))
 
-/**
- * The dock closes and the route goes back, and only one of them is a Back control.
- *
- * Nothing else pins this: no golden names this component and no parity census covers
- * `src/source-control`. The Back census reads what a control is called, so a single control
- * serving both modes has to be named "Back" in a mode where it dismisses a dock — which satisfies
- * the rule by making the wording wrong.
- */
+// Dock dismissal and route Back need distinct controls; the dock never pops a route.
 describe('the source-control header control', () => {
   let tree: ReactTestRenderer | null = null
 
@@ -34,14 +27,18 @@ describe('the source-control header control', () => {
     tree = null
   })
 
-  function render(embedded: boolean, handlers: { onBack: () => void; onClose: () => void }) {
+  function render(
+    embedded: boolean,
+    handlers: { onBack: () => void; onClose: () => void },
+    ioBusy = false
+  ) {
     let rendered: ReactTestRenderer | null = null
     act(() => {
       rendered = create(
         createElement(MobileSourceControlHeader, {
           embedded,
           worktreeLabel: 'wt',
-          ioBusy: false,
+          ioBusy,
           onRefresh: () => {},
           ...handlers
         })
@@ -81,5 +78,19 @@ describe('the source-control header control', () => {
     act(() => control?.props.onPress())
     expect(calls).toEqual(['close'])
     expect(labelled(rendered, 'Back to session')).toHaveLength(0)
+  })
+
+  it.each([false, true])('keeps navigation enabled during file I/O (embedded: %s)', (embedded) => {
+    const onBack = vi.fn()
+    const onClose = vi.fn()
+    const rendered = render(embedded, { onBack, onClose }, true)
+    const navigation = labelled(rendered, embedded ? 'Close source control' : 'Back to session').at(
+      0
+    )
+    expect(navigation?.props.disabled).not.toBe(true)
+    expect(labelled(rendered, 'Refresh source control').at(0)?.props.disabled).toBe(true)
+    act(() => navigation?.props.onPress())
+    expect(embedded ? onClose : onBack).toHaveBeenCalledTimes(1)
+    expect(embedded ? onBack : onClose).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,4 @@
-// A structured-session runtime whose Claude children are scripted: the production runtime,
-// adapter, record store and host, with only the CLI process replaced.
+// Use production runtime/adapter/store/host with only the Claude CLI process replaced.
 
 import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -12,7 +11,7 @@ import type {
   openClaudeStreamJsonConnection
 } from '../claude/claude-stream-json-connection'
 import { runClaudeControl } from '../claude/claude-agent-sdk-control-requests'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { hostTestAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -43,17 +42,19 @@ export type ScriptedClaudeBehavior = {
   optionWritesHang?: boolean
   /** Startup's own settings read goes unanswered. */
   startupSettingsReadHangs?: boolean
-  /** Every option write loses its answer while the CLI keeps running (not a refusal), so a
-   *  start that restores one faults. */
+  /** Every option write loses its answer while the CLI keeps running (not a refusal). */
   optionWritesFail?: boolean
   /** The init frame names another provider session than the one launched. */
   initNamesForeignSession?: boolean
+  /** No start frame before the first turn, as with no SessionStart hook configured. */
+  sendsNoStartFrame?: boolean
 }
 
 export type ScriptedClaudeChild = {
   sessionId: string
   launch: ClaudeStreamJsonLaunch
   calls: string[]
+  initializing: boolean
   handlers: ClaudeStreamJsonConnectionHandlers
   connection: Omit<ClaudeStreamJsonConnection, 'closed' | 'exitVerdict'> & {
     closed: boolean
@@ -73,12 +74,17 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
     releaseStalls = resolve
   })
   let root: string | null = null
+  let host: StructuredAgentSessionHost | null = null
   let operations = 0
 
   const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
     const providerSessionId = String(launch.options.sessionId ?? launch.options.resume)
     const sessionId = sessionIds.find(
-      (candidate) => claudeSessionIdForOrcaSession(candidate) === providerSessionId
+      (candidate) =>
+        claudeSessionIdForOrcaSession(
+          candidate,
+          host?.deps.store.getRecord(candidate)?.providerContextBoundary?.operationId
+        ) === providerSessionId
     )
     if (!sessionId) {
       throw new Error(`no scripted Claude session for ${providerSessionId}`)
@@ -110,6 +116,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
       sessionId,
       launch,
       calls: [],
+      initializing: false,
       handlers,
       exit: (error) => {
         child.connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
@@ -122,8 +129,12 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         closed: false,
         exitVerdict: { root: 'live', tree: 'unverifiable' },
         initializationResult: () => {
+          child.initializing = true
           const initialized = { models: [{ value: 'sonnet', displayName: 'Sonnet' }] }
-          const announce = (): void =>
+          const announce = (): void => {
+            if (behavior.sendsNoStartFrame) {
+              return
+            }
             handlers.onMessage?.({
               type: 'system',
               subtype: 'init',
@@ -131,6 +142,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
               model: 'claude-sonnet-5',
               apiKeySource: 'none'
             })
+          }
           if (behavior.initHangs) {
             return new Promise((resolve, reject) => {
               failInit = reject
@@ -175,7 +187,8 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         interrupt: async () => undefined,
         cancelAsyncMessage: async () => false,
         stopTask: async () => {},
-        send: async () => {
+        send: async (_message, beforeDispatch) => {
+          await beforeDispatch?.()
           child.calls.push('send')
         },
         close: async () => {
@@ -220,20 +233,22 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
     children: (sessionId: string): ScriptedClaudeChild[] =>
       children.filter((entry) => entry.sessionId === sessionId),
     install: async (): Promise<StructuredAgentSessionHost> => {
-      root = await mkdtemp(join(tmpdir(), 'orca-scripted-claude-runtime-'))
+      root ??= await mkdtemp(join(tmpdir(), 'orca-scripted-claude-runtime-'))
       await mkdir(join(root, 'claude-home'), { recursive: true })
       const directory = root
-      return ensureStructuredAgentSessionHost({
+      host = await ensureStructuredAgentSessionHost({
         logger: createStructuredAgentSessionLogger(),
         stateDirectory: directory,
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => directory,
         resolveClaudeCommand: () => '/usr/local/bin/claude',
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
+        resolveLaunchArgs: () => [],
+        resolveClaudeAuthPolicy: () => ({ account: 'system' }),
         openClaudeConnection: openConnection,
         readProcessStartTime
       })
+      return host
     },
     attachParams: (
       sessionId: string,

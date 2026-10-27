@@ -1,10 +1,14 @@
+import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { VirtualizedList } from '../virtualized-list'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import { CheckButton, SortIndicator } from './workspace-space-selection-controls'
 import { WorkspaceSpaceWorktreeRow } from './workspace-space-worktree-row'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import type { useWorkspaceSpaceManagerPanel } from './use-workspace-space-manager-panel'
+import { WORKSPACE_SPACE_TABLE_GRID_CLASS } from './workspace-space-table-layout'
 
 type WorkspaceSpaceManagerModel = ReturnType<typeof useWorkspaceSpaceManagerPanel>
 
@@ -13,16 +17,17 @@ export function WorkspaceSpaceManagerTable({
 }: {
   model: WorkspaceSpaceManagerModel
 }): React.JSX.Element {
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const {
     analysis,
     decisionDetailsByWorktreeId,
     deleteWorktrees,
     forceDeleteWorktree,
     gitRefreshStateByWorktreeId,
+    gitStatusByWorktreeIdentity,
     hasRows,
     inspectedWorktree,
     isInitialScan,
-    maxSize,
     nextSelectedIds,
     getDeleteStateForWorktree,
     rows,
@@ -38,11 +43,16 @@ export function WorkspaceSpaceManagerTable({
     allVisibleSelected
   } = model
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       {hasRows || isInitialScan ? (
-        <div className="overflow-x-auto rounded-lg border border-border/70 bg-background/30">
-          <div className="min-w-[46rem]">
-            <div className="grid grid-cols-[1.75rem_minmax(0,1.25fr)_minmax(9rem,0.55fr)_8rem_9.5rem] gap-3 border-b border-border/60 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        <div className="flex min-h-0 flex-1 flex-col overflow-x-auto rounded-lg border border-border/70 bg-background/30">
+          <div className="flex min-h-0 min-w-[54rem] flex-1 flex-col">
+            <div
+              className={cn(
+                WORKSPACE_SPACE_TABLE_GRID_CLASS,
+                'shrink-0 border-b border-border/60 px-3 py-1.5 text-2xs font-medium uppercase tracking-wider text-muted-foreground'
+              )}
+            >
               <div className="flex items-center">
                 <CheckButton
                   checked={visibleSelectionState}
@@ -85,6 +95,14 @@ export function WorkspaceSpaceManagerTable({
               </button>
               <button
                 type="button"
+                onClick={() => toggleSort('activity')}
+                className="flex items-center justify-end gap-1 text-right"
+              >
+                {translate('workspaceSpace.table.lastActive', 'Last active')}
+                <SortIndicator sortKey="activity" activeKey={sortKey} direction={sortDirection} />
+              </button>
+              <button
+                type="button"
                 onClick={() => toggleSort('size')}
                 className="flex items-center justify-end gap-1 text-right"
               >
@@ -100,9 +118,14 @@ export function WorkspaceSpaceManagerTable({
                   'State'
                 )}
               </div>
+              <div>
+                <span className="sr-only">
+                  {translate('workspaceSpace.table.actions', 'Actions')}
+                </span>
+              </div>
             </div>
 
-            <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">
+            <div ref={setScrollElement} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               {isInitialScan ? (
                 <div className="flex items-center justify-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
@@ -119,42 +142,55 @@ export function WorkspaceSpaceManagerTable({
                   )}
                 </div>
               ) : (
-                rows.map((worktree) => {
-                  const identity = getWorkspaceSpaceWorktreeIdentity(worktree)
-                  const decisionDetails = decisionDetailsByWorktreeId.get(identity)
-                  if (!decisionDetails) {
-                    return null
-                  }
-                  return (
-                    <WorkspaceSpaceWorktreeRow
-                      key={identity}
-                      worktree={worktree}
-                      maxSize={maxSize}
-                      selected={nextSelectedIds.has(identity)}
-                      inspected={
-                        inspectedWorktree !== null &&
-                        getWorkspaceSpaceWorktreeIdentity(inspectedWorktree) === identity
-                      }
-                      decisionDetails={decisionDetails}
-                      gitRefreshState={gitRefreshStateByWorktreeId[identity]}
-                      deleteState={getDeleteStateForWorktree(worktree)}
-                      onToggleSelected={() => toggleSelection(worktree)}
-                      onInspect={() => setInspectedWorktreeId(identity)}
-                      onOpenWorkspace={() =>
-                        activateAndRevealWorktree(worktree.worktreeId, {
-                          navigationIntent: 'user-open'
-                        })
-                      }
-                      onDelete={() => deleteWorktrees([worktree])}
-                      onForceDelete={() => forceDeleteWorktree(worktree)}
-                    />
-                  )
-                })
+                <VirtualizedList
+                  rows={rows}
+                  getRowKey={getWorkspaceSpaceWorktreeIdentity}
+                  scrollElement={scrollElement}
+                  estimateRowHeightPx={33}
+                  announceListPosition
+                  renderRow={(worktree) => {
+                    const identity = getWorkspaceSpaceWorktreeIdentity(worktree)
+                    const decisionDetails = decisionDetailsByWorktreeId.get(identity)
+                    if (!decisionDetails) {
+                      return null
+                    }
+                    return (
+                      <WorkspaceSpaceWorktreeRow
+                        key={identity}
+                        worktree={worktree}
+                        selected={nextSelectedIds.has(identity)}
+                        inspected={
+                          inspectedWorktree !== null &&
+                          getWorkspaceSpaceWorktreeIdentity(inspectedWorktree) === identity
+                        }
+                        decisionDetails={decisionDetails}
+                        changedFiles={gitStatusByWorktreeIdentity.get(identity)}
+                        gitRefreshState={gitRefreshStateByWorktreeId[identity]}
+                        deleteState={getDeleteStateForWorktree(worktree)}
+                        onToggleSelected={() => toggleSelection(worktree)}
+                        onInspect={() => setInspectedWorktreeId(identity)}
+                        onOpenWorkspace={() =>
+                          window.location.pathname.endsWith('/space.html')
+                            ? void window.api.workspaceSpace.revealWorktree?.(
+                                worktree.worktreeId,
+                                worktree.executionHostId
+                              )
+                            : activateAndRevealWorktree(worktree.worktreeId, {
+                                navigationIntent: 'user-open',
+                                executionHostId: worktree.executionHostId
+                              })
+                        }
+                        onDelete={() => deleteWorktrees([worktree], { forceOnConfirm: true })}
+                        onForceDelete={() => forceDeleteWorktree(worktree)}
+                      />
+                    )
+                  }}
+                />
               )}
             </div>
           </div>
         </div>
-      ) : (
+      ) : !analysis && !scanError ? null : (
         <div className="rounded-lg border border-border/70 bg-background/30 px-4 py-10 text-center text-sm text-muted-foreground">
           {scanError
             ? translate(
@@ -172,6 +208,6 @@ export function WorkspaceSpaceManagerTable({
                 )}
         </div>
       )}
-    </>
+    </div>
   )
 }

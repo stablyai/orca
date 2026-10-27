@@ -4,10 +4,7 @@ import { updateScrollIndicator } from './viewport-transform'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import type { TerminalDocumentScope } from './document-scope'
 
-// Why: rewrap the local xterm buffer (scrollback included) to a new width
-// after a server PTY reflow. Skip the alternate screen: those snapshots are
-// fully repainted by the PTY and a local resize there can drop SGR attributes
-// (see init's alt-screen handling), which shows as white text.
+// Rewrap scrollback after PTY width changes; skip alternate screens, whose full repaints can lose SGR under local resize.
 export function reflow(scope: TerminalDocumentScope, cols: number, rows: number) {
   if (!scope.term || isAlternateBufferActive(scope)) {
     return
@@ -18,9 +15,7 @@ export function reflow(scope: TerminalDocumentScope, cols: number, rows: number)
     return
   }
   const buffer = scope.term.buffer.active
-  // Why: anchor reflow on whether the user was pinned to the live bottom so
-  // their scroll position survives the rewrap — if they were scrolled up,
-  // hold the same distance from the bottom; if at the bottom, stay there.
+  // Preserve distance from bottom across rewrap, including bottom-pinned readers.
   const wasAtBottom = buffer.viewportY >= buffer.baseY
   const distanceFromBottom = buffer.baseY - buffer.viewportY
   scope.initRows = nextRows

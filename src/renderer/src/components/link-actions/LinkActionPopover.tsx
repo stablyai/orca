@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef } from 'react'
 import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -14,21 +14,26 @@ import type { LinkAction, LinkActionRequest } from './link-action-request'
 type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
   request: TRequest | null
   onClose: (dismissed?: TRequest) => void
+  onPointerDownOutside?: (event: Event) => void
+  onOpenSettings?: () => void
 }
 
 function ActionRow({
   action,
-  alternate,
+  shortcut,
   onRun
 }: {
   action: LinkAction
-  alternate: boolean
+  shortcut: 'primary' | 'alternate' | null
   onRun: () => void
 }): React.JSX.Element {
   const isMac = navigator.userAgent.includes('Mac')
-  const keys = alternate
-    ? [isMac ? '⇧' : 'Shift', isMac ? '⌘' : 'Ctrl', 'Click']
-    : [isMac ? '⌘' : 'Ctrl', 'Click']
+  const keys =
+    shortcut === 'alternate'
+      ? [isMac ? '⇧' : 'Shift', isMac ? '⌘' : 'Ctrl', 'Click']
+      : shortcut === 'primary'
+        ? [isMac ? '⌘' : 'Ctrl', 'Click']
+        : null
 
   return (
     <Button
@@ -41,21 +46,41 @@ function ActionRow({
       <span className="min-w-0 flex-1 truncate text-left" title={action.label}>
         {action.label}
       </span>
-      <ShortcutKeyCombo keys={keys} keyCapClassName="min-w-5 px-1 py-0 text-[11px]" />
+      {keys ? (
+        <ShortcutKeyCombo keys={keys} keyCapClassName="min-w-5 px-1 py-0 text-[11px]" />
+      ) : null}
     </Button>
   )
 }
 
-/** Shared by the terminal and native chat: pick where a clicked link opens. */
 export function LinkActionPopover<TRequest extends LinkActionRequest>({
   request,
-  onClose
+  onClose,
+  onPointerDownOutside,
+  onOpenSettings
 }: LinkActionPopoverProps<TRequest>): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const copyableDestination = request?.kind === 'url' ? request.destination : ''
   const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
   const copyInFlightRef = useRef(false)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const dismissOnOutsidePointerDown = useEffectEvent((event: PointerEvent): void => {
+    if (!request || (event.target instanceof Node && contentRef.current?.contains(event.target))) {
+      return
+    }
+    onPointerDownOutside?.(event)
+    onClose(request)
+  })
+  useEffect(() => {
+    if (!request) {
+      return
+    }
+    // Why: Radix defers outside dismissal to the click and skips it when the click's
+    // propagation is stopped, which hover cards and sidebar cards both do.
+    document.addEventListener('pointerdown', dismissOnOutsidePointerDown, true)
+    return () => document.removeEventListener('pointerdown', dismissOnOutsidePointerDown, true)
+  }, [request])
   const virtualRef = useMemo(
     () => ({
       current: {
@@ -108,6 +133,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
 
   const openTerminalLinkSettings = (): void => {
     onClose()
+    onOpenSettings?.()
     openSettingsTarget({
       pane: 'browser',
       repoId: null,
@@ -124,6 +150,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
       <PopoverAnchor virtualRef={virtualRef} />
       {request ? (
         <PopoverContent
+          ref={contentRef}
           align="start"
           side="top"
           sideOffset={6}
@@ -180,16 +207,24 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
           </div>
           <ActionRow
             action={request.primary}
-            alternate={false}
+            shortcut="primary"
             onRun={() => runAction(request.primary)}
           />
           {request.alternate ? (
             <ActionRow
               action={request.alternate}
-              alternate
+              shortcut="alternate"
               onRun={() => runAction(request.alternate!)}
             />
           ) : null}
+          {request.secondaryActions?.map((action) => (
+            <ActionRow
+              key={action.label}
+              action={action}
+              shortcut={null}
+              onRun={() => runAction(action)}
+            />
+          ))}
         </PopoverContent>
       ) : null}
     </Popover>

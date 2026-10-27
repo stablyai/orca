@@ -5,17 +5,26 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-  AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
+  AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY
 } from '../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => ({
   supports: vi.fn(),
+  regenerate: vi.fn(async () => true),
   contactRegained: new Map<string, () => void>()
 }))
 
-vi.mock('./runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: mocks.supports
+vi.mock('./structured-agent-session-client', () => ({
+  regenerateStructuredAgentSessionName: mocks.regenerate
 }))
+vi.mock('./structured-agent-session-status-feed', () => ({
+  getStructuredAgentSessionStatusFeed: () => null
+}))
+import { useNativeChatNamingFailure } from '../components/tab-bar/use-native-chat-naming-failure'
+
+vi.mock('./runtime-rpc-client', () => ({ runtimeEnvironmentSupportsCapability: mocks.supports }))
 
 vi.mock('./runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (environmentId: string, listener: () => void) => {
@@ -27,6 +36,7 @@ vi.mock('./runtime-host-contact-regained', () => ({
 import { setLocalRuntimeCapabilitiesForTests } from './local-runtime-capabilities'
 import {
   useStructuredAgentSessionHostQueuesMessagesState,
+  useStructuredAgentSessionHostRecoversRewindOnSend,
   useStructuredAgentSessionHostStopsConversation
 } from './structured-agent-session-host-capability'
 
@@ -89,11 +99,63 @@ describe('the queued-messages capability, three-state', () => {
     )
   })
 
+  it('restores the naming action after a failed capability probe without calling an unsupported host', async () => {
+    mocks.supports.mockRejectedValueOnce(new Error('unreachable'))
+    const { result } = renderHook(() =>
+      useNativeChatNamingFailure({
+        executionHostId: 'runtime:env-1',
+        sessionId: 'chat',
+        error: { message: 'Failed', failedAt: 1 }
+      })
+    )
+    await waitFor(() => expect(mocks.supports).toHaveBeenCalledTimes(1))
+    act(() => result.current?.regenerate())
+    expect(mocks.regenerate).not.toHaveBeenCalled()
+    mocks.supports.mockResolvedValueOnce(true)
+    act(() => mocks.contactRegained.get('env-1')?.())
+    await waitFor(() => expect(result.current?.canRegenerate).toBe(true))
+    act(() => result.current?.regenerate())
+    expect(mocks.regenerate).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'chat'
+    )
+    expect(result.current?.regenerating).toBe(false)
+  })
+
   it('reads a local runtime that has not answered as unknown', () => {
     setLocalRuntimeCapabilitiesForTests(null)
     const { result } = renderHook(() =>
       useStructuredAgentSessionHostQueuesMessagesState({ kind: 'local' })
     )
     expect(result.current).toBe('unknown')
+  })
+})
+
+describe('whether a host settles an in-doubt rewind on the next send', () => {
+  it('reads the local runtime, which only rewinding is not enough for', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_REWIND_RUNTIME_CAPABILITY])
+    expect(
+      renderHook(() => useStructuredAgentSessionHostRecoversRewindOnSend({ kind: 'local' })).result
+        .current
+    ).toBe(false)
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_REWIND_RECOVERY_CAPABILITY])
+    expect(
+      renderHook(() => useStructuredAgentSessionHostRecoversRewindOnSend({ kind: 'local' })).result
+        .current
+    ).toBe(true)
+  })
+
+  it.each([true, false])('asks a remote host, which answers %s', async (supported) => {
+    mocks.supports.mockResolvedValueOnce(supported)
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionHostRecoversRewindOnSend({
+        kind: 'environment',
+        environmentId: 'env-1'
+      })
+    )
+    await waitFor(() =>
+      expect(mocks.supports).toHaveBeenCalledWith('env-1', AGENT_SESSION_REWIND_RECOVERY_CAPABILITY)
+    )
+    await waitFor(() => expect(result.current).toBe(supported))
   })
 })

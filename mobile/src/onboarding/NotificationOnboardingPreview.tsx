@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
+import { Animated, Easing, Text, View } from 'react-native'
 import { OrcaLogo } from '../components/OrcaLogo'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { useReducedMotionEnabled } from './use-reduced-motion'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 
 const SAMPLE_NOTIFICATIONS = [
   { title: 'Codex finished', body: 'Tests are passing.' },
@@ -22,6 +24,7 @@ type Props = {
 
 /** Decorative banners; the surrounding copy is the accessible explanation. */
 export function NotificationOnboardingPreview({ active }: Props) {
+  useMobileColorScheme()
   const reduceMotion = useReducedMotionEnabled()
   const first = useRef(new Animated.Value(0)).current
   const second = useRef(new Animated.Value(0)).current
@@ -86,6 +89,7 @@ export function NotificationOnboardingPreview({ active }: Props) {
 }
 
 function SampleBanner({ notification }: { notification: (typeof SAMPLE_NOTIFICATIONS)[number] }) {
+  useMobileColorScheme()
   return (
     <View style={styles.card}>
       <View style={styles.appIcon}>
@@ -121,7 +125,7 @@ function bannerMotion(progress: Animated.Value) {
   }
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   stack: {
     width: '100%',
     maxWidth: 320,
@@ -176,4 +180,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     marginTop: 1
   }
-})
+}))

@@ -2,6 +2,9 @@ import { existsSync } from 'node:fs'
 import { hasStateBackup } from './legacy-json/profile-state-legacy-backup-path'
 import { profileStateJsonExportPaths } from './legacy-json/profile-state-export-path'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
+import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
+import type { ProfileStateRepairSection } from './profile-state-section-repair'
+import { profileStateSectionLabels } from './profile-state-section-labels'
 
 type ProfileStateRecoveryLocation = {
   dataFile: string
@@ -12,7 +15,7 @@ type ProfileStateRecoveryLocation = {
 export class ProfileStateAuthorityBootstrapError extends Error {
   readonly code = 'ambiguous-profile-state' as const
 
-  /** `diverged-json`: both copies are readable, so the user can pick one at startup. */
+  /** Readable divergent copies allow a startup choice. */
   constructor(
     message: string,
     readonly divergence?: 'diverged-json'
@@ -32,24 +35,35 @@ export function assertProfileStateCanInitialize(options: ProfileStateRecoveryLoc
   }
 }
 
-/** Startup can surface this error with the exact artifacts an explicit rollback may use. */
 export class ProfileStateRecoveryRequiredError extends Error {
   readonly code = 'profile-state-recovery-required' as const
   readonly dataFile: string
   readonly databaseFile: string
   readonly exportPaths: readonly string[]
   readonly backupPaths: readonly string[]
+  readonly profileId: string
+  /** Confined damage permits preserving the other sections. */
+  readonly repairableSections?: readonly ProfileStateRepairSection[]
 
-  constructor(options: ProfileStateRecoveryLocation, cause: unknown) {
+  constructor(
+    options: ProfileStateRecoveryLocation,
+    cause: unknown,
+    repairableSections?: readonly ProfileStateRepairSection[]
+  ) {
     super(
-      `SQLite profile state could not be read; choose a retained backup or JSON export to recover the profile`,
+      repairableSections
+        ? `Damaged profile sections: ${profileStateSectionLabels(repairableSections.map(({ domain }) => domain)).join(', ')}; run \`orca profile state rollback --repair --profile-id ${options.profileId}\` to replace only those sections from backups`
+        : `SQLite profile state could not be read; choose a retained backup or JSON export to recover the profile`,
       { cause }
     )
     this.name = 'ProfileStateRecoveryRequiredError'
     this.dataFile = options.dataFile
     this.databaseFile = options.databaseFile
-    // Recovery guidance must survive a permissions failure while enumerating the directory.
-    // The startup error still names the canonical paths and remains typed for fail-closed handling.
+    this.profileId = options.profileId
+    if (repairableSections) {
+      this.repairableSections = repairableSections
+    }
+    // Directory permission errors must not hide typed recovery guidance or canonical paths.
     try {
       this.exportPaths = profileStateJsonExportPaths(options.dataFile)
     } catch {
@@ -63,23 +77,24 @@ export class ProfileStateRecoveryRequiredError extends Error {
   }
 }
 
-/** A retained migration export proves that absent SQLite is not a fresh profile. */
+/** Retained authority evidence rules out treating missing SQLite as a fresh profile. */
 export function assertNoRetainedProfileStateExports(options: ProfileStateRecoveryLocation): void {
-  let hasRetainedExport: boolean
+  let hasRetainedEvidence: boolean
   try {
-    hasRetainedExport =
+    hasRetainedEvidence =
+      hasProfileStateAuthorityMarker(options.databaseFile) ||
       profileStateJsonExportPaths(options.dataFile).length > 0 ||
       profileStateDatabaseBackups(options.databaseFile).length > 0
   } catch {
     throw new ProfileStateRecoveryRequiredError(
       options,
-      new Error('Could not enumerate retained profile state exports')
+      new Error('Could not inspect retained profile state authority evidence')
     )
   }
-  if (hasRetainedExport) {
+  if (hasRetainedEvidence) {
     throw new ProfileStateRecoveryRequiredError(
       options,
-      new Error('SQLite profile state is missing while retained migration exports exist')
+      new Error('SQLite profile state is missing while retained authority evidence exists')
     )
   }
 }

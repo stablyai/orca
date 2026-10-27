@@ -1,9 +1,7 @@
-import {
-  type RpcSuccess,
-  type TaskProvider,
-  type GitHubOwnerRepo,
-  colors
-} from './mobile-tasks-dependencies'
+import { getGitHubTaskKind } from '../../../src/shared/task-github-search'
+export { scopeGitHubTaskSearch } from '../../../src/shared/task-github-search'
+export { getTaskPresetQuery } from '../../../src/shared/task-preset-query'
+import { type RpcSuccess, type GitHubOwnerRepo, colors } from './mobile-tasks-dependencies'
 import type {
   GitHubPreset,
   GitHubProjectRow,
@@ -11,6 +9,7 @@ import type {
   LinearFilter
 } from './mobile-tasks-view-state-types'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import type {
   GitHubWorkItem,
   GitLabTodo,
@@ -44,25 +43,7 @@ export function formatUpdatedAt(value: string): string {
   return `${Math.floor(hours / 24)}d`
 }
 
-export function getTaskPresetQuery(preset: GitHubPreset): string {
-  switch (preset) {
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case 'issues':
-    default:
-      return 'is:issue is:open'
-  }
-}
-
-export function isTaskProvider(value: unknown): value is TaskProvider {
-  return value === 'github' || value === 'gitlab' || value === 'linear'
-}
+export { isTaskProvider } from '../../../src/shared/task-providers'
 
 export function normalizeGitHubPreset(value: unknown): GitHubPreset {
   return value === 'my-issues' ||
@@ -81,15 +62,7 @@ export function normalizeLinearFilter(value: unknown): LinearFilter {
 }
 
 export function githubKindFromQuery(query: string, fallbackPreset: GitHubPreset): GitHubTaskKind {
-  if (/\bis:pr\b/i.test(query)) {
-    return 'prs'
-  }
-  if (/\bis:issue\b/i.test(query)) {
-    return 'issues'
-  }
-  return fallbackPreset === 'prs' || fallbackPreset === 'my-prs' || fallbackPreset === 'review'
-    ? 'prs'
-    : 'issues'
+  return getGitHubTaskKind(fallbackPreset, query)
 }
 
 export function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
@@ -103,8 +76,7 @@ export function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
 }
 
 export function canCreateWorkspaceFromProjectRow(row: GitHubProjectRow): boolean {
-  // Why: desktop only exposes Project "Start work" for backed issue/PR rows
-  // with enough GitHub identity to build the linked work item.
+  // Match desktop: Project Start work requires a backed issue/PR with enough identity to link the work item.
   return projectRowType(row) !== null && row.content.number != null && Boolean(row.content.url)
 }
 
@@ -162,17 +134,6 @@ export function projectRowStatusLabel(row: GitHubProjectRow): string {
     return 'Closed'
   }
   return 'Open'
-}
-
-export function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
-  const trimmed = query.trim()
-  if (!trimmed) {
-    return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
-  }
-  if (/\bis:(?:issue|pr)\b/i.test(trimmed)) {
-    return trimmed
-  }
-  return `${kind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
 export function gitHubStatusLabel(item: GitHubWorkItem): string {
@@ -286,6 +247,20 @@ export async function mapWithConcurrency<T, R>(
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()))
   return results
+}
+
+export function createJiraTask(issue: JiraIssue): Extract<TaskItem, { provider: 'jira' }> {
+  const project = issue.project.name.trim() || issue.project.key
+  return {
+    // Site-qualify keys because all-sites queries can return colliding issue ids.
+    key: `jira:${issue.siteId ?? 'site'}:${issue.id}`,
+    provider: 'jira',
+    title: issue.title,
+    subtitle: `${issue.key} · ${project}`,
+    status: issue.status.name,
+    updatedAt: issue.updatedAt,
+    source: issue
+  }
 }
 
 export function createLinearTask(issue: LinearIssue): TaskItem {

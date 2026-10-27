@@ -3,17 +3,21 @@ import { defineMethod } from '../../../core'
 import { releaseFederatedWorker } from '../federation/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { resolvePinnedFederatedServer } from './worker-observation'
+import { archiveSummary } from './worker-terminal-resource-presentation'
 import {
-  archiveSummary,
   completeWorkerTerminalRelease,
   type WorkerReleaseReceipt
 } from './worker-release-completion'
-import { WorkerDispatchParams, WorkerRetainParams } from './worker-release-schemas'
+import {
+  WorkerDispatchParams,
+  WorkerRetainParams
+} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
 import { OrchestrationWorkerTerminalUserInputParams } from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineMethod({
     name: 'orchestration.workerRelease',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
@@ -85,6 +89,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerRetain',
+    permission: 'workspace',
     params: WorkerRetainParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -132,12 +137,10 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   ORCHESTRATION_WORKER_LIST_METHOD,
   defineMethod({
     name: 'orchestration.workerTerminalUserInput',
-    // `sessionId` addresses a worker that IS a structured agent session. Its pane key is a random
-    // identity credential that never leaves main, so the caller names the session and the owning
-    // runtime resolves it — a renderer echoing the pane key back would make it learnable.
+    permission: 'workspace',
+    // Name structured workers by session id; resolve their private pane credential on the owning runtime instead of exposing it to renderers.
     params: OrchestrationWorkerTerminalUserInputParams,
-    // Real user keystrokes durably relinquish orchestration ownership on the owning runtime, so
-    // restarts, SSH drops, remote viewing, and renderer remounts cannot erase the takeover.
+    // Persist user takeover on the owning runtime so restart, SSH loss, viewing and remount cannot erase it.
     handler: (params, { runtime }) => {
       // A structured worker reports by session id; it has no pane of its own to name.
       const paneKey =

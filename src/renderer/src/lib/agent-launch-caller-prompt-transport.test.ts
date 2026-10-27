@@ -1,6 +1,4 @@
-// How each call site's prompt reaches the agent: folded into argv, or pasted once the TUI is
-// ready — and whether it submits. The choice is a per-agent table crossed with the delivery mode
-// the call site asks for, so it is pinned along both axes.
+// Cross each caller’s delivery mode with agent injection policy to verify argv, paste or environment transport and submission.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -27,10 +25,12 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => nul
 vi.mock('@/lib/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({ isWebRuntimeSessionActive: () => false }))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: () => false
+}))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  getRuntimeEnvironmentIdForWorktree: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: (_stored: unknown, terminalIds: string[]) => terminalIds
@@ -51,15 +51,25 @@ vi.mock('@/lib/agent-ready-wait', () => ({
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
+// The host starts an AI button's agent in the tab's pane and answers; the window then pastes.
+const callRuntimeRpc = vi.hoisted(() =>
+  vi.fn(async (_target: unknown, _method: string, params: Record<string, unknown>) => ({
+    outcome: { kind: 'terminal', handle: 'term_1', paneKey: params.paneKey },
+    worktreeId: 'wt-1',
+    receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'x' }
+  }))
+)
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
+
+/** What the window's own launch command carries; a launch started by the host queues none. */
+function commandCarries(text: string): boolean {
+  return queuedStartupCommand(store)?.includes(text) ?? false
+}
 
 const PROMPT = 'Explain the failing check and propose a fix.'
 
-/**
- * One agent per prompt-injection mode crossed with the delivery a call site can ask for.
- * `transport` is what the launch actually does with the text: `argv` folds it into the launch
- * command, `paste` starts the agent empty and sends it once the TUI is ready, and `env` hands it
- * over in the startup environment because the text must never appear on a command line.
- */
+// Cover each injection mode: argv embeds text, paste waits for TUI readiness, and env keeps text off command lines.
 const TRANSPORT_TABLE: readonly {
   agent: TuiAgent
   mode: string
@@ -99,8 +109,7 @@ const TRANSPORT_TABLE: readonly {
     transport: 'argv',
     submits: true
   },
-  // Hermes never puts the query on a command line: it is handed over in the environment and the
-  // launch command is a shell wrapper that consumes and unsets it.
+  // Hermes passes query text through an environment variable that its shell wrapper consumes and unsets, never argv.
   {
     agent: 'hermes',
     mode: 'hermes-query',
@@ -129,7 +138,7 @@ const cases = callerProfileCases()
 
 async function launch(profile: AgentLaunchCallerProfile) {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  return launchAgentInNewTab({ ...profile.args })
+  return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
 }
 
 describe('agent launch caller prompt transport', () => {
@@ -147,14 +156,17 @@ describe('agent launch caller prompt transport', () => {
       if (profile.args.prompt === undefined) {
         expect(result?.pasteDraftAfterLaunch).toBe(false)
         expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
-        expect(queuedStartupCommand(store)).not.toContain(PROMPT)
+        expect(commandCarries(PROMPT)).toBe(false)
         return
       }
-      // quick-command is the only prompt-carrying call site that names no delivery mode, so its text
-      // rides argv; every other one asks for draft or submit-after-ready and pastes.
+      // Quick-command omits delivery mode and uses argv; other callers request draft or submit-after-ready paste.
       const ridesArgv = id === 'quick-command'
       expect(result?.pasteDraftAfterLaunch).toBe(!ridesArgv)
-      expect(queuedStartupCommand(store)?.includes(PROMPT)).toBe(ridesArgv)
+      expect(commandCarries(PROMPT)).toBe(ridesArgv)
+      // The host is never handed the text: the window pastes it, as main does.
+      for (const [, , params] of callRuntimeRpc.mock.calls) {
+        expect(params).not.toHaveProperty('prompt')
+      }
     }
   )
 
@@ -163,8 +175,7 @@ describe('agent launch caller prompt transport', () => {
     async (_id, profile) => {
       const result = await launch(profile)
 
-      // Why: three call sites branch on this promise being present; a draft launch must NOT get one,
-      // because the composer owns the text until the user sends it.
+      // Draft launches must omit this promise because the composer owns text until the user sends it.
       const expectsPromise =
         profile.args.prompt !== undefined && profile.args.promptDelivery === 'submit-after-ready'
       expect(result?.promptDeliveryResult !== undefined).toBe(expectsPromise)
@@ -181,7 +192,11 @@ describe('agent launch caller prompt transport', () => {
     const onPromptDelivered = vi.fn()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({ ...profile.args, onPromptDelivered })
+    const result = launchAgentInNewTab({
+      requestId: 'request-2',
+      ...profile.args,
+      onPromptDelivered
+    })
     await result?.promptDeliveryResult
 
     if (profile.args.prompt === undefined) {
@@ -199,6 +214,7 @@ describe('agent launch caller prompt transport', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-3',
       agent: row.agent,
       worktreeId: 'wt-1',
       prompt: PROMPT,
@@ -206,12 +222,15 @@ describe('agent launch caller prompt transport', () => {
     })
 
     expect(result?.pasteDraftAfterLaunch).toBe(row.transport === 'paste')
-    expect(queuedStartupCommand(store)?.includes(PROMPT)).toBe(row.transport === 'argv')
+    expect(commandCarries(PROMPT)).toBe(row.transport === 'argv')
     if (row.transport === 'paste') {
-      expect(mockPasteDraftWhenAgentReady.mock.calls[0]?.[0]).toMatchObject({
-        content: PROMPT,
-        submit: row.submits
-      })
+      // Through the host, the paste waits for the agent to be started in the tab.
+      await vi.waitFor(() =>
+        expect(mockPasteDraftWhenAgentReady.mock.calls[0]?.[0]).toMatchObject({
+          content: PROMPT,
+          submit: row.submits
+        })
+      )
     } else {
       expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
     }
@@ -226,13 +245,14 @@ describe('agent launch caller prompt transport', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
+      requestId: 'request-4',
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: PROMPT,
       promptDelivery: 'draft'
     })
 
-    // Why: the draft rode in on `--prefill`, so no paste runs and nothing else would seed chat.
+    // Native --prefill skips paste, so chat needs its own seed.
     expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledTimes(1)
     expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
@@ -241,6 +261,7 @@ describe('agent launch caller prompt transport', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-5',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: '   \n  ',
@@ -257,6 +278,7 @@ describe('agent launch caller prompt transport', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-6',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: PROMPT,

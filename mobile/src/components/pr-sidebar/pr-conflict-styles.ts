@@ -1,11 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-// Styles for the conflicting-files section (file list + fallback notice). Muted/
-// monochrome to match the rest of the PR sidebar; split out so the section file and
-// the shared sidebar styles each stay focused. Ports the LOOK of the desktop
-// ConflictingFilesSection / MergeConflictNotice.
-export const prConflictStyles = StyleSheet.create({
+// Match desktop conflict section’s muted layout without growing shared sidebar styles.
+export const prConflictStyles = themedStyleSheet(() => ({
   meta: {
     color: colors.textSecondary,
     fontSize: 11
@@ -25,8 +23,7 @@ export const prConflictStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 11
   },
-  // The file list is capped + scrollable so a long conflict set doesn't push the
-  // rest of the sidebar off-screen (it lives inside the outer ScrollView).
+  // Cap/scroll conflict paths within outer sidebar so large set cannot displace other sections.
   fileList: {
     maxHeight: 180,
     marginTop: spacing.sm
@@ -101,4 +98,4 @@ export const prConflictStyles = StyleSheet.create({
     lineHeight: 15,
     marginTop: spacing.sm
   }
-})
+}))

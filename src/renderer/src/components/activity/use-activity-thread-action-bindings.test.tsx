@@ -4,15 +4,16 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentPaneThread } from './activity-thread-types'
+import type * as ActivityClearCompleted from './activity-clear-completed'
+import { makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 
 const mocks = vi.hoisted(() => ({
   clearCompletedActivity: vi.fn()
 }))
 
-vi.mock('./activity-clear-completed', () => ({
-  clearCompletedActivity: mocks.clearCompletedActivity,
-  // Done threads carry no live state; the null marker stands in for the real group-id predicate.
-  isClearableActivityThread: (thread: AgentPaneThread) => thread.currentAgentState === null
+vi.mock('./activity-clear-completed', async (importOriginal) => ({
+  ...(await importOriginal<typeof ActivityClearCompleted>()),
+  clearCompletedActivity: mocks.clearCompletedActivity
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
@@ -22,7 +23,30 @@ import { useActivityThreadActionBindings } from './use-activity-thread-action-bi
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 function makeThread(paneKey: string, overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
-  return { paneKey, unread: false, currentAgentState: 'working', ...overrides } as AgentPaneThread
+  return {
+    paneKey,
+    tab: makeTab(),
+    worktree: makeWorktree(),
+    repo: null,
+    currentAgentState: 'working',
+    currentAgentEntry: null,
+    latestEvent: null,
+    latestTimestamp: 1_000,
+    agentType: 'claude',
+    unread: false,
+    paneTitle: 'Agent',
+    responsePreview: '',
+    events: [],
+    paneEntry: {
+      paneKey,
+      state: 'done',
+      prompt: '',
+      updatedAt: 1_000,
+      stateStartedAt: 1_000,
+      stateHistory: []
+    },
+    ...overrides
+  }
 }
 
 type HookResult = ReturnType<typeof useActivityThreadActionBindings>
@@ -83,7 +107,7 @@ describe('useActivityThreadActionBindings', () => {
 
     expect(bindings.hasUnreadThreads).toBe(true)
     bindings.markAllThreadsRead()
-    expect(acknowledgeAgents).toHaveBeenCalledWith([hiddenUnread.paneKey])
+    expect(acknowledgeAgents).toHaveBeenCalledWith([hiddenUnread.paneKey], undefined, 'explicit')
   })
 
   it('clears completed strictly from the visible set', () => {

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { finalizeHostTerminalSnapshot } from './__fixtures__/web-session-terminal-host-finalization'
 import {
   ENV,
@@ -189,8 +190,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   })
 
   it('keeps the client viewMode when an in-flight host snapshot echoes the old value', () => {
-    // Echo-window: client just toggled to chat; a host snapshot carrying the
-    // pre-toggle 'terminal' value must not revert it (mirrors color/pin rule).
+    // Pre-toggle host echo must not revert client chat mode, like color/pin.
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const existingTab: TerminalTab = {
       id: mirroredId,

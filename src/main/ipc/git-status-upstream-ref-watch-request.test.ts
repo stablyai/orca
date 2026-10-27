@@ -3,20 +3,19 @@ import type { Store } from '../persistence'
 
 const mocks = vi.hoisted(() => ({
   gitExec: vi.fn(),
-  getProvider: vi.fn(),
-  getProviderGeneration: vi.fn(),
   resolveRegisteredPath: vi.fn(),
   getLocalRepo: vi.fn(),
   getLocalOptions: vi.fn(),
-  setWatch: vi.fn()
+  setWatch: vi.fn(),
+  isWslDistroRunning: vi.fn(async () => true)
+}))
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: async () =>
+    (await mocks.isWslDistroRunning()) ? 'running' : 'stopped'
 }))
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.gitExec }))
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: mocks.getProvider,
-  getSshGitProviderGeneration: mocks.getProviderGeneration,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable'
-}))
 vi.mock('./registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRegisteredPath
 }))
@@ -29,11 +28,12 @@ vi.mock('./worktree-base-directory-watcher', () => ({
 }))
 
 import { applyGitStatusUpstreamRefWatchRequest } from './git-status-upstream-ref-watch-request'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import { WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 
 describe('applyGitStatusUpstreamRefWatchRequest', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.getProviderGeneration.mockReturnValue(0)
     mocks.resolveRegisteredPath.mockResolvedValue('/resolved/repo')
     mocks.getLocalOptions.mockReturnValue({})
     mocks.setWatch.mockImplementation(
@@ -67,36 +67,46 @@ describe('applyGitStatusUpstreamRefWatchRequest', () => {
     )
   })
 
-  it('routes SSH resolution through the current provider generation', async () => {
-    const exec = vi.fn().mockResolvedValue({
-      stdout:
-        'refs/heads/feature/main\0refs/remotes/team/fork/feature/main\0team/fork/feature/main\n'
-    })
-    mocks.getProvider.mockReturnValue({ exec })
-    mocks.getProviderGeneration.mockReturnValue(7)
-
-    await applyGitStatusUpstreamRefWatchRequest({} as Store, {
-      worktreeId: 'repo-1::/repo',
-      worktreePath: '/repo',
-      executionHostId: 'ssh:ssh-1',
-      connectionId: 'ssh-1',
-      branch: 'refs/heads/feature/main',
-      upstreamName: 'team/fork/feature/main'
-    })
+  it('binds the SSH watch but refuses to resolve on an SSH host', async () => {
+    await expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SSH refusal throws before any store read.
+      applyGitStatusUpstreamRefWatchRequest({} as Store, {
+        worktreeId: 'repo-1::/repo',
+        worktreePath: '/repo',
+        executionHostId: 'ssh:ssh-1',
+        connectionId: 'ssh-1',
+        branch: 'refs/heads/feature/main',
+        upstreamName: 'team/fork/feature/main'
+      })
+    ).rejects.toThrow(SshHostNotServedError)
 
     expect(mocks.setWatch).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'ssh-1', providerGeneration: 7 }),
+      expect.objectContaining({ connectionId: 'ssh-1' }),
       expect.any(Function)
     )
-    expect(exec).toHaveBeenCalledWith(
-      [
-        'for-each-ref',
-        '--format=%(refname)%00%(upstream)%00%(upstream:short)',
-        '--count=1',
-        'refs/heads/feature/main'
-      ],
-      '/repo',
-      expect.objectContaining({ signal: expect.any(AbortSignal), timeoutMs: 15_000 })
-    )
+    expect(mocks.gitExec).not.toHaveBeenCalled()
+  })
+
+  it('does not run Git in a stopped WSL distro (E9)', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      mocks.getLocalOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
+      mocks.isWslDistroRunning.mockResolvedValueOnce(false)
+      await expect(
+        applyGitStatusUpstreamRefWatchRequest({} as Store, {
+          worktreeId: 'repo-1::/repo',
+          worktreePath: '/repo',
+          executionHostId: 'wsl:Ubuntu',
+          branch: 'refs/heads/main',
+          upstreamName: 'origin/main'
+        })
+      ).rejects.toBeInstanceOf(WslDistroStoppedError)
+      expect(mocks.gitExec).not.toHaveBeenCalled()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 })

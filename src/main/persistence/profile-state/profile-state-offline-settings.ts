@@ -18,6 +18,7 @@ import { writeProfileStateDomain } from './profile-state-domain-writes'
 import { assertProfileStateCanInitialize } from './profile-state-recovery-required'
 import { classifyProfileStateStorage } from './profile-state-storage-classification'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
+import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 
 export type ProfileStateOfflineLocation = {
   dataFile: string
@@ -35,7 +36,7 @@ export type AgentHookSettingsUpdate = {
   settingsPath: string
 }
 
-/** Read the settings domain without creating SQLite for a JSON-only profile. */
+/** JSON-only profiles must not create SQLite while reading settings. */
 export function readAgentHookSettingsFromProfileState(
   location: ProfileStateOfflineLocation
 ): AgentHookSettings {
@@ -54,12 +55,7 @@ export function readAgentHookSettingsFromProfileState(
   return readAgentHookSettingsFromSettingsValue(result.values.get('settings'))
 }
 
-/**
- * Update only the settings row in an existing SQLite authority.
- *
- * The snapshot revision is checked again by BEGIN IMMEDIATE, so a runtime
- * writer between read and update produces a conflict instead of clobbering it.
- */
+/** Fence the snapshot revision under BEGIN IMMEDIATE so intervening runtime writes conflict. */
 export function updateAgentHookSettingsInProfileState(
   location: ProfileStateOfflineLocation,
   enabled: boolean
@@ -73,13 +69,16 @@ export function updateAgentHookSettingsInProfileState(
   assertAcceptedLegacyJson(location, classification)
   const opened = openProfileStateDatabase(location.databaseFile, location.profileId)
   try {
+    ensureProfileStateAuthorityMarker(location.databaseFile)
     const domains = readProfileStateDomainsWithRevisionFromDatabase(opened.db, ['settings'])
     if (domains.kind === 'unreadable') {
       throw domains.error
     }
     const persistedSettings = domains.values.get('settings')
+    const { uiLanguagePortugueseMigrationApplied: _migrationApplied, ...settingsDefaults } =
+      getDefaultPersistedState(homedir()).settings
     const settings = {
-      ...getDefaultPersistedState(homedir()).settings,
+      ...settingsDefaults,
       ...(isRecord(persistedSettings) ? persistedSettings : {}),
       agentStatusHooksEnabled: enabled
     }
@@ -97,7 +96,7 @@ export function updateAgentHookSettingsInProfileState(
   }
 }
 
-/** The caller holds maintenance ownership through import and the fenced settings write. */
+/** Caller retains maintenance ownership through import and fenced update. */
 export function updateAgentHookSettingsFromProfileState(
   location: ProfileStateOfflineLocation,
   enabled: boolean

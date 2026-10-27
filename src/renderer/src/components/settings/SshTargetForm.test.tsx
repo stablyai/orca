@@ -60,7 +60,7 @@ describe('SshTargetForm', () => {
     )
     expect(document.querySelector('#ssh-target-host')).not.toBeNull()
     expect(document.querySelector('#ssh-target-label')).not.toBeNull()
-    expect(document.body.textContent).toContain('Add Target')
+    expect(document.body.textContent).toContain('Add host')
     expect(document.body.textContent).not.toContain('Editing')
     act(() => root.unmount())
   })
@@ -77,7 +77,6 @@ describe('SshTargetForm', () => {
     expect(content.className).toContain('flex-col')
     expect(header.className).toContain('shrink-0')
     expect(footer.className).toContain('shrink-0')
-    // Why: only the field region scrolls; header/footer stay put when Advanced expands.
     const scrollBody = content.querySelector('.overflow-y-auto')
     expect(scrollBody).not.toBeNull()
     expect(scrollBody?.contains(header)).toBe(false)
@@ -110,7 +109,7 @@ describe('SshTargetForm', () => {
     const root = await renderForm({ onSave, onOpenChange })
 
     await act(async () => {
-      button('Add Target').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      button('Add host').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(onSave).toHaveBeenCalledOnce()
 
@@ -151,7 +150,7 @@ describe('SshTargetForm', () => {
     const onSave = vi.fn()
     const root = await renderForm({ saving: true, onSave })
 
-    expect(button('Add Target').disabled).toBe(true)
+    expect(button('Add host').disabled).toBe(true)
     // Why: Enter submits past a disabled button, so the form itself must gate too.
     await act(async () => {
       document
@@ -169,8 +168,7 @@ describe('SshTargetForm', () => {
     const root = await renderForm({ open: false, onOpenChange })
     await renderForm({ open: true, editingId: 'target-1', form: editTarget, onOpenChange }, root)
 
-    // Why: the session effect rewrites the baseline without forcing a re-render,
-    // so a render-captured isDirty would wrongly block this dismissal.
+    // Session effects update baseline without rerender; dismissal must read current refs.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })

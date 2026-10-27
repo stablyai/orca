@@ -3,8 +3,9 @@ import {
   createFakeSpawnedChild,
   fakeSpawnDispatch,
   fakeSpawnReturning
-} from '../../shared/child-process/__fixtures__/fake-spawned-child'
+} from '../../shared/__fixtures__/fake-spawned-child'
 import type * as WslModule from '../wsl'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
@@ -90,9 +91,7 @@ describe('ghExecFileAsync WSL fallback', () => {
         '-c',
         "cd '/home/jinwoo/stably/noqa' && 'gh' 'issue' 'list' '--repo' 'stablyhq/noqa' '--json' 'number,title'"
       ],
-      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-      // worktree. The Linux directory still rides inside the command.
+      // Use a stable Win32 cwd instead of inheriting Orca's deletable UNC cwd.
       expect.objectContaining({ cwd: expect.any(String) })
     )
     expect(spawnMock).toHaveBeenNthCalledWith(
@@ -283,10 +282,7 @@ describe('ghExecFileAsync WSL fallback', () => {
       2,
       'wsl.exe',
       ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'gh' 'api' 'rate_limit'"],
-      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-      // worktree. This global call has no repo directory at all, so nothing about
-      // where it runs changes.
+      // Global calls still need a stable Win32 spawn cwd.
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -403,10 +399,7 @@ describe('ghExecFileAsync WSL fallback', () => {
       2,
       'wsl.exe',
       ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'glab' 'api' 'projects'"],
-      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-      // worktree. This global call has no repo directory at all, so nothing about
-      // where it runs changes.
+      // Global calls still need a stable Win32 spawn cwd.
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -418,8 +411,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     const taskkill = createFakeSpawnedChild(3600)
     spawnMock
       .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('glab')))
-      // Why a child that never exits: this is the wedged WSL helper the deadline
-      // has to reap, so nothing must settle the promise before taskkill reports.
+      // Keep the child unsettled until taskkill reports completion.
       .mockImplementationOnce(() => wslChild)
       .mockImplementation(() => taskkill)
 
@@ -434,7 +426,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(spawnMock).toHaveBeenCalledWith(
-      'taskkill',
+      windowsSystem32Binary('taskkill.exe'),
       ['/pid', '2400', '/t', '/f'],
       expect.objectContaining({ stdio: 'ignore', windowsHide: true })
     )
@@ -468,7 +460,7 @@ describe('ghExecFileAsync WSL fallback', () => {
       expect.not.objectContaining({ signal: controller.signal })
     )
     expect(spawnMock).toHaveBeenCalledWith(
-      'taskkill',
+      windowsSystem32Binary('taskkill.exe'),
       ['/pid', '2400', '/t', '/f'],
       expect.objectContaining({ stdio: 'ignore', windowsHide: true })
     )
@@ -511,7 +503,6 @@ describe('ghExecFileAsync WSL fallback', () => {
   })
 
   it('resolves fallback to the overridden distro if configured, and falls back to default WSL distro otherwise', async () => {
-    // 1) Test with override configured (should use 'Debian' override)
     setDefaultWslDistroOverride('Debian')
     getDefaultWslDistroMock.mockReturnValue('Ubuntu')
 
@@ -538,7 +529,6 @@ describe('ghExecFileAsync WSL fallback', () => {
       expect.any(Object)
     )
 
-    // 2) Test without override (should use default 'Ubuntu')
     spawnMock.mockClear()
     setDefaultWslDistroOverride(null)
 

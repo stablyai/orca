@@ -1,5 +1,9 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
@@ -15,14 +19,29 @@ import {
   type StructuredAgentSessionEventTarget
 } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const BODY: AgentJournalItemBody = {
   kind: 'message',
   role: 'assistant',
   blocks: [{ type: 'text', text: 'hi' }]
 }
+
+const JOURNAL_IDENTITY = {
+  sessionId: 'session-1',
+  workspaceId: 'workspace-1',
+  hostId: 'host-1',
+  agent: 'codex',
+  providerHandle: codexProviderHandle('thread-1')
+} as const
 
 function identity(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
@@ -36,10 +55,7 @@ type Recorded = {
   activity?: AgentSessionTurnActivity | null
 }
 
-/** The journal's OWN append options, captured beside the call log rather than on
- *  it: a double that omits the third parameter makes every assertion about what
- *  the sink forwards pass against `undefined`, which is how this went unnoticed
- *  before. Kept separate so the call-order assertions stay about call order. */
+/** Capture actual append options separately so call-order tests cannot hide missing forwarded fields. */
 const journalAppendOptions: Partial<JournalItemAppendOptions>[] = []
 
 function target(
@@ -74,13 +90,24 @@ function target(
       return { epoch: 'e', sequence: 0 }
     }),
     appendLifecycleBatch: vi.fn(async (input: JournalLifecycleBatchInput) => {
-      // A batch carries no producer linkage by design, so the fence is all
-      // there is to record — see the batch row builder.
+      // Lifecycle batches carry linkage per mutation, not on their row.
       journalAppendOptions.push({ fence: input.fence })
       log.push({ call: 'appendLifecycleBatch', fence, settlementId: input.settlementId })
       return { epoch: 'e', sequence: 0 }
     }),
-    latestItemMatching: vi.fn(() => null)
+    latestItemMatching: vi.fn(() => null),
+    readInOrder: vi.fn(async <T>(read: () => T) => read()),
+    appendResolvedItem: vi.fn(
+      async (
+        resolve: () => { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null,
+        options: JournalItemAppendOptions
+      ) => {
+        const resolved = resolve()
+        return resolved === null
+          ? null
+          : journal.appendItem(resolved.identity, resolved.body, options)
+      }
+    )
   } as unknown as AgentSessionJournal
   return {
     journal,
@@ -116,7 +143,6 @@ describe('deferred structured agent-session event sink', () => {
     deferred.bind(target(1, log))
 
     deferred.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    // The re-attach that raised the fence.
     deferred.bind(target(2, log))
     deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await deferred.drained()
@@ -179,6 +205,23 @@ describe('deferred structured agent-session event sink', () => {
     expect(log).toEqual([])
   })
 
+  it('says its writes landed only when they ran, though a close still settles drained()', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    deferred.bind(target(1, log))
+    deferred.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    expect(await deferred.sink.written?.()).toEqual({ ok: true })
+
+    deferred.unbind()
+    deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    const written = deferred.sink.written?.()
+    deferred.close()
+
+    expect(await written).toMatchObject({ ok: false })
+    expect(await deferred.drained()).toEqual({ ok: true })
+    expect(log).toEqual([{ call: 'appendItem', fence: 1, ordinal: 0 }])
+  })
+
   it('reports one refused append, fails the barrier, and stops later writes', async () => {
     const log: Recorded[] = []
     const errors: unknown[] = []
@@ -191,8 +234,11 @@ describe('deferred structured agent-session event sink', () => {
     deferred.bind(target(4, log, 0))
 
     deferred.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    deferred.sink.appendTombstone(identity(1))
     const barrier = await deferred.drained()
+    expect(deferred.sink.tryAppendTombstone?.(identity(1))).toEqual({
+      accepted: false,
+      reason: 'failed'
+    })
 
     expect(errors).toHaveLength(1)
     expect((errors[0] as Error).message).toBe('refused 0')
@@ -210,10 +256,11 @@ describe('deferred structured agent-session event sink', () => {
 
   it('replaces a failed cached sink before recovery drain', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cached-sink path reads only the logger, on the failed drain.
-    const runtime = new StructuredAgentSessionHostRuntimeState({
+    const deps = {
       store: {},
       logger: createStructuredAgentSessionLogger()
-    } as never)
+    } as never
+    const runtime = new StructuredAgentSessionHostRuntimeState(deps, new Map())
     const failed = runtime.eventSinkFor('session-1')
     failed.bind(target(1, [], 0))
     failed.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
@@ -405,24 +452,13 @@ describe('deferred structured agent-session event sink', () => {
     releaseSecond?.()
   })
 
-  it('replaces a queued same-item checkpoint before it runs', async () => {
-    const log: Recorded[] = []
-    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    const options = { coalescingKey: 'checkpoint:item-1', turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-
-    deferred.sink.appendItem(identity(0), BODY, options)
-    deferred.sink.appendItem(identity(1), BODY, options)
-    expect(deferred.state().queuedOperations).toBe(1)
-
-    deferred.bind(target(6, log))
-    await deferred.drained()
-    expect(log).toEqual([{ call: 'appendItem', fence: 6, ordinal: 1 }])
-  })
-
-  it('keeps the first queued lifecycle batch for a settlement, as the journal does', async () => {
-    // The journal applies a settlement id once and skips any later batch with it,
-    // so the queue must not let a later batch replace one it has not run yet.
-    const log: Recorded[] = []
+  it('applies the first lifecycle batch for a settlement once, in the journal', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-event-sink-settlement-'))
+    const journal = await openAgentSessionJournal({
+      identity: JOURNAL_IDENTITY,
+      database: openTestJournalHostDatabase(root),
+      mintEpoch: () => 'epoch-1'
+    })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const batch = (ordinal: number) => [
       {
@@ -437,34 +473,63 @@ describe('deferred structured agent-session event sink', () => {
     expect(deferred.sink.tryAppendLifecycleBatch?.('turn-completed:turn-1', batch(1))).toEqual({
       accepted: true
     })
-    expect(deferred.state().queuedOperations).toBe(1)
+    deferred.bind({ journal, fence: 1, publish: () => {} })
+    await expect(deferred.drained()).resolves.toEqual({ ok: true })
+
+    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
+      agentJournalItemKey(identity(0))
+    ])
+    await journal.close()
+    closeTestJournalHostDatabase(root)
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('keeps a rewritten streamed row in its place ahead of what was issued after it', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    const window: (() => void)[] = []
+    const translator = createCodexJournalTranslator({
+      sink: deferred.sink,
+      sessionId: 'session-1',
+      primaryThreadId: () => 'thread-1',
+      schedule: (run) => {
+        window.push(run)
+        return () => {}
+      }
+    })
+    const notify = (method: string, params: Record<string, unknown>) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: 'session-1',
+        threadId: 'thread-1',
+        method,
+        params: { threadId: 'thread-1', turnId: 'turn-1', turn: { id: 'turn-1' }, ...params }
+      })
+    const checkpoint = (text: string) => {
+      notify('item/agentMessage/delta', { itemId: 'reply', delta: text })
+      for (const run of window.splice(0)) {
+        run()
+      }
+    }
+    notify('turn/started', {})
+    notify('item/started', { item: { type: 'agentMessage', id: 'reply', text: '' } })
+    checkpoint('Looking at the tests first. '.repeat(4))
+    notify('item/completed', { item: { type: 'agentMessage', id: 'aside', text: 'An aside.' } })
+    checkpoint('Then the build. '.repeat(40))
 
     const bound = target(6, log)
     deferred.bind(bound)
     await deferred.drained()
-
-    expect(
-      vi
-        .mocked(bound.journal.appendLifecycleBatch)
-        .mock.calls.map(([input]) => input.mutations.map((mutation) => mutation.identity))
-    ).toEqual([[identity(0)]])
-  })
-
-  it('keeps a replacement checkpoint after distinct intervening operations', async () => {
-    const log: Recorded[] = []
-    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    const options = { coalescingKey: 'checkpoint:item-1', turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-
-    deferred.sink.appendItem(identity(0), BODY, options)
-    deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    deferred.sink.appendItem(identity(2), BODY, options)
-    deferred.bind(target(6, log))
-    await deferred.drained()
-
-    expect(log).toEqual([
-      { call: 'appendItem', fence: 6, ordinal: 1 },
-      { call: 'appendItem', fence: 6, ordinal: 2 }
-    ])
+    const written = vi.mocked(bound.journal.appendItem).mock.calls.flatMap(([id, body]) => {
+      const block = body.kind === 'message' ? body.blocks[0] : undefined
+      const text = block?.type === 'text' ? block.text : ''
+      return text.startsWith('Looking') || text === 'An aside.'
+        ? [`${text.startsWith('Looking') ? 'reply' : 'aside'} ${agentJournalItemKey(id)}`]
+        : []
+    })
+    const [reply, aside] = written
+    expect(reply?.startsWith('reply')).toBe(true)
+    expect(written).toEqual([reply, aside, reply])
   })
 
   it('coalesces provider activity as a publication without a journal write', async () => {
@@ -507,15 +572,14 @@ describe('producer linkage reaches the journal through every append path', () =>
       await deferred.drained()
 
       expect(journalAppendOptions).toEqual([
-        { fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
+        { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
       ])
       deferred.close()
     }
   })
 
   it('forwards it on the resolved-append and lifecycle-transition paths', async () => {
-    // The resolved paths lost it once before; a transition is how a Codex
-    // child's goal row is written, so dropping it there files the goal as root.
+    // Goal rows use resolved transitions; lost linkage would misattribute them to root.
     for (const append of [
       'tryAppendResolvedItem',
       'tryAppendResolvedItemAndPublish',
@@ -531,16 +595,14 @@ describe('producer linkage reaches the journal through every append path', () =>
       await deferred.drained()
 
       expect(journalAppendOptions).toEqual([
-        { fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
+        { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
       ])
       deferred.close()
     }
   })
 
   it('does NOT forward it on the lifecycle-batch path, which is one row for N mutations', async () => {
-    // A batch row carries one producer for every mutation in it, so forwarding
-    // would stamp whoever opened the batch onto all of them. Both callers are
-    // single-producer today; a mixed batch would have to stamp per mutation.
+    // Mixed-agent batches need per-mutation linkage; row-level stamping would misattribute their contents.
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind(target(5, log))
@@ -552,7 +614,6 @@ describe('producer linkage reaches the journal through every append path', () =>
 
     await deferred.drained()
 
-    // The fence and nothing else: no linkage key reaches the batch row.
     expect(journalAppendOptions).toEqual([{ fence: 5 }])
     deferred.close()
   })
@@ -564,10 +625,11 @@ describe('producer linkage reaches the journal through every append path', () =>
     deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await deferred.drained()
 
-    // A control, not a pin. Absence is the claim, so the keys must be missing
-    // rather than present-and-undefined: a reader holding this options object
-    // would read `agentId: undefined` as a key that exists.
-    expect(journalAppendOptions).toEqual([{ fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }])
+    // Presence matters: root writes must omit linkage keys, not set them undefined.
+    // Provider observations still stamp their bound execution fence.
+    expect(journalAppendOptions).toEqual([
+      { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    ])
     deferred.close()
   })
 })

@@ -8,16 +8,17 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: 'leaf-1' }
+  providerHandle: claudeProviderHandle('provider-1', 'leaf-1')
 }
 
-/** A frame as Claude Code 2.1.280 sends it: a transcript note at a render level. */
+/** Informational frame shape from CLI 2.1.280. */
 function informational(
   level: 'info' | 'notice' | 'suggestion' | 'warning',
   content: string
@@ -70,9 +71,5 @@ describe('a Claude informational frame', () => {
     const items = await itemsFor([informational('warning', content)])
 
     expect(items).toEqual([{ kind: 'status', tone: 'warning', text: content }])
-  })
-
-  it('writes no row for a warning with nothing to say', async () => {
-    expect(await itemsFor([informational('warning', '  ')])).toEqual([])
   })
 })

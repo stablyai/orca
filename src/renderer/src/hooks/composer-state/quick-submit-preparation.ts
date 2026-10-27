@@ -4,17 +4,12 @@ import { useCallback } from 'react'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import {
-  getSetupConfig,
   getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider
 } from '@/lib/new-workspace'
-import {
-  ensureHooksConfirmed,
-  readAndConfirmRuntimeIssueCommand
-} from '@/lib/ensure-hooks-confirmed'
-import { useAppStore } from '@/store'
+import { getDefaultSetupDecision, getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
-import { buildTrustedComposerIssueCommand } from '@/lib/composer-issue-command'
+import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -23,6 +18,7 @@ import type { PendingSmartGitHubSubmitResolution } from './source-selection-deci
 export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
   const {
     branchAutoNameRef,
+    branchIntent,
     branchNameOverridePreservesNameEdits,
     checkedHooksContextKey,
     commitHookCheckIfCurrent,
@@ -39,7 +35,6 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     selectedRepoHookContextKey,
     selectedRepoIsGit,
     setAdvancedOpen,
-    setLoadedIssueCommand,
     settings,
     setupConfig,
     setupDecision,
@@ -79,6 +74,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
 
       if (
         selectedRepoIsGit &&
+        setupPolicy === 'ask' &&
         selectedRepoHookContextKey &&
         checkedHooksContextKey !== selectedRepoHookContextKey
       ) {
@@ -100,12 +96,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         }
         submitSetupConfig = getSetupConfig(selectedRepo, hookCheck.hooks)
         submitResolvedSetupDecision =
-          setupDecision ??
-          (!submitSetupConfig || setupPolicy === 'ask'
-            ? null
-            : setupPolicy === 'run-by-default'
-              ? 'run'
-              : 'skip')
+          setupDecision ?? getDefaultSetupDecision(Boolean(submitSetupConfig), setupPolicy)
       }
 
       if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
@@ -113,84 +104,29 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         return null
       }
 
-      const setupTrustSettlement = await settleComposerSubmit(
-        selectedRepoIsGit
-          ? ensureHooksConfirmed(
-              useAppStore.getState(),
-              repoId,
-              'setup',
-              selectedRepoExecutionHostId ?? undefined,
-              undefined,
-              isSubmissionCancelled
-            )
-          : Promise.resolve<'skip'>('skip'),
-        isSubmissionCancelled
-      )
-
-      if (setupTrustSettlement.status === 'cancelled') {
-        return null
-      }
-
-      const trustDecision = setupTrustSettlement.value
-
-      const effectiveSetupDecision: SetupDecision =
-        trustDecision === 'skip'
-          ? 'skip'
-          : ((submitResolvedSetupDecision ?? 'inherit') as SetupDecision)
-
+      const effectiveSetupDecision: SetupDecision = selectedRepoIsGit
+        ? (submitResolvedSetupDecision ?? 'inherit')
+        : 'skip'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
         ? getLinkedWorkItemProvider(submitLinkedWorkItem)
         : null
-
-      const shouldReadIssueCommand =
-        enableIssueAutomation &&
-        selectedRepoIsGit &&
-        submitLinkedIssueNumber !== null &&
-        canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider)
-
-      let submitIssueCommandTemplate = ''
-
-      let issueCommandTrustDecision: 'run' | 'skip' = 'skip'
-
-      if (
-        shouldReadIssueCommand &&
-        trustDecision !== 'skip' &&
-        selectedRepoExecutionHostId &&
-        selectedRepoHookContextKey
-      ) {
-        const issueCommandSettlement = await settleComposerSubmit(
-          readAndConfirmRuntimeIssueCommand(
-            useAppStore.getState(),
-            repoId,
-            selectedRepoExecutionHostId,
-            isSubmissionCancelled
-          ),
-          isSubmissionCancelled
-        )
-        if (issueCommandSettlement.status === 'cancelled') {
-          return null
-        }
-        const confirmedIssueCommand = issueCommandSettlement.value
-        submitIssueCommandTemplate = confirmedIssueCommand.template
-        issueCommandTrustDecision = confirmedIssueCommand.trustDecision
-        setLoadedIssueCommand({
-          contextKey: selectedRepoHookContextKey,
-          result: confirmedIssueCommand.result
-        })
-      }
-
-      const issueCommandInput = {
-        enabled: enableIssueAutomation && selectedRepoIsGit,
-        provider: submitLinkedWorkItemProvider,
-        issueNumber: submitLinkedIssueNumber,
-        template: submitIssueCommandTemplate,
-        artifactUrl: submitLinkedWorkItem?.url ?? null
-      }
-
-      const issueCommand = buildTrustedComposerIssueCommand({
-        ...issueCommandInput,
-        trustDecision: issueCommandTrustDecision
-      })
+      const hookPreparation: WorktreeCreationRequest['hookPreparation'] = selectedRepoIsGit
+        ? {
+            executionHostId: selectedRepoExecutionHostId ?? undefined,
+            issueCommand:
+              enableIssueAutomation &&
+              submitLinkedIssueNumber !== null &&
+              canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider) &&
+              selectedRepoExecutionHostId &&
+              selectedRepoHookContextKey
+                ? {
+                    provider: submitLinkedWorkItemProvider,
+                    issueNumber: submitLinkedIssueNumber,
+                    artifactUrl: submitLinkedWorkItem?.url ?? null
+                  }
+                : undefined
+          }
+        : undefined
 
       const linkedLinearIssue =
         submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
@@ -249,11 +185,15 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
 
       return Object.assign(source, {
         effectiveSetupDecision,
-        issueCommand,
+        hookPreparation,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
         effectiveBranchNameOverride,
+        branchIntent:
+          smartGitHubResolution.kind === 'none' && effectiveBranchNameOverride
+            ? branchIntent
+            : undefined,
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
@@ -262,6 +202,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     },
     [
       branchNameOverridePreservesNameEdits,
+      branchIntent,
       checkedHooksContextKey,
       commitHookCheckIfCurrent,
       enableIssueAutomation,
@@ -277,7 +218,6 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       selectedRepoHookContextKey,
       selectedRepoIsGit,
       setAdvancedOpen,
-      setLoadedIssueCommand,
       settings,
       setupConfig,
       setupDecision,

@@ -4,8 +4,10 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
+import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
 
 type SessionTabsInventory = {
   snapshots: RuntimeMobileSessionTabsResult[]
@@ -31,7 +33,10 @@ export function projectSessionTabsForClient(
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
-    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+    projectSessionTabFileHosts(
+      projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+      clientKind
+    ),
     clientCapabilities
   )
 }
@@ -58,8 +63,7 @@ async function collectSessionTabsInventory(
   changeSequence: number
 }> {
   const { runtime, pairedDeviceId, signal } = context
-  // Why: a failed census degrades inside the runtime to the same scan without
-  // the authoritative label, so no client ever pays a second full collection.
+  // Census failure reuses its scan without authority, never collecting twice.
   if (!includeChangeSequence) {
     const inventory = runtime.supportsAuthoritativeSessionTabsInventory()
       ? await runtime.listAllMobileSessionTabsInventory(pairedDeviceId, signal)
@@ -109,6 +113,7 @@ export async function subscribeSessionTabsInventory(
   let censusChangeSequence: number | undefined
   let censusInvalidated = false
   const withProofDelta = createSessionTabsRetirementProofDelta(context.clientCapabilities)
+  const tabDelta = createSessionTabsTabDeltaEncoder(context.clientCapabilities)
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection rewrites only tabs and groups; the change fields it was handed pass through.
     projectSessionTabsForClient(
@@ -185,7 +190,7 @@ export async function subscribeSessionTabsInventory(
     }
     emit({
       type: 'updated',
-      ...withProofDelta(projected)
+      ...tabDelta.update(withProofDelta(projected))
     })
     if (projected.removed === true) {
       publishedSnapshotsByWorktree.delete(snapshot.worktree)
@@ -230,7 +235,7 @@ export async function subscribeSessionTabsInventory(
   }
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
   try {
-    // Why: restore after registering, so an unsubscribe or socket close while it runs still finds the stream.
+    // Register before restore so unsubscribe/socket close can find the stream during its awaits.
     const restoring = restoreStructuredTabsIfSupported(context)
     if (restoring) {
       await restoring
@@ -265,7 +270,11 @@ export async function subscribeSessionTabsInventory(
   }
   const { inventory, changeSequence } = collected
   censusChangeSequence = changeSequence
-  emit({ type: 'snapshots', ...inventory, snapshots: inventory.snapshots.map(withProofDelta) })
+  emit({
+    type: 'snapshots',
+    ...inventory,
+    snapshots: inventory.snapshots.map((snapshot) => tabDelta.full(withProofDelta(snapshot)))
+  })
   for (const snapshot of inventory.snapshots) {
     publishedSnapshotsByWorktree.set(snapshot.worktree, withoutNavigationIntent(snapshot))
   }

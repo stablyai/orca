@@ -1,29 +1,21 @@
-// Why: when a Project row's `content.repository` does not match any
-// registered Orca repo, the main `GitHubItemDialog` cannot be used in
-// repo-backed mode — it requires a `repoPath` for label/assignee pickers
-// and conversation details. Per design doc §Dialog editing from Project
-// rows, the dialog for unknown-repo rows is allowed to be a simplified
-// surface (conversation + title/body/labels/assignees/comments) with
-// Files, Checks, and review-thread tabs hidden. This component is that
-// simplified surface; it also routes every write through slug-addressed
-// mutation helpers and patches the Project table cache on success.
+// For unregistered row repos, use slug-addressed edits and Project-cache updates without repo-backed Files, Checks or review threads.
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
-import { VisuallyHidden } from 'radix-ui'
+import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { SlugDialogBody } from './slug-dialog/SlugDialogBody'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
   projectOrigin: GitHubItemDialogProjectOrigin | null
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onClose: () => void
 }
 
 export default function ProjectItemSlugDialog({
   projectOrigin,
-  sourceSettings,
+  sourceTarget,
   onClose
 }: Props): React.JSX.Element {
   const open = projectOrigin !== null
@@ -55,7 +47,7 @@ export default function ProjectItemSlugDialog({
         {projectOrigin ? (
           <SlugDialogBody
             projectOrigin={projectOrigin}
-            sourceSettings={sourceSettings}
+            sourceTarget={sourceTarget}
             onClose={onClose}
           />
         ) : null}

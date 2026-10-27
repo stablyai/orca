@@ -7,7 +7,13 @@ import type {
   AgentJournalTurnScope
 } from './agent-session-journal-types'
 import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
-import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
+import {
+  nativeChatTurnMembership,
+  structuredAgentTurnAnchors,
+  isNativeChatRowInLiveWorkingTurn
+} from './native-chat-turn-membership'
+import { isAgentSessionRewindTarget } from './agent-session-rewind'
+import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatRole } from './native-chat-types'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
@@ -80,6 +86,36 @@ function liveTurnKey(items: readonly AgentJournalRenderItem[]) {
 }
 
 describe('nativeChatTurnMembership', () => {
+  it('does not anchor unresolved input or assign it to unanchored live work', () => {
+    const unknown = user('follow-up', { kind: 'unknown' })
+    const items = [
+      user('u1'),
+      turn('t1', 'u1'),
+      unknown,
+      turn('wake', undefined, THREAD, 'running'),
+      assistant('a', inTurn('wake'))
+    ]
+    const membership = nativeChatTurnMembership(rows(items), { items, submissions: [] })
+    expect(membership.turnKeys).toEqual(['u1', undefined, 'wake'])
+    expect(membership.liveTurnKey).toBe('wake')
+    expect(structuredAgentTurnAnchors(items).get('wake')).toBe('wake')
+    const opener = (id: string) =>
+      readAgentJournalTurn(items.find((row) => row.itemId === id)?.body)?.userItemId
+    expect(isAgentSessionRewindTarget(unknown, opener)).toBe(false)
+    expect(isAgentSessionRewindTarget(items[0]!, opener)).toBe(true)
+    const alone = nativeChatTurnMembership(rows([unknown]), { items: [unknown], submissions: [] })
+    expect(alone.turnKeys).toEqual([undefined])
+    expect(alone.liveTurnKey).toBeUndefined()
+    expect(
+      isNativeChatRowInLiveWorkingTurn(
+        undefined,
+        undefined,
+        true,
+        alone.unresolvedRowIds?.has('follow-up')
+      )
+    ).toBe(false)
+    expect(isNativeChatRowInLiveWorkingTurn(undefined, undefined, true)).toBe(true)
+  })
   it('groups rows by the turn their scope names, and a steer into the turn it joined', () => {
     const items = [
       user('u1'),
@@ -181,6 +217,63 @@ describe('the live turn', () => {
     expect(liveTurnKey(items)).toBe('u1')
   })
 
+  const PROVIDER_KEY = 'codex:thread:t1:0'
+  /** A send handed over (echoed under the turn's provider key, or not yet), or still queued. */
+  const sent = (
+    clientMessageId: string,
+    state: 'echoed' | 'unechoed' | 'queued'
+  ): AgentJournalSubmission => ({
+    clientMessageId,
+    fence: 1,
+    payloadFingerprint: clientMessageId,
+    dispatchState: state === 'echoed' ? 'accepted' : 'pending',
+    providerItemId: state === 'echoed' ? PROVIDER_KEY : null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: state === 'echoed' ? 2 : null,
+    handoverRecorded: true,
+    ...(state === 'queued' ? {} : { handedOverAt: 1 })
+  })
+  const opener = agentJournalSubmissionKey('first')
+  const second = agentJournalSubmissionKey('second')
+
+  function expectOpenedBy(
+    items: readonly AgentJournalRenderItem[],
+    submissions: readonly AgentJournalSubmission[]
+  ): void {
+    expect(structuredAgentTurnAnchors(items, submissions).get('t1')).toBe(opener)
+    const membership = nativeChatTurnMembership(rows(items), { items, submissions })
+    expect(membership.liveTurnKey).toBe(opener)
+    expect(membership.turnKeys[rows(items).findIndex((row) => row.id === opener)]).toBe(opener)
+  }
+
+  // Codex can echo a steer before the send that opened the turn, under the turn's one provider key.
+  it('stays on the send that opened the running turn when a steer into it is echoed first', () => {
+    const items = [
+      user(opener),
+      turn('t1', PROVIDER_KEY, THREAD, 'running'),
+      user(second, inTurn('t1'))
+    ]
+    expectOpenedBy(items, [sent('first', 'unechoed'), sent('second', 'echoed')])
+    expect(keys(items, [sent('first', 'unechoed'), sent('second', 'echoed')])).toEqual([
+      opener,
+      opener
+    ])
+  })
+
+  // Accepted above the send's handover (queued behind /compact), and not handed over at the record.
+  it('stays on the send that opened the running turn, not a message still queued above it', () => {
+    const items = [user(second), user(opener), turn('t1', PROVIDER_KEY, THREAD, 'running')]
+    expectOpenedBy(items, [sent('first', 'unechoed'), sent('second', 'queued')])
+    expectOpenedBy(items, [sent('first', 'echoed'), sent('second', 'queued')])
+  })
+
+  // A host that hands both over before the turn opens: the echoed send, not the one still unechoed.
+  it('stays on the echoed send that opened it, not a later send handed over before the record', () => {
+    const items = [user(opener), user(second), turn('t1', PROVIDER_KEY, THREAD, 'running')]
+    expectOpenedBy(items, [sent('first', 'echoed'), sent('second', 'unechoed')])
+  })
+
   it('is the newest user row while its send has not opened a turn', () => {
     const items = [user('u1'), turn('t1', 'u1'), assistant('a1', inTurn('t1')), user('u2')]
     expect(liveTurnKey(items)).toBe('u2')
@@ -197,6 +290,39 @@ describe('the live turn', () => {
     expect(liveTurnKey(items)).toBe('u2')
     expect(nativeChatTurnMembership(rows(items)).liveTurnKey).toBe('u2')
     expect(nativeChatTurnMembership([]).liveTurnKey).toBeUndefined()
+  })
+})
+
+describe('a turn whose record is above the loaded rows', () => {
+  const tail = () => [assistant('a300', inTurn('t1')), assistant('a301', inTurn('t1'))]
+  const hostTurn = (state: 'running' | 'completed', itemId = 't1') => ({
+    itemId,
+    observedAt: 1,
+    turn: { turnId: itemId, state, userItemId: 'u1' }
+  })
+  const membership = (
+    items: readonly AgentJournalRenderItem[],
+    latestTurn: ReturnType<typeof hostTurn>
+  ) => nativeChatTurnMembership(rows(items), { items, submissions: [], latestTurn })
+
+  it('groups its tail under the live bar while it runs, marked partial', () => {
+    const live = membership(tail(), hostTurn('running'))
+    expect(live.turnKeys).toEqual(['t1', 't1'])
+    expect(live.liveTurnKey).toBe('t1')
+    expect(live.partialTurnKey).toBe('t1')
+  })
+
+  it('leaves its tail ungrouped once it ends, whichever turn is newest', () => {
+    expect(membership(tail(), hostTurn('completed')).turnKeys).toEqual([undefined, undefined])
+    const next = membership([...tail(), user('u2')], hostTurn('running', 't2'))
+    expect(next.turnKeys.slice(0, 2)).toEqual([undefined, undefined])
+  })
+
+  it('is whole once its record loads', () => {
+    const items = [user('u1'), turn('t1', 'u1', THREAD, 'running'), ...tail()]
+    const loaded = membership(items, hostTurn('running'))
+    expect(loaded.turnKeys).toEqual(['u1', 'u1', 'u1'])
+    expect(loaded.partialTurnKey).toBeUndefined()
   })
 })
 

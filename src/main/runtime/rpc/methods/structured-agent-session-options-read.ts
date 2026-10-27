@@ -1,42 +1,117 @@
-// The options read surface: what a session reports about itself, and the
-// host's stored model catalog behind the picker.
-//
-// `agentSession.options` answers at rest from the record and the catalog, and
-// asks the live provider only when one runs. `agentSession.modelCatalog` deliberately does
-// neither — answering from the host store is what lets a picker render while
-// an attach is still running. It is additive: an older host answers
-// `method_not_found` (or `forbidden` through the mobile allowlist gate), and
-// the client keeps its static seed.
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+// options reads at-rest records/catalogs or the live provider; modelCatalog reads stored/start-published facts without waiting on attach.
+// Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../core'
 import {
   requireInstalledStructuredHost,
-  requireStructuredHost as requireHost
+  requireStructuredAgentAudience,
+  requireStructuredHost
 } from './structured-agent-session-gate'
-import { ModelCatalogParams, OptionsParams } from './structured-agent-session-schemas'
+import {
+  HandoffStatusParams,
+  ContinuationContextParams,
+  ModelCatalogParams,
+  OptionsParams
+} from './structured-agent-session-schemas'
+import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
+import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
+import { finishedListingIds } from '../../../../shared/structured-agent-session-options'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
-    name: 'agentSession.options',
+    name: 'agentSession.continuationContext',
+    permission: 'workspace',
+    params: ContinuationContextParams,
+    handler: async (params, ctx) =>
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).continuationContext(params)
+  }),
+  defineMethod({
+    name: 'agentSession.handoffStatus',
+    permission: 'workspace',
+    params: HandoffStatusParams,
+    handler: async (params, ctx) =>
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).handoffStatus(params.sessionId)
+  }),
+  defineMethod({
+    name: 'agentSession.commands',
+    permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) =>
-      (await requireInstalledStructuredHost(ctx)).readOptions(params.sessionId)
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(params.sessionId)
+  }),
+  defineMethod({
+    name: 'agentSession.options',
+    permission: 'workspace',
+    params: OptionsParams,
+    handler: async (params, ctx) => {
+      const readsWithoutModel = clientReadsOptionsWithoutModel(ctx)
+      const result = await (
+        await requireInstalledStructuredHost(ctx, params.sessionId)
+      ).readOptions(params.sessionId, { readsWithoutModel })
+      if (result.current.model === undefined && !readsWithoutModel) {
+        throw agentSessionRefusalError('structured_agent_session_unsupported', {
+          reason: 'clientCapabilityMissing'
+        })
+      }
+      return result
+    }
   }),
   defineMethod({
     name: 'agentSession.modelCatalog',
+    permission: 'workspace',
     params: ModelCatalogParams,
+    // Session reads may build the host; session-less terminal reads must not open unused structured journals.
     handler: async ({ worktree, ...params }, ctx) => {
-      const catalog = requireHost(ctx).deps.modelCatalog
-      if (!catalog) {
-        return { origin: 'unknown' as const }
+      requireStructuredAgentAudience(ctx, params.agent)
+      const host =
+        params.sessionId === undefined
+          ? requireStructuredHost(ctx)
+          : await requireInstalledStructuredHost(ctx, params.sessionId)
+      const record =
+        params.sessionId === undefined ? null : host.deps.store.getConversation(params.sessionId)
+      const coherent =
+        ctx.clientKind === undefined ||
+        ctx.clientCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
+      const scope = coherent ? {} : { legacy: true }
+      const read = async (): Promise<AgentSessionModelCatalogResult> => {
+        const catalog = host.deps.modelCatalog
+        if (!catalog) {
+          return { origin: 'unknown' }
+        }
+        // A floating chat runs in the folder it was created in, not the floating setting's current one.
+        const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
+        if (launchDirectory) {
+          return catalog.read({ ...params, ...scope, workspacePath: launchDirectory })
+        }
+        if (worktree === undefined) {
+          return catalog.read({ ...params, ...scope })
+        }
+        const workspacePath = await ctx.runtime
+          .resolveStructuredAgentSessionLocalWorkspacePath(worktree)
+          .catch(() => null)
+        return catalog.read({ ...params, ...scope, workspacePath })
       }
-      if (worktree === undefined) {
-        return catalog.read(params)
-      }
-      const workspacePath = await ctx.runtime
-        .resolveStructuredAgentSessionLocalWorkspacePath(worktree)
-        .catch(() => null)
-      return catalog.read({ ...params, workspacePath })
+      const listing = await read()
+      const own = record?.provider === params.agent ? record : null
+      // Preserve a reopened chat's own model even if unlisted; new-chat reads instead seed the next picker.
+      return !coherent &&
+        own &&
+        worktree === undefined &&
+        finishedListingIds(listing) &&
+        listing.origin !== 'unknown'
+        ? {
+            ...listing,
+            models: structuredAgentSessionOptionModels(
+              listing.models,
+              own.options?.model,
+              (row) => row
+            )
+          }
+        : listing
     }
   })
 ]

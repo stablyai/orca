@@ -3,27 +3,16 @@ import {
   gitLabJobCanHaveTrace,
   gitLabJobTraceToCheckRunDetails
 } from '../../../shared/gitlab-job-trace-check-details'
-import type { GitLabJobTraceResult, GitLabProjectRef } from '../../../shared/gitlab-types'
+import type { GitLabProjectRef } from '../../../shared/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
-import { getActiveRuntimeTarget } from './runtime-client-target'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { gitLabApiFor, JOB_TRACE_TIMEOUT_MS } from './gitlab-owner-api'
 import { withGitLabIpcTimeout } from './gitlab-ipc-timeout'
 
-// Why: job logs run longer than a generic GitLab call, so this sits above main's 60s
-// `glab` timeout — otherwise the caller aborts first and hides main's classified error.
-const JOB_TRACE_TIMEOUT_MS = 65_000
-
-/**
- * Load a GitLab pipeline job log as provider-neutral check details.
- *
- * Returns null for checks that are not GitLab jobs so callers can fall through to
- * their existing provider path. Throws on a GitLab-reported failure so the caller's
- * error handling surfaces the message instead of showing "no details available".
- */
+/** Load GitLab job logs as provider-neutral details; null permits other-provider fallback, while GitLab failures throw for caller error UI. */
 export async function loadGitLabJobLogDetails(args: {
   repoPath: string
   repoId?: string
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+  repoOwnerExecutionHostId?: string
   check: PRCheckDetail
   /** Fork/cross-project MRs run their pipeline outside the repo's own project. */
   projectRef?: GitLabProjectRef | null
@@ -35,29 +24,15 @@ export async function loadGitLabJobLogDetails(args: {
   if (!gitLabJobCanHaveTrace(args.check)) {
     return gitLabJobTraceToCheckRunDetails(args.check, '', emptyTraceStrings())
   }
-  const target = getActiveRuntimeTarget(args.settings)
-  const result =
-    target.kind === 'environment'
-      ? await callRuntimeRpc<GitLabJobTraceResult>(
-          target,
-          'gitlab.jobTrace',
-          {
-            repo: args.repoId ?? args.repoPath,
-            jobId,
-            projectRef: args.projectRef ?? undefined,
-            logExcerpt: true
-          },
-          { timeoutMs: JOB_TRACE_TIMEOUT_MS }
-        )
-      : await withJobTraceTimeout(
-          window.api.gl.jobTrace({
-            repoPath: args.repoPath,
-            repoId: args.repoId,
-            jobId,
-            projectRef: args.projectRef ?? null,
-            logExcerpt: true
-          })
-        )
+  const result = await withJobTraceTimeout(
+    gitLabApiFor(args).jobTrace({
+      repoPath: args.repoPath,
+      repoId: args.repoId,
+      jobId,
+      projectRef: args.projectRef ?? null,
+      logExcerpt: true
+    })
+  )
   if (!result?.ok) {
     throw new Error(
       result?.error?.trim() ||
@@ -70,7 +45,7 @@ export async function loadGitLabJobLogDetails(args: {
   return gitLabJobTraceToCheckRunDetails(args.check, result.trace, emptyTraceStrings())
 }
 
-// Why: the expanded Checks row needs its own message, not the generic GitLab timeout text.
+// Expanded Checks needs its own timeout message, not the generic GitLab text.
 function withJobTraceTimeout<T>(pending: Promise<T>): Promise<T> {
   return withGitLabIpcTimeout(pending, {
     timeoutMs: JOB_TRACE_TIMEOUT_MS,

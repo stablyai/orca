@@ -2,25 +2,12 @@ import type { BrowserWindow } from 'electron'
 import { agentHookServer } from '../agent-hooks/server'
 import { setMigrationUnsupportedPtyListener } from '../agent-hooks/migration-unsupported-pty-state'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
-import {
-  getSyntheticAgentTitleProfile,
-  shouldDriveSyntheticAgentTitleFromHook
-} from '../../shared/synthetic-agent-title'
-import {
-  driveSyntheticTitleFromHook,
-  stopAllSyntheticTitleSpinners
-} from './synthetic-title-runtime'
+import { stopSyntheticTitleSpinnerTimer } from './synthetic-title-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { pickHostTurnEnd } from '../../shared/agent-status-types'
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
-  maybeAutoRenameBranchOnFirstWork: (event: {
-    paneKey: string
-    tabId: string | undefined
-    worktreeId: string | undefined
-    payload: { state: string; prompt?: string; lastAssistantMessage?: string }
-    isReplay: boolean | undefined
-  }) => void
   onRecordAgentState: (agentType: string, status: string) => void
 }
 
@@ -36,6 +23,8 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       evidenceObservedAt,
       stateStartedAt,
       turnStartedAt,
+      turnEndedAt,
+      turnEndDisposition,
       launchToken,
       providerSession,
       providerSessionOnly,
@@ -44,18 +33,20 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       observation,
       isReplay,
       authorityRestartId,
-      structuredHost
+      structuredHost,
+      programStatus,
+      programStatusOnly,
+      agentPresence
     }) => {
       if (state.mainWindow?.isDestroyed()) {
         return
       }
-      // Why: the renderer still derives structured rows from its own feed subscription; forwarding
-      // these too would give one pane key two writers until that bridge is retired.
+      // Renderer still owns structured rows; forwarding would give each pane key two writers until that bridge retires.
       if (structuredHost) {
         return
       }
       if (providerSessionOnly) {
-        // Why: session_start just refreshes durable resume identity while Pi is idle; forward it without titles, telemetry, or status UI.
+        // Idle Pi session_start only refreshes resume identity; skip titles, telemetry and status UI.
         state.mainWindow?.webContents.send('agentStatus:set', {
           ...payload,
           paneKey,
@@ -71,9 +62,6 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
           providerSessionOnly: true
         })
         return
-      }
-      if (!restoredUnconfirmed) {
-        options.maybeAutoRenameBranchOnFirstWork({ paneKey, tabId, worktreeId, payload, isReplay })
       }
       const runtime = state.runtime
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
@@ -91,19 +79,25 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(evidenceObservedAt !== undefined ? { evidenceObservedAt } : {}),
         stateStartedAt,
         ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
+        ...pickHostTurnEnd({ turnEndedAt, turnEndDisposition }),
         ...(providerSession ? { providerSession } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),
-        ...(orchestration ? { orchestration } : {})
+        ...(orchestration ? { orchestration } : {}),
+        ...(programStatus ? { programStatus } : {}),
+        ...(programStatusOnly === true ? { programStatusOnly: true } : {}),
+        ...(agentPresence?.session && !agentPresence.ended
+          ? { paneOwner: { agent: agentPresence.agent, session: agentPresence.session } }
+          : {}),
+        // Mark reconnect replays so cached completions do not notify again.
+        ...(isReplay === true ? { isReplay: true } : {})
       }
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
       getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
-      options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
-      // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
-      const profile = getSyntheticAgentTitleProfile(payload.agentType)
-      if (profile && shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state)) {
-        driveSyntheticTitleFromHook(paneKey, payload.state, profile)
+      // A facet-only republish (progress tick) is not a state the agent entered.
+      if (programStatusOnly !== true) {
+        options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
       }
     }
   )
@@ -129,10 +123,10 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
 }
 
 export function clearMainWindowAgentStatusListeners(): void {
-  // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
+  // Detach window listeners before destroyed WebContents; only deliberate window recreation replays.
   agentHookServer.setListener(null)
   agentHookServer.setPaneStatusClearListener(null)
   setMigrationUnsupportedPtyListener(null)
-  // Why: stop the spinner timer here — it would fire into destroyed webContents, and per-pane teardown may never run for restored-but-untorn panes.
-  stopAllSyntheticTitleSpinners()
+  // Stop the timer only; retained working entries resume on reopened show without hook replay.
+  stopSyntheticTitleSpinnerTimer()
 }

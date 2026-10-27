@@ -1,6 +1,4 @@
-// First-launch telemetry notice shown only to pre-telemetry users (existedBeforeTelemetryRelease && optedIn === null),
-// who installed under a "no telemetry" contract; new users are covered by install-time disclosure.
-// Got it / ✕ silently opt in; "Turn off" explicitly opts out. See telemetry-plan.md §First-launch experience.
+// Pre-telemetry users with unresolved consent get this notice; new users receive install-time disclosure. Got it/close opt in, Turn off opts out (telemetry-plan.md §First-launch experience).
 
 import { useState } from 'react'
 import { X } from 'lucide-react'
@@ -19,7 +17,7 @@ export function FirstLaunchBanner({
   onResolve,
   fetchSettings
 }: FirstLaunchBannerProps): React.JSX.Element {
-  // Double-click guard: a second Turn-off click would re-derive `via` as 'settings', mis-tagging one opt-out as two.
+  // Prevent duplicate opt-outs being retagged as settings-origin on a second click.
   const [inFlight, setInFlight] = useState(false)
   const mountedRef = useMountedRef()
 
@@ -36,7 +34,7 @@ export function FirstLaunchBanner({
         onResolve()
       }
     } finally {
-      // Reset inFlight so a fetchSettings rejection doesn't leave every button permanently disabled.
+      // A failed settings refresh must not leave all actions disabled.
       if (mountedRef.current) {
         setInFlight(false)
       }
@@ -63,15 +61,14 @@ export function FirstLaunchBanner({
   }
 
   return (
-    // Fixed non-modal overlay; centered + narrow so it clears the macOS traffic lights.
-    // `relative` is load-bearing: the absolutely-positioned ✕ anchors to this container.
+    // Keep the fixed notice clear of macOS traffic lights; its dismiss button anchors to this container.
     <div
       className="fixed left-1/2 top-2 z-40 flex w-[min(44.625rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-4 rounded-lg border border-border bg-card/95 py-3 pl-4 pr-3 shadow-lg backdrop-blur"
       role="region"
       aria-label={translate('auto.components.FirstLaunchBanner.fcbee32f08', 'Telemetry notice')}
       aria-live="polite"
     >
-      {/* Text column — flex-1 so the action column never wraps the copy. */}
+      {/* Let text shrink without wrapping the action column. */}
       <div className="flex-1 space-y-0.5 pr-1 text-sm">
         <p className="font-medium leading-snug">
           {translate(
@@ -94,7 +91,7 @@ export function FirstLaunchBanner({
           .
         </p>
       </div>
-      {/* Action column — "Got it" primary reads as the easy path; "Turn off" outline marks the explicit opt-out. */}
+      {/* Keep explicit opt-out visually distinct from the default acknowledgement. */}
       <div className="flex shrink-0 items-center gap-2 self-center pr-6">
         <Button
           variant="outline"
@@ -109,7 +106,7 @@ export function FirstLaunchBanner({
           {translate('auto.components.FirstLaunchBanner.94cc673726', 'Got it')}
         </Button>
       </div>
-      {/* aria-label says "Dismiss" but this persists silent opt-in, not just hides the UI. */}
+      {/* Dismiss persists opt-in; it does more than hide the notice. */}
       <button
         type="button"
         aria-label={translate('auto.components.FirstLaunchBanner.b9e1b966c7', 'Dismiss notice')}

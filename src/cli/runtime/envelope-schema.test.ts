@@ -85,9 +85,7 @@ describe('RuntimeRpcEnvelopeSchema', () => {
   })
 
   it('accepts a failure envelope without _meta', () => {
-    // Why: the runtime may fail before it has resolved its own runtimeId, in
-    // which case _meta is omitted. The schema must tolerate that rather than
-    // rejecting a legitimate failure as an invalid frame.
+    // Failures before runtimeId resolution legitimately omit _meta.
     const parsed = RuntimeRpcEnvelopeSchema.safeParse({
       id: 'req-1',
       ok: false,

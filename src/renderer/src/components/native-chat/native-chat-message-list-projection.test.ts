@@ -3,7 +3,8 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { orderNativeChatMessages } from './native-chat-message-grouping'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages } from './native-chat-tool-fold'
+import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat-tool-pairs'
 
 function message(
   id: string,
@@ -13,6 +14,40 @@ function message(
 ): NativeChatMessage {
   return { id, timestamp, blocks, role, source: 'transcript' }
 }
+
+it('retains detached evidence and its row identity when later work uses the same provider ID', () => {
+  const project = createNativeChatMessageListProjection()
+  const source = message('source', 1, [
+    { type: 'text', text: 'Working' },
+    { type: 'tool-call', name: 'Bash', callId: 'a', input: { command: 'echo a' } },
+    { type: 'tool-result', callId: 'x', output: 'earlier unowned output' }
+  ])
+  const initial = project([source])
+  const orphan = initial.conversation.find((row) => row.unpairedToolResults)
+  expect(orphan).toBeDefined()
+  expect(project([source])).toBe(initial)
+  const laterCall = message(
+    'later-call',
+    2,
+    [{ type: 'tool-call', name: 'Bash', callId: 'x', input: { command: 'echo x' } }],
+    'tool'
+  )
+  const laterResult = message(
+    'later-result',
+    3,
+    [{ type: 'tool-result', callId: 'x', output: 'actual later output' }],
+    'tool'
+  )
+  const updated = project([source, laterCall, laterResult])
+  expect(updated.conversation.find((row) => row.unpairedToolResults)).toBe(orphan)
+  expect(updated.conversation[0]).not.toBe(initial.conversation[0])
+  expect(pairToolBlocks(updated.conversation[0]!.blocks).at(-1)).toEqual({
+    call: laterCall.blocks[0],
+    result: laterResult.blocks[0]
+  })
+  expect(foldToolMessages(updated.conversation)).toEqual(updated.conversation)
+  expect(source.blocks).toHaveLength(3)
+})
 
 it('retains settled folded runs while exposing changed tools, metadata, and attribution boundaries', () => {
   const projectList = createNativeChatMessageListProjection()
@@ -61,8 +96,7 @@ it('retains settled folded runs while exposing changed tools, metadata, and attr
   expect(project([prose, call, result])[0]).not.toBe(initial[0])
 })
 
-// A reused row aliases producer-owned block objects (a journal item's `body.blocks`),
-// so an in-place rewrite here would freeze what the transcript renders.
+// Reused blocks belong to producers; mutating them would freeze transcript output.
 it('leaves producer-owned messages and blocks untouched', () => {
   const projectList = createNativeChatMessageListProjection()
   const project = (messages: NativeChatMessage[]) => projectList(messages).conversation
@@ -85,8 +119,7 @@ it('leaves producer-owned messages and blocks untouched', () => {
   expect(prose.blocks).toHaveLength(1)
 })
 
-// The list orders subagent rows once per change to them; the parent streaming must
-// not hand it a new map.
+// Parent streaming must retain the unchanged subagent map to avoid reordering it every frame.
 it("keeps the subagent rows when only the conversation changes, and replaces them when a subagent's do", () => {
   const projectList = createNativeChatMessageListProjection()
   const child = (id: string, timestamp: number, text: string): NativeChatMessage => ({

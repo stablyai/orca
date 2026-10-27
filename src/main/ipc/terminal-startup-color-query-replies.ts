@@ -1,6 +1,6 @@
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress-intent'
 import { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentLaunchCommand } from '../../shared/agent-command-line-intent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { agentKindSchema } from '../../shared/telemetry-events'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
@@ -22,7 +22,21 @@ function isAgentLaunch(args: {
     return true
   }
   const command = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
-  return recognizeAgentProcessFromCommandLine(command) !== null
+  return recognizeAgentLaunchCommand(command) !== null
+}
+
+// jcode queries before TUI input is ready; suppress cooked replies via agent, telemetry kind or quick-launch command.
+export function agentSkipsStartupOscColorQueryReplies(args: {
+  launchAgent?: unknown
+  telemetry?: { agent_kind?: unknown } | undefined
+  command?: string
+  launchConfig?: SleepingAgentLaunchConfig
+}): boolean {
+  if (args.launchAgent === 'jcode' || args.telemetry?.agent_kind === 'jcode') {
+    return true
+  }
+  const command = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
+  return command.length > 0 && recognizeAgentLaunchCommand(command)?.agent === 'jcode'
 }
 
 export function getStartupTerminalIngressIntent(args: {
@@ -33,11 +47,13 @@ export function getStartupTerminalIngressIntent(args: {
   terminalColorQueryReplies?: unknown
   terminalKittyKeyboardProtocol?: boolean
 }) {
-  // Why colours for every PTY: an agent typed into a plain shell later queries too, and these
-  // seed an owner that has not been pushed the host's viewer colours yet.
+  // Seed every PTY: agents launched later from plain shells can also query before viewer colors arrive.
+  const colors = agentSkipsStartupOscColorQueryReplies(args)
+    ? {}
+    : (normalizeColorQueryReplyColors(args.terminalColorQueryReplies) ?? {})
   return parsePtyStartupIngressIntent({
-    colors: normalizeColorQueryReplyColors(args.terminalColorQueryReplies) ?? {},
     kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol === true && isAgentLaunch(args),
+    colors,
     deadlineMs: 5_000
   })
 }

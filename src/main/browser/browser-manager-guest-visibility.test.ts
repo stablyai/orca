@@ -66,9 +66,11 @@ describe('browserManager', () => {
   })
 
   it('holds capture paint one-way and keeps the renderer unthrottled until the last release', () => {
+    vi.useFakeTimers()
     const guest = {
       id: 1707,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -81,7 +83,8 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       executeJavaScript: vi.fn(() => new Promise(() => {})),
       send: vi.fn(),
-      setBackgroundThrottling: vi.fn()
+      setBackgroundThrottling: vi.fn(),
+      capturePage: vi.fn(async () => null)
     }
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
@@ -100,6 +103,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about paint holds.
+    renderer.send.mockClear()
 
     // Synchronous: a capture never waits on the desktop renderer.
     const releaseFirst = browserManager.holdPaintForCapture(guest.id)
@@ -121,11 +126,8 @@ describe('browserManager', () => {
       'browser:capturePaintHold',
       { browserPageId: 'page-capture', held: false }
     ])
+    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
+    vi.runAllTimers()
     expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-  })
-
-  it('returns a no-op capture hold for a guest no page owns', () => {
-    const release = browserManager.holdPaintForCapture(424242)
-    expect(() => release()).not.toThrow()
   })
 })

@@ -34,8 +34,7 @@ export const GitSubmoduleStatus = WorktreeSelector.extend({
         // Why: never let a submodule path be parsed as a git flag (arg injection).
         .refine((value) => !value.startsWith('-'), 'Submodule path must not start with -')
     ),
-  // Why: submodule expansion is requested from a Source Control row; the row
-  // area determines whether the gitlink range is HEAD->index or index->worktree.
+  // The Source Control row selects HEAD→index versus index→worktree gitlink ranges.
   area: z.enum(['staged', 'unstaged', 'untracked']).optional()
 })
 
@@ -208,6 +207,11 @@ export const GitBulkPaths = WorktreeSelector.extend({
   filePaths: z.array(z.string().min(1, 'Missing file path'))
 })
 
+// Why: optional so older hosts strip it and stage the listed `filePaths` instead.
+export const GitBulkStage = GitBulkPaths.extend({
+  scope: z.enum(['all', 'tracked']).optional()
+})
+
 export const GitPushTargetParam = z.object({
   remoteName: z.string(),
   branchName: z.string(),
@@ -262,7 +266,8 @@ export const GitRemoteFileUrl = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing relative path')),
-  line: z.number().int().min(1)
+  line: z.number().int().min(1),
+  endLine: z.number().int().min(1).optional()
 })
 
 export const GitRemoteCommitUrl = WorktreeSelector.extend({

@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
-import type * as FilesystemAuth from '../ipc/filesystem-auth'
+import type * as FilesystemAuth from '../ipc/filesystem/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
-import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
+import { WatcherProcessFailure } from '../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 
 const {
@@ -12,15 +12,13 @@ const {
   statMock,
   watchMock,
   watchInWatcherProcessMock,
-  closeWatcherInWatcherProcessMock,
-  getSshFilesystemProviderMock
+  closeWatcherInWatcherProcessMock
 } = vi.hoisted(() => ({
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
   watchMock: vi.fn(),
   watchInWatcherProcessMock: vi.fn(),
-  closeWatcherInWatcherProcessMock: vi.fn(),
-  getSshFilesystemProviderMock: vi.fn()
+  closeWatcherInWatcherProcessMock: vi.fn()
 }))
 
 vi.mock('fs', async () => {
@@ -39,32 +37,30 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-// The local (non-Windows, non-SSH) watch path delegates to the isolated watcher process.
 vi.mock('./file-watcher-host', () => ({
   closeFileExplorerWatcherInWatcherProcess: closeWatcherInWatcherProcessMock,
   watchFileExplorerInWatcherProcess: watchInWatcherProcessMock
 }))
 
-vi.mock('../ipc/filesystem-auth', async () => {
-  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem-auth')
+vi.mock('../ipc/filesystem/filesystem-auth', async () => {
+  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem/filesystem-auth')
   return {
     ...actual,
     resolveAuthorizedPath: resolveAuthorizedPathMock
   }
 })
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock,
-  onSshFilesystemProviderRegistered: () => () => undefined
-}))
-
 import {
   _getRuntimeFileWatcherReleaseCountForTests,
   _resetRuntimeFileWatcherLeasesForTests,
-  awaitRuntimeFileWatcherUnsubscribes,
-  RuntimeFileCommands,
-  WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS
-} from './orca-runtime-files'
+  awaitRuntimeFileWatcherUnsubscribes
+} from './files/watch/file-watcher-leases'
+import { RuntimeFileCommands } from './orca-runtime-files'
+import {
+  WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS,
+  WINDOWS_RUNTIME_FILE_WATCH_LEADING_MS,
+  WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS
+} from './files/watch/windows-file-watch'
 
 function createWindowsWatcher(close: () => void) {
   const watcher = new EventEmitter() as EventEmitter & { close: ReturnType<typeof vi.fn> }
@@ -98,7 +94,7 @@ function createRuntimeFileCommands(rootPath: string) {
 
 describe('RuntimeFileCommands file watching', () => {
   const originalPlatform = process.platform
-  // Why: Windows runtime watches intentionally use fs.watch instead of the watcher child.
+  // Windows uses fs.watch directly instead of the watcher process.
   const posixWatcherProcessIt = process.platform === 'win32' ? it.skip : it
 
   beforeEach(() => {
@@ -108,7 +104,6 @@ describe('RuntimeFileCommands file watching', () => {
     watchMock.mockReset()
     watchInWatcherProcessMock.mockReset()
     closeWatcherInWatcherProcessMock.mockReset()
-    getSshFilesystemProviderMock.mockReset()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -147,19 +142,25 @@ describe('RuntimeFileCommands file watching', () => {
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
 
     expect(watchMock).toHaveBeenCalledWith('C:\\repo', { recursive: true }, expect.any(Function))
-    // Windows path does not go through the watcher child.
     expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
     const emit = listener as (() => void) | null
     expect(emit).not.toBeNull()
 
     emit?.()
     emit?.()
-    await vi.advanceTimersByTimeAsync(149)
+    await vi.advanceTimersByTimeAsync(WINDOWS_RUNTIME_FILE_WATCH_LEADING_MS - 1)
     expect(onEvents).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
     expect(onEvents).toHaveBeenCalledTimes(1)
     expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: 'C:\\repo' }])
+
+    emit?.()
+    await vi.advanceTimersByTimeAsync(WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS - 1)
+    expect(onEvents).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(onEvents).toHaveBeenCalledTimes(2)
 
     await unsubscribe()
     expect(watcher.close).toHaveBeenCalledTimes(1)
@@ -209,6 +210,27 @@ describe('RuntimeFileCommands file watching', () => {
     commands.forgetFileExplorerWatchersAfterRemoval('C:\\repo')
     expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('closes Windows removal watchers without reauthorizing a path Git already unregistered', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const rootPath = 'C:\\projects\\repo-feature'
+    const watcher = createWindowsWatcher(() => {
+      queueMicrotask(() => watcher.emit('close'))
+    })
+    watchMock.mockReturnValue(watcher)
+    resolveAuthorizedPathMock.mockResolvedValue(rootPath)
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const { commands } = createRuntimeFileCommands(rootPath)
+    await commands.watchFileExplorer('id:wt-1', vi.fn())
+    resolveAuthorizedPathMock.mockRejectedValue(
+      new Error('Access denied: path resolves outside allowed directories')
+    )
+
+    await expect(commands.closeFileExplorerWatchersForPath(rootPath)).resolves.toBeUndefined()
+
+    expect(watcher.close).toHaveBeenCalledTimes(1)
+    expect(closeWatcherInWatcherProcessMock).not.toHaveBeenCalled()
   })
 
   it('retains Windows close ownership until late physical exit without retry leaks', async () => {
@@ -270,8 +292,7 @@ describe('RuntimeFileCommands file watching', () => {
     expect(watcher.close).toHaveBeenCalledTimes(2)
   })
 
-  // Issues #5308/#8212: the local recursive watch runs out of process so the
-  // blocking initial crawl and native faults cannot take down the serve runtime.
+  // #5308/#8212: recursive crawl/native faults must stay in the watcher child, outside serve.
   posixWatcherProcessIt('delegates local recursive watching to the watcher process', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/home5/Brian')
     statMock.mockResolvedValue({ isDirectory: () => true })
@@ -300,14 +321,12 @@ describe('RuntimeFileCommands file watching', () => {
       controller.signal
     )
 
-    // Events surfaced by the watcher process reach the caller.
     captured.cb?.([{ kind: 'update', absolutePath: '/home5/Brian/a.txt', isDirectory: false }])
     expect(onEvents).toHaveBeenCalledWith([
       { kind: 'update', absolutePath: '/home5/Brian/a.txt', isDirectory: false }
     ])
 
-    // Unsubscribe tears the subscription down (dispose runs on the shutdown-drain
-    // microtask, so await the drain before asserting).
+    // Unsubscribe disposes on a shutdown-drain microtask; await it before asserting.
     unsubscribe()
     await awaitRuntimeFileWatcherUnsubscribes()
     expect(watcherDispose).toHaveBeenCalledTimes(1)
@@ -541,40 +560,5 @@ describe('RuntimeFileCommands file watching', () => {
     resolveDispose()
     await drainPromise
     expect(drained).toBe(true)
-  })
-
-  it('forwards the abort signal into SSH-backed file explorer watches', async () => {
-    const watch = vi.fn(async () => () => {})
-    getSshFilesystemProviderMock.mockReturnValue({ watch })
-    const store = { getRepo: vi.fn(() => ({ connectionId: 'ssh-1' })) }
-    const commands = new RuntimeFileCommands({
-      getRuntimeId: () => 'runtime-1',
-      requireStore: () => store,
-      resolveWorktreeSelector: vi.fn(async () => ({
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: '/remote/repo'
-      })),
-      resolveRuntimeFileTarget: vi.fn(async () => ({
-        worktree: {
-          id: 'wt-1',
-          repoId: 'repo-1',
-          path: '/remote/repo'
-        },
-        executionHostId: 'ssh:ssh-1'
-      })),
-      resolveRuntimeGitTarget: vi.fn(),
-      openFile: vi.fn()
-    } as never)
-    const controller = new AbortController()
-    const onTerminalError = vi.fn()
-
-    await commands.watchFileExplorer('id:wt-1', vi.fn(), onTerminalError, controller.signal)
-
-    expect(watch).toHaveBeenCalledWith('/remote/repo', expect.any(Function), {
-      signal: controller.signal,
-      onTerminalError
-    })
-    expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
   })
 })

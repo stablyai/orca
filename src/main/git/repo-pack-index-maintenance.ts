@@ -106,7 +106,9 @@ export async function maintainRepoPackIndex(
       cwd: args.repoPath,
       ...(args.wslDistro ? { wslDistro: args.wslDistro } : {}),
       admissionTier: 'background',
-      timeout: PACK_INDEX_TIMEOUT_MS
+      timeout: PACK_INDEX_TIMEOUT_MS,
+      admissionSignal: signal,
+      canStart: args.canWrite
     })
     const writtenStamp = await readRepoPackDirectoryStamp(directory).catch(() => undefined)
     // A racing new pack remains readable; the forced refresh bounds a missed directory change.
@@ -116,6 +118,9 @@ export async function maintainRepoPackIndex(
     span.setAttribute('git.pack_index_write_ms', Date.now() - startedAt)
     return outcome('written')
   } catch (error) {
+    if (signal.aborted || !args.canWrite()) {
+      return outcome('deferred')
+    }
     span.setAttribute('git.pack_index_error', String(error))
     return outcome('failed')
   }

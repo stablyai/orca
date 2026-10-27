@@ -1,3 +1,5 @@
+import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
+import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
@@ -20,12 +22,34 @@ import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
 import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import { PaneTimers } from './program-status/pane-timers'
+import { ProgramStatusFacetStore } from './program-status/facet-store'
 
-// Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
+// Unassigned rows sort after the listing counter, which starts at 1.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
-  protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
+  protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
+
+  setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
+    this.cliWriterExecutionMatches = cliWriterExecutionMatcher(...args)
+  }
+  protected readonly programStatusFacets = new ProgramStatusFacetStore()
+  /** Retry yielded OSC 7501 reports when hook precedence expires; programs may not resend. */
+  protected readonly hookSilenceRechecks = new PaneTimers()
+  /** Coalesce facet-only ticks that arrive at PTY chunk rate. */
+  protected readonly programStatusFacetRepublishes = new PaneTimers()
+
+  setStartupPromptClaimListener(
+    listener: (body: unknown) => boolean | 'pending',
+    clear: () => void
+  ): void {
+    this.onStartupPromptClaim = listener
+    this.clearStartupPromptClaims = clear
+  }
+
+  protected emitEnrichedStatus(row: EnrichedAgentHookEventPayload): void {
+    const enriched = this.programStatusFacets.stitch(row)
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
       try {
@@ -49,12 +73,12 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       rows.push({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
-        entry: entry as EnrichedAgentHookEventPayload,
+        entry: this.programStatusFacets.stitch(entry as EnrichedAgentHookEventPayload),
         order: getLegacyStatusListingOrder(this.state, paneKey) ?? UNORDERED_STATUS_ROW
       })
     }
     for (const parent of this.canonicalStatusStore.getParents()) {
-      if (!parent.status) {
+      if (!parent.status || isTmuxInnerSubject(parent.subject)) {
         continue
       }
       rows.push({
@@ -66,11 +90,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     }
     return rows.sort((a, b) => a.order - b.order).map(({ entry }) => entry)
   }
-  /**
-   * Notified once per process when repeated hook POSTs are cut off mid-body (#11217).
-   * Why: the listener fails open on every request error, so without this the only symptom is
-   * agent status quietly going stale — for every runtime at once, since they share this transport.
-   */
+  /** Report repeated hook-body truncation once per process; fail-open handling otherwise hides it (#11217). */
   setTransportInterferenceListener(
     listener: ((report: HookTransportInterferenceReport) => void) | null
   ): void {
@@ -82,7 +102,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     if (!listener) {
       return
     }
-    // Why: replay is best-effort per pane so one throwing listener can't starve the rest.
+    // One failing replay subscriber must not starve other panes.
     for (const payload of this.combinedStatusEntries()) {
       try {
         listener({ ...payload, isReplay: true })
@@ -92,7 +112,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     }
   }
 
-  // Why: statusline posts carry live Claude usage windows, not agent status; they feed RateLimitService directly.
+  // Claude statusline carries usage windows for RateLimitService, not agent status.
   setClaudeStatusLineListener(
     listener: ((event: ClaudeStatusLineRateLimits) => void) | null
   ): void {
@@ -135,9 +155,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     }
   }
 
-  /** Multi-subscriber tap on definitive live-row deletions. `dropStatusEntry` is a user
-   * dismissal, so it never routes through the pane-status-clear fan-out — pane-owned
-   * cleanup (synthetic spinners) still has to retire with the row it was driving. */
+  /** Include user-dismissed rows, which bypass pane-clear events but must still retire pane-owned UI. */
   subscribeStatusDrop(listener: StatusDropListener): () => void {
     this.statusDropListeners.add(listener)
     return () => {
@@ -147,7 +165,6 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   protected emitStatusDropped(paneKey: string): void {
     for (const listener of this.statusDropListeners) {
-      // Why: matches every other fan-out here — one throwing subscriber must not strand the rest.
       try {
         listener(paneKey)
       } catch (err) {
@@ -156,7 +173,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     }
   }
 
-  /** Multi-subscriber tap on every enriched status change (no replay). */
+  /** Enriched changes only; no replay. */
   subscribeEnrichedStatus(listener: (payload: EnrichedAgentHookEventPayload) => void): () => void {
     this.enrichedStatusListeners.add(listener)
     return () => {
@@ -175,9 +192,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     this.onPaneStatusCleared = listener
   }
 
-  /** Multi-subscriber tap on pane status clears. Unlike `setPaneStatusClearListener`
-   *  (a single slot the main window owns and drops on close) this survives window
-   *  teardown and exists at all under headless serve, which never opens one. */
+  /** Survives window teardown and works under headless serve, unlike the window's single listener slot. */
   subscribePaneStatusClear(listener: (clear: AgentStatusClearIpcPayload) => void): () => void {
     this.paneStatusClearListeners.add(listener)
     return () => {
@@ -188,8 +203,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   protected emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
     this.onPaneStatusCleared?.(clear)
     for (const listener of this.paneStatusClearListeners) {
-      // Why: callers are pane/connection teardown paths; one throwing subscriber must
-      // not strand the rest, matching every other fan-out here.
+      // One throwing subscriber must not interrupt teardown for the others.
       try {
         listener(clear)
       } catch (err) {
@@ -198,13 +212,11 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     }
   }
 
-  /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
-   *  dashboard catches up on hook events that fired during startup. */
   getStatusSnapshot(): AgentStatusIpcPayload[] {
     return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
   }
 
-  /** Provider-session identities, including Pi's metadata-only rows. */
+  /** Include metadata-only provider identities. */
   getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
     return this.buildStatusChangeNotification().providerSessions
   }
@@ -213,7 +225,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     const legacy = this.state.lastStatusByPaneKey.get(paneKey)
     if (legacy) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
-      return [toAgentStatusIpcPayload(legacy as EnrichedAgentHookEventPayload)]
+      const row = legacy as EnrichedAgentHookEventPayload
+      return [toAgentStatusIpcPayload(this.programStatusFacets.stitch(row))]
     }
     const rows: AgentStatusIpcPayload[] = []
     for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
@@ -291,7 +304,6 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return this.buildStatusChangeNotification().statuses
   }
 
-  /** Test-only accessor for the per-instance listener state (narrow getter avoids an `as unknown` cast). */
   _getStateForTests(): HookListenerState {
     return this.state
   }

@@ -1,45 +1,42 @@
 import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { emptyLayoutSnapshot, singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
+import {
+  isValidHostTerminalTabId,
+  isValidMirroredHostTerminalTabId
+} from '../../../../shared/terminal-tab-id'
+import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
+import { singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   buildOrphanTerminalCleanupPatch,
   getOrphanTerminalIds
 } from '../slices/terminal-orphan-helpers'
 import {
-  dedupeTabOrder,
   ensureGroup,
   findTabByEntityInGroup,
   pushRecentTabId,
   sanitizeRecentTabIds,
   updateGroup
 } from '../slices/tab-group-state'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { emptySplitGroup, insertSplitGroup } from '../slices/tabs/tabs-group-actions'
+import { ownsGlobalSelection } from '../global-selection-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  recordCreatedTerminalTabInLayoutOwner,
+  terminalTabCreateCommand,
+  withMainTerminalFacts
+} from './terminal-tab-create-through-layout-owner'
 import {
   getRemoteConnectionIdForWorktree,
   resolveCreatedTabShellOverride,
   worktreeUsesWslPath
 } from './terminal-workspace-routing'
-export function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
-  const usedOrdinals = new Set<number>()
-  for (const tab of tabs) {
-    const match = /^Terminal (\d+)$/.exec(tab.defaultTitle ?? tab.title)
-    if (!match) {
-      continue
-    }
-    usedOrdinals.add(Number(match[1]))
-  }
-  let nextOrdinal = 1
-  while (usedOrdinals.has(nextOrdinal)) {
-    nextOrdinal += 1
-  }
-  return nextOrdinal
-}
-
+import type { AppState } from '../types'
 type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
 
 function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
@@ -55,42 +52,56 @@ function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupComma
 
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  get: TerminalStoreGet,
+  subscribe: (listener: (state: AppState) => void) => () => void
 ): Pick<TerminalSlice, 'createTab'> {
   return {
     createTab: (worktreeId, targetGroupId, shellOverride, options) => {
       let tab!: TerminalTab
-      set((s) => {
+      const split = options?.split
+      const splitGroupId = split ? createBrowserUuid() : undefined
+      set((current) => {
+        const s =
+          split && splitGroupId
+            ? {
+                ...current,
+                ...insertSplitGroup(
+                  current,
+                  worktreeId,
+                  split,
+                  emptySplitGroup(worktreeId, splitGroupId)
+                )
+              }
+            : current
+        const requestedGroupId = splitGroupId ?? targetGroupId
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
         const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
           (entry) => !orphanTerminalIds.has(entry.id)
         )
-        // Why: honor a caller-supplied tab id but mint on collision — aliasing two PTYs to one id corrupts agent-status routing. See docs/cli-terminal-hook-pane-key.md.
-        // Why: only honor a non-empty trimmed hint; useIpcEvents spreads `id` whenever tabId !== undefined, so a stray '' would break paneKey routing.
+        // Trim ID hints: IPC can include empty IDs, which break pane-key routing.
         const trimmedHint = typeof options?.id === 'string' ? options.id.trim() : ''
-        const hintedId =
-          trimmedHint.length > 0 && isValidHostTerminalTabId(trimmedHint) ? trimmedHint : undefined
-        const idCollides =
+        // Why: `web-terminal-` ids are reserved for mirrored host tabs, so an IPC-spread hint must not take one.
+        const hintIsValid = options?.mirroredHostTab
+          ? isValidMirroredHostTerminalTabId(trimmedHint)
+          : isValidHostTerminalTabId(trimmedHint)
+        const hintedId = trimmedHint.length > 0 && hintIsValid ? trimmedHint : undefined
+        // Why: the caller's PTY routes agent status by this id, so a fresh id would orphan it and aliasing would corrupt another tab's.
+        if (
           hintedId !== undefined &&
           Object.values(s.tabsByWorktree).some((tabs) =>
             tabs.some((entry) => entry.id === hintedId)
           )
-        if (idCollides) {
-          console.warn(
-            `[createTab] tabId hint ${hintedId} already exists; minting a fresh id (hook attribution will degrade for this terminal)`
-          )
+        ) {
+          throw new Error(`Terminal tab ${hintedId} already exists`)
         }
-        const id = hintedId !== undefined && !idCollides ? hintedId : createBrowserUuid()
+        const id = hintedId ?? createBrowserUuid()
         const requestedInitialLeafId =
           options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
             ? options.initialLeafId
             : undefined
-        // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
-        const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup
-            ? (requestedInitialLeafId ?? createBrowserUuid())
-            : undefined
+        // Why: name the first pane at creation so the saved layout is never empty; the pane mounts and spawns into this leaf.
+        const initialLeafId = requestedInitialLeafId ?? createBrowserUuid()
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`
@@ -131,8 +142,13 @@ export function createTerminalTabCreationActions(
           ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
-          // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
+          ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
+          // Tag click-driven spawn so bind cannot reorder Recent/Smart via activity/sortEpoch.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
+        }
+        // Switch point: a tab main already made is drawn with main's creation facts.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          tab = withMainTerminalFacts(tab)
         }
         if (options?.launchAgent === 'zcode') {
           // Why here: this is where a ZCode launch is first known, and it runs before the
@@ -140,9 +156,9 @@ export function createTerminalTabCreationActions(
           void warnIfZCodeCannotOpenSession()
         }
         const validTargetGroupId =
-          targetGroupId &&
-          s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)
-            ? targetGroupId
+          requestedGroupId &&
+          s.groupsByWorktree[worktreeId]?.some((group) => group.id === requestedGroupId)
+            ? requestedGroupId
             : undefined
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
           s.groupsByWorktree,
@@ -249,9 +265,8 @@ export function createTerminalTabCreationActions(
             ...s.layoutByWorktree,
             [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
           },
-          // Why: the global selection is the main window's; a tab in another worktree (or the floating workspace) activates only within its own group.
           activeTabId:
-            shouldActivate && s.activeWorktreeId === worktreeId
+            shouldActivate && ownsGlobalSelection(s, worktreeId)
               ? tab.id
               : orphanCleanupPatch.activeTabId,
           activeTabIdByWorktree: {
@@ -276,12 +291,17 @@ export function createTerminalTabCreationActions(
             : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
           terminalLayoutsByTabId: {
             ...orphanCleanupPatch.terminalLayoutsByTabId,
-            [tab.id]: initialLeafId
-              ? singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
-              : emptyLayoutSnapshot()
+            [tab.id]: singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
           }
         }
       })
+      // Switch point: main writes the tab under these ids before any later command names it.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab), {
+          tab,
+          store: { getState: get, setState: (patch) => set(patch), subscribe }
+        })
+      }
       if (options?.initialPtyId) {
         // Why: a tab born with a live PTY (CLI/runtime create) wakes the workspace like any other bind.
         clearWorktreeSleepIntent(worktreeId)
@@ -290,6 +310,9 @@ export function createTerminalTabCreationActions(
         options?.recordInteraction ?? (!options?.pendingActivationSpawn && !options?.initialPtyId)
       if (shouldRecordInteraction) {
         get().recordFeatureInteraction?.('terminal-tabs')
+      }
+      if (splitGroupId) {
+        get().recordFeatureInteraction?.('terminal-panes')
       }
       return tab
     }

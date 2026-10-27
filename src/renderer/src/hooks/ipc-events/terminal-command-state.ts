@@ -1,12 +1,11 @@
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
+import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-registry'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/terminal-tab-types'
-import type { AppState } from '../../store/types'
 
 export function resolveTerminalPresentation(data: {
   presentation?: RuntimeTerminalPresentation
@@ -32,15 +31,6 @@ export function focusTerminalInitiatedTab(
 ): void {
   if (!focusRuntimeTerminalSurface(tabId, leafId, worktreeId)) {
     focusTerminalTabSurface(tabId, leafId)
-  }
-}
-
-export function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
-  store.setActiveView('terminal')
-  store.setActiveWorktree(worktreeId)
-  store.markWorktreeVisited(worktreeId)
-  if (!store.isNavigatingHistory) {
-    store.recordWorktreeVisit(worktreeId)
   }
 }
 

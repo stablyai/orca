@@ -9,17 +9,18 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execu
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
+import {
+  buildWorkspaceRunContext,
+  type WorkspaceRunContext
+} from '../../shared/task-source-context'
+import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
+import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 
 export type AutomationRunTargetResult =
   | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
   | { ok: false; error: string }
 
-/**
- * One fixed sentence per diagnosis, and never the same sentence twice: run
- * coalescing folds repeats on identical error text, so a message that varied per
- * occurrence would write a row each, and a shared one would merge a host that is
- * gone with a host that was replaced.
- */
+// Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
 const CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, string> = {
   [AUTOMATION_ORPHAN_ISSUES.targetMissing]:
     'The automation host is no longer registered, so this automation has nowhere to run.',
@@ -53,6 +54,89 @@ function resolveAutomationOwnerRefusal(store: Store, automation: Automation): st
   return issue ? CAPTURED_HOST_REFUSALS[issue] : NO_RUNNABLE_HOST
 }
 
+const LEGACY_TWIN_REFUSAL =
+  'This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.'
+
+function resolveLegacyAutomationRunTarget(
+  store: Store,
+  automation: Automation
+): AutomationRunTargetResult {
+  const repoId = getAutomationLegacyRepoId(automation)
+  const rows = store.getRepos().filter((entry) => entry.id === repoId)
+  // Reject twin repos before getRepo or owner resolution silently selects one host.
+  if (rows.length > 1) {
+    return { ok: false, error: LEGACY_TWIN_REFUSAL }
+  }
+  const ownerRefusal = resolveAutomationOwnerRefusal(store, automation)
+  if (ownerRefusal) {
+    return { ok: false, error: ownerRefusal }
+  }
+  const repo = rows[0]
+  const cwd = getLegacyPrecheckCwd(store, automation)
+  if (!repo || !cwd) {
+    return { ok: false, error: 'Automation run target is no longer available.' }
+  }
+  return { ok: true, cwd, repo }
+}
+
+/** Capture a legacy host only if the folder and destination stay unchanged. */
+function findLegacyAutomationRunContextStamp(
+  store: Store,
+  automation: Automation,
+  options: AutomationRunTargetOptions
+): WorkspaceRunContext | null {
+  if (automation.runContext) {
+    return null
+  }
+  const legacy = resolveLegacyAutomationRunTarget(store, automation)
+  if (!legacy.ok) {
+    return null
+  }
+  const repoHostId = getRepoExecutionHostId(legacy.repo)
+  const setup = store
+    .getProjectHostSetups()
+    .find((candidate) => candidate.repoId === legacy.repo.id && candidate.hostId === repoHostId)
+  const runContext = setup
+    ? buildWorkspaceRunContext({
+        projectId: setup.projectId,
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: legacy.repo.id,
+        path: setup.path
+      })
+    : null
+  if (!runContext) {
+    return null
+  }
+  const captured = resolveAutomationRunTarget(store, { ...automation, runContext }, options)
+  return captured.ok &&
+    captured.cwd === legacy.cwd &&
+    getRepoExecutionHostId(captured.repo) === repoHostId
+    ? runContext
+    : null
+}
+
+/** Capture before the dispatch snapshot so later checks use the persisted target. */
+export function captureLegacyRunTarget(
+  store: Store,
+  automation: Automation,
+  allowRemoteHostScheduling: boolean
+): Automation {
+  // The scheduler's first write; a fenced row must stay as the move exported it.
+  if (isOrcadFencedAutomation(store, automation)) {
+    throw new AutomationDispatchCancelledError(ORCAD_FENCED_AUTOMATION)
+  }
+  const runContext = findLegacyAutomationRunContextStamp(store, automation, {
+    allowRemoteHostScheduling
+  })
+  if (!runContext) {
+    return automation
+  }
+  // Another run may have captured first, even if this write was refused.
+  store.stampLegacyAutomationRunContext(automation.id, runContext)
+  return store.listAutomations().find((entry) => entry.id === automation.id) ?? automation
+}
+
 export function resolveAutomationRunTarget(
   store: Store,
   automation: Automation,
@@ -60,16 +144,7 @@ export function resolveAutomationRunTarget(
 ): AutomationRunTargetResult {
   const context = automation.runContext ?? null
   if (!context) {
-    const ownerRefusal = resolveAutomationOwnerRefusal(store, automation)
-    if (ownerRefusal) {
-      return { ok: false, error: ownerRefusal }
-    }
-    const repo = store.getRepo(getAutomationLegacyRepoId(automation))
-    const cwd = getLegacyPrecheckCwd(store, automation)
-    if (!repo || !cwd) {
-      return { ok: false, error: 'Automation run target is no longer available.' }
-    }
-    return { ok: true, cwd, repo }
+    return resolveLegacyAutomationRunTarget(store, automation)
   }
   const parsedHost = parseExecutionHostId(context.hostId)
   if (
@@ -83,11 +158,7 @@ export function resolveAutomationRunTarget(
     }
   }
 
-  // Why: removing a host — or removing and re-registering it under the same id —
-  // keeps hostId, repoId and path intact, so every check below still passes while
-  // the host is gone or is a different machine. Asks the list's projection for the
-  // verdict rather than re-deriving one, so the row the user sees as orphaned can
-  // never be the row that quietly keeps firing.
+  // Use the list’s host-generation verdict: matching IDs and paths can survive host replacement.
   const hostIssue = store.automationCapturedHostIssue(automation)
   if (hostIssue) {
     return { ok: false, error: CAPTURED_HOST_REFUSALS[hostIssue] }
@@ -108,9 +179,7 @@ export function resolveAutomationRunTarget(
       error: `Project setup on the selected automation host is ${setup.setupState}.`
     }
   }
-  // Why: projectId is a derived identity that upgrades over time (repo:→git:→github:);
-  // matching on it strands automations created before their repo's identity resolved.
-  // Anchor on repoId/hostId/path instead — the durable, stable target identity.
+  // Derived project IDs evolve; compare stable repo, host and path identities instead.
   if (setup.hostId !== context.hostId || setup.repoId !== context.repoId) {
     return {
       ok: false,

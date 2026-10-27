@@ -1,38 +1,26 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-/**
- * What a host-scoped pathname nothing can paint lands on.
- *
- * The catch-all route is the one switch with no native screen behind it, so its `fallback` cannot
- * be a panel: a pathname the bundle does not list, or lists needing a grant this app lacks, has no
- * renderer on either side. This replaces expo-router's Unmatched there, which says "Unmatched
- * Route" and offers a sitemap link that means nothing to someone holding a stale app.
- *
- * `replace` and not `push`: this screen is a dead end, so leaving it must not leave it behind to
- * come back to.
- *
- * Through `hostStackHostRoute` rather than a template: an id carrying `/` builds a two-segment
- * pathname, and `/h/a/b` is caught by the very route that rendered this, with `hostId` now `a`.
- *
- * An absent id has no host route to return to. `firstParam` answers `''`, and `/h/` matches no
- * screen at all — measured with expo-router's own matcher, it resolves to the `h` layout with no
- * child — so the way out is the app root, which is where `ProtocolBlockScreen` sends the same
- * gesture from the same position. The label follows the target rather than outliving it.
- *
- * `useRouteHandoff` and not `useRouter`: the page renders this screen too, through the catch-all's
- * `.web.tsx` sibling, and there a bare replace navigates inside the WebView to a route the page
- * does not carry instead of leaving it. The seam posts the target to the shell.
- */
-export function PageRouteUnavailableScreen({ hostId }: { hostId: string }) {
+// Catch-all routes have no renderer on either side; show an escape screen instead of Expo’s unusable sitemap.
+// Replace this dead end via route handoff so page navigation reaches the shell. Encode host ids with hostStackHostRoute; missing ids return to app root because /h/ has no child screen.
+export function PageRouteUnavailableScreen({
+  hostId,
+  message = 'This workspace screen is not available on this host.'
+}: {
+  hostId: string
+  message?: string
+}) {
+  useMobileColorScheme()
   const router = useRouteHandoff()
   const target = hostId === '' ? '/' : hostStackHostRoute(hostId)
   const label = hostId === '' ? 'Back to hosts' : 'Back to workspaces'
   return (
     <View style={styles.root} testID="mobile-web-page-route-unavailable">
-      <Text style={styles.message}>This workspace screen is not available on this host.</Text>
+      <Text style={styles.message}>{message}</Text>
       <Pressable
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
         accessibilityRole="button"
@@ -45,7 +33,7 @@ export function PageRouteUnavailableScreen({ hostId }: { hostId: string }) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   root: {
     flex: 1,
     alignItems: 'center',
@@ -73,4 +61,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7
   }
-})
+}))

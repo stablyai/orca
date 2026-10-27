@@ -5,11 +5,7 @@ import type {
   FeedbackRequestFailure
 } from '../../shared/feedback-submit-contract'
 
-// Why: the production Mac build loads the renderer from a file:// origin, so a
-// cross-origin POST from fetch() triggers a CORS preflight that the feedback
-// endpoint rejects. Electron's net module runs in the main process and is not
-// subject to CORS, so we proxy the submission through IPC. This mirrors the
-// same pattern used by updater-changelog.ts and updater-nudge.ts.
+// Main-process HTTP avoids CORS preflights rejected by feedback when packaged renderers use file origins.
 export const FEEDBACK_API_URL = 'https://www.onorca.dev/v1/feedback'
 const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000
 const DIAGNOSTIC_BUNDLE_CONTENT_TYPE = 'application/x-ndjson'
@@ -36,8 +32,6 @@ export type FeedbackSubmitBody = {
   images?: FeedbackImageAttachment[]
 }
 
-export type { FeedbackRequestFailure } from '../../shared/feedback-submit-contract'
-
 export async function postFeedback(
   url: string,
   body: FeedbackSubmitBody,
@@ -45,7 +39,7 @@ export async function postFeedback(
   readResponse?: (response: Response) => Promise<void>
 ): Promise<Response> {
   const controller = new AbortController()
-  // Why: a silent endpoint must not leave feedback IPC pending forever.
+  // Bound IPC even when the endpoint stays silent.
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const init: RequestInit = {
@@ -57,20 +51,20 @@ export async function postFeedback(
     if (readResponse) {
       await readResponse(response)
     }
-    // Why: a response parser may tolerate malformed legacy bodies, but it must
-    // not turn the deadline's aborted body into a confirmed delivery.
+    // Tolerant legacy parsing must not turn an aborted body into confirmed delivery.
     if (controller.signal.aborted) {
       throw new Error(`request timed out after ${timeoutMs / 1000} seconds`)
     }
     return response
   } catch (error) {
-    // Why: Electron and Node report AbortError differently; keep deadline logs stable.
+    // Normalize differing Electron/Node AbortError shapes for stable deadline logs.
     if (controller.signal.aborted) {
       throw new Error(`request timed out after ${timeoutMs / 1000} seconds`)
     }
     throw error
   } finally {
     clearTimeout(timeout)
+    controller.abort()
   }
 }
 
@@ -111,8 +105,7 @@ function feedbackRequestBodyInit(body: FeedbackSubmitBody): Pick<RequestInit, 'b
   }
   appendFeedbackImagesToFormData(formData, body.images ?? [])
 
-  // Why: multipart avoids JSON-escaping a near-cap NDJSON bundle over the
-  // backend request limit while still submitting one feedback request.
+  // Multipart avoids JSON escaping that can push near-cap NDJSON bundles over the backend limit.
   return { body: formData }
 }
 

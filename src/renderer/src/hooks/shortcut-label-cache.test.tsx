@@ -157,7 +157,6 @@ describe('useShortcutLabel', () => {
     render(<CloseLabel />)
     expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧K')
 
-    // Mirrors the store update a Settings edit performs: a brand new overrides object.
     act(() => useAppStore.setState({ keybindings: overridesFor('Mod+Shift+L') }))
     expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧L')
 
@@ -167,7 +166,6 @@ describe('useShortcutLabel', () => {
     act(() => useAppStore.setState({ keybindings: { 'tab.close': [] } }))
     expect(screen.getByTestId('close-label').textContent).toBe('Unassigned')
 
-    // Back to the first binding: a revert must not resurrect the entry cached for the old object.
     act(() => useAppStore.setState({ keybindings: overridesFor('Mod+Shift+K') }))
     expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧K')
   })

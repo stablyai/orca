@@ -3,23 +3,29 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
+import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
+import { planOf, sharedEntry } from '../skills/bundled-skill-plan-fixtures.test-support'
 import { _skillFreshnessCacheForTests } from '@/hooks/useSkillFreshness'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
 
 const mocks = vi.hoisted(() => ({
-  canUseLocalSkillFreshness: true,
+  canUseSkillFreshness: true,
   refreshOrchestrationSkill: vi.fn(async () => true),
   recordFeatureInteraction: vi.fn()
+}))
+
+// Why: these tests count the freshness plans; the button's own plan is covered elsewhere.
+vi.mock('@/hooks/use-bundled-skill-install-action', () => ({
+  useBundledSkillInstallAction: () => ({ kind: 'run' })
 }))
 
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     agentRuntime: undefined,
     discoveryTarget: undefined,
-    terminalShellOverride: undefined,
     installDisabledReason: null,
-    canUseLocalSkillFreshness: mocks.canUseLocalSkillFreshness
+    canUseSkillFreshness: mocks.canUseSkillFreshness,
+    bundledSkillTarget: mocks.canUseSkillFreshness ? { kind: 'local' } : null
   })
 }))
 
@@ -35,25 +41,14 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   notifyInstalledAgentSkillsRefreshed: vi.fn()
 }))
 
-vi.mock('@/components/settings/CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (command: string) => command,
-  buildSkillSetupTerminalCommand: (command: string) => command,
-  ensureWslCliAvailableForAgentSkillTerminal: vi.fn(),
-  getWslCliDistroRequest: () => undefined
-}))
-
-vi.mock('@/components/onboarding/OnboardingInlineCommandTerminal', () => ({
-  OnboardingInlineCommandTerminal: () => null
-}))
-
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => undefined, {
     getState: () => ({ recordFeatureInteraction: mocks.recordFeatureInteraction })
   })
 }))
 
-function inventory(eligibleUpdateNames: string[]): SkillFreshnessInventory {
-  return { schemaVersion: 1, installations: [], eligibleUpdateNames, scanIssues: [], scannedAt: 1 }
+function plan(updateNames: string[]): BundledSkillPlan {
+  return planOf(updateNames.map((name) => sharedEntry(name, 'update')))
 }
 
 let root: Root | null = null
@@ -81,7 +76,7 @@ async function renderDialog(): Promise<void> {
 describe('FloatingTerminalOrchestrationDialog freshness', () => {
   beforeEach(() => {
     _skillFreshnessCacheForTests.reset()
-    mocks.canUseLocalSkillFreshness = true
+    mocks.canUseSkillFreshness = true
     mocks.refreshOrchestrationSkill.mockClear()
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -99,17 +94,18 @@ describe('FloatingTerminalOrchestrationDialog freshness', () => {
   })
 
   it('refreshes the local freshness verdict after presence re-check completes', async () => {
-    const freshnessInventory = vi
+    const bundledPlan = vi
       .fn()
-      .mockResolvedValueOnce(inventory(['orchestration']))
-      .mockResolvedValueOnce(inventory([]))
+      .mockResolvedValueOnce(plan(['orchestration']))
+      .mockResolvedValueOnce(plan([]))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
     window.api = {
-      skills: { freshnessInventory },
+      skills: { bundledPlan },
       cli: { getInstallStatus: vi.fn().mockResolvedValue({ onPath: true }) }
     } as never
 
     await renderDialog()
-    expect(freshnessInventory).toHaveBeenCalledOnce()
+    expect(bundledPlan).toHaveBeenCalledOnce()
     expect(document.body.textContent).toContain('Update available')
 
     await act(async () => {
@@ -118,15 +114,16 @@ describe('FloatingTerminalOrchestrationDialog freshness', () => {
     await act(async () => {})
 
     expect(mocks.refreshOrchestrationSkill).toHaveBeenCalledOnce()
-    expect(freshnessInventory).toHaveBeenCalledTimes(2)
+    expect(bundledPlan).toHaveBeenCalledTimes(2)
     expect(document.body.textContent).not.toContain('Update available')
   })
 
   it('never reads client freshness for an SSH-owned skill', async () => {
-    mocks.canUseLocalSkillFreshness = false
-    const freshnessInventory = vi.fn().mockResolvedValue(inventory([]))
+    mocks.canUseSkillFreshness = false
+    const bundledPlan = vi.fn().mockResolvedValue(plan([]))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
     window.api = {
-      skills: { freshnessInventory },
+      skills: { bundledPlan },
       cli: { getInstallStatus: vi.fn().mockResolvedValue({ onPath: true }) }
     } as never
 
@@ -139,6 +136,6 @@ describe('FloatingTerminalOrchestrationDialog freshness', () => {
     await act(async () => {})
 
     expect(mocks.refreshOrchestrationSkill).toHaveBeenCalledOnce()
-    expect(freshnessInventory).not.toHaveBeenCalled()
+    expect(bundledPlan).not.toHaveBeenCalled()
   })
 })

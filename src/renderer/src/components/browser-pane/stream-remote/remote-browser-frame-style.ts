@@ -1,16 +1,23 @@
 import type { CSSProperties } from 'react'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import { getPositiveFiniteNumber } from './remote-browser-page-input-model'
 
+// Use the host’s displayed CSS viewport; bitmap dimensions vary with DPR and frame-budget scaling.
 export function getRemoteBrowserFrameStyle(
-  _metadata: BrowserScreencastFrameMetadata | null
+  metadata: BrowserScreencastFrameMetadata | null
 ): CSSProperties {
-  // Why: the runtime now rejects server-sized frames when a client viewport was
-  // requested. The renderer should display that authoritative viewport exactly,
-  // not infer crop/contain behavior from transient bitmap dimensions.
+  const width = getPositiveFiniteNumber(metadata?.deviceWidth)
+  const height = getPositiveFiniteNumber(metadata?.deviceHeight)
+  if (!width || !height) {
+    return { width: '100%', height: '100%', objectFit: 'fill', objectPosition: 'top left' }
+  }
+  // Contain smaller or pre-resize frames without distortion; pointer mapping uses this same letterboxed box.
+  const aspect = width / height
   return {
-    width: '100%',
-    height: '100%',
-    objectFit: 'fill',
-    objectPosition: 'top left'
+    inset: 0,
+    margin: 'auto',
+    width: `min(100cqw, calc(100cqh * ${aspect}))`,
+    height: `min(100cqh, calc(100cqw / ${aspect}))`,
+    objectFit: 'fill'
   }
 }

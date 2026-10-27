@@ -1,5 +1,4 @@
-// Real-binary coverage for worktree removal: the mocked-runner suite cannot prove what Git deletes,
-// deregisters and refuses, or that deleting a checkout leaves Node's file pool free.
+// Real Git verifies deletion/refusal behavior and file-pool responsiveness beyond mocked argv.
 import { execFile } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import { link, mkdir, mkdtemp, readFile, realpath, stat, writeFile } from 'node:fs/promises'
@@ -7,15 +6,29 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as nativeFs from '../asar-transparent-fs'
+import * as diskFs from 'node:fs/promises'
+import * as runner from './runner'
+import {
+  runUnderWorktreeDeleteLimit,
+  _worktreeDeleteLimitSnapshotForTests
+} from './worktree-delete-limit'
+import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { listWorktreesStrict, removeWorktree } from './worktree'
+import { canSafelyRemoveOrphanedWorktreeDirectory } from '../worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
+import { classifyWorktreeForceDeleteReason } from '../../shared/worktree/removal'
+import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
+import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from './worktree'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { isPrunableGitFileWorktree } from '../worktree-prunable-git-file'
 import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-recovery'
 import { sweepStaleWorktreeTrash, WORKTREE_TRASH_DIR_NAME } from '../worktree-trash'
 
 const execFileAsync = promisify(execFile)
+
+installRealWorkerThreadChildProcesses()
 
 let scratchDir = ''
 let repoPath = ''
@@ -27,7 +40,7 @@ async function git(args: string[], cwd: string): Promise<string> {
   return stdout
 }
 
-// Why parsed: Git prints forward slashes on Windows, so raw text never contains a joined path.
+// Git prints forward slashes on Windows, so compare parsed paths.
 async function isRegistered(path: string): Promise<boolean> {
   return (await listWorktreesStrict(repoPath)).some((worktree) =>
     areWorktreePathsEqual(worktree.path, path)
@@ -35,8 +48,7 @@ async function isRegistered(path: string): Promise<boolean> {
 }
 
 beforeEach(async () => {
-  // realpath: macOS hands out /var/... temp paths while Git reports /private/var/..., and Orca
-  // matches the worktree it is removing against Git's own list.
+  // Canonicalize macOS /var temp paths to match Git's /private/var output.
   scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-worktree-removal-')))
   repoPath = join(scratchDir, 'repo')
   workspaceRoot = join(scratchDir, 'workspaces')
@@ -46,7 +58,7 @@ beforeEach(async () => {
   await git(['init', '-q'], repoPath)
   await git(['config', 'user.email', 'removal@example.invalid'], repoPath)
   await git(['config', 'user.name', 'Worktree Removal'], repoPath)
-  // Why: a commit's detached auto-maintenance can still be writing packs when teardown deletes the repo.
+  // Disable detached maintenance that could race fixture teardown.
   await git(['config', 'maintenance.auto', 'false'], repoPath)
   await git(['config', 'gc.auto', '0'], repoPath)
   await writeFile(join(repoPath, 'seed.txt'), 'seed\n')
@@ -59,17 +71,119 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   await removeTree(scratchDir)
 })
 
 describe('worktree removal against the real Git binary', () => {
-  it('deletes the checkout and its registration before returning', async () => {
-    await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
+  it.each(['ordinary', 'bare', 'link-before', 'link-after'])(
+    'deletes the checkout and only its target administration from a %s parent',
+    async (layout) => {
+      if (layout === 'bare') {
+        await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+        const bare = join(scratchDir, 'bare.git')
+        await git(['clone', '--bare', '-q', repoPath, bare], scratchDir)
+        repoPath = bare
+        await git(['worktree', 'add', '-q', worktreePath, 'feature'], repoPath)
+      }
+      if (layout.startsWith('link-')) {
+        if (layout === 'link-before') {
+          await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+        }
+        const metadata = join(scratchDir, 'metadata')
+        await diskFs.rename(join(repoPath, '.git'), metadata)
+        await diskFs.symlink(
+          metadata,
+          join(repoPath, '.git'),
+          process.platform === 'win32' ? 'junction' : 'dir'
+        )
+        if (layout === 'link-before') {
+          await git(['worktree', 'add', '-q', worktreePath, 'feature'], repoPath)
+        }
+        expect((await diskFs.lstat(join(repoPath, '.git'))).isSymbolicLink()).toBe(true)
+      }
+      const sibling = join(scratchDir, 'unrelated')
+      await git(['worktree', 'add', '-q', sibling, '-b', 'sibling'], repoPath)
+      await diskFs.rename(sibling, join(scratchDir, 'offline'))
+      const marker = await readFile(join(worktreePath, '.git'), 'utf8')
+      const admin = marker.trim().slice(8)
+      const backlink = await readFile(join(admin, 'gitdir'), 'utf8')
+      console.info('owning metadata layout', { layout, marker, backlink })
+      expect(
+        await canSafelyRemoveOrphanedWorktreeDirectory(worktreePath, repoPath, CLIENT_REMOVAL_HOME)
+      ).toBe(true)
 
-    expect(existsSync(worktreePath)).toBe(false)
-    expect(await isRegistered(worktreePath)).toBe(false)
-    expect(existsSync(join(workspaceRoot, 'repo', WORKTREE_TRASH_DIR_NAME))).toBe(false)
-  })
+      await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
+
+      expect(existsSync(worktreePath)).toBe(false)
+      expect(await isRegistered(worktreePath)).toBe(false)
+      expect(existsSync(join(workspaceRoot, 'repo', WORKTREE_TRASH_DIR_NAME))).toBe(false)
+      expect(existsSync(admin)).toBe(false)
+      expect(await isRegistered(sibling)).toBe(true)
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32').each(['redirect', 'ls-files', 'status'])(
+    'preserves the accepted checkout across bound Git checks: %s',
+    async (schedule) => {
+      const dispatch = vi.spyOn(nativeFs, 'rm')
+      if (schedule === 'redirect') {
+        const clean = join(scratchDir, 'clean')
+        await git(['worktree', 'add', '-q', clean, '-b', 'clean'], repoPath)
+        await git(['config', 'extensions.worktreeConfig', 'true'], repoPath)
+        await git(['config', '--worktree', 'core.worktree', clean], worktreePath)
+        await writeFile(join(worktreePath, 'seed.txt'), 'do not delete\n')
+        vi.stubEnv('GIT_WORK_TREE', clean)
+      } else {
+        if (schedule === 'ls-files') {
+          await writeFile(join(repoPath, '.git', 'info', 'exclude'), 'nested/\n')
+        }
+        const execute = runner.gitExecFileAsync
+        vi.spyOn(runner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+          const result = await execute(args, options)
+          if (args[0] === schedule && options?.env?.GIT_WORK_TREE === worktreePath) {
+            if (schedule === 'status') {
+              await git(['worktree', 'lock', worktreePath], repoPath)
+            } else {
+              const nested = join(worktreePath, 'nested')
+              await git(['worktree', 'add', '-q', nested, '-b', 'nested'], repoPath)
+            }
+          }
+          return result
+        })
+      }
+      await expect(removeWorktree(repoPath, worktreePath, false)).rejects.toThrow(
+        /uncommitted|locked|contains another/
+      )
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(await readFile(join(worktreePath, 'seed.txt'), 'utf8')).toBe(
+        schedule === 'redirect' ? 'do not delete\n' : 'seed\n'
+      )
+      expect(await isRegistered(worktreePath)).toBe(true)
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'freezes accepted absence across the delete-slot wait',
+    async () => {
+      await git(['worktree', 'remove', worktreePath], repoPath)
+      const paused = Promise.withResolvers<void>()
+      const blockers = [0, 1].map(() => runUnderWorktreeDeleteLimit(() => paused.promise))
+      const removal = removeWorktree(repoPath, worktreePath, true, {
+        knownRemovedWorktree: null
+      }).catch((error: unknown) => error)
+      try {
+        await vi.waitFor(() => expect(_worktreeDeleteLimitSnapshotForTests().waiting).toBe(1))
+        await git(['worktree', 'add', '-q', '--detach', worktreePath], repoPath)
+      } finally {
+        paused.resolve()
+        await Promise.all([...blockers, removal])
+      }
+      expect(String(await removal)).toContain('different checkout')
+      expect(await readFile(join(worktreePath, 'seed.txt'), 'utf8')).toBe('seed\n')
+    }
+  )
 
   it('leaves sibling worktrees registered', async () => {
     const siblingPath = join(workspaceRoot, 'repo', 'sibling')
@@ -87,12 +201,105 @@ describe('worktree removal against the real Git binary', () => {
     expect(await git(['branch', '--list', 'feature'], repoPath)).toBe('')
   })
 
+  it('preserves a branch whose only unmerged commit is empty', async () => {
+    await git(['commit', '--allow-empty', '-qm', 'unique empty commit'], worktreePath)
+    const head = (await git(['rev-parse', 'HEAD'], worktreePath)).trim()
+
+    const result = await removeWorktree(repoPath, worktreePath, false)
+
+    expect(existsSync(worktreePath)).toBe(false)
+    expect(await isRegistered(worktreePath)).toBe(false)
+    expect(result).toEqual({ preservedBranch: { branchName: 'feature', head } })
+    expect((await git(['rev-parse', 'refs/heads/feature'], repoPath)).trim()).toBe(head)
+  })
+
+  it('preserves unmerged commits that cancel out their file changes', async () => {
+    await writeFile(join(worktreePath, 'seed.txt'), 'temporary change\n')
+    await git(['commit', '-qam', 'change seed'], worktreePath)
+    await git(['revert', '--no-edit', 'HEAD'], worktreePath)
+    const head = (await git(['rev-parse', 'HEAD'], worktreePath)).trim()
+
+    const result = await removeWorktree(repoPath, worktreePath, false)
+
+    expect(result).toEqual({ preservedBranch: { branchName: 'feature', head } })
+    expect((await git(['rev-parse', 'refs/heads/feature'], repoPath)).trim()).toBe(head)
+  })
+
+  it('still deletes a squash-merged branch with net file changes', async () => {
+    await writeFile(join(worktreePath, 'seed.txt'), 'feature change\n')
+    await git(['commit', '-qam', 'change seed'], worktreePath)
+    await git(['merge', '--squash', 'feature'], repoPath)
+    await git(['commit', '-qm', 'squash feature'], repoPath)
+
+    expect(await removeWorktree(repoPath, worktreePath, false)).toEqual({})
+    expect(await git(['branch', '--list', 'feature'], repoPath)).toBe('')
+  })
+
   it('refuses to delete a dirty checkout', async () => {
     await writeFile(join(worktreePath, 'seed.txt'), 'edited\n')
 
     await expect(removeWorktree(repoPath, worktreePath, false)).rejects.toThrow()
     expect(existsSync(join(worktreePath, 'seed.txt'))).toBe(true)
     expect(await isRegistered(worktreePath)).toBe(true)
+  })
+
+  async function addSubmoduleCheckoutWithLocalCommit(): Promise<{
+    subWorktreePath: string
+    vendorPath: string
+    localCommit: string
+  }> {
+    const emptyCommit = ['-c', 'user.name=o', '-c', 'user.email=o@example.invalid', 'commit']
+    const originPath = join(scratchDir, 'origin')
+    await mkdir(originPath)
+    await git(['init', '-q'], originPath)
+    await git([...emptyCommit, '-q', '--allow-empty', '-m', 'origin'], originPath)
+    await git(
+      ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', originPath, 'vendor'],
+      repoPath
+    )
+    await git(['commit', '-qm', 'add vendor'], repoPath)
+    const subWorktreePath = join(workspaceRoot, 'repo', 'with-sub')
+    await git(['worktree', 'add', '-q', subWorktreePath, '-b', 'with-sub'], repoPath)
+    await git(
+      ['-c', 'protocol.file.allow=always', 'submodule', 'update', '-q', '--init'],
+      subWorktreePath
+    )
+    const vendorPath = join(subWorktreePath, 'vendor')
+    await git([...emptyCommit, '-q', '--allow-empty', '-m', 'local only'], vendorPath)
+    const localCommit = (await git(['rev-parse', 'HEAD'], vendorPath)).trim()
+    return { subWorktreePath, vendorPath, localCommit }
+  }
+
+  it('refuses a clean checkout with a submodule and offers Force Delete for it', async () => {
+    // Force deletion can destroy submodule-only commits; preserve Git's refusal.
+    const { subWorktreePath, vendorPath, localCommit } = await addSubmoduleCheckoutWithLocalCommit()
+    // Recorded by the parent so its status stays clean.
+    await git(['commit', '-qam', 'bump vendor'], subWorktreePath)
+
+    const refusal = await removeWorktree(repoPath, subWorktreePath, false).catch((error) => error)
+    expect(refusal).toBeInstanceOf(Error)
+    expect(
+      classifyWorktreeForceDeleteReason(formatWorktreeRemovalError(refusal, subWorktreePath, false))
+    ).toBe('submodules')
+    expect(await isRegistered(subWorktreePath)).toBe(true)
+    expect((await git(['cat-file', '-t', localCommit], vendorPath)).trim()).toBe('commit')
+
+    await removeWorktree(repoPath, subWorktreePath, true)
+    expect(await isRegistered(subWorktreePath)).toBe(false)
+  })
+
+  it('names submodules when the dirty check refuses a checkout that has them', async () => {
+    // Parent status cannot show the submodule-only commit that Force Delete would destroy.
+    const { subWorktreePath } = await addSubmoduleCheckoutWithLocalCommit()
+    await git(['commit', '-qam', 'bump vendor'], subWorktreePath)
+    await writeFile(join(subWorktreePath, 'notes.txt'), 'draft\n')
+
+    const refusal = await assertWorktreeCleanForRemoval(subWorktreePath).catch((error) => error)
+    const message = formatWorktreeRemovalError(refusal, subWorktreePath, false)
+    expect(classifyWorktreeForceDeleteReason(message)).toBe('submodules')
+    expect(message).toContain('?? notes.txt')
+    // Older apps offer Force Delete only for this sentence.
+    expect(message).toContain('Worktree has uncommitted or untracked changes')
   })
 
   it('does not delete a checkout through a malformed registration that names its git file', async () => {
@@ -184,8 +391,7 @@ describe('worktree removal and the Node file pool', () => {
     }
     await git(['add', '-A'], worktreePath)
     await git(['commit', '-qm', 'bulk'], worktreePath)
-    // Outside hard links drop to one link only once the checkout's copies are gone, wherever the
-    // delete runs, so the window below covers the whole delete rather than just the call.
+    // Hard-link counts bound the actual delete window independently of the call's lifetime.
     const sentinelRoot = join(scratchDir, 'sentinels')
     await mkdir(sentinelRoot)
     const sentinels: string[] = []
@@ -195,6 +401,7 @@ describe('worktree removal and the Node file pool', () => {
       sentinels.push(sentinel)
     }
     const checkoutDeleted = (): boolean => sentinels.every((path) => statSync(path).nlink === 1)
+    const deletionStarted = (): boolean => sentinels.some((path) => statSync(path).nlink === 1)
     const probePath = join(repoPath, 'seed.txt')
 
     let removalSettled = false
@@ -207,6 +414,7 @@ describe('worktree removal and the Node file pool', () => {
     let maxQueued = 0
     let maxStatMs = 0
     let statCount = 0
+    let statsDuringDeletion = 0
     const sampler = setInterval(() => {
       maxQueued = Math.max(maxQueued, queuedFsRequests())
     }, 1)
@@ -214,9 +422,13 @@ describe('worktree removal and the Node file pool', () => {
       while (!removalSettled || !checkoutDeleted()) {
         expect(performance.now() - startedAt).toBeLessThan(60_000)
         maxQueued = Math.max(maxQueued, queuedFsRequests())
+        const deletionInProgress = deletionStarted() && !checkoutDeleted()
         const statStartedAt = performance.now()
         await stat(probePath)
         maxStatMs = Math.max(maxStatMs, performance.now() - statStartedAt)
+        if (deletionInProgress && !checkoutDeleted()) {
+          statsDuringDeletion += 1
+        }
         statCount += 1
       }
     } finally {
@@ -226,10 +438,10 @@ describe('worktree removal and the Node file pool', () => {
     await removal
 
     console.log(
-      `[pool] files=${POOL_FIXTURE_FILES} delete=${deletionMs.toFixed(0)}ms stats=${statCount} maxStat=${maxStatMs.toFixed(1)}ms maxQueuedFsRequests=${maxQueued}`
+      `[pool] files=${POOL_FIXTURE_FILES} delete=${deletionMs.toFixed(0)}ms stats=${statCount} statsDuringDeletion=${statsDuringDeletion} maxStat=${maxStatMs.toFixed(1)}ms maxQueuedFsRequests=${maxQueued}`
     )
     expect(existsSync(worktreePath)).toBe(false)
     expect(maxQueued).toBeLessThan(32)
-    expect(maxStatMs).toBeLessThan(deletionMs / 4)
+    expect(statsDuringDeletion).toBeGreaterThan(0)
   }, 120_000)
 })

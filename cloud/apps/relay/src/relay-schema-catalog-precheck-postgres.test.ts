@@ -13,16 +13,12 @@ import {
   type RelayDatabase
 } from './database.js'
 
-// The outage this guards against: CREATE INDEX IF NOT EXISTS takes its relation lock before the
-// server evaluates the existence test, so on a database that already has the index the boot still
-// joins the lock queue, and relation locks are granted in queue order, so every writer queues
-// behind it. Only a real server can show that the catalog pre-check removes those statements.
+// IF NOT EXISTS acquires relation locks before checking existence, queueing writers behind boot DDL; prove catalog prechecks avoid it on a real server.
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 const schema = 'relay_schema_precheck_test'
 
-// A table the boot would otherwise touch with two CREATE INDEX statements, and the largest table
-// in production.
+// Largest production table, otherwise touched by two boot CREATE INDEX statements.
 const LOCKED_TABLE = 'relay_control_connection_reservations'
 
 function scopedUrl(): string {
@@ -56,8 +52,7 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
       await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`)
       await client.query(`CREATE SCHEMA ${schema}`)
     })
-    // Same lock bound the boot pool uses, so a statement that still queues fails instead of
-    // hanging the test.
+    // Match boot’s lock timeout so any DDL still queued fails promptly.
     pool = new pg.Pool({ connectionString: url, max: 1, lock_timeout: POSTGRES_LOCK_TIMEOUT_MS })
     sent = []
   })
@@ -90,7 +85,6 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
 
     sent = []
     const warm = await applyRecording()
-    // Zero, with no exceptions: every statement that takes a relation lock has a pre-check.
     expect(lockTaking()).toEqual([])
     const preCheckedCount = relayPostgresSchemaStatements().filter(
       (statement) => schemaLockTarget(statement) !== undefined
@@ -104,8 +98,7 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
 
   it('skips an index a failed concurrent build left invalid instead of rebuilding it', async () => {
     await applyRecording()
-    // A cancelled CREATE INDEX CONCURRENTLY leaves exactly this state, and IF NOT EXISTS skips it
-    // too, so reading indisvalid as a condition would newly take the lock it used to avoid.
+    // Cancelled concurrent indexes can be invalid; IF NOT EXISTS still skips them, so indisvalid must not newly trigger DDL.
     await pool.query(
       `UPDATE pg_catalog.pg_index SET indisvalid = false
        WHERE indexrelid = to_regclass('${schema}.relay_audit_events_at')`
@@ -117,8 +110,7 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
   })
 
   it('re-adds a constraint an operator dropped, then skips it again', async () => {
-    // The pre-check matches the constraint by name only, so this is the one shape where a changed
-    // body needs an operator: drop it, and the next boot puts the current definition back.
+    // Name-only constraint checks require operators to drop changed definitions before boot recreates them.
     await applyRecording()
     const named = async (): Promise<number> =>
       Number(
@@ -148,9 +140,7 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
   })
 
   it('does not let a same-named index on a sibling table answer for this one', async () => {
-    // Index names are unique per schema, not per table, so a name freed on one table and taken on
-    // another is reachable. Without tying the index to the table, the pre-check reads that sibling
-    // as this table's index and skips the real CREATE INDEX for good.
+    // Index names are schema-wide; bind name to table or a sibling’s index can permanently suppress the real CREATE.
     await applyRecording()
     const ask = async (table: string): Promise<boolean> =>
       (
@@ -171,8 +161,7 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
   })
 
   it('boots while another session holds ACCESS EXCLUSIVE on the largest table', async () => {
-    // The end-to-end proof through openRelayDatabase: with the lock held, any DDL the boot still
-    // sent against this table would hit lock_timeout, and 55P03 is no longer retried.
+    // Exercise openRelayDatabase: leftover DDL against the held lock would fail with unretried 55P03.
     const cold = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
     opened.push(cold)
     await pool.end()
@@ -190,10 +179,49 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
     }
   })
 
+  it('throttles the reservations vacuum, deferring it while a vacuum holds the table', async () => {
+    const reservationOptions = async (): Promise<unknown> =>
+      (
+        await pool.query(`SELECT reloptions FROM pg_class WHERE oid = to_regclass($1)`, [
+          `${schema}.${LOCKED_TABLE}`
+        ])
+      ).rows[0]?.reloptions
+    const cold = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
+    opened.push(cold)
+    expect(await reservationOptions()).toEqual([
+      'autovacuum_vacuum_cost_delay=20',
+      'autovacuum_vacuum_cost_limit=200'
+    ])
+    await pool.query(
+      `ALTER TABLE ${schema}.${LOCKED_TABLE}
+         RESET (autovacuum_vacuum_cost_delay, autovacuum_vacuum_cost_limit)`
+    )
+
+    // The lock a running (auto)vacuum holds; the boot must yield to it rather than fail.
+    const holder = new pg.Client({ connectionString: url })
+    await holder.connect()
+    await holder.query('BEGIN')
+    await holder.query(`LOCK TABLE ${LOCKED_TABLE} IN SHARE UPDATE EXCLUSIVE MODE`)
+    try {
+      const behindVacuum = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
+      opened.push(behindVacuum)
+    } finally {
+      await holder.query('ROLLBACK')
+      await holder.end()
+    }
+    expect(await reservationOptions()).toBeNull()
+
+    const next = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
+    opened.push(next)
+    expect(await reservationOptions()).toEqual([
+      'autovacuum_vacuum_cost_delay=20',
+      'autovacuum_vacuum_cost_limit=200'
+    ])
+    await pool.end()
+  })
+
   it('defers the activity-lease migrations and still boots while their table is locked', async () => {
-    // The migration boot, reproduced: the index is there, the table is locked by someone else, and
-    // all the drop can do is time out. It has to leave the statement for the next boot rather than
-    // fail, or 28 directors crash-loop through a stall on a table written ~475/s.
+    // Migration DROP must defer behind writers or 28 directors crash-loop on a table written ~475/s.
     const cold = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
     opened.push(cold)
     // Put the database back in its pre-migration shape, which is what makes the drop lock-taking.
@@ -226,7 +254,6 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
       warn.mockRestore()
     }
 
-    // Both statements deferred, and the boot still applied everything else.
     expect(summary.deferred).toBe(2)
     expect(summary.ran).toBeGreaterThan(0)
     const deferred = warned
@@ -236,14 +263,12 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
       'relay_assignment_activity_expiry',
       'fillfactor=70'
     ])
-    // Nothing was applied, so the next boot has the same work to do, not half of it.
     const stillThere = await pool.query(
       `SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2`,
       [schema, 'relay_assignment_activity_expiry']
     )
     expect(stillThere.rowCount).toBe(1)
 
-    // And the next boot, with the lock gone, finishes the job.
     const retry = await applyPostgresSchema(
       relayPostgresSchemaStatements(),
       (statement) => pool.query(statement),

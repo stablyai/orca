@@ -1,9 +1,6 @@
-// The host journal database for a test's state directory. One per directory per test process, as
-// one per state directory per host process in production, so a test that "restarts" a host on the
-// same directory reads the same database the way a restarted host would.
+// Share one connection per test profile to match production host ownership.
 
 import { resolve } from 'node:path'
-import { NO_LEGACY_JOURNAL_RECORDS } from './journal-database'
 import { JournalHostDatabase } from './journal-host-database'
 import { replayJournal, type JournalLoad } from './journal-open'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
@@ -16,7 +13,6 @@ import {
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
-import { openAgentSessionJournal } from './journal-store-factory'
 
 const opened = new Map<string, JournalHostDatabase>()
 
@@ -26,19 +22,17 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
   if (existing && !existing.isClosed) {
     return existing
   }
-  const database = JournalHostDatabase.openWith(directory, NO_LEGACY_JOURNAL_RECORDS)
+  const database = JournalHostDatabase.open(directory)
   opened.set(directory, database)
   return database
 }
 
-/** Closes this directory's database, so the next open reads the file as a fresh process would. */
 export function closeTestJournalHostDatabase(stateDirectory: string): void {
   const directory = resolve(stateDirectory)
   opened.get(directory)?.close()
   opened.delete(directory)
 }
 
-/** Closes every database this process opened for tests. */
 export function closeTestJournalHostDatabases(): void {
   for (const database of opened.values()) {
     database.close()
@@ -47,14 +41,12 @@ export function closeTestJournalHostDatabases(): void {
 }
 
 export type TestJournalOptions = Omit<AgentSessionJournalOptions, 'database'> & {
-  /** The state directory whose one journal database holds this chat. */
   stateDirectory: string
 }
 
 export type TrackedJournalOpener = {
   open: (options: TestJournalOptions) => Promise<AgentSessionJournal>
   track: <T extends AgentSessionJournal>(journal: T) => T
-  /** Drains every tracked journal, then closes the databases. */
   closeAll: () => Promise<void>
 }
 
@@ -62,6 +54,7 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
   const journals: AgentSessionJournal[] = []
   return {
     open: async ({ stateDirectory, ...options }) => {
+      const { openAgentSessionJournal } = await import('./journal-store-factory')
       const journal = await openAgentSessionJournal({
         ...options,
         database: openTestJournalHostDatabase(stateDirectory)
@@ -80,12 +73,16 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
   }
 }
 
-/** What a fresh open of the chat would replay, read from the test state directory's database. */
+export const SAVED_BY_NEWER_ORCA = {
+  refusal: {
+    code: 'agent_session_journal_unreadable',
+    details: { reason: 'journalWrittenByNewerOrca' }
+  }
+}
+
 export function loadTestJournal(stateDirectory: string, sessionId: string): JournalLoad | null {
   return replayJournal(openTestJournalHostDatabase(stateDirectory).db, sessionId)
 }
-
-// Staging on-disk states for a case, addressed the way the case thinks of them: by chat and sequence.
 
 function liveEpoch(db: Database.Database, sessionId: string): string {
   const epoch = readJournalSessionEpoch(db, sessionId)
@@ -95,7 +92,6 @@ function liveEpoch(db: Database.Database, sessionId: string): string {
   return epoch
 }
 
-/** Points the chat at a new epoch, as a publish would. */
 export function publishTestJournalEpoch(
   db: Database.Database,
   sessionId: string,
@@ -104,7 +100,6 @@ export function publishTestJournalEpoch(
   publishJournalSessionEpoch(db, { sessionId, workspaceId: 'ws-1' }, epoch)
 }
 
-/** The chat's rows of `epoch` — none once that epoch is no longer the live one. */
 export function readTestJournalRows(
   db: Database.Database,
   sessionId: string,
@@ -115,13 +110,11 @@ export function readTestJournalRows(
     : []
 }
 
-/** The chat's rows of whichever epoch is live now. */
 export function liveTestJournalRows(db: Database.Database, sessionId: string): JournalStoredRow[] {
   const epoch = readJournalSessionEpoch(db, sessionId)
   return epoch === null ? [] : [...iterateJournalEpochRows(db, sessionId, epoch)]
 }
 
-/** The row under the chat's live epoch, whatever epoch its body names. */
 export function insertTestJournalRow(
   db: Database.Database,
   sessionId: string,
@@ -130,7 +123,6 @@ export function insertTestJournalRow(
   insertTestJournalRowJson(db, sessionId, row.seq, serializeJournalRow(row), row.ts)
 }
 
-/** A raw `row_json` at `seq`, the way a newer build or a bad write would leave it. */
 export function insertTestJournalRowJson(
   db: Database.Database,
   sessionId: string,

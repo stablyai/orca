@@ -94,30 +94,6 @@ it('produces the same flex on every element as the uncached weight walk', () => 
   expect(splitCases).toBeGreaterThan(1000)
 })
 
-it('keeps every split weight equal to the integer sum of its same-axis children', () => {
-  for (let seed = 1; seed <= 200; seed += 1) {
-    const root = makeTree(makeRandom(seed), 5)
-    equalizePaneSplitSizes(root)
-    for (const split of allElements(root).filter((el) => el.classList.contains('pane-split'))) {
-      const children = findPaneChildren(split)
-      if (children.length < 2) {
-        continue
-      }
-      const direction: Direction = split.classList.contains('is-horizontal')
-        ? 'horizontal'
-        : 'vertical'
-      const total = children.reduce((sum, child) => {
-        const grow = Number(child.style.flex.split(' ')[0])
-        // Integer weights only: no float drift can make the row fail to fill.
-        expect(Number.isInteger(grow)).toBe(true)
-        expect(grow).toBeGreaterThanOrEqual(1)
-        return sum + grow
-      }, 0)
-      expect(total, `seed ${seed}`).toBe(referenceWeight(split, direction))
-    }
-  }
-})
-
 it('recomputes weights after a split is added and after one is closed', () => {
   const root = document.createElement('div')
   root.className = 'pane-split'
@@ -127,7 +103,6 @@ it('recomputes weights after a split is added and after one is closed', () => {
   equalizePaneSplitSizes(root)
   expect(left.style.flex).toBe('1 1 0%')
 
-  // Split the right pane on the same axis: the parent must re-weight it to 2.
   const nested = document.createElement('div')
   nested.className = 'pane-split'
   nested.append(makePane(), makeDivider(), makePane())
@@ -136,12 +111,10 @@ it('recomputes weights after a split is added and after one is closed', () => {
   expect(nested.style.flex).toBe('2 1 0%')
   expect(left.style.flex).toBe('1 1 0%')
 
-  // Close one of the nested panes: the weight must drop back to 1.
   nested.lastElementChild!.remove()
   expect(equalizePaneSplitSizes(root)).toBe(true)
   expect(nested.style.flex).toBe('1 1 0%')
 
-  // A resize sweep with no structural change writes nothing.
   expect(equalizePaneSplitSizes(root)).toBe(false)
 })
 

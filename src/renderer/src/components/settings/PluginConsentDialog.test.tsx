@@ -103,8 +103,6 @@ describe('PluginConsentDialog', () => {
   it('shows provenance, capabilities, worker warning, and focuses the safe default', async () => {
     await renderConsent(plugin, vi.fn().mockResolvedValue(undefined))
 
-    // Provenance leads with a short badge + a short trust chip; the full
-    // source URL and commit are tucked behind the "Source" details popover.
     expect(document.body.textContent).toContain(plugin.publisher)
     expect(document.body.textContent).toContain('Worker')
     expect(

@@ -9,13 +9,8 @@ import {
 } from './schedule-driver'
 import type { RecordingScenario } from './recording-scenario'
 
-/**
- * One golden and the scenarios it is recorded from. Derived here rather than inside the suites so
- * the census and `rpc:record --prune` read the same derivation that records the file: a restated
- * expansion could agree with itself while disagreeing with what was recorded.
- *
- * Every `title` starts with the golden id, so `rpc:record <id>` can select it by test name.
- */
+// Share derivation with census/pruning so all consumers enumerate the recordings actually written.
+// Prefix titles with golden ids so rpc:record can select by test name.
 export type DerivedGolden = {
   id: string
   title: string
@@ -53,10 +48,29 @@ function baseScenario(manifest: readonly RecordingScenario[], id: string): Recor
   return found
 }
 
-/** The manifest scenario a pilot golden expands from, which its suite also mounts and mutates. */
+function omitRetiredInventoryAdmission(scenario: RecordingScenario): RecordingScenario {
+  if (
+    scenario.id !== 'inventory-lifecycle.unmount-before-1' &&
+    scenario.id !== 'inventory-lifecycle.reset-before-1'
+  ) {
+    return scenario
+  }
+  // A late search refusal cannot start an inventory after its owner retires.
+  return {
+    ...scenario,
+    steps: scenario.steps.filter(
+      (step) =>
+        !(
+          ('bind' in step &&
+            (step.bind === 'old-inventory' || step.bind === 'lifecycle-old-inventory')) ||
+          ('complete' in step && step.complete === 'lifecycle-old-inventory')
+        )
+    )
+  }
+}
+
 export type PilotGolden = DerivedGolden & { scenario: RecordingScenario }
 
-/** One golden per manifest scenario, recorded as written. */
 export function pilotGoldens(manifest: readonly RecordingScenario[]): PilotGolden[] {
   return manifest.map((scenario) => ({
     id: scenario.id,
@@ -67,7 +81,6 @@ export function pilotGoldens(manifest: readonly RecordingScenario[]): PilotGolde
   }))
 }
 
-/** Every golden generated from a family's base scenario: reply matrices and owned schedules. */
 export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGolden[] {
   const families = new Map<string, RecordingScenario[]>()
   for (const scenario of manifest) {
@@ -144,13 +157,12 @@ export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGo
           actions
             .flatMap((action) => lifecycleSchedules(base, action))
             .filter(({ scenario }) => !id.includes('hydration') || !scenario.id.endsWith('-1'))
-        )
+        ).map(omitRetiredInventoryAdmission)
     })
   }
   return goldens
 }
 
-/** Every golden the oracle freezes, pilot and family alike. */
 export function derivedGoldens(manifest: readonly RecordingScenario[]): DerivedGolden[] {
   return [...pilotGoldens(manifest), ...familyGoldens(manifest)]
 }

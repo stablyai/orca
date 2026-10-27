@@ -1,9 +1,11 @@
-import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { addRepoWithWorkspaces, writeWorkspaceMeta } from './helpers/repo-with-workspaces'
 import { waitForSessionReady } from './helpers/store'
 
-const SYNTHETIC_COUNT = 60
+const WORKSPACE_COUNT = 60
+
+test.use({ seedTestRepo: false })
 
 type PreviewOffsetSample = {
   worktreeId: string
@@ -11,107 +13,37 @@ type PreviewOffsetSample = {
   renderedOffset: number
 }
 
-async function seedVirtualizedManualWorktrees(page: Page): Promise<{
-  sourceId: string
-  nextId: string
-  idPrefix: string
-}> {
-  const repo = await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('window.__store is not available')
-    }
-    const state = store.getState()
-    const repo = state.repos[0]
-    if (!repo) {
-      throw new Error('Expected a seeded e2e repo')
-    }
-    return { id: repo.id, path: repo.path }
-  })
-  const now = Date.now()
-  const syntheticWorktrees = Array.from({ length: SYNTHETIC_COUNT }, (_, index) => {
-    const suffix = String(index).padStart(2, '0')
-    const worktreePath = path.join(repo.path, '..', `downward-drag-${suffix}`)
-    return {
-      id: `${repo.id}::downward-drag-${suffix}`,
-      instanceId: `downward-drag-${suffix}`,
-      repoId: repo.id,
-      path: worktreePath,
-      displayName: `Downward drag ${suffix}`,
-      comment: '',
-      linkedIssue: null,
-      linkedPR: null,
-      linkedLinearIssue: null,
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 100_000 - index,
-      manualOrder: 100_000 - index,
-      lastActivityAt: now - index,
-      head: '0000000000000000000000000000000000000000',
-      branch: `downward-drag-${suffix}`,
-      isBare: false,
-      isMainWorktree: false
-    }
-  })
-  await page.evaluate(
-    ({ repoId, worktrees }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      const state = store.getState()
-      const seededWorktrees = (state.worktreesByRepo[repoId] ?? []).map((worktree, index) => ({
-        ...worktree,
-        manualOrder: -1_000 - index
-      }))
-
-      store.setState({
-        groupBy: 'none',
-        sortBy: 'manual',
-        showActiveOnly: false,
-        showSleepingWorkspaces: true,
-        hideDefaultBranchWorkspace: false,
-        filterRepoIds: [],
-        sidebarOpen: true,
-        worktreesByRepo: {
-          ...state.worktreesByRepo,
-          [repoId]: [...worktrees, ...seededWorktrees]
-        },
-        // Stands in for the real action only to skip its IPC persistence tail: these 60 rows
-        // are store-only, so persisting them would fail and refetch them away mid-drag.
-        updateWorktreesMeta: async (batchUpdates) => {
-          if (batchUpdates.length === 0) {
-            return
-          }
-          // executionHostId is ignored on purpose: every seeded row is host-less, which the
-          // real action treats as local (worktree-meta-host-match.ts).
-          const updatesByWorktreeId = new Map(
-            batchUpdates.map((batchUpdate) => [batchUpdate.worktreeId, batchUpdate.updates])
-          )
-          store.setState((current) => ({
-            sortEpoch: current.sortEpoch + 1,
-            worktreesByRepo: Object.fromEntries(
-              Object.entries(current.worktreesByRepo).map(([repoId, worktrees]) => [
-                repoId,
-                worktrees.map((worktree) => ({
-                  ...worktree,
-                  ...updatesByWorktreeId.get(worktree.id)
-                }))
-              ])
-            )
-          }))
+async function seedVirtualizedManualWorktrees(
+  page: Page,
+  testInfo: TestInfo
+): Promise<{ sourceId: string; nextId: string; ids: string[] }> {
+  const repo = await addRepoWithWorkspaces(page, testInfo, WORKSPACE_COUNT)
+  await writeWorkspaceMeta(page, [
+    { worktreeId: repo.mainId, updates: { manualOrder: -1_000, sortOrder: -1_000 } },
+    ...repo.ids.map((worktreeId, index) => {
+      const suffix = String(index).padStart(2, '0')
+      return {
+        worktreeId,
+        updates: {
+          displayName: `Downward drag ${suffix}`,
+          sortOrder: 100_000 - index,
+          manualOrder: 100_000 - index
         }
-      })
-    },
-    { repoId: repo.id, worktrees: syntheticWorktrees }
-  )
-  const sourceId = syntheticWorktrees[0]!.id
-  return {
-    sourceId,
-    nextId: syntheticWorktrees[1]!.id,
-    idPrefix: sourceId.slice(0, -2)
-  }
+      }
+    })
+  ])
+  await page.evaluate(() => {
+    window.__store!.setState({
+      groupBy: 'none',
+      sortBy: 'manual',
+      showActiveOnly: false,
+      showSleepingWorkspaces: true,
+      hideDefaultBranchWorkspace: false,
+      filterRepoIds: [],
+      sidebarOpen: true
+    })
+  })
+  return { sourceId: repo.ids[0]!, nextId: repo.ids[1]!, ids: repo.ids }
 }
 
 async function sampleMountedPreviewOffsets(
@@ -159,10 +91,12 @@ async function sampleMountedPreviewOffsets(
   }, sourceId)
 }
 
-test('dragging a virtualized worktree downward keeps rows stable', async ({ orcaPage }) => {
+test('dragging a virtualized worktree downward keeps rows stable', async ({
+  orcaPage
+}, testInfo) => {
   await waitForSessionReady(orcaPage)
   await orcaPage.setViewportSize({ width: 1_000, height: 620 })
-  const { sourceId, nextId, idPrefix } = await seedVirtualizedManualWorktrees(orcaPage)
+  const { sourceId, nextId, ids } = await seedVirtualizedManualWorktrees(orcaPage, testInfo)
   const scroller = orcaPage.locator('[data-worktree-sidebar]')
   const source = orcaPage.locator(
     `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(sourceId)}]`
@@ -276,11 +210,11 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
         scroller
           .locator('[role="option"]')
           .evaluateAll(
-            (options, prefix) =>
+            (options, ids) =>
               options
                 .map((option) => option.getAttribute('data-worktree-id'))
-                .find((worktreeId) => worktreeId?.startsWith(prefix)) ?? null,
-            idPrefix
+                .find((worktreeId) => worktreeId !== null && ids.includes(worktreeId)) ?? null,
+            ids
           ),
       { message: 'The downward drop did not move the source away from the first slot' }
     )

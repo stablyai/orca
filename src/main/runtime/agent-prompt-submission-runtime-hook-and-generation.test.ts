@@ -1,3 +1,5 @@
+import { deliverFollowUp } from '../external-conversations/external-conversation-send'
+import { ConversationChain } from '../external-conversations/external-conversation-chain'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
@@ -59,7 +61,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
           prompt: '',
           agentType: launchAgent,
           connectionId: null,
-          // Why: every hook ping refreshes receivedAt, including same-state tool pings.
+          // receivedAt changes even on same-state tool pings.
           receivedAt: Date.now(),
           stateStartedAt: hook.stateStartedAt
         }
@@ -149,8 +151,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  // Why: same-state pings keep refreshing receivedAt on a turn that started before the prompt;
-  // only the pinned stateStartedAt separates that from a turn this prompt started.
+  // Same-state pings refresh receivedAt; only stateStartedAt proves a new working turn.
   it('does not accept a hook row refreshed without a new working turn', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -419,7 +420,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     })
   })
 
-  it('does not queue a replacement generation behind an obsolete submission', async () => {
+  it.each(['reset', 'exit'] as const)('retires pending %s', async (retirement) => {
     vi.useFakeTimers()
     let releaseFirst!: () => void
     let firstWriteReached!: () => void
@@ -442,13 +443,23 @@ describe('agent prompt submission runtime hook and generation cases', () => {
         await firstGate
       }
     })
+    const obsolete = expect(first).rejects.toThrow('terminal_handle_stale')
     await firstWrite
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-prompt',
-      { value: 0, generation: 'reset' },
-      0
-    )
+    if (retirement === 'exit') {
+      runtime.onPtyExit('pty-prompt', 0)
+    } else {
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-prompt',
+        { value: 0, generation: 'reset' },
+        0
+      )
+    }
 
+    await obsolete
+    if (retirement === 'exit') {
+      releaseFirst()
+      return
+    }
     const replacement = runtime.sendTerminalAgentPrompt(handle, 'replacement prompt', {
       inputKind: 'driving'
     })
@@ -457,17 +468,21 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     expect(writes.some((data) => data.includes('replacement prompt'))).toBe(true)
 
     releaseFirst()
-    await expect(first).rejects.toThrow('terminal_handle_stale')
   })
 
-  it('does not close a partial paste after the PTY generation changes', async () => {
+  it.each(['generation', 'signal'] as const)('suffix stop %s', async (stop) => {
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
     let writeChecks = 0
+    const controller = new AbortController()
 
     const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(20_000), {
       inputKind: 'driving',
+      signal: controller.signal,
       beforeWrite: () => {
         writeChecks += 1
+        if (writeChecks === 2 && stop === 'signal') {
+          return controller.abort()
+        }
         if (writeChecks === 2) {
           runtime.synchronizePtyOutputSequenceFromProvider(
             'pty-prompt',
@@ -478,7 +493,9 @@ describe('agent prompt submission runtime hook and generation cases', () => {
       }
     })
 
-    await expect(submission).rejects.toThrow('terminal_handle_stale')
+    await expect(submission).rejects.toThrow(
+      stop === 'signal' ? 'request_aborted' : 'terminal_handle_stale'
+    )
     expect(writes).toHaveLength(1)
     expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
   })
@@ -501,6 +518,41 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(0)
   })
 
+  it.each(['agent', 'reject'] as const)('follow-up cancel before late %s', async (late) => {
+    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
+    const probe = Promise.withResolvers<'agent'>(),
+      reached = Promise.withResolvers<void>()
+    const unsubscribe = vi.fn()
+    vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(unsubscribe)
+    vi.mocked(runtime.readLaunchedAgentForeground).mockImplementation(() => {
+      reached.resolve()
+      return probe.promise
+    })
+    const chain = new ConversationChain(new AbortController().signal)
+    const delivered = chain.enqueue('prompt', (signal) =>
+      deliverFollowUp(runtime, {
+        handle,
+        agent: 'claude',
+        expectedBinding: runtime.getTerminalPromptRequestBinding(handle),
+        text: 'follow-up',
+        requestId: 'follow-up',
+        signal
+      })
+    )
+    await reached.promise
+    void chain.cancel('prompt', 'conversation_cancelled')
+    await expect(delivered).resolves.toMatchObject({ outcome: 'refused' })
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    if (late === 'agent') {
+      probe.resolve('agent')
+    } else {
+      probe.reject(new Error('late failure'))
+    }
+    await Promise.resolve()
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(writes).toEqual([])
+  })
+
   it('does not send another Enter after cancellation during verification', async () => {
     vi.useFakeTimers()
     const controller = new AbortController()
@@ -511,15 +563,14 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     })
     const rejected = expect(submission).rejects.toThrow('request_aborted')
 
-    // Why compute it: the submit delay now follows the payload size and the executing host,
-    // so a hardcoded number aborts before the Enter on some lanes.
+    // Derive delay from executing host/payload so abort cannot precede Enter on slower lanes.
     await vi.advanceTimersByTimeAsync(
       getAgentPromptSubmitDelayMs(
         process.platform,
         Buffer.byteLength(buildAgentPromptPasteBytes('review this'), 'utf8')
       )
     )
-    // Why: pin the phase boundary so drift fails here instead of as an empty post-abort array.
+    // Establish Enter delivery before testing the post-submit abort boundary.
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
     controller.abort()
     await vi.runAllTimersAsync()

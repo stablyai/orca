@@ -1,6 +1,6 @@
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 import { readCodexSubagentAnnouncements } from './codex-subagent-activity'
-import { codexChildTurnState } from './codex-subagent-executions'
+import { codexChildTurnState, type CodexSubagentExecutions } from './codex-subagent-executions'
 import { readRecord } from './codex-item-field-readers'
 import { readCodexThreadItem } from './codex-structured-item-translation'
 import { readCodexTurnId } from './codex-structured-thread-facts'
@@ -8,14 +8,12 @@ import { readCodexTurnId } from './codex-structured-thread-facts'
 export type CodexAnnouncedChild = {
   agentThreadId: string
   label: string | null
-  parentTurnId: string | null | undefined
-  /** The reporting thread, for a spawn: the agent that spawned the child. */
+  /** Set only by spawn announcements, whose reporting thread is the spawner. */
   spawnerThreadId: string | undefined
 }
 
 export type CodexBackgroundTaskFrame =
   | {
-      /** An item naming children, several for a call on more than one helper. */
       kind: 'subagents'
       children: CodexAnnouncedChild[]
     }
@@ -26,7 +24,7 @@ export type CodexBackgroundTaskFrame =
       state: NativeChatSubagentState
     }
   | {
-      /** A child thread that closed: it ran its last turn, and Codex never said how it went. */
+      /** Thread closure without a final turn outcome. */
       kind: 'thread-closed'
       threadId: string
     }
@@ -37,12 +35,7 @@ export type CodexBackgroundTaskEvent = {
   params: unknown
 }
 
-/**
- * The one way Codex ends a child's turn without `turn/completed`: a closed thread ran its last
- * turn and Codex never said how it went. A turn-ending `error` is not one — Codex follows it with
- * a failed `turn/completed` for the same turn, which is that turn's end and carries the duration
- * and receipt time the error does not.
- */
+// Only thread closure substitutes for turn/completed; errors await that frame's outcome and timing.
 function readCodexChildThreadClosed(
   event: CodexBackgroundTaskEvent
 ): CodexBackgroundTaskFrame | null {
@@ -83,10 +76,26 @@ export function readCodexBackgroundTaskFrame(
     (announcement) => ({
       agentThreadId: announcement.agentThreadId,
       label: announcement.label,
-      parentTurnId: announcement.namesParentTurn ? readCodexTurnId(event.params) : undefined,
       // Only a spawn names the spawner: other announcements ride whichever agent acted.
       spawnerThreadId: announcement.spawned ? event.threadId : undefined
     })
   )
   return children.length > 0 ? { kind: 'subagents', children } : null
+}
+
+/** Idempotent: the journal observes before writing rows, then background tasks observe again. */
+export function observeCodexExecutionFrame(
+  executions: CodexSubagentExecutions,
+  frame: CodexBackgroundTaskFrame | null,
+  primaryThreadId: string
+): void {
+  if (frame?.kind === 'subagents') {
+    for (const child of frame.children) {
+      executions.register(child.agentThreadId, child.label, child.spawnerThreadId)
+    }
+  } else if (frame?.kind === 'thread-closed') {
+    executions.closeThread(frame.threadId)
+  } else if (frame && frame.threadId !== primaryThreadId) {
+    executions.observeTurn(frame.threadId, frame.turnId, frame.state)
+  }
 }

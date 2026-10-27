@@ -1,46 +1,50 @@
-// The queue's pauses: a pure function of the journal fold and the cards, never a stored flag, so
-// nothing has to retire them. Each holds its own cards (`queuePauseHolding`). In force when:
-//   - 'stopped': the latest Stop event is a person's (reason `user-stop`), with no later Resume row
-//     and no turn a person asked for sent after it and accepted. A later Stop of any reason
-//     supersedes it; only a person's pauses.
-//   - 'cleared': a card /clear carried into this conversation waits, and no person's turn or
-//     Resume has happened here since.
-//   - 'restarted': a waiting card was written by another host process, and no person's turn has
-//     started since this conversation opened.
-// A person's turn is an accepted submission of origin `client`. Orchestration mail, a restart
-// continuation, a launch prompt and the queue's own drain are `host` and never lift it.
+// Derive pauses from journal state: personal Stop, cleared IDs and cards predating reopen.
+// Later accepted turns/Resume lift pauses; per-card holds still require their own action.
 
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
 export type QueuePauseReason = 'stopped' | 'cleared' | 'restarted'
 
-/** The latest Stop event, whatever its reason, and the latest Resume row, folded by the reducer. */
+/** Memory-only unnamed Stop binding; failedOn affects display, never cancellation ownership. */
+export type JournalStopSettle = {
+  settling: boolean
+  turnId?: string
+  failedOn?: JournalStopFailedOn
+}
+
+export type JournalStopFailedOn = { turnId: string } | { openedAfter: number }
+
 export type JournalQueuePauseMarks = {
-  latestStop: { sequence: number; event: JournalStopEvent } | null
-  /** 0 when none. */
+  cleared?: { sequence: number; operationId: string; messageIds: readonly string[]; lifted?: true }
+  latestStop: { sequence: number; event: JournalStopEvent; settle?: JournalStopSettle } | null
+  /** Zero means absent. */
   resumedSequence: number
+  /** Zero means absent. */
+  reopenedSequence: number
 }
 
 export type DerivedQueuePause = {
   reason: QueuePauseReason
-  /** Where a Stop's pause began: a card queued at or after it is newer. Null for the others. */
+  /** Clear holds exact IDs; other pauses use the cursor boundary. */
   since: AgentJournalCursor | null
+  messageIds?: readonly string[]
 }
 
 type QueueCard = {
+  messageId?: string
   state: string
   holdReason: string | null
-  hostInstance: string
-  carriedFrom: string | null
   queuedAt: AgentJournalCursor | null
 }
 
 export function createJournalQueuePauseMarks(): JournalQueuePauseMarks {
-  return { latestStop: null, resumedSequence: 0 }
+  return { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
 }
 
-/** The keys are read from disk unchecked: a value no build writes (a corrupt row) is ignored. */
 function isReadableStopEvent(value: unknown): value is JournalStopEvent {
   return (
     typeof value === 'object' &&
@@ -61,82 +65,145 @@ export function foldJournalQueuePauseMark(
     marks.latestStop = { sequence: row.seq, event: row.stopEvent }
   } else if (row.queueResume === true) {
     marks.resumedSequence = row.seq
+  } else if (row.queueReopen === true) {
+    // Late reopen marks must not narrow earlier boundaries.
+    const since = row.queueReopenSince
+    const start = typeof since === 'number' && since > 0 && since <= row.seq ? since : row.seq
+    marks.reopenedSequence = Math.max(marks.reopenedSequence, start)
+  } else if (isReadableQueueClear(row.queueClear)) {
+    marks.cleared = { ...row.queueClear, sequence: row.seq }
   }
 }
 
-/** A person's Stop still pauses: it is the latest Stop, and nothing a person did since, and no
- *  Resume, ended it. A later Stop for any other reason ends it without pausing itself. */
-export function journalQueueStopHolds(
-  marks: JournalQueuePauseMarks,
-  latestPersonTurnSequence: number
-): boolean {
+function isReadableQueueClear(
+  value: unknown
+): value is NonNullable<JournalTombstoneRow['queueClear']> {
   return (
-    marks.latestStop?.event.reason === 'user-stop' &&
-    marks.latestStop.sequence > Math.max(latestPersonTurnSequence, marks.resumedSequence)
+    typeof value === 'object' &&
+    value !== null &&
+    'operationId' in value &&
+    typeof value.operationId === 'string' &&
+    value.operationId.length > 0 &&
+    'messageIds' in value &&
+    Array.isArray(value.messageIds) &&
+    value.messageIds.every((id: unknown) => typeof id === 'string' && id.length > 0) &&
+    (!('lifted' in value) || value.lifted === true)
   )
 }
 
-/** The latest person's Stop while it still pauses, with where it was written; else null. */
-export function journalUserStopInForce(
+/** Any later Stop supersedes a personal pause; only personal Stops create one. */
+export function journalQueueStopHolds(
   marks: JournalQueuePauseMarks,
-  latestPersonTurnSequence: number
-): JournalQueuePauseMarks['latestStop'] {
-  return journalQueueStopHolds(marks, latestPersonTurnSequence) ? marks.latestStop : null
+  latestAcceptedTurnSequence: number
+): boolean {
+  return (
+    marks.latestStop?.event.reason === 'user-stop' &&
+    marks.latestStop.sequence > Math.max(latestAcceptedTurnSequence, marks.resumedSequence)
+  )
 }
 
-/** What a rewind's new epoch restates so its pauses read as they did: a lift of /clear's pause (a
- *  person's turn or a Resume happened), then the Stop still in force, in that order so the lift
- *  never ends the Stop. */
+export function journalUserStopInForce(
+  marks: JournalQueuePauseMarks,
+  latestAcceptedTurnSequence: number
+): JournalQueuePauseMarks['latestStop'] {
+  return journalQueueStopHolds(marks, latestAcceptedTurnSequence) ? marks.latestStop : null
+}
+
+/** Restate clear-lift first, then active Stop/reopen marks so the lift cannot erase them. */
 export type JournalQueuePauseRestatement = {
   lifted: boolean
   liveStop: JournalStopEvent | null
+  reopened: boolean
+  cleared?: { operationId: string; messageIds: string[]; lifted?: true }
 }
 
 export function journalQueuePauseRestatement(
   marks: JournalQueuePauseMarks,
-  latestPersonTurnSequence: number
+  latestAcceptedTurnSequence: number,
+  pauses: readonly DerivedQueuePause[]
 ): JournalQueuePauseRestatement {
   return {
-    lifted: latestPersonTurnSequence > 0 || marks.resumedSequence > 0,
-    liveStop: journalUserStopInForce(marks, latestPersonTurnSequence)?.event ?? null
+    lifted: latestAcceptedTurnSequence > 0 || marks.resumedSequence > 0,
+    liveStop: journalUserStopInForce(marks, latestAcceptedTurnSequence)?.event ?? null,
+    reopened: pauses.some((pause) => pause.reason === 'restarted'),
+    ...(marks.cleared
+      ? {
+          cleared: {
+            operationId: marks.cleared.operationId,
+            messageIds: [...(pauses.find((pause) => pause.reason === 'cleared')?.messageIds ?? [])],
+            ...(marks.cleared.lifted ||
+            Math.max(latestAcceptedTurnSequence, marks.resumedSequence) >= marks.cleared.sequence
+              ? { lifted: true as const }
+              : {})
+          }
+        }
+      : {})
   }
 }
 
-/** Every pause in force, in the order a card held by several names its reason. */
+/** Order determines which reason a card held by multiple pauses displays. */
 export function deriveQueuePauses(input: {
-  /** The journal's epoch: sequences compare only within one. */
+  /** Sequences compare only within the same epoch. */
   epoch: string
   marks: JournalQueuePauseMarks
-  latestPersonTurnSequence: number
+  latestAcceptedTurnSequence: number
   cards: readonly QueueCard[]
-  hostInstance: string
-  /** A person's turn started since this conversation opened. */
-  restartEnded: boolean
+  /** Conservative boundary when this handle could not write a reopen mark. */
+  reopenFloor: AgentJournalCursor | null
 }): DerivedQueuePause[] {
-  const { epoch, marks, latestPersonTurnSequence } = input
+  const { epoch, marks, latestAcceptedTurnSequence } = input
   const pauses: DerivedQueuePause[] = []
-  const stop = journalUserStopInForce(marks, latestPersonTurnSequence)
+  const stop = journalUserStopInForce(marks, latestAcceptedTurnSequence)
   if (stop) {
     pauses.push({ reason: 'stopped', since: { epoch, sequence: stop.sequence } })
   }
   const waiting = input.cards.filter((card) => card.state === 'waiting')
-  const carried = waiting.filter((card) => card.carriedFrom !== null)
-  if (carried.length > 0 && latestPersonTurnSequence === 0 && marks.resumedSequence === 0) {
-    pauses.push({ reason: 'cleared', since: null })
+  const cleared = marks.cleared
+  if (
+    cleared &&
+    !cleared.lifted &&
+    cleared.sequence > Math.max(latestAcceptedTurnSequence, marks.resumedSequence)
+  ) {
+    const membership = new Set(cleared.messageIds)
+    const messageIds = waiting.flatMap((card) =>
+      card.messageId && membership.has(card.messageId) ? [card.messageId] : []
+    )
+    if (messageIds.length > 0) {
+      pauses.push({ reason: 'cleared', since: { epoch, sequence: cleared.sequence }, messageIds })
+    }
   }
-  if (!input.restartEnded && waiting.some((card) => card.hostInstance !== input.hostInstance)) {
-    // The process that wrote a card is gone: every card waits, whenever it was written.
-    pauses.push({ reason: 'restarted', since: null })
+  const reopened = reopenPause(input)
+  if (
+    reopened &&
+    waiting.some((card) => card.holdReason === null && queuedBefore(reopened, card))
+  ) {
+    pauses.push(reopened)
   }
   return pauses
 }
 
-/** Queued before the pause began: for /clear, a card it carried; for a restart, every card. For a
- *  Stop, a card queued before its row; one from another epoch (before a rewind) or from a build
- *  that recorded no position counts as before. A withdrawn steer keeps its position, so is held. */
-function queuedBeforePause(pause: DerivedQueuePause, card: QueueCard): boolean {
+/** Failed marks use the open boundary conservatively; later turns/Resume lift it, and epochs cannot mix. */
+function reopenPause(input: {
+  epoch: string
+  marks: JournalQueuePauseMarks
+  latestAcceptedTurnSequence: number
+  reopenFloor: AgentJournalCursor | null
+}): DerivedQueuePause | null {
+  const { epoch, marks, reopenFloor } = input
+  const floor = reopenFloor?.epoch === epoch ? reopenFloor.sequence : 0
+  const sequence = Math.max(marks.reopenedSequence, floor)
+  if (sequence === 0) {
+    return null
+  }
+  if (Math.max(input.latestAcceptedTurnSequence, marks.resumedSequence) >= sequence) {
+    return null
+  }
+  return { reason: 'restarted', since: { epoch, sequence } }
+}
+
+function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
   if (pause.reason === 'cleared') {
-    return card.carriedFrom !== null
+    return pause.messageIds?.includes(card.messageId ?? '') ?? false
   }
   const { since } = pause
   return (
@@ -147,14 +214,7 @@ function queuedBeforePause(pause: DerivedQueuePause, card: QueueCard): boolean {
   )
 }
 
-// Product decision: a card queued AFTER a Stop is a new instruction and is not held; only cards
-// queued before it, and a steer it withdrew, wait. It still never jumps ahead of a held card: the
-// drain stops at the first one. true instead holds every waiting card, whenever it was queued.
-const PAUSE_HOLDS_CARDS_QUEUED_AFTER_IT = false
-
-/** THE rule for which cards are held: by ANY pause in force, named by the first that holds it, so
- *  a Stop's that holds nothing never hides a restart's. The drain, its consume, and publication
- *  all read it. */
+/** Share pause selection across drain, consume and publication; an empty Stop cannot hide a restart. */
 export function queuePauseHolding(
   pauses: readonly DerivedQueuePause[],
   card: QueueCard
@@ -162,30 +222,28 @@ export function queuePauseHolding(
   if (card.state !== 'waiting' || card.holdReason !== null) {
     return undefined
   }
-  return pauses.find((pause) => PAUSE_HOLDS_CARDS_QUEUED_AFTER_IT || queuedBeforePause(pause, card))
+  // Post-Stop cards are new instructions but still wait behind held cards.
+  return pauses.find((pause) => queuedBefore(pause, card))
 }
 
-/** The card the queue sends next: the oldest waiting one with no hold of its own, unless a
- *  returned card or a held one comes first. The queue never reorders, so a newer card never
- *  overtakes a held one. The drain's pick and its consume both read this. */
-export function nextSendableQueuedCard<T extends QueueCard>(
+/** Preserve queue order: returned, paused or edited cards block later cards; per-card holds are skipped. */
+export function nextSendableQueuedCard<T extends QueueCard & { messageId: string }>(
   pauses: readonly DerivedQueuePause[],
-  cards: readonly T[]
+  cards: readonly T[],
+  editHeld: ReadonlySet<string> = new Set()
 ): T | null {
   for (const card of cards) {
     if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
       return null
     }
     if (card.state === 'waiting' && card.holdReason === null) {
-      return card
+      return editHeld.has(card.messageId) ? null : card
     }
   }
   return null
 }
 
-/** The pause to PUBLISH: the one holding the first card Resume would send, not behind a returned
- *  card, which blocks everything after it until the user acts. None otherwise, so its header
- *  never offers a Resume that sends nothing. */
+/** Publish only pauses Resume can act on, never those hidden behind a returned card. */
 export function resumableQueuePause(
   pauses: readonly DerivedQueuePause[],
   cards: readonly QueueCard[]
@@ -200,4 +258,16 @@ export function resumableQueuePause(
     }
   }
   return null
+}
+
+/** Hide pauses while a later send awaits acceptance; rejection reveals them again. */
+export function queuePauseLiftOnItsWay(
+  pause: DerivedQueuePause,
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>[]
+): boolean {
+  const anchor = pause.since?.sequence ?? 0
+  return submissions.some(
+    (submission) =>
+      submission.dispatchState === 'pending' && (submission.acceptedSequence ?? 0) > anchor
+  )
 }

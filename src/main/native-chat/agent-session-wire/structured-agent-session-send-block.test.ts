@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionConversationCommandRecord } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommandRecord } from '../../../shared/agent-session/agent-session-conversation-command'
 import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import {
   openConversationForWrite,
@@ -14,7 +14,6 @@ function withCommand(command: AgentSessionConversationCommandRecord) {
 const COMMAND = { operationId: 'operation-1', callerKey: 'client-1', runtimeFence: 7 }
 
 describe('a send refused by the conversation command it follows', () => {
-  // A clear's commit is its only durable write, so a record short of it never changed the chat.
   it("lets a send follow a /clear that never committed, as an older build's record leaves one", () => {
     expect(
       structuredAgentSessionSendBlock(
@@ -29,7 +28,7 @@ describe('a send refused by the conversation command it follows', () => {
     ).toBeNull()
   })
 
-  it('says a committed /clear cleared the conversation', () => {
+  it('allows a send to an independently retained old-build clear source', () => {
     const blocked = structuredAgentSessionSendBlock(
       withCommand({
         ...COMMAND,
@@ -40,10 +39,7 @@ describe('a send refused by the conversation command it follows', () => {
       })
     )
 
-    expect(blocked?.refusal).toMatchObject({
-      code: 'agent_session_operation_invalid',
-      details: { reason: 'conversationCleared' }
-    })
+    expect(blocked).toBeNull()
   })
 
   it("lets a send follow an older build's unconfirmed /compact, whose child this host no longer runs", () => {

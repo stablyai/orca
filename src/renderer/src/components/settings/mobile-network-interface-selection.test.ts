@@ -24,13 +24,10 @@ const EXTERNAL_SWITCH: MobileNetworkInterface = {
 }
 
 describe('selectRefreshedNetworkAddress', () => {
-  // Why: regression for the manual-address branch the PR adds — a
-  // transient empty refresh must not clobber the user's typed address.
   it('keeps a manual address when refresh returns no interfaces', () => {
     expect(selectRefreshedNetworkAddress('my-mac.ts.net', [], true)).toBe('my-mac.ts.net')
   })
 
-  // Existing behavior is preserved verbatim from the spec.
   it('keeps the selected address when refresh discovers a new tailnet interface', () => {
     expect(selectRefreshedNetworkAddress(LAN.address, [LAN, TAILNET])).toBe(LAN.address)
   })
@@ -92,8 +89,7 @@ describe('selectRefreshedNetworkAddress', () => {
     ).toBeUndefined()
   })
 
-  // Why: matches main's default — advertising nothing beats advertising docker0, and Relay
-  // pairs without a direct address. A divergence here would show an address the QR never carried.
+  // Match main’s bridge-only fallback: Relay can omit direct addresses, but unreachable docker0 must not appear selected.
   it('selects no address when every interface is a container bridge', () => {
     expect(selectRefreshedNetworkAddress(undefined, [BRIDGE])).toBeUndefined()
   })

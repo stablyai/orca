@@ -4,6 +4,15 @@ import { createProgrammaticScrollMarks } from './programmatic-scroll-marks'
 const scrollEvent = (): Event => new Event('scroll')
 
 describe('createProgrammaticScrollMarks', () => {
+  it('checks pending landings without consuming their delayed events', () => {
+    const marks = createProgrammaticScrollMarks()
+    marks.mark(12000)
+    expect(marks.hasPendingScrollOffset(5000, 5000)).toBe(true)
+    expect(marks.hasPendingScrollOffset(4000, 5000)).toBe(false)
+    expect(marks.consume(scrollEvent(), 5000, 5000)).toBe(true)
+    expect(marks.hasPendingScrollOffset(5000, 5000)).toBe(false)
+  })
+
   it('classifies an event matching a marked target as programmatic', () => {
     const marks = createProgrammaticScrollMarks()
     marks.mark(500)
@@ -39,9 +48,7 @@ describe('createProgrammaticScrollMarks', () => {
     marks.mark(500)
     const event = scrollEvent()
     expect(marks.consume(event, 500, 10_000)).toBe(true)
-    // Second listener on the same event: mark already consumed, cache must answer.
     expect(marks.consume(event, 500, 10_000)).toBe(true)
-    // A fresh event at the same offset is a new scroll and no mark remains.
     expect(marks.consume(scrollEvent(), 500, 10_000)).toBe(false)
   })
 
@@ -68,7 +75,6 @@ describe('createProgrammaticScrollMarks', () => {
     for (let i = 0; i < 40; i++) {
       marks.mark(i * 1_000)
     }
-    // Oldest marks were evicted; only the most recent 16 remain matchable.
     expect(marks.consume(scrollEvent(), 0, 100_000)).toBe(false)
     expect(marks.consume(scrollEvent(), 39_000, 100_000)).toBe(true)
   })

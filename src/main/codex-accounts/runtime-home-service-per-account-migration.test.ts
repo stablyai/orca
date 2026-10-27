@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,22 +12,31 @@ import { writeCodexStateDbBackfillStatus } from '../codex/codex-state-db-test-fi
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
 
+vi.mock('../codex/codex-hook-trust-derivation', async (importOriginal) =>
+  (await import('../codex/codex-hook-trust-derivation.test-fixture')).answeringCodexForTests(
+    await importOriginal()
+  )
+)
 vi.mock('electron', () => ({ app: { getPath: () => testState.userData } }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userData }))
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
   return { ...actual, homedir: () => testState.home }
 })
-// Why: selecting an account starts the history bridge, which would otherwise
-// spawn the real `codex app-server` on these fixture homes.
-vi.mock('../codex/codex-account-session-index-heal', () => ({
-  createCodexAccountStateDb: async () => false,
-  healCodexAccountSessionIndex: async () => ({
+// Prevent the selection-triggered history bridge from spawning a real app-server.
+vi.mock('../codex/codex-account-session-index-heal', () => {
+  const upToDate = async () => ({
     outcome: 'up-to-date',
     healedThreads: 0,
     missingThreads: 0,
     failedThreads: 0
   })
-}))
+  return {
+    createCodexAccountStateDb: async () => false,
+    healCodexAccountSessionIndex: upToDate,
+    healPendingCodexAccountThreads: upToDate
+  }
+})
 
 beforeEach(() => {
   vi.resetModules()
@@ -86,6 +96,8 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const { CodexHookService } = await import('../codex/hook-service')
+    const { startCodexHookHashLookup } = await import('../codex/codex-hook-hash-lookup')
+    startCodexHookHashLookup(Promise.resolve())
     const service = new CodexRuntimeHomeService(store as never)
     const hookService = new CodexHookService()
 
@@ -224,7 +236,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const siblingRollout = join('2026', '07', '21', 'rollout-2026-07-21T10-00-00-bbbb.jsonl')
     writeRollout(systemHome(), systemRollout, '{"session":"real-home"}\n')
     writeRollout(accountOne.managedHomePath, siblingRollout, '{"session":"account-one"}\n')
-    // Why: history is linked only once Codex has indexed the new home (#20669).
+    // History bridging requires the new home to be indexed first (#20669).
     writeCodexStateDbBackfillStatus(accountTwo.managedHomePath, 'complete')
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -239,8 +251,6 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       sourceCodexHomePaths: [systemHome(), accountOne.managedHomePath]
     })
 
-    // Why: /resume reads only the launch CODEX_HOME, so both histories must be
-    // present under account two or the switch looks like data loss.
     expect(readFileSync(join(accountTwo.managedHomePath, 'sessions', systemRollout), 'utf-8')).toBe(
       '{"session":"real-home"}\n'
     )

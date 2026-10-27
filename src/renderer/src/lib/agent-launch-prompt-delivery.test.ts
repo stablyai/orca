@@ -32,9 +32,7 @@ describe('seedNativeChatLaunchDraftForAgentTab', () => {
   })
 
   it('mirrors multi-line text — the majority of real drafts', () => {
-    // A Linear draft is always `Linked Linear issue: …\n<url>\n`, so rejecting
-    // newlines made every Linear launch invisible in chat. Send now clears every
-    // parked line first, so there is nothing left to glue.
+    // Linear drafts contain newlines; Send clears parked lines first, so mirroring them cannot glue stale context.
     const text = 'Linked Linear issue: STA-1234\nhttps://linear.app/o/issue/STA-1234\n'
     seedNativeChatLaunchDraftForAgentTab({ tabId: 'linear-tab', agent: 'codex', text })
 
@@ -152,8 +150,7 @@ describe('deliverLaunchPromptToAgentTab', () => {
   })
 
   it('keeps the seeded launch draft when paste delivery fails', async () => {
-    // A paste timeout means the TUI never got the draft — the composer copy is
-    // then the only copy, so it must not be flagged or cleared.
+    // After paste timeout, the composer may hold the only draft copy; preserve it without flagging delivery.
     mocks.pasteDraftWhenAgentReady.mockResolvedValue(false)
 
     await deliverLaunchPromptToAgentTab({
@@ -202,8 +199,7 @@ describe('deliverLaunchPromptToAgentTab', () => {
   })
 
   it('treats native-prefill delivery as success without flagging the seeded prompt', async () => {
-    // claude delivers via `--prefill` at launch, so paste no-ops (returns false)
-    // when forcePaste is false — that is a native delivery, not a failure.
+    // Claude --prefill delivery succeeds even though the redundant paste returns false.
     mocks.pasteDraftWhenAgentReady.mockResolvedValue(false)
 
     await expect(

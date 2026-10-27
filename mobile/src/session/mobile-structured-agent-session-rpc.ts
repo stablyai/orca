@@ -2,6 +2,8 @@ import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusalCode
 } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import {
   agentSessionRefusalNotice,
@@ -20,17 +22,14 @@ import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
+import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './native-chat/mobile-native-chat-send'
 
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
 export type StructuredAgentSessionMutationCallResult<TValue> =
-  | { status: 'accepted'; value: TValue }
+  | { status: 'accepted'; value: TValue; cursor?: AgentJournalCursor }
   | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
-  /** `hostRejectedByRequestSchema`: the host's schema turned this request away before running
-   *  it, so the same request can never be accepted there. An auth refusal does not set it:
-   *  it says nothing about an earlier delivery of the same id. */
-  | { status: 'failed'; message: string; hostRejectedByRequestSchema?: true }
+  | { status: 'failed'; message: string }
   | { status: 'unknown' }
 
 export type StructuredAgentSessionMutationResult<TValue> =
@@ -55,17 +54,23 @@ class AgentSessionRpcResponseError extends Error {
   }
 }
 
-/** A failed read of a chat's history as the pane shows it, from a thrown error or a stream's error
- *  frame (`{ message, error }`): a thrown refusal's message is its bare code, so its words come
- *  from the refusal in the error's data. */
-export function agentSessionReadFailureText(failure: unknown): string {
-  const refusal = readAgentSessionErrorRefusal(
+export function agentSessionReadFailureRefusal(failure: unknown) {
+  return readAgentSessionErrorRefusal(
     typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
   )
+}
+
+export function agentSessionReadRefusalText(refusal: AgentSessionRefusalReference): string {
+  return agentSessionWriteNoticeEnglish(
+    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
+  )
+}
+
+// Read refusal words from error data: thrown messages contain bare codes, and stream failures nest them under error.
+export function agentSessionReadFailureText(failure: unknown): string {
+  const refusal = agentSessionReadFailureRefusal(failure)
   if (refusal) {
-    return agentSessionWriteNoticeEnglish(
-      agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
-    )
+    return agentSessionReadRefusalText(refusal)
   }
   if (failure instanceof Error) {
     return failure.message
@@ -125,6 +130,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
   fields: Record<string, unknown>
   clientOperationId?: string
   timeoutMs?: number
+  agentName?: string
 }): Promise<StructuredAgentSessionMutationCallResult<TValue>> {
   const {
     client,
@@ -134,8 +140,10 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     expectedRuntimeFence,
     fields,
     clientOperationId,
-    timeoutMs
+    timeoutMs,
+    agentName
   } = args
+  const context = agentName ? { agentName } : {}
   try {
     const result = await callAgentSession<AgentSessionMutationResult<TValue>>(
       client,
@@ -163,13 +171,14 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       return { status: 'unknown' }
     }
     return result.ok
-      ? { status: 'accepted', value: result.value }
+      ? { status: 'accepted', value: result.value, cursor: result.cursor }
       : {
           status: 'refused',
           code: result.refusal.code,
           message: agentSessionRefusalNotice(
             result.refusal,
-            phoneWriteKind(fingerprintMethod, fields)
+            phoneWriteKind(fingerprintMethod, fields),
+            context
           )
         }
   } catch (error) {
@@ -182,11 +191,8 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       return {
         status: 'failed',
         message: agentSessionWriteNoticeEnglish(
-          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields))
-        ),
-        ...(error instanceof AgentSessionRpcResponseError && error.code === 'invalid_argument'
-          ? { hostRejectedByRequestSchema: true }
-          : {})
+          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields), context)
+        )
       }
     }
     if (

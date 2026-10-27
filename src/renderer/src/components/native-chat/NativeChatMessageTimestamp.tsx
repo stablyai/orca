@@ -1,6 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { getIntlLocale } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import {
+  NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT,
+  NATIVE_CHAT_MESSAGE_TIME_FORMAT
+} from '../../../../shared/native-chat-message-time'
 
 let cached: {
   locale: string
@@ -13,8 +17,8 @@ function getTimestampFormatters(): NonNullable<typeof cached> {
   if (!cached || cached.locale !== locale) {
     cached = {
       locale,
-      time: new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }),
-      full: new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'long' })
+      time: new Intl.DateTimeFormat(locale, NATIVE_CHAT_MESSAGE_TIME_FORMAT),
+      full: new Intl.DateTimeFormat(locale, NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT)
     }
   }
   return cached
@@ -45,7 +49,7 @@ export function NativeChatMessageTimestamp({
       aria-label={formatters.full.format(date)}
       tabIndex={focusable ? 0 : undefined}
       className={cn(
-        'rounded-md text-xs whitespace-nowrap text-muted-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'rounded-md text-xs whitespace-nowrap text-chat-foreground-faint tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className
       )}
     >

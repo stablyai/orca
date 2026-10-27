@@ -11,9 +11,13 @@ import {
 } from '@/components/ui/dialog'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { getConnectionIdForFile } from '@/lib/connection-context'
+import { editorTabFileAccess } from '@/lib/local-file-access'
 import { detectLanguage } from '@/lib/language-detect'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import {
+  FILE_OWNER_UNRESOLVED_MESSAGE,
+  getRuntimeTargetForFileOwner
+} from '@/lib/file-owner-runtime-target'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { translate } from '@/i18n/i18n'
@@ -26,9 +30,7 @@ type DiskReadState =
   | { kind: 'binary' }
   | { kind: 'ready'; content: string }
 
-// Why: choosing between "Reload from Disk" and "Keep My Edits" blind is the
-// sharpest edge of the changed-on-disk banner — this dialog shows exactly
-// what each choice discards before the user commits (issue #7265 follow-up).
+// Show which content Reload and Keep would discard before either action commits.
 export function ExternalFileChangeCompareDialog({
   file,
   currentContent,
@@ -46,6 +48,7 @@ export function ExternalFileChangeCompareDialog({
   onKeepEdits: () => void
 }): React.JSX.Element {
   const [diskState, setDiskState] = useState<DiskReadState>({ kind: 'loading' })
+  const access = editorTabFileAccess(useAppStore.getState(), file)
 
   useEffect(() => {
     if (!open) {
@@ -53,15 +56,25 @@ export function ExternalFileChangeCompareDialog({
     }
     let cancelled = false
     setDiskState({ kind: 'loading' })
-    // Why: read at open time — the banner can be minutes old and the agent
-    // may have written again since; the comparison must show current disk.
+    // Read when opening: agents may have written again since the banner appeared.
+    const target = getRuntimeTargetForFileOwner(
+      useAppStore.getState(),
+      file.worktreeId,
+      file.runtimeEnvironmentId
+    )
+    if (!target) {
+      setDiskState({ kind: 'error', message: FILE_OWNER_UNRESOLVED_MESSAGE })
+      return
+    }
     void readRuntimeFileContent({
-      settings: settingsForRuntimeOwner(useAppStore.getState().settings, file.runtimeEnvironmentId),
+      target,
       filePath: file.filePath,
       relativePath: file.relativePath,
       worktreeId: file.worktreeId,
       connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
-      expectedExternalSshTargetId: file.externalSshTargetId
+      expectedExternalSshTargetId: file.externalSshTargetId,
+      access,
+      terminalArtifactGrantId: file.terminalArtifactGrantId
     })
       .then((result) => {
         if (cancelled) {
@@ -89,7 +102,9 @@ export function ExternalFileChangeCompareDialog({
     file.relativePath,
     file.worktreeId,
     file.runtimeEnvironmentId,
-    file.externalSshTargetId
+    file.externalSshTargetId,
+    file.terminalArtifactGrantId,
+    access
   ])
 
   const language = detectLanguage(file.relativePath)
@@ -137,8 +152,6 @@ export function ExternalFileChangeCompareDialog({
             </div>
           ) : (
             <Suspense
-              // Why: the DiffViewer chunk loads lazily after the disk read —
-              // without a fallback the 80vh body flashes blank in between.
               fallback={
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   <Loader2 className="mr-2 size-4 animate-spin" />

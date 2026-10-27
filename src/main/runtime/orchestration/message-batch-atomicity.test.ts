@@ -68,7 +68,11 @@ describe('message batch atomicity', () => {
     }
     rejectLastMessageUpdate(sqlite)
 
-    expect(() => db?.[method](messageIds)).toThrow('blocked')
+    expect(() =>
+      method === 'markAsDelivered'
+        ? db?.markAsDelivered(messageIds, 'recipient')
+        : db?.[method](messageIds)
+    ).toThrow('blocked')
 
     const changed = sqlite.prepare(changedCountSql).get() as { count: number }
     expect(changed.count).toBe(0)

@@ -1,18 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionAdapterDeps,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type {
+  ClaudeStructuredSessionAdapterDeps,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
 import {
   adapterFor,
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  tick
+  tick,
+  recordingJournalSink
 } from './claude-structured-session-test-support'
+import {
+  claudeStartupSettled,
+  claudeOpened
+} from './claude-structured-startup-settled-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
+import {
+  claudeProviderHandle,
+  claudeProviderHandleLeafUuid
+} from '../../shared/agent-session-provider-handle-encoding'
 
 describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
   it('shares concurrent close finalization and emits lifecycle once', async () => {
@@ -95,13 +104,15 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     ).sessions.get('session-1')
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
-    await expect(adapter.closeSession('session-1')).rejects.toBe(callbackError)
-    expect(events.filter((event) => event.type === 'handle')).toHaveLength(1)
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+    await vi.waitFor(() =>
+      expect(events.filter((event) => event.type === 'handle')).toHaveLength(1)
+    )
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(disposeTranslator).toHaveBeenCalledOnce()
   })
 
-  it('retains a closed session until its durable cursor persistence succeeds', async () => {
+  it('does not keep a dead child indexed over a failed resume-point write', async () => {
     const claude = fakeClaude()
     const persistenceError = new Error('store unavailable')
     const persistHandle = vi
@@ -111,10 +122,10 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     const adapter = adapterFor(claude, {}, [], [], undefined, persistHandle)
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
 
-    await expect(adapter.closeSession('session-1')).rejects.toBe(persistenceError)
-    expect(persistHandle).toHaveBeenCalledTimes(1)
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(persistHandle).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(persistHandle).toHaveBeenCalledOnce())
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+    expect(persistHandle).toHaveBeenCalledOnce()
   })
 
   it('persists the last completed turn message before graceful close', async () => {
@@ -122,11 +133,17 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     const events: ClaudeStructuredSessionEvent[] = []
     const persistedHandles: unknown[] = []
     const adapter = adapterFor(claude, {}, events, persistedHandles)
-    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: { ...recordingJournalSink(), written: async () => ({ ok: true }) }
+    })
     claude.connections[0].handlers.onMessage?.({
       type: 'assistant',
       session_id: PROVIDER_SESSION_ID,
-      uuid: 'assistant-leaf'
+      uuid: 'assistant-leaf',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] }
     })
     claude.connections[0].handlers.onMessage?.({
       type: 'result',
@@ -141,6 +158,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
 
     await adapter.closeSession('session-1')
 
+    await vi.waitFor(() => expect(persistedHandles).toHaveLength(1))
     expect(persistedHandles).toEqual([
       {
         sessionId: 'session-1',
@@ -149,7 +167,8 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         fence: 7
       }
     ])
-    expect(events.at(-2)).toEqual({
+    expect(events.at(-2)).toMatchObject({ type: 'ended', cause: 'requested-close' })
+    expect(events.at(-1)).toEqual({
       type: 'handle',
       sessionId: 'session-1',
       providerSessionId: PROVIDER_SESSION_ID,
@@ -164,13 +183,25 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     const persistedHandles: unknown[] = []
     const events: ClaudeStructuredSessionEvent[] = []
     const adapter = adapterFor(claude, {}, events, persistedHandles)
-    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: { ...recordingJournalSink(), written: async () => ({ ok: true }) }
+    })
     const frame = (message: Record<string, unknown>) =>
       claude.connections[0].handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
-    frame({ type: 'assistant', uuid: 'crash-leaf' })
+    frame({
+      type: 'assistant',
+      uuid: 'crash-leaf',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] }
+    })
     frame({ type: 'result', uuid: 'result-frame-uuid' })
-    // The next turn's prompt is live, but its turn never completed.
-    frame({ type: 'user', uuid: 'half-turn-prompt' })
+    frame({
+      type: 'user',
+      uuid: 'half-turn-prompt',
+      message: { role: 'user', content: 'next' }
+    })
 
     claude.connections[0].handlers.onExit?.(
       new Error('claude stream-json exited (code 1): crashed unexpectedly')
@@ -284,14 +315,15 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
       appendTombstone: () => {},
-      publish: () => {}
+      publish: () => {},
+      written: async () => ({ ok: true })
     }
     let durableLeafUuid: string | null = null
     const resolveLaunch = vi.fn(async ({ identity }) => {
       if (
-        identity.providerHandle.kind !== 'claude' ||
-        identity.providerHandle.sessionId !== PROVIDER_SESSION_ID ||
-        identity.providerHandle.leafUuid !== durableLeafUuid
+        !identity.providerHandle ||
+        identity.providerHandle.nativeId !== PROVIDER_SESSION_ID ||
+        claudeProviderHandleLeafUuid(identity.providerHandle) !== durableLeafUuid
       ) {
         throw new Error('claude durable resume identity changed before spawn')
       }
@@ -338,7 +370,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       spawnToken: 'spawn-9',
       events: journalSink
     })
-    await adapter.awaitStarted('session-1')
+    await claudeStartupSettled(adapter, 'session-1')
     const first = claude.connections[0]
     const oldPrompt = invokeCanUseTool(first, 'Bash', 'permission-retained', 'tool-retained')
     const oldSession = (
@@ -362,7 +394,8 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     first.handlers.onMessage?.({
       type: 'assistant',
       session_id: PROVIDER_SESSION_ID,
-      uuid: 'observed-retained-leaf'
+      uuid: 'observed-retained-leaf',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] }
     })
     first.handlers.onMessage?.({ type: 'result', session_id: PROVIDER_SESSION_ID })
     first.close = vi
@@ -375,19 +408,16 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     expect(oldPrompt.settled()).toBe(false)
     expect(events.filter((event) => event.type === 'ended')).toEqual([])
 
-    const replacement = await adapter.acquire({
+    await adapter.acquire({
       identity: {
         ...identityFor(),
-        providerHandle: {
-          kind: 'claude',
-          sessionId: PROVIDER_SESSION_ID,
-          leafUuid: 'observed-retained-leaf'
-        }
+        providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf')
       },
       fence: 8,
       spawnToken: 'spawn-10',
       events: journalSink
     })
+    const replacement = await claudeOpened(adapter, 'session-1')
 
     expect(disposeTranslator).toHaveBeenCalledOnce()
     expect(settlePrompt).toHaveBeenCalledOnce()
@@ -404,12 +434,9 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     expect(resolveLaunch).toHaveBeenNthCalledWith(2, {
       identity: {
         ...identityFor(),
-        providerHandle: {
-          kind: 'claude',
-          sessionId: PROVIDER_SESSION_ID,
-          leafUuid: 'observed-retained-leaf'
-        }
-      }
+        providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf')
+      },
+      spawnToken: expect.any(String)
     })
     expect(oldPrompt.settled()).toBe(true)
     expect(events.filter((event) => event.type === 'ended')).toEqual([
@@ -425,15 +452,21 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       }
     ])
     expect(replacement.link).toMatchObject({
-      handle: {
-        provider: 'claude',
-        sessionId: PROVIDER_SESSION_ID,
-        leafUuid: 'observed-retained-leaf'
-      },
+      handle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf'),
       origin: 'resumed',
       mintedAtFence: 8
     })
     expect(claude.connections[1]?.launch.options).toEqual({ resume: PROVIDER_SESSION_ID })
     expect(claude.connections).toHaveLength(2)
+    first.handlers.onMessage?.({
+      type: 'assistant',
+      session_id: PROVIDER_SESSION_ID,
+      uuid: 'stale-old-leaf',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'stale answer' }] }
+    })
+    first.handlers.onMessage?.({ type: 'result', session_id: PROVIDER_SESSION_ID })
+    await tick()
+    expect((await claudeOpened(adapter, 'session-1')).link).toEqual(replacement.link)
+    expect(persistHandle).toHaveBeenCalledOnce()
   })
 })

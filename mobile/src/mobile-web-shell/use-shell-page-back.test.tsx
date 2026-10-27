@@ -1,9 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => {
-  // Annotated rather than asserted: the literal alone narrows to 'android' and the cases reassign it.
   const platform: { os: 'ios' | 'android' } = { os: 'android' }
   const remove = vi.fn()
   return {
@@ -34,6 +33,22 @@ function Screen(props: {
   return null
 }
 
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(() => {
+  act(() => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
+
 function render(props: {
   claimed: boolean
   sendBack: () => boolean
@@ -41,7 +56,7 @@ function render(props: {
 }): ReactTestRenderer {
   let tree!: ReactTestRenderer
   act(() => {
-    tree = create(createElement(Screen, props))
+    tree = createTracked(createElement(Screen, props))
   })
   return tree
 }
@@ -52,11 +67,7 @@ beforeEach(() => {
   native.remove.mockClear()
 })
 
-/**
- * The shell's half of the key. Nothing is registered without a live claim, so a page too old to
- * make one, a faulted page and a session between documents all keep today's behaviour: the
- * navigator pops.
- */
+// Register only for live claims; faults, old pages and between-document gaps must leave Back to navigation.
 describe('the shell taking the device Back key for a page that claimed it', () => {
   it('registers nothing while the page holds nothing', () => {
     render({ claimed: false, sendBack: () => true, setOptions: vi.fn() })
@@ -72,11 +83,7 @@ describe('the shell taking the device Back key for a page that claimed it', () =
     expect(sendBack).toHaveBeenCalledTimes(1)
   })
 
-  /**
-   * The honest half: a press the host could not deliver — a page too old to take one, a view
-   * between documents — falls through to the navigator rather than being swallowed. A key that
-   * does nothing is the failure this whole lane exists to remove.
-   */
+  // Undeliverable presses fall through rather than become dead keys.
   it('lets a press it could not deliver fall through to the navigator', () => {
     render({ claimed: true, sendBack: () => false, setOptions: vi.fn() })
     expect(native.addEventListener.mock.calls[0]?.[1]?.()).toBe(false)
@@ -93,15 +100,21 @@ describe('the shell taking the device Back key for a page that claimed it', () =
     expect(native.remove).toHaveBeenCalledTimes(1)
   })
 
-  it('registers once across a rebuilt sender, so the page beneath does not churn it', () => {
-    const tree = render({ claimed: true, sendBack: () => true, setOptions: vi.fn() })
+  it('registers once across a rebuilt sender and calls the current sender', () => {
+    const first = vi.fn(() => false)
+    const second = vi.fn(() => true)
+    const tree = render({ claimed: true, sendBack: first, setOptions: vi.fn() })
+    const listener = native.addEventListener.mock.calls[0]?.[1]
+    expect(listener?.()).toBe(false)
+    expect(first).toHaveBeenCalledTimes(1)
     act(() => {
-      tree.update(
-        createElement(Screen, { claimed: true, sendBack: () => true, setOptions: vi.fn() })
-      )
+      tree.update(createElement(Screen, { claimed: true, sendBack: second, setOptions: vi.fn() }))
     })
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
     expect(native.remove).not.toHaveBeenCalled()
+    expect(listener?.()).toBe(true)
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(1)
   })
 
   it('reaches for no hardware key on iOS, which has none', () => {
@@ -110,8 +123,7 @@ describe('the shell taking the device Back key for a page that claimed it', () =
     expect(native.addEventListener).not.toHaveBeenCalled()
   })
 
-  /** iOS has no key to intercept, so what is taken away is the swipe: a swipe-back over an open
-   *  sheet would leave the screen with the sheet still on it. */
+  // On iOS, disable swipe-back while a sheet claims Back so swiping cannot leave the sheet’s screen.
   it('takes the stack swipe away on iOS while the claim is live, and restores it after', () => {
     native.platform.os = 'ios'
     const setOptions = vi.fn()

@@ -6,11 +6,12 @@ import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
 import { isKnownReadyPromptBody } from './terminal-wait-detection'
 import {
   evaluateAgentStateRules,
+  hookAuthority,
   readsTrustedScreen
 } from './agent-state-rules/agent-state-rules-engine'
 import {
   evaluateTuiIdle,
-  hasFreshDoneFirstPartyStatus,
+  quietForegroundLaneForTerminalAgent,
   hasQuietReadyScreen,
   isTuiIdleReadyVerdict,
   nameOnlyIdleNeedsCorroboration,
@@ -36,6 +37,8 @@ function input(overrides: Partial<TuiIdleEvaluationInput> = {}): TuiIdleEvaluati
     readPositiveBodyEvidence: () => false,
     readQuietReadyBodyEvidence: () => true,
     readAgentRuleVerdict: () => null,
+    readScreenInputVeto: () => null,
+    titleObservedAtEpochMs: null,
     agent: 'muse',
     firstPartyStatus: null,
     quiescenceMs: QUIESCENCE_MS,
@@ -176,6 +179,11 @@ describe('evaluateTuiIdle ranking', () => {
 
   // Why: a launched agent whose title Orca cannot classify has no other lane; closing this
   // one for every known agent left `worker start` failing at agent_readiness (STA-7440).
+  it('leaves the lane open for recognized dsb instead of reading a missing launch config', () => {
+    expect(quietForegroundLaneForTerminalAgent('dsb')).toBe('open')
+    expect(quietForegroundLaneForTerminalAgent('codex')).toBe('closed')
+  })
+
   it('keeps the quiet-foreground lane for an agent with no other rest signal, after it paints', () => {
     for (const agent of ['amp', 'goose', 'crush', 'kimi', 'qwen-code', 'rovo', 'aug'] as const) {
       expect(evaluateTuiIdle(input({ ...noMuse, agent }))).toEqual({
@@ -198,8 +206,15 @@ describe('evaluateTuiIdle ranking', () => {
 describe('rest signal agrees with the lanes that can settle a wait', () => {
   it.each(Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent))('%s', (agent) => {
     const signal = getTuiAgentRestSignal(agent)
-    const hookDone = hasFreshDoneFirstPartyStatus(agent, { state: 'done', updatedAt: Date.now() })
-    expect(hookDone).toBe(signal === 'hook-done')
+    // Why both ways: a `hook-done` agent rests only through the hook lane, and a trusted hook
+    // lane is a stronger signal than the quiet foreground `none` reopens.
+    const trustsHooks = hookAuthority(agent) !== 'identity-only'
+    if (signal === 'hook-done') {
+      expect(trustsHooks).toBe(true)
+    }
+    if (trustsHooks) {
+      expect(signal).not.toBe('none')
+    }
     let screenRead = false
     isKnownReadyPromptBody(
       '',
@@ -253,6 +268,10 @@ describe('rest signal agrees with the lanes that can settle a wait', () => {
 })
 
 describe('nameOnlyIdleNeedsCorroboration', () => {
+  it('keeps recognition-only DSB titles outside managed idle-title policies', () => {
+    expect(nameOnlyIdleNeedsCorroboration(null, 'DeepSeek Build')).toBe(false)
+  })
+
   it('holds agents that announce rest with an explicit title, native or synthesized', () => {
     expect(nameOnlyIdleNeedsCorroboration('claude')).toBe(true)
     expect(nameOnlyIdleNeedsCorroboration('codex')).toBe(true)
@@ -268,41 +287,84 @@ describe('nameOnlyIdleNeedsCorroboration', () => {
   })
 })
 
-describe('a DSH pane settles tui-idle on its own hook', () => {
-  const base = {
-    record: { lastAgentStatus: null, lastOutputAt: null, lastOscTitle: '\u2726 \u{1F40B} repo' },
-    rendererTitle: undefined,
-    readPositiveBodyEvidence: () => false,
-    readQuietReadyBodyEvidence: () => false,
-    readAgentRuleVerdict: () => null,
-    readTailBlockedReason: () => null,
-    agent: 'dsh' as const,
-    firstPartyStatus: { state: 'done' as const, updatedAt: Date.now() },
-    quiescenceMs: 1_000
-  } satisfies TuiIdleEvaluationInput
+describe('evaluateTuiIdle screen input veto', () => {
+  const omp = (overrides: Partial<TuiIdleEvaluationInput> = {}) =>
+    input({ agent: 'omp', readQuietReadyBodyEvidence: () => false, ...overrides })
 
-  const ready = (over: Partial<TuiIdleEvaluationInput> = {}) =>
-    isTuiIdleReadyVerdict(evaluateTuiIdle({ ...base, ...over }))
-
-  it('settles on a fresh first-party done', () => {
-    // The regression: DSH's title carries no idle (its rest glyph is Gemini's working one),
-    // so every title-reading tier failed and `terminal wait --for tui-idle` ran to timeout
-    // against an already-ready composer.
-    expect(ready()).toBe(true)
+  it('refuses every ready lane while the screen vetoes input', () => {
+    const lanes: Partial<TuiIdleEvaluationInput>[] = [
+      { record: record({ lastOscTitle: 'π - repo', lastAgentStatus: 'idle' }) },
+      { readPositiveBodyEvidence: () => true },
+      { firstPartyStatus: { state: 'done', updatedAt: Date.now(), sessionBoundary: true } },
+      { record: record({ lastOscTitle: 'OMP', lastAgentStatus: 'idle' }) }
+    ]
+    for (const lane of lanes) {
+      expect(isTuiIdleReadyVerdict(evaluateTuiIdle(omp(lane)))).toBe(true)
+      expect(evaluateTuiIdle(omp({ ...lane, readScreenInputVeto: () => true }))).toEqual({
+        kind: 'pending',
+        quietForeground: 'closed'
+      })
+    }
   })
 
-  it('does not settle while the same pane reports working', () => {
-    expect(ready({ firstPartyStatus: { state: 'working', updatedAt: Date.now() } })).toBe(false)
+  it("accepts OMP's own idle title once it has stood on a screen read clear of the wizard", () => {
+    const idle = {
+      record: record({
+        lastOscTitle: 'π > repo',
+        lastAgentStatus: 'idle',
+        lastOutputAt: Date.now()
+      }),
+      titleObservedAtEpochMs: Date.now() - QUIESCENCE_MS
+    }
+    // Output still flowing (OMP's bracketed-paste keepalive) does not hold the title back.
+    expect(evaluateTuiIdle(omp({ ...idle, readScreenInputVeto: () => false }))).toEqual({
+      kind: 'ready-strong'
+    })
+    for (const unproven of [
+      { readScreenInputVeto: () => null },
+      { readScreenInputVeto: () => true },
+      {
+        titleObservedAtEpochMs: Date.now() - QUIESCENCE_MS + 1_000,
+        readScreenInputVeto: () => false
+      },
+      { titleObservedAtEpochMs: null, readScreenInputVeto: () => false }
+    ]) {
+      expect(isTuiIdleReadyVerdict(evaluateTuiIdle(omp({ ...idle, ...unproven })))).toBe(false)
+    }
   })
 
-  it('does not settle on a stale done', () => {
+  it('keeps an OMP pane waiting on the user pending, so the poll still reads its screen', () => {
     expect(
-      ready({ firstPartyStatus: { state: 'done', updatedAt: Date.now() - 31 * 60 * 1000 } })
-    ).toBe(false)
+      evaluateTuiIdle(
+        omp({
+          record: record({ lastOscTitle: 'OMP', lastAgentStatus: 'idle' }),
+          firstPartyStatus: { state: 'blocked', updatedAt: Date.now() }
+        })
+      )
+    ).toEqual({ kind: 'pending', quietForeground: 'closed' })
+  })
+})
+
+describe('evaluateTuiIdle with OSC 7501 program status', () => {
+  const claude = (overrides: Partial<TuiIdleEvaluationInput> = {}) =>
+    input({
+      agent: 'claude',
+      // Claude drops its ✳ idle glyph once the terminal answers the OSC 7501 probe.
+      record: record({ lastOscTitle: 'Tea or coffee notes.txt', lastAgentStatus: null }),
+      ...overrides
+    })
+
+  it("settles on the program's own done although its title carries no idle glyph", () => {
+    expect(
+      evaluateTuiIdle(
+        claude({ firstPartyStatus: { state: 'done', updatedAt: Date.now(), programAtRest: true } })
+      )
+    ).toEqual({ kind: 'ready-strong' })
   })
 
-  it('leaves other agents on the title lanes', () => {
-    // Scoped on purpose: an agent whose hooks report child turns can emit `done` mid-turn.
-    expect(ready({ agent: 'claude' })).toBe(false)
+  it('does not settle on a done that only a hook-style stream claimed', () => {
+    expect(
+      evaluateTuiIdle(claude({ firstPartyStatus: { state: 'done', updatedAt: Date.now() } }))
+    ).not.toEqual({ kind: 'ready-strong' })
   })
 })

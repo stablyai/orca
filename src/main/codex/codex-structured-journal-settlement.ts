@@ -2,25 +2,20 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
   type AgentJournalItemIdentity,
-  type AgentJournalTurnLifecycle
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnLifecycleState
 } from '../../shared/agent-session-journal-types'
 import {
   journalLifecycleItemMutation,
-  type JournalLifecycleMutationInput
+  type JournalLifecycleIdentityMutationInput
 } from '../native-chat/agent-session-journal/journal-row-builders'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
-import {
-  codexJournalItem,
-  codexStreamingJournalItem,
-  type CodexThreadItem,
-  type CodexTurnOrdinals
-} from './codex-structured-item-translation'
+import type { CodexTurnOrdinals } from './codex-structured-item-translation'
 import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
-import type { CodexHelperName } from './codex-collab-agent-item-translation'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 import {
@@ -28,16 +23,9 @@ import {
   codexTurnLifecycleIdentity
 } from './codex-structured-journal-translation-turns'
 import { appendCodexLifecycleMutations } from './codex-structured-journal-sink'
+import { codexActiveItemBody, interruptedCodexItemBody } from './codex-unfinished-item-body'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
-
-export type CodexActiveJournalItem = {
-  threadId: string
-  turnId: string | null
-  identity: AgentJournalItemIdentity
-  item: CodexThreadItem
-  /** Names the helpers a collab call acted on, so a settled revision keeps naming them. */
-  helperName?: CodexHelperName
-}
+import type { CodexActiveJournalItem } from './codex-structured-journal-contracts'
 
 export type CodexPendingJournalPrompt = {
   threadId: string
@@ -57,20 +45,19 @@ export function settleCodexJournalSession(input: {
   currentTurnIds: ReadonlyMap<string, ReadonlySet<string>>
   primaryThreadId: string | null
   ordinals: CodexTurnOrdinals
-  /** Terminal lifecycle for a turn the provider left running when it ended; null for a turn a
-   *  conversation command claimed, whose record the host settles. */
+  /** Null for command-owned turns, which the host settles. */
   settledTurnLifecycle: (threadId: string, turnId: string) => AgentJournalTurnLifecycle | null
   attributionFor: CodexRowAttribution
+  now?: () => number
 }): StructuredAgentSessionSinkAdmission {
   // Rows from every thread settle in this one batch, so each names its own producer.
-  const mutations: JournalLifecycleMutationInput[] = []
+  const mutations: JournalLifecycleIdentityMutationInput[] = []
   const turnOrdinalsToForget: { threadId: string; turnId: string }[] = []
   for (const active of input.activeItems.values()) {
-    const streamed = input.streams.snapshot(active.threadId, active.item.id)
-    const translated = streamed
-      ? codexStreamingJournalItem(active.item, streamed.text)
-      : codexJournalItem(active.item, active.helperName)
-    const body = interruptedBody(translated.body)
+    const body = interruptedCodexItemBody(codexActiveItemBody(active, input.streams), {
+      at: input.event.observedAt ?? input.now?.() ?? Date.now(),
+      call: 'interrupted'
+    })
     if (body) {
       mutations.push(settledRow(input.attributionFor, active, body))
     }
@@ -116,18 +103,22 @@ export function settleCodexJournalTurn(input: {
   sessionId: string
   threadId: string
   turnId: string
-  /** Null off the primary thread: only the primary turn owns a lifecycle row. */
+  /** Only primary-thread turns own lifecycle rows. */
   turnLifecycle: AgentJournalTurnLifecycle | null
+  /** Host end time, also applied to unfinished items. */
+  completedAt: number
+  /** Unfinished calls inherit this turn-end state on every thread. */
+  turnEnd: Extract<AgentJournalTurnLifecycleState, 'completed' | 'interrupted'>
   sink: StructuredAgentSessionEventSink
   streams: CodexStructuredItemStreams
   activeItems: Map<string, CodexActiveJournalItem>
   pendingPrompts?: Map<string, CodexPendingJournalPrompt>
   clearPromptTurn?: (threadId: string, turnId: string) => void
   attributionFor: CodexRowAttribution
-  /** The end of a conversation command the turn carried, which settles with it. */
-  commandEnd?: readonly JournalLifecycleMutationInput[]
+  /** Settle the carried conversation command in the same batch. */
+  commandEnd?: readonly JournalLifecycleIdentityMutationInput[]
 }): StructuredAgentSessionSinkAdmission {
-  const mutations: JournalLifecycleMutationInput[] = []
+  const mutations: JournalLifecycleIdentityMutationInput[] = []
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
   const pendingPromptsToForget: string[] = []
   const pendingPrompts = input.pendingPrompts ?? new Map<string, CodexPendingJournalPrompt>()
@@ -138,11 +129,10 @@ export function settleCodexJournalTurn(input: {
     if (codexCommandOutlivesTurn(active.item)) {
       continue
     }
-    const streamed = input.streams.snapshot(active.threadId, active.item.id)
-    const translated = streamed
-      ? codexStreamingJournalItem(active.item, streamed.text)
-      : codexJournalItem(active.item, active.helperName)
-    const body = interruptedBody(translated.body)
+    const body = interruptedCodexItemBody(codexActiveItemBody(active, input.streams), {
+      at: input.completedAt,
+      call: input.turnEnd
+    })
     if (body) {
       mutations.push(settledRow(input.attributionFor, active, body))
     }
@@ -158,7 +148,7 @@ export function settleCodexJournalTurn(input: {
     }
     pendingPromptsToForget.push(key)
   }
-  // Revised, never tombstoned: the terminal row keeps the turn's duration durable.
+  // Preserve the terminal row so the turn's duration remains available.
   if (input.turnLifecycle) {
     mutations.push({
       kind: 'item',
@@ -187,28 +177,13 @@ export function settleCodexJournalTurn(input: {
   return ADMITTED
 }
 
-/** A settled item or prompt, naming its producer: the settlement can be the row's first write. */
+/** Include attribution because settlement may be the row's first write. */
 function settledRow(
   attributionFor: CodexRowAttribution,
   row: { threadId: string; turnId: string | null; identity: AgentJournalItemIdentity },
   body: AgentJournalItemBody
-): JournalLifecycleMutationInput {
+): JournalLifecycleIdentityMutationInput {
   return journalLifecycleItemMutation(attributionFor(row.threadId, row.turnId), row.identity, body)
-}
-
-function interruptedBody(body: AgentJournalItemBody | null): AgentJournalItemBody | null {
-  if (!body) {
-    return null
-  }
-  if (body.kind === 'tool-call') {
-    return { ...body, state: 'failed' }
-  }
-  if (body.kind === 'message') {
-    return body
-  }
-  return body.kind === 'diff'
-    ? { kind: 'status', text: 'File changes were interrupted before completion.' }
-    : body
 }
 
 function exitSettlementId(event: Extract<CodexStructuredSessionEvent, { type: 'ended' }>): string {

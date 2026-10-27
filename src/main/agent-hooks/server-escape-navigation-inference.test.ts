@@ -43,9 +43,7 @@ function ingest(server: AgentHookServer, row: HookRow): void {
   )
 }
 
-/** The request `createAgentInterruptInference` emits for this row after its settle window.
- *  Its shape is pinned on the renderer side by agent-interrupt-inference.test.ts; the renderer
- *  cannot be imported here because tsconfig.node.json maps neither `@/` nor renderer sources. */
+/** Mirror the renderer inference request; node-side path mappings cannot import its implementation. */
 function pressInterruptKey(
   server: AgentHookServer,
   intent: AgentInterruptInputIntent,
@@ -120,7 +118,7 @@ describe('navigation Escape during an open tool call', () => {
 
     vi.setSystemTime(1_200)
     expect(pressInterruptKey(server, 'plain-escape')).toBe(false)
-    // Why: OMP's second Escape is more navigation, so even a double-press request must not infer.
+    // A second OMP Escape still means navigation.
     vi.setSystemTime(1_400)
     expect(pressInterruptKey(server, 'plain-escape', 2)).toBe(false)
 
@@ -236,15 +234,12 @@ describe('navigation Escape during an open tool call', () => {
 
     vi.setSystemTime(1_200)
     expect(pressInterruptKey(server, 'plain-escape')).toBe(true)
-    // Why: dismissal restores the lead state the question displaced, so the waiting card clears.
     expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
       state: 'working'
     })
   })
 })
 
-/** The rule has to hold on the path a real agent CLI uses, not only on ingestRemote: the loopback
- *  listener is what a locally launched agent posts to. */
 describe('navigation Escape over the loopback hook listener', () => {
   const cases: {
     hookEventName: 'PreToolUse' | 'PostToolUse'

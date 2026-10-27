@@ -22,6 +22,8 @@ const VALUE_FLAGS = new Set([
   '--api-key'
 ])
 const SWITCH_FLAGS = new Set(['--no-extensions', '--no-skills', '--no-prompt-templates'])
+// `@` keeps an echo-on prompt from printing the substituted body.
+const CMD_FRESH_CONFIG_FOR = 'for %! in (.) do @'
 
 /** Apply fresh intent to one launch command, never the saved resume configuration. */
 export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, suffix = ''): string {
@@ -48,7 +50,7 @@ export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, su
   }
   const path =
     shell === 'cmd'
-      ? `"%${ORCA_OMP_FRESH_CONFIG_ENV}%"`
+      ? `"%~$${ORCA_OMP_FRESH_CONFIG_ENV}:!"`
       : shell === 'powershell'
         ? `"$env:${ORCA_OMP_FRESH_CONFIG_ENV}"`
         : `"$${ORCA_OMP_FRESH_CONFIG_ENV}"`
@@ -59,7 +61,9 @@ export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, su
     return `if (${path} -and (Test-Path -LiteralPath ${path} -PathType Leaf)) { ${launch} } else { $global:LASTEXITCODE = 1; Write-Error '${error}' }`
   }
   if (shell === 'cmd') {
-    return `if exist ${path} (if not exist "${path.slice(1, -1)}\\*" (${launch}) else (echo ${error} 1>&2 & verify invalid 2>nul)) else (echo ${error} 1>&2 & verify invalid 2>nul)`
+    // By-name %~$NAME:! reads paths even inside expanded startup variables, where %NAME% stays literal.
+    // The FOR variable substitutes only %!/%~…! across the body; quoted prompt ! is escaped, although raw overrides could form it.
+    return `${CMD_FRESH_CONFIG_FOR}if exist ${path} (if not exist "${path.slice(1, -1)}\\*" (${launch}) else (echo ${error} 1>&2 & verify invalid 2>nul)) else (echo ${error} 1>&2 & verify invalid 2>nul)`
   }
   const available = `printenv ${ORCA_OMP_FRESH_CONFIG_ENV} >/dev/null && test -f ${path}`
   // && is supported by bash, zsh, and fish; invoking directly preserves shell aliases/functions.
@@ -77,6 +81,8 @@ export function isFreshOmpLaunchCommand(command: string | undefined): boolean {
     [
       `printenv ${ORCA_OMP_FRESH_CONFIG_ENV} >/dev/null && test -f "$${ORCA_OMP_FRESH_CONFIG_ENV}"`,
       `if ("$env:${ORCA_OMP_FRESH_CONFIG_ENV}" -and (Test-Path -LiteralPath "$env:${ORCA_OMP_FRESH_CONFIG_ENV}" -PathType Leaf))`,
+      `${CMD_FRESH_CONFIG_FOR}if exist "%~$${ORCA_OMP_FRESH_CONFIG_ENV}:!" (if not exist "%~$${ORCA_OMP_FRESH_CONFIG_ENV}:!\\*"`,
+      // Lines built before the by-name guard can still be persisted or come from an older host.
       `if exist "%${ORCA_OMP_FRESH_CONFIG_ENV}%" (if not exist "%${ORCA_OMP_FRESH_CONFIG_ENV}%\\*"`
     ].some((prefix) => guarded.startsWith(prefix))
   )

@@ -1,3 +1,5 @@
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from '../checks-entry-refresh'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
@@ -99,7 +101,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       if (!repo || !branch || !activeWorktreeId) {
         return
       }
-      // Why: tab entry is automatic UI, not a user refresh; keep coordinator rate-limit guards and only force panes already proven stale.
+      // Tab entry is automatic: preserve rate-limit guards and force only panes already known stale.
       if (isGitLabReviewContext) {
         void fetchHostedReviewForBranch(repo.path, branch, {
           force: true,
@@ -146,7 +148,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     ]
   )
 
-  // Why: force a freshness check on each Checks-tab entry so externally-changed PRs appear without waiting for the cache TTL. See docs/refresh-on-checks-tab.md.
+  // Check freshness on tab entry to catch external changes before TTL expiry; see docs/refresh-on-checks-tab.md.
   const entryKey =
     isPanelVisible && repo && !isFolder && branch
       ? `${activeWorktreeId ?? ''}::${activeGitLabReview ? hostedReviewCacheKey : prCacheKey}`
@@ -154,7 +156,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
   const lastEntryKeyRef = useRef<string>('')
   useEffect(() => {
     if (!entryKey) {
-      // Reset on hide so reopening the same PR re-evaluates freshness; a prevKey !== currentKey check alone would miss close-and-reopen.
+      // Reset on hide so closing/reopening the same PR still reevaluates freshness.
       lastEntryKeyRef.current = ''
       return
     }
@@ -181,7 +183,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     const refreshComments =
       prNumber !== null && (commentsFetchedAt === undefined || commentsFetchedAt < cutoff)
 
-    // Reset polling attention state so the forced fetch establishes a fresh baseline instead of colliding with the previous PR's backoff.
+    // Reset the previous PR's backoff so this forced fetch establishes its own baseline.
     pollIntervalRef.current = 30_000
     prevChecksRef.current = ''
     handleEntryRefresh({ refreshChecks, refreshComments })
@@ -294,9 +296,13 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     setTitleSaving(true)
     try {
       if (activeReview.provider === 'gitlab') {
-        const result = await window.api.gl.updateMR({
+        const selector = {
           repoPath: repo.path,
           repoId: repo.id,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+        }
+        const result = await gitLabApiFor(selector).updateMR({
+          ...selector,
           iid: activeReview.number,
           updates: { title: nextTitle }
         })
@@ -329,6 +335,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     }
   }, [
     activeReview,
+    activeWorktree,
     repo,
     pr,
     titleDraft,

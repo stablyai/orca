@@ -2,7 +2,6 @@ import { getSecretStore } from '../shared/secret-store'
 
 export const PROTECTED_SECRET_SLOT = {
   opencodeSessionCookie: 'settings.opencodeSessionCookie',
-  opencodeGoApiKey: 'settings.opencodeGoApiKey',
   httpProxyUrl: 'settings.httpProxyUrl',
   browserKagiSessionLink: 'ui.browserKagiSessionLink'
 } as const
@@ -47,6 +46,17 @@ export class ProtectedSecretPersistence {
     this.retainedBlobs.delete(slot)
     this.sealedSlots.delete(slot)
     this.pendingEncryption.delete(slot)
+  }
+
+  /** Parks ciphertext without allowing an earlier pending write to replace it. */
+  retainSealed(slot: string, blob: string): void {
+    this.removeRetainedBlob(slot)
+    this.retainedBlobs.set(slot, blob)
+    this.sealedSlots.add(slot)
+  }
+
+  sealedBlob(slot: string): string | null {
+    return this.sealedSlots.has(slot) ? (this.retainedBlobs.get(slot) ?? null) : null
   }
 
   isSealed(slot: string, value: string): boolean {
@@ -166,10 +176,7 @@ export class ProtectedSecretPersistence {
   }
 
   private encryptionAvailable(): boolean {
-    // Why getSecretStore() sits outside the try: an uninstalled store is a startup bug,
-    // not a keyring failure. Swallowing it would degrade to an empty blob and report
-    // 'unavailable' — the silent-wrong-state outcome the port throws to prevent. Only
-    // the backend probe itself may fail softly.
+    // Missing store installation is a startup bug; only backend keyring failures may degrade softly.
     const store = getSecretStore()
     try {
       return store.isEncryptionAvailable()

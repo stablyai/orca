@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { open, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
@@ -19,6 +20,7 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
+import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
@@ -33,53 +35,34 @@ import { skillDirectoryMaxDepth } from '../../shared/skill-discovery-depth'
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
-// Why: the fixed home roots are identical for every target, so one worktree pane
-// per open workspace used to re-walk the same directories once per pane. Sharing
-// them for a few seconds is what bounds that fan-out.
+// Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
-// Why: sized off the root formula, not a round number. One scan builds
-// `17 fixed home roots + 7 per local repo (+ cwd) + plugin roots`, so a bound
-// smaller than a single scan's root count makes that scan evict its own earlier
-// entries and the cache degrades to a ~0% hit rate — exactly the walk this
-// exists to prevent. The live key space is the union across targets — the fixed
-// home roots plus seven per repo plus seven per distinct workspace cwd — so this holds
-// a few hundred repos with panes open, not an unbounded install. Past that the LRU
-// keeps the hot home roots and the repo roots thrash, which degrades rather than
-// breaks. Most repo roots do not exist, and a missing root caches as
-// `{exists: false, skills: []}`.
+// A scan builds 17 fixed roots + 7/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
 const MAX_CACHED_SKILL_ROOTS = 1_024
-// Why: roots grow with the repo count, so an uncapped id list would make one log
-// line grow with the install. Root *ids* are safe to log where labels and paths
-// are not — a repo/plugin id is already a hash.
+// Cap logged root ids as repos grow; hashed ids avoid exposing names and paths.
 export const MAX_LOGGED_ROOT_IDS = 12
-// Why: a root that did not answer holds unknown skills, not zero, so serving what
-// it last held is what stops an installed skill flipping to "Install" while a
-// mount is wedged. Bounded rather than forever: it covers a stall
-// (MAX_JOINABLE_SCAN_AGE_MS) many times over without pinning a permanently dead
-// root to rows that can no longer be checked.
+// Unavailable roots are unknown, not empty; retain last answers briefly without pinning permanently dead roots.
 export const LAST_KNOWN_ROOT_SCAN_RETENTION_MS = 5 * 60_000
 
 type RootScan = { exists: boolean; skills: ScannedSkill[]; unavailable?: boolean }
 
 const rootScans = new SkillScanCoalescer<RootScan>(MAX_CACHED_SKILL_ROOTS)
-/** Last answered scan per root key, read only when a later scan goes unavailable. */
 const lastKnownRootScans = new Map<string, { skills: ScannedSkill[]; recordedAt: number }>()
 
-/** Drop every shared root scan, e.g. after a skill install/update mutates disk. */
+/** Invalidate after skill mutations. */
 export function clearSkillRootScanCache(): void {
   rootScans.clear()
-  // A mutation invalidates the retained copy too — it is a pre-mutation answer.
+  // Mutation invalidates retained pre-mutation answers too.
   lastKnownRootScans.clear()
 }
 
 function recordLastKnownRootScan(key: string, scan: RootScan): void {
   if (!scan.exists) {
-    // Why: a root that scanned as absent is known-empty, so keeping an older copy
-    // would resurrect skills the user actually removed the next time it stalls.
+    // Confirmed absence invalidates retained skills or a later stall would resurrect deleted entries.
     lastKnownRootScans.delete(key)
     return
   }
-  // Delete first so re-insert refreshes recency under the LRU bound below.
+  // Reinsert to refresh LRU recency.
   lastKnownRootScans.delete(key)
   lastKnownRootScans.set(key, { skills: scan.skills, recordedAt: Date.now() })
   while (lastKnownRootScans.size > MAX_CACHED_SKILL_ROOTS) {
@@ -142,16 +125,12 @@ type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
   const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
   const skillFiles = await findSkillFiles(root.path, maxDepth, signal)
-  // Why: a root can hold many packages and each one costs a summary read plus a
-  // package walk. Unbounded fan-out here is what turned one scan into a burst of
-  // filesystem-metadata work across every core.
+  // Bound per-package metadata fan-out so one large root cannot occupy every core.
   const skills = await runSkillCandidateTasks(
     skillFiles.map((skillFilePath) => async (): Promise<ScannedSkill | null> => {
-      // Why: these tasks drain long after the walk, so an abandoned scan would
-      // keep spending a realpath + stat + read per remaining candidate.
+      // Abandoned walks must stop queued realpath/stat/read work too.
       signal.throwIfAborted()
-      // Why: path identity belongs to the scanning host; canonicalizing before
-      // returning prevents symlinked roots from becoming duplicate picker rows.
+      // Canonicalize on the scanning host so symlinked roots cannot duplicate picker rows.
       const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
       const directoryPath = dirname(skillFilePath)
       const summary = await readSkillSummary(skillFilePath)
@@ -163,8 +142,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
         id: stablePathId(canonicalSkillFilePath),
         name: summary.name ?? basename(directoryPath),
         description: summary.description,
-        // Copy: `root.providers` is shared across every skill/source from this
-        // root, so the dedup merge below must not mutate the aliased array.
+        // Copy shared root tags before merges so siblings cannot mutate one another.
         providers: [...root.providers],
         sourceKind,
         sourceLabel: sourceLabelForSkill(root, sourceKind),
@@ -180,9 +158,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
   return skills.filter((skill): skill is ScannedSkill => skill !== null)
 }
 
-// Why: two roots can share a path (e.g. `~/.claude/skills` is both a home root
-// and a repo root when the home dir is the workspace), and their scan differs
-// only by depth, which `sourceKind` decides.
+// A path can belong to home and repo roots with different depth; key by sourceKind too.
 function rootScanKey(root: SkillScanRoot): string {
   return `${root.sourceKind}\0${root.path}`
 }
@@ -207,18 +183,7 @@ async function scanRootShared(
     if (!isSkillRootUnavailableError(error)) {
       throw error
     }
-    // Why degrade instead of rejecting: one unreachable root must not fail the
-    // whole discovery and empty the picker for every healthy root beside it.
-    // `unavailable` keeps that distinct from a root that genuinely is not there.
-    //
-    // The abort case matters as much as the shed one: callers already waiting on
-    // a scan that is later abandoned for age see it reject, and re-throwing here
-    // would turn one slow root into a failed discovery for every root.
-    //
-    // Empty skills here is not the same claim as `exists: false`: every consumer
-    // that derives "installed" does it from the skill list, so shipping an empty
-    // one turned an unanswered root into proof the skill is gone. Serve what the
-    // root last held and let `unavailable` carry the uncertainty.
+    // One unavailable root must not fail healthy roots. Serve its last answer with explicit uncertainty; an empty list would falsely imply uninstall.
     return {
       value: { exists: true, skills: readLastKnownRootScan(key), unavailable: true },
       cached: false
@@ -227,14 +192,11 @@ async function scanRootShared(
 }
 
 function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSkill): void {
-  // Why: overlapping repo/cwd roots and symlinked provider homes can reach
-  // the same file. Keep the first source's higher-level scope identity, but
-  // record every contributing root so per-agent visibility survives dedup.
+  // Deduplicate canonical files but retain every contributing root for per-agent visibility.
   const existing = seen.get(skill.canonicalSkillFilePath)
   if (!existing) {
     const { canonicalSkillFilePath, ...publicSkill } = skill
-    // Copy: a shared root scan hands the same skill object to every caller, so the
-    // result each one owns must not alias the cached arrays.
+    // Cached scan objects are shared; copy their arrays into each caller's result.
     seen.set(canonicalSkillFilePath, {
       ...publicSkill,
       providers: [...publicSkill.providers],
@@ -245,11 +207,7 @@ function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSki
   if (existing.rootPaths && !existing.rootPaths.includes(skill.rootPath)) {
     existing.rootPaths.push(skill.rootPath)
   }
-  // Why: providers is per-agent visibility just like rootPaths; keeping only
-  // the first root's tags makes a shared/symlinked skill under-report which
-  // agents can see it on the Settings provider badges/filter. Reassign a
-  // fresh array — `providers` aliases the scan root's array, so pushing in
-  // place would mutate the root and every sibling skill/source sharing it.
+  // Merge all provider tags for visibility, using a fresh array so cached roots and sibling skills stay unchanged.
   const mergedProviders = [...existing.providers]
   for (const provider of skill.providers) {
     if (!mergedProviders.includes(provider)) {
@@ -260,6 +218,7 @@ function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSki
 }
 
 export async function discoverSkills(args: {
+  signal?: AbortSignal
   repos?: Repo[]
   homeDir?: string
   cwd?: string
@@ -269,30 +228,42 @@ export async function discoverSkills(args: {
   names?: string[]
   sourceKinds?: SkillSourceKind[]
 }): Promise<SkillDiscoveryResult> {
+  args.signal?.throwIfAborted()
   const startedAt = Date.now()
   const homeDir = args.homeDir ?? homedir()
   const refresh = args.refresh === true
   const roots = [
     ...buildSkillDiscoverySources({ ...args, homeDir }),
-    // Why: plugin discovery is native-chat data keyed to an explicit workspace.
-    // Untargeted scans (Settings) keep their pre-picker inventory and cost.
+    // Plugin inventory belongs to explicit workspaces; untargeted Settings scans retain their existing scope/cost.
     ...(args.cwd &&
     args.includeCwd !== false &&
     (!args.sourceKinds?.length || args.sourceKinds.includes('plugin'))
-      ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
+      ? await waitForPromiseWithSignal(
+          discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd, signal: args.signal }),
+          args.signal
+        )
       : [])
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
-  const scans = await Promise.all(roots.map((root) => scanRootShared(root, refresh)))
-  const sources: SkillDiscoverySource[] = roots.map((root, index) => ({
-    ...root,
-    providers: [...root.providers],
-    exists: scans[index].value.exists,
-    skippedReason: scans[index].value.unavailable
-      ? 'unavailable'
-      : scans[index].value.exists
-        ? undefined
-        : 'missing'
-  }))
+  args.signal?.throwIfAborted()
+  const scans = await waitForPromiseWithSignal(
+    Promise.all(roots.map((root) => scanRootShared(root, refresh))),
+    args.signal
+  )
+  const sources: SkillDiscoverySource[] = [
+    ...roots.map((root, index): SkillDiscoverySource => ({
+      ...root,
+      providers: [...root.providers],
+      exists: scans[index].value.exists,
+      skippedReason: scans[index].value.unavailable
+        ? 'unavailable'
+        : scans[index].value.exists
+          ? undefined
+          : 'missing'
+    })),
+    ...(!args.sourceKinds?.length || args.sourceKinds.includes('repo')
+      ? buildRemoteRepoSkillSources(args.repos ?? [])
+      : [])
+  ]
   const normalizedNames = args.names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   const seen = new Map<string, DiscoveredSkill>()
@@ -312,15 +283,10 @@ export async function discoverSkills(args: {
     }
   }
   const skills = sortDiscoveredSkills(Array.from(seen.values()))
-  // Why: root *ids* — a repo/plugin id is already a hash, while its label carries
-  // the repo or plugin name and its path carries the user's directory names. A
-  // fully cached scan did no filesystem work, so it stays silent rather than
-  // burying the bursts this line exists to make visible.
+  // Log filesystem work only, using hashed root ids rather than private labels/paths.
   const walked = roots.filter((_, index) => !scans[index].cached).map((root) => root.id)
   if (walked.length > 0) {
-    // `present` is not derivable from the rest: "walked 500 roots, 3 existed" is
-    // the shape that says the root set, not the tree, is what costs. The id list
-    // is capped because roots grow with the repo count.
+    // Present-root count distinguishes large root sets from large trees; cap ids as repo count grows.
     const present = sources.filter((source) => source.exists).length
     console.info(
       `[skills] scan roots=${roots.length} present=${present} walked=${walked.length} skills=${skills.length} ms=${Date.now() - startedAt} ids=${walked.slice(0, MAX_LOGGED_ROOT_IDS).join(',')}`

@@ -1,15 +1,7 @@
-/**
- * The RPC boundary of `agent.launch`: who may call it, what it accepts, and which runtime call
- * each of its three factories makes.
- *
- * The last group is where the defect lived. A structured launch must reach
- * `createManagedWorktree` with NO startup agent — an agent-first create makes the startup terminal
- * the agent and puts the structured branch out of reach — and the old `worktree.create` contract
- * must be observably untouched by any of it.
- */
+/** Exercise RPC authorization, parsing and all surface factories; structured creates must omit startupAgent while legacy worktree.create retains its terminal contract. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import type { RpcContext } from '../core'
 import {
   CAPABLE_CLIENT,
@@ -19,8 +11,7 @@ import {
   type AgentLaunchRuntimeStub as RuntimeStub
 } from './agent-launch.test-fixture'
 
-/** The real `createStructuredAgentSessionForWorktree` answers ok-or-refusal. The stub used to
- *  declare only the ok arm, which made the refusal-downgrade path unmodellable. */
+/** Include refusal replies so the fixture can exercise structured-to-terminal downgrade. */
 type StructuredCreateReply =
   | { ok: true; value: { sessionId: string } }
   | { ok: false; refusal: { code: string; message: string } }
@@ -208,9 +199,15 @@ describe('the worktree factory', () => {
     expect(args.startupAgent).toBeUndefined()
     expect(args.awaitTerminalProvisioning).toBe(true)
     expect(args.observeSetupCompletion).toBe(true)
-    // Still recorded on the workspace: the launch owns the agent whichever surface it settles on.
     expect(args.createdWithAgent).toBe('claude')
     expect(result.outcome.kind).toBe('structured')
+  })
+
+  it('lets the create fall back to a local base when the launch carries no automation provenance', async () => {
+    const runtime = runtimeStub()
+    await launch(CREATE_LAUNCH, runtime)
+
+    expect(createArgs(runtime).allowLocalBaseFallback).toBe(true)
   })
 
   it('deduplicates concurrent launches through surface creation', async () => {
@@ -325,6 +322,7 @@ describe('the worktree factory', () => {
 
     expect(createArgs(runtime)).toMatchObject({
       startupAgent: 'claude',
+      terminalImageViewerSupported: false,
       startupAgentArgs: '--model opus',
       startupCwd: '/repo/packages/api',
       startupLaunchSource: 'source_control_recovery'
@@ -378,6 +376,66 @@ describe('the worktree factory', () => {
   })
 })
 
+describe('whose window a new workspace moves', () => {
+  const ACTIVATING_CREATE_LAUNCH = {
+    agent: 'claude',
+    target: {
+      kind: 'create-worktree',
+      create: { ...CREATE_LAUNCH.target.create, activate: true, runHooks: true }
+    }
+  }
+  const PAIRED_DESKTOP: Partial<RpcContext> = { ...CAPABLE_CLIENT, clientKind: 'runtime' }
+
+  it.each([
+    ['a phone', 'chat', CAPABLE_CLIENT],
+    ['a phone', 'terminal', CAPABLE_CLIENT],
+    ['a paired desktop', 'chat', PAIRED_DESKTOP],
+    ['a paired desktop', 'terminal', PAIRED_DESKTOP]
+  ] as const)(
+    '%s creates without activating the host, and its setup still runs (%s)',
+    async (_name, mode, context) => {
+      const runtime = runtimeStub(mode === 'terminal' ? { settings: {} } : {})
+      await launch(ACTIVATING_CREATE_LAUNCH, runtime, context)
+
+      expect(createArgs(runtime)).toMatchObject({
+        activate: false,
+        runHooks: false,
+        setupDecision: 'run',
+        awaitTerminalProvisioning: true
+      })
+    }
+  )
+
+  it("keeps a paired device's own setup decision when it asked only to activate", async () => {
+    const runtime = runtimeStub()
+    await launch(
+      {
+        agent: 'claude',
+        target: {
+          kind: 'create-worktree',
+          create: { ...CREATE_LAUNCH.target.create, activate: true, setupDecision: 'skip' }
+        }
+      },
+      runtime
+    )
+
+    expect(createArgs(runtime)).toMatchObject({
+      activate: false,
+      runHooks: false,
+      setupDecision: 'skip'
+    })
+  })
+
+  it('still activates a create the CLI asked to activate', async () => {
+    const runtime = runtimeStub({ settings: {} })
+    await launch(ACTIVATING_CREATE_LAUNCH, runtime, {})
+
+    const args = createArgs(runtime)
+    expect(args).toMatchObject({ activate: true, runHooks: true })
+    expect(args.setupDecision).toBeUndefined()
+  })
+})
+
 describe('the structured session factory', () => {
   it('creates the session for the worktree the launch just made, and activates it', async () => {
     const runtime = runtimeStub()
@@ -413,10 +471,7 @@ describe('the structured session factory', () => {
 })
 
 describe('a create that succeeded but is incomplete', () => {
-  // createManagedWorktree reports an unspawned startup terminal or an uncopied working tree as a
-  // top-level `warning`, and worktree.create hands it straight to mobile. This path narrowed the
-  // create down to {worktreeId, startupTerminalHandle} and dropped it — on BOTH arms, but the
-  // structured arm is the one that had no channel for a warning at all.
+  // Preserve create warnings on both routes, including structured launches with no terminal warning channel.
   it('carries a create warning onto a structured launch', async () => {
     const runtime = runtimeStub({
       createWarning: 'Could not copy untracked files into the new workspace.'
@@ -428,12 +483,26 @@ describe('a create that succeeded but is incomplete', () => {
     expect(result.warning).toBe('Could not copy untracked files into the new workspace.')
   })
 
+  it('carries lineage warnings alongside create warnings', async () => {
+    const runtime = runtimeStub({
+      createWarning: 'Could not copy untracked files into the new workspace.',
+      createLineageWarnings: [
+        {
+          code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          message: 'The inferred parent contexts conflict.'
+        }
+      ]
+    })
+
+    const result = await launch(CREATE_LAUNCH, runtime)
+
+    expect(result.warning).toBe(
+      'Could not copy untracked files into the new workspace. Also the inferred parent contexts conflict.'
+    )
+  })
+
   it('carries a create warning onto an agent-first terminal launch', async () => {
-    // settings: {} leaves the structured preference off, so the launch is agent-first and returns
-    // on the cached startup handle - the early path that also had to learn to carry a warning.
-    // Wording matters: the producer cannot emit "startup terminal failed" ALONGSIDE a handle —
-    // `orca-runtime-create-managed-worktree.ts:283` gates startupTerminal on the spawn having
-    // succeeded. An untracked-copy warning is the one that genuinely co-occurs with a handle.
+    // Agent-first success can carry an untracked-copy warning alongside a handle; startup-terminal failure cannot.
     const runtime = runtimeStub({
       settings: {},
       createWarning: 'Could not copy untracked files into the new workspace.'
@@ -446,9 +515,7 @@ describe('a create that succeeded but is incomplete', () => {
   })
 
   it('combines a create warning with a surface warning instead of dropping one', async () => {
-    // Both are reachable together: the create warns about the untracked copy, the structured
-    // create is then definitively refused, and the terminal it downgrades to warns as well.
-    // `??` kept the first and lost the second with nothing saying so.
+    // Preserve both create and fallback-terminal warnings; nullish coalescing discarded the latter.
     const runtime = runtimeStub({
       createWarning: 'Could not copy untracked files into the new workspace.',
       terminalWarning: 'No pty was available for the agent.'
@@ -480,6 +547,9 @@ describe('the terminal factory', () => {
 
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', {
       startupAgent: 'claude',
+      terminalImageViewerSupported: false,
+      viewMode: 'terminal',
+      surfaceOwner: false,
       onPtySpawnDispatched: expect.any(Function)
     })
     expect(createStructuredSession).not.toHaveBeenCalled()
@@ -491,18 +561,20 @@ describe('the terminal factory', () => {
   it('takes an existing workspace without creating one', async () => {
     const runtime = runtimeStub()
     const result = await launch(
-      { agent: 'grok', target: { kind: 'existing', worktree: 'id:wt-7' } },
+      { agent: 'gemini', target: { kind: 'existing', worktree: 'id:wt-7' } },
       runtime
     )
 
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-    // The scope, not the worktree record: asking for the record refused any workspace without one.
+    // Use launch scope so floating workspaces need no Git worktree record.
     expect(runtime.showTerminalWorkspaceLaunchScope).toHaveBeenCalledWith('id:wt-7')
     expect(runtime.showManagedTerminalWorkspace).not.toHaveBeenCalled()
-    // Resolved to an id first: everything below re-prefixes it, so a raw selector reaches the
-    // runtime as `id:id:wt-7`.
+    // Normalize selectors to ids before lower layers add their own id: prefix.
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', {
-      startupAgent: 'grok',
+      startupAgent: 'gemini',
+      terminalImageViewerSupported: false,
+      viewMode: 'terminal',
+      surfaceOwner: false,
       onPtySpawnDispatched: expect.any(Function)
     })
     expect(result.worktreeId).toBe('wt-7')
@@ -534,14 +606,7 @@ describe('worktree.create is untouched by any of this', () => {
   })
 })
 
-/**
- * The wire half of the launch inputs a host cannot derive: params in, `createTerminal` options out.
- *
- * Asserted here rather than only at the executor because the executor takes an intent that someone
- * has to build. The interesting case is the telemetry triple — two thirds of it is derived by the
- * host on purpose, and the third is parsed leniently so an unfamiliar label costs an analytics row
- * rather than the user's agent.
- */
+/** Test wire forwarding at the handler boundary: host-derived telemetry stays local, and unfamiliar source labels lose attribution rather than the launch. */
 describe('launch inputs that cross the wire', () => {
   const EXISTING_LAUNCH = {
     agent: 'claude',
@@ -553,8 +618,7 @@ describe('launch inputs that cross the wire', () => {
     if (!options) {
       throw new Error('createTerminal was not called')
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub records whatever options the method passed; each assertion below checks a field before reading it.
-    return options as Record<string, unknown>
+    return options
   }
 
   it('carries agentArgs and cwd through to the terminal create', async () => {
@@ -575,8 +639,7 @@ describe('launch inputs that cross the wire', () => {
     const runtime = runtimeStub({ settings: {} })
     await launch({ ...EXISTING_LAUNCH, launchSource: 'source_control_recovery' }, runtime)
 
-    // The runtime derives agent_kind and request_kind from the agent it builds, so the handler
-    // forwards only the one member it cannot know, and never a prebuilt triple.
+    // Derive agent_kind/request_kind on the host; only launchSource crosses this boundary.
     expect(terminalOptions(runtime)).toMatchObject({ launchSource: 'source_control_recovery' })
     expect(terminalOptions(runtime)).not.toHaveProperty('telemetry')
   })
@@ -588,8 +651,7 @@ describe('launch inputs that cross the wire', () => {
       runtime
     )
 
-    // The whole point of the open arm set: attribution is bookkeeping, and bookkeeping must never
-    // gate a user action. The runtime records it as `unknown`; the launch still starts.
+    // Unknown attribution must not block launch; runtime records it as unknown.
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
     expect(terminalOptions(runtime)).toMatchObject({ launchSource: 'a_surface_added_later' })
   })
@@ -602,7 +664,6 @@ describe('launch inputs that cross the wire', () => {
   })
 
   it('keeps a structured preference when the cwd names the workspace root', async () => {
-    // The scope the handler resolves for the target carries the root the fixture reports.
     const runtime = runtimeStub({})
     const result = await launch({ ...EXISTING_LAUNCH, cwd: '/tmp/wt-7/' }, runtime)
 

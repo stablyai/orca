@@ -1,12 +1,9 @@
-// What the host may durably say about a turn whose provider child is gone.
-//
-// `interrupted` requires proof that the child which wrote the turn is gone: death evidence naming
-// that turn's owner by fence — a watched exit, or a local probe that found the recorded pid gone or
-// reused. A release nothing proved — lost contact, an unverifiable identity, a stop that outlived the
-// ladder — carries none, and neither does a later owner's death; the turn is then `unverifiable`
-// with no end at all, until a proof naming its owner is written and revises it.
+// Require matching owner death or runtime-replacement proof for interrupted; otherwise retain unverifiable until proof.
 
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  interruptedAgentJournalToolCall,
+  isUnverifiedEndAgentJournalToolCall
+} from '../../../shared/agent-journal-tool-call-lifecycle'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
@@ -17,12 +14,13 @@ import {
   readAgentJournalTurn
 } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export type StructuredAgentSessionTurnVerdict =
-  /** Whose end it was is the Stop event's to say, where the row is built (`turnEndAfterStop`). */
-  { state: 'interrupted'; completedAt: number } | { state: 'unverifiable' }
+  /** Stop events determine personal cancellation when building the row. */
+  { state: 'interrupted'; completedAt?: number } | { state: 'unverifiable' }
 
 export const UNVERIFIABLE_TURN_VERDICT: StructuredAgentSessionTurnVerdict = {
   state: 'unverifiable'
@@ -30,45 +28,62 @@ export const UNVERIFIABLE_TURN_VERDICT: StructuredAgentSessionTurnVerdict = {
 
 export function turnVerdictFromDeathEvidence(
   evidence: AgentSessionDeathEvidence | null | undefined,
-  /** Fence of the owner that wrote the turn. */
   turnFence: number | undefined,
-  /** When a Stop event found the turn running (`stopFoundTurnLiveAt`): a later proof of life. */
+  /** Saved output or Stop that observed this turn running. */
   liveAt?: number
 ): StructuredAgentSessionTurnVerdict {
   if (!evidence) {
     return UNVERIFIABLE_TURN_VERDICT
   }
   if (evidence.ownerFence === undefined) {
-    // Evidence an older build wrote names no owner; it keeps the rule that build applied.
+    // Preserve legacy ownerless evidence rules.
     return evidence.kind === 'exit-observed'
-      ? { state: 'interrupted', completedAt: evidence.observedAt }
+      ? interruptedTurnVerdict(evidence.observedAt)
       : UNVERIFIABLE_TURN_VERDICT
   }
   if (evidence.ownerFence !== turnFence) {
     return UNVERIFIABLE_TURN_VERDICT
   }
   if (evidence.kind === 'exit-observed') {
-    return { state: 'interrupted', completedAt: evidence.observedAt }
+    return interruptedTurnVerdict(evidence.observedAt)
   }
-  // A probe finds a dead child long after it died; its last renewal bounds the end, so the turn never
-  // counts the time Orca was down. Timeline rows don't: a send can land there after the death. A
-  // Stop that found the turn running is a later renewal, so the end reads after that Stop.
+  // Bound probe-discovered death by last life evidence; client sends/recovery writes prove none.
   const lastAlive = Math.max(evidence.lastProvenAliveAt ?? evidence.observedAt, liveAt ?? 0)
-  return { state: 'interrupted', completedAt: Math.min(lastAlive, evidence.observedAt) }
+  return interruptedTurnVerdict(Math.min(lastAlive, evidence.observedAt))
 }
 
-/** When the latest Stop event found `item`'s turn running: E1 writes one only for a live turn. */
-export function stopFoundTurnLiveAt(
-  journal: Pick<AgentSessionJournal, 'stopMarks'>,
+function interruptedTurnVerdict(completedAt: number): StructuredAgentSessionTurnVerdict {
+  return Number.isFinite(completedAt) && completedAt > 0
+    ? { state: 'interrupted', completedAt }
+    : { state: 'interrupted' }
+}
+
+/** Replaced runtime loses owner transport; end at its last saved proof of life. */
+export function turnVerdictFromReplacedRuntime(
+  replaced: AgentSessionReplacedRuntime | undefined,
+  turnFence: number | undefined,
+  liveAt?: number
+): StructuredAgentSessionTurnVerdict {
+  if (!replaced || turnFence === undefined || turnFence > replaced.fence) {
+    return UNVERIFIABLE_TURN_VERDICT
+  }
+  const renewedAt = turnFence === replaced.fence ? (replaced.lastProvenAliveAt ?? 0) : 0
+  return interruptedTurnVerdict(Math.max(renewedAt, liveAt ?? 0))
+}
+
+export function lastProvenTurnLiveAt(
+  journal: Pick<AgentSessionJournal, 'stopMarks' | 'itemFence' | 'lastProviderActivityAt'>,
   item: AgentJournalRenderItem
 ): number | undefined {
   const stop = journal.stopMarks.latest()
   const turnId = readAgentJournalTurn(item.body)?.turnId
-  return stop && turnId !== undefined && stop.event.turnId === turnId ? stop.event.at : undefined
+  const stoppedAt = stop && turnId !== undefined && stop.event.turnId === turnId ? stop.event.at : 0
+  const fence = journal.itemFence(item.itemId)
+  const providerAt = fence === undefined ? 0 : (journal.lastProviderActivityAt(fence) ?? 0)
+  return Math.max(stoppedAt, providerAt) || undefined
 }
 
-/** Every turn this settle interrupts is a person's Stop's to end (`turnEndAfterStop`), so it reads
- *  as theirs, muted, with no row saying the provider stopped: as a live Stop writes none. */
+/** Personal Stop owns these interrupted turns, suppressing provider-failure notices. */
 export function endedByPersonsStop(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,
   turnEnds: readonly JournalLifecycleMutationInput[]
@@ -83,7 +98,6 @@ export function endedByPersonsStop(
   )
 }
 
-/** Revises every still-running lifecycle item in place, keeping its identity and start. */
 export function runningTurnLifecycleRevisions(
   items: readonly AgentJournalRenderItem[],
   verdict: StructuredAgentSessionTurnVerdict
@@ -94,28 +108,75 @@ export function runningTurnLifecycleRevisions(
   })
 }
 
-/**
- * A turn an earlier settle could only call `unverifiable`, because the proof had not been written
- * yet, revised once a proof names the owner that wrote it. Only ever upward, and never from an
- * older build's proof, which names no owner.
- */
+/** Upgrade unverifiable only with matching owner proof, never legacy ownerless evidence. */
 export function provenUnverifiableTurnRevisions(
   items: readonly AgentJournalRenderItem[],
   evidence: AgentSessionDeathEvidence | null | undefined,
-  journal: Pick<AgentSessionJournal, 'itemFence' | 'stopMarks'>
+  journal: Pick<AgentSessionJournal, 'itemFence' | 'stopMarks' | 'lastProviderActivityAt'>,
+  /** Replacement covers all owners it held; death covers only its named owner. */
+  replaced?: AgentSessionReplacedRuntime
 ): JournalLifecycleMutationInput[] {
-  const ownerFence = evidence?.ownerFence
-  if (ownerFence === undefined) {
-    return []
-  }
   return items.flatMap((item) => {
     const turn = readAgentJournalTurn(item.body)
-    return turn?.state === 'unverifiable' && journal.itemFence(item.itemId) === ownerFence
-      ? turnLifecycleRevision(
-          item,
-          turn,
-          turnVerdictFromDeathEvidence(evidence, ownerFence, stopFoundTurnLiveAt(journal, item))
-        )
+    if (turn?.state !== 'unverifiable') {
+      return []
+    }
+    const fence = journal.itemFence(item.itemId)
+    const liveAt = lastProvenTurnLiveAt(journal, item)
+    const verdict =
+      evidence?.ownerFence !== undefined && fence === evidence.ownerFence
+        ? turnVerdictFromDeathEvidence(evidence, fence, liveAt)
+        : turnVerdictFromReplacedRuntime(replaced, fence, liveAt)
+    return verdict.state === 'interrupted' ? turnLifecycleRevision(item, turn, verdict) : []
+  })
+}
+
+export type StructuredAgentSessionWatchedExit = { ownerFence: number; observedAt: number }
+
+/** Observed exit revises matching unverified turns/calls at its own timestamp, without Stop timing. */
+export function watchedExitRevisions(
+  items: readonly AgentJournalRenderItem[],
+  exit: StructuredAgentSessionWatchedExit | undefined,
+  journal: Pick<AgentSessionJournal, 'itemFence'>
+): JournalLifecycleMutationInput[] {
+  if (!exit) {
+    return []
+  }
+  const proof: AgentSessionDeathEvidence = { kind: 'exit-observed', detail: '', ...exit }
+  return [
+    ...provenUnverifiedToolCallRevisions(items, proof, journal),
+    ...items.flatMap((item) => {
+      const turn = readAgentJournalTurn(item.body)
+      return turn?.state === 'unverifiable' && journal.itemFence(item.itemId) === exit.ownerFence
+        ? turnLifecycleRevision(item, turn, interruptedTurnVerdict(exit.observedAt))
+        : []
+    })
+  ]
+}
+
+/** Revise only proof-matching calls; independent failures remain failed. */
+export function provenUnverifiedToolCallRevisions(
+  items: readonly AgentJournalRenderItem[],
+  evidence: AgentSessionDeathEvidence | null | undefined,
+  journal: Pick<AgentSessionJournal, 'itemFence'>,
+  replaced?: AgentSessionReplacedRuntime
+): JournalLifecycleMutationInput[] {
+  const ownerFence = evidence?.ownerFence
+  const proven = (fence: number | undefined) =>
+    fence !== undefined &&
+    (fence === ownerFence || (replaced !== undefined && fence <= replaced.fence))
+  return items.flatMap((item): JournalLifecycleMutationInput[] => {
+    return item.body.kind === 'tool-call' &&
+      isUnverifiedEndAgentJournalToolCall(item.body) &&
+      proven(journal.itemFence(item.itemId))
+      ? [
+          {
+            kind: 'item',
+            itemId: item.itemId,
+            body: interruptedAgentJournalToolCall(item.body),
+            turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+          }
+        ]
       : []
   })
 }
@@ -125,21 +186,17 @@ function turnLifecycleRevision(
   turn: AgentJournalTurnLifecycle,
   verdict: StructuredAgentSessionTurnVerdict
 ): JournalLifecycleMutationInput[] {
-  const identity = parseAgentJournalItemKey(item.itemId)
-  return identity
-    ? [
-        {
-          kind: 'item',
-          identity,
-          body: agentJournalTurnBody(settledLifecycle(turn, verdict)),
-          turnScope: AGENT_JOURNAL_THREAD_SCOPE
-        }
-      ]
-    : []
+  return [
+    {
+      kind: 'item',
+      itemId: item.itemId,
+      body: agentJournalTurnBody(settledLifecycle(turn, verdict)),
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
+  ]
 }
 
-/** The verdict owns the turn's end and nothing else; every other field the row
- *  carries, including ones this build does not know, stays as it was. */
+/** Replace old end fields while retaining unknown fields. */
 function settledLifecycle(
   lifecycle: AgentJournalTurnLifecycle,
   verdict: StructuredAgentSessionTurnVerdict
@@ -151,14 +208,15 @@ function settledLifecycle(
     durationMs: _durationMs,
     ...kept
   } = lifecycle
-  if (verdict.state !== 'interrupted') {
+  if (
+    verdict.state !== 'interrupted' ||
+    verdict.completedAt === undefined ||
+    !Number.isFinite(verdict.completedAt) ||
+    verdict.completedAt <= 0
+  ) {
     return { ...kept, state: verdict.state }
   }
-  // A renewal can predate the turn, which started with its owner alive; it never ends before that.
+  // Completion cannot precede turn start, even if renewal evidence does.
   const began = Math.max(lifecycle.requestedAt ?? 0, lifecycle.startedAt ?? 0)
-  return {
-    ...kept,
-    state: verdict.state,
-    completedAt: Math.max(verdict.completedAt, began)
-  }
+  return { ...kept, ...interruptedTurnVerdict(Math.max(verdict.completedAt, began)) }
 }

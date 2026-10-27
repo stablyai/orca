@@ -45,8 +45,7 @@ async function runtimeSpawnEnv(
   return ctx.spawnOptions.env
 }
 
-// Why both hosts: SSH panes reach the relay with this env untouched, local ones reach
-// node-pty or the daemon; WSL forwarding is covered by wsl-orca-env.test.ts.
+// SSH preserves this env for the relay; local providers consume it directly. WSL has separate forwarding coverage.
 describe.each([
   ['renderer spawn', ipcSpawnEnv],
   ['runtime spawn', runtimeSpawnEnv]

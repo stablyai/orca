@@ -4,14 +4,18 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
-import type { RpcClient } from './rpc-client'
+import type { RpcClient, SendRequestOptions } from './rpc-client'
 import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile, RpcResponse } from './types'
 
 export class FakeSession implements RpcClient {
   readonly sendRequest = vi.fn(
-    async (_method: string, _params?: unknown): Promise<RpcResponse> => ({
+    async (
+      _method: string,
+      _params?: unknown,
+      _options?: SendRequestOptions
+    ): Promise<RpcResponse> => ({
       id: 'rpc-1',
       ok: true,
       result: {},
@@ -52,8 +56,7 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
   ) {
     super(state)
   }
-  // Why: production-realistic defaults — fictional fake values hid three
-  // live defects in this subsystem (latch, churn, int32 timer overflow).
+  // Use production-realistic defaults; unrealistic ones concealed latch, reconnect churn and timer-overflow defects.
   getAttachDeadlineAt = () => Date.now() + 10_000
   readonly dialStage = new RelayDialStageTracker()
   getDialStage = () => this.dialStage.getDialStage()
@@ -69,6 +72,7 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
     resumeExpiresAt: this.resumeExpiry
   })
   getFailure = () => this.failure
+  readonly probeAfterBackground = vi.fn()
 }
 
 export class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
@@ -94,7 +98,6 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
         session.close()
         throw new Error(`replacement session ${session.getState()}`)
       }
-      // Mirrors the real client: a racing caller withdraws after auth, before the swap.
       if (shouldAbort?.()) {
         session.close()
         throw new Error('migration superseded')
@@ -103,7 +106,6 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
       this.recoveryPath = null
       this.recoveryAttempt = 0
       this.generation += 1
-      // Connected-state publication carries the migration cleanup.
       this.publishState('connected')
     }
   )
@@ -148,7 +150,6 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     }
   })
   getRelayHostReachability = () => this.relayHostReachability
-  // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {
       this.pairingRejected = false

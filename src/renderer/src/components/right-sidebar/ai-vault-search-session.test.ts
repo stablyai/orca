@@ -3,8 +3,40 @@ import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
 import {
   aiVaultSearchHitToSession,
   canResumeAiVaultSearchHit,
-  hasAiVaultSearchHitPath
+  hasAiVaultSearchHitPath,
+  withAiVaultHistoryPreviews
 } from './ai-vault-search-session'
+
+describe('withAiVaultHistoryPreviews', () => {
+  it("shows a paired server hit's conversation preview from its scanned history row", () => {
+    // A relay hit arrives without its transcript path, so its row id differs from the scanned row's.
+    const hitSession = aiVaultSearchHitToSession(
+      { ...searchHit(), source: { presence: 'present' as const } },
+      'runtime:env-1'
+    )
+    const turns = [
+      { role: 'user' as const, text: 'Fix the flaky test', timestamp: null },
+      { role: 'assistant' as const, text: 'Done', timestamp: null }
+    ]
+
+    const [hydrated] = withAiVaultHistoryPreviews(
+      [hitSession],
+      [
+        {
+          ...hitSession,
+          id: 'runtime:env-1:codex:host-session:/host/transcript.jsonl',
+          filePath: '/host/transcript.jsonl',
+          previewMessages: turns,
+          firstUserPrompt: 'Fix the flaky test'
+        }
+      ]
+    )
+
+    expect(hydrated.previewMessages).toEqual(turns)
+    expect(hydrated.firstUserPrompt).toBe('Fix the flaky test')
+    expect(hydrated.resumeCommand).toBe('host-resume-command')
+  })
+})
 
 describe('aiVaultSearchHitToSession', () => {
   it('uses the selected execution host and only host-provided source fields', () => {
@@ -29,6 +61,18 @@ describe('aiVaultSearchHitToSession', () => {
     expect(session.filePath).toBe('')
     expect(session.resumeCommand).toBe('')
     expect(canResumeAiVaultSearchHit(hit)).toBe(false)
+    expect(hasAiVaultSearchHitPath(hit)).toBe(false)
+  })
+
+  it('opens a native chat hit through its owner when transport withholds the command', () => {
+    const hit = {
+      ...searchHit(),
+      source: { presence: 'present' as const },
+      resumeCommand: undefined,
+      structuredSession: { sessionId: 'native-session', workspaceId: 'host-workspace' }
+    }
+
+    expect(canResumeAiVaultSearchHit(hit)).toBe(true)
     expect(hasAiVaultSearchHitPath(hit)).toBe(false)
   })
 

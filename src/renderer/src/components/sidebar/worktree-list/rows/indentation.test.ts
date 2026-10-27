@@ -4,7 +4,6 @@ import {
   FLUSH_CARD_MIN_CONTENT_INSET,
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   LINEAGE_CHILDREN_INLINE_OFFSET,
-  LINEAGE_NESTED_ROW_SURFACE_INSET,
   WORKTREE_CARD_SURFACE_MARGIN,
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
   getFolderBackedRepoWorktreeCardContentIndent,
@@ -14,7 +13,6 @@ import {
   getFolderWorkspaceRowGeometry,
   getFlushWorktreeCardPaddingLeft,
   getLineageChildrenInlineStyle,
-  getLineageNestedRowGeometry,
   getProjectGroupHeaderPaddingLeft,
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset
@@ -230,41 +228,6 @@ describe('worktree list indentation', () => {
   it('keeps flush card content off the sidebar edge without indentation', () => {
     expect(getFlushWorktreeCardPaddingLeft(0)).toBe('2px')
     expect(getFlushWorktreeCardPaddingLeft(0, true)).toBe('2px')
-  })
-
-  it('keeps experimental lineage nested rows from accumulating global depth', () => {
-    const child = getLineageNestedRowGeometry({
-      experimentalNewWorktreeCardStyle: true,
-      inheritedCardContentIndent: 20,
-      lineageDepth: 1
-    })
-    const grandchild = getLineageNestedRowGeometry({
-      experimentalNewWorktreeCardStyle: true,
-      inheritedCardContentIndent: 20,
-      lineageDepth: 2
-    })
-
-    expect(child.surfaceInset).toBe(LINEAGE_NESTED_ROW_SURFACE_INSET)
-    expect(grandchild.surfaceInset).toBe(LINEAGE_NESTED_ROW_SURFACE_INSET)
-    expect(child.cardContentIndent).toBe(0)
-    expect(grandchild.cardContentIndent).toBe(0)
-  })
-
-  it('preserves legacy nested row geometry for non-experimental cards', () => {
-    expect(
-      getLineageNestedRowGeometry({
-        experimentalNewWorktreeCardStyle: false,
-        inheritedCardContentIndent: 0,
-        lineageDepth: 1
-      }).surfaceInset
-    ).toBe(14)
-    expect(
-      getLineageNestedRowGeometry({
-        experimentalNewWorktreeCardStyle: false,
-        inheritedCardContentIndent: 0,
-        lineageDepth: 2
-      }).surfaceInset
-    ).toBe(28)
   })
 
   it('expresses lineage child wrapper width from the resolved inline offset', () => {

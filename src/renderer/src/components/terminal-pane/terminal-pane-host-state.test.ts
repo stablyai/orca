@@ -118,8 +118,7 @@ describe('selectTerminalPaneHostState', () => {
     })
   })
 
-  // Without this the terminal overlay shows only a canned sentence, so a host key rejection — whose
-  // remedy is the last clause of the message — is invisible to anyone working in a terminal.
+  // Expose the host’s detail so terminal overlays include actionable rejection remedies.
   it('carries the failure detail alongside the status', () => {
     const state = makeState({
       repos: [{ id: 'repo-ssh', connectionId: 'ssh-a' }],
@@ -163,9 +162,7 @@ describe('selectTerminalPaneHostState', () => {
     })
   })
 
-  // The terminal reads the shared host signal but names the published status: an undialed
-  // target during startup restoration stays "disconnected" here (the overlay and error
-  // ownership are unchanged) even though the other panes read that window as connecting.
+  // Keep published disconnected status during startup; shared connecting hints must not change terminal overlay/error ownership.
   it('reports the published status through the shared signal, across startup and connect', () => {
     const repos = [{ id: 'repo-ssh', connectionId: 'ssh-a' }]
     const worktreesByRepo = { 'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' }] }
@@ -191,8 +188,7 @@ describe('selectTerminalPaneHostState', () => {
     )
   })
 
-  // An owning runtime that has not published its SSH state is unverifiable, not down: the
-  // terminal keeps reporting no status, so it shows no reconnect overlay for it.
+  // Missing owner-runtime SSH state is unknown; show no disconnected overlay without evidence.
   it('reports no status for a nested target whose runtime has not published its SSH state', () => {
     const state = makeState({
       repos: [{ id: 'repo-runtime', connectionId: 'ssh-nested', executionHostId: 'runtime:env-a' }],

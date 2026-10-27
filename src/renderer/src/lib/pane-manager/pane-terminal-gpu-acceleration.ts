@@ -6,6 +6,7 @@ import {
   shouldUseTerminalWebgl
 } from './pane-webgl-renderer'
 import { safeFit } from './pane-tree-ops'
+import { applyDomBlockFills } from './terminal-dom-block-fill'
 import { resetPaneWebglContextLosses } from './pane-webgl-context-loss-policy'
 
 export function applyTerminalGpuAcceleration(
@@ -23,15 +24,17 @@ export function applyTerminalGpuAcceleration(
   for (const pane of panes) {
     pane.terminalGpuAcceleration = nextMode
     if (modeChanged) {
-      // Why: an explicit setting change is user intent to re-evaluate the
-      // renderer; context-loss and attach-failure latches from the old mode
-      // should not pin DOM.
+      // Explicit GPU settings changes reset prior context-loss/attach latches so user intent can reevaluate the renderer.
       pane.webglDisabledAfterContextLoss = false
       resetPaneWebglContextLosses(pane)
       pane.webglAttachFailedSinceRecovery = false
     }
     if (!shouldUseTerminalWebgl(pane)) {
       disposeWebgl(pane, { refreshDimensions: true })
+      const root = pane.terminal.element
+      if (root) {
+        applyDomBlockFills(root)
+      }
       continue
     }
     if (

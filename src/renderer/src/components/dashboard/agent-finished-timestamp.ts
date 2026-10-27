@@ -5,12 +5,7 @@ import {
 } from '../../../../shared/agent-main-agent-verdict'
 import type { DashboardAgentRow } from './useDashboardData'
 
-/**
- * The moment an agent last entered `done`, or null if it never finished (still
- * working / idle without a prior completion). Shared by the left worktree
- * sidebar and the pop-out dashboard so both time from the SAME event: a finished
- * agent reads "N since it finished", an active one falls through to its start.
- */
+/** Share completion age across sidebar and dashboard, including stopped/failed main turns and host-settled child rows. */
 export function lastEnteredDoneAt(
   agent: Pick<DashboardAgentRow, 'rowSource' | 'state' | 'entry' | 'childRow'>
 ): number | null {
@@ -19,9 +14,7 @@ export function lastEnteredDoneAt(
     return agent.childRow?.settledAt ?? null
   }
   const entry = agent.entry
-  // Why: same primitive Smart Sort ranks on, so the displayed age and Done eligibility share a clock.
-  // (Session-boundary `done` means the session connected idle — STA-3386 — so it resolves to the real
-  // completion it displaced, if any.)
+  // Share Smart Sort’s completion clock; session-boundary idle must use the real completion it displaced.
   const completedAt = agentEntryCompletionAt(entry)
   if (completedAt !== null) {
     return completedAt

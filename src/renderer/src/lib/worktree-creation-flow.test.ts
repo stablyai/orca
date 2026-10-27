@@ -13,8 +13,8 @@ type TestActiveView = 'terminal' | 'tasks'
 const store = {
   settings: {
     activeRuntimeEnvironmentId: null as string | null,
-    experimentalNativeChat: undefined as boolean | undefined,
-    openAgentTabsInChatByDefault: undefined as boolean | undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mutates this setting across test cases.
+    experimentalNativeChat: undefined as boolean | undefined
   },
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
@@ -100,7 +100,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   store.settings.activeRuntimeEnvironmentId = null
   store.settings.experimentalNativeChat = undefined
-  store.settings.openAgentTabsInChatByDefault = undefined
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
   store.repos = []
@@ -538,7 +537,7 @@ describe('staged background worktree creation', () => {
       undefined,
       undefined,
       undefined,
-      { activateCreatedTabs: false, backendStartupTerminalSpawned: true }
+      expect.objectContaining({ activateCreatedTabs: false, backendStartupTerminalSpawned: true })
     )
     expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
@@ -546,9 +545,7 @@ describe('staged background worktree creation', () => {
     })
   })
 
-  // Why: one-click "Start workspace from issue" commonly backgrounds, so the
-  // user-moved-on path is the common delivery for the repo's issue command; it
-  // must thread through as the 5th positional arg, not be dropped to undefined.
+  // Background issue launches must retain the fifth positional issueCommand; this is the common one-click path.
   it('threads the request issue command into the background terminal seed', async () => {
     store.activeView = 'tasks'
     store.createWorktree.mockResolvedValueOnce({
@@ -565,9 +562,7 @@ describe('staged background worktree creation', () => {
     )
 
     expect(started).toBe(true)
-    // Why: vi.waitFor instead of a fixed microtask flush — the await count in
-    // executeWorktreeCreation grows over time (e.g. VM preflight), and a fixed
-    // flush silently starves this assertion in merged builds.
+    // Wait on the condition; fixed microtask counts drift as async preflight grows and silently starve assertions.
     await vi.waitFor(() =>
       expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
         store,
@@ -576,7 +571,7 @@ describe('staged background worktree creation', () => {
         undefined,
         { command: 'gh issue view 42' },
         undefined,
-        { activateCreatedTabs: false }
+        { activateCreatedTabs: false, worktreeCreationId: 'creation-1' }
       )
     )
   })
@@ -608,6 +603,73 @@ describe('staged background worktree creation', () => {
       )
     )
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+  })
+
+  it('opens only the setup tab despite templates when the composer choice is cleared', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    const setup = { runnerScriptPath: '/repo/.orca/setup.sh', envVars: {} }
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
+      setup,
+      defaultTabs: { tabs: [{ title: 'Dev', command: 'pnpm dev' }], runCommands: true }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: null })
+
+    continueBackgroundWorktreeCreation('creation-1', makeRequest({ setupOnly: true }))
+
+    await vi.waitFor(() =>
+      expect(activateAndRevealWorktree).toHaveBeenCalledWith(
+        'wt-1',
+        expect.objectContaining({ setup, providesInitialSurface: true })
+      )
+    )
+    expect(store.createWorktree.mock.calls[0]?.at(-1)).toMatchObject({ setupOnly: true })
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]).not.toHaveProperty(
+      'defaultTabs'
+    )
+  })
+
+  it('falls back to a blank terminal for None when no setup runs', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    continueBackgroundWorktreeCreation('creation-1', makeRequest({ setupOnly: true }))
+
+    await vi.waitFor(() => expect(activateAndRevealWorktree).toHaveBeenCalled())
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]).not.toHaveProperty(
+      'providesInitialSurface'
+    )
+  })
+
+  it('seeds only setup despite templates when the user moved on before completion', async () => {
+    store.activeView = 'tasks'
+    const setup = { runnerScriptPath: '/repo/.orca/setup.sh', envVars: {} }
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
+      setup,
+      defaultTabs: { tabs: [{ title: 'Dev', command: 'pnpm dev' }], runCommands: true }
+    })
+
+    continueBackgroundWorktreeCreation('creation-1', makeRequest({ setupOnly: true }), {
+      revealCreationSurface: false
+    })
+
+    await vi.waitFor(() =>
+      expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+        store,
+        'wt-1',
+        undefined,
+        setup,
+        undefined,
+        undefined,
+        expect.objectContaining({ activateCreatedTabs: false, callerProvidesSurface: true })
+      )
+    )
   })
 
   it('seeds the chat-composer launch draft on completion for draft launches', async () => {
@@ -645,8 +707,7 @@ describe('staged background worktree creation', () => {
   })
 
   it('seeds the backend-spawned agent tab, not the worktree default terminal tab', async () => {
-    // Repo default tabs ("dev server", "logs", …) make activation's primaryTabId
-    // a tab that runs no agent; main's startup terminal is the agent's own tab.
+    // Default tabs can be dev/log shells; backend startup terminal, not activation primaryTabId, identifies the agent.
     store.activeView = 'terminal'
     store.activePendingCreationId = 'creation-1'
     store.tabsByWorktree = { 'wt-1': [{ id: 'dev-server' }, { id: 'agent-tab' }] }
@@ -682,11 +743,10 @@ describe('staged background worktree creation', () => {
   })
 
   it.each([
-    ['mirrorable local Grok', 'grok', 'https://github.com/o/r/issues/12', 'chat'],
-    ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'chat']
+    ['mirrorable local Grok', 'grok', 'https://github.com/o/r/issues/12', 'terminal'],
+    ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'terminal']
   ] as const)('passes %s draft mode to backend startup', async (_label, agent, draft, viewMode) => {
     store.settings.experimentalNativeChat = true
-    store.settings.openAgentTabsInChatByDefault = true
     store.repos = [{ id: 'repo-1', connectionId: null }]
     continueBackgroundWorktreeCreation(
       'creation-1',
@@ -713,10 +773,7 @@ describe('staged background worktree creation', () => {
     })
   })
 
-  it('carries launchDraftText into activation for an argv-prefill launch', async () => {
-    // Why: the draft rides inside `launchCommand` here, so the plan sets no
-    // draftPrompt — without launchDraftText the initial view-mode decision
-    // never sees a draft and opens chat on an unmirrorable one.
+  it('keeps an argv-prefill draft inside the terminal command', async () => {
     store.activeView = 'terminal'
     store.activePendingCreationId = 'creation-1'
     store.createWorktree.mockResolvedValueOnce({
@@ -742,7 +799,7 @@ describe('staged background worktree creation', () => {
     await vi.waitFor(() => expect(activateAndRevealWorktree).toHaveBeenCalled())
     const startup = vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]?.startup
     expect(startup?.draftPrompt).toBeUndefined()
-    expect(startup?.launchDraftText).toBe('https://github.com/o/r/issues/12')
+    expect(startup?.command).toContain('https://github.com/o/r/issues/12')
   })
 
   it('does not seed a launch draft without draft launch context', async () => {

@@ -49,9 +49,7 @@ afterEach(() => {
 
 describe('local repo ref maintenance target', () => {
   it('never hands the pack child an abort signal', async () => {
-    // Killing a `pack-refs` strands a `refs/**` lock about one time in five, and
-    // on Windows a force-kill inside the rewrite strands `packed-refs.lock`
-    // every time. The child must always be allowed to finish.
+    // Killing pack-refs can strand packed-refs or per-ref locks; let the child finish.
     readRepoCommonDirFromGitMock.mockResolvedValue('/repo/.git')
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
@@ -100,13 +98,13 @@ describe('local repo ref maintenance target', () => {
     await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(false)
   })
 
-  it('fails closed when the auto-maintenance config cannot be read', async () => {
+  it('reports unreadable auto-maintenance config without claiming a user opt-out', async () => {
     for (const error of [
       new Error('spawn failed'),
       Object.assign(new Error('bad config'), { code: 128 })
     ]) {
       gitExecFileAsyncMock.mockRejectedValue(error)
-      await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(true)
+      await expect(target().isOptedOut?.(NO_ABORT)).rejects.toBe(error)
     }
   })
 
@@ -117,7 +115,6 @@ describe('local repo ref maintenance target', () => {
   })
 
   it('translates a WSL repo answer back to the UNC path the main process can open', async () => {
-    // Git answers in its own execution space, which for WSL is a Linux path.
     readRepoCommonDirFromGitMock.mockResolvedValue('/home/dev/repo/.git')
 
     await expect(target('Ubuntu').resolveRefsDirectory(NO_ABORT)).resolves.toBe(
@@ -151,7 +148,6 @@ describe('local repo ref maintenance scheduling', () => {
   })
 
   it('is free when nothing has ever been armed', async () => {
-    // The common case by far: no timers, no instance, no reason to pay anything.
     await expect(withRepoRefMaintenancePaused('git-fetch', async () => 'done')).resolves.toBe(
       'done'
     )

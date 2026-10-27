@@ -1,12 +1,14 @@
 import { createElement } from 'react'
+import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 function journalItem(
@@ -21,38 +23,16 @@ function snapshot(
   fence: number,
   activity?: AgentSessionTurnActivity
 ): AgentSessionSubscribeEvent {
-  const newest = items.length
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence,
-    ...(activity ? { activity } : {}),
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence,
-      direction: 'tail',
-      items,
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: { epoch: 'epoch-1', sequence: 1 },
-        newest: { epoch: 'epoch-1', sequence: newest },
-        nextCursor: { epoch: 'epoch-1', sequence: newest + 1 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: newest },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
+  return { ...snapshotEvent({ items, fence }), ...(activity ? { activity } : {}) }
 }
 
-/** What the one live indicator row reads, resolved off the session journal. */
 describe('useMobileStructuredAgentSession turn indicator', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
   let listener: ((value: unknown) => void) | null = null
-  const sendRequest = vi.fn(async (method: string) => ({
+  type RpcReply = RpcResponse
+  const sendRequest = vi.fn(async (method: string): Promise<RpcReply> => ({
+    id: 'indicator-rpc',
     ok: true,
     result:
       method === 'agentSession.options'
@@ -67,7 +47,17 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     listener = onData
     return vi.fn()
   })
-  const client = { sendRequest, subscribe } as unknown as RpcClient
+  const client: RpcClient = {
+    sendRequest,
+    subscribe,
+    getState: () => 'connected',
+    onStateChange: () => () => {},
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    updateTerminalSubscriptionViewport: () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
   // Stable across renders: a fresh callback would re-run the hold/subscribe effect
   // and release the session out from under the test.
   const onSendError = vi.fn()
@@ -113,7 +103,12 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
       listener?.(snapshot([runningTurn, reasoning], 3))
     })
 
-    expect(hook?.turnIndicator).toEqual({ thinking: true, activityText: null })
+    expect(hook?.turnIndicator).toEqual({
+      thinking: true,
+      activityText: null,
+      stopping: false,
+      stopRequestInFlight: false
+    })
   })
 
   it('hands the row the provider copy once real content ends the reasoning', async () => {
@@ -142,7 +137,48 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
       )
     })
 
-    expect(hook?.turnIndicator).toEqual({ thinking: false, activityText: 'Updating the plan' })
+    expect(hook?.turnIndicator).toEqual({
+      thinking: false,
+      activityText: 'Updating the plan',
+      stopping: false,
+      stopRequestInFlight: false
+    })
+  })
+
+  it("reads Stopping from this phone's own Stop until its request answers", async () => {
+    const passthrough = sendRequest.getMockImplementation()!
+    type Reply = Awaited<ReturnType<typeof passthrough>>
+    let answer: (value: Reply) => void = () => undefined
+    sendRequest.mockImplementation((method: string) =>
+      method === 'agentSession.cancel'
+        ? new Promise<Reply>((resolve) => (answer = resolve))
+        : passthrough(method)
+    )
+    onTestFinished(() => {
+      sendRequest.mockImplementation(passthrough)
+    })
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).not.toBeNull())
+    act(() => {
+      listener?.(snapshot([runningTurn], 3))
+    })
+    expect(hook?.turnIndicator.stopping).toBe(false)
+
+    act(() => hook?.cancel())
+    // Legacy hosts hold a new send until the pending Stop lands.
+    expect(hook?.turnIndicator).toMatchObject({
+      stopping: true,
+      stopRequestInFlight: true,
+      afterStop: 'send'
+    })
+
+    await act(async () => {
+      const cancelled = { ok: true, value: { cancelled: true } }
+      answer({ id: 'indicator-rpc', ok: true, result: cancelled, _meta: { runtimeId: 'r1' } })
+    })
+    await vi.waitFor(() => expect(hook?.turnIndicator.stopping).toBe(false))
   })
 
   it('never reads a journal status row as the live activity', async () => {
@@ -167,6 +203,155 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
       )
     })
 
-    expect(hook?.turnIndicator).toEqual({ thinking: false, activityText: null })
+    expect(hook?.turnIndicator).toEqual({
+      thinking: false,
+      activityText: null,
+      stopping: false,
+      stopRequestInFlight: false
+    })
+  })
+})
+
+describe("useMobileStructuredAgentSession and the host's Stopping", () => {
+  type RpcReply = { ok: boolean; result: unknown; _meta: { runtimeId: string } }
+  let renderer: ReactTestRenderer | null = null
+  let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
+  let streams: Map<string, (value: unknown) => void>
+  let cancelReply: ((reply: RpcReply) => void) | null
+  let subscribe: ReturnType<typeof vi.fn>
+  let client: RpcClient
+  const onSendError = vi.fn()
+  const runningTurn = journalItem(1, { kind: 'turn', turnId: 'turn-1', state: 'running' })
+
+  function hostSays(sessionId: string, stopping: boolean): void {
+    act(() =>
+      streams.get('agentSession.subscribeStatus')?.({
+        type: 'status',
+        session: {
+          sessionId,
+          workspaceId: 'workspace-a',
+          agent: 'codex',
+          status: 'working',
+          updatedAt: 1,
+          ...(stopping ? { stopping: true } : {})
+        }
+      })
+    )
+  }
+
+  let connected = true
+
+  function Harness({ statusFeed }: { statusFeed: boolean }): null {
+    hook = useMobileStructuredAgentSession({
+      client,
+      sessionId: 'session-1',
+      sourceIdentity: 'host-a\0workspace-a',
+      enabled: true,
+      connected,
+      hostSupport: {
+        promptCancel: false,
+        questionAnswers: false,
+        queuedMessages: false,
+        queuedCommands: false,
+        quietRepeatedStop: false,
+        statusFeed,
+        sendOptions: false,
+        conversationStop: false,
+        permissionModes: false,
+        itemDetail: false,
+        phoneAttachments: false
+      },
+      agent: 'codex',
+      onSendError
+    })
+    return null
+  }
+
+  async function mount(options: { statusFeed?: boolean } = {}) {
+    act(() => {
+      renderer = create(createElement(Harness, { statusFeed: options.statusFeed ?? true }))
+    })
+    await vi.waitFor(() => expect(streams.has('agentSession.subscribe')).toBe(true))
+    act(() => streams.get('agentSession.subscribe')?.(snapshot([runningTurn], 3)))
+  }
+
+  beforeEach(() => {
+    streams = new Map()
+    cancelReply = null
+    connected = true
+    subscribe = vi.fn((method: string, _params: unknown, onData: (value: unknown) => void) => {
+      streams.set(method, onData)
+      return vi.fn()
+    })
+    const sendRequest = vi.fn((method: string): Promise<RpcReply> =>
+      method === 'agentSession.cancel'
+        ? new Promise<RpcReply>((resolve) => (cancelReply = resolve))
+        : Promise.resolve({ ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    )
+    // A fresh client per test: the status stream is one per client for its life.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the session hook and its status feed call only these members here; a missing one would throw at once, never misread.
+    client = {
+      sendRequest,
+      subscribe,
+      getState: () => 'connected',
+      onStateChange: () => () => {}
+    } as unknown as RpcClient
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    hook = null
+  })
+
+  it('reads Stopping from the host with no press of its own, and keeps Stop for a repeat', async () => {
+    await mount()
+
+    hostSays('session-1', true)
+
+    expect(hook?.turnIndicator).toMatchObject({ stopping: true, stopRequestInFlight: false })
+  })
+
+  it("stays Stopping after this phone's own Stop answers while the host still says so", async () => {
+    await mount()
+    act(() => hook?.cancel())
+    hostSays('session-1', true)
+    expect(hook?.turnIndicator).toMatchObject({ stopping: true, stopRequestInFlight: true })
+
+    await act(async () => {
+      const cancelled = { ok: true, value: { cancelled: true } }
+      cancelReply?.({ ok: true, result: cancelled, _meta: { runtimeId: 'r1' } })
+    })
+
+    await vi.waitFor(() => expect(hook?.turnIndicator.stopRequestInFlight).toBe(false))
+    expect(hook?.turnIndicator.stopping).toBe(true)
+  })
+
+  it("never reads another session's Stopping", async () => {
+    await mount()
+
+    hostSays('session-2', true)
+
+    expect(hook?.turnIndicator.stopping).toBe(false)
+  })
+
+  it('reads nothing from the host while the phone is not connected', async () => {
+    await mount()
+    hostSays('session-1', true)
+    expect(hook?.turnIndicator.stopping).toBe(true)
+
+    connected = false
+    act(() => renderer?.update(createElement(Harness, { statusFeed: true })))
+
+    expect(hook?.turnIndicator.stopping).toBe(false)
+  })
+
+  it('never opens the status stream on a host without the status feed', async () => {
+    await mount({ statusFeed: false })
+
+    expect(subscribe.mock.calls.map(([method]) => method)).not.toContain(
+      'agentSession.subscribeStatus'
+    )
+    expect(hook?.turnIndicator.stopping).toBe(false)
   })
 })

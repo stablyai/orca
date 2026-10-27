@@ -1,29 +1,19 @@
-/**
- * Identity for a rendered automation list row.
- *
- * An automation ID is unique only inside its authority, so under All hosts two
- * hosts can legitimately return `a-1` and every bare-ID map, React key, and
- * selection check silently collapses them into one. A row is therefore keyed by
- * the host it came from plus the record's ID.
- *
- * The host part is the incarnation-free `stableKey`, never `ownerKey`: this key
- * decides React identity and which row is selected, and both must survive a
- * re-pairing that bumps `pairingRevision` / `targetGeneration`. An
- * incarnation-bearing key would remount every row and drop the selection each
- * time a host reconnected. Freshness fences still use `ownerKey` — they are
- * asking a different question about the same row.
- */
+/** Qualify row IDs by incarnation-free host stableKey so colliding authorities stay distinct and re-pairs preserve React identity/selection. Freshness uses incarnation-bearing ownerKey separately. */
 
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import type { StableAutomationCatalogRef } from '../../../../shared/automation-owner-ref'
 import {
+  getConnectionExecutionHostId,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getFolderWorkspaceWorktree } from '../../store/slices/worktrees/listing/detected-worktree-meta'
 
 export type AutomationListRow = {
   /** Authority-qualified and incarnation-free; see the module note. */
@@ -47,12 +37,7 @@ export function automationListRowKey(hostStableKey: string | null, automationId:
     .join('|')
 }
 
-/**
- * Dedupe key for a record within one authority. Deliberately coarser than the
- * row key: an authority's Self, SSH, and orphan scopes can each return the same
- * record and only one should render, while two authorities holding that ID hold
- * two different records.
- */
+/** Deduplicate Self/SSH/orphan copies within one authority; matching IDs on different authorities remain distinct records. */
 export function automationAuthorityRecordKey(authorityKey: string, automationId: string): string {
   return [authorityKey, automationId].map(encodeURIComponent).join('|')
 }
@@ -80,15 +65,41 @@ export function automationRepoForRow(
   if (!authority) {
     return fallback.get(repoId)
   }
-  return repos.find((repo) => {
-    const host = getRepoExecutionHostId(repo)
-    return (
-      repo.id === repoId &&
-      (authority.kind === 'runtime'
-        ? host === `runtime:${encodeURIComponent(authority.environmentId)}`
-        : !host.startsWith('runtime:'))
-    )
-  })
+  return repos.find(
+    (repo) => repo.id === repoId && authorityOwnsHost(authority, getRepoExecutionHostId(repo))
+  )
+}
+
+function authorityOwnsHost(
+  authority: StableAutomationCatalogRef['authority'],
+  hostId: string
+): boolean {
+  return authority.kind === 'runtime'
+    ? hostId === `runtime:${encodeURIComponent(authority.environmentId)}`
+    : !hostId.startsWith('runtime:')
+}
+
+/** Folder workspaces are not in `worktreesByRepo`; dispatch resolves `folder:<id>` the same way. */
+export function automationFolderWorktreeForRow(
+  row: AutomationListRow,
+  folderWorkspaces: readonly FolderWorkspace[],
+  workspaceId: string | null | undefined = row.automation.workspaceId
+): Worktree | undefined {
+  const scope = workspaceId ? parseWorkspaceKey(workspaceId) : null
+  if (scope?.type !== 'folder') {
+    return undefined
+  }
+  const authority = row.catalogRef?.authority
+  const matches = folderWorkspaces.filter(
+    (workspace) =>
+      workspace.id === scope.folderWorkspaceId &&
+      (!authority ||
+        authorityOwnsHost(
+          authority,
+          workspace.executionHostId ?? getConnectionExecutionHostId(workspace.connectionId)
+        ))
+  )
+  return matches.length === 1 ? getFolderWorkspaceWorktree(matches[0]) : undefined
 }
 
 export function automationWorktreeForRow(

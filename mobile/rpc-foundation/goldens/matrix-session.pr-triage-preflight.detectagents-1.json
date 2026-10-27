@@ -41,7 +41,7 @@
         }
       }
     },
-    "0220267a7bca": {
+    "039b2277b75a": {
       "name": "preflight.detectAgents#1",
       "ordinal": 5,
       "args": [
@@ -52,42 +52,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "084fe2afb0ce": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
+            "worktreeId": "repo-9::/w"
           }
         },
         {
@@ -106,6 +71,40 @@
           "ok": true,
           "result": {
             "error": "refused"
+          }
+        }
+      }
+    },
+    "1469e05f35f7": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
           }
         }
       }
@@ -228,7 +227,7 @@
         "startedAt": 0
       }
     },
-    "570f5efcd445": {
+    "67471f63b6f7": {
       "name": "preflight.detectAgents#1",
       "ordinal": 5,
       "args": [
@@ -239,215 +238,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "57f451cceda3": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "585dfba86809": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true
-        }
-      }
-    },
-    "6dd8724be3b1": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "9c16efc31903": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": ["codex"]
-        }
-      }
-    },
-    "a4273b38df83": {
-      "launched": "unlaunched"
-    },
-    "a9705081551e": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
-    },
-    "ac08a3ca5c67": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
+            "worktreeId": "repo-9::/w"
           }
         },
         {
@@ -468,6 +259,148 @@
             "error": "inner refused",
             "ok": false
           }
+        }
+      }
+    },
+    "742db574bda3": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"repo-9::/w\"}}"
+    },
+    "786221fb36b0": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "880c4a7837af": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "96aa7f51b001": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a4273b38df83": {
+      "launched": "unlaunched"
+    },
+    "a55db9667146": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true
         }
       }
     },
@@ -535,12 +468,7 @@
         }
       }
     },
-    "e0eef7c9fafe": {
-      "name": "repo.list#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "e1b544c0b6ec": {
+    "bfd08cc3060a": {
       "name": "preflight.detectAgents#1",
       "ordinal": 5,
       "args": [
@@ -551,7 +479,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "worktreeId": "repo-9::/w"
           }
         },
         {
@@ -562,36 +490,22 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
         }
       }
     },
-    "e35d7003f64c": {
-      "launched": {
-        "kind": "not-started",
-        "message": "transport failure"
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "eb8d47f90956": {
-      "launched": {
-        "kind": "sent"
-      }
-    },
-    "efd2ac432554": {
+    "d85a8cd9155e": {
       "name": "preflight.detectAgents#1",
       "ordinal": 5,
       "args": [
@@ -602,7 +516,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "worktreeId": "repo-9::/w"
           }
         },
         {
@@ -626,10 +540,96 @@
         }
       }
     },
-    "f49d184679d1": {
+    "e0eef7c9fafe": {
+      "name": "repo.list#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "e35d7003f64c": {
+      "launched": {
+        "kind": "not-started",
+        "message": "transport failure"
+      }
+    },
+    "e5392ac00e18": {
       "name": "preflight.detectAgents#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
+    "e69d09287c64": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eb8d47f90956": {
+      "launched": {
+        "kind": "sent"
+      }
     }
   },
   "recording": {
@@ -650,8 +650,8 @@
       {
         "id": "pr-triage-launch.normal:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "ba3fac1eb199"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "ba3fac1eb199"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -662,8 +662,8 @@
       {
         "id": "pr-triage-launch.result-absent:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "585dfba86809"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "a55db9667146"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -674,8 +674,8 @@
       {
         "id": "pr-triage-launch.result-null:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "6dd8724be3b1"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "1469e05f35f7"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -686,8 +686,8 @@
       {
         "id": "pr-triage-launch.inner-ok-missing:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "084fe2afb0ce"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "039b2277b75a"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -698,8 +698,8 @@
       {
         "id": "pr-triage-launch.inner-false-string-error:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "ac08a3ca5c67"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "67471f63b6f7"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -710,8 +710,8 @@
       {
         "id": "pr-triage-launch.inner-false-object-error:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "a9705081551e"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "bfd08cc3060a"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -722,8 +722,8 @@
       {
         "id": "pr-triage-launch.outer-refused:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "570f5efcd445"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e69d09287c64"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -734,8 +734,8 @@
       {
         "id": "pr-triage-launch.outer-refused-no-message:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "efd2ac432554"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "d85a8cd9155e"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -746,8 +746,8 @@
       {
         "id": "pr-triage-launch.method-not-found:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "0220267a7bca"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "880c4a7837af"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -758,8 +758,8 @@
       {
         "id": "pr-triage-launch.transport-rejection:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "e1b544c0b6ec"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "96aa7f51b001"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -770,8 +770,8 @@
       {
         "id": "pr-triage-launch.transport-rejection-no-message:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "57f451cceda3"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "786221fb36b0"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },

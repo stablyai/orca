@@ -21,15 +21,14 @@ describe('how long the shell keeps its own frame up', () => {
       { kind: 'checking' },
       { kind: 'activating', source: 'download' },
       { kind: 'offline' },
-      { kind: 'native-route' }
+      { kind: 'route-unavailable' }
     ] as const satisfies readonly MobileWebShellSessionState[]) {
       expect(frame({ state }), state.kind).toBe('pending')
     }
   })
 
   it('covers a mounted view until the page reports a frame, handshake or not', () => {
-    // `ready` is posted before the tree is built, so the view is mounted, empty and showing the
-    // surface behind it for every frame between the two.
+    // Ready precedes tree construction; keep the cover over the empty view until paint.
     expect(frame({})).toBe('unpainted')
   })
 

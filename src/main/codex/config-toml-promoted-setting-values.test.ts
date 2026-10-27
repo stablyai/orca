@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { readPromotedSettingValuesFromContent } from './config-toml-promoted-setting-values'
 
 describe('readPromotedSettingValuesFromContent', () => {
-  it('reads bare, dotted and table-body keys by structured path', () => {
+  it('reads values and multiline flags by structured path', () => {
     const values = readPromotedSettingValuesFromContent(
-      'model = "o4"\ntui.theme = "dark"\n\n[features]\ndaemon_auto_start = false\n'
+      'model = "o4"\ntui.theme = "dark"\ntui.status_line = [\n  "model"\n]\n\n[features]\ndaemon_auto_start = false\n'
     )
-    expect([...values.keys()]).toEqual(['model', 'tui.theme', 'features.daemon_auto_start'])
+    expect([...values]).toEqual([
+      ['model', { raw: '"o4"', multiline: false }],
+      ['tui.theme', { raw: '"dark"', multiline: false }],
+      ['tui.status_line', { raw: '[', multiline: true }],
+      ['features.daemon_auto_start', { raw: 'false', multiline: false }]
+    ])
   })
 
   it('does not read a quoted key containing a dot as a table key', () => {

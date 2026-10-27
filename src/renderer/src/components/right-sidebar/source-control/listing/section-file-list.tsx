@@ -1,7 +1,7 @@
 import React from 'react'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { DiscardAllArea } from '../commit/discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import {
   getSubmoduleExpansionKey,
   isExpandableSubmoduleEntry,
@@ -66,7 +66,7 @@ export function SourceControlSectionFileList({
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
-  handleUnstage: (path: string) => Promise<void>
+  handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {

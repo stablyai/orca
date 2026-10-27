@@ -1,10 +1,14 @@
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalAnsweredTurnIdentity,
+  AgentJournalItemIdentity
+} from '../../../shared/agent-session-journal-types'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { ResolveDispatchInput } from '../agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import { whileStructuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 
-/** Settle a provider-proven outcome independently of an in-flight client mutation. `unknown` is
- *  released doubt: the provider let the send go unanswered, so nothing re-sends it. */
+/** Never resend unknown outcomes. Explicit unrun proof requeues cards; direct sends retain refusal. */
 export async function settleStructuredAgentSessionLateDispatch(
   context: StructuredAgentSessionMutationContext,
   input: {
@@ -12,7 +16,11 @@ export async function settleStructuredAgentSessionLateDispatch(
     clientMessageId: string
   } & (
     | { providerIdentity: AgentJournalItemIdentity }
-    | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+    | ({
+        state: 'rejected'
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+        unrun?: true
+      } & AgentJournalDispatchRejection)
     | { state: 'unknown'; reason: string }
   )
 ): Promise<void> {
@@ -21,8 +29,12 @@ export async function settleStructuredAgentSessionLateDispatch(
     return
   }
   const fence = structuredAgentSessionConversationFence(context.deps.store, input.sessionId)
-  // The journal queue drains before close; the host queue would defer this past teardown.
-  await session.journal.resolveDispatch(
+  const unrunCard =
+    'state' in input &&
+    input.state === 'rejected' &&
+    input.unrun === true &&
+    session.journal.submission(input.clientMessageId)?.queuedMessageId !== undefined
+  const settlement: ResolveDispatchInput =
     'providerIdentity' in input
       ? {
           clientMessageId: input.clientMessageId,
@@ -42,8 +54,25 @@ export async function settleStructuredAgentSessionLateDispatch(
             clientMessageId: input.clientMessageId,
             state: 'rejected',
             reason: input.reason,
-            rejection: input.rejection,
+            rejection: unrunCard
+              ? { ...input.rejection, neverReachedAgent: true }
+              : input.rejection,
+            ...(input.answeredInTurn ? { answeredInTurn: input.answeredInTurn } : {}),
             fence
           }
-  )
+  try {
+    // Use the journal queue: it drains before close, while host serialization may run after teardown.
+    await whileStructuredAgentSessionHandingOver(
+      session.journal,
+      input.clientMessageId,
+      async () => {
+        await (settlement.state === 'accepted'
+          ? session.journal.acceptLate(settlement)
+          : session.journal.resolveDispatch(settlement))
+      }
+    )
+  } catch (error) {
+    context.publishWorkChanged(input.sessionId)
+    throw error
+  }
 }

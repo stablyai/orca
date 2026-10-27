@@ -1,15 +1,9 @@
-/**
- * The worker mode is a runtime implementation detail, not part of the orchestration contract.
- *
- * Two properties are pinned here, because both were false at some point in this lane:
- *
- * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once how it is named
- *   and the dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
- *   worker, which is a two-tier capability model dressed as a preamble tweak;
- * - a structured worker can actually BE a coordinator. `worker-start` used to resolve `--from`
- *   through `showTerminal`, which needs a PTY, so the capability the preamble withheld was in fact
- *   missing rather than merely unadvertised.
- */
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+/** Both worker modes receive identical orchestration instructions after identity/surface normalization, and structured workers can dispatch sub-workers through session authority. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -19,6 +13,10 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../../structured-worker-identity'
+import {
+  CHAT_REDISPATCH_PARAGRAPH,
+  TERMINAL_REDISPATCH_PARAGRAPH
+} from '../../orchestration/preamble'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { readStructuredWorkerOutput } from './orchestration-structured-worker-lifecycle'
 import { inspectWorkerTerminal } from './orchestration/worker/worker-observation'
@@ -56,13 +54,11 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
 
 const STRUCTURED_DEFAULT = {
   experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
 }
-const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalStructuredNativeChat: false }
+const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }
 
 /** A coordinator that IS a structured session: registry identity plus a live durable record. */
 function installStructuredCoordinator(handle: string, sessionId: string): string {
@@ -80,18 +76,12 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
     hasSession: () => true,
     deps: {
       store: {
-        getRecord: () => ({
-          provider: 'claude',
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
-            claimStatus: 'live',
-            deathEvidence: null,
-            runtimeFence: 1
-          }
-        }),
+        getConversation: () =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))
+          ),
         // No committed /clear: each session is its own lineage's root.
-        listRecords: () => []
+        listConversations: () => []
       }
     }
   }
@@ -107,6 +97,11 @@ function normalizePreamble(preamble: string, handle: string, dispatchId: string)
     .join('<dispatch>')
     .replace(/dcap_[\w-]+/g, '<capability>')
     .replace(/task_[0-9a-f]+/g, '<task>')
+    .split(CHAT_REDISPATCH_PARAGRAPH)
+    .join('<redispatch>')
+    .split(TERMINAL_REDISPATCH_PARAGRAPH)
+    .join('<redispatch>')
+    .replace(/\bthis (chat|terminal)\b/g, 'this <surface>')
 }
 
 describe('a worker cannot tell which mode it is running in', () => {
@@ -120,8 +115,7 @@ describe('a worker cannot tell which mode it is running in', () => {
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
-    // Deferred to the real getters for a structured handle, because resolving one through the
-    // registry is exactly what is under test; stubbed only for the PTY handles that have no runtime.
+    // Use real structured-handle getters to test registry resolution; stub only PTYs lacking runtime state.
     const realPaneKey = runtime.getTerminalPaneKey.bind(runtime)
     const realIncarnation = runtime.getTerminalProcessIncarnation.bind(runtime)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
@@ -131,8 +125,7 @@ describe('a worker cannot tell which mode it is running in', () => {
       (handle) => realIncarnation(handle) ?? 'runtime_test:worker:1'
     )
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-    // Above the default of 1, so the sub-dispatch section is on the table for both modes; at the
-    // default a depth-1 worker is refused nesting whatever mode it runs in.
+    // Raise nesting depth above one so both modes can receive sub-dispatch instructions.
     vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(3)
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
       id: WORKTREE,
@@ -168,7 +161,8 @@ describe('a worker cannot tell which mode it is running in', () => {
     from: string
     coordinatorPaneKey: string
   }) {
-    vi.spyOn(runtime, 'getClientSettings').mockReturnValue(args.settings as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mode selection reads only getSettings; all worker execution surfaces are stubbed below.
+    vi.spyOn(runtime, 'requireStore').mockReturnValue({ getSettings: () => args.settings } as never)
     const runId = db.createRun({
       objective: 'mode opacity',
       coordinatorHandle: args.from,
@@ -224,8 +218,11 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(structuredPreamble).toContain(`${selfLine}\n`)
     expect(structuredPreamble).not.toContain(STRUCTURED_HANDLE)
     expect(terminalPreamble).not.toContain('Orca session ID')
-    // The section the structured lane used to withhold, asserted by name so the equality above
-    // cannot pass by both preambles losing it.
+    // Only the surface words differ: a chat is told about its chat, a terminal keeps main's text.
+    expect(structuredPreamble).toContain(CHAT_REDISPATCH_PARAGRAPH)
+    expect(terminalPreamble).toContain(TERMINAL_REDISPATCH_PARAGRAPH)
+    expect(structuredPreamble).not.toContain('this terminal')
+    // Assert the sub-dispatch section exists too; equality alone passes if both modes lose it.
     expect(structuredPreamble).toContain('=== SUB-DISPATCH ===')
   })
 
@@ -300,8 +297,7 @@ describe('a worker cannot tell which mode it is running in', () => {
 
     const observation = await inspectWorkerTerminal(runtime, db, started.dispatchId)
 
-    // Absent, not null: null is the contract's "looked and found none", and a journal question is
-    // invisible to every prompt scan, so null would be a false negative a coordinator acts on.
+    // Omit agentWait: null means checked-and-absent, but terminal prompt scans cannot see journal questions.
     expect('agentWait' in observation).toBe(false)
   })
 })

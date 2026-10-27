@@ -1,5 +1,8 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import {
   getExplorerDisplayRootOptions,
@@ -30,23 +33,34 @@ import {
 } from './file-explorer-name-filter-projection'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
+import { getFileExplorerOperationOwnerFromState } from './file-explorer-operation-owner'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
+import { useWslHostUnavailableReason } from '../terminal-pane/use-wsl-host-unavailable-reason'
 import { translate } from '@/i18n/i18n'
-import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
-  const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
-  const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
+  const setRightSidebarExplorerView = useAppStore((s) => s.setRightSidebarExplorerView)
   const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const runtimeEnvironmentId = useAppStore((s) =>
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
+  )
+  const wslHostUnavailable = useWslHostUnavailableReason(activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  // Why: a folder workspace has no repo row, so only the catalog owner names its SSH host.
+  const openInOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, activeWorktreeId, {
+      connectionId: activeRepo?.connectionId,
+      runtimeEnvironmentId
+    })
+  )
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
   const activeFileId = useAppStore((s) => s.activeFileId)
@@ -101,17 +115,6 @@ function FileExplorerFiles(): React.JSX.Element {
     handleClearNameFilter
   } = useFileExplorerNameFilter({ isFilesViewActive, activeWorktreeId })
 
-  const handleSelectExplorerView = useCallback(
-    (view: RightSidebarExplorerView) => {
-      if (view === 'files') {
-        showRightSidebarFiles()
-        return
-      }
-      const trimmedQuery = nameFilterQuery.trim()
-      showRightSidebarSearch(trimmedQuery ? { query: trimmedQuery } : undefined)
-    },
-    [nameFilterQuery, showRightSidebarFiles, showRightSidebarSearch]
-  )
   const {
     rowProjection,
     ignoredByRelativePath,
@@ -173,9 +176,7 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [setNameFilterCollapsedPaths]
   )
-  // Why: every explorer effect lives here, above the `!worktreePath` early
-  // return, so a transient null worktree cannot unmount the tree's reset guard
-  // and SSH generation refs and trigger a full cache-dropping reload on return.
+  // Keep effects above the null-path return so transient missing ownership cannot reset cache guards or SSH generations.
   const paneState = useFileExplorerTreePaneState({
     onRevealOutsideRoot: rootNavigation.revealOutsideRoot,
     activeWorktreeId,
@@ -248,7 +249,8 @@ function FileExplorerFiles(): React.JSX.Element {
         <FileExplorerToolbar
           repoName={repoName}
           worktreePath={worktreePath}
-          connectionId={activeRepo?.connectionId ?? null}
+          {...getRouteForLocalPathOpenOwner(openInOwner)}
+          workspaceId={activeWorktreeId}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}
@@ -282,15 +284,10 @@ function FileExplorerFiles(): React.JSX.Element {
             sparse={!!activeWorktree?.isSparse}
           />
         )}
-        <FileExplorerQueryStrip view={explorerView} onSelectView={handleSelectExplorerView}>
-          {/* Why: keep both query rows mounted and cross-fade so the Names/Contents
-             switch does not remount or shift when changing modes. */}
-          <div className="relative min-h-7">
-            <div
-              className={cn(
-                explorerView !== 'files' && 'pointer-events-none invisible absolute inset-x-0 top-0'
-              )}
-            >
+        <FileExplorerQueryStrip view={explorerView} onSelectView={setRightSidebarExplorerView}>
+          {/* Keep query rows mounted to preserve input selection when switching modes. */}
+          <div className="relative min-h-8">
+            <div hidden={explorerView !== 'files'}>
               <FileExplorerNameFilter
                 query={nameFilterQuery}
                 scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
@@ -299,35 +296,21 @@ function FileExplorerFiles(): React.JSX.Element {
                 onClear={handleClearNameFilter}
               />
             </div>
-            <div
-              className={cn(
-                explorerView !== 'search' &&
-                  'pointer-events-none invisible absolute inset-x-0 top-0'
-              )}
-            >
+            <div hidden={explorerView !== 'search'}>
               <SearchQueryRow {...searchPanel.queryRowProps} />
+            </div>
+            <div hidden={explorerView !== 'search'}>
+              <SearchFilters key={activeWorktreeId} {...searchPanel.filtersProps} />
             </div>
           </div>
         </FileExplorerQueryStrip>
-        <div
-          className={cn(
-            'border-b border-border px-2 pb-1.5',
-            explorerView !== 'search' &&
-              'pointer-events-none invisible h-0 overflow-hidden border-b-0 p-0'
-          )}
-        >
-          <SearchFilters {...searchPanel.filtersProps} />
-        </div>
-        {/* Why: the Files and Contents views share one body slot; layering them
-           avoids remounting heavy virtualized panes while preserving full height. */}
+        {/* Layer Files/Contents in one body slot to retain heavy virtualized panes at full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <FileExplorerFilesTreePane
             displayRootPath={displayRootPath}
             activeRepo={activeRepo}
             worktreePath={worktreePath}
-            visibleFilesWorktreePath={visibleFilesWorktreePath}
             explorerView={explorerView}
-            isFilesViewActive={isFilesViewActive}
             activeFileId={activeFileId}
             hasNameFilter={hasNameFilter}
             nameFilterSource={nameFilterSource}
@@ -342,6 +325,7 @@ function FileExplorerFiles(): React.JSX.Element {
             visibleRowCount={visibleRowCount}
             handleExplorerBackgroundContextMenuCapture={handleExplorerBackgroundContextMenuCapture}
             handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
+            wslHostUnavailable={wslHostUnavailable}
           />
           <div
             className={cn(
@@ -378,7 +362,11 @@ function FileExplorerFiles(): React.JSX.Element {
 const FileExplorerFilesMemo = React.memo(FileExplorerFiles)
 
 function FileExplorer(): React.JSX.Element {
-  return <FileExplorerFilesMemo />
+  const ownerKey = useAppStore((state) =>
+    JSON.stringify(getFileExplorerOperationOwnerFromState(state, state.activeWorktreeId))
+  )
+  // Different hosts can expose the same path; their explorer caches must have separate lifetimes.
+  return <FileExplorerFilesMemo key={ownerKey} />
 }
 
 export default React.memo(FileExplorer)

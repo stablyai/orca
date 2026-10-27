@@ -1,8 +1,8 @@
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isCommandOnLocalPath } from './command-path-resolver'
+import { isCommandOnLocalPath, listLocalCommandPaths } from './command-path-resolver'
 
 describe('isCommandOnLocalPath', () => {
   it('returns false for an empty command', async () => {
@@ -74,11 +74,7 @@ describe('isCommandOnLocalPath', () => {
     let dir = ''
     beforeAll(async () => {
       dir = await mkdtemp(path.join(tmpdir(), 'cmd-resolver-win32-'))
-      // Why: the fixture extension matches a PATHEXT entry's case exactly so these
-      // tests are filesystem-portable. Real Windows resolves `.CMD` vs `.cmd`
-      // case-insensitively via the FS itself (same as where.exe); we deliberately
-      // do NOT emulate that in the resolver, so we must not depend on a
-      // case-insensitive FS here — this suite also runs on case-sensitive Linux CI.
+      // Match PATHEXT case in fixtures; real Windows handles filename case while Linux test filesystems do not.
       await writeFile(path.join(dir, 'tool.CMD'), '@echo off\n')
     })
     afterAll(async () => {
@@ -110,6 +106,121 @@ describe('isCommandOnLocalPath', () => {
           env: { Path: dir, PATHEXT: '.EXE' }
         })
       ).resolves.toBe(true)
+    })
+  })
+
+  // Executable-but-broken shims can shadow working binaries; retain later PATH candidates (#22975).
+  describe.skipIf(process.platform === 'win32')('listLocalCommandPaths', () => {
+    let front = ''
+    let middle = ''
+    let back = ''
+
+    async function executable(dir: string, name: string, body: string): Promise<void> {
+      await writeFile(path.join(dir, name), body)
+      await chmod(path.join(dir, name), 0o755)
+    }
+
+    beforeAll(async () => {
+      front = await mkdtemp(path.join(tmpdir(), 'cmd-list-front-'))
+      middle = await mkdtemp(path.join(tmpdir(), 'cmd-list-middle-'))
+      back = await mkdtemp(path.join(tmpdir(), 'cmd-list-back-'))
+      await executable(front, 'gh', '#!/usr/bin/env bash\nexec /nope/asdf exec "gh" "$@"\n')
+      await executable(back, 'gh', "#!/bin/sh\nprintf 'gh version 2.98.0\\n'\n")
+      await writeFile(path.join(middle, 'gh'), 'not executable\n')
+      await chmod(path.join(middle, 'gh'), 0o644)
+      await mkdir(path.join(middle, 'glab'))
+      await executable(back, 'glab', '#!/bin/sh\n')
+    })
+
+    afterAll(async () => {
+      await rm(front, { recursive: true, force: true })
+      await rm(middle, { recursive: true, force: true })
+      await rm(back, { recursive: true, force: true })
+    })
+
+    it('returns every match in PATH order, shim first', async () => {
+      await expect(
+        listLocalCommandPaths('gh', {
+          platform: 'linux',
+          env: { PATH: `${front}:${middle}:${back}` }
+        })
+      ).resolves.toEqual([path.posix.join(front, 'gh'), path.posix.join(back, 'gh')])
+    })
+
+    it('follows PATH order rather than which copy runs', async () => {
+      await expect(
+        listLocalCommandPaths('gh', { platform: 'linux', env: { PATH: `${back}:${front}` } })
+      ).resolves.toEqual([path.posix.join(back, 'gh'), path.posix.join(front, 'gh')])
+    })
+
+    it('skips a directory that matches the command name and keeps scanning', async () => {
+      await expect(
+        listLocalCommandPaths('glab', {
+          platform: 'linux',
+          env: { PATH: `${middle}:${front}:${back}` }
+        })
+      ).resolves.toEqual([path.posix.join(back, 'glab')])
+    })
+
+    it('returns an empty list when PATH holds no absolute match', async () => {
+      await expect(
+        listLocalCommandPaths('gh', { platform: 'linux', env: { PATH: '' } })
+      ).resolves.toEqual([])
+    })
+
+    it('applies the absolute-only gate to the whole list, not just the winner', async () => {
+      await expect(
+        listLocalCommandPaths('gh', {
+          platform: 'linux',
+          env: { PATH: `.${path.delimiter}${front}` }
+        })
+      ).resolves.toEqual([path.posix.join(front, 'gh')])
+    })
+
+    it('drops a relative match the filesystem would otherwise find', async () => {
+      // Ensure this relative PATH entry actually reaches a fixture before asserting the absolute-only filter.
+      const relative = path.relative(process.cwd(), back)
+      await expect(access(path.join(relative, 'gh'))).resolves.toBeUndefined()
+      await expect(
+        listLocalCommandPaths('gh', { platform: 'linux', env: { PATH: relative } })
+      ).resolves.toEqual([])
+    })
+
+    it('lists a PATH entry that repeats only once', async () => {
+      // Duplicate PATH directories must not probe doomed shims repeatedly.
+      await expect(
+        listLocalCommandPaths('gh', {
+          platform: 'linux',
+          env: { PATH: `${back}:${front}:${back}` }
+        })
+      ).resolves.toEqual([path.posix.join(back, 'gh'), path.posix.join(front, 'gh')])
+    })
+
+    it('returns an empty list for an empty command', async () => {
+      await expect(listLocalCommandPaths('')).resolves.toEqual([])
+    })
+
+    it('resolves an absolute command path directly', async () => {
+      await expect(
+        listLocalCommandPaths(path.join(front, 'gh'), { platform: 'linux', env: { PATH: '' } })
+      ).resolves.toEqual([`${front}/gh`])
+    })
+
+    it('lists every PATHEXT permutation on win32, in resolver order', async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), 'cmd-list-win32-'))
+      try {
+        await writeFile(path.join(dir, 'tool.CMD'), '@echo off\n')
+        await writeFile(path.join(dir, 'tool.EXE'), '')
+        await expect(
+          listLocalCommandPaths('tool', {
+            platform: 'win32',
+            env: { Path: dir, PATHEXT: '.CMD;.EXE' },
+            cwd: dir
+          })
+        ).resolves.toEqual([`${dir}/tool.CMD`, `${dir}/tool.EXE`])
+      } finally {
+        await rm(dir, { recursive: true, force: true })
+      }
     })
   })
 })

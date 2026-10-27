@@ -4,8 +4,7 @@ type PairedBrowserTabCreator = (args: CreateWebRuntimeSessionBrowserTabArgs) => 
 
 let registeredCreator: PairedBrowserTabCreator | null = null
 
-// Why: the runtime imports the store, so its loaded module registers a synchronous creation path.
-// Cold calls use the lazy import below and stage once it resolves.
+// Runtime imports store; register synchronous staging once loaded, lazy-import for cold calls.
 export function registerPairedBrowserTabCreator(create: PairedBrowserTabCreator): void {
   registeredCreator = create
 }

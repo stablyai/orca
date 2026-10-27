@@ -3,14 +3,16 @@ import type { ExecutionHostId } from '../shared/execution-host'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
-  assertNoPendingWorktreeRemovalConflict,
   finishAcceptedWorktreeRemoval,
-  projectPendingWorktreeRemovals,
   removesInBackground,
-  snapshotPendingWorktreeRemovals,
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
 } from './worktree-background-removal'
+import {
+  projectPendingWorktreeRemovals,
+  snapshotPendingWorktreeRemovals
+} from './worktree-removal-listing'
+import { assertNoPendingWorktreeRemovalConflict } from './worktree-removal-table'
 
 const removal = {
   worktreeId: 'repo-1::/work/feature',
@@ -54,7 +56,6 @@ describe('background worktree removal', () => {
     })
     await _settlePendingWorktreeRemovalsForTests()
     expect(isPending()).toBe(false)
-    // A refetch the end notice triggers must not see the row as still removing.
     expect(pendingAtPublish).toEqual([true, false])
   })
 
@@ -229,7 +230,6 @@ describe('background worktree removal', () => {
         projectPendingWorktreeRemovals(rows, (row) => row.id, clientReadsMarker, pendingAtScan)
       ).toEqual([{ id: other.worktreeId }])
     }
-    // A listing that began after the delete finished reads Git's current answer as-is.
     expect(
       projectPendingWorktreeRemovals(rows, (row) => row.id, true, snapshotPendingWorktreeRemovals())
     ).toBe(rows)

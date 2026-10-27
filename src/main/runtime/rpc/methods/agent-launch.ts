@@ -1,31 +1,11 @@
-/**
- * `agent.launch` — the one method that starts an agent, whatever surface it turns out to be.
- *
- * It exists because the routing decision had no host-side home: `worktree.create` never consulted
- * it, so any client that created a worktree with `startupAgent` got a PTY agent no matter what the
- * user's default said. That is not fixable inside `worktree.create`, because its contract is
- * exactly "spawn a PTY agent and hand me its `agentTerminalHandle`" — a host that quietly answered
- * it with a structured session would hand every older client a response with no handle and no
- * error. So `worktree.create` keeps that meaning verbatim, forever, and everything that has to
- * choose a surface comes here instead, behind a negotiated capability.
- *
- * A caller therefore never asks for a mode, and must read `outcome.kind` rather than assume one:
- * the receipt always says which surface ran and why, so a downgrade is never silent.
- *
- * A launch is also the one call whose retry is most expensive to get wrong — a lost reply means the
- * caller cannot tell "never ran" from "ran, answer lost" — so a caller may name the operation with
- * `operationId` and get exactly one execution, a recorded answer on every replay, and a refusal
- * when the outcome is genuinely unknown. That guarantee is safety, not recovery: it makes a retry
- * harmless, and does nothing to reunite a caller with a surface a dead attempt left behind.
- */
+/** Capability-gated surface routing; callers must inspect outcome.kind and receipt for fallback reasons.
+ * Keep worktree.create's PTY/handle contract for older clients.
+ * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
 
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
-import type {
-  AgentLaunchIntent,
-  AgentLaunchResult,
-  AgentLaunchTarget
-} from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session-operation-ledger'
 import {
   WorktreeCreateCollisionError,
@@ -39,7 +19,19 @@ import {
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
-import { AgentLaunch, AgentLaunchReplay, type AgentLaunchParams } from './agent-launch-schemas'
+import {
+  AgentLaunchExecutionError,
+  agentLaunchRefusalError,
+  agentLaunchTabClosedAnswer,
+  settleLaunchWhoseTabWasClosed,
+  settleQuietly,
+  withEarlyTab
+} from './agent-launch-execution-outcome'
+import {
+  AgentLaunch,
+  AgentLaunchReplay,
+  type AgentLaunchParams
+} from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import {
   agentLaunchFailureCode,
@@ -47,18 +39,19 @@ import {
 } from './agent-launch-failure-code'
 import {
   agentLaunchCallerNavigationId,
+  callerRendersLaunchedChat,
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
+import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
+import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
+import {
+  publishEarlyTab,
+  withPlacement,
+  type AgentLaunchView
+} from './agent-launch-tab-publication'
 
-/**
- * Advertising `agent.launch.v2` is a client's statement that it understands EITHER outcome — a
- * structured session it can open, or a terminal agent. A client that can only render one of the
- * two must keep using the surface-specific methods instead. The `clientKind === undefined` branch
- * is not "whatever ships in this build": it is the `orca` CLI over the runtime socket and the
- * SSH-remote CLI bridges, which carry no capability list at all. The desktop renderer ships in
- * this build and still arrives as `clientKind: 'runtime'`, so it advertises like any other client.
- */
+/** agent.launch.v2 declares support for both outcomes. CLI/runtime-socket and SSH bridges have no clientKind/capabilities; the desktop renderer is a runtime client and must advertise support. */
 export function supportsAgentLaunch(
   context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
 ): boolean {
@@ -68,125 +61,69 @@ export function supportsAgentLaunch(
   )
 }
 
-/**
- * A client addresses a workspace by selector, but the result's `worktreeId` is an id and every
- * step below the executor re-prefixes it as `id:<worktreeId>`. Resolving here is what keeps a
- * caller's `id:wt-7` from reaching the runtime as `id:id:wt-7`.
- *
- * The launch *scope* is what is asked for, because the id below is the only thing read off it. The
- * git-worktree record is the narrower answer — it does not exist for the floating workspace, so
- * asking for one refused a launch this method can perfectly well run, on a workspace whose id it
- * had already resolved. A folder workspace survived that only because the resolver fabricates a
- * worktree row for it; the scope is the answer that is real for all three kinds.
- */
-async function agentLaunchTarget(
-  params: AgentLaunchParams,
-  runtime: Pick<OrcaRuntimeService, 'showTerminalWorkspaceLaunchScope'>
-): Promise<AgentLaunchTarget> {
-  if (params.target.kind === 'create-worktree') {
-    return { kind: 'create-worktree', create: { ...params.target.create } }
-  }
-  const workspace = await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
-  return { kind: 'existing', worktree: workspace.id, workspacePath: workspace.path }
-}
-
-async function agentLaunchIntent(
-  params: AgentLaunchParams,
-  runtime: OrcaRuntimeService
-): Promise<AgentLaunchIntent> {
-  return {
-    agent: params.agent,
-    target: await agentLaunchTarget(params, runtime),
-    ...(params.prompt ? { prompt: params.prompt } : {}),
-    ...(params.sessionOptions ? { sessionOptions: params.sessionOptions } : {}),
-    ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {}),
-    // `null` means "no arguments" and must survive; only absence falls back to the settings default.
-    ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {}),
-    ...(params.cwd ? { cwd: params.cwd } : {}),
-    ...(params.launchSource ? { launchSource: params.launchSource } : {}),
-    ...(params.paneKey ? { paneKey: params.paneKey } : {}),
-    ...(params.sessionId ? { sessionId: params.sessionId } : {})
-  }
-}
-
-async function validateReusedTerminal(
-  intent: AgentLaunchIntent,
-  runtime: Pick<OrcaRuntimeService, 'showTerminal' | 'isTerminalRunningAgent'>
-): Promise<void> {
-  if (!intent.reuseTerminal) {
-    return
-  }
-  if (intent.target.kind !== 'existing') {
-    throw new Error('agent_launch_reuse_requires_existing_workspace')
-  }
-  const terminal = await runtime.showTerminal(intent.reuseTerminal.handle)
-  if (terminal.worktreeId !== intent.target.worktree) {
-    throw new Error('agent_launch_terminal_worktree_mismatch')
-  }
-  if (!(await runtime.isTerminalRunningAgent(intent.reuseTerminal.handle))) {
-    throw new Error('agent_launch_terminal_not_running_agent')
-  }
-}
-
-/**
- * The half before anything is created: resolve the caller's selector, then check a reused terminal.
- * A throw from here proves no surface was built, which is what lets the ledger record a launch that
- * failed in it as `failed` rather than `unknown`.
- */
-async function resolveUnlaunchedIntent(
-  params: AgentLaunchParams,
-  runtime: OrcaRuntimeService
-): Promise<AgentLaunchIntent> {
-  const intent = await agentLaunchIntent(params, runtime)
-  await validateReusedTerminal(intent, runtime)
-  return intent
+/** What a launch admitted under an operation id carries into its execution. */
+type ReplaySafeLaunch = {
+  attachOperationId: string
+  callerKey: string
+  terminalSpawn: TerminalSpawnDispatch
+  /** Queue provisional surface/prompt recording without awaiting it; ordered ledger transactions keep final settlement after it. */
+  recordSurface: (provisional: AgentLaunchResult) => void
 }
 
 async function runAgentLaunch(
-  intent: AgentLaunchIntent,
+  { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
   context: RpcContext,
-  attachOperationId?: string,
-  operationCallerKey?: string,
-  terminalSpawn?: TerminalSpawnDispatch
+  view: AgentLaunchView,
+  replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
   const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
+    decidedMode,
     surfaces: agentLaunchSurfaceFactory(
       context,
-      attachOperationId,
-      operationCallerKey,
-      callerNavigationId === null,
-      terminalSpawn
+      replaySafe?.attachOperationId,
+      replaySafe?.callerKey,
+      callerNavigationId !== null,
+      replaySafe?.terminalSpawn,
+      view
     ),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent)
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
+    // The tab is shown as it is published, not after a prompt that can take a minute to land.
+    onSurfacePublished: (surface) => {
+      view.early?.surfacePublished(surface)
+      replaySafe?.recordSurface(withPlacement(surface, view))
+      if (callerNavigationId !== null && view.presentation !== 'background') {
+        selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
+      }
+    }
   })
-  if (callerNavigationId !== null) {
-    selectAgentLaunchTabForCaller(context.runtime, result, callerNavigationId)
-  }
-  return result
+  return withPlacement(result, view)
 }
 
-/**
- * The pre-ledger path, unchanged and kept for every caller that names no operation.
- *
- * `dedupeWorktreeCreate` is an in-memory 60-second window over the create half of a launch, keyed
- * on repo plus mutation id with no caller partition, and it dies with the process. That was the
- * only idempotency `agent.launch` ever had, and an existing-workspace launch never got even that.
- * It is deliberately NOT a second correctness authority now: once a caller supplies `operationId`,
- * durable admission encloses the whole operation and this cache is bypassed entirely, so there is
- * one place that decides whether a launch runs.
- */
+/** Legacy unnamed launches retain the 60-second create dedupe cache (repo/mutation id, no caller partition).
+ * Named operations bypass it: durable admission alone decides execution, including existing-workspace launches. */
 function runLegacyAgentLaunch(
   params: AgentLaunchParams,
   context: RpcContext
 ): Promise<AgentLaunchResult> {
+  // No early tab, as before: only a replay-safe launch shows its tab before its agent exists.
   const execute = async () =>
-    runAgentLaunch(await resolveUnlaunchedIntent(params, context.runtime), context)
+    runAgentLaunch(
+      await resolveUnlaunchedIntent(params, context.runtime, null, {
+        callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+      }),
+      context,
+      {
+        early: null,
+        presentation: params.presentation
+      }
+    )
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
+    const { repo, repoHostId } = params.target.create
     return context.runtime.dedupeWorktreeCreate(
-      params.target.create.repo,
+      repoHostId ? { repo, repoHostId } : repo,
       `agent.launch:${params.target.create.clientMutationId}`,
       execute
     )
@@ -194,25 +131,9 @@ function runLegacyAgentLaunch(
   return execute()
 }
 
-function settleQuietly(settlement: Promise<void>): Promise<void> {
-  return settlement.catch((error: unknown) => {
-    console.warn('[agent-launch] the launch settled, its operation row did not', error)
-  })
-}
-
 type ActiveAgentLaunch = {
   fingerprint: string
   promise: Promise<AgentLaunchResult>
-}
-
-class AgentLaunchExecutionError extends Error {
-  constructor(
-    cause: unknown,
-    /** Decided once, by the launch that ran; a later reader cannot re-derive it from the error. */
-    readonly failedWithoutEffects: boolean
-  ) {
-    super('agent_session_operation_unknown', { cause })
-  }
 }
 
 const activeAgentLaunchesByRuntime = new WeakMap<
@@ -221,12 +142,11 @@ const activeAgentLaunchesByRuntime = new WeakMap<
 >()
 
 function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, ActiveAgentLaunch> {
-  const existing = activeAgentLaunchesByRuntime.get(runtime)
-  if (existing) {
-    return existing
+  let active = activeAgentLaunchesByRuntime.get(runtime)
+  if (!active) {
+    active = new Map()
+    activeAgentLaunchesByRuntime.set(runtime, active)
   }
-  const active = new Map<string, ActiveAgentLaunch>()
-  activeAgentLaunchesByRuntime.set(runtime, active)
   return active
 }
 
@@ -235,42 +155,83 @@ async function executeReplaySafeAgentLaunch(
   context: RpcContext,
   fingerprint: string
 ): Promise<AgentLaunchResult> {
-  const admission = await admitAgentLaunchOperation(context, params, fingerprint)
-  if (admission.decision === 'refuse') {
-    throw new Error(admission.refusal.code)
+  // The tab is the host's first act: admission has a cold cost the user should not watch.
+  const early = await publishEarlyTab(params, context)
+  let admission: Awaited<ReturnType<typeof admitAgentLaunchOperation>>
+  try {
+    admission = await admitAgentLaunchOperation(context, params, fingerprint, Date.now())
+  } catch (error) {
+    early?.finish()
+    throw error
   }
-  if (admission.decision === 'replay') {
+  if (admission.decision !== 'execute') {
+    // No effect runs on refusal; remove only this request's empty tab, never a pane that survived for replay.
+    early?.finish(
+      admission.decision === 'refuse' &&
+        admission.refusal.code !== 'agent_session_operation_unknown'
+        ? admission.refusal.code
+        : undefined
+    )
+    if (admission.decision === 'refuse') {
+      throw agentLaunchRefusalError(admission.refusal)
+    }
     return admission.result
   }
-  let intent: AgentLaunchIntent
+  early?.executing()
+  return withEarlyTab(early, () =>
+    executeAdmittedAgentLaunch(params, context, admission, {
+      early,
+      presentation: params.presentation
+    })
+  )
+}
+
+async function executeAdmittedAgentLaunch(
+  params: AgentLaunchParams & { operationId: string },
+  context: RpcContext,
+  admission: Extract<
+    Awaited<ReturnType<typeof admitAgentLaunchOperation>>,
+    { decision: 'execute' }
+  >,
+  view: AgentLaunchView
+): Promise<AgentLaunchResult> {
+  let resolved: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>
   try {
-    intent = await resolveUnlaunchedIntent(params, context.runtime)
+    resolved = await resolveUnlaunchedIntent(params, context.runtime, view.early, {
+      callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
+    })
   } catch (error) {
-    await settleQuietly(admission.fail(agentLaunchFailureCode(error)))
+    await settleQuietly(admission.fail(agentLaunchFailureCode(error), error))
     throw error
   }
   const terminalSpawn = trackTerminalSpawnDispatch()
   let result: AgentLaunchResult
   try {
-    result = await runAgentLaunch(
-      intent,
-      context,
-      admission.attachOperationId,
-      admission.callerKey,
-      terminalSpawn
-    )
+    result = await runAgentLaunch(resolved, context, view, {
+      attachOperationId: admission.attachOperationId,
+      callerKey: admission.callerKey,
+      terminalSpawn,
+      recordSurface: (provisional) => void settleQuietly(admission.record(provisional))
+    })
   } catch (error) {
+    if (view.early?.closedByUser()) {
+      await settleLaunchWhoseTabWasClosed(context, view.early, admission)
+    }
     const failedWithoutEffects = launchFailureWithoutEffectsCode(
       error,
-      intent.target.kind,
+      resolved.intent.target.kind,
       terminalSpawn
     )
     if (failedWithoutEffects) {
-      await settleQuietly(admission.fail(failedWithoutEffects))
+      await settleQuietly(admission.fail(failedWithoutEffects, error))
     }
-    throw new AgentLaunchExecutionError(error, failedWithoutEffects !== null)
+    throw new AgentLaunchExecutionError(error, failedWithoutEffects)
   }
-  // Settlement is bookkeeping; failure leaves the truthful `unknown` refusal for later retries.
+  if (view.early?.closedByUser()) {
+    // The user closed its tab after the spawn left: the agent stops, as any closed tab's does.
+    await settleLaunchWhoseTabWasClosed(context, view.early, admission)
+  }
+  // Failed settlement leaves the provisional prompt unconfirmed (unknown for older callers), never not-delivered that invites duplication.
   await settleQuietly(admission.settle(result))
   return result
 }
@@ -304,11 +265,13 @@ function runReplaySafeAgentLaunch(
 export const AGENT_LAUNCH_METHODS = [
   defineMethod({
     name: 'agent.launchReplay',
+    permission: 'workspace',
     params: AgentLaunchReplay,
     handler: async (params, context): Promise<AgentLaunchResult> => {
       if (!supportsAgentLaunch(context)) {
         throw new Error('agent_launch_replay_unsupported')
       }
+      assertAgentLaunchTargetAuthorized(params.target, context)
       try {
         return await runReplaySafeAgentLaunch(params, context)
       } catch (error) {
@@ -318,6 +281,9 @@ export const AGENT_LAUNCH_METHODS = [
             throw Object.assign(new Error(error.cause.message, { cause: error.cause }), {
               code: WORKTREE_CREATE_COLLISION_CODE
             })
+          }
+          if (error.cause instanceof AgentLaunchTabClosedError) {
+            throw agentLaunchTabClosedAnswer(context)
           }
           if (error.failedWithoutEffects) {
             throw error.cause
@@ -330,11 +296,13 @@ export const AGENT_LAUNCH_METHODS = [
   }),
   defineMethod({
     name: 'agent.launch',
+    permission: 'workspace',
     params: AgentLaunch,
     handler: async (params, context): Promise<AgentLaunchResult> => {
       if (!supportsAgentLaunch(context)) {
         throw new Error('agent_launch_unsupported')
       }
+      assertAgentLaunchTargetAuthorized(params.target, context)
       if (!params.operationId) {
         return runLegacyAgentLaunch(params, context)
       }
@@ -346,7 +314,12 @@ export const AGENT_LAUNCH_METHODS = [
         context
       ).catch((error: unknown) => {
         // Preserve the original error contract for callers of the optional-identity method.
-        throw error instanceof AgentLaunchExecutionError ? error.cause : error
+        if (error instanceof AgentLaunchExecutionError) {
+          throw error.cause instanceof AgentLaunchTabClosedError
+            ? agentLaunchTabClosedAnswer(context)
+            : error.cause
+        }
+        throw error
       })
     }
   })

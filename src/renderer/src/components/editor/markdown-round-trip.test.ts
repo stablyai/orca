@@ -16,9 +16,7 @@ function roundTripMarkdown(content: string): string {
   })
 
   try {
-    // Why: markdown serialization walks the document without running
-    // NodeType.checkContent, so it emits byte-identical output from a
-    // schema-invalid document that would crash on the user's next keystroke.
+    // Serialization can match byte-for-byte while schema-invalid content crashes on the next edit; check the document too.
     editor.state.doc.check()
     return editor.getMarkdown().trimEnd()
   } finally {
@@ -247,6 +245,14 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
+  it.each([
+    'Text with `<details>` inline and a `<summary>` mention.',
+    '`<details><summary>A</summary>B</details>` starts this paragraph.',
+    'First line\n`<details>` on the next line.'
+  ])('keeps details tags inside inline code as prose: %j', (input) => {
+    expect(roundTripMarkdown(input)).toBe(input)
+  })
+
   it('reopens nested toggles as editable details blocks', () => {
     expect(
       roundTripMarkdown(
@@ -375,8 +381,7 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('Intro\n\n![shot](shot.png)\n\nOutro\n')).toBe(
       'Intro\n\n![shot](shot.png)\n\nOutro'
     )
-    // Typing beside the image must join its paragraph instead of opening a new block,
-    // which only holds while the standalone image stays wrapped in a paragraph.
+    // Standalone images must stay in paragraphs so adjacent typing joins the same block.
     expect(markdownAfterTypingBesideImage('Intro\n\n![shot](shot.png)\n\nOutro\n', 'X')).toBe(
       'Intro\n\n![shot](shot.png)X\n\nOutro'
     )

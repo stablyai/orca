@@ -272,8 +272,6 @@ describe('scanClaudeUsageFiles', () => {
         '\n'
       )
     )
-    // Fork copies the original history with preserved message/request IDs but a
-    // rewritten sessionId, then appends its own new turn.
     await writeFile(
       forkFile,
       [
@@ -340,7 +338,6 @@ describe('scanClaudeUsageFiles', () => {
     const first = await scanClaudeUsageFiles([])
     expect(first.processedFiles[0]?.ownedDedupeKeys).toEqual(['msg_1:req_1'])
 
-    // A fork appears later while the original stays unchanged (cache reuse).
     await writeFile(
       forkFile,
       [turn('session-2', 'msg_1', 'req_1', 100), turn('session-2', 'msg_9', 'req_9', 50)].join('\n')
@@ -358,7 +355,6 @@ describe('scanClaudeUsageFiles', () => {
       ['msg_9:req_9']
     ])
 
-    // Rescanning with the full cache stays stable.
     const third = await scanClaudeUsageFiles([], second.processedFiles)
     expect(third.dailyAggregates.reduce((sum, aggregate) => sum + aggregate.inputTokens, 0)).toBe(
       150
@@ -410,8 +406,6 @@ describe('scanClaudeUsageFiles', () => {
     expect(first.processedFiles[0]?.ownedDedupeKeys).toEqual(['msg_1:req_1'])
     expect(first.processedFiles[1]?.ownedDedupeKeys).toEqual(['msg_9:req_9'])
 
-    // Deleting the owner must reparse deferred forks so they can re-claim the
-    // copied turn instead of permanently under-counting.
     await rm(originalFile)
 
     const second = await scanClaudeUsageFiles([], first.processedFiles)
@@ -471,7 +465,6 @@ describe('scanClaudeUsageFiles', () => {
 
     const second = await scanClaudeUsageFiles([], first.processedFiles)
     const unrelatedAfter = second.processedFiles.find((file) => file.path === unrelatedFile)
-    // Unrelated files must keep their cached projection identity (stat-only path).
     expect(unrelatedAfter).toBe(unrelatedBefore)
     expect(second.dailyAggregates.reduce((sum, aggregate) => sum + aggregate.inputTokens, 0)).toBe(
       175

@@ -1,6 +1,7 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AppState, type View } from 'react-native'
+import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
@@ -38,6 +39,7 @@ export type MobileBrowserTab = {
   browserPageId: string | null
   url: string
   loading: boolean
+  loadError?: BrowserLoadError | null
   canGoBack: boolean
   canGoForward: boolean
   isActive: boolean
@@ -122,8 +124,7 @@ export function MobileBrowserPane({
 
   const setRootViewRef = useCallback(
     (node: View | null) => {
-      // Why: long-press right-click timers belong to this responder surface;
-      // clearing from ref cleanup preserves the same unmount boundary.
+      // Clear surface-owned long-press timers at ref cleanup to preserve unmount boundary.
       if (node === null) {
         clearLongPressTimer()
       }
@@ -163,15 +164,13 @@ export function MobileBrowserPane({
   if (addressSync.nextState !== addressSyncState) {
     setAddressSyncState(addressSync.nextState)
     if (addressSync.shouldSyncValue) {
-      // Why: keep browser stream/goto address updates intact, but avoid a
-      // stale post-blur paint when the tab URL is the source of truth.
+      // Preserve stream/goto updates without stale post-blur paint when tab URL is authoritative.
       setAddressValue(displayBrowserUrl(tab.url))
     }
   }
 
   useLayoutEffect(() => {
-    // Why: gesture and stream handlers need committed values before passive
-    // Effects flush, without leaking refs from an uncommitted render.
+    // Publish committed gesture/stream refs before passive effects without leaking uncommitted render values.
     frameMetadataRef.current = frameMetadata
     layoutRef.current = layout
     dialogRef.current = dialog

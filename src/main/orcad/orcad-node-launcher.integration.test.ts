@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import {
@@ -14,7 +14,7 @@ import {
 } from './orcad-node-slot-fixture'
 
 const pinnedNode = locatePinnedNodeForTests()
-// Any Node other than the slot's runtime path plays the service unit's launcher.
+// Use a different Node path to exercise launcher handoff into the slot runtime.
 const nodePath = process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath
 let directory = ''
 let slotDir = ''
@@ -32,7 +32,7 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-node-launcher-'))
     ;({ slotDir, runtime: slotRuntime } = await writeNodeSlotFixture(directory, pinnedNode!))
     await build({
-      // Record entry before imports without relying on either process's stdout.
+      // Trace before imports without depending on either process stdout.
       banner: {
         js: `
           function traceLauncherPhase(phase) {
@@ -150,6 +150,9 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     })
     children.add(child)
+    if (!child.stdout || !child.stderr) {
+      throw new Error('The launcher fixture requires stdout and stderr pipes')
+    }
     child.once('spawn', () => record('spawn'))
     let closed = false
     child.once('close', () => {

@@ -1,6 +1,7 @@
 import type {
   AgentJournalApprovalItem,
   AgentJournalItemIdentity,
+  AgentJournalProducerLinkage,
   AgentJournalQuestionItem,
   AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
@@ -16,7 +17,7 @@ import {
   claudeQuestionItems,
   type ClaudeQuestionItem
 } from './claude-structured-prompt-items'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 
 const ADMITTED = { accepted: true } as const
 
@@ -29,7 +30,14 @@ type ClaudeJournalPrompt = {
 type ClaudeJournalPromptEntry = {
   items: ClaudeJournalPrompt[]
   cancellationPending: boolean
+  /** Journal producer ID; absent for the session's own agent. */
+  asker?: string
+  /** Waiting status requires a durable prompt card. */
+  written: boolean
+  landed?: Promise<void>
 }
+
+export type ClaudeOpenPromptCard = { promptKey: string; asker: string }
 
 function cancelledPromptBody(
   body: AgentJournalApprovalItem | AgentJournalQuestionItem
@@ -56,37 +64,40 @@ export class ClaudeJournalPrompts {
   constructor(
     private readonly deps: {
       sink: StructuredAgentSessionEventSink
-      /** The turn that raised the prompt: the open one, else the conversation. */
       turnScope: () => AgentJournalTurnScope
       bindPromptItemId?: (journalItemId: string, promptKey: string) => void
       questionItems?: (input: {
         sessionId: string
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
       }) => ClaudeQuestionItem[]
+      producerOf?: (
+        prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
+      ) => AgentJournalProducerLinkage
     }
   ) {}
 
-  /**
-   * Prompt rows carry NO producer linkage, and cannot.
-   *
-   * A prompt is not a transcript frame: it reaches Orca through the SDK's
-   * permission callback, whose options carry a request id and the tool awaiting
-   * approval and no parent reference of any kind. So when a subagent asks, the
-   * row cannot name it — unattributable at this site, not deliberately root.
-   *
-   * No reader is wrong because of it. A pending prompt projects the session as
-   * `attention` whoever raised it, which is the truth: the USER has to answer.
-   */
+  /** Attribute the card to its asker; any pending card still puts the session in attention. */
   handle(event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>): void {
+    const producer = this.deps.producerOf?.(event.prompt) ?? {}
     const items: ClaudeJournalPrompt[] = []
     const turnScope = this.deps.turnScope()
+    let admitted = true
+    const append = (identity: AgentJournalItemIdentity, body: ClaudeJournalPrompt['body']) => {
+      const options = { ...producer, turnScope }
+      if (this.deps.sink.tryAppendItem) {
+        const admission = this.deps.sink.tryAppendItem(identity, body, options)
+        admitted &&= admission.accepted
+      } else {
+        this.deps.sink.appendItem(identity, body, options)
+      }
+    }
     if (event.prompt.kind === 'question') {
       for (const question of (this.deps.questionItems ?? claudeQuestionItems)({
         sessionId: event.sessionId,
         prompt: event.prompt
       })) {
         items.push({ ...question, turnScope })
-        this.deps.sink.appendItem(question.identity, question.body, { turnScope })
+        append(question.identity, question.body)
         this.deps.bindPromptItemId?.(agentJournalItemKey(question.identity), event.prompt.promptKey)
       }
     } else {
@@ -96,12 +107,38 @@ export class ClaudeJournalPrompts {
       })
       const body = claudeApprovalItem(event.prompt)
       items.push({ identity, body, turnScope })
-      this.deps.sink.appendItem(identity, body, { turnScope })
+      append(identity, body)
       this.deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
     }
     this.deletePrompt(event.prompt.promptKey)
-    this.items.set(event.prompt.promptKey, { items, cancellationPending: false })
+    const entry: ClaudeJournalPromptEntry = {
+      items,
+      cancellationPending: false,
+      ...(producer.agentId ? { asker: producer.agentId } : {}),
+      written: false
+    }
+    this.items.set(event.prompt.promptKey, entry)
     this.deps.sink.publish()
+    if (admitted) {
+      this.markWritten(entry)
+    }
+  }
+
+  // Sinks without write barriers are treated as synchronous.
+  private markWritten(entry: ClaudeJournalPromptEntry): void {
+    const written = this.deps.sink.written?.()
+    if (!written) {
+      entry.written = true
+      return
+    }
+    entry.landed = written.then((barrier) => {
+      entry.written = barrier.ok
+    })
+  }
+
+  /** No promise for synchronous writes or closed cards; a settled promise can indicate failure. */
+  whenWritten(promptKey: string): Promise<void> | undefined {
+    return this.items.get(promptKey)?.landed
   }
 
   private admitCancellation(promptKey: string): StructuredAgentSessionSinkAdmission {
@@ -179,9 +216,9 @@ export class ClaudeJournalPrompts {
     return admission
   }
 
-  retryPendingCancellations(): void {
+  retryPendingCancellations(): StructuredAgentSessionSinkAdmission {
     if (this.pendingCancellationTotal === 0) {
-      return
+      return ADMITTED
     }
     for (const [promptKey, entry] of this.items) {
       if (!entry.cancellationPending) {
@@ -189,27 +226,37 @@ export class ClaudeJournalPrompts {
       }
       const admission = this.admitCancellation(promptKey)
       if (!admission.accepted && admission.reason === 'backpressure') {
-        return
+        return admission
       }
       const retained = this.items.get(promptKey)
       if (retained) {
         this.setCancellationPending(retained, false)
       }
     }
+    return ADMITTED
   }
 
   resolve(promptKey: string): void {
     this.deletePrompt(promptKey)
   }
 
-  /** The host records the card itself, so nothing here writes it any more. The returned undo hands
-   *  it back when that record fails, so Claude's own withdrawal can still close it. */
+  *openCards(): IterableIterator<ClaudeOpenPromptCard> {
+    for (const [promptKey, entry] of this.items) {
+      if (entry.written && entry.asker !== undefined) {
+        yield { promptKey, asker: entry.asker }
+      }
+    }
+  }
+
+  /** Transfer cancellation ownership to the host; undo if its journal commit fails. */
   handOver(promptKey: string): () => void {
     const entry = this.items.get(promptKey)
     this.deletePrompt(promptKey)
     return () => {
       if (entry && !this.items.has(promptKey)) {
-        this.items.set(promptKey, { items: entry.items, cancellationPending: false })
+        // Reuse the entry so an in-flight write updates the restored card.
+        entry.cancellationPending = false
+        this.items.set(promptKey, entry)
       }
     }
   }

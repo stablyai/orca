@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 
 export type ComposerIdentityModel = {
   linkedIssue: string
@@ -19,6 +19,8 @@ export type ComposerIdentityModel = {
   compareBaseRef: string | undefined
   setCompareBaseRef: React.Dispatch<React.SetStateAction<string | undefined>>
   branchNameOverride: string | undefined
+  branchIntent?: 'open-existing'
+  setBranchIntent: React.Dispatch<React.SetStateAction<'open-existing' | undefined>>
   setBranchNameOverride: React.Dispatch<React.SetStateAction<string | undefined>>
   parentWorktreeId: string | null
   setParentWorktreeId: React.Dispatch<React.SetStateAction<string | null>>

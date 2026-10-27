@@ -4,6 +4,7 @@ import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
 import RetainedAgentsSyncGate from '../components/dashboard/RetainedAgentsSyncGate'
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
+import { SavedHostScopeWidenGate } from '../components/sidebar/SavedHostScopeWidenGate'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
 import { useAppStore } from '../store'
 import { StructuredAgentSessionAttentionBridge } from '../components/native-chat/StructuredAgentSessionAttentionBridge'
@@ -11,10 +12,7 @@ import { StructuredAgentSessionStatusBridge } from '../components/native-chat/St
 
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
 
-/**
- * App-level gates that render nothing. Each lives here rather than inside the surface that
- * needs it so its high-churn store subscriptions stay out of the App render tree.
- */
+/** Isolate high-churn subscriptions from App rendering; services outlive their consuming surfaces. */
 export function AppBackgroundServices(): React.JSX.Element {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const dashboardPopoutEnabled = useAppStore(
@@ -24,11 +22,12 @@ export function AppBackgroundServices(): React.JSX.Element {
   return (
     <>
       <WorkspacePortScanner enabled={workspaceSessionReady} />
-      {/* Why: plugin language-pack discovery must not re-render the App shell. */}
+      {/* Keep permission notices available across app surfaces. */}
       <MacosTccPromptNoticeHost />
-      {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
+      {/* Keep agent-status retention subscriptions out of the App render tree. */}
       <RetainedAgentsSyncGate />
       <AiVaultTabTitleSyncGate />
+      <SavedHostScopeWidenGate />
       {dashboardPopoutEnabled ? (
         <Suspense fallback={null}>
           <DashboardPopoutBridge />
@@ -36,8 +35,7 @@ export function AppBackgroundServices(): React.JSX.Element {
       ) : null}
       <AgentHibernationGate />
       <StructuredAgentSessionStatusBridge />
-      {/* Why here and not in the chat pane: a backgrounded chat has no mounted pane, and that is
-          exactly the completion the user needs the dot for. */}
+      {/* Background chats have no mounted pane but still need completion attention. */}
       <StructuredAgentSessionAttentionBridge />
     </>
   )

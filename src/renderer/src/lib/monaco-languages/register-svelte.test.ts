@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { EMBED_ENTRY_REST_OF_LINE_BUDGET } from './monarch-embed-entry-budget'
 import {
+  createMonarchTokenizer,
   endEmbeddedLanguages,
   formatTokenizedLines,
+  measureNestedDepth,
   tokenizeMonarchDocument,
   tokenLanguages,
   tokenLanguagesPerLine,
@@ -13,9 +16,7 @@ import {
   svelteMonarchLanguage
 } from './register-svelte'
 
-// These tests drive the real `MonarchTokenizer`. Walking the rule table instead
-// let a grammar that threw on 100% of Svelte inputs — including `<p>a {b}</p>` —
-// ship with a green suite, because a broken grammar still has a valid table.
+// Use real Monarch tokenization; walking valid rule tables previously missed throws on ordinary Svelte expressions.
 function tokenizeSvelte(source: string) {
   return tokenizeMonarchDocument('svelte', svelteMonarchLanguage, source)
 }
@@ -26,8 +27,7 @@ function languagesPerLine(source: string): string[][] {
 }
 
 describe('registerSvelteLanguage registration', () => {
-  // Structural by necessity: this covers the registration call itself
-  // (ids, extensions, idempotence), which no amount of tokenizing can observe.
+  // Tokenizing cannot observe registration IDs/extensions/idempotence; structural checks cover that contract.
   it('registers the svelte language, Monarch tokenizer, and configuration once', () => {
     const languages: { id: string }[] = [{ id: 'typescript' }]
     const register = vi.fn((entry: { id: string }) => {
@@ -94,8 +94,8 @@ describe('svelte tokenization', () => {
         "  <p>{count} clicked</p> | 0:-@html 5:delimiter.curly.svelte@svelte 6:-@typescript 11:delimiter.curly.svelte@svelte 12:-@html | embed=html",
         "{:else} | 0:keyword.control.svelte@svelte | embed=none",
         "  <p>not yet</p> | 0:-@html | embed=html",
-        "{/if} | 0:-@html | embed=html",
-        " | 0:-@html | embed=html",
+        "{/if} | 0:keyword.control.svelte@svelte | embed=none",
+        " |  | embed=html",
         "<button on:click={increment}>{count}</button> | 0:-@html 17:delimiter.curly.svelte@svelte 18:-@typescript 27:delimiter.curly.svelte@svelte 28:-@html 29:delimiter.curly.svelte@svelte 30:-@typescript 35:delimiter.curly.svelte@svelte 36:-@html | embed=html",
         "{@html '<em>raw</em>'} | 0:keyword.control.svelte@svelte 6:-@typescript 21:delimiter.curly.svelte@svelte | embed=none",
         " |  | embed=html",
@@ -106,9 +106,7 @@ describe('svelte tokenization', () => {
     `)
   })
 
-  // Regression (the field failure): the first interpolation of a file threw
-  // "cannot pop embedded language if not inside one" — every Svelte file with a
-  // `{}` in it, which is essentially all of them.
+  // The first interpolation must not pop HTML before any embed was pushed.
   it('highlights every interpolation of a markup line', () => {
     const [line] = tokenizeSvelte('<p>a {first} b {second} c</p>')
 
@@ -126,8 +124,7 @@ describe('svelte tokenization', () => {
   })
 
   it('opens a file on a Svelte block without popping a missing embed', () => {
-    // No html embed exists yet at file start, so the block's entry rule must not
-    // pop one — Monarch throws outright if it does.
+    // File-start block entries have no HTML embed to pop.
     const [line] = tokenizeSvelte('{#if count > 0}')
 
     expect(tokenTypeAt(line, 0)).toBe('keyword.control')
@@ -139,8 +136,7 @@ describe('svelte tokenization', () => {
   })
 
   it('pops the html embed for a comment that follows markup', () => {
-    // Once html is active Monaco only consults parent rules that pop the embed,
-    // so `<!--` after markup is unreachable without one.
+    // Active HTML consults only parent pop rules; comments need one to become reachable.
     expect(languagesPerLine('<h1>hi</h1>\n<!-- a note -->\n<p>after</p>')).toEqual([
       ['html'],
       ['svelte'],
@@ -159,14 +155,85 @@ describe('svelte tokenization', () => {
       ['html'],
       ['svelte'],
       ['html'],
-      ['html'],
+      ['svelte'],
       ['html']
     ])
   })
 
+  it.each(['if', 'each', 'await', 'key', 'snippet'])(
+    'highlights %s closers and resumes HTML with or without whitespace',
+    (name) => {
+      for (const closer of [`{/${name}}`, `{ \t/${name} \t}`]) {
+        const lines = tokenizeSvelte(`<p>before</p>\n${closer}\n<p>after</p>`)
+        expect(tokenTypeAt(lines[1], 0)).toBe('keyword.control')
+        expect(tokenLanguages(lines[1])).toEqual(['svelte'])
+        expect(tokenLanguages(lines[2])).toEqual(['html'])
+
+        const [sameLine] = tokenizeSvelte(`<p>before</p>${closer}<p>after</p>`)
+        expect(tokenTypeAt(sameLine, '<p>before</p>'.length)).toBe('keyword.control')
+        expect(tokenLanguages(sameLine)).toEqual(['html', 'svelte', 'html'])
+
+        const [fileStartCloser] = tokenizeSvelte(closer)
+        expect(tokenTypeAt(fileStartCloser, 0)).toBe('keyword.control')
+        expect(tokenLanguages(fileStartCloser)).toEqual(['svelte'])
+      }
+    }
+  )
+
+  it('preserves a CSS block after a Svelte closer', () => {
+    expect(
+      languagesPerLine(
+        '{#each items as item}\n  <p>{item}</p>\n{/each}\n<style>\n  p { color: red; }\n</style>'
+      )
+    ).toEqual([
+      ['svelte', 'typescript', 'svelte'],
+      ['html', 'svelte', 'typescript', 'svelte', 'html'],
+      ['svelte'],
+      ['svelte'],
+      ['css'],
+      ['svelte']
+    ])
+  })
+
+  it('resumes HTML, expressions, script and CSS after an inline closer', () => {
+    const source =
+      '<p>before</p>{/if}<p>{value}</p><script>let a = 1</script><style>p {color:red}</style>'
+    expect(tokenLanguages(tokenizeSvelte(source)[0])).toEqual([
+      'html',
+      'svelte',
+      'html',
+      'svelte',
+      'typescript',
+      'svelte',
+      'html',
+      'svelte',
+      'typescript',
+      'svelte',
+      'css',
+      'svelte'
+    ])
+  })
+
+  it('keeps repeated closer reentry within the embed budget and recovers on the next line', () => {
+    // HTML text between closers forces repeated embed reentry after the fallback.
+    const closerWithText = '{/if}a'
+    const longLine = `<p>${closerWithText.repeat(1000)}<p>after</p>`
+    const tokenizer = createMonarchTokenizer('svelte', svelteMonarchLanguage)
+    const measurement = measureNestedDepth(tokenizer, ['<p>before</p>', longLine, '<p>next</p>'])
+    expect(measurement.error).toBeUndefined()
+    expect(measurement.maxNestedDepth).toBeGreaterThan(1)
+    expect(measurement.maxNestedDepth).toBeLessThanOrEqual(EMBED_ENTRY_REST_OF_LINE_BUDGET)
+
+    const lines = tokenizeSvelte(`<p>before</p>\n${longLine}\n<p>next</p>`)
+    expect(tokenTypeAt(lines[1], '<p>'.length)).toBe('keyword.control')
+    expect(tokenTypeAt(lines[1], '<p>'.length + closerWithText.length * 999)).toBe(
+      'keyword.control'
+    )
+    expect(tokenLanguages(lines[2])).toEqual(['html'])
+  })
+
   it('keeps markup highlighted across a whole multi-line file', () => {
-    // A grammar that drops the embed leaves plain `svelte` on these rows, which
-    // is the silently-unhighlighted failure a rule-table walk cannot see.
+    // Check embedded language attribution; a rule-table walk cannot detect silently lost highlighting.
     expect(
       languagesPerLine(
         '<h1>hi</h1>\n<p>{a}</p>\n<!-- note -->\n<p>{b}</p>\n<button on:click={go}>x</button>'
@@ -181,15 +248,13 @@ describe('svelte tokenization', () => {
   })
 
   it('does not enter typescript for an empty expression', () => {
-    // `{}` pops html on entry but never pushes typescript; the close must unwind
-    // only the state, or the tokenizer pops an embed that is not there.
+    // Empty expressions push no TypeScript, so close must unwind only state.
     expect(tokenLanguages(tokenizeSvelte('<p>{}</p>')[0])).toEqual(['html', 'svelte', 'html'])
   })
 })
 
 describe('svelte embedded language attributes', () => {
-  // `lang=` picks the embedded language for the block body. The assertion is on
-  // the body row, which is the region a reader sees highlighted (or not).
+  // Assert body-language attribution because lang= controls what the reader actually sees highlighted.
   it.each([
     ['<script>', 'typescript'],
     ['<script lang="ts">', 'typescript'],
@@ -225,9 +290,7 @@ describe('svelte embedded language attributes', () => {
 })
 
 describe('svelte root state invariant', () => {
-  // Structural on purpose: behaviour can only reach the root rules some fixture
-  // happens to exercise, and a root rule that pops an embed throws on the very
-  // first character of a file. Guard every root rule, exercised or not.
+  // Check every root rule for illegal embed pops, including unexercised paths that could throw at file start.
   it('has no root rule that pops an embedded language', () => {
     const rootRules = (svelteMonarchLanguage.tokenizer as Record<string, unknown[]>).root
     const popRules = rootRules.filter(

@@ -1,17 +1,20 @@
 import { useState } from 'react'
-import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
+import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
   getQuickCommandAgentLabel,
-  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
+  getTerminalQuickCommandBodySize,
+  formatKilobytes,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
 } from '../terminal/quick-commands'
 import type { QuickCommandDraft } from './quick-command-draft'
-import { isQuickCommandDraftValid } from './quick-command-draft'
+import { isQuickCommandDraftPromptTooLong, isQuickCommandDraftValid } from './quick-command-draft'
+import { themedStyleSheet } from '../theme/themed-styles'
 
 type Props = {
   draft: QuickCommandDraft
@@ -22,6 +25,7 @@ type Props = {
   // worktree's repo — no cross-repo picker like desktop.
   repoId: string | null
   repoName: string | null
+  agentPromptMaxLength: number | null
   onChange: (patch: Partial<QuickCommandDraft>) => void
   onOpenAgentPicker: () => void
   onCancel: () => void
@@ -35,6 +39,7 @@ function ActionToggle({
   value: QuickCommandDraft['action']
   onChange: (action: QuickCommandDraft['action']) => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.toggleGroup}>
       {(['terminal-command', 'agent-prompt'] as const).map((action) => {
@@ -68,15 +73,23 @@ export function QuickCommandEditorForm({
   error,
   repoId,
   repoName,
+  agentPromptMaxLength,
   onChange,
   onOpenAgentPicker,
   onCancel,
   onSave
 }: Props) {
+  useMobileColorScheme()
   const hasRepoScope = repoId !== null
   const [advancedOpen, setAdvancedOpen] = useState(draft.scope.type === 'repo')
   const isAgent = draft.action === 'agent-prompt'
-  const canSave = isQuickCommandDraftValid(draft) && !saving
+  const canSave = isQuickCommandDraftValid(draft, agentPromptMaxLength) && !saving
+  const promptTooLong = isQuickCommandDraftPromptTooLong(draft, agentPromptMaxLength)
+  const promptSize = getTerminalQuickCommandBodySize(
+    'agent-prompt',
+    draft.prompt,
+    agentPromptMaxLength
+  )
 
   return (
     <View style={styles.form}>
@@ -131,11 +144,24 @@ export function QuickCommandEditorForm({
           autoCapitalize="none"
           autoCorrect={false}
           multiline
-          maxLength={
-            isAgent ? MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH : MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
-          }
+          // Why: maxLength drops the tail of a paste silently, so prompts show a refusal instead.
+          maxLength={isAgent ? undefined : MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH}
         />
-        {isAgent ? (
+        {promptTooLong ? (
+          <View>
+            {/* Why static text in the alert: a live count would re-announce on every keystroke. */}
+            <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+              {promptSize.olderHostCap
+                ? 'Too long for this host. Update Orca on the host to save longer prompts.'
+                : 'Too long to save.'}
+            </Text>
+            <Text style={styles.hint}>
+              {promptSize.unit === 'bytes'
+                ? `${formatKilobytes(promptSize.used)} / ${formatKilobytes(promptSize.max)}`
+                : `${promptSize.used.toLocaleString()} / ${promptSize.max.toLocaleString()} characters`}
+            </Text>
+          </View>
+        ) : isAgent ? (
           <Text style={styles.hint}>Supports skills, file paths, and built-in commands.</Text>
         ) : null}
       </View>
@@ -241,7 +267,7 @@ export function QuickCommandEditorForm({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   form: { gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
   field: { gap: spacing.sm },
   label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
@@ -315,4 +341,4 @@ const styles = StyleSheet.create({
   saveButtonDisabled: { backgroundColor: colors.bgRaised },
   saveText: { fontSize: 14, fontWeight: '700', color: colors.bgBase },
   saveTextDisabled: { color: colors.textMuted }
-})
+}))

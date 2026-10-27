@@ -1,12 +1,4 @@
-/**
- * Custody for an agent terminal this start created is written when the terminal is created, not
- * after the agent boot wait.
- *
- * A worker pane is visible on desktop and phone the moment it exists. While the row was written
- * only after `tui-idle` (up to 60 s later), a keystroke into the booting pane found no `owned` row,
- * `markWorkerTerminalUserOwned` returned 0, and the takeover was lost — so a later `worker-release`
- * closed the pane the user had claimed.
- */
+/** Write custody at terminal creation so boot-time user input can revoke ownership; waiting for TUI idle lost takeover and later release closed claimed panes. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db'

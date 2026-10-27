@@ -1,18 +1,23 @@
-// A follow-up Claude queued behind the running turn is dropped by Stop, so the chat must record it
-// as withdrawn and stop reading as working — under the SessionStart hook Orca installs, whose frame
-// proves the start before the turn's system/init says the CLI can cancel its queue.
+// SessionStart proves readiness before system/init advertises queue cancellation; Stop must still withdraw unrun follow-ups.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import { projectStructuredAgentSessionStatus } from '../../../shared/structured-agent-session-projection'
+import {
+  projectStructuredAgentSessionStatus,
+  projectStructuredAgentSessionStatusState
+} from '../../../shared/structured-agent-session-projection'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
+  claudeFrame as frame,
+  claudeWasSent as wrote,
   fakeClaude,
   PROVIDER_SESSION_ID
 } from '../../claude/claude-structured-session-test-support'
@@ -20,6 +25,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -30,9 +36,10 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
-// As Claude Code 2.1.280 advertises them on a turn's system/init frame.
+// Claude Code 2.1.280 system/init capabilities.
 const CAPABILITIES = ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1', 'msg_lifecycle_v1']
 
 let root: string
@@ -40,21 +47,34 @@ let host: StructuredAgentSessionHost
 let adapter: ClaudeStructuredSessionAdapter
 let store: AgentSessionRecordStore
 let queued: string[]
+let lifecycleCancelled: string[]
 let claude: ReturnType<typeof fakeClaude>
 
 beforeEach(async () => {
+  vi.useFakeTimers()
   root = await mkdtemp(join(tmpdir(), 'orca-claude-queued-stop-'))
   resetHostTestOperationIds()
   queued = []
+  lifecycleCancelled = []
   claude = fakeClaude({
     replayUuid: null,
     initProof: 'session-start',
-    // What the real CLI answers: cancel_queued cancels the queue, a plain interrupt keeps it.
+    // Match CLI semantics: plain interrupt retains queued sends, cancel_queued removes them.
     routes: {
-      interrupt: (params) =>
-        params?.cancelQueued
+      interrupt: (params) => {
+        for (const commandUuid of lifecycleCancelled.splice(0)) {
+          claude.connections[0]!.handlers.onMessage?.({
+            type: 'command_lifecycle',
+            command_uuid: commandUuid,
+            state: 'cancelled',
+            uuid: `lifecycle-${commandUuid}`,
+            session_id: PROVIDER_SESSION_ID
+          })
+        }
+        return params?.cancelQueued
           ? { still_queued: [], cancelled: queued.splice(0) }
           : { still_queued: [...queued] }
+      }
     }
   })
   const lifecycle: Promise<void>[] = []
@@ -66,8 +86,8 @@ beforeEach(async () => {
       claudeConfigDir: join(root, 'claude-home'),
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
-      resumesTranscript: false,
-      continuesChain: false
+      resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
       const mapped = structuredClaudeLifecycleEvent(event)
@@ -75,7 +95,6 @@ beforeEach(async () => {
         lifecycle.push(host.handleAdapterEvent(mapped))
       }
     },
-    // As the runtime wires it.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -83,6 +102,7 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
@@ -98,14 +118,18 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await adapter.awaitStarted(SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   await Promise.all(lifecycle)
 })
 
 afterEach(async () => {
-  await adapter.closeAll()
-  await host.flushAllStreamedEvents()
-  await rm(root, { recursive: true, force: true })
+  try {
+    await adapter.closeAll()
+    await host.flushAllStreamedEvents()
+    await rm(root, { recursive: true, force: true })
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 function eventually(assertion: () => unknown): Promise<unknown> {
@@ -157,11 +181,9 @@ async function liveTurnId(): Promise<string | null> {
   return activeStructuredAgentSessionTurnId((await host.journalSnapshot(SESSION)).items)
 }
 
-/** Sends the first message and lets Claude open its turn; returns the turn a client reads. */
 async function openFirstTurn(connection: (typeof claude.connections)[number]): Promise<string> {
   const first = await send('Write a long reply.')
   await eventually(() => expect(connection.sent).toHaveLength(1))
-  // Claude opens the turn: its system/init, then the echo of the message it runs.
   connection.handlers.onMessage?.({
     type: 'system',
     subtype: 'init',
@@ -208,7 +230,6 @@ it('withdraws a follow-up Claude queued behind the running turn when that turn i
 
   const stopped = await stop(turnId)
   expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
-  // The interrupted turn closes as the CLI ends it.
   connection.handlers.onMessage?.({
     type: 'result',
     subtype: 'error_during_execution',
@@ -224,8 +245,7 @@ it('withdraws a follow-up Claude queued behind the running turn when that turn i
   await eventually(async () => expect(await status()).toBe('idle'))
 }, 15_000)
 
-// The phone names the turn from its own copy of the journal, which can trail the host's.
-it('withdraws a follow-up Claude holds when the turn the Stop names ended before it landed', async () => {
+it('leaves a follow-up Claude holds to run when the turn the Stop names ended before it landed', async () => {
   const connection = claude.connections[0]!
   const turnId = await openFirstTurn(connection)
   const followUp = await send('And then this.')
@@ -234,54 +254,36 @@ it('withdraws a follow-up Claude holds when the turn the Stop names ended before
   await eventually(async () => expect((await dispatch(followUp)).state).toBe('pending'))
   await endFirstTurn(connection)
 
-  expect(await stop(turnId)).toMatchObject({ ok: true, value: { cancelled: true } })
-  expect(connection.calls.find((call) => call.subtype === 'interrupt')?.params).toEqual({
-    cancelQueued: true
-  })
-  await eventually(async () =>
-    expect(await dispatch(followUp)).toEqual({
-      state: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
-    })
-  )
-  await eventually(async () => expect(await status()).toBe('idle'))
+  expect(await stop(turnId)).toMatchObject({ ok: true, value: { cancelled: false } })
+  expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  expect((await dispatch(followUp)).state).toBe('pending')
 }, 15_000)
 
-it('withdraws a follow-up still queued on the host when the turn the Stop names already ended', async () => {
+it('leaves a follow-up still queued on the host alone when the turn the Stop names already ended', async () => {
   const connection = claude.connections[0]!
   const turnId = await openFirstTurn(connection)
   await endFirstTurn(connection)
-  // Holds the delivery loop between its start check and the handover, with the follow-up queued.
-  let release!: () => void
-  const held = new Promise<void>((resolve) => (release = resolve))
-  const awaitStarted = vi.spyOn(adapter, 'awaitStarted').mockImplementationOnce(async () => {
-    await held
-  })
+  // Hold delivery before handover so Stop sees host-queued work.
+  const { held, release } = holdDelivery()
   const followUp = await send('And then this.')
-  await eventually(() => expect(awaitStarted).toHaveBeenCalled())
+  await held
   const submission = (await host.journalSnapshot(SESSION)).submissions.find(
     (entry) => entry.clientMessageId === followUp
   )
   expect(submission && isQueuedAgentJournalSubmission(submission)).toBe(true)
 
-  // Nothing reached Claude, so the host's withdrawal is the whole Stop, as with no turn named.
-  expect(await stop(turnId)).toMatchObject({ ok: true, value: { cancelled: true } })
+  const stopped = stop(turnId)
   release()
-  await eventually(async () =>
-    expect(await dispatch(followUp)).toEqual({
-      state: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
-    })
-  )
-  expect(connection.sent).toHaveLength(1)
-  await eventually(async () => expect(await status()).toBe('idle'))
+  expect(await stopped).toMatchObject({ ok: true, value: { cancelled: false } })
+  await eventually(() => expect(connection.sent).toHaveLength(2))
+  expect((await dispatch(followUp)).state).not.toBe('rejected')
   const rows = (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
     item.body.kind === 'status' ? [item.body.text] : []
   )
   expect(rows).not.toContain('The provider had already finished this turn.')
 }, 15_000)
 
-it('withdraws a host-queued follow-up but leaves a newer turn running when the Stop names an older one', async () => {
+it('leaves a host-queued follow-up and a newer turn running when the Stop names an older one', async () => {
   const connection = claude.connections[0]!
   const olderTurnId = await openFirstTurn(connection)
   await endFirstTurn(connection)
@@ -295,22 +297,14 @@ it('withdraws a host-queued follow-up but leaves a newer turn running when the S
   const newerTurnId = await liveTurnId()
   expect(newerTurnId).not.toBeNull()
   expect(newerTurnId).not.toBe(olderTurnId)
-  let release!: () => void
-  const held = new Promise<void>((resolve) => (release = resolve))
-  const awaitStarted = vi.spyOn(adapter, 'awaitStarted').mockImplementationOnce(async () => {
-    await held
-  })
+  const { held, release } = holdDelivery()
   const followUp = await send('And then this.')
-  await eventually(() => expect(awaitStarted).toHaveBeenCalled())
+  await held
 
-  expect(await stop(olderTurnId)).toMatchObject({ ok: true, value: { cancelled: false } })
+  const stopped = stop(olderTurnId)
   release()
-  await eventually(async () =>
-    expect(await dispatch(followUp)).toEqual({
-      state: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
-    })
-  )
+  expect(await stopped).toMatchObject({ ok: true, value: { cancelled: false } })
+  await eventually(async () => expect((await dispatch(followUp)).state).not.toBe('rejected'))
   expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
   expect(await liveTurnId()).toBe(newerTurnId)
   const rows = (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
@@ -319,7 +313,7 @@ it('withdraws a host-queued follow-up but leaves a newer turn running when the S
   expect(rows).not.toContain('The provider had already finished this turn.')
 }, 15_000)
 
-it('a card sent now into the running turn comes back paused when Stop withdraws it, and is not sent again', async () => {
+it('a card sent now into the running turn comes back paused when Claude reports it cancelled unrun, and is not sent again', async () => {
   const connection = claude.connections[0]!
   const turnId = await openFirstTurn(connection)
   const body = hostTestMessage('And then this.')
@@ -327,8 +321,7 @@ it('a card sent now into the running turn comes back paused when Stop withdraws 
   const queuedSend = await host.send(CALLER, {
     envelope: envelope('agentSession.send', { body, delivery }),
     body,
-    delivery,
-    userSend: true
+    delivery
   })
   if (!queuedSend.ok || !('queued' in queuedSend.value)) {
     throw new Error('expected a queued receipt')
@@ -339,13 +332,12 @@ it('a card sent now into the running turn comes back paused when Stop withdraws 
     messageId: cardId
   })
   expect(sentNow).toMatchObject({ ok: true })
-  // Folded into the running turn: Claude holds it until that turn ends.
   await eventually(() => expect(connection.sent).toHaveLength(2))
-  queued.push(String(connection.sent.at(-1)!.uuid))
+  lifecycleCancelled.push(String(connection.sent.at(-1)!.uuid))
   const sends = async () =>
     (await host.journalSnapshot(SESSION)).submissions
       .filter((entry) => entry.queuedMessageId === cardId)
-      .map((entry) => ({ origin: entry.origin, state: entry.dispatchState, reason: entry.reason }))
+      .map((entry) => ({ state: entry.dispatchState, reason: entry.reason }))
   await eventually(async () => expect((await sends())[0]?.state).toBe('pending'))
 
   expect(await stop(turnId)).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -356,7 +348,7 @@ it('a card sent now into the running turn comes back paused when Stop withdraws 
     uuid: 'interrupted-result'
   })
 
-  // Inside the test's budget, so a re-send fails on this diff rather than the timeout.
+  // Keep replay detection within the test deadline.
   await vi.waitFor(async () => {
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect({
@@ -366,14 +358,80 @@ it('a card sent now into the running turn comes back paused when Stop withdraws 
     }).toEqual({
       pause: { reason: 'stopped' },
       cards: ['waiting'],
-      sends: [{ origin: 'client', state: 'rejected', reason: DISPATCH_REJECTED_CANCELLED }]
+      sends: [{ state: 'rejected', reason: DISPATCH_REJECTED_CANCELLED }]
     })
   }, 5_000)
-  // A drain ignoring the pause re-sends only after the stopped turn ends: watch past that.
+  // A broken drain may resend only after turn end; observe beyond that boundary.
   await eventually(async () => expect(await liveTurnId()).toBeNull())
-  await new Promise((resolve) => setTimeout(resolve, 2_500))
+  await vi.advanceTimersByTimeAsync(2_500)
   expect(connection.sent).toHaveLength(2)
-  expect(await sends()).toEqual([
-    { origin: 'client', state: 'rejected', reason: DISPATCH_REJECTED_CANCELLED }
-  ])
+  expect(await sends()).toEqual([{ state: 'rejected', reason: DISPATCH_REJECTED_CANCELLED }])
 }, 20_000)
+
+it('ends the captured child when a named Stop sees its next turn open during acceptance', async () => {
+  const connection = claude.connections[0]!
+  const close = vi.spyOn(connection, 'close')
+  const stoppedTurn = await openFirstTurn(connection)
+  const laneDrained = () => host['tasks'].serialize(SESSION, async () => {})
+  const statusTexts = async () =>
+    (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+      item.body.kind === 'status' ? [String(item.body.text)] : []
+    )
+  await send('Already handed-over follow-up.')
+  await eventually(() => expect(wrote(connection, 'Already handed-over follow-up.')).toBe(true))
+  const followUp = connection.sent.at(-1)!
+  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const accept = journal.stops.accept.bind(journal.stops)
+  vi.spyOn(journal.stops, 'accept').mockImplementationOnce(async (...args) => {
+    const accepted = await accept(...args)
+    frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'result-1' })
+    frame(connection, followUp)
+    frame(connection, {
+      type: 'assistant',
+      uuid: 'follow-up-leaf',
+      parent_tool_use_id: null,
+      message: { id: 'msg-2', role: 'assistant', content: [{ type: 'text', text: 'Next reply' }] }
+    })
+    await eventually(async () => {
+      const live = activeStructuredAgentSessionTurnId((await host.journalSnapshot(SESSION)).items)
+      expect(live).not.toBeNull()
+      expect(live).not.toBe(stoppedTurn)
+    })
+    return accepted
+  })
+
+  await expect(stop(stoppedTurn)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  await laneDrained()
+
+  expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  expect(close).toHaveBeenCalledOnce()
+  expect(connection.closed).toBe(true)
+  expect(await statusTexts()).toEqual(['Cancellation requested.'])
+  const snapshot = await host.journalSnapshot(SESSION)
+  const turn = readAgentJournalTurn(
+    snapshot.items.findLast((item) => item.body.kind === 'turn')?.body
+  )
+  expect(turn).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+  const { summary } = projectStructuredAgentSessionStatusState(
+    snapshot.items,
+    snapshot.submissions,
+    store.getRecord(SESSION)!.lease.runtimeFence
+  )
+  expect(structuredAgentSessionAgentStatus({ ...summary, status: summary.status! })).toMatchObject({
+    mainAgent: { outcome: 'cancellation' }
+  })
+
+  await send('New child.')
+  await eventually(() => {
+    const started = claude.connections.at(-1)!
+    expect(started).not.toBe(connection)
+    expect(wrote(started, 'New child.')).toBe(true)
+  })
+  const resumed = claude.connections.at(-1)!
+  await expect(stop(stoppedTurn)).resolves.toMatchObject({ ok: true, value: { cancelled: false } })
+  await laneDrained()
+  expect(close).toHaveBeenCalledOnce()
+  expect(resumed.closed).toBe(false)
+  expect(resumed.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  expect(await statusTexts()).toEqual(['Cancellation requested.'])
+})

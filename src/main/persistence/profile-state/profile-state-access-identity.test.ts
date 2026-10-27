@@ -3,8 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => ({
   registry: vi.fn(),
-  creationTime: vi.fn()
+  creationTime: vi.fn(),
+  runProcessSync: vi.fn()
 }))
+vi.mock('@orca/process-host', () => ({ runProcessSync: native.runProcessSync }))
 vi.mock('../../windows-native-registry', () => ({
   WINDOWS_REG_SZ: 1,
   loadWindowsNativeRegistry: () => ({ HK: { LM: 123 }, getRegistryKey: native.registry })
@@ -21,6 +23,7 @@ beforeEach(() => {
   vi.resetModules()
   native.registry.mockReset()
   native.creationTime.mockReset().mockReturnValue(null)
+  native.runProcessSync.mockReset()
 })
 
 afterEach(() => {
@@ -98,4 +101,37 @@ it.each([
   )
   const { profileStateAccessMachineIdentity } = await import('./profile-state-access-identity')
   expect(profileStateAccessMachineIdentity()).toBe(expected)
+})
+
+const IOREG = `+-o J316sAP  <class IOPlatformExpertDevice, id 0x100000253>
+    {
+      "IOPlatformSerialNumber" = "C02XXXXXXXXX"
+      "IOPlatformUUID" = "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE"
+    }
+`
+
+it('reads the macOS hardware UUID from IOPlatformUUID, not a sysctl macOS lacks', async () => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+  native.runProcessSync.mockReturnValue({ code: 0, stdout: IOREG, stderr: '' })
+  const { profileStateAccessMachineIdentity } = await import('./profile-state-access-identity')
+  expect(profileStateAccessMachineIdentity()).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')
+  expect(profileStateAccessMachineIdentity()).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')
+  expect(native.runProcessSync).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      program: '/usr/sbin/ioreg',
+      args: ['-rd1', '-c', 'IOPlatformExpertDevice']
+    })
+  )
+})
+
+it.each([
+  [{ code: 1, stdout: '', stderr: 'ioreg: failed' }],
+  [{ code: 0, stdout: '"IOPlatformUUID" = "00000000-0000-0000-0000-000000000000"', stderr: '' }],
+  [{ code: 0, stdout: '"IOPlatformUUID" = "not-a-uuid"', stderr: '' }],
+  [{ code: 0, stdout: '', stderr: '' }]
+])('keeps an unavailable macOS hardware UUID unverifiable', async (result) => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+  native.runProcessSync.mockReturnValue(result)
+  const { profileStateAccessMachineIdentity } = await import('./profile-state-access-identity')
+  expect(profileStateAccessMachineIdentity()).toBeNull()
 })

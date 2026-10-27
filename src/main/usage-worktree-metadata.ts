@@ -1,8 +1,13 @@
 import { basename } from 'node:path'
 import type { Repo } from '../shared/repo-types'
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree/id'
+import {
+  getRepoMainWorktreeId,
+  splitWorktreeId,
+  splitWorktreeIdForFilesystem
+} from '../shared/worktree/id'
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Store } from './persistence'
+import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
 export type UsageWorktreeRef = {
   worktreeId: string
@@ -18,13 +23,11 @@ export function loadKnownUsageWorktreesByRepo(
   store: Pick<Store, 'getAllWorktreeMeta'>,
   repos: Repo[]
 ): Map<string, UsageWorktreeRef[]> {
-  const localRepos = repos.filter((repo) => !repo.connectionId)
-  // Why: all three usage scanners revisit persisted worktree metadata; index
-  // repos once instead of linearly searching the full list for every row.
+  const localRepos = repos.filter((repo) => !getRepoRoutingConnectionId(repo))
   const localReposById = new Map<string, Repo>()
   for (const repo of localRepos) {
     const repoId = repo.id
-    // Preserve the former Array.find behavior if corrupt state repeats an ID.
+    // Preserve the first match if corrupt state repeats a repo id.
     if (!localReposById.has(repoId)) {
       localReposById.set(repoId, repo)
     }
@@ -35,7 +38,7 @@ export function loadKnownUsageWorktreesByRepo(
   for (const repo of localRepos) {
     worktreesByRepo.set(repo.id, [
       {
-        worktreeId: `${repo.id}::${repo.path}`,
+        worktreeId: getRepoMainWorktreeId(repo),
         path: repo.path,
         displayName: repo.displayName || getDefaultUsageWorktreeLabel(repo.path)
       }
@@ -43,8 +46,7 @@ export function loadKnownUsageWorktreesByRepo(
     seenPathsByRepo.set(repo.id, new Set([repo.path]))
   }
 
-  // Why: usage scans are background/opt-in analytics. Do not spawn
-  // `git worktree list` here; it can re-touch macOS protected folders.
+  // Background analytics must not spawn git scans that re-touch macOS protected folders.
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
     const parsed = splitWorktreeId(worktreeId)
     if (!parsed) {

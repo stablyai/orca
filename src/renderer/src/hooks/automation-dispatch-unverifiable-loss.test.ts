@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -10,7 +11,7 @@ vi.mock('@/store', () => ({
 
 const markDispatchResult = vi.fn<(result: AutomationDispatchResult) => Promise<void>>()
 const releaseTerminalOwnership = vi.fn()
-const finalizeTerminalOwnership = vi.fn(() => false)
+const finalizeTerminalOwnership = vi.fn<AutomationTerminalOwnership['finalize']>(async () => null)
 
 async function createCompletion() {
   const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
@@ -22,7 +23,6 @@ async function createCompletion() {
     releaseTerminalOwnership,
     finalizeTerminalOwnership
   })
-  // The dispatch itself is already recorded before any exit can settle it.
   await completion.settlePendingAfterDispatch()
   markDispatchResult.mockClear()
   return completion
@@ -37,13 +37,11 @@ describe('automation dispatch completion on an unverifiable loss', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     markDispatchResult.mockResolvedValue(undefined)
-    finalizeTerminalOwnership.mockReturnValue(false)
+    finalizeTerminalOwnership.mockResolvedValue(null)
   })
 
   it('records no result, so the run keeps its non-final dispatched status', async () => {
-    // A -1 is a lost relay or a synthesized host-shutdown fanout. Reporting
-    // "exited with code -1" asserts a finish nobody witnessed; on SSH the
-    // automation is very likely still running.
+    // Exit -1 is unobserved relay/host loss, never a witnessed finish; SSH work may still run.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const completion = await createCompletion()
 
@@ -58,7 +56,7 @@ describe('automation dispatch completion on an unverifiable loss', () => {
 
   it('still completes and finalizes a genuinely exited process', async () => {
     const completion = await createCompletion()
-    finalizeTerminalOwnership.mockReturnValue(true)
+    finalizeTerminalOwnership.mockResolvedValue('closed')
 
     completion.handleExit(0)
     await vi.waitFor(() => expect(finalizeTerminalOwnership).toHaveBeenCalledOnce())
@@ -86,8 +84,7 @@ describe('automation dispatch completion on an unverifiable loss', () => {
   })
 
   it('lets a later done still complete a run whose contact was lost', async () => {
-    // The loss withheld a verdict rather than settling one, so positive
-    // evidence arriving afterwards must still be able to close the run.
+    // Loss withholds judgment; later positive evidence must still finish the run.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const completion = await createCompletion()
 

@@ -1,10 +1,4 @@
-/**
- * What the owning authority says, and writes, when it refuses to start a run.
- *
- * Kept together because every refusal must be one fixed sentence: skip
- * coalescing folds repeats only on byte-identical text, so a reason that varied
- * per occurrence would write a row each.
- */
+// Skip coalescing requires a fixed, byte-identical sentence for each refusal reason.
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type {
@@ -14,18 +8,23 @@ import type {
 } from '../../shared/automations-types'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
+import { wslMoveRepoBackoff } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isOrcadFencedAutomation } from './orcad-fenced-automation'
 
 export const NO_DISPATCH_HOST = 'No Orca window was available to launch the automation.'
 
-/** A record the tick could not evaluate at all — its schedule no longer resolves (#16303). */
 export const UNEVALUABLE_SCHEDULE =
   'Orca could not evaluate this automation and skipped the occurrence.'
 
-/** A record the authority refuses to execute at all, with no target diagnosis of its own. */
 export const NO_RUNNABLE_HOST = 'This automation has no host to run on.'
 
-/** Every reason this occurrence cannot start, decided before a run row exists so
- *  the scheduler can fold repeats instead of writing one row each. */
+export const WSL_MOVE_IN_PROGRESS =
+  "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes."
+
+export const WSL_MOVE_OWNED_BY_HOST =
+  "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
+
+/** Decide refusals before creating rows so repeated skips can coalesce. */
 export function describeScheduledRefusal(input: {
   target: AutomationRunTargetResult
   canDispatch: boolean
@@ -33,22 +32,23 @@ export function describeScheduledRefusal(input: {
   if (!input.target.ok) {
     return input.target.error
   }
+  const backoff = wslMoveRepoBackoff(input.target.repo)
+  if (backoff) {
+    return backoff === 'moving' ? WSL_MOVE_IN_PROGRESS : WSL_MOVE_OWNED_BY_HOST
+  }
   return input.canDispatch ? null : NO_DISPATCH_HOST
 }
 
-/**
- * Records the manual attempt an execute fence refused before dispatch existed.
- *
- * The typed conflict answers the caller; run history is what answers the user,
- * and doc:94 asks for both. Never dispatches: the reason is the one the
- * scheduler would have written for the same record.
- */
+/** Record refused manual attempts so run history agrees with the caller’s typed conflict. */
 export async function recordRefusedAutomationRun(input: {
   store: Store
   runs: AutomationRunWriter
   automation: Automation
   allowRemoteHostScheduling: boolean
 }): Promise<void> {
+  if (isOrcadFencedAutomation(input.store, input.automation)) {
+    return
+  }
   const target = resolveAutomationRunTarget(input.store, input.automation, {
     allowRemoteHostScheduling: input.allowRemoteHostScheduling
   })
@@ -61,11 +61,7 @@ export async function recordRefusedAutomationRun(input: {
   })
 }
 
-/**
- * Marks the poison record the scheduler tick just stepped over, so the user sees why it
- * stalled. Folds on the fixed sentence and the unchanged nextRunAt, so a record that stays
- * broken writes one row rather than one per tick, and never throws back into the tick.
- */
+/** Fold broken schedules into one retained skip without interrupting the scheduler tick. */
 export async function recordUnevaluableAutomation(input: {
   runs: AutomationRunWriter
   automation: Automation
@@ -73,8 +69,7 @@ export async function recordUnevaluableAutomation(input: {
 }): Promise<void> {
   const { automation } = input
   try {
-    // nextRunAt deliberately stays put: the record is retried so a repaired schedule resumes
-    // on its own. The fold is what keeps that from writing a row — and logging — every tick.
+    // Keep nextRunAt for automatic retry after repair; fold repeated failures to avoid row churn.
     if (await input.runs.repeatSkip(automation.id, UNEVALUABLE_SCHEDULE, automation.nextRunAt)) {
       return
     }
@@ -90,7 +85,6 @@ export async function recordUnevaluableAutomation(input: {
       error: UNEVALUABLE_SCHEDULE
     })
   } catch (writeError) {
-    // The original failure has not been reported yet on this path, so carry it too.
     console.error(
       '[automations] failed to record unevaluable automation:',
       automation.id,
@@ -100,10 +94,6 @@ export async function recordUnevaluableAutomation(input: {
   }
 }
 
-/**
- * Sends the dispatch request through the renderer channel, closing the run out as
- * `dispatch_failed` when the send throws — a failed send is not an unreadable schedule.
- */
 export async function sendRendererDispatch(
   channel: Pick<WebContents, 'send'> | null,
   payload: AutomationDispatchRequest,
@@ -123,27 +113,8 @@ export async function sendRendererDispatch(
   }
 }
 
-/**
- * Grace is a downtime catch-up budget. It must not also absorb the scheduler's own tick latency:
- * evaluation runs on a fixed interval never aligned to an occurrence, so with zero grace every
- * tick arrived "late" and skipped the run, blaming downtime that never happened (#11299).
- *
- * Why not process liveness: a suspended process (system sleep) keeps its start time, so a
- * liveness flag waves through an occurrence that came due during a multi-hour sleep -- exactly
- * what grace exists for. Elapsed lateness cannot be faked that way.
- *
- * Consequence worth knowing: elapsed lateness cannot distinguish a short outage from a late
- * tick, so a zero-grace run that came due during an outage shorter than the tolerance is
- * dispatched rather than skipped. That is the deliberate trade -- the alternative was a
- * liveness flag, which got the far worse case wrong (a multi-hour sleep replayed on wake).
- *
- * Known remaining gap: an evaluation pass holds the re-entrancy guard across its dispatches, and
- * in serve mode a dispatch runs inline (precheck up to 600s, then a worktree create). A pass
- * longer than the tolerance drops every intervening tick, so the next automation's lateness is
- * the scheduler's stall rather than downtime and can still be mis-skipped. Desktop is
- * unaffected -- its dispatch is synchronous IPC. Tracked separately; forgiving "time since the
- * last pass" is NOT the fix, because a suspended process runs no passes either.
- */
+/** Allow tick jitter beyond downtime grace; elapsed time still catches system sleep.
+ * Short outages inside the tolerance are accepted; long inline dispatches may still exceed it. */
 export function missedBeyondGrace(input: {
   automation: Automation
   scheduledFor: number
@@ -151,7 +122,7 @@ export function missedBeyondGrace(input: {
   tickMs: number
 }): boolean {
   const graceMs = input.automation.missedRunGraceMinutes * 60 * 1000
-  // Two intervals: one for the tick that should have caught it, one for ordinary jitter.
+  // Allow one interval for the next tick and another for jitter.
   const jitterMs = input.tickMs * 2
   return input.now - input.scheduledFor > graceMs + jitterMs
 }

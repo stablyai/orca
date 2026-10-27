@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   acquired,
@@ -7,9 +7,9 @@ import {
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 
-/** Verbatim rows from Claude Code 2.1.280's list_models: `default` is the CLI's own
- *  default, and it resolves to the same model as the `opus[1m]` row. */
+/** Claude Code 2.1.280 list_models fixture; default and opus[1m] resolve to the same model. */
 const CATALOG = [
   {
     value: 'default',
@@ -35,8 +35,7 @@ const CATALOG = [
   { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku' }
 ]
 
-/** Verbatim get_settings answers from Claude Code 2.1.280 under a scratch config dir.
- *  `applied` is the CLI's own resolution; `effective` only ever sees settings files. */
+/** Claude Code 2.1.280 scratch-config responses: applied includes env resolution; effective reflects settings. */
 const SETTINGS = {
   noOverride: {
     effective: {},
@@ -48,13 +47,11 @@ const SETTINGS = {
     sources: [{ source: 'userSettings', settings: { model: 'haiku' } }],
     applied: { model: 'claude-haiku-4-5-20251001', effort: null, advisor: null, ultracode: false }
   },
-  // ANTHROPIC_MODEL=sonnet with no settings model.
   envSonnet: {
     effective: {},
     sources: [],
     applied: { model: 'claude-sonnet-5', effort: 'high', advisor: null, ultracode: false }
   },
-  // settings.json says haiku, ANTHROPIC_MODEL=sonnet.
   settingsHaikuEnvSonnet: {
     effective: { model: 'haiku' },
     sources: [{ source: 'userSettings', settings: { model: 'haiku' } }],
@@ -79,27 +76,26 @@ async function readCurrent(settings: unknown) {
 
 describe('Claude model before the first turn', () => {
   it.each([
-    ['nothing overrides the default', SETTINGS.noOverride, 'opus[1m]', 'medium'],
-    ['settings name a model', SETTINGS.settingsHaiku, 'haiku', undefined],
-    ['the env names a model', SETTINGS.envSonnet, 'sonnet', 'high'],
-    ['the env overrides the settings', SETTINGS.settingsHaikuEnvSonnet, 'sonnet', 'high']
+    ['nothing overrides the default', SETTINGS.noOverride, 'claude-opus-5-5[1m]', 'medium'],
+    ['settings name a model', SETTINGS.settingsHaiku, 'claude-haiku-4-5-20251001', undefined],
+    ['the env names a model', SETTINGS.envSonnet, 'claude-sonnet-5', 'high'],
+    ['the env overrides the settings', SETTINGS.settingsHaikuEnvSonnet, 'claude-sonnet-5', 'high']
   ])(
     'names what Claude will apply when %s, unconfirmed',
     async (_case, settings, model, effort) => {
       const current = await readCurrent(settings)
 
       expect(current.model).toBe(model)
-      // A null applied effort means none is sent, so none is shown.
       expect(current.effort).toBe(effort)
       expect(current.confirmed ?? []).not.toContain('model')
       expect(current.confirmed ?? []).not.toContain('effort')
     }
   )
 
-  it('falls back to the listing default only when the CLI reports no applied model', async () => {
+  it('marks an unknown applied model as defaulted for the host to resolve', async () => {
     const current = await readCurrent({ effective: {}, sources: [] })
 
-    expect(current.model).toBe('opus[1m]')
+    expect(current.defaulted).toEqual(['model'])
     expect(current.effort).toBeUndefined()
   })
 
@@ -117,7 +113,7 @@ describe('Claude model before the first turn', () => {
     })
 
     const { current } = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(current.model).toBe('sonnet')
+    expect(current.model).toBe('claude-sonnet-5')
     expect(current.confirmed).toContain('model')
   })
 
@@ -125,20 +121,22 @@ describe('Claude model before the first turn', () => {
     const events: ClaudeStructuredSessionEvent[] = []
     await acquired(startedWithoutATurn(SETTINGS.settingsHaiku), {}, events)
 
-    const started = events.find((event) => event.type === 'started')
-    expect(started).toMatchObject({ reportedOptions: { model: 'haiku' } })
+    const reported = events.find((event) => event.type === 'options-reported')
+    expect(reported).toMatchObject({ reportedOptions: { model: 'claude-haiku-4-5-20251001' } })
   })
 
   it('shows the applied effort but never persists it as the session options', async () => {
     const events: ClaudeStructuredSessionEvent[] = []
     const adapter = await acquired(startedWithoutATurn(SETTINGS.noOverride), {}, events)
 
-    const started = events.find((event) => event.type === 'started')
-    expect(started).toMatchObject({ reportedOptions: { model: 'opus[1m]' } })
+    const started = await claudeOpened(adapter, 'session-1')
+    expect(started.reportedOptions).not.toHaveProperty('model')
     // Saved, it would be restored on every reopen past a later settings.json change.
-    expect(started?.type === 'started' ? started.reportedOptions : null).not.toHaveProperty(
-      'effort'
-    )
+    expect(started.reportedOptions).not.toHaveProperty('effort')
+    const reported = events.find((event) => event.type === 'options-reported')
+    expect(
+      reported?.type === 'options-reported' ? reported.reportedOptions : null
+    ).not.toHaveProperty('effort')
     const { current } = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(current.effort).toBe('medium')
   })
@@ -149,7 +147,6 @@ describe('Claude model before the first turn', () => {
     const adapter = await acquired(claude)
 
     await adapter.setOption({ sessionId: 'session-1', fence: 7, key: 'model', value: 'sonnet' })
-    // What the real CLI answers once the write has landed.
     Object.assign(settings.applied, { model: 'claude-sonnet-5', effort: 'high' })
 
     const { current } = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
@@ -168,9 +165,8 @@ describe('Claude model before the first turn', () => {
       options: { model: 'haiku' }
     })
 
-    // `started` is persisted as the session's options; opus's effort must not ride along onto haiku.
-    const started = events.find((event) => event.type === 'started')
-    expect(started).toMatchObject({ reportedOptions: { model: 'haiku' } })
-    expect(started?.type === 'started' ? started.reportedOptions.effort : null).toBeUndefined()
+    const started = await claudeOpened(adapter, 'session-1')
+    expect(started.reportedOptions).not.toHaveProperty('model')
+    expect(started.reportedOptions.effort).toBeUndefined()
   })
 })

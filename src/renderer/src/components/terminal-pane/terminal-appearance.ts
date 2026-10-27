@@ -22,14 +22,14 @@ import {
 } from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-cursor-blink-suspension'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
-import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
 export function hexToRgba(hex: string, alpha: number): string {
@@ -50,7 +50,7 @@ export function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)
 }
 
-// Why extracted: lets the settings preview compose the same theme without depending on PaneManager. Keep pure.
+// Keep pure so settings preview can compose the same theme without PaneManager.
 export function composeActiveTerminalTheme(
   baseTheme: ITheme | null,
   settings: Pick<
@@ -70,7 +70,6 @@ export function composeActiveTerminalTheme(
     scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
     ...baseTheme
   }
-  // Why: merge Ghostty color overrides atop the base theme so individual colors can be tweaked without losing the rest.
   if (settings.terminalColorOverrides) {
     theme = { ...theme, ...settings.terminalColorOverrides }
   }
@@ -91,8 +90,7 @@ export function composeActiveTerminalTheme(
   return theme
 }
 
-/** Publishes composed terminal appearance at app start so hidden-at-launch PTYs can query OSC 10/11
- *  before any pane mounts (terminal-query-authority.md §Phase 6). Returns whether a publish went out. */
+/** Publish at startup so hidden-at-launch PTYs can query OSC 10/11 before any pane mounts; returns whether sent (terminal-query-authority.md). */
 export function publishTerminalViewAttributesAtAppStart(
   settings: GlobalSettings | null | undefined,
   systemPrefersDark: boolean,
@@ -148,7 +146,6 @@ export function applyTerminalAppearance(
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
   const theme = composeActiveTerminalTheme(baseTheme, settings)
-  // Publish composed appearance to main's hidden-PTY query responder — the only point it exists; deduped in the publisher.
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
 
@@ -166,9 +163,7 @@ export function applyTerminalAppearance(
     if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
       pane.terminal.options.theme = theme
     }
-    // Gate off the configured theme background; the live OSC-11 background is deliberately preserved by the
-    // theme write above, so a TUI that repaints its background at runtime won't re-gate (known limitation).
-    // Why value-gated: writing minimumContrastRatio clears xterm's contrast cache, so skip on no-op re-applies.
+    // Use configured background: preserving live OSC-11 mutations above means a TUI background change does not re-gate contrast.
     const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       theme?.background,
       appearance.mode,
@@ -183,8 +178,7 @@ export function applyTerminalAppearance(
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
-    // Why not a direct write: a suspended (hidden) pane parks the value instead, so a
-    // settings change mid-hide cannot re-arm its blink timer behind the hidden surface.
+    // Hidden panes defer cursor blink so settings changes cannot restart their blink timer.
     setTerminalCursorBlinkOption(pane.terminal, settings.terminalCursorBlink)
     const paneSize = paneFontSizes.get(pane.id)
     const metricOptions = {
@@ -194,11 +188,8 @@ export function applyTerminalAppearance(
       fontWeightBold: terminalFontWeights.fontWeightBold,
       lineHeight: normalizeTerminalLineHeight(settings.terminalLineHeight)
     }
-    // Why value-gated: any settings write re-runs this over every mounted pane, and
-    // canApplyPaneMetricOptions forces style+layout; an unchanged no-op deferral
-    // would also arm a pointless refit on the next reveal.
-    // Why deferred: a metric write makes xterm clear/resize/full-refresh, which is
-    // wasted on a pane with no usable box and whose follow-up cols/rows fit can't run.
+    // Skip unchanged metrics: checking measurability forces layout and a no-op deferral needlessly schedules refit.
+    // Defer metric-triggered clear/resize/refresh until the pane can measure and fit.
     if (!paneMetricOptionsAlreadySettled(pane, metricOptions)) {
       applyOrDeferPaneMetricOptions(pane, metricOptions, canApplyPaneMetricOptions(pane))
     }
@@ -210,10 +201,7 @@ export function applyTerminalAppearance(
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
-    // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
-    // Why unconditional: setInlineImagesEnabled is idempotent (attach no-ops when
-    // already loaded, detach no-ops when absent), so this keeps live toggles in sync.
     manager.setPaneInlineImagesEnabled(
       pane.id,
       resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)

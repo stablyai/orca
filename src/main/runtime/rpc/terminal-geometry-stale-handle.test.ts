@@ -1,27 +1,19 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 
-// Why: the terminal geometry family (resize/setDisplayMode/restoreFit/
-// updateViewport) mutates PTY state. A remote client can hold a handle minted
-// for a PTY that was later replaced under the pane (restart/re-spawn bumps
-// ptyId/generation). The UNGUARDED resolveLeafForHandle returns the pane's
-// CURRENT pty, so a stale client would mutate the wrong (new) PTY — visible as
-// geometry corruption on the fresh session (#7718). These methods must use the
-// guarded resolveLiveLeafForHandle, which throws terminal_handle_stale instead.
+// Geometry RPCs must use resolveLiveLeafForHandle: an unguarded stale handle resolves the replacement PTY and corrupts its display (#7718).
 
-// Models a stale handle exactly as the runtime does: the unguarded resolver
-// silently adopts the replacement PTY ('pty-b'); the guarded resolver throws.
+// Model stale resolution: unguarded lookup returns replacement pty-b; guarded lookup refuses.
 const NEW_PTY_UNDER_PANE = 'pty-b'
 
 function stubStaleHandleRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
-    // Unguarded path: returns the pane's current (replaced) PTY — the misroute.
     resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: NEW_PTY_UNDER_PANE }),
-    // Guarded path: surfaces the staleness.
     resolveLiveLeafForHandle: vi.fn(() => {
       throw new Error('terminal_handle_stale')
     }),
@@ -48,7 +40,6 @@ async function expectStale(method: string, params: unknown, mutators: string[]):
     throw new Error(`expected ${method} to reject a stale handle`)
   }
   expect(response.error.message).toContain('terminal_handle_stale')
-  // The wrong (replacement) PTY must never be mutated.
   for (const name of mutators) {
     expect(spies[name]).not.toHaveBeenCalled()
   }

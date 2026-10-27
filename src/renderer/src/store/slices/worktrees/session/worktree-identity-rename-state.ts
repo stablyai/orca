@@ -11,30 +11,20 @@ import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
 } from '../../recently-closed-tabs'
+import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
+import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
-// Every worktree-id-keyed store map the rename path re-keys, so a new `*ByWorktree` map isn't silently missed.
-// Tab-id/file-id-keyed maps are deliberately excluded: tabs and files keep their ids across a rename.
+// Inventory non-layout worktree-keyed maps; layout migrates separately, while surviving tab/file IDs keep their keys.
 const WORKTREE_ID_KEYED_MAP_KEYS = [
   'worktreeLineageById',
-  'tabsByWorktree',
   'deleteStateByWorktreeId',
   'baseStatusByWorktreeId',
   'remoteBranchConflictByWorktreeId',
   'fileSearchStateByWorktree',
-  'browserTabsByWorktree',
   'recentlyClosedBrowserTabsByWorktree',
-  'activeBrowserTabIdByWorktree',
-  'activeFileIdByWorktree',
-  'activeTabTypeByWorktree',
-  'activeTabIdByWorktree',
-  'tabBarOrderByWorktree',
   'pendingReconnectTabByWorktree',
   'rightSidebarTabByWorktree',
   'rightSidebarExplorerViewByWorktree',
-  'unifiedTabsByWorktree',
-  'groupsByWorktree',
-  'layoutByWorktree',
-  'activeGroupIdByWorktree',
   'gitStatusByWorktree',
   'gitStatusHeadByWorktree',
   'gitBranchLineTotalByWorktree',
@@ -52,12 +42,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'recentlyClosedTabKindsByWorktree'
 ] as const satisfies readonly (keyof AppState)[]
 
-/**
- * Re-key every worktree-id-keyed map from `oldWorktreeId` to `newWorktreeId` after a folder
- * rename. Tab-id/file-id-keyed maps stay put since tabs/files keep their ids; the
- * active/renaming pointers are worktree-id-valued, so they're re-pointed too.
- * Main-process counterpart: `Store.migrateWorktreeIdentity` in persistence.ts.
- */
+/** Rekey worktree maps and valued pointers, preserving tab/file IDs; main counterpart is Store.migrateWorktreeIdentity in persistence.ts. */
 export function buildWorktreeRenameState(
   s: AppState,
   oldWorktreeId: string,
@@ -66,6 +51,7 @@ export function buildWorktreeRenameState(
   if (oldWorktreeId === newWorktreeId) {
     return {}
   }
+  renameCombinedDiffViewOwner(oldWorktreeId, newWorktreeId)
   const renamed: Record<string, unknown> = {}
   const renameKey = <T>(
     key: keyof AppState,
@@ -100,9 +86,6 @@ export function buildWorktreeRenameState(
       : renamedValue
   }
   const renameValueByKey: Partial<Record<(typeof WORKTREE_ID_KEYED_MAP_KEYS)[number], unknown>> = {
-    tabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
-    browserTabsByWorktree: (workspaces: BrowserWorkspace[]) =>
-      workspaces.map(withNewBrowserWorktreeId),
     recentlyClosedBrowserTabsByWorktree: (
       snapshots: { workspace: BrowserWorkspace; pages: BrowserPage[] }[]
     ) =>
@@ -114,9 +97,7 @@ export function buildWorktreeRenameState(
     fileSearchStateByWorktree: (searchState: AppState['fileSearchStateByWorktree'][string]) => ({
       ...searchState,
       resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
-    }),
-    unifiedTabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
-    groupsByWorktree: (groups: { worktreeId: string }[]) => groups.map(withNewWorktreeId)
+    })
   }
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
@@ -143,7 +124,7 @@ export function buildWorktreeRenameState(
   renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
     files.map(withNewWorktreeId)
   )
-  // Why: terminal reopen snapshots hold absolute startupCwd paths under the old folder; remap or Cmd+Shift+T respawns into a directory that no longer exists after the rename.
+  // Remap absolute startupCwd in reopen snapshots or Cmd+Shift+T spawns into the vanished old directory.
   renameKey('recentlyClosedTerminalTabsByWorktree', (snapshots: ClosedTerminalTabSnapshot[]) =>
     oldWorktreePath && newWorktreePath
       ? remapClosedTerminalTabSnapshotCwds(snapshots, oldWorktreePath, newWorktreePath)
@@ -151,11 +132,6 @@ export function buildWorktreeRenameState(
   )
   renameKey('remoteStatusesByWorktree')
 
-  const openFiles = s.openFiles?.some((f) => f.worktreeId === oldWorktreeId)
-    ? s.openFiles.map((f) =>
-        f.worktreeId === oldWorktreeId ? { ...f, worktreeId: newWorktreeId } : f
-      )
-    : s.openFiles
   const currentBrowserPagesByWorkspace = s.browserPagesByWorkspace ?? {}
   const browserPagesByWorkspace = Object.values(currentBrowserPagesByWorkspace).some((pages) =>
     pages.some(
@@ -193,12 +169,7 @@ export function buildWorktreeRenameState(
   const pendingReconnectWorktreeIds = s.pendingReconnectWorktreeIds?.includes(oldWorktreeId)
     ? s.pendingReconnectWorktreeIds.map((id) => (id === oldWorktreeId ? newWorktreeId : id))
     : s.pendingReconnectWorktreeIds
-  // Why these two and not just the pane records below: both are keyed by something other than the
-  // worktree, so the rename path skipped them, but each row names the worktree in its VALUE. A
-  // close tombstone on the old id never matches the merge's worktree scope, so a terminal tab the
-  // user closed is re-added by the next host snapshot; a close intent on the old id replays against
-  // a selector that no longer resolves, which reads as `definitively gone` and drops the intent
-  // while the page is still open. Both are resurrections the maps exist to prevent.
+  // Repoint worktreeId values in non-worktree-keyed close records: stale terminal tombstones fail matching; stale browser intents read selector_not_found as final and disappear, resurrecting closed surfaces.
   const repointRows = <T extends { worktreeId: string }>(
     rows: readonly T[]
   ): { rows: T[]; changed: boolean } => {
@@ -221,14 +192,24 @@ export function buildWorktreeRenameState(
         closedTombstoneEntries.rows.map(({ tabId, ...tombstone }) => [tabId, tombstone])
       )
     : s.closedTerminalTabTombstonesByTabId
-  const currentCloseIntents = s.clientHostedBrowserCloseIntentsByEnvironment ?? {}
-  let closeIntentsChanged = false
-  const clientHostedBrowserCloseIntentsByEnvironment = Object.fromEntries(
-    Object.entries(currentCloseIntents).map(([environmentId, intents]) => {
-      const repointed = repointRows(intents)
-      closeIntentsChanged = closeIntentsChanged || repointed.changed
-      return [environmentId, repointed.changed ? repointed.rows : intents]
-    })
+  const repointRowsByEnvironment = <T extends { worktreeId: string }>(
+    current: Record<string, T[]> | undefined
+  ): Record<string, T[]> | null => {
+    let changed = false
+    const next = Object.fromEntries(
+      Object.entries(current ?? {}).map(([environmentId, intents]) => {
+        const repointed = repointRows(intents)
+        changed = changed || repointed.changed
+        return [environmentId, repointed.changed ? repointed.rows : intents]
+      })
+    )
+    return changed ? next : null
+  }
+  const clientHostedBrowserCloseIntentsByEnvironment = repointRowsByEnvironment(
+    s.clientHostedBrowserCloseIntentsByEnvironment
+  )
+  const pairedTerminalTabCloseIntentsByEnvironment = repointRowsByEnvironment(
+    s.pairedTerminalTabCloseIntentsByEnvironment
   )
   const currentSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey ?? {}
   const sleepingAgentSessionsByPaneKey = Object.values(currentSleepingAgentSessionsByPaneKey).some(
@@ -243,8 +224,8 @@ export function buildWorktreeRenameState(
     : s.sleepingAgentSessionsByPaneKey
 
   return {
+    ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId),
     ...(renamed as Partial<AppState>),
-    ...(openFiles !== s.openFiles ? { openFiles } : {}),
     ...(browserPagesByWorkspace !== s.browserPagesByWorkspace ? { browserPagesByWorkspace } : {}),
     ...(recentlyClosedBrowserPagesByWorkspace !== s.recentlyClosedBrowserPagesByWorkspace
       ? { recentlyClosedBrowserPagesByWorkspace }
@@ -261,7 +242,12 @@ export function buildWorktreeRenameState(
     ...(closedTerminalTabTombstonesByTabId !== s.closedTerminalTabTombstonesByTabId
       ? { closedTerminalTabTombstonesByTabId }
       : {}),
-    ...(closeIntentsChanged ? { clientHostedBrowserCloseIntentsByEnvironment } : {}),
+    ...(clientHostedBrowserCloseIntentsByEnvironment
+      ? { clientHostedBrowserCloseIntentsByEnvironment }
+      : {}),
+    ...(pairedTerminalTabCloseIntentsByEnvironment
+      ? { pairedTerminalTabCloseIntentsByEnvironment }
+      : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
     ...(s.activeWorkspaceKey === worktreeWorkspaceKey(oldWorktreeId)

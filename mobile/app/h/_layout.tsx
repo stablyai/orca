@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { View, StyleSheet, PanResponder } from 'react-native'
+import { View, PanResponder, Platform } from 'react-native'
 import { useGlobalSearchParams, usePathname } from 'expo-router'
 import { colors } from '../../src/theme/mobile-theme'
+import { themedStyleSheet } from '../../src/theme/themed-styles'
+import { useMobileColorScheme } from '../../src/theme/use-mobile-color-scheme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
 import {
-  HOST_SIDEBAR_DEFAULT_WIDTH,
+  defaultHostSidebarWidth,
+  SPLIT_DETAIL_MIN_WIDTH
+} from '../../src/layout/responsive-layout-metrics'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useReleasedSideRail } from '../../src/layout/side-safe-area'
+import {
   HOST_SIDEBAR_MAX_WIDTH,
   HOST_SIDEBAR_MIN_WIDTH,
   loadHostSidebarWidth,
@@ -13,43 +20,50 @@ import {
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from '../../src/host-screen/HostScreen'
 import { HostStack } from '../../src/navigation/host-stack'
+import { HostSidebarRevealContext } from '../../src/layout/host-sidebar-reveal'
+import { HostAreaServingContext } from '../../src/mobile-web-shell/host-area-serving'
+import { usePageOwnsHostArea } from '../../src/mobile-web-shell/page-owns-host-area'
+import { useReportedPageLocation } from '../../src/mobile-web-shell/page-location-report'
+import { isOverlayPageRoute } from '../../src/new-workspace/overlay-page-route'
 
-// Keep at least this much room for the detail pane when resizing the sidebar.
-const MIN_DETAIL_WIDTH = 320
 const RESIZE_EDGE_WIDTH = 24
 
-// Clamp a sidebar width to the bounds and to the current window, so a width
-// saved on a larger device can't starve the detail pane on a narrower one.
+// Clamp restored sidebar width to current window so a smaller device retains usable detail space.
 function clampSidebarToWindow(width: number, windowWidth: number): number {
   const hardMax = Math.max(
     HOST_SIDEBAR_MIN_WIDTH,
-    Math.min(HOST_SIDEBAR_MAX_WIDTH, windowWidth - MIN_DETAIL_WIDTH)
+    Math.min(HOST_SIDEBAR_MAX_WIDTH, windowWidth - SPLIT_DETAIL_MIN_WIDTH)
   )
   return Math.min(hardMax, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
 }
 
 export default function HostGroupLayout() {
+  useMobileColorScheme()
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
-  const { hostId, action } = useGlobalSearchParams<{ hostId?: string; action?: string }>()
+  const { hostId } = useGlobalSearchParams<{ hostId?: string }>()
   const pathname = usePathname()
+  const overlayRoute = isOverlayPageRoute(pathname)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [sidebarWidth, setSidebarWidth] = useState(HOST_SIDEBAR_DEFAULT_WIDTH)
+  // Keep the dragged width and clamp per render so a fold cannot shrink it for good.
+  const [savedSidebarWidth, setSidebarWidth] = useState<number | null>(null)
+  const sidebarWidth = clampSidebarToWindow(
+    savedSidebarWidth ?? defaultHostSidebarWidth(windowWidth),
+    windowWidth
+  )
 
-  // Refs keep the once-created PanResponder reading live values without
-  // re-creating its handlers on every width/window change.
+  // Refs keep once-created PanResponder handlers reading current widths.
   const widthRef = useRef(sidebarWidth)
   widthRef.current = sidebarWidth
   const windowWidthRef = useRef(windowWidth)
   windowWidthRef.current = windowWidth
   const dragStartRef = useRef(sidebarWidth)
 
-  // Restore the user's last sidebar width, clamped to the current window.
   useEffect(() => {
     let stale = false
     void loadHostSidebarWidth().then((saved) => {
       if (!stale) {
-        setSidebarWidth(clampSidebarToWindow(saved, windowWidthRef.current))
+        setSidebarWidth(saved)
       }
     })
     return () => {
@@ -57,32 +71,31 @@ export default function HostGroupLayout() {
     }
   }, [])
 
-  // Re-clamp when the window shrinks (fold, rotation, split-screen) so the
-  // detail pane keeps at least MIN_DETAIL_WIDTH.
-  useEffect(() => {
-    setSidebarWidth((current) => clampSidebarToWindow(current, windowWidth))
-  }, [windowWidth])
-
+  // Host screens are pages that draw in the Duo's status-bar rail; the native sidebar pads itself.
+  useReleasedSideRail(Platform.OS !== 'web')
+  const railLeft = useSafeAreaInsets().left
   const hideSidebar = useCallback(() => setSidebarOpen(false), [])
-  const showSidebar = isWideLayout && !!hostId
+  const revealSidebar = useCallback(() => setSidebarOpen(true), [])
+  const [hostAreaServing, setHostAreaServing] = useState(false)
+  const pageOwnsHostArea = usePageOwnsHostArea()
+  useReportedPageLocation()
+  // One owner: the page only with its init fact; natively all but a host route its page is serving.
+  const sidebarDrawnHere =
+    Platform.OS === 'web' ? pageOwnsHostArea : !(pathname === `/h/${hostId}` && hostAreaServing)
+  const showSidebar = isWideLayout && !!hostId && sidebarDrawnHere
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
-  const canCollapseSidebar = showSidebar && detailHasContent
+  // Only the page's session header can reveal it again; a native sidebar beside a page detail could never come back.
+  const canCollapseSidebar = Platform.OS === 'web' && showSidebar && detailHasContent
 
-  // Why: there is no reveal button — navigating Back to the base host route brings
-  // the sidebar back (and that route's detail pane is only a placeholder, so a
-  // hidden sidebar would leave nothing useful).
+  // Base host detail is a placeholder; hiding its sidebar would leave nothing useful.
   useEffect(() => {
     if (showSidebar && !detailHasContent) {
       setSidebarOpen(true)
     }
   }, [detailHasContent, showSidebar])
 
-  // Why: the resizer lives on a dedicated edge handle (a leaf overlay at the
-  // sidebar's right border), NOT on the sidebar container. On Android a child
-  // ScrollView/FlatList claims the native touch responder, so a parent-View
-  // PanResponder never sees the move events and the drag silently no-ops; a
-  // dedicated handle on top of the content captures the gesture on both
-  // platforms. It claims on start (capture too) since nothing sits under it.
+  // Use an overlaid leaf drag handle: Android ScrollView/FlatList captures touches before a parent PanResponder.
+  // Claim start/capture because nothing lies beneath the handle; keep it off the sidebar container.
   const resizer = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -105,44 +118,50 @@ export default function HostGroupLayout() {
     })
   ).current
 
-  // The detail Stack stays at a stable position in the tree across width
-  // changes so a fold/rotation doesn't remount the navigator and reset the
-  // navigation stack — only the sidebar pane toggles in and out.
+  // Keep detail Stack at a stable tree position so fold/rotation cannot remount navigation.
   return (
-    <HostProtocolGate hostId={hostId}>
-      <View style={styles.row}>
+    <HostProtocolGate hostId={hostId} transparentWhilePending={overlayRoute}>
+      <View style={[styles.row, overlayRoute && styles.transparent]}>
         {showSidebar && sidebarOpen ? (
-          <View style={[styles.sidebar, { width: sidebarWidth }]}>
+          <View style={[styles.sidebar, { width: sidebarWidth, paddingLeft: railLeft }]}>
             <HostScreen
               embedded
               hostId={hostId}
-              action={action}
               onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
+              actionsInRail={!detailHasContent}
             />
-            {/* Dedicated drag handle straddling the right border — see resizer note. */}
+            {/* Edge drag handle captures Android gestures above the list. */}
             <View style={styles.resizeHandle} {...resizer.panHandlers} />
           </View>
         ) : null}
         <View style={styles.detail}>
-          <HostStack animation={showSidebar ? 'none' : 'default'} />
+          <HostAreaServingContext.Provider value={setHostAreaServing}>
+            <HostSidebarRevealContext.Provider
+              value={showSidebar && !sidebarOpen ? revealSidebar : null}
+            >
+              <HostStack animation={showSidebar ? 'none' : 'default'} />
+            </HostSidebarRevealContext.Provider>
+          </HostAreaServingContext.Provider>
         </View>
       </View>
     </HostProtocolGate>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flex: 1,
     flexDirection: 'row',
     backgroundColor: colors.bgBase
   },
+  transparent: {
+    backgroundColor: 'transparent'
+  },
   sidebar: {
     borderRightWidth: 1,
     borderRightColor: colors.borderSubtle
   },
-  // Invisible grab strip over the sidebar's right edge. Absolute + elevated so it
-  // sits above the worktree list and reliably owns the drag on Android.
+  // Elevated edge strip must sit above list to own Android drags.
   resizeHandle: {
     position: 'absolute',
     top: 0,
@@ -156,4 +175,4 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   }
-})
+}))

@@ -6,13 +6,40 @@ import {
   TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
   validateNewTabEntryAbsolutePath,
   validateNewTabEntryRelativePath
-} from './tab-create-entry-action'
+} from './tab-create-entry-classifier'
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
 
+it.each(['.env api', 'api .env'])('offers the multi-term file match for %s', (query) => {
+  const options = getTabEntryOptions(query, readyFiles(['apps/api/.env', 'apps/web/.env']))
+  expect(options.map((option) => option.classification)).toEqual([
+    { kind: 'search', engine: 'google', query },
+    { kind: 'existing-file', matchKind: 'fuzzy', relativePath: 'apps/api/.env' }
+  ])
+})
+
 describe('tab create entry classification', () => {
-  // Kept word-for-word in step with the omnibox placeholder (see
-  // TabBarCreateEntry.keyboard.test.tsx), so the two never drift apart.
+  it.each([true, false])(
+    'offers HTML URLs while the file list loads (local paths: %s)',
+    (allowAbsolutePaths) => {
+      expect(
+        classifyTabEntryQuery(
+          'file:///repo/report.html',
+          {
+            files: [],
+            loading: true,
+            loadError: null
+          },
+          { allowAbsolutePaths }
+        )
+      ).toEqual({
+        kind: 'html-file-url',
+        filePath: '/repo/report.html'
+      })
+    }
+  )
+
+  // Keep empty-query guidance aligned with the omnibox placeholder.
   it('advertises tab search in the empty-query message', () => {
     expect(classifyTabEntryQuery('', readyFiles([]))).toEqual({
       kind: 'empty',
@@ -254,7 +281,7 @@ describe('tab create entry classification', () => {
       getTabEntryOptions('type script', readyFiles(['docs/typescript-guide.md'])).map(
         (option) => option.classification.kind
       )
-    ).toEqual(['search'])
+    ).toEqual(['search', 'existing-file'])
   })
 
   it('never offers to create a file from a spaced phrase without path syntax', () => {
@@ -361,8 +388,7 @@ describe('tab create entry classification', () => {
 
   it('keeps file matches for path prefixes that cannot be created', () => {
     const files = ['src/main/index.ts', 'src/renderer/App.tsx']
-    // A trailing separator is an ordinary keystroke on the way to a nested path,
-    // so the matches it finds must survive the unusable-path verdict.
+    // Trailing separators are incomplete paths, but their existing-file matches must survive validation.
     for (const query of ['src/', 'src/renderer/']) {
       expect(
         getTabEntryOptions(query, readyFiles(files)).map((option) => option.classification.kind),

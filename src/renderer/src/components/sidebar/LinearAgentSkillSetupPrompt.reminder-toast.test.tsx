@@ -4,7 +4,7 @@ import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
 import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
@@ -56,16 +56,6 @@ vi.mock('sonner', () => ({
 vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
   ...(await importOriginal()),
   useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
-}))
-
-vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (
-    command: string,
-    runtime: { runtime: string; wslDistro?: string | null }
-  ) =>
-    runtime.runtime === 'wsl'
-      ? `wsl.exe${runtime.wslDistro ? ` -d '${runtime.wslDistro}'` : ''} --exec bash -lc '${command}'`
-      : command
 }))
 
 vi.mock('../settings/AgentSkillSetupPanel', () => ({
@@ -131,8 +121,6 @@ async function snoozeInitialModal(
   props: ComponentProps<typeof LinearAgentSkillSetupPrompt>
 ): Promise<void> {
   await renderPrompt(props)
-  // Why: the modal's casual dismiss is the dialog × (session snooze) now that
-  // "Not now" is removed.
   await act(async () => {
     findBodyButton('Close')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -196,7 +184,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     expect(document.body.textContent).not.toContain(
       'Enable agents to read and edit the attached Linear ticket.'
     )
-    // Why: host terminals already have the bundled CLI, so host reminders name only the skill.
+    // Host terminals already bundle the CLI; reminders need only the skill.
     expect(mocks.getCliStatus).not.toHaveBeenCalled()
     expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
     expect(toast.warning).toHaveBeenCalledWith(
@@ -310,7 +298,6 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     })
     mocks.toastDismiss.mockClear()
     await act(async () => {
-      // Why: permanent dismiss is now an EyeOff icon button (aria-label, no text).
       document.body
         .querySelector<HTMLButtonElement>('button[aria-label="Don\'t show again"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

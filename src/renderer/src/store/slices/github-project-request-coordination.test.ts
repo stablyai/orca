@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubProjectTable } from '../../../../shared/github/project-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
-import { projectViewCacheKey } from '../github/cache-identity'
-import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
+import { projectViewCacheKey, projectViewSourceScope } from '../github/cache-identity'
+import {
+  createTestStore,
+  mockApi,
+  resetRemoteRuntimeMocks,
+  runtimeEnvironmentCall
+} from './github-slice-test-harness'
+import { projectRelationsTableFixture } from '../../../../shared/github/project-relations.test-fixture'
+import { projectRelationCellText } from '../../components/github-project/ProjectCell.test-fixture'
+import { sortRows, groupRows } from '../../../../shared/github/project-group-sort'
 
 function makeTable(title = 'Roadmap'): GitHubProjectTable {
   return {
@@ -50,20 +58,78 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
     const table = makeTable()
     store.setState({ projectViewCache: { [cacheKey]: { data: table, fetchedAt: Date.now() } } })
 
-    await expect(store.getState().fetchProjectViewTable(request)).resolves.toEqual({
+    await expect(
+      store.getState().fetchProjectViewTable({ kind: 'local' }, request)
+    ).resolves.toEqual({
       ok: true,
       data: table
     })
     expect(mockApi.gh.getProjectViewTable).not.toHaveBeenCalled()
   })
 
+  it.each([{ kind: 'local' }, { kind: 'environment', environmentId: 'env-board' }] as const)(
+    'preserves populated and legacy cells through the $kind cache',
+    async (target) => {
+      const table = projectRelationsTableFixture()
+      const store = createTestStore()
+      const envelope = { ok: true, data: table }
+      if (target.kind === 'local') {
+        mockApi.gh.getProjectViewTable.mockResolvedValueOnce(envelope)
+      } else {
+        runtimeEnvironmentCall.mockResolvedValueOnce({
+          id: 'rpc-project',
+          ok: true,
+          result: envelope,
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      expect(await store.getState().fetchProjectViewTable(target, request)).toEqual(envelope)
+      const key = projectViewCacheKey(
+        'organization',
+        'acme',
+        1,
+        'view-1',
+        undefined,
+        projectViewSourceScope(target)
+      )
+      const cached = store.getState().projectViewCache[key]?.data
+      if (!cached) {
+        throw new Error('Expected cached table')
+      }
+      expect(cached).toEqual(table)
+      const groups = groupRows(cached, sortRows(cached, cached.rows))
+      expect(groups.map((group) => group.label)).toEqual(['1', '2'])
+      expect(groups.flatMap((group) => group.rows.map(projectRelationCellText))).toEqual([
+        ['', ''],
+        ['#12 +2', '1/2 (50%)']
+      ])
+      expect(cached.rows[1].content).not.toHaveProperty('linkedPullRequests')
+      expect(cached.rows[1].content).not.toHaveProperty('subIssuesProgress')
+      expect(await store.getState().fetchProjectViewTable(target, request)).toEqual(envelope)
+      if (target.kind === 'local') {
+        expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(1)
+        expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      } else {
+        expect(mockApi.gh.getProjectViewTable).not.toHaveBeenCalled()
+        expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+        expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+          expect.objectContaining({
+            selector: 'env-board',
+            method: 'github.project.viewTable',
+            params: request
+          })
+        )
+      }
+    }
+  )
+
   it('deduplicates identical non-forced in-flight requests', async () => {
     const store = createTestStore()
     const pending = Promise.withResolvers<GetProjectViewTableResult>()
     mockApi.gh.getProjectViewTable.mockReturnValueOnce(pending.promise)
 
-    const first = store.getState().fetchProjectViewTable(request)
-    const duplicate = store.getState().fetchProjectViewTable(request)
+    const first = store.getState().fetchProjectViewTable({ kind: 'local' }, request)
+    const duplicate = store.getState().fetchProjectViewTable({ kind: 'local' }, request)
     pending.resolve({ ok: true, data: makeTable() })
 
     await expect(Promise.all([first, duplicate])).resolves.toEqual([
@@ -80,9 +146,9 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
       .mockReturnValueOnce(weak.promise)
       .mockResolvedValue({ ok: true, data: makeTable('forced') })
 
-    const first = store.getState().fetchProjectViewTable(request)
+    const first = store.getState().fetchProjectViewTable({ kind: 'local' }, request)
     const forced = Array.from({ length: 20 }, () =>
-      store.getState().fetchProjectViewTable(request, { force: true })
+      store.getState().fetchProjectViewTable({ kind: 'local' }, request, { force: true })
     )
     weak.resolve({ ok: true, data: makeTable('weak') })
 
@@ -100,21 +166,24 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
     store.setState({ projectViewCache: { [cacheKey]: { data: stale, fetchedAt: 1 } } })
     mockApi.gh.getProjectViewTable.mockResolvedValueOnce({ ok: false, error })
 
-    await expect(store.getState().fetchProjectViewTable(request, { force: true })).resolves.toEqual(
-      {
-        ok: false,
-        error
-      }
-    )
+    await expect(
+      store.getState().fetchProjectViewTable({ kind: 'local' }, request, { force: true })
+    ).resolves.toEqual({
+      ok: false,
+      error
+    })
     expect(store.getState().projectViewCache[cacheKey]).toMatchObject({ data: stale, error })
 
     mockApi.gh.getProjectViewTable.mockResolvedValueOnce({ ok: false, error })
     await expect(
-      store.getState().fetchProjectViewTable({
-        owner: 'acme',
-        ownerType: 'organization',
-        projectNumber: 1
-      })
+      store.getState().fetchProjectViewTable(
+        { kind: 'local' },
+        {
+          owner: 'acme',
+          ownerType: 'organization',
+          projectNumber: 1
+        }
+      )
     ).resolves.toEqual({ ok: false, error })
     expect(Object.keys(store.getState().projectViewCache)).toEqual([cacheKey])
   })
@@ -123,11 +192,14 @@ describe('createGitHubSlice.fetchProjectViewTable coordination', () => {
     mockApi.gh.getProjectViewTable.mockRejectedValueOnce(new Error('transport offline'))
 
     await expect(
-      store.getState().fetchProjectViewTable({
-        owner: 'acme',
-        ownerType: 'organization',
-        projectNumber: 1
-      })
+      store.getState().fetchProjectViewTable(
+        { kind: 'local' },
+        {
+          owner: 'acme',
+          ownerType: 'organization',
+          projectNumber: 1
+        }
+      )
     ).resolves.toEqual({
       ok: false,
       error: { type: 'unknown', message: 'transport offline' }

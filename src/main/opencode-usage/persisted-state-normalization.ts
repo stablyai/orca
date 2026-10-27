@@ -1,5 +1,10 @@
-import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
+import type { OpenCodeUsagePersistedState } from './types'
 import { OPENCODE_USAGE_SCHEMA_VERSION } from './opencode-usage-provider'
+import {
+  normalizeDailyAggregateCost,
+  normalizeOpenCodeUsagePersistedDatabases,
+  normalizeSessionCost
+} from './persisted-database-normalization'
 
 const SCHEMA_VERSION = OPENCODE_USAGE_SCHEMA_VERSION
 
@@ -31,42 +36,8 @@ export function normalizePersistedState(
   }
   return {
     ...state,
-    processedDatabases: (state.processedDatabases ?? []).map((database) => ({
-      ...database,
-      sessions: (database.sessions ?? []).map(normalizeSessionCost),
-      dailyAggregates: (database.dailyAggregates ?? []).map(normalizeDailyAggregateCost)
-    })),
+    processedDatabases: normalizeOpenCodeUsagePersistedDatabases(state.processedDatabases),
     sessions: state.sessions.map(normalizeSessionCost),
     dailyAggregates: state.dailyAggregates.map(normalizeDailyAggregateCost)
-  }
-}
-
-function normalizeDailyAggregateCost(
-  entry: OpenCodeUsageDailyAggregate
-): OpenCodeUsageDailyAggregate {
-  return {
-    ...entry,
-    estimatedCostUsd: entry.estimatedCostUsd ?? null
-  }
-}
-
-function normalizeSessionCost(
-  session: OpenCodeUsagePersistedState['sessions'][number]
-): OpenCodeUsagePersistedState['sessions'][number] {
-  return {
-    ...session,
-    estimatedCostUsd: session.estimatedCostUsd ?? null,
-    locationBreakdown: (session.locationBreakdown ?? []).map((entry) => ({
-      ...entry,
-      estimatedCostUsd: entry.estimatedCostUsd ?? null
-    })),
-    modelBreakdown: (session.modelBreakdown ?? []).map((entry) => ({
-      ...entry,
-      estimatedCostUsd: entry.estimatedCostUsd ?? null
-    })),
-    locationModelBreakdown: (session.locationModelBreakdown ?? []).map((entry) => ({
-      ...entry,
-      estimatedCostUsd: entry.estimatedCostUsd ?? null
-    }))
   }
 }

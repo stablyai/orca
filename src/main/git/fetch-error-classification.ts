@@ -1,19 +1,9 @@
 import { isExecKilledError } from '../../shared/git-remote-error'
 
-export function isMissingRemoteRefGitError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  const normalized = message.toLowerCase()
-  return (
-    normalized.includes('could not find remote ref') ||
-    normalized.includes("couldn't find remote ref")
-  )
-}
+import { isMissingRemoteRefGitError } from '../../shared/git-missing-remote-ref'
+export { isMissingRemoteRefGitError } from '../../shared/git-missing-remote-ref'
 
-// Why: allowlist, not blocklist — soft-keeping a durable review-head ref is
-// only safe when the fetch plainly died in transport. A deleted PR head, auth
-// failure, or stale-relay method-not-found must surface, or the caller checks
-// out a dead/unauthorized tip. Covers raw git stderr and the relay's
-// normalized messages ("Network error. Check your connection.", "… timed out").
+// Keep durable review heads only after transport failures; auth, deleted refs, and stale RPC failures must surface.
 const TRANSIENT_FETCH_ERROR_PATTERNS = [
   'timed out',
   'timeout',

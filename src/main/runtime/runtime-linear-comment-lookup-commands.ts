@@ -1,13 +1,15 @@
 import {
   isLinearAuthError,
   getLinearIssueCommentThreadRoot,
-  LinearWriteFailure,
+  LinearWriteFailure
+} from './runtime-linear-command-dependencies'
+import {
   LinearAgentAccessError,
   classifyLinearError,
   linearError,
   linearMessage,
   sanitizeLinearErrorMessage
-} from './runtime-linear-command-dependencies'
+} from '../linear/issue-context/errors'
 import { RuntimeLinearWriteResultCommands } from './runtime-linear-write-result-commands'
 
 export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResultCommands {

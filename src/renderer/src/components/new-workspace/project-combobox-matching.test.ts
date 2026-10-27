@@ -28,8 +28,7 @@ describe('rankProjectOptions', () => {
 
   it('matches a scattered subsequence in the name but not in the detail', () => {
     const hosts = project('infra', 'infra', '3 hosts configured')
-    // "sc" appears scattered in "hosts configured" but detail matching is
-    // substring-only, so this must not match on the detail line.
+    // Detail search is substring-only; scattered sc in hosts configured must not match.
     expect(rankProjectOptions([hosts], 'sc', [])).toHaveLength(0)
     expect(rankProjectOptions([hosts], 'ifa', [])).toHaveLength(1)
   })

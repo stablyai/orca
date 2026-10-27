@@ -25,8 +25,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       request.webContentsId === undefined
         ? undefined
         : this.pendingNavigationByGuestId.get(request.webContentsId)
-    // Firefox is delivered per-target and cannot reach workers; keep it clean-only to preserve one
-    // coherent identity per mode instead of pairing a Firefox document with native workers.
+    // Keep Firefox auth overrides in clean mode to avoid mixing them with native worker identity.
     const googleAuthEnabled = processIdentity.mode === 'clean'
     if (
       googleAuthEnabled &&
@@ -50,13 +49,8 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     if (googleAuthEnabled && standingOverride?.userAgent === googleAuth.userAgent) {
       return googleAuth
     }
-    // Shared and service worker requests carry no webContentsId, and resolving a session-wide mobile
-    // intent for one put the mobile UA on the wire for a context whose own navigator.userAgent is
-    // desktop-clean — and for every tab sharing the session. One context, one identity: those workers
-    // stay on the session identity, while emulation reaches documents and the emulated tab's dedicated
-    // workers, which carry the owning webContentsId.
-    // Why the standing override and not the requested preset: the wire must match what the document
-    // presents, and a preset whose CDP write never landed (no debugger, a failed write) presents none.
+    // Shared/service workers lack a guest ID and retain the process identity.
+    // Derive mobile identity from the standing override, never an unapplied preset.
     return resolveBrowserTabIdentity({
       url: request.url,
       mobile: standingOverride?.userAgentMetadata?.mobile === true,
@@ -64,26 +58,21 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     })
   }
 
-  // Why: gate on the DIRECT page id, not ownerTabId — a popup has no device-metrics override of its
-  // own, so inheriting the owner tab's preset would pair a mobile UA with a desktop viewport.
+  // Popups have no device-metrics override; never inherit the opener tab's mobile identity.
   protected hasMobileViewportApplied(guestWebContentsId: number): boolean {
     const browserPageId = this.tabIdByWebContentsId.get(guestWebContentsId)
     const preset = browserPageId ? this.viewportPresetByTabId.get(browserPageId) : undefined
     return preset?.guestWebContentsId === guestWebContentsId && preset.applied?.mobile === true
   }
 
-  /**
-   * The only writer of the WebContents UA. Chromium cancels a redirect, and reloads a loading
-   * document, when that UA changes at any other moment; a cross-document did-start-navigation is
-   * the one point where it lands on the new document alone. Call it synchronously from that event.
-   */
+  /** Write synchronously at cross-document navigation start; later UA writes can abort or reload. */
   protected presentTabIdentityAtNavigationStart(
     guest: Electron.WebContents,
     url: string,
     sameDocument: boolean
   ): Promise<boolean> {
     const identity = this.resolveGuestTabIdentity(guest, url)
-    // The WebContents UA carries no mobile identity: that needs metadata only CDP can send.
+    // Mobile identity needs CDP metadata that setUserAgent cannot supply.
     const webContentsUserAgent =
       identity.kind === 'google-auth'
         ? identity.userAgent
@@ -96,7 +85,6 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     return this.writeTabIdentityOverride(guest, identity, presentedByWebContents)
   }
 
-  /** Every other identity change (redirects, failed loads, preset changes) goes over CDP only. */
   protected retargetTabIdentity(guest: Electron.WebContents, url: string): Promise<boolean> {
     return this.writeTabIdentityOverride(
       guest,
@@ -113,9 +101,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     })
   }
 
-  // Why clear rather than restate: any override without userAgentMetadata makes Chromium drop
-  // navigator.userAgentData and every sec-ch-ua header, so it stands only when the WebContents UA
-  // cannot present the identity itself.
+  // Clear redundant overrides to preserve client hints; UA-only CDP overrides suppress them.
   private writeTabIdentityOverride(
     guest: Electron.WebContents,
     identity: BrowserTabIdentity,
@@ -126,19 +112,16 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         ? { userAgent: identity.userAgent, userAgentMetadata: identity.userAgentMetadata }
         : presentedByWebContents === identity.userAgent
           ? { userAgent: '' }
-          : // Only reachable before a navigation start can rewrite the WebContents UA (a redirect
-            // off the auth host, a failed load); the next cross-document navigation clears it.
+          : // Temporary override until cross-document navigation can update the WebContents UA.
             { userAgent: identity.userAgent }
     if (override.userAgent === '' && !this.standingCdpUserAgentOverride(guest.id)) {
       return Promise.resolve(true)
     }
-    // Why: with no debugger there is no way to retarget the identity without cancelling a redirect.
-    // A stale navigator.userAgent is recoverable; a dead navigation is not. The wire UA never
-    // depended on this write: the session request hook rewrites User-Agent on its own.
+    // Without CDP, leave navigation intact; session hooks still rewrite the request UA.
     return this.writeCdpUserAgentOverride(guest, override)
   }
 
-  /** The override Chromium holds or is about to hold; undefined when none stands. */
+  /** Includes pending writes; undefined when no nonempty override stands. */
   protected standingCdpUserAgentOverride(guestId: number): CdpUserAgentOverride | undefined {
     const state = this.cdpUserAgentOverrideStateByGuestId.get(guestId)
     const latestPending = state?.pending.at(-1)
@@ -157,8 +140,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     }
   }
 
-  // Why no queue: debugger.sendCommand dispatches in call order over one channel, so the later-issued
-  // write wins. The sequence only keeps a failed or superseded write from being recorded as standing.
+  // CDP dispatches writes in order; sequence tracking keeps stale completions from replacing newer state.
   protected writeCdpUserAgentOverride(
     guest: Electron.WebContents,
     override: CdpUserAgentOverride
@@ -249,14 +231,11 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     return true
   }
 
-  // Why: webContents.getURL() reports the last COMMITTED url, so mid-navigation it names the host
-  // the tab is leaving, not the one it is entering. Every UA writer must resolve the host through
-  // here or two writers racing the same navigation will pick opposite identities.
+  // Resolve in-flight targets before getURL(), which still names the outgoing document.
   protected resolveTabNavigationUrl(guest: Electron.WebContents): string {
     return this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? guest.getURL()
   }
 
-  /** Route guests own their own popup handler, so their denials arrive here instead. */
   reportRouteGuestPopupBlocked(input: { openerWebContentsId: number; url: string }): void {
     this.forwardOrQueuePopupEvent(input.openerWebContentsId, {
       origin: safeOrigin(input.url),
@@ -269,17 +248,22 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     targetUrl: string,
     options: PopupChildWindowOptions
   ): Electron.WebContents {
-    const popup = openPopupWithOriginBar(options, targetUrl)
-    // Why: Electron emits no did-create-window for createWindow children, so attach the opener's policies here.
-    this.attachGuestPolicies(
-      popup.contentWebContents,
-      this.resolvePopupOwnerContext(openerGuest.id)
-    )
+    const popup = openPopupWithOriginBar(options, targetUrl, (contents) => {
+      if (openerGuest.isDestroyed() || contents.session !== openerGuest.session) {
+        return false
+      }
+      const owner = this.resolvePopupOwnerContext(openerGuest.id)
+      if (!owner) {
+        return false
+      }
+      this.attachGuestPolicies(contents, owner)
+      return true
+    })
     this.forwardOrQueuePopupEvent(openerGuest.id, {
       origin: safeOrigin(targetUrl),
-      action: 'opened-in-orca'
+      action: options.webContents || options.nativeWindow ? 'opened-in-orca' : 'blocked'
     })
-    // Why: match Electron's child-window lifecycle so closing the owning tab doesn't orphan session-bearing popups.
+    // Close session-bearing popups with their owning guest to avoid orphan windows.
     const closePopupWithOpener = (): void => popup.close()
     openerGuest.once('destroyed', closePopupWithOpener)
     popup.onClosed(() => {

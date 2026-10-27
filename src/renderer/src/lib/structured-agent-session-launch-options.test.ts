@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
@@ -20,19 +21,33 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: mocks.retryIntent,
     restoreStructuredAgentSessionLaunchIntent: vi.fn(),
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
-vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
@@ -61,7 +76,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
+import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import {
   cancelStructuredAgentLaunch,
   getStructuredAgentSessionLaunchLifecycle,
@@ -72,12 +87,17 @@ import {
   getStructuredAgentSessionLaunchSelection,
   holdStructuredAgentSessionLaunchOption
 } from './structured-agent-session-launch-options'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import {
-  markStructuredAgentSessionLaunchPublished,
   resetStructuredAgentLaunchRegistryForTests,
   subscribeStructuredAgentLaunchStatus
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
+import { markStructuredAgentSessionLaunchPublished } from './agent-session/launch/structured-agent-session-launch-publication'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import {
+  applyStructuredAgentSessionModelCatalog,
+  createStructuredAgentSessionOptionState
+} from '../../../shared/structured-agent-session-options'
 
 const WORKTREE_ID = 'wt-1'
 const SESSION_ID = 'session-1'
@@ -85,6 +105,8 @@ const SESSION_ID = 'session-1'
 function launchIntent(seedOptions?: Record<string, string>): StructuredAgentSessionLaunchIntent {
   return {
     worktreeId: WORKTREE_ID,
+    executionHostId: 'local',
+    target: { kind: 'local' },
     sessionId: SESSION_ID,
     agent: 'codex',
     params: {
@@ -186,7 +208,10 @@ describe('picks made while a chat launches', () => {
   it('applies them against the receipt fence before the first turn and before publishing', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
-    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { prompt: 'first turn' })
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      requestId: 'request-1',
+      prompt: 'first turn'
+    })
 
     const modelPick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
@@ -194,7 +219,7 @@ describe('picks made while a chat launches', () => {
     await settle()
 
     // The host published the tab, but the launch is not published until its picks land.
-    markStructuredAgentSessionLaunchPublished(WORKTREE_ID, SESSION_ID)
+    markStructuredAgentSessionLaunchPublished(WORKTREE_ID, SESSION_ID, 'local')
     expect(lifecycle()).toBe('pending')
     expect(mutations()).toEqual([
       { method: 'agentSession.setOption', fence: 7, key: 'model', value: 'gpt-picked' }
@@ -222,7 +247,7 @@ describe('picks made while a chat launches', () => {
 
   it('applies a pick made while the earlier ones are being applied', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-2' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
     await settle()
     expect(setOptionReplies).toHaveLength(1)
@@ -237,9 +262,46 @@ describe('picks made while a chat launches', () => {
     expect(mutations().map((mutation) => mutation.value)).toEqual(['gpt-picked', 'gpt-repicked'])
   })
 
+  it('drops a held Fast the picked model does not offer: neither sent nor remembered', async () => {
+    const created = deferred<{ sessionId: string; fence: number }>()
+    mocks.launch.mockReturnValue(created.promise)
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-tier' })
+    const picker = applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [
+          {
+            id: 'gpt-5.5',
+            label: 'GPT-5.5',
+            isDefault: true,
+            efforts: [],
+            serviceTiers: [{ value: 'priority', label: 'Fast' }]
+          },
+          { id: 'gpt-nofast', label: 'No Fast', isDefault: false, efforts: [] }
+        ]
+      },
+      { newLaunch: true }
+    )
+    const tierPick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'serviceTier', 'priority')
+    holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-nofast', picker)
+    await expect(tierPick).resolves.toEqual({ kind: 'superseded' })
+    created.resolve({ sessionId: SESSION_ID, fence: 3 })
+    await settle()
+    setOptionReplies[0]!.resolve(ACCEPTED)
+    await launch.launchResult
+
+    expect(mutations().map(({ key, value }) => [key, value])).toEqual([['model', 'gpt-nofast']])
+  })
+
   it('reports a refused pick to its picker and publishes all the same', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { prompt: 'first turn' })
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      requestId: 'request-3',
+      prompt: 'first turn'
+    })
     const pick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-missing')
     await settle()
     setOptionReplies[0]!.resolve({
@@ -267,7 +329,7 @@ describe('picks made while a chat launches', () => {
 
   it('reports a refusal the host threw as its fact, never the bare code it carries as a message', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-4' })
     const pick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-missing')
     await settle()
     setOptionReplies[0]!.resolve(
@@ -304,14 +366,13 @@ describe('picks made while a chat launches', () => {
     mocks.launch
       .mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('unsupported'))
       .mockResolvedValueOnce({ sessionId: SESSION_ID, fence: 2 })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-5' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
     await settle()
     expect(lifecycle()).toBe('failed')
     expect(mutations()).toEqual([])
 
     expect(retryStructuredAgentSessionLaunch(WORKTREE_ID, SESSION_ID)).toBe(true)
-    // The retried create seeds from the saved selection of now.
     expect(getStructuredAgentSessionLaunchSelection(SESSION_ID)).toEqual({
       seed: { model: 'gpt-saved-since' },
       held: { model: 'gpt-picked' }
@@ -325,7 +386,7 @@ describe('picks made while a chat launches', () => {
   it('discards them when the tab closes before the launch publishes', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-6' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
 
     cancelStructuredAgentLaunch(WORKTREE_ID, SESSION_ID)
@@ -338,7 +399,7 @@ describe('picks made while a chat launches', () => {
 
   it('folds an accepted pick into what the launch reports it runs', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-7' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
     await settle()
     const seen: unknown[] = []

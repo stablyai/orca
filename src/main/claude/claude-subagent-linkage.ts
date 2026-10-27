@@ -1,36 +1,15 @@
-// Who produced a Claude journal row, decided from the roster's own knowledge.
-//
-// Separate from the roster because it answers a different question. The roster
-// maintains the spawn-group row a user reads; this answers, for one frame's
-// `parent_tool_use_id`, WHICH child produced the rows that frame carries. Never
-// whether one did: a non-null reference already settles that.
-//
-// It prefers the CANONICAL task id over the tool id the frame arrived under.
-// Claude re-announces a resumed task under a new tool id while its task id
-// stays put, so a row stamped with the tool id splits one child into two the
-// moment it resumes. That is a reason to prefer the task id, not to withhold a
-// row until one exists: a row written under the tool id is re-stamped in place
-// once the announcement lands, and a split child still beats a child whose
-// words are filed under its parent.
+// Prefer canonical task IDs across resumes; write provisional child rows immediately and correct them in place.
 
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session-journal-types'
 import type { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 
-/** What a frame's `parent_tool_use_id` says about the rows it produces. */
 export type ClaudeSubagentLinkageVerdict =
-  /** A subagent produced them, under an identity that will not change. */
   | { kind: 'linked'; linkage: AgentJournalProducerLinkage }
-  /** A subagent produced them under an identity that is not final yet. The rows
-   *  are still written now — with `settledLinkageFor`'s stamp — and this is what
-   *  marks them as owing a correction once the announcement lands. */
+  /** Write with settledLinkageFor now; track a correction for the later announcement. */
   | { kind: 'pending' }
 
-// There is deliberately no ROOT arm. A non-null `parent_tool_use_id` names a
-// child, always — so every row it produces is a child's, and the only open
-// question is which identity to stamp. Reading any of them as the session's own
-// would assert the parent wrote words it did not.
+// Non-null parent references always name non-root producers; unresolved identity must not become root attribution.
 
-/** This resolver, as a write site asking who produced a row sees it. */
 export type ClaudeSubagentLinkageSource = {
   linkageFor: (parentToolUseId: string) => ClaudeSubagentLinkageVerdict
   settledLinkageFor: (
@@ -38,44 +17,38 @@ export type ClaudeSubagentLinkageSource = {
   ) => Exclude<ClaudeSubagentLinkageVerdict, { kind: 'pending' }>
 }
 
-/** What the roster knows about one child, reduced to what attribution needs. */
+/** Resolve provider task IDs directly, as permission requests require. */
+export type ClaudeAgentLinkageSource = {
+  linkageForAgent: (agentId: string) => AgentJournalProducerLinkage
+}
+
 export type ClaudeSubagentLinkageEntry = { attempt: number }
 
 export type ClaudeSubagentLinkageDeps = {
   ids: ClaudeSubagentIds
   trackedFor: (canonicalId: string) => ClaudeSubagentLinkageEntry | null
-  /** Whether a tool id was forwarded at the TOP level. A child parented to one
-   *  was spawned by a call the transcript shows, so an announcement naming it is
-   *  still expected. Gates only whether a CORRECTION is owed, never whether the
-   *  row is a child's, so a stale answer costs precision and not correctness. */
+  /** Forwarded spawn calls may receive announcements; this gates correction tracking, never child attribution. */
   isForwardedParentTool?: (toolUseId: string) => boolean
-  /** The reference naming the child that journaled a tool call, when a child
-   *  did rather than the session's own agent. A grandchild's own
-   *  `parent_tool_use_id` is one of those ids, and this is the only route from
-   *  it to the agent that actually spawned the grandchild. */
+  /** Map sidechain tool calls to their child owner to identify grandchildren's parents. */
   childOwnerRefOf?: (toolUseId: string) => string | null
+  spawnRefOf?: (canonicalId: string) => string | null
 }
 
-/** How far a sidechain is followed when naming a row's parent. Depth beyond
- *  this is past anything a transcript shows, and the guard is also what stops a
- *  malformed chain that points at itself from recursing. */
+/** Bound malformed or cyclic sidechains when resolving parents. */
 const MAX_PARENT_RESOLUTION_DEPTH = 8
 
-/** A parent's identity, or the fact that it is not final yet. `agentId` absent
- *  with kind `known` is the truthful claim that the session's own agent is the
- *  parent, which is what an unrecorded owner also means. */
+/** A known parent without agentId projects as the session's own agent. */
 type ParentAgentVerdict = { kind: 'known'; agentId?: string } | { kind: 'pending' }
 
-export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
+export class ClaudeSubagentLinkage
+  implements ClaudeSubagentLinkageSource, ClaudeAgentLinkageSource
+{
   constructor(private readonly deps: ClaudeSubagentLinkageDeps) {}
 
   linkageFor = (parentToolUseId: string): ClaudeSubagentLinkageVerdict =>
     this.resolve(parentToolUseId, false, 0)
 
-  /** The verdict for rows that can wait no longer — the pre-announcement buffer
-   *  draining on eviction, at turn settle, or at teardown. Never `pending`:
-   *  under settle, a spawn call whose announcement never came resolves to its
-   *  own raw id, which is the only handle that child will ever have. */
+  /** Always return writable linkage, using the raw reference when no announcement resolves it. */
   settledLinkageFor = (
     parentToolUseId: string
   ): Exclude<ClaudeSubagentLinkageVerdict, { kind: 'pending' }> => {
@@ -85,20 +58,30 @@ export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
       : verdict
   }
 
+  /** Resolve parent and attempt through the spawn call while preserving the provider's agent ID. */
+  linkageForAgent = (agentId: string): AgentJournalProducerLinkage => {
+    const spawnRef = this.deps.spawnRefOf?.(agentId) ?? null
+    if (spawnRef === null) {
+      return { agentId, producerKind: 'agent' }
+    }
+    const { linkage } = this.settledLinkageFor(spawnRef)
+    const { parentAgentId, ...rest } = linkage
+    return {
+      ...rest,
+      agentId,
+      ...(parentAgentId === undefined || parentAgentId === agentId ? {} : { parentAgentId })
+    }
+  }
+
   private resolve(
     parentToolUseId: string,
     settled: boolean,
     depth: number
   ): ClaudeSubagentLinkageVerdict {
     const canonical = this.deps.ids.canonical(parentToolUseId)
-    // An announcement said this task is not a subagent — a backgrounded shell
-    // or a workflow. Its output is still not the session's own agent's.
+    // Excluded tasks remain non-root producers even when they are shells or workflows.
     const excluded = this.deps.ids.isExcluded(parentToolUseId, canonical)
-    // An announcement named this spawn call, so the task id behind it is
-    // settled — including the case where the two ids are the same string, which
-    // comparing them could not tell from never having been announced. An earlier
-    // run's announcement counts: a child resumed after a restart keeps that run's
-    // spawn id on its frames, and its rows recall the id that run resolved.
+    // Announcement evidence also covers self-aliases and spawn IDs recalled from earlier runs.
     const announced = this.deps.ids.isAnnounced(parentToolUseId)
     if (
       !settled &&
@@ -106,17 +89,10 @@ export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
       !announced &&
       this.deps.isForwardedParentTool?.(parentToolUseId) === true
     ) {
-      // A top-level spawn call whose `task_started` has not landed yet. Its rows
-      // are written immediately under the id it already has and re-attributed
-      // when the announcement names it; `pending` is what marks them as owing
-      // that correction. Nothing WAITS on this — it only decides whether a
-      // correction is owed — so a reference this misses costs a row the
-      // canonical id, never its author.
+      // Pending flags an identity correction; it never delays writing the child's rows.
       return { kind: 'pending' }
     }
-    // A row names its parent as well as its producer, and it persists only once
-    // BOTH are final: a sidechain call's parent is another agent, whose own
-    // identity can still be provisional.
+    // A provisional parent also requires correction, even if the producer itself is settled.
     const parent = this.parentAgentFor(parentToolUseId, settled, depth)
     if (parent.kind === 'pending') {
       return { kind: 'pending' }
@@ -133,10 +109,7 @@ export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
         parent.agentId
       )
     }
-    // Nothing is coming for this id: nested tool traffic, a grandchild inside a
-    // sidechain, a forwarded spawn call that can wait no longer, or a resumed
-    // child no journaled row ever resolved. The raw reference is the only handle
-    // there will ever be for it.
+    // Unannounced children retain their available reference instead of becoming root output.
     return linked(
       parentToolUseId,
       canonical,
@@ -146,9 +119,7 @@ export class ClaudeSubagentLinkage implements ClaudeSubagentLinkageSource {
     )
   }
 
-  /** Who spawned the agent this reference names, resolved through the same path
-   *  that reference's own rows resolve through — so a parent id always matches
-   *  the `agentId` the parent's own rows carry, however either was settled. */
+  /** Resolve parent IDs through the same path as their own rows so attribution agrees. */
   private parentAgentFor(
     parentToolUseId: string,
     settled: boolean,
@@ -179,16 +150,11 @@ function linked(
     kind: 'linked',
     linkage: {
       agentId,
-      // Absent means the session's own agent spawned this one, so it is only
-      // ever written when ANOTHER agent is known to have. A malformed chain
-      // that loops back names the agent its own ancestor; the depth guard
-      // bounds that walk but cannot make its answer mean anything, and absence
-      // is the truthful claim rather than a self-parent persisted for ever.
+      // Missing parents project as root; omit self-parent links from malformed cycles.
       ...(parentAgentId === undefined || parentAgentId === agentId ? {} : { parentAgentId }),
       providerParentRef: parentToolUseId,
       producerKind,
-      // The first run is the absence of an attempt, like every other field
-      // here: absence is the claim, so only a reopened run states one.
+      // Omit attempt for the first run; only resumed runs need it.
       ...(tracked && tracked.attempt > 1 ? { attempt: tracked.attempt } : {})
     }
   }

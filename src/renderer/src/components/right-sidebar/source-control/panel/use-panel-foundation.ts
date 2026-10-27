@@ -1,23 +1,21 @@
 import { useEffect } from 'react'
+import { useAppStore } from '@/store'
 import { useSourceControlAi } from '../ai/use-ai'
 import { useSourceControlFileListing } from '../listing/use-file-listing'
 import { useSourceControlReviewContext } from '../review/use-review-context'
 import { useSourceControlPanelState } from './use-panel-state'
 
-/**
- * Everything the panel knows before any action runs: state, review context, the projected file
- * listing and the AI surface. Split from the flows so no action hook can be read as a dependency
- * of the data it acts on.
- */
+/** Keep data foundation separate from action hooks so flows cannot become dependencies of the state they mutate. */
 export function useSourceControlPanelFoundation() {
   const panelState = useSourceControlPanelState()
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const reviewContext = useSourceControlReviewContext(panelState)
   const {
     activeConnectionId,
     activeGroupId,
     activeRemoteActionSequence,
     activeRepo,
-    activeRepoSettings,
+    activeRepoTarget,
     activeSourceControlLaunchPlatform,
     activeWorktreeId,
     branchEntries,
@@ -38,6 +36,7 @@ export function useSourceControlPanelFoundation() {
     openSettingsTarget,
     refreshActiveGitStatusAfterMutation,
     remoteActionError,
+    repositoryHuge,
     rightSidebarTab,
     sourceControlGroupOrder,
     sourceControlRef,
@@ -50,7 +49,7 @@ export function useSourceControlPanelFoundation() {
 
   const listing = useSourceControlFileListing({
     activeRemoteActionSequence,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     branchEntries,
     branchName,
@@ -66,6 +65,7 @@ export function useSourceControlPanelFoundation() {
     isMac,
     refreshActiveGitStatusAfterMutation,
     remoteActionError,
+    repositoryHuge,
     rightSidebarTab,
     sourceControlGroupOrder,
     sourceControlRef,
@@ -74,7 +74,8 @@ export function useSourceControlPanelFoundation() {
     worktreePath
   })
   const ai = useSourceControlAi({
-    settings: activeRepoSettings,
+    settings: panelState.settings,
+    target: activeRepoTarget,
     activeRepo: activeRepo ?? null,
     activeWorktreeId,
     activeConnectionId,
@@ -88,6 +89,7 @@ export function useSourceControlPanelFoundation() {
     commitError,
     pushRecoveryPrompt: listing.pushRecovery?.prompt ?? null,
     updateSettings,
+    updateSettingsOrThrow,
     updateRepo,
     openSettingsTarget,
     openSettingsPage

@@ -8,7 +8,6 @@ import {
 
 const mocks = vi.hoisted(() => ({ supports: vi.fn(), rpc: vi.fn() }))
 vi.mock('./runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'environment', environmentId: 'remote-test' }),
   runtimeEnvironmentSupportsCapability: mocks.supports,
   callRuntimeRpc: mocks.rpc
 }))
@@ -23,9 +22,13 @@ for (const operation of ['commitMessage', 'pullRequest'] as const) {
   describe(operation, () => {
     function generate(model: string, resolved = true, agentArgs?: string) {
       const settings = getDefaultSettings('/tmp')
-      settings.activeRuntimeEnvironmentId = 'remote-test'
       settings.sourceControlAi = { ...settings.sourceControlAi!, agentId: 'antigravity' }
-      const context = { settings, worktreeId: 'wt-1', worktreePath: '/remote/workspace' }
+      const context = {
+        target: { kind: 'environment' as const, environmentId: 'remote-test' },
+        prefs: settings,
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/workspace'
+      }
       const overrides = resolved
         ? {
             sourceControlAiResolvedParams: {

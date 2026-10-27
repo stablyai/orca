@@ -1,16 +1,13 @@
-// Opening a new epoch.
-//
-// One transaction: discard every row of the superseded epoch, insert the new
-// epoch row at sequence 1, move the session projection onto it, and retire any
-// repair marker the superseded epoch was carrying. Superseded rows are DELETED
-// rather than retained — nothing would ever shed them.
+// Delete and replace epochs atomically; retaining superseded rows would grow history without bound.
 
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
-import { clearJournalRepairMarker } from './journal-repair-marker'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
+import { buildJournalQueueRow } from './journal-queue-events'
+import type { JournalQueueRestatement } from './journal-queued-messages'
 import {
   deleteJournalEpochRows,
   insertJournalRow,
@@ -26,14 +23,16 @@ export function publishNewEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   now: number
-  /** Called the instant the transaction commits, before any fallible follow-up. */
+  /** Unhanded cards wait again; replacement submissions may relink them. */
+  queue: JournalQueueRestatement
+  /** Adopt committed state before fallible follow-up work. */
   onPublished: (loaded: JournalLoad) => void
 }): void {
   const row: JournalRow = {
     kind: 'epoch',
     reason: input.reason,
-    providerHandle: input.identity.providerHandle,
-    // Carries no body: an older host must keep reading a turn-free session past row 1.
+    providerHandle: agentSessionJournalProviderHandle(input.identity),
+    // Body-free epoch rows must remain readable by older hosts.
     v: journalRowSchemaVersion([]),
     epoch: input.epoch,
     seq: 1,
@@ -42,21 +41,30 @@ export function publishNewEpoch(input: {
   }
 
   const { sessionId } = input.identity
+  const state = createJournalReducerState(sessionId, input.epoch)
+  applyJournalRow(state, row)
+  const rows: JournalRow[] = [row]
+  for (const { messageId, change } of input.queue.cards) {
+    if (change) {
+      const card = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, input.now)
+      applyJournalRow(state, card)
+      rows.push(card)
+    }
+  }
   input.database.transaction((db) => {
     const retired = readJournalSessionEpoch(db, sessionId)
     if (retired !== null) {
       deleteJournalEpochRows(db, sessionId, retired)
     }
-    clearJournalRepairMarker(db, sessionId)
-    insertJournalRow(db, sessionId, row)
+    for (const each of rows) {
+      insertJournalRow(db, sessionId, each)
+    }
+    input.queue.receipt.write(db)
     publishJournalSessionEpoch(db, input.identity, input.epoch)
   })
 
-  // COMMIT landed: on disk the superseded prefix is gone and this epoch is the
-  // live one. The caller adopts that immediately, or a later failure leaves the
-  // store writing into an epoch that no longer exists.
-  const state = createJournalReducerState(sessionId, input.epoch)
-  applyJournalRow(state, row)
+  // Adopt committed state before fallible work can leave writers targeting the deleted epoch.
+  input.queue.receipt.committed()
   state.oldestSequence = 1
-  input.onPublished({ state, readOnly: false, corrupt: false, malformedRows: 0 })
+  input.onPublished({ state, newer: null, damage: null })
 }

@@ -1,3 +1,4 @@
+import type { ModelManager } from './model-manager'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -155,7 +156,12 @@ vi.mock('./openai-transcription-client', () => ({
   OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
 }))
 
-import { IDLE_WORKER_TEARDOWN_MS, START_DICTATION_TIMEOUT_MS, SttService } from './stt-service'
+import {
+  IDLE_WORKER_TEARDOWN_MS,
+  START_DICTATION_TIMEOUT_MS,
+  SttService,
+  type SttEventSink
+} from './stt-service'
 
 describe('SttService', () => {
   beforeEach(() => {
@@ -653,4 +659,69 @@ describe('SttService', () => {
     expect(getCreatedWorkerCount()).toBe(2)
     expect(getLastWorker()).not.toBe(firstWorker)
   })
+
+  it.each(['exit', 'error'] as const)(
+    'releases the idle teardown timer after a warm worker %s',
+    async (event) => {
+      vi.useFakeTimers()
+      try {
+        const models: Pick<ModelManager, 'getModelState' | 'getModelDir'> = {
+          getModelState: vi.fn<ModelManager['getModelState']>().mockResolvedValue({
+            id: 'model-a',
+            status: 'ready'
+          }),
+          getModelDir: vi.fn<ModelManager['getModelDir']>().mockReturnValue('/tmp/model-a')
+        }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This lifecycle reads only getModelState/getModelDir on the model manager.
+        const service = new SttService(models as ModelManager)
+        const sink = vi.fn<SttEventSink>()
+        await service.startDictation('model-a', sink, undefined, 'desktop')
+        const retired = getLastWorker()
+        if (!retired) {
+          throw new Error('Missing warm speech worker')
+        }
+        await service.stopDictation('desktop')
+        expect(sink.mock.calls).toEqual([[{ type: 'ready' }], [{ type: 'stopped' }]])
+        expect(service.isActive()).toBe(true)
+        expect(retired.terminated).toBe(false)
+        expect(vi.getTimerCount()).toBe(1)
+        await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+        retired.emit(event, event === 'exit' ? 0 : new Error('idle worker failed'))
+        expect(service.isActive()).toBe(false)
+        expect(sink.mock.calls).toEqual([[{ type: 'ready' }], [{ type: 'stopped' }]])
+        for (const name of ['message', 'error', 'exit']) {
+          expect(retired.listenerCount(name)).toBe(0)
+        }
+        service.feedAudio(new Float32Array([1]), 16000, 'desktop')
+        expect(retired.messages.filter((message) => message.type === 'feed')).toHaveLength(0)
+        const retiredTimerCount = vi.getTimerCount()
+        await service.startDictation('model-a', sink, undefined, 'desktop')
+        const successor = getLastWorker()
+        if (!successor) {
+          throw new Error('Missing successor speech worker')
+        }
+        expect(successor).not.toBe(retired)
+        await service.stopDictation('desktop')
+        expect(vi.getTimerCount()).toBe(1)
+        retired.emit('exit', 0)
+        retired.emit('error', new Error('retired error'))
+        expect(sink.mock.calls).toEqual([
+          [{ type: 'ready' }],
+          [{ type: 'stopped' }],
+          [{ type: 'ready' }],
+          [{ type: 'stopped' }]
+        ])
+        expect(service.isActive()).toBe(true)
+        expect(vi.getTimerCount()).toBe(1)
+        await vi.advanceTimersByTimeAsync(IDLE_WORKER_TEARDOWN_MS - 1)
+        expect(successor.terminated).toBe(false)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(successor.terminated).toBe(true)
+        expect(retiredTimerCount).toBe(0)
+      } finally {
+        vi.clearAllTimers()
+        vi.useRealTimers()
+      }
+    }
+  )
 })

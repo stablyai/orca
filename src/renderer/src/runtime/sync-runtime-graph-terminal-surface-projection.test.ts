@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildMobileSessionTabSnapshots, registerRuntimeTerminalTab } from './sync-runtime-graph'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
+import { registerRuntimeTerminalTab } from './mounted-terminal-tab-registry'
 import { makeAgentStatusEntry, makeState } from './sync-runtime-graph-test-harness'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
@@ -111,9 +112,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   })
 
   it('withholds a launch draft seeded for a different agent than the tab runs', () => {
-    // The seed is keyed by tab id, which survives an agent switch. Desktop's
-    // consumer declines on mismatch; publishing anyway would prefill the new
-    // agent's mobile chat with the previous agent's link.
+    // Tab-keyed startup seeds survive agent switches; decline mismatches like desktop or mobile prefills the prior agent’s link.
     const leafId = '11111111-1111-4111-8111-111111111111'
     const state = makeState({
       tabsByWorktree: {

@@ -2,7 +2,6 @@ export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 export type SetupAgentStartupPolicy = 'start-immediately' | 'wait-for-setup'
 export type HookCommandSourcePolicy = 'shared-only' | 'local-only' | 'run-both'
 
-// ─── Hooks (orca.yaml) ──────────────────────────────────────────────
 export type OrcaHooks = {
   scripts: {
     setup?: string // Runs after worktree is created
@@ -17,8 +16,7 @@ export type OrcaHooks = {
 }
 
 export type OrcaWorktreeDefaults = {
-  // Why: shared (symlinked) rather than copied — large rebuildable dirs like
-  // node_modules should be one install serving every worktree.
+  // Share large rebuildable directories such as node_modules across worktrees instead of copying installs.
   sharedDirectories?: string[]
 }
 
@@ -49,8 +47,7 @@ export type OrcaVmRecipeDiagnostic = {
 }
 
 export type RepoHookSettings = {
-  // Why: persisted data may still include the old mode field from the earlier
-  // hook UI. Keep it in the shape so existing local state reads without a migration.
+  // Retain the old hook-UI mode so persisted state reads without migration.
   mode: 'auto' | 'override'
   setupRunPolicy?: SetupRunPolicy
   setupAgentStartupPolicy?: SetupAgentStartupPolicy

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 const {
@@ -105,7 +105,7 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   })
 
   it('closes a headless tab via the offscreen backend without a renderer round-trip', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     const closeTab = vi.fn(async () => {})
     const retireRuntimeOwnedBrowserSessionTab = vi.fn()
@@ -127,22 +127,19 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-offscreen' })
     ).resolves.toEqual({ closed: true })
     expect(closeTab).toHaveBeenCalledWith('page-offscreen')
-    // Why: without retirement, paired clients keep a dead session tab after an RPC close.
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-offscreen')
     expect(ipcMainOnMock).not.toHaveBeenCalledWith('browser:tabCloseReply', expect.anything())
     await expect(
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-other' })
     ).rejects.toMatchObject({ code: 'browser_tab_not_found' })
     expect(closeTab).toHaveBeenCalledTimes(1)
-    // Why the unknown page still reaches retirement: it is the ghost probe — a session row whose
-    // page this runtime no longer has is the one thing left to close. This host reports no such
-    // row, so the close still fails closed rather than claiming it removed something.
+    // Unknown-page ghost probes still fail closed when no session row was retired.
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledTimes(2)
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenLastCalledWith('wt-1', 'page-other')
   })
 
   it('closes the active headless tab on an implicit close', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     const closeTab = vi.fn(async () => {})
     const bridge = {
@@ -165,7 +162,7 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   })
 
   it('reports not-closed when no headless tab can be resolved', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const closeTab = vi.fn(async () => {})
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map()),
@@ -187,7 +184,7 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   })
 
   it('forwards an unresolved worktree to the bridge unchanged for keyboard inserttext', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const keyboardInsertText = vi.fn().mockResolvedValue({ inserted: true })
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),

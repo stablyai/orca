@@ -57,6 +57,7 @@ function cancelArgs(client: RpcClient, hostAnswersRepeatedStops: boolean | null 
     stateRef: { current: runningState() },
     promptCancelSupported: null,
     hostAnswersRepeatedStops,
+    hostStopsConversation: null,
     inFlight: new Map<string, Promise<boolean>>(),
     onSendError: vi.fn()
   }
@@ -297,7 +298,8 @@ describe('what a structured refusal says on the phone', () => {
 
     expect(result).toEqual({
       status: 'failed',
-      message: "The Orca running this chat doesn't support this. Update Orca, then try again."
+      message:
+        'This needs a newer Orca on the computer running this chat. Update Orca there, then try again.'
     })
   })
 })

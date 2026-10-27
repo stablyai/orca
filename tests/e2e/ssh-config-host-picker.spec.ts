@@ -1,7 +1,4 @@
-/**
- * E2E: Add SSH host → Fill from ~/.ssh/config picker (isolated HOME + real ssh -G).
- * Plan cases: P1, P2, P3, P4, P8 (+ N3 with P3). Bulk/import: ssh-config-host-import.spec.ts.
- */
+// Use isolated HOME and real ssh -G for picker P1/P2/P3/P4/P8 plus N3; bulk/re-adopt lives in ssh-config-host-import.spec.ts.
 
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -21,8 +18,9 @@ import {
   type SeededSshConfigHost
 } from './helpers/ssh-config-host-picker'
 
-// Why: afterEach deletes every target carrying this prefix; workers loading the
-// module in the same millisecond must not collide on a shared Date.now().
+test.use({ seedTestRepo: false })
+
+// Use unique cleanup prefixes so workers loaded in the same millisecond cannot delete each other’s targets.
 const HOST_PREFIX = makeSshConfigHostPrefix()
 
 function pairHosts(prefix: string): { alpha: SeededSshConfigHost; bravo: SeededSshConfigHost } {
@@ -61,7 +59,6 @@ test.describe('SSH config host picker', () => {
     await removeSshTargetsByPrefix(orcaPage, HOST_PREFIX).catch(() => undefined)
   })
 
-  // ── P1 ─────────────────────────────────────────────────────────────
   test('P1: empty config shows empty state; Back returns to blank form', async ({ orcaPage }) => {
     // Isolated HOME has no ~/.ssh/config by default.
     const picker = await openSshConfigHostPicker(orcaPage)
@@ -81,7 +78,6 @@ test.describe('SSH config host picker', () => {
     await expect(fields.label).toHaveValue('')
   })
 
-  // ── P2 ─────────────────────────────────────────────────────────────
   test('P2: seeded hosts list with summary lines and Add all enabled', async ({
     electronApp,
     orcaPage
@@ -102,7 +98,6 @@ test.describe('SSH config host picker', () => {
     await expect(picker.getByRole('button', { name: 'Add all 2 to Orca' })).toBeEnabled()
   })
 
-  // ── P3 + N3 ────────────────────────────────────────────────────────
   test('P3: select host prefills form; Save persists; N3 identity hint', async ({
     electronApp,
     orcaPage
@@ -144,7 +139,6 @@ test.describe('SSH config host picker', () => {
     await expectSshHostListedInSettings(sshSection, prod)
   })
 
-  // ── P4 ─────────────────────────────────────────────────────────────
   test('P4: filter narrows host list', async ({ electronApp, orcaPage }) => {
     const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
     const picker = await openSshConfigHostPicker(orcaPage)
@@ -165,7 +159,6 @@ test.describe('SSH config host picker', () => {
     ).toBeVisible()
   })
 
-  // ── P8 ─────────────────────────────────────────────────────────────
   test('P8: Back without select leaves form empty', async ({ electronApp, orcaPage }) => {
     const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
     const picker = await openSshConfigHostPicker(orcaPage)

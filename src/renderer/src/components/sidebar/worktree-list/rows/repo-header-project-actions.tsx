@@ -1,4 +1,5 @@
 import React from 'react'
+import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
   CircleX,
   Ellipsis,
@@ -25,7 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
+import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
@@ -38,7 +39,7 @@ import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
   REPO_HEADER_ACTION_REVEAL_CLASS
 } from '../../repo-header-action-button-class'
-import type { getRepoHeaderCreateState } from '../../repo-header-create-state'
+import { getRepoHeaderCreateState } from '../../repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -54,7 +55,15 @@ function getWorktreeVisibilityMenuLabel(
     isLegacyRepoForExternalWorktreeVisibility(repo),
     visibilityDefaults
   )
-  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
+  return visibility === 'show'
+    ? translate(
+        'auto.components.sidebar.repoHeaderProjectActions.hideNonOrcaWorktrees',
+        'Hide non-Orca worktrees'
+      )
+    : translate(
+        'auto.components.sidebar.repoHeaderProjectActions.showHiddenWorktrees',
+        'Show hidden worktrees'
+      )
 }
 
 export type RepoHeaderProjectActions = {
@@ -178,14 +187,14 @@ export function RepoHeaderProjectActionsMenu({
 export function RepoHeaderCreateWorkspaceButton({
   repo,
   label,
-  createState,
   onCreateForRepo
 }: {
   repo: Repo
   label: string
-  createState: ReturnType<typeof getRepoHeaderCreateState> | null
   onCreateForRepo: (projectId: string) => void
 }): React.JSX.Element {
+  const sshGate = useRepoSshGate(repo)
+  const createState = getRepoHeaderCreateState({ repo, label, sshGate })
   const fallbackLabel = translate(
     'auto.components.sidebar.WorktreeList.bb85cd86ba',
     'Create workspace for {{value0}}',

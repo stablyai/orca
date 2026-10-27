@@ -1,16 +1,17 @@
 import { spawn } from 'node:child_process'
+import { resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
-import { stripElectronRunAsNode } from '../runtime/launch'
+import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { resolveCliStatusCaller } from '../runtime/status-caller'
+import { getServeSuperviseValidationError } from '../runtime/serve-supervised-service'
+import { getOptionalServePort } from '../runtime/serve-port-flag'
+import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
 
 function envRecord(): Record<string, string> {
-  // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
-  // process carries ELECTRON_RUN_AS_NODE=1. Strip it before it reaches the
-  // spawned `claude` (and any nested Electron it launches), which would
-  // otherwise be forced into headless plain-Node mode.
+  // Inherited ELECTRON_RUN_AS_NODE would force nested Electron children into plain Node mode.
   const env = stripElectronRunAsNode(process.env)
   return Object.fromEntries(
     Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
@@ -42,21 +43,6 @@ async function runClaudeAgentTeams(env: Record<string, string>, args: string[]):
       resolve(signal ? 1 : 0)
     })
   })
-}
-
-function getOptionalServePort(flags: Map<string, string | boolean>): string | null {
-  if (!flags.has('port')) {
-    return null
-  }
-  const rawPort = flags.get('port')
-  if (typeof rawPort !== 'string' || rawPort.length === 0) {
-    throw new RuntimeClientError('invalid_argument', 'Missing value for --port.')
-  }
-  const port = Number(rawPort)
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new RuntimeClientError('invalid_argument', `Invalid --port value: ${rawPort}`)
-  }
-  return rawPort
 }
 
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
@@ -98,14 +84,43 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatCliStatus)
   },
   serve: async ({ flags, json }) => {
+    if (flags.get('reclaim-stale-lock') === true) {
+      const dataRoot = flags.get('data-root')
+      // Why refuse rather than default: a missing value would point a destructive command elsewhere.
+      if (flags.has('data-root') && (typeof dataRoot !== 'string' || !dataRoot.trim())) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--data-root expects a directory. Usage: orca serve --reclaim-stale-lock [--data-root <dir>] [--yes] [--json]'
+        )
+      }
+      // Why lazy: only this mode needs orcad's lock code, and every other command skips loading it.
+      const { printOrcadStaleLockReclaimResult, reclaimStaleOrcadInstanceLock } =
+        await import('../../main/orcad/orcad-stale-lock-reclaim.js')
+      const result = await reclaimStaleOrcadInstanceLock(
+        typeof dataRoot === 'string' ? resolve(dataRoot) : resolveLaunchUserDataPath(),
+        // This CLI's own binary is no command to give a user; `orca serve` is.
+        { yes: flags.get('yes') === true, hintRuntime: null }
+      )
+      printOrcadStaleLockReclaimResult(result, json)
+      process.exitCode = result.exitCode
+      return
+    }
     const projectRootValue = flags.get('project-root')
     const projectRoot = typeof projectRootValue === 'string' ? projectRootValue : null
     const noPairing = flags.get('no-pairing') === true
     const mobilePairing = flags.get('mobile-pairing') === true
+    const grantDesktopControl = flags.get('grant-desktop-control') === true
     const recipeJson = flags.get('recipe-json') === true
+    const force = flags.get('force') === true
+    const supervise = flags.get('supervise') === true
+    const superviseError = getServeSuperviseValidationError({ supervise, recipeJson })
+    if (superviseError) {
+      throw new RuntimeClientError('invalid_argument', superviseError)
+    }
     const validationError = getServeOptionValidationError({
       noPairing,
       mobilePairing,
+      grantDesktopControl,
       recipeJson,
       projectRoot
     })
@@ -120,8 +135,11 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,
       mobilePairing,
+      grantDesktopControl,
       recipeJson,
-      projectRoot
+      projectRoot,
+      ...(force ? { force: true } : {}),
+      ...(supervise ? { supervise: true } : {})
     })
     process.exitCode = exitCode
   },

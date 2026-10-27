@@ -10,11 +10,7 @@ export type TranscriptNativeWatcher = {
   dispose: () => void
 }
 
-/**
- * Optional fs.watch acceleration for transcript reconciliation. Native watches
- * can fail on otherwise-readable remote filesystems, so binding is retryable
- * and never owns transcript liveness; the caller's polling loop does.
- */
+/** Native watches only accelerate polling reconciliation: remote filesystems may reject them while files remain readable, so retry binding without owning liveness. */
 export function createTranscriptNativeWatcher(
   filePath: string,
   onEvent: () => void,

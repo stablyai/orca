@@ -1,30 +1,29 @@
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
-/**
- * The host's open conversations. A journal handle becomes a conversation's when it is set here,
- * and from then on every change it commits reaches that conversation's readers: no writer
- * publishes what it appended, so none can forget to.
- *
- * Delivery runs a microtask after the commit, so a reader that throws cannot fail a write that is
- * already durable. A handle this map has since replaced or dropped delivers nothing.
- *
- * Each entry also carries when it last saw activity — its open, then every journal publish — which
- * is the idle sweep's clock. In memory only, so it dies with the entry.
- */
+/** Bind commit delivery at adoption so writers cannot forget publication. Deliver in a microtask
+ * to isolate durable writes from reader failures; ignore replaced/dropped handles. Activity clocks are memory-only. */
 export class StructuredAgentSessionConversations extends Map<
   string,
   StructuredAgentSessionHostSession
 > {
   private readonly activity = new Map<string, number>()
-  private readonly closeObservers = new Set<(sessionId: string) => void>()
 
   constructor(
     private readonly delivery: {
+      observe?: (
+        sessionId: string,
+        journal: AgentSessionJournal,
+        rows?: readonly JournalRow[]
+      ) => void
+      forget?: (sessionId: string) => void
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
+      /** Settle edges write no row and renew no activity clock. */
+      deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
-      /** A conversation became held: state that waited on it (queued drafts) re-derives. */
+      /** Opening makes waiting state re-derive. */
       onOpened?: (sessionId: string) => void
       now: () => number
     }
@@ -35,7 +34,19 @@ export class StructuredAgentSessionConversations extends Map<
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
     const { journal } = session
     let queued = false
-    journal.observeCommits(() => {
+    journal.observeCommits((rows) => {
+      if (this.get(sessionId)?.journal !== journal) {
+        return
+      }
+      try {
+        this.delivery.observe?.(sessionId, journal, rows)
+      } catch (error) {
+        this.delivery.logger.warn('observing committed requests failed', {
+          scope: 'request-outcomes',
+          sessionId,
+          error
+        })
+      }
       if (queued) {
         return
       }
@@ -56,26 +67,33 @@ export class StructuredAgentSessionConversations extends Map<
         }
       })
     })
+    journal.stopMarks.observeSettleEdges(() => {
+      queueMicrotask(() => {
+        if (this.get(sessionId)?.journal !== journal) {
+          return
+        }
+        try {
+          this.delivery.deliverSettleEdge?.(sessionId, journal)
+        } catch (error) {
+          this.delivery.logger.warn("delivering a Stop's settle edge failed", {
+            scope: 'stop-settle-delivery',
+            sessionId,
+            error
+          })
+        }
+      })
+    })
     this.activity.set(sessionId, this.delivery.now())
     const adopted = super.set(sessionId, session)
+    this.delivery.observe?.(sessionId, journal)
     this.delivery.onOpened?.(sessionId)
     return adopted
   }
 
   override delete(sessionId: string): boolean {
+    this.delivery.forget?.(sessionId)
     this.activity.delete(sessionId)
-    const deleted = super.delete(sessionId)
-    if (deleted) {
-      for (const observer of this.closeObservers) {
-        observer(sessionId)
-      }
-    }
-    return deleted
-  }
-
-  /** Told when a conversation leaves the map, so state kept per conversation dies with it. */
-  observeClose(observer: (sessionId: string) => void): void {
-    this.closeObservers.add(observer)
+    return super.delete(sessionId)
   }
 
   touch(sessionId: string): void {

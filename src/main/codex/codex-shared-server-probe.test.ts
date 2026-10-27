@@ -9,7 +9,7 @@ const { readWindowsProcessCreationTime } = vi.hoisted(() => ({
 }))
 vi.mock('../windows/windows-process-table', () => ({ readWindowsProcessCreationTime }))
 
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { probeCodexSharedServer } from './codex-shared-server-probe'
 
 const originalPlatform = process.platform
@@ -36,7 +36,7 @@ function close(): Promise<void> {
 }
 
 beforeEach(() => {
-  // Why /tmp: a unix socket path must fit sun_path, which a macOS $TMPDIR can exceed.
+  // macOS TMPDIR can exceed the Unix socket path limit.
   home = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cxh-'))
   readWindowsProcessCreationTime.mockReset()
 })
@@ -67,7 +67,7 @@ describe.skipIf(process.platform === 'win32')('probeCodexSharedServer on POSIX',
   it('is absent when a crashed server left its socket file behind', async () => {
     const socketPath = join(home, 'app-server-control', 'app-server-control.sock')
     mkdirSync(join(home, 'app-server-control'), { recursive: true })
-    // Why a killed child: only a crash leaves the socket inode with nobody listening.
+    // A crash leaves the socket inode without a listener.
     await runProcess({
       program: process.execPath,
       args: [
@@ -81,7 +81,7 @@ describe.skipIf(process.platform === 'win32')('probeCodexSharedServer on POSIX',
   })
 
   it('is unknown when the socket path cannot be connected to for another reason', async () => {
-    // Why a file where the directory goes: connect fails with ENOTDIR, which proves nothing.
+    // ENOTDIR does not prove server absence.
     writeFileSync(join(home, 'app-server-control'), '')
     await expect(probeCodexSharedServer(home)).resolves.toBe('unknown')
   })

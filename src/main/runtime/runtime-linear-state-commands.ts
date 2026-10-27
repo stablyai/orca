@@ -1,9 +1,9 @@
 import {
   updateLinearIssueForAgent,
   LinearWriteFailure,
-  linearError,
   writeIssueRelation
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import type {
   LinearCurrentIssueContextHints,
   LinearIssueRelationWriteRequest,

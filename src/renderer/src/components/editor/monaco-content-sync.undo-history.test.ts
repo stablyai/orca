@@ -35,7 +35,7 @@ describe('Monaco external-content undo history', () => {
 
     syncContentUpdate(editorInstance, 'first line\nappended', 'read-only-live-tail')
 
-    expect(model.getValue()).toBe('first line\nappended')
+    expect(model.getValue()).toBe(['first line', 'appended'].join(model.getEOL()))
     expect(model.canUndo()).toBe(false)
   })
 

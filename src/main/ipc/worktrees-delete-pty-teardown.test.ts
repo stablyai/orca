@@ -4,17 +4,15 @@ import {
   assertWorktreeCleanForRemovalMock,
   removeWorktreeMock,
   getEffectiveHooksMock,
-  getEffectiveHooksFromConfigMock,
   runHookMock,
-  getSshGitProviderMock,
   deleteWorktreeHistoryDirMock,
   killAllProcessesForWorktreeMock,
-  clearProviderPtyStateMock,
-  getSshPtyProviderMock
+  clearProviderPtyStateMock
 } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
-import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -39,18 +37,8 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -96,16 +84,18 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
-// Why: every removal and listing reply now names the catalog it produced or scanned.
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
 
 describe('registerWorktreeHandlers', () => {
-  let runtimeStub: WorktreeRuntimeStub
-
   beforeEach(() => {
-    runtimeStub = setupWorktreeHandlers()
+    setupWorktreeHandlers()
   })
 
   it('coalesces concurrent deletes for the same worktree id', async () => {
@@ -145,7 +135,7 @@ describe('registerWorktreeHandlers', () => {
     ])
     expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(1)
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledTimes(1)
-    // One notice when the row starts showing as removing, one after it has left the table.
+    // Notices cover acceptance and completed removal.
     expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
     expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('worktrees:changed', {
       repoId: 'repo-1'
@@ -159,7 +149,7 @@ describe('registerWorktreeHandlers', () => {
     const started = new Promise<void>((resolve) => {
       removalStarted = resolve
     })
-    // Held in acceptance: once accepted, a repeat delete joins the background removal instead.
+    // Hold acceptance; later repeats would join the accepted background job.
     killAllProcessesForWorktreeMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -295,9 +285,7 @@ describe('registerWorktreeHandlers', () => {
     expect(callOrder).toEqual(['preflight', 'kill', 'git'])
   })
 
-  // Regression: `repoId::path` ids repeat across hosts, so an SSH delete used to reach the
-  // runtime's same-id local (or other-connection) terminals and stop them.
-  it('fences an SSH worktree delete PTY sweep to the owning connection', async () => {
+  it('refuses an SSH worktree delete this process does not serve, never deleting here', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -307,41 +295,18 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1',
       worktreeBaseRef: null
     }
-    const sshPtyProvider = { id: 'ssh-pty-provider' } as never
     store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
-    getSshGitProviderMock.mockReturnValue({
-      listWorktrees: vi.fn().mockResolvedValue([
-        { path: '/remote/repo', head: 'main', branch: 'main', isBare: false, isMainWorktree: true },
-        {
-          path: '/remote/feature-wt',
-          head: 'feature',
-          branch: 'feature',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]),
-      removeWorktree: vi.fn().mockResolvedValue({}),
-      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
-    })
-    getSshPtyProviderMock.mockReturnValue(sshPtyProvider)
-    getEffectiveHooksFromConfigMock.mockReturnValue(null)
 
-    await handlers['worktrees:remove'](null, { worktreeId: 'repo-ssh::/remote/feature-wt' })
+    await expect(
+      handlers['worktrees:remove'](null, { worktreeId: 'repo-ssh::/remote/feature-wt' })
+    ).rejects.toThrow(SshHostNotServedError)
 
-    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith('repo-ssh::/remote/feature-wt', {
-      runtime: runtimeStub,
-      resolvedWorktreeId: 'repo-ssh::/remote/feature-wt',
-      resolvedConnectionId: 'conn-1',
-      localProvider: sshPtyProvider,
-      onPtyStopped: clearProviderPtyStateMock,
-      requirePhysicalStop: true,
-      includeLocalRegistry: false
-    })
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
   })
 
-  // The local counterpart still identifies itself by exact id so a selector that resolves
-  // two hosts can no longer decide which workspace loses its terminals.
   it('pins a local worktree delete PTY sweep to the exact worktree id', async () => {
     mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
@@ -359,8 +324,6 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  // Why (#11960): the PTY gate previously had no escape hatch at all, so a
-  // workspace with an unprovable PTY was unremovable forever.
   it('forwards an explicit Force Delete to the PTY gate', async () => {
     mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
@@ -377,9 +340,7 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  // Why (#11960): the ordinary Delete confirmation already sets force:true to skip
-  // the dirty-file prompt. Waiving PTY-stop proof off that signal would silently
-  // disable the gate on the primary delete path.
+  // Ordinary confirmation sets force too; only allowUnverifiedPtyStop may waive physical-stop proof.
   it('keeps the PTY gate strict for a confirmed delete that only sets force', async () => {
     mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
@@ -424,5 +385,195 @@ describe('registerWorktreeHandlers', () => {
 
     expect(removeWorktreeMock).not.toHaveBeenCalled()
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+  function mockNestedWorktrees() {
+    const worktrees = mockKnownFeatureWorktree('/workspace/parent')
+    const parent = worktrees[1]
+    const child = {
+      ...parent,
+      path: '/workspace/parent/.tmp/child',
+      head: 'child',
+      branch: 'child'
+    }
+    const grandchild = {
+      ...child,
+      path: `${child.path}/grandchild`,
+      head: 'grandchild',
+      branch: 'grandchild'
+    }
+    let remaining = [...worktrees, child, grandchild]
+    listWorktreesMock.mockImplementation(async () => remaining)
+    removeWorktreeMock.mockImplementation(async (_repoPath: unknown, path: unknown) => {
+      remaining = remaining.filter((item) => item.path !== path)
+    })
+    return { parent, child, grandchild, approved: [grandchild, child, parent] }
+  }
+
+  it('previews registrations without stopping processes or running archive hooks', async () => {
+    const { approved } = mockNestedWorktrees()
+    expect(
+      await handlers['worktrees:previewNestedRemoval'](null, {
+        worktreeId: 'repo-1::/workspace/parent',
+        hostId: 'local'
+      })
+    ).toEqual(approved)
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(runHookMock).not.toHaveBeenCalled()
+  })
+
+  it('deletes hidden nested registrations deepest first through full cleanup, then the parent', async () => {
+    const { approved } = mockNestedWorktrees()
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/parent',
+      hostId: 'local',
+      force: true,
+      approvedNestedWorktrees: approved
+    })
+    expect(removeWorktreeMock.mock.calls.map((call) => call[1])).toEqual(
+      approved.map((item) => item.path)
+    )
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(3)
+    for (const item of approved) {
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: `repo-1::${item.path}`, hostId: 'local' })
+      )
+    }
+  })
+
+  it('rejects a changed approval before deleting anything', async () => {
+    const { approved } = mockNestedWorktrees()
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/parent',
+        hostId: 'local',
+        force: true,
+        approvedNestedWorktrees: approved.map((item) => ({ ...item, head: 'old-head' }))
+      })
+    ).rejects.toThrow(/changed/)
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('stops the batch after a child fails and keeps its ancestors', async () => {
+    const { approved } = mockNestedWorktrees()
+    removeWorktreeMock.mockRejectedValueOnce(new Error('permission denied'))
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/parent',
+        hostId: 'local',
+        force: true,
+        approvedNestedWorktrees: approved
+      })
+    ).rejects.toThrow(/Could not delete nested worktree.*permission denied/)
+    expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('does not treat nested deletion confirmation as a process-stop waiver', async () => {
+    const { approved } = mockNestedWorktrees()
+    killAllProcessesForWorktreeMock.mockRejectedValueOnce(new Error('cannot prove process stop'))
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/parent',
+        hostId: 'local',
+        force: true,
+        approvedNestedWorktrees: approved
+      })
+    ).rejects.toThrow(/cannot prove process stop/)
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+  it('waits for background checkout deletion before starting any ancestor', async () => {
+    const { approved } = mockNestedWorktrees()
+    let finish: () => void = () => {}
+    const remaining = [...approved]
+    listWorktreesMock.mockImplementation(async () => remaining)
+    let block = true
+    removeWorktreeMock.mockImplementation(async (_repo, path) => {
+      if (block) {
+        block = false
+        await new Promise<void>((resolve) => {
+          finish = resolve
+        })
+      }
+      const index = remaining.findIndex((item) => item.path === path)
+      remaining.splice(index, 1)
+    })
+    const reply = handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/parent',
+      hostId: 'local',
+      force: true,
+      approvedNestedWorktrees: approved
+    })
+    await vi.waitFor(() => expect(removeWorktreeMock).toHaveBeenCalledTimes(1))
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+    finish()
+    await reply
+    expect(removeWorktreeMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('refuses a locked child before deleting any sibling', async () => {
+    const { approved } = mockNestedWorktrees()
+    listWorktreesMock.mockResolvedValue(
+      approved.map((item, index) => (index === 1 ? { ...item, locked: true } : item))
+    )
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/parent',
+        hostId: 'local',
+        force: true,
+        approvedNestedWorktrees: approved
+      })
+    ).rejects.toThrow(/locked by Git/)
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('rechecks a child head after the archive hook before stopping its processes', async () => {
+    const { approved } = mockNestedWorktrees()
+    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'echo archive' } })
+    runHookMock.mockImplementation(async () => {
+      listWorktreesMock.mockResolvedValue(
+        approved.map((item, index) => (index === 0 ? { ...item, head: 'replacement-head' } : item))
+      )
+      return { success: true, output: '' }
+    })
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/parent',
+        hostId: 'local',
+        force: true,
+        approvedNestedWorktrees: approved
+      })
+    ).rejects.toThrow(/changed/)
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('reports branches kept by a nested deletion without forcing away their commits', async () => {
+    const { approved } = mockNestedWorktrees()
+    const remove = removeWorktreeMock.getMockImplementation()
+    if (!remove) {
+      throw new Error('Missing fixture removal')
+    }
+    removeWorktreeMock.mockImplementationOnce(async (...args) => {
+      await remove(...args)
+      return { preservedBranch: { branchName: 'grandchild', head: 'grandchild-head' } }
+    })
+    const result = await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/parent',
+      hostId: 'local',
+      force: true,
+      approvedNestedWorktrees: approved
+    })
+    expect(result).toMatchObject({
+      nestedPreservedBranches: [
+        {
+          worktreeId: `repo-1::${approved[0].path}`,
+          branchName: 'grandchild',
+          head: 'grandchild-head'
+        }
+      ]
+    })
   })
 })

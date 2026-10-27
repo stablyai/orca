@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES,
   expectsBrowserClientHosting,
   runtimeAdvertisesBrowserClientHosting
 } from './browser-client-hosting-eligibility'
+
+const CLIENT_HOST_CAPABILITIES = [
+  'browser.clientHost.v1',
+  'browser.clientHost.pageMetadata.v1',
+  'browser.clientHost.automation.v1',
+  'network.browserTunnel.v1',
+  'network.browserTunnel.executionHosts.v1'
+]
 
 const ELIGIBLE = {
   enabled: true,
   preference: 'auto' as const,
   deviceScope: 'desktop',
-  capabilities: [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES, 'browser.screencast.v1']
+  capabilities: [...CLIENT_HOST_CAPABILITIES, 'browser.screencast.v1']
 }
 
 describe('expectsBrowserClientHosting', () => {
@@ -30,9 +37,7 @@ describe('expectsBrowserClientHosting', () => {
     expect(expectsBrowserClientHosting({ ...ELIGIBLE, ...input })).toBe(false)
   })
 
-  // Why each capability gets its own case: the set is the contract between this client's guest
-  // renderer and the runtime, and dropping any one of them leaves a host that cannot serve it.
-  it.each(BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES)('refuses without %s', (missing) => {
+  it.each(CLIENT_HOST_CAPABILITIES)('refuses without %s', (missing) => {
     const capabilities = ELIGIBLE.capabilities.filter((capability) => capability !== missing)
 
     expect(runtimeAdvertisesBrowserClientHosting(capabilities)).toBe(false)

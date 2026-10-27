@@ -31,9 +31,11 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: () => 'ssh-a',
   isWorktreeConnectionResolved: () => true
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: (_settings: unknown, connectionId: string | undefined) =>
-    connectionId ?? 'local',
+    connectionId ?? 'local'
+}))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
 
@@ -146,6 +148,43 @@ describe('editor file loads while the SSH host connects', () => {
     setHost('unavailable')
     await act(async () => load?.(file.filePath, file.id, file.worktreeId, file.relativePath))
     expect(fileContents[file.id]?.loadError).toBe(SSH_PROVIDER_UNAVAILABLE)
+  })
+
+  it('reads a read-only link to this computer here, never through the workspace SSH host', async () => {
+    setHost('connecting')
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'notes', isBinary: false })
+    const clientTab: OpenFile = {
+      ...file,
+      id: 'tab-client',
+      filePath: '/Users/me/notes.md',
+      relativePath: '/Users/me/notes.md',
+      runtimeEnvironmentId: null,
+      readOnly: true
+    }
+    let load: EditorPanelFileContentLoader | null = null
+    function LoaderHarness(): null {
+      load = useEditorPanelFileContentLoader({
+        fileLoadRetryAttemptsRef: { current: {} },
+        fileReadGenerationCounterRef: { current: 0 },
+        fileReadGenerationRef: { current: {} },
+        openFilesRef: { current: [clientTab] },
+        outstandingFileReadsRef: { current: {} },
+        setFileContents: () => {}
+      })
+      return null
+    }
+    act(() => root.render(<LoaderHarness />))
+    await act(async () =>
+      load?.(clientTab.filePath, clientTab.id, clientTab.worktreeId, clientTab.relativePath)
+    )
+
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/Users/me/notes.md',
+        connectionId: undefined,
+        access: { kind: 'user-file' }
+      })
+    )
   })
 
   it('spends no retry budget while connecting, then reloads exactly once when the host connects', () => {

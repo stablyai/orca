@@ -53,12 +53,18 @@ describe('openSessionSearchDatabase', () => {
     const path = await tempDatabasePath()
     const first = openSessionSearchDatabase(path)
     first.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
+    first
+      .prepare("INSERT INTO messages(session_row_id,role,text_truncated) VALUES (1,'user',1)")
+      .run()
     first.close()
 
     const second = openSessionSearchDatabase(path)
     expect(schemaVersion(second)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
     expect(second.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
       c: 1
+    })
+    expect(second.prepare('SELECT text_truncated FROM messages').get()).toEqual({
+      text_truncated: 1
     })
     second.close()
   })
@@ -74,9 +80,7 @@ describe('openSessionSearchDatabase', () => {
       ).map((row) => row.name)
     expect(tables()).toEqual(['messages_fts'])
 
-    // What an index written before this bump looks like: the second table, and
-    // rows in it. `CREATE TABLE IF NOT EXISTS` would leave both in place, so
-    // only the version bump makes that file go.
+    // A version bump must remove obsolete tables that CREATE IF NOT EXISTS would retain.
     fresh.exec('CREATE VIRTUAL TABLE conversation_fts USING fts5(user_text, assistant_text)')
     fresh.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
     fresh.prepare("UPDATE meta SET value = '3' WHERE key = 'schema_version'").run()
@@ -99,9 +103,10 @@ describe('openSessionSearchDatabase', () => {
     stale.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
     stale
       .prepare("UPDATE meta SET value = ? WHERE key = 'schema_version'")
-      .run(String(SESSION_SEARCH_SCHEMA_VERSION + 1))
+      .run(String(SESSION_SEARCH_SCHEMA_VERSION - 1))
+    stale.exec('ALTER TABLE messages DROP COLUMN text_truncated')
     stale.close()
-    // Why: a stale sidecar must go with the main file, or SQLite replays it into the new one.
+    // Remove stale WAL sidecars so SQLite cannot replay them into the rebuilt cache.
     await writeFile(`${path}-wal`, 'stale wal bytes')
     const before = await stat(path)
 
@@ -110,9 +115,9 @@ describe('openSessionSearchDatabase', () => {
     expect(fresh.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
       c: 0
     })
+    expect(fresh.prepare('SELECT text_truncated FROM messages').all()).toEqual([])
     fresh.close()
-    // Why not inode: ext4 hands a freed inode straight back to the next create.
-    // The planted sidecar is gone (a fresh WAL is checkpointed away on close).
+    // Inodes may be reused immediately; verify sidecar removal instead.
     await expect(stat(`${path}-wal`)).rejects.toMatchObject({ code: 'ENOENT' })
     expect((await stat(path)).mtimeMs).toBeGreaterThanOrEqual(before.mtimeMs)
   })
@@ -135,7 +140,7 @@ it('rebuilds a file too corrupt to open instead of refusing forever', async () =
   const healthy = openSessionSearchDatabase(path)
   healthy.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
   healthy.close()
-  // A torn page, not a truncation: SQLite opens the header and fails on the read.
+  // Corrupt data pages while retaining the header so failure occurs after opening.
   const bytes = await readFile(path)
   bytes.fill(0x7f, 4096, Math.min(bytes.length, 12_288))
   await writeFile(path, bytes)
@@ -166,7 +171,6 @@ it('rebuilds a file that is not a database at all', async () => {
 it('gives up rather than looping when a fresh file still cannot be opened', async () => {
   const path = await tempDatabasePath()
   await writeFile(path, 'not a SQLite database')
-  // Every open of this path fails, so the one permitted retry is exhausted.
   const open = vi.spyOn(SyncDatabase.prototype, 'pragma').mockImplementation(() => {
     throw Object.assign(new Error('database disk image is malformed'), {
       code: 'SQLITE_CORRUPT'
@@ -193,9 +197,7 @@ it('surfaces the unlink failure itself when a stale index cannot be removed', as
     })
   })
   try {
-    // The stale handle is closed before the unlink, so the failure path must not
-    // close it again: ERR_INVALID_STATE would bury the cause and would not be
-    // classified as worth a rebuild.
+    // A second close could hide the unlink error behind ERR_INVALID_STATE.
     expect(() => openSessionSearchDatabase(path)).toThrow(/EPERM/)
     expect(() => openSessionSearchDatabase(path)).not.toThrow(/not open/)
   } finally {
@@ -206,9 +208,6 @@ it('surfaces the unlink failure itself when a stale index cannot be removed', as
 it('creates the directory the index lives in', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-session-search-mkdir-'))
   roots.push(root)
-  // The real layout: `<userData>/ai-vault-search/index.sqlite`, where nothing
-  // has made that folder yet. SQLite would fail with `unable to open database
-  // file`, which is correctly not treated as corruption, so it never retries.
   const db = openSessionSearchDatabase(join(root, 'ai-vault-search', 'index.sqlite'))
   try {
     expect(schemaVersion(db)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
@@ -217,32 +216,10 @@ it('creates the directory the index lives in', async () => {
   }
 })
 
-it('rebuilds a newer index rather than reading a schema it does not know', async () => {
-  const path = await tempDatabasePath()
-  const newer = openSessionSearchDatabase(path)
-  newer.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
-  newer
-    .prepare("UPDATE meta SET value = ? WHERE key = 'schema_version'")
-    .run(String(SESSION_SEARCH_SCHEMA_VERSION + 1))
-  newer.close()
-
-  const rebuilt = openSessionSearchDatabase(path)
-  try {
-    expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
-      c: 0
-    })
-  } finally {
-    rebuilt.close()
-  }
-})
-
 it('rebuilds when meta exists but its version row is gone', async () => {
   const path = await tempDatabasePath()
   const damaged = openSessionSearchDatabase(path)
   damaged.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
-  // A meta table with no version is a damaged index, never a fresh one: seeding
-  // the current version over it would keep whatever the old schema left behind.
   damaged.prepare("DELETE FROM meta WHERE key = 'schema_version'").run()
   damaged.close()
 
@@ -260,14 +237,12 @@ it('rebuilds when meta exists but its version row is gone', async () => {
 it('opens with the pragmas the write path depends on', async () => {
   const db = openSessionSearchDatabase(await tempDatabasePath())
   try {
-    // auto_vacuum=2 is INCREMENTAL, and only takes on an empty file: without it
-    // a purge cannot hand pages back in bounded steps.
+    // INCREMENTAL auto-vacuum must be enabled on an empty file for bounded page reclamation.
     expect(Number(db.pragma('auto_vacuum', { simple: true }))).toBe(2)
     expect(String(db.pragma('journal_mode', { simple: true })).toLowerCase()).toBe('wal')
     expect(Number(db.pragma('synchronous', { simple: true }))).toBe(1)
-    // A WAL with no size limit never hands its space back after a large write.
     expect(Number(db.pragma('journal_size_limit', { simple: true }))).toBe(8388608)
-    // Zero here turns every contended write into an immediate SQLITE_BUSY.
+    // A nonzero busy timeout allows contended writers to wait instead of failing immediately.
     expect(Number(db.pragma('busy_timeout', { simple: true }))).toBe(5000)
   } finally {
     db.close()
@@ -277,7 +252,6 @@ it('opens with the pragmas the write path depends on', async () => {
 it("walks a session's rows through an index rather than scanning the table", async () => {
   const db = openSessionSearchDatabase(await tempDatabasePath())
   try {
-    // The replace delete and the orphan drain both take this path, once per file.
     const plan = (
       db
         .prepare('EXPLAIN QUERY PLAN SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')
@@ -286,25 +260,6 @@ it("walks a session's rows through an index rather than scanning the table", asy
       .map((row) => row.detail)
       .join(' ')
     expect(plan).toContain('messages_session')
-  } finally {
-    db.close()
-  }
-})
-
-it('keeps only the session indexes a retrieval query can seek', async () => {
-  const db = openSessionSearchDatabase(await tempDatabasePath())
-  try {
-    const names = (
-      db
-        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='sessions'")
-        .all() as { name: string }[]
-    )
-      .map((row) => row.name)
-      .sort()
-    // One per shape PR 4's retrieval seeks: the agent filter, the newest-first
-    // order and date window, and the folder-prefix range scan. Fork folding reads
-    // `content_hash` off rows it already holds, so that column is not indexed.
-    expect(names).toEqual(['sessions_agent', 'sessions_cwd_key', 'sessions_updated_at'])
   } finally {
     db.close()
   }

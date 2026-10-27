@@ -1,5 +1,9 @@
 import type { CliInstallState, CliInstallStatus } from '../../shared/cli-install-types'
 import { listWslDistrosAsync } from '../wsl'
+import {
+  deferUntilWslDistroRunning,
+  listConfirmedRunningWslDistros
+} from '../wsl-background-distro-gate'
 import { CliInstaller } from './cli-installer'
 import {
   getWslCliRegistrationCandidates,
@@ -9,9 +13,9 @@ import {
 import { WslCliInstaller } from './wsl-cli-installer'
 import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration-operation'
 
-// Why: candidate distros can each boot a stopped WSL VM; a small cap staggers
-// those boots instead of spiking RAM/CPU for every distro at once at startup.
+// Why: each repair spawns a guest shell; a small cap bounds the startup fan-out.
 const MAX_CONCURRENT_DISTRO_REPAIRS = 2
+const DEFERRED_RECONCILIATION_KEY = 'wsl-cli-registration-reconciliation'
 
 type ManagedWslCliInstaller = {
   repairManagedRegistration: () => Promise<{
@@ -43,6 +47,8 @@ type WslCliRegistrationReconciliationOptions = {
   createInstaller?: (distro: string) => ManagedWslCliInstaller
   getHostLauncherTarget?: () => Promise<string | null>
   registry?: WslCliRegistrationRegistry
+  listRunningDistros?: () => Promise<string[]>
+  deferUntilRunning?: (distro: string, key: string, task: () => unknown) => void
 }
 
 export type WslCliRegistrationReconciliationResult =
@@ -56,6 +62,10 @@ export type WslCliRegistrationReconciliationResult =
       distro: string
       outcome: 'failed'
       error: string
+    }
+  | {
+      distro: string
+      outcome: 'deferred'
     }
 
 export async function reconcileManagedWslCliRegistrations(
@@ -80,9 +90,7 @@ export async function reconcileManagedWslCliRegistrations(
   if (!createInstaller) {
     const hostInstaller = new CliInstaller()
     let hostStatus: Promise<CliInstallStatus> | null = null
-    // Why: every distro must target this app install; share one Windows PATH /
-    // launcher probe instead of spawning a PowerShell probe per distro. A
-    // rejected probe is evicted so one transient failure cannot poison the run.
+    // Share this install's host probe across distros; evict failures so later repairs can retry.
     const getHostStatus = (): Promise<CliInstallStatus> =>
       (hostStatus ??= hostInstaller.getStatus().catch((error) => {
         hostStatus = null
@@ -101,9 +109,32 @@ export async function reconcileManagedWslCliRegistrations(
     ? await getHostLauncherTarget().catch(() => null)
     : null
   const appVersion = options.appVersion ?? ''
-  const distros = await registry.getCandidates(availableDistros, { currentTarget, appVersion })
-  if (distros.length === 0) {
+  const candidates = await registry.getCandidates(availableDistros, { currentTarget, appVersion })
+  if (candidates.length === 0) {
     return []
+  }
+  // Never boot stopped distros for background repair; defer until they run.
+  const running = new Set(
+    (await (options.listRunningDistros ?? listConfirmedRunningWslDistros)()).map((distro) =>
+      distro.toLowerCase()
+    )
+  )
+  const distros = candidates.filter((distro) => running.has(distro.toLowerCase()))
+  const deferUntilRunning = options.deferUntilRunning ?? deferUntilWslDistroRunning
+  const deferred: WslCliRegistrationReconciliationResult[] = []
+  for (const distro of candidates) {
+    if (running.has(distro.toLowerCase())) {
+      continue
+    }
+    deferred.push({ distro, outcome: 'deferred' })
+    deferUntilRunning(distro, DEFERRED_RECONCILIATION_KEY, () =>
+      reconcileManagedWslCliRegistrations({ ...options, listDistros: async () => [distro] }).then(
+        logWslCliReconciliationResults
+      )
+    )
+  }
+  if (distros.length === 0) {
+    return deferred
   }
 
   const reconcileDistro = async (
@@ -127,8 +158,7 @@ export async function reconcileManagedWslCliRegistrations(
     }
     const observation: WslCliRegistrationObservation =
       repair.status.state === 'unsupported'
-        ? // Why: managed-ness is unknowable without interop; stamp the
-          // inspection (negative TTL) without changing registration ownership.
+        ? // Without interop, record the inspection TTL but preserve unknown ownership.
           { distro, inspected: true, managed: null, reconciled: null }
         : repair.managed
           ? {
@@ -139,12 +169,10 @@ export async function reconcileManagedWslCliRegistrations(
             }
           : { distro, inspected: true, managed: false, reconciled: null }
     try {
-      // Why: ownership metadata must commit before a concurrent Settings
-      // operation can mutate this distro, or stale startup state can win.
+      // Commit ownership while holding the distro queue so Settings cannot race stale startup state.
       await registry.recordObservations([observation])
     } catch (error) {
-      // Why: the repair already succeeded on disk; an advisory bookkeeping
-      // failure must not reclassify it, mirroring the Settings IPC contract.
+      // Advisory bookkeeping failure must not reclassify a completed on-disk repair.
       console.warn(
         `[wsl-cli] Failed to record ${distro} registration observation:`,
         error instanceof Error ? error.message : String(error)
@@ -171,5 +199,19 @@ export async function reconcileManagedWslCliRegistrations(
       }
     })
   )
-  return results
+  return [...results, ...deferred]
+}
+
+export function logWslCliReconciliationResults(
+  results: readonly WslCliRegistrationReconciliationResult[]
+): void {
+  for (const result of results) {
+    if (result.outcome === 'failed') {
+      console.warn(
+        `[wsl-cli] ${result.distro} managed registration reconciliation failed: ${result.error}`
+      )
+    } else if (result.outcome === 'repaired') {
+      console.log(`[wsl-cli] Repaired managed registration in ${result.distro}.`)
+    }
+  }
 }

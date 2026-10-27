@@ -1,7 +1,4 @@
-// The context window a structured session reads from its own journal's turn
-// rows. Facts are written only to the open or newest turn and each write
-// replaces its namesake, so the newest row carrying a part holds its current
-// value. Nothing is held outside the journal, so a restart replays the same answer.
+// Turn rows persist context facts across restart; writes target open/newest turns and replace their namesake, so newest facts win.
 
 import {
   contextTokensFromUsage,
@@ -12,6 +9,10 @@ import {
 } from './agent-session-context-usage'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import {
+  isAgentSessionContextClear,
+  latestAgentSessionContextClearSequence
+} from './agent-session-context-clear'
 
 export type StructuredAgentContextUsage = {
   usedTokens: number
@@ -26,13 +27,26 @@ export type StructuredAgentContextUsage = {
 
 type ContextFactSource = Pick<AgentJournalRenderItem, 'sequence' | 'body'>
 
-/** The newest of each part these rows carry, in any order; a part none of them carries is absent. */
+/** Resolve each newest fact independently in any iteration order; missing parts stay absent. */
 export function latestStructuredAgentContextFacts(
-  items: Iterable<ContextFactSource>
+  items: Iterable<ContextFactSource>,
+  minimumSequence = 0
 ): AgentSessionContextUsage {
   let used: { sequence: number; fact: AgentSessionContextUsed } | null = null
   let window: { sequence: number; fact: AgentSessionContextWindow } | null = null
   for (const item of items) {
+    if (isAgentSessionContextClear(item.body) && item.sequence > minimumSequence) {
+      minimumSequence = item.sequence
+      if (used && used.sequence <= minimumSequence) {
+        used = null
+      }
+      if (window && window.sequence <= minimumSequence) {
+        window = null
+      }
+    }
+    if (item.sequence <= minimumSequence) {
+      continue
+    }
     const facts = readAgentJournalTurn(item.body)?.contextUsage
     if (facts?.used && (used === null || item.sequence >= used.sequence)) {
       used = { sequence: item.sequence, fact: facts.used }
@@ -44,18 +58,19 @@ export function latestStructuredAgentContextFacts(
   return { ...(used ? { used: used.fact } : {}), ...(window ? { window: window.fact } : {}) }
 }
 
-/**
- * The ring's reading of the loaded rows, with `wholeJournal` (the host's answer
- * over every row) filling any part they lack. The loaded window reaches the live
- * head, so a part found in it is newer than the host's; the host's covers only
- * rows older than the window.
- */
+/** Loaded rows reach the live head and outrank wholeJournal; use the host answer only for missing parts from older rows. */
 export function selectStructuredAgentContextUsage(
   items: readonly AgentJournalRenderItem[],
-  wholeJournal?: AgentSessionContextUsage
+  wholeJournal?: AgentSessionContextUsage,
+  minimumSequence = 0
 ): StructuredAgentContextUsage | null {
-  const loaded = latestStructuredAgentContextFacts(items)
-  return summarizeStructuredAgentContextFacts({ ...wholeJournal, ...loaded })
+  const clearedSequence = latestAgentSessionContextClearSequence(items)
+  const loaded = latestStructuredAgentContextFacts(
+    items,
+    Math.max(minimumSequence, clearedSequence)
+  )
+  const fallback = clearedSequence > minimumSequence ? undefined : wholeJournal
+  return summarizeStructuredAgentContextFacts({ ...fallback, ...loaded })
 }
 
 function summarizeStructuredAgentContextFacts({

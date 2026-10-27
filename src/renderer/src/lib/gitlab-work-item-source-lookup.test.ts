@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import {
-  listGitLabMRsForSource,
+  listGitLabWorkItemsForSource,
   lookupGitLabWorkItemByPathForSource
 } from './gitlab-work-item-source-lookup'
-import type { GitLabWorkItem, ListMergeRequestsResult } from '../../../shared/gitlab-types'
+import type { GitLabPagedResult, GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
@@ -47,7 +47,7 @@ describe('GitLab source lookup routing', () => {
       api: {
         gl: {
           workItemByPath: vi.fn(),
-          listMRs: vi.fn()
+          listWorkItems: vi.fn()
         }
       }
     })
@@ -71,78 +71,90 @@ describe('GitLab source lookup routing', () => {
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'gitlab.workItemByPath',
-      { repo: 'runtime-repo', host: 'gitlab.com', path: 'acme/app', iid: 7, type: 'mr' },
+      expect.objectContaining({
+        repo: 'id:runtime-repo',
+        host: 'gitlab.com',
+        path: 'acme/app',
+        iid: 7,
+        type: 'mr'
+      }),
       { timeoutMs: 30_000 }
     )
     expect(window.api.gl.workItemByPath).not.toHaveBeenCalled()
   })
 
-  it('routes runtime-owned GitLab MR lists through runtime RPC', async () => {
-    const result: ListMergeRequestsResult = {
+  it('routes runtime-owned GitLab work item lists through runtime RPC', async () => {
+    const result: GitLabPagedResult<GitLabWorkItem> = {
       items: [gitlabItem({ repoId: 'runtime-returned' })],
-      page: 1,
-      perPage: 12,
-      totalCount: 1,
-      totalPages: 1
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
     }
     vi.mocked(callRuntimeRpc).mockResolvedValue(result)
 
     await expect(
-      listGitLabMRsForSource({
+      listGitLabWorkItemsForSource({
         repoPath: '/workspace/app',
         repoId: 'renderer-repo',
         sourceContext: runtimeSourceContext,
         state: 'opened',
-        page: 1,
-        perPage: 12,
+        page: 3,
+        perPage: 1,
         query: 'fix login'
       })
-    ).resolves.toMatchObject({ items: [{ repoId: 'renderer-repo', number: 7 }] })
+    ).resolves.toEqual({ ...result, items: [gitlabItem({ repoId: 'renderer-repo' })] })
 
-    // Why (#6263): the typed query must reach the runtime RPC so GitLab search
-    // actually filters; previously the field was never threaded through.
+    // Forward the query through runtime RPC or GitLab search would return unfiltered results (#6263).
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
-      'gitlab.listMRs',
-      { repo: 'runtime-repo', state: 'opened', page: 1, perPage: 12, query: 'fix login' },
+      'gitlab.listWorkItems',
+      expect.objectContaining({
+        repo: 'id:runtime-repo',
+        state: 'opened',
+        page: 3,
+        perPage: 1,
+        query: 'fix login'
+      }),
       { timeoutMs: 30_000 }
     )
-    expect(window.api.gl.listMRs).not.toHaveBeenCalled()
+    expect(window.api.gl.listWorkItems).not.toHaveBeenCalled()
   })
 
-  it('forwards the search query to local GitLab MR lists over Electron IPC', async () => {
+  it('forwards the search query to local GitLab work item lists over Electron IPC', async () => {
     const localSourceContext: TaskSourceContext = {
       ...runtimeSourceContext,
       hostId: 'local',
       repoId: 'local-repo'
     }
-    vi.mocked(window.api.gl.listMRs).mockResolvedValue({
+    const result = {
       items: [gitlabItem({ repoId: 'local-returned' })],
-      page: 1,
-      perPage: 12,
-      totalCount: 1,
-      totalPages: 1
-    })
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
+    }
+    vi.mocked(window.api.gl.listWorkItems).mockResolvedValue(result)
 
     await expect(
-      listGitLabMRsForSource({
+      listGitLabWorkItemsForSource({
         repoPath: '/workspace/app',
         repoId: 'local-repo',
         sourceContext: localSourceContext,
         state: 'opened',
-        page: 1,
-        perPage: 12,
+        page: 3,
+        perPage: 1,
         query: 'fix login'
       })
-    ).resolves.toMatchObject({ items: [{ repoId: 'local-repo', number: 7 }] })
+    ).resolves.toEqual({ ...result, items: [gitlabItem({ repoId: 'local-repo' })] })
 
-    expect(window.api.gl.listMRs).toHaveBeenCalledWith({
+    expect(window.api.gl.listWorkItems).toHaveBeenCalledWith({
       repoPath: '/workspace/app',
       repoId: 'local-repo',
       sourceContext: localSourceContext,
       state: 'opened',
-      page: 1,
-      perPage: 12,
+      page: 3,
+      perPage: 1,
       query: 'fix login'
     })
     expect(callRuntimeRpc).not.toHaveBeenCalled()

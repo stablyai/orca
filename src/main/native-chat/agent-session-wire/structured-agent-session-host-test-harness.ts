@@ -30,6 +30,9 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -81,17 +84,23 @@ function accepted(): AgentSessionDispatchOutcome {
 }
 
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    acquire,
-    releaseAcquisition,
-    dispatch: async (input) => {
-      await input.beforeDispatch?.()
-      return dispatch(input)
+  return startsWhenPublished(
+    {
+      acquire,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
+      releaseAcquisition,
+      dispatch: async (input) => {
+        await input.beforeDispatch?.()
+        return dispatch(input)
+      },
+      cancelTurn,
+      answerPrompt,
+      setOption
     },
-    cancelTurn,
-    answerPrompt,
-    setOption
-  }
+    () => host
+  )
 }
 
 async function attach(): Promise<AgentSessionRecord | null> {
@@ -100,7 +109,6 @@ async function attach(): Promise<AgentSessionRecord | null> {
   return store.getRecord(SESSION)
 }
 
-/** Emits a pending approval through the acquired provider sink. */
 async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
   const events = acquire.mock.calls.at(-1)?.[0].events
@@ -133,6 +141,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   ordinal = 0
   acquire = vi.fn(async ({ fence }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: {
       hostId: 'local',
       pid: 4242,
@@ -141,7 +150,7 @@ beforeEach(async () => {
     },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
       observedAt: NOW
@@ -156,6 +165,7 @@ beforeEach(async () => {
   recoveryCapsule = new TrackedTestRecoveryCapsule(root)
   log = recordingProductionStructuredAgentSessionLogger()
   host = new StructuredAgentSessionHost({
+    agents: claudeAndCodexDeclared(),
     logger: log.logger,
     store,
     adapter: adapter(),
@@ -170,18 +180,17 @@ beforeEach(async () => {
 afterEach(async () => {
   await host.flushAllStreamedEvents()
   await journals.closeAll()
-  // A host a test replaced can still hold the capsule's lock directory under `root`.
+  // Replaced hosts may still hold recovery-capsule locks under root.
   await recoveryCapsule.settled()
   await rm(root, { recursive: true, force: true })
 })
 
-/** Waits out every recovery-capsule operation a host of this test started, replaced ones too. */
+/** Drain recovery work from current and replaced hosts. */
 function hostTestRecoveryCapsuleSettled(): Promise<void> {
   return recoveryCapsule.settled()
 }
 
-/** A restarted process swaps the store and the host under the same directories.
- *  The helpers here close over both, so they have to be told. */
+/** Update helper closures after restarting the host/store over the same directories. */
 export function replaceHostTestState(next: {
   store: AgentSessionRecordStore
   host: StructuredAgentSessionHost
@@ -190,21 +199,17 @@ export function replaceHostTestState(next: {
   host = next.host
 }
 
-/** Serves `records` as the session's child records through the status sink, as the host's store
- *  does. Call before `attach`: only the attach's publish carries the address a row lands under. */
+/** Install before attach, whose publication supplies the child-work row address. */
 export function serveHostTestChildWork(records: () => AgentChildWorkView[]): void {
   host.deps.statusSink = { publish: () => {}, forget: () => {}, readChildWork: records }
 }
 
-/** The live per-test state. Read it in a `beforeEach` so a suite's test bodies
- *  keep using bare `host` / `store` / `dispatch` exactly as they did when this
- *  setup was inline. */
 export function hostTestState() {
   return {
     root,
     store,
     host,
-    /** Every entry the beforeEach host logged; a host a test builds itself logs elsewhere. */
+    /** Logs from the beforeEach host only. */
     log,
     acquire,
     releaseAcquisition,

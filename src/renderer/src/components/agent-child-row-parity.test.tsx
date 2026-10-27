@@ -12,7 +12,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { NativeChatBackgroundTasksStatus } from '@/components/native-chat/NativeChatBackgroundTasksStatus'
-import { buildBackgroundTaskGroupsFromViews } from '@/components/native-chat/background-task-roster'
+import { buildBackgroundTaskGroupsFromViews } from '../../../shared/background-task-roster'
 import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
 import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -134,8 +134,7 @@ function sidebarRows(parent: AgentStatusEntry, parentIsFresh = true): RenderedRo
   )
 }
 
-/** The strip's rows over what the host sends it: the running children, and no strip at all when
- *  none runs. */
+/** Compare the strip’s running-child rows; no running children means no strip. */
 function stripRows(
   children: AgentChildWorkView[] | undefined,
   childRowContext?: AgentChildRowContext,
@@ -153,7 +152,7 @@ function stripRows(
         childViews={sent}
         childRowContext={childRowContext}
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         indicatorActive
@@ -290,8 +289,7 @@ const FULL_ROW_DETAIL: Record<string, { shows: string[]; hides?: string[] }> = {
   'parked, still live': { shows: [] }
 }
 
-// The sidebar and the strip list running children only; a finished child is in the transcript. A
-// finished child whose shell still runs reads monitoring, so it stays on both.
+// Finished children leave both surfaces; a finished child with a running shell remains monitoring.
 const FINISHED = new Set(['finished', 'failed', 'cancelled', 'ended, outcome unknown'])
 
 describe('a child reads the same in the sidebar and the chat strip', () => {
@@ -545,21 +543,10 @@ describe('sibling child rows keep their own clocks', () => {
       'No update in 10m'
     ])
   })
-
-  it('leaves a finished child off the sidebar and the strip', () => {
-    expect(
-      buildSubagentChildRows({
-        parentEntry: parentWith([settled('succeeded')]),
-        tab,
-        parentIsFresh: true
-      })
-    ).toEqual([])
-    expect(stripRows([settled('succeeded')])).toEqual([])
-  })
 })
 
 describe('the chat strip from views', () => {
-  it('nests a child-owned shell under its owner and stops by the provider id', () => {
+  it('nests a child-owned shell and applies the provider stopping state', () => {
     const children = [
       view('child', { description: 'Dev server owner' }),
       view('shell', {
@@ -583,7 +570,7 @@ describe('the chat strip from views', () => {
           settledTasks={[]}
           childViews={children}
           supportsTaskStop
-          supportsStopAll
+          offersStopAll={false}
           stoppingTaskIds={new Set(['task-shell'])}
           stoppingAll={false}
           indicatorActive

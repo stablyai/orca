@@ -10,8 +10,7 @@ function streamUrlFromServeSimUrl(url: string): string {
   return url.endsWith(MJPEG_STREAM_SUFFIX) ? url : `${url.replace(/\/$/, '')}${MJPEG_STREAM_SUFFIX}`
 }
 
-// Derive the helper /ax endpoint by swapping the mjpeg stream suffix. Guarded to
-// that suffix so a non-mjpeg stream URL never fabricates a bogus /ax endpoint.
+// Derive /ax only from MJPEG URLs to avoid fabricating endpoints for other stream types.
 export function deriveAxUrlFromStreamUrl(streamUrl: string | undefined): string | undefined {
   if (!streamUrl || !streamUrl.endsWith(MJPEG_STREAM_SUFFIX)) {
     return undefined

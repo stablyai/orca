@@ -2,7 +2,9 @@ import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/pr-refresh-state'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
-import { getRuntimeGitStatus, getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   hasChecksPanelGitStatusBranchChanged,
   readChecksPanelRefreshGitIdentitySnapshot,
@@ -39,7 +41,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     linkedGiteaPR,
     linkedGitLabMR,
     linkedPR,
-    ownerSettings,
+    ownerCopyHostId,
+    ownerTarget,
     panelContextKey,
     panelContextKeyRef,
     pollIntervalRef,
@@ -66,7 +69,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     if (refreshInFlightRef.current) {
       return
     }
-    // Why: button isn't disabled until next render; guard a rapid double-click from starting duplicate git subprocesses.
+    // Latch before render disables the button so double-clicks cannot duplicate Git subprocesses.
     refreshInFlightRef.current = true
     const initialRequestKey = checksPanelAsyncResultKey(
       prCacheKey,
@@ -95,36 +98,41 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null
     })
     try {
-      if (activeWorktreeId && activeWorktreePath && !isFolder) {
+      if (activeWorktreeId && activeWorktreePath && !isFolder && ownerTarget) {
+        // Why one resolution: a same-path twin must not get this copy's transport, SSH target or answer.
+        const copy = resolveWorktreeGitCopyNow(activeWorktreeId, ownerCopyHostId)
+        const ownerHostId = copy?.hostId ?? null
         const snapshotIdentity = readChecksPanelRefreshGitIdentitySnapshot({
           snapshot: gitStatusSnapshot,
           contextKey: panelContextKey,
           currentBranch: branch
         })
         if (snapshotIdentity.kind === 'changed') {
-          updateWorktreeGitIdentity(activeWorktreeId, {
-            head: snapshotIdentity.head,
-            branch: snapshotIdentity.branch
-          })
-          // Why: this click discovered a terminal branch switch; let branch-keyed render/effects restart instead of refreshing old PR data.
+          updateWorktreeGitIdentity(
+            activeWorktreeId,
+            { head: snapshotIdentity.head, branch: snapshotIdentity.branch },
+            ownerHostId
+          )
+          // A discovered terminal branch switch must restart branch-keyed effects rather than refresh old PR data.
           refreshOutcome = 'branch-changed'
           return
         }
         try {
           const statusContext = {
-            settings: ownerSettings,
+            target: copy?.transport ?? ownerTarget,
             worktreeId: activeWorktreeId,
             worktreePath: activeWorktreePath,
-            connectionId: activeConnectionId ?? undefined
+            connectionId: copy ? copy.connectionId : (activeConnectionId ?? undefined)
           }
           const status = await getRuntimeGitStatus(statusContext, {
             admissionTier: 'interactive'
           })
           const observedBranch = status.branch ?? (status.head ? null : undefined)
-          updateWorktreeGitIdentity(activeWorktreeId, {
-            head: status.head,
-            branch: observedBranch
-          })
+          updateWorktreeGitIdentity(
+            activeWorktreeId,
+            { head: status.head, branch: observedBranch },
+            ownerHostId
+          )
           if (
             observedBranch !== undefined &&
             hasChecksPanelGitStatusBranchChanged({
@@ -132,7 +140,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
               currentBranch: branch
             })
           ) {
-            // Why: this click discovered a terminal branch switch; let branch-keyed render/effects restart instead of refreshing old PR data.
+            // A discovered terminal branch switch must restart branch-keyed effects rather than refresh old PR data.
             refreshOutcome = 'branch-changed'
             return
           }
@@ -154,7 +162,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
             isCurrentRequest() &&
             shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, panelContextKey)
           ) {
-            // Why: the Refresh click already paid for this status read; commit it so empty-state Publish/Create eligibility is fresh.
+            // Reuse this click's status read to refresh Publish/Create eligibility.
             setGitStatusSnapshot({
               contextKey: panelContextKey,
               hasUncommittedChanges: status.entries.length > 0,
@@ -253,9 +261,9 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         if (!isCurrentAsyncResult(initialRequestKey) && !isCurrentRequest()) {
           return
         }
-        // Why: a forced refresh can find the PR number before React repaints from prCache; mark this refresh's checks current.
+        // Forced refresh may discover the number before React repaints; mark these checks current now.
         asyncResultKeyRef.current = prRequestKey
-        // Why: pass the refreshed headSha directly; fetchChecks's closure captured a stale one (force-pushes, PR-number changes).
+        // Pass fresh headSha directly; the closure predates force-pushes and PR-number changes.
         const refreshedChecks = fetchPRChecks(
           repo.path,
           refreshedPR.number,
@@ -345,7 +353,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       if (isCurrentRequest()) {
         refreshInFlightRef.current = false
         setIsRefreshing(false)
-        // Why: force fresh eligibility so a resolved auth failure clears the sticky hard error even when Git state is unchanged.
+        // Rerun eligibility to clear resolved authentication errors even when Git state is unchanged.
         setEligibilityRefreshNonce((value) => value + 1)
       }
     }
@@ -380,7 +388,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     fetchHostedReviewForBranch,
     expireGitHubPRRefreshState,
     isCurrentAsyncResult,
-    ownerSettings,
+    ownerCopyHostId,
+    ownerTarget,
     updateWorktreeGitIdentity,
     panelContextKeyRef,
     asyncResultKeyRef,

@@ -6,7 +6,7 @@ import {
   _resetGitAdmissionForTests,
   acquireGitAdmission
 } from './git-subprocess-admission'
-import type { GitAdmissionEvent } from './git-admission-state'
+import type { GitAdmissionEvent } from '../../../shared/git-admission-state'
 
 const local = (tier: 'interactive' | 'status' | 'background' = 'status') => ({
   args: ['status'],

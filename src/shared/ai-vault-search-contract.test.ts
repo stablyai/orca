@@ -23,7 +23,7 @@ describe('session search public contract', () => {
   ])('clamps %s to %s', (limit, expected) => {
     expect(AiVaultSearchRequestSchema.parse({ query: 'needle', limit }).limit).toBe(expected)
   })
-  it('allows the engine to report long-query truncation', () => {
+  it('preserves long query text in the request schema', () => {
     const query = 'needle '.repeat(100)
     expect(AiVaultSearchRequestSchema.parse({ query }).query).toBe(query)
   })
@@ -55,6 +55,20 @@ describe('session search public contract', () => {
         ...searchResults(),
         hits: [{ ...searchHit(), executionHostId: '' }]
       }).success
+    ).toBe(false)
+  })
+  it('accepts future agent names only in optional capability lists', () => {
+    const supportedAgents = ['codex', 'jcode', 'future-agent']
+    expect(
+      AiVaultSearchRequestSchema.parse({ query: 'q', supportedAgents }).supportedAgents
+    ).toEqual(supportedAgents)
+    expect(
+      AiVaultSearchStatusSchema.parse({ ...unavailableSessionSearchStatus(), supportedAgents })
+        .supportedAgents
+    ).toEqual(supportedAgents)
+    expect(
+      AiVaultSearchRequestSchema.safeParse({ query: 'q', filters: { agents: ['future-agent'] } })
+        .success
     ).toBe(false)
   })
   it('never accepts resume commands for an unverified or missing source', () => {

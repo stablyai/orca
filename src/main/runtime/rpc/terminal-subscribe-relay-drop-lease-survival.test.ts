@@ -1,6 +1,5 @@
-// Why: the stale-handle survival suite doubles subscribeToPtyExit, so it pins the wiring but
-// not the predicate that decides whether a PTY counts as exited. This wires that one call to
-// a real OrcaRuntimeService, because a relay drop reaches the phone through the predicate.
+import './unused-default-rpc-methods.test-fixture'
+// Use the real runtime exit predicate: stale-handle wiring doubles it and cannot prove a relay drop preserves the lease.
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'

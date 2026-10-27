@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { isInNativeChatUpgradeTipAudience } from '../../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -20,6 +21,7 @@ import {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
+import { NativeChatUpgradeTipDialog } from './NativeChatUpgradeTipDialog'
 import { SessionSearchTipDialog } from './SessionSearchTipDialog'
 import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
@@ -31,8 +33,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const nativeChatUpgradeTipVariant = useAppStore((s) => s.nativeChatUpgradeTipVariant)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
@@ -47,6 +51,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     modalData,
     seenTipIds,
     featureInteractions,
+    inNativeChatUpgradeTipAudience: isInNativeChatUpgradeTipAudience(nativeChatUpgradeTipVariant),
     settings,
     webClient: isWebClientLocation()
   })
@@ -88,9 +93,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   }
 
   const openShortcutsSettings = (): void => {
-    // Why: dismiss the tip when navigating away — the tip's job is done once
-    // the user clicks through to rebind, and leaving it mounted behind the
-    // settings page would re-appear on close.
+    // Dismiss before opening Settings so closing Settings cannot resurrect the tip.
     markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'shortcuts', repoId: null })
@@ -111,6 +114,17 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
+  const openNativeChatSettings = (): void => {
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({
+      pane: 'experimental',
+      repoId: null,
+      sectionId: 'experimental-native-chat'
+    })
+    openSettingsPage()
+  }
+
   const enableOrchestrationSkillSetup = (): void => {
     localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
     localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
@@ -122,11 +136,29 @@ export default function FeatureTipsModal(): JSX.Element | null {
       return
     }
 
-    markFeatureTipsSeen([currentTip.id])
+    if (currentTip.action !== 'learn-native-chat-upgrade') {
+      markFeatureTipsSeen([currentTip.id])
+    }
     switch (currentTip.action) {
+      case 'learn-native-chat-upgrade': {
+        if (settings?.experimentalNativeChat !== true) {
+          setPrimaryBusy(true)
+          try {
+            await updateSettingsOrThrow({ experimentalNativeChat: true })
+          } catch {
+            toast.error(
+              translate('featureTips.nativeChatUpgrade.enableError', 'Could not enable chat mode.')
+            )
+            return
+          } finally {
+            setPrimaryBusy(false)
+          }
+        }
+        markFeatureTipsSeen([currentTip.id])
+        closeModal()
+        break
+      }
       case 'learn-cmd-j-palette': {
-        // Why: passive education tip — acknowledging just dismisses; the rebind
-        // path lives in Settings and is reachable from the palette itself.
         trackCmdJPaletteFeatureTipAcknowledged(
           getOrcaCliFeatureTipTelemetrySource(modalData.source)
         )
@@ -163,8 +195,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
       case 'setup-cli': {
         const setupRequestId = setupRequestIdRef.current + 1
         setupRequestIdRef.current = setupRequestId
-        // Why: this modal is lazily mounted; closing it does not unmount the
-        // component, so async install results must not reopen UI after dismissal.
+        // Closing this lazily mounted modal does not unmount it; ignore dismissed installs’ async results.
         const canApplySetupResult = (): boolean =>
           mountedRef.current &&
           activeModalRef.current === 'feature-tips' &&
@@ -211,7 +242,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
           closeModal()
           openCliSettings()
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to install Orca CLI.'
+          const message =
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.feature.tips.FeatureTipsModal.cliInstallFailed',
+                  'Failed to install Orca CLI.'
+                )
           if (
             import.meta.env.DEV &&
             message.includes('Development mode uses a generated launcher for validation only')
@@ -272,6 +309,20 @@ export default function FeatureTipsModal(): JSX.Element | null {
         onPrimaryAction={() => void handlePrimaryAction()}
         onSkip={handleSkip}
         onRebindClick={openShortcutsSettings}
+      />
+    )
+  }
+
+  if (currentTip.action === 'learn-native-chat-upgrade') {
+    return (
+      <NativeChatUpgradeTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        chatModeOn={settings?.experimentalNativeChat === true}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSettingsClick={openNativeChatSettings}
       />
     )
   }

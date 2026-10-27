@@ -1,13 +1,13 @@
 import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { compileTextTest } from './agent-state-rule-matchers'
-import { BUNDLED_AGENT_STATE_RULE_FILES } from './agent-state-rules-catalog'
+import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import type {
   AgentStateRulesFile,
   NamedTitlePredicate,
   TitleAnchorCondition
 } from './agent-state-rules-schema'
 
-// Why shared code: the same marker also proves OpenCode presence, so both must read it alike.
+// Presence and readiness must interpret the OpenCode marker identically.
 const NAMED_TITLE_PREDICATES: Record<NamedTitlePredicate, (title: string) => boolean> = {
   'opencode-native-title': isOpenCodeNativeTitle
 }
@@ -26,9 +26,8 @@ function compileTitleAnchors(files: readonly AgentStateRulesFile[]): TitleAnchor
   )
 }
 
-const TITLE_ANCHORS = compileTitleAnchors(BUNDLED_AGENT_STATE_RULE_FILES)
+const titleAnchors = compiledFromActiveAgentStateRules(compileTitleAnchors)
 
-/** Whether any rule file's title anchor marks an idle-classified `title` as an agent's own rest title. */
 export function showsIdleTitleAnchor(title: string): boolean {
-  return TITLE_ANCHORS.some((matches) => matches(title))
+  return titleAnchors().some((matches) => matches(title))
 }

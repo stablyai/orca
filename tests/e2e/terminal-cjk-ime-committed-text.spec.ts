@@ -115,13 +115,11 @@ const SUBSTITUTION_ROUTES: readonly {
 ]
 
 /**
- * The two substitution shapes above are macOS-only, and deliberately so: the keydown bypass that
- * owns single-keystroke IME commits installs only when the renderer reports macOS, because only
- * the macOS text system delivers a substituted glyph with the plain layout key still on the
- * keydown. Windows and Linux frameworks claim the same keystroke as VK_PROCESSKEY and route the
- * glyph through a composition session instead, which the separate composition-session test below
- * covers. Running the macOS shapes under a Linux policy would assert a sequence no Linux input
- * framework produces.
+ * The two substitution shapes above run under the macOS policy: they are the macOS text system's
+ * shapes for punctuation. Windows and most Linux frameworks claim the same keystroke as
+ * VK_PROCESSKEY and route the glyph through a composition session instead, which the separate
+ * composition-session test below covers. The Linux plain-keydown commit shape (fcitx4 Sogou's
+ * candidate picks, #28213) is covered by terminal-linux-claimed-preedit-selector.spec.ts.
  */
 const FULL_WIDTH_SESSION_PUNCTUATION = [
   { key: ',', code: 'Comma', keyCode: 188, glyph: '，', ascii: ',' },

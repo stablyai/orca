@@ -10,10 +10,10 @@ import {
   PROMPTED_AGENT_LAUNCH_TIMEOUT_MS,
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch,
-  supportsMobileExistingAgentLaunch
+  AGENT_LAUNCH_TAB_CLOSED_MESSAGE
 } from './mobile-existing-agent-launch'
+import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
-// A connected client whose only behaviour is the scripted `sendRequest`.
 function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
   return {
     sendRequest,
@@ -91,18 +91,8 @@ function launch(
   })
 }
 
-describe('supportsMobileExistingAgentLaunch', () => {
-  it('requires the replay ledger, not just agent.launch', () => {
-    expect(supportsMobileExistingAgentLaunch(LAUNCH_CAPABILITIES)).toBe(true)
-    expect(supportsMobileExistingAgentLaunch(['agent.launch.v2'])).toBe(false)
-    expect(supportsMobileExistingAgentLaunch([])).toBe(false)
-    expect(supportsMobileExistingAgentLaunch(undefined)).toBe(false)
-  })
-})
-
 describe('reserveMobileAgentLaunch', () => {
-  // The host's schema accepting these, and an older one dropping them, is pinned host-side
-  // (agent-launch-params.test.ts) and through the real dispatcher (agent-launch-mobile-replay).
+  // Host dispatcher tests cover accepting these reserved ids and older hosts stripping them.
   it('sends the pane and chat it reserved as the launch params', async () => {
     const { client, sendRequest } = scriptedClient(launched({}))
     const reservation = reserveMobileAgentLaunch('claude')
@@ -113,6 +103,21 @@ describe('reserveMobileAgentLaunch', () => {
       paneKey: `${reservation.pane.tabId}:${reservation.pane.leafId}`,
       sessionId: reservation.sessionId
     })
+    expect(mobileCreatedStructuredSession(reservation.sessionId!)).toMatchObject({
+      worktree: expect.stringMatching(/^id:/)
+    })
+  })
+
+  it('asks for the new tab after the one the user is on', async () => {
+    const { client, sendRequest } = scriptedClient(launched({}))
+    await launch(client, {
+      placement: { afterTabId: 'tab-current' },
+      mintOperationId: () => `1790000000000-${'b'.repeat(32)}`
+    })
+
+    expect(requestParam(sendRequest.mock.calls[0]![1], 'placement')).toEqual({
+      afterTabId: 'tab-current'
+    })
   })
 
   it('mints a pane the host adopts even where the runtime has no crypto.randomUUID', () => {
@@ -122,7 +127,6 @@ describe('reserveMobileAgentLaunch', () => {
       const { pane } = reserveMobileAgentLaunch('aider')
       expect(isTerminalLeafId(pane.leafId)).toBe(true)
       expect(isValidHostTerminalTabId(pane.tabId)).toBe(true)
-      // The same fallback still yields a durable operation id.
       expect(structuredSessionOperationId(1790000000000)).toMatch(/^1790000000000-[0-9a-f]{32}$/)
     } finally {
       if (native) {
@@ -133,13 +137,16 @@ describe('reserveMobileAgentLaunch', () => {
 })
 
 describe('launchAgentInExistingWorkspace', () => {
-  it('sends nothing to a host without the launch capabilities', async () => {
-    const { client, sendRequest } = scriptedClient(launched({}))
-    await expect(launch(client, { hostCapabilities: ['agent.launch.v2'] })).resolves.toEqual({
-      kind: 'unsupported'
-    })
-    expect(sendRequest).not.toHaveBeenCalled()
-  })
+  it.each([['agent.launch.v2'], [], undefined])(
+    'sends nothing to a host without the launch capabilities: %s',
+    async (hostCapabilities) => {
+      const { client, sendRequest } = scriptedClient(launched({}))
+      await expect(launch(client, { hostCapabilities })).resolves.toEqual({
+        kind: 'unsupported'
+      })
+      expect(sendRequest).not.toHaveBeenCalled()
+    }
+  )
 
   it('launches through agent.launchReplay into the existing workspace with the prompt', async () => {
     const { client, sendRequest } = scriptedClient(
@@ -202,8 +209,11 @@ describe('launchAgentInExistingWorkspace', () => {
   })
 
   it('treats a refusal of the first send as an unsupported host', async () => {
-    const { client } = scriptedClient(refused('agent_launch_replay_unsupported'))
-    await expect(launch(client)).resolves.toEqual({ kind: 'unsupported' })
+    const { client, sendRequest } = scriptedClient(refused('agent_launch_replay_unsupported'))
+    await expect(
+      launch(client, { chatOptions: { model: 'opus', fastMode: 'false' } })
+    ).resolves.toEqual({ kind: 'unsupported' })
+    expect(sendRequest.mock.calls[0]?.[1]).not.toHaveProperty('chatOptions')
   })
 
   it('never reads a refusal after a replay as unsupported: the first attempt may have run', async () => {
@@ -211,10 +221,22 @@ describe('launchAgentInExistingWorkspace', () => {
       { throws: markRpcDeliveryUnknown(new Error('Connection interrupted')) },
       refused('agent_launch_replay_unsupported')
     )
-    await expect(launch(client)).resolves.toEqual({
+    const chatOptions = { model: 'opus', fastMode: 'false' }
+    const capabilities = [...LAUNCH_CAPABILITIES, 'agent.launch.chat-options.v1']
+    const pending = launch(client, { hostCapabilities: capabilities, chatOptions })
+    chatOptions.model = 'changed-after-send'
+    capabilities.length = 0
+    await expect(pending).resolves.toEqual({
       kind: 'unknown',
       message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE
     })
+    expect(sendRequest.mock.calls.map(([, params]) => requestParam(params, 'chatOptions'))).toEqual(
+      [
+        { model: 'opus', fastMode: 'false' },
+        { model: 'opus', fastMode: 'false' }
+      ]
+    )
+    expect(sendRequest.mock.calls[0]?.[1]).toBe(sendRequest.mock.calls[1]?.[1])
     // The replay reuses the same operation id.
     expect(sendRequest.mock.calls.map(([, params]) => requestParam(params, 'operationId'))).toEqual(
       ['op-1', 'op-1']
@@ -237,6 +259,14 @@ describe('launchAgentInExistingWorkspace', () => {
     })
   })
 
+  it('reads a closed tab as the user stopping the launch, not as the launch failing', async () => {
+    const { client } = scriptedClient(refused('agent_launch_tab_closed'))
+    await expect(launch(client)).resolves.toEqual({
+      kind: 'tab-closed',
+      message: AGENT_LAUNCH_TAB_CLOSED_MESSAGE
+    })
+  })
+
   it('reports unknown when no answer arrives at all', async () => {
     const { client } = scriptedClient({ throws: new Error('Request timed out') })
     await expect(launch(client)).resolves.toEqual({
@@ -256,8 +286,7 @@ describe('launchAgentInExistingWorkspace', () => {
   })
 
   it('works against a v1.4.206-shaped host', async () => {
-    // v1.4.206 (the first release with these capabilities) parses a plain object that knows only
-    // these keys and strips the rest; its terminal arm starts the agent without the prompt.
+    // The first capable release strips unknown fields and starts its terminal arm without a prompt; preserve that compatibility fixture.
     const v1_4_206Keys = new Set([
       'agent',
       'operationId',
@@ -277,7 +306,6 @@ describe('launchAgentInExistingWorkspace', () => {
       prompt: { text: 'Fix it', delivery: 'submit' },
       launchSource: 'task_page'
     })
-    // Only telemetry is lost; the launch itself carries nothing that host would drop.
     expect(parsed).toEqual({
       agent: 'claude',
       operationId: 'op-1',

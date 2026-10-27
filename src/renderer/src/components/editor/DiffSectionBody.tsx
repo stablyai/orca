@@ -1,3 +1,5 @@
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -10,7 +12,10 @@ import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
 import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
-import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import {
+  buildDiffEditorWordWrapOptions,
+  syncDiffEditorOriginalWordWrap
+} from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
 
@@ -58,11 +63,56 @@ export function DiffSectionBody({
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
-  const handleEditorMount: DiffOnMount = (editor, monaco) => {
-    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(editor)
-    editor.onDidDispose(cleanupShiftWheelScroll)
-    onMount(editor, monaco)
+  const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
+  const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+  const wordWrapMountFrameRef = useRef(0)
+  const diffWordWrapRef = useRef(diffWordWrap)
+  useLayoutEffect(() => {
+    diffWordWrapRef.current = diffWordWrap
+  }, [diffWordWrap])
+  const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
+    diffEditorRef.current = diffEditor
+    const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
+    diffEditor.getModifiedEditor().onDidDispose(() => {
+      cleanupShiftWheelScroll()
+      if (diffEditorRef.current !== diffEditor) {
+        return
+      }
+      cancelAnimationFrame(wordWrapMountFrameRef.current)
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = null
+      diffEditorRef.current = null
+    })
+    // Monaco applies its inline wrap override after mount when width is known.
+    wordWrapMountFrameRef.current = requestAnimationFrame(() => {
+      if (diffEditorRef.current !== diffEditor) {
+        return
+      }
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(
+        diffEditor,
+        diffWordWrapRef.current
+      )
+    })
+    onMount(diffEditor, monaco)
   }
+
+  useEffect(() => {
+    cancelAnimationFrame(wordWrapMountFrameRef.current)
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor) {
+      return () => {
+        cancelAnimationFrame(wordWrapMountFrameRef.current)
+      }
+    }
+    wordWrapOptionsSubRef.current?.dispose()
+    wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(diffEditor, diffWordWrap)
+    return () => {
+      cancelAnimationFrame(wordWrapMountFrameRef.current)
+      wordWrapOptionsSubRef.current?.dispose()
+      wordWrapOptionsSubRef.current = null
+    }
+  }, [diffWordWrap, sideBySide])
 
   return (
     <div
@@ -159,13 +209,13 @@ export function DiffSectionBody({
           modified={section.modifiedContent}
           theme={isDark ? 'vs-dark' : 'vs'}
           onMount={handleEditorMount}
-          // Why: @monaco-editor/react can dispose models before widget teardown.
-          // Keep them through unmount and dispose unattached models next tick.
+          // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
           originalModelPath={`${modelPathBase}:original`}
           modifiedModelPath={`${modelPathBase}:modified`}
           keepCurrentOriginalModel
           keepCurrentModifiedModel
           options={{
+            dropIntoEditor: { enabled: false },
             // Native EditContext focus scrolls its hidden input into the combined viewport.
             editContext: false,
             readOnly: !isEditable,

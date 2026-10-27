@@ -4,12 +4,17 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import {
   parseAgentStatusSubject,
   serializeAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
 } from '../../../shared/agent-status-subject'
+import {
+  StructuredAgentSessionOpenChildWork,
+  type ChildWorkLifetimeToken
+} from './structured-agent-session-open-child-work'
 
 export type StructuredAgentSessionStatusSink = {
   publish: (
@@ -17,23 +22,29 @@ export type StructuredAgentSessionStatusSink = {
     subject: AgentStatusStructuredSessionSubject
   ) => void
   forget: (subject: AgentStatusStructuredSessionSubject) => void
-  /** The session's child-work evidence, addressed by the subject its parent row landed under. */
+  /** Address evidence by the parent row’s landed subject. */
   publishChildWork?: (
     subject: AgentStatusStructuredSessionSubject,
     evidence: AgentChildWorkEvidence[],
     provider: AgentSessionRecord['provider']
   ) => void
-  /** The child records the sink holds for that subject, as the views every surface reads. */
   readChildWork?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkView[]
+  /** Includes host-only facts omitted from views. */
+  readChildWorkRecords?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkRecord[]
+  readChildWorkHandles?: (subject: AgentStatusStructuredSessionSubject) => ReadonlySet<string>
 }
 
-/** Retain the owner address because record removal may precede the final status callback. */
+export type CapturedChildWorkStops = {
+  current: (handleId: string) => boolean
+  acknowledge: (evidence: readonly AgentChildWorkEvidence[]) => void
+}
+
+/** Retain addresses through record removal for final callbacks. */
 export class StructuredAgentSessionStatusOwnership {
   private readonly subjects = new Map<string, AgentStatusStructuredSessionSubject>()
-  // Why separate from `subjects`: the address must survive a throwing publish so teardown can still
-  // forget a row that did land, but "we hold an address" is not evidence the row is there. Only a
-  // publish that returned proves that, and only that proof may suppress the re-offer below.
+  // Retain failed-publish addresses for cleanup, but only returned publication proves landing.
   private readonly landed = new Set<string>()
+  private readonly open = new StructuredAgentSessionOpenChildWork()
 
   constructor(private readonly sink: () => StructuredAgentSessionStatusSink | undefined) {}
 
@@ -76,26 +87,76 @@ export class StructuredAgentSessionStatusOwnership {
     this.landed.add(summary.sessionId)
   }
 
-  /** Children ride the address the parent landed under: without that proof the store would
-   *  refuse them anyway, and offering them earlier would race the parent row. */
+  /** Publish children only after parent landing; track all provider edges independently of display admission. */
   publishChildWork(
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     provider: AgentSessionRecord['provider']
   ): void {
+    this.open.observe(sessionId, evidence)
     const subject = this.subjects.get(sessionId)
-    if (subject && this.landed.has(sessionId)) {
-      this.sink()?.publishChildWork?.(subject, evidence, provider)
+    if (!subject || !this.landed.has(sessionId)) {
+      return
+    }
+    this.sink()?.publishChildWork?.(subject, evidence, provider)
+  }
+
+  /** Capture lifetimes before provider awaits so Stop cannot close replacement runs. */
+  captureChildWorkStops(sessionId: string, handleIds: readonly string[]): CapturedChildWorkStops {
+    const captured = new Map<string, ChildWorkLifetimeToken | undefined>()
+    for (const handleId of handleIds) {
+      captured.set(handleId, this.open.capture(sessionId, handleId))
+    }
+    return {
+      current: (handleId) =>
+        captured.has(handleId) && this.open.matches(sessionId, handleId, captured.get(handleId)),
+      acknowledge: (evidence) => {
+        for (const edge of evidence) {
+          if (edge.type === 'stop-acknowledged') {
+            const token = captured.get(edge.handleId)
+            if (token) {
+              this.open.stopped(sessionId, edge.handleId, token)
+            }
+          }
+        }
+      }
     }
   }
 
-  /** Undefined until the parent row has landed: a sink holds no children for a parent it lacks. */
+  childWorkOpen(sessionId: string): boolean {
+    return this.open.hasOpen(sessionId)
+  }
+
+  /** Includes provider work rejected by display storage. */
+  childWorkIncomplete(sessionId: string): boolean {
+    const open = this.open.handles(sessionId)
+    if (!open) {
+      return false
+    }
+    const read = this.sink()?.readChildWorkHandles
+    if (!read) {
+      return true
+    }
+    const subject = this.subjects.get(sessionId)
+    const recorded = subject && this.landed.has(sessionId) ? read(subject) : new Set<string>()
+    return [...open].some((handleId) => !recorded.has(handleId))
+  }
+
+  /** No parent landing means no stored children to read. */
   readChildWork(sessionId: string): AgentChildWorkView[] | undefined {
     const subject = this.subjects.get(sessionId)
     return subject && this.landed.has(sessionId) ? this.sink()?.readChildWork?.(subject) : undefined
   }
 
+  readChildWorkRecords(sessionId: string): AgentChildWorkRecord[] | undefined {
+    const subject = this.subjects.get(sessionId)
+    return subject && this.landed.has(sessionId)
+      ? this.sink()?.readChildWorkRecords?.(subject)
+      : undefined
+  }
+
   forget(sessionId: string): void {
+    this.open.forget(sessionId)
     const subject = this.subjects.get(sessionId)
     if (!subject) {
       return

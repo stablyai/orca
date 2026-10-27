@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as LocalCommandResolver from './command-path-resolver'
+import { resolveProfileLoadingShell } from '../startup/hydrate-shell-path'
 
 const {
   handleMock,
@@ -6,12 +8,12 @@ const {
   execFileAsyncMock,
   hydrateShellPathMock,
   mergePathSegmentsMock,
-  getActiveMultiplexerMock,
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
   isCommandOnLocalPathMock,
+  listLocalCommandPathsMock,
   mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
@@ -20,19 +22,18 @@ const {
   execFileAsyncMock: vi.fn(),
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
-  getActiveMultiplexerMock: vi.fn(),
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
+  listLocalCommandPathsMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
-// Why the runner and not child_process: WSL agent detection goes through
-// runWslProcess now, so a child_process mock never sees it.
+// WSL detection uses runWslProcess, so child_process mocks cannot observe it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('electron', () => ({
@@ -53,27 +54,26 @@ vi.mock('child_process', () => {
 
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: hydrateShellPathMock,
-  mergePathSegments: mergePathSegmentsMock
+  mergePathSegments: mergePathSegmentsMock,
+  resolveProfileLoadingShell: vi.fn(() => null),
+  resolveProfileLoadingFallbackShell: () => null
 }))
 
 vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommands: resolveCliCommandsMock
 }))
 
-// Why (#9297): local PATH resolution is now fs-based (no where/which spawn).
-// These tests express "which commands are on PATH" via the where/which mock,
-// so route the resolver through that same mock to preserve their intent.
-vi.mock('./command-path-resolver', () => ({
-  isCommandOnLocalPath: isCommandOnLocalPathMock
+// Route filesystem PATH resolution through the existing command-lookup mock.
+vi.mock('./command-path-resolver', async (importOriginal) => ({
+  ...(await importOriginal<typeof LocalCommandResolver>()),
+  isCommandOnLocalPath: isCommandOnLocalPathMock,
+  listLocalCommandPaths: listLocalCommandPathsMock
 }))
 
 vi.mock('../pty/windows-environment-path', () => ({
+  readPersistedWindowsPathSegmentsAsync: async () => [],
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
-}))
-
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
 }))
 
 vi.mock('../bitbucket/client', () => ({
@@ -96,6 +96,7 @@ describe('preflight', () => {
   const handlers: HandlerMap = {}
 
   beforeEach(() => {
+    vi.mocked(resolveProfileLoadingShell).mockClear()
     runWslProcessMock.mockReset()
     resetPreflightMocks(
       {
@@ -103,12 +104,12 @@ describe('preflight', () => {
         execFileAsyncMock,
         hydrateShellPathMock,
         mergePathSegmentsMock,
-        getActiveMultiplexerMock,
         getBitbucketAuthStatusMock,
         getAzureDevOpsAuthStatusMock,
         getGiteaAuthStatusMock,
         resolveCliCommandsMock,
         isCommandOnLocalPathMock,
+        listLocalCommandPathsMock,
         mergePersistedWindowsPathAsyncMock,
         mergePersistedWindowsPathMock
       },
@@ -172,12 +173,11 @@ describe('preflight', () => {
     })
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
+    expect(resolveProfileLoadingShell).not.toHaveBeenCalled()
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {
-    // Why: the Agents settings Refresh button calls this path. It must (1) ask
-    // the shell hydrator for a fresh PATH, (2) merge any new segments, then
-    // (3) re-run `which` so newly-installed CLIs appear without a restart.
+    // Refresh must hydrate and merge PATH before detecting newly installed CLIs.
     hydrateShellPathMock.mockResolvedValueOnce({
       segments: ['/Users/test/.opencode/bin'],
       ok: true,
@@ -255,13 +255,9 @@ describe('preflight', () => {
     expect(result.shellHydrationOk).toBe(false)
     expect(result.addedPathSegments).toEqual([])
     expect(result.agents).toEqual(['claude'])
-    // Why: drives the agent_picks `on_path:false` triage in dashboard 1562016.
-    // Without these fields we cannot distinguish "hydration failed" from
-    // "user genuinely doesn't have the binary."
+    // Diagnostics must distinguish failed hydration from an absent binary.
     expect(result.pathSource).toBe('sync_seed_only')
     expect(result.pathFailureReason).toBe('timeout')
-    // Why: when hydration fails, we must not call merge — nothing to merge —
-    // otherwise we'd log a no-op "added 0 segments" event on every refresh.
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
   })
 

@@ -12,6 +12,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
 import { MAX_CODEX_GOAL_THREADS } from './codex-structured-journal-limits'
+import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
@@ -49,7 +50,7 @@ function goalJournal(
     ...options
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a fake journal exposing only the members the goal translator and deferred sink call.
-  const journal = {
+  const journal = withJournalQueueMembers({
     get epoch() {
       return `epoch-${epochNumber}`
     },
@@ -81,7 +82,7 @@ function goalJournal(
         visit(item.itemId, item.sequence, item.body)
       }
     }
-  } as unknown as StructuredAgentSessionEventTarget['journal']
+  }) as unknown as StructuredAgentSessionEventTarget['journal']
   const target = {
     journal,
     fence: 1,
@@ -376,8 +377,7 @@ describe('codex goal lifecycle resume', () => {
         prefix === 'Goal cleared' ? prefix : `${prefix}: Keep the current scratch directory tidy.`
       )
     )
-    // A resumed goal's fresh accounting revises the row it already has: no new
-    // row, and the text a reader sees is unchanged. A cleared goal has no accounting.
+    // Fresh resume accounting revises the existing row; cleared goals carry none.
     const cleared = scenario.resumed.method === 'thread/goal/cleared'
     expect(journal.writes).toHaveLength(writesBeforeResume + (cleared ? 0 : 1))
     expect(journal.publishes()).toBe(publishesBeforeResume + (cleared ? 0 : 1))

@@ -1,11 +1,7 @@
-// The one queue gate: admission, the drain step and Send-now consume a single
-// typed hold decision, so the lists cannot drift — pinned here with a clear in
-// doubt, Send-now's override set, and the replay-preference rule for a refused
-// draft.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -17,6 +13,7 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
+import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 let rig: QueuedMessageTestRig
 let host: QueuedMessageTestRig['host']
@@ -41,26 +38,6 @@ const settleRejected: QueuedMessageTestRig['settleRejected'] = (...args) =>
   rig.settleRejected(...args)
 
 describe('the one queue gate', () => {
-  it('a clear an older build left prepared holds nothing: Send-now sends the draft', async () => {
-    await workingSend()
-    const queued = await send('queued behind the clear', 'queue-if-active').result
-    if (!queued.ok || !('queued' in queued.value)) {
-      throw new Error('expected a queued receipt')
-    }
-    const draftId = queued.value.queued.messageId
-    // An unfinished /clear changed nothing the chat reads, so it refuses no send.
-    await store.setConversationCommand(SESSION, 1, {
-      command: 'clear',
-      runtimeFence: 1,
-      operationId: hostTestOperationId(),
-      callerKey: CALLER.callerKey,
-      phase: 'prepared',
-      state: 'unknown'
-    })
-    expect(await sendNow(draftId)).toMatchObject({ ok: true })
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-  })
-
   it('Send-now refuses on a pending prompt and overrides a running turn', async () => {
     const working = await workingSend()
     const queued = await send('queued mid-turn', 'queue-if-active').result
@@ -84,11 +61,13 @@ describe('the one queue gate', () => {
       ok: false,
       refusal: { message: expect.stringContaining('pending request') }
     })
-    // Read in place: the gate runs on every admission and drain step.
     const snapshot = vi.spyOn(journal, 'snapshot')
-    expect(structuredQueueHold({ journal, record: store.getRecord(SESSION), fence: 1 })).toBe(
-      'prompt'
-    )
+    expect(
+      structuredQueueHold({
+        record: store.getRecord(SESSION),
+        work: new StructuredAgentSessionCurrentWork(journal, 1)
+      })
+    ).toBe('prompt')
     expect(snapshot).not.toHaveBeenCalled()
     snapshot.mockRestore()
     await journal.appendItem(
@@ -107,7 +86,6 @@ describe('the one queue gate', () => {
       },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    // The turn still runs (`working`), which Send-now alone may override.
     expect(await submission(working)).toMatchObject({ dispatchState: 'pending' })
     expect(await sendNow(draftId)).toMatchObject({
       ok: true,
@@ -140,8 +118,7 @@ describe('replay preference', () => {
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: clientOperationId, state: 'returned' }])
     )
-    // The original reply was lost; the retry must agree with the card, or the
-    // same text renders twice — once on a Retry row, once on the card.
+    // Lost-reply replay must match the card or clients render duplicate text.
     const replay = await host.send(CALLER, params)
     expect(replay).toMatchObject({
       ok: true,
@@ -179,7 +156,7 @@ describe('replay of a deleted card', () => {
       ok: true,
       value: { deleted: true }
     })
-    // Retention later drops the tombstone; the rejected hand-off still names the draft.
+    // A retained rejection still identifies its card after tombstone pruning.
     const journal = host.collaboratorsForTests().sessions.get(SESSION)?.journal
     if (!journal) {
       throw new Error('expected the conversation open')
@@ -222,15 +199,13 @@ describe('the hand-off link on answers', () => {
       replayed: true,
       value: { submission: { queuedMessageId: clientOperationId } }
     })
-    // Handed off under a fresh id, never the draft's (the send operation's) own.
     expect(
       replayed.ok && 'submission' in replayed.value && replayed.value.submission.clientMessageId
     ).not.toBe(clientOperationId)
-    // The first send, direct, names no draft.
     expect(await submission(working)).not.toHaveProperty('queuedMessageId')
   })
 
-  it('a queued send asked again after its ledger row is gone answers with its hand-off, never sending twice', async () => {
+  it('a queued send asked again after its receipt is gone answers with its hand-off, never sending twice', async () => {
     const working = await workingSend()
     const body = hostTestMessage('asked again')
     const clientOperationId = hostTestOperationId()
@@ -241,20 +216,16 @@ describe('the hand-off link on answers', () => {
         clientOperationId
       ),
       body,
-      delivery: 'queue-if-active' as const,
-      userSend: true as const
+      delivery: 'queue-if-active' as const
     }
     await host.send(CALLER, params)
     await settleAccepted(working, 'a')
     await eventually(async () => expect(await rig.handoff(clientOperationId)).toBeDefined())
     const handedOffAs = await rig.handoffId(clientOperationId)
-    // The ledger forgot the id, so the send runs again rather than replaying.
-    const operations = store['transactions'].state.operations
-    for (const [key, row] of operations) {
-      if (row.operationId === clientOperationId) {
-        operations.delete(key)
-      }
-    }
+    // Model legacy acceptance without a receipt, requiring effect reconstruction.
+    openTestJournalHostDatabase(rig.root)
+      .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
+      .run(clientOperationId)
     const count = (await host.journalSnapshot(SESSION)).submissions.length
     expect(await host.send(CALLER, params)).toMatchObject({
       ok: true,
@@ -285,7 +256,7 @@ describe('Send-now rerun', () => {
     await eventually(async () =>
       expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
     )
-    // The host died before the Send's answer settled: its ledger row is still pending, so it reruns.
+    // Model a crash before answer settlement, leaving a pending ledger row.
     const operations = store['transactions'].state.operations
     for (const [key, row] of operations) {
       if (row.operationId === operationId) {

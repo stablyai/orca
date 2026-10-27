@@ -1,16 +1,18 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { Suspense } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
 type MockAppState = {
   browserTabsByWorktree: Record<string, readonly BrowserTabState[]>
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
+  browserPagesByWorkspace: Record<string, readonly { id: string }[]>
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
@@ -19,17 +21,24 @@ const mocks = vi.hoisted(() => ({
   automationVisiblePageIds: new Set<string>(),
   mobileDrivenPageIds: new Set<string>(),
   remotelyViewedPageIds: new Set<string>(),
-  focusGroup: vi.fn()
+  focusGroup: vi.fn(),
+  pagePointerDown: vi.fn<(target: { browserPageId: string }) => void>()
 }))
 
-vi.mock('../../../store', () => ({
-  useAppStore: (selector: (state: MockAppState) => unknown) => {
+vi.mock('../../../store', () => {
+  const readState = (): MockAppState => {
     if (!mocks.state) {
       throw new Error('mock app state not initialized')
     }
-    return selector(mocks.state)
+    return mocks.state
   }
-}))
+  return {
+    useAppStore: Object.assign(
+      (selector: (state: MockAppState) => unknown) => selector(readState()),
+      { getState: readState }
+    )
+  }
+})
 
 vi.mock('../host-guest/browser-automation-visibility', () => ({
   useBrowserAutomationVisibilityForAny: (pageIds: readonly string[]) =>
@@ -70,6 +79,10 @@ import {
   selectClientHostedBrowserRow
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import BrowserPaneOverlayLayer, { RetainedBrowserPaneOverlayLayer } from './BrowserPaneOverlayLayer'
+import {
+  admitBrowserPageMount,
+  releaseBrowserPageMount
+} from '../host-guest/browser-page-mount-admission'
 
 const HOST_ROW = {
   browserPageId: 'page-hosted',
@@ -89,12 +102,20 @@ describe('BrowserPaneOverlayLayer', () => {
     mocks.remotelyViewedPageIds.clear()
     mocks.focusGroup.mockClear()
     mocks.state = createState()
+    vi.stubGlobal('api', {
+      ui: {
+        onBrowserPagePointerDown: (listener: (target: { browserPageId: string }) => void) => {
+          mocks.pagePointerDown.mockImplementation(listener)
+          return () => {}
+        }
+      }
+    })
   })
 
   afterEach(() => {
     cleanup()
-    // The row store is module-level, so a leftover row would render an extra pane in every
-    // sibling test.
+    vi.unstubAllGlobals()
+    // Clear the module-level row store so sibling tests cannot inherit extra panes.
     clearClientHostedBrowserRowSelection()
     applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [] })
   })
@@ -271,6 +292,26 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(1000)
   })
 
+  it('keeps a floating browser to chords from its own overlay even when its group holds focus', () => {
+    const floating = FLOATING_TERMINAL_WORKTREE_ID
+    const state = createState()
+    mocks.state = {
+      ...state,
+      browserTabsByWorktree: { [floating]: state.browserTabsByWorktree['wt-1'] },
+      unifiedTabsByWorktree: { [floating]: state.unifiedTabsByWorktree['wt-1'] },
+      groupsByWorktree: { [floating]: state.groupsByWorktree['wt-1'] },
+      activeGroupIdByWorktree: { [floating]: 'group-1' }
+    }
+
+    const markup = renderToStaticMarkup(
+      <BrowserPaneOverlayLayer worktreeId={floating} isWorktreeActive />
+    )
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
+    )
+  })
+
   it('keeps an active browser pane unfocused when another split holds focus (#11348)', () => {
     mocks.state = createState()
     mocks.state.groupsByWorktree = {
@@ -391,9 +432,39 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="false"')
   })
 
-  // Why the style and not just mountedness: paintability drives the slot's `display`, and
-  // display:none is the exact park that stops Chromium producing frames. A mounted pane inside a
-  // display:none slot still goes dark, so mount assertions alone cannot see this regression.
+  // After background admission ends, return to normal parking rules instead of retaining layout forever.
+  it('mounts an admitted page in a hidden worktree and parks it once the admission ends', () => {
+    admitBrowserPageMount('page-b')
+    try {
+      const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={false} />)
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).not.toBeNull()
+
+      act(() => releaseBrowserPageMount('page-b'))
+
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).toBeNull()
+    } finally {
+      releaseBrowserPageMount('page-b')
+    }
+  })
+
+  it('keeps an admitted page mounted in the visible worktree but stops laying out its slot', () => {
+    admitBrowserPageMount('page-b')
+    try {
+      const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={true} />)
+      const slot = (): HTMLElement | null =>
+        view.container.querySelector<HTMLElement>('[data-browser-overlay-tab-id="browser-b"]')
+      expect(slot()?.style.display).toBe('flex')
+
+      act(() => releaseBrowserPageMount('page-b'))
+
+      expect(slot()?.style.display).toBe('none')
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).not.toBeNull()
+    } finally {
+      releaseBrowserPageMount('page-b')
+    }
+  })
+
+  // Assert display, not just mounting: display:none stops Chromium frames even on a mounted pane.
   it('paints the slot of a remotely viewed inactive browser pane', () => {
     expect(slotDisplay('browser-b')).toBe('none')
 
@@ -403,10 +474,27 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(slotDisplay('browser-b')).toBe('flex')
   })
 
-  // Why DOM order and not just presence: the host-row pane carries no guest and paints over
-  // whichever webview the group was showing. Both siblings are absolutely positioned onto the same
-  // anchor, so the only thing putting it on top is being last — a reorder is invisible to every
-  // other assertion here and would bury it under a guest.
+  it('makes the split of a page clicked into the active one (#22144)', () => {
+    const state = createState()
+    const [tabA, tabB] = state.unifiedTabsByWorktree['wt-1']
+    state.unifiedTabsByWorktree = { 'wt-1': [tabA, { ...tabB, groupId: 'group-2' }] }
+    state.groupsByWorktree = {
+      'wt-1': [
+        { id: 'group-1', worktreeId: 'wt-1', activeTabId: tabA.id, tabOrder: [tabA.id] },
+        { id: 'group-2', worktreeId: 'wt-1', activeTabId: tabB.id, tabOrder: [tabB.id] }
+      ]
+    }
+    state.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
+    mocks.state = state
+    render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+
+    // Main reports the press by page id, which is how both local and client-hosted guests register.
+    act(() => mocks.pagePointerDown({ browserPageId: 'page-b' }))
+
+    expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
+  })
+
+  // The host-row pane shares an absolute anchor with guests; only last-in-DOM order keeps it visible above them.
   it('renders the client-hosted host-row pane after every browser slot', () => {
     applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [HOST_ROW] })
     selectClientHostedBrowserRow({
@@ -469,6 +557,10 @@ function createState(): MockAppState {
     },
     // Default: the browser's own group holds focus, so active === focused.
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+    browserPagesByWorkspace: {
+      [browserA.id]: [{ id: 'page-a' }],
+      [browserB.id]: [{ id: 'page-b' }]
+    },
     focusGroup: mocks.focusGroup
   }
 }

@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import {
-  buildDismissedOnboardingFolderAgentStartup,
   buildOnboardingFolderAgentStartup,
   shouldSeedFolderAgentAfterDismissedOnboarding
 } from '@/lib/onboarding-folder-agent-startup'
 
+const HOST = { platform: 'linux', shell: undefined, isRemote: false } as const
+const buildStartup = (settings: Parameters<typeof buildOnboardingFolderAgentStartup>[0]) =>
+  buildOnboardingFolderAgentStartup(settings, HOST)
+
 describe('buildOnboardingFolderAgentStartup', () => {
   it('queues the persisted default agent with onboarding telemetry', () => {
-    const startup = buildOnboardingFolderAgentStartup({
+    const startup = buildStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'codex'
     })
@@ -33,7 +36,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
   })
 
   it('respects the blank terminal preference', () => {
-    const startup = buildOnboardingFolderAgentStartup({
+    const startup = buildStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'blank'
     })
@@ -41,47 +44,29 @@ describe('buildOnboardingFolderAgentStartup', () => {
     expect(startup).toBeUndefined()
   })
 
-  it('omits native-chat preferences from terminal-default folder launches', () => {
-    const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
-      defaultTuiAgent: 'codex',
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: false,
-      nativeChatSessionOptions: {
-        codex: {
-          model: 'gpt-5.2-codex',
-          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+  it.each([false, true])(
+    'keeps Chat UI model preferences out of the terminal folder launch (Chat UI %s)',
+    (experimentalNativeChat) => {
+      const startup = buildStartup({
+        ...getDefaultSettings('/tmp/orca-workspaces'),
+        defaultTuiAgent: 'codex',
+        experimentalNativeChat,
+        nativeChatSessionOptions: {
+          codex: {
+            model: 'gpt-5.2-codex',
+            valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+          }
         }
-      }
-    })
+      })
 
-    expect(startup?.command).not.toContain("'-m'")
-    expect(startup?.sessionOptions).toBeUndefined()
-  })
-
-  it('applies native-chat preferences to chat-default folder launches', () => {
-    const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
-      defaultTuiAgent: 'codex',
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true,
-      nativeChatSessionOptions: {
-        codex: {
-          model: 'gpt-5.2-codex',
-          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
-        }
-      }
-    })
-
-    expect(startup?.command).toContain("'-m' 'gpt-5.2-codex'")
-    expect(startup?.sessionOptions).toEqual({
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
-    })
-  })
+      expect(startup?.command).not.toContain("'-m'")
+      expect(startup?.command).not.toContain('model_reasoning_effort=')
+      expect(startup).not.toHaveProperty('sessionOptions')
+    }
+  )
 
   it('does not infer an agent from auto mode', () => {
-    const startup = buildOnboardingFolderAgentStartup({
+    const startup = buildStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: null
     })
@@ -124,34 +109,5 @@ describe('buildOnboardingFolderAgentStartup', () => {
         false
       )
     ).toBe(false)
-  })
-
-  it('builds the skipped-onboarding folder startup from the persisted default agent', () => {
-    expect(
-      buildDismissedOnboardingFolderAgentStartup(
-        {
-          ...getDefaultSettings('/tmp/orca-workspaces'),
-          defaultTuiAgent: 'codex',
-          agentCmdOverrides: { codex: 'echo onboarding-folder-agent' }
-        },
-        { ...getDefaultOnboardingState(), outcome: 'dismissed' },
-        false
-      )
-    ).toEqual({
-      command: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
-      env: {},
-      launchAgent: 'codex',
-      launchConfig: {
-        agentCommand: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
-        agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-        agentEnv: {}
-      },
-      sessionOptions: undefined,
-      telemetry: {
-        agent_kind: 'codex',
-        launch_source: 'onboarding',
-        request_kind: 'new'
-      }
-    })
   })
 })

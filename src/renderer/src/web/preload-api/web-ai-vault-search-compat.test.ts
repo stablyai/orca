@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { searchResults } from '../../../../shared/ai-vault-search-test-fixture'
 import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
+import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 
 const callRuntimeResult = vi.hoisted(() => vi.fn())
-vi.mock('./web-runtime-calls', () => ({ callRuntimeResult }))
+vi.mock('./web-runtime-calls', () => ({
+  callRuntimeResult,
+  callEnvironmentEnvelope: async (_selector: string, method: string, params: unknown) => ({
+    ok: true,
+    result: await callRuntimeResult(method, params)
+  })
+}))
 vi.mock('./web-runtime-session', () => ({
   requireActiveEnvironment: () => ({ id: 'owning-host' })
 }))
@@ -20,7 +27,10 @@ describe('web session search preload compatibility', () => {
     const result = await api.searchSessions({ query: 'needle' })
     expect(callRuntimeResult).toHaveBeenCalledExactlyOnceWith('aiVault.searchSessions', {
       query: 'needle',
-      limit: 20
+      limit: 20,
+      supportedAgents: [...AI_VAULT_AGENTS],
+      supportsQoderHistory: true,
+      supportsJcodeHistory: true
     })
     expect(result).toMatchObject({ kind: 'results', hits: [{ source: { presence: 'present' } }] })
     expect(JSON.stringify(result)).not.toContain('resumeCommand')
@@ -28,6 +38,23 @@ describe('web session search preload compatibility', () => {
     callRuntimeResult.mockResolvedValue(unavailableSessionSearchStatus())
     expect(await api.searchStatus()).toEqual(unavailableSessionSearchStatus())
     expect(callRuntimeResult).toHaveBeenLastCalledWith('aiVault.searchStatus', {})
+  })
+  it('forwards returned-row ownership intent without changing the concrete list scope', async () => {
+    callRuntimeResult.mockResolvedValue({ sessions: [], issues: [], scannedAt: 'same' })
+    await createWebAiVaultApi().listSessions({
+      historyOwnership: {},
+      scopePaths: ['/repo'],
+      limit: 25
+    })
+    expect(callRuntimeResult).toHaveBeenCalledExactlyOnceWith(
+      'aiVault.listSessions',
+      expect.objectContaining({
+        historyOwnership: {},
+        scopePaths: ['/repo'],
+        limit: 25,
+        executionHostId: 'runtime:owning-host'
+      })
+    )
   })
   it('treats an old host as unavailable but propagates transport failures', async () => {
     const api = createWebAiVaultApi()

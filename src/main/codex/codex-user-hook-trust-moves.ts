@@ -63,24 +63,22 @@ export function getMovedCodexUserHookTrust(
   return moves
 }
 
-/**
- * Writes hooks.json, then moves the trust of every hook the write shifted to
- * its new key, verbatim. Needs no Codex session, so no removal waits on one.
- */
 export function mutateRealHomeHooksPreservingUserTrust(args: {
-  sourcePath: string
+  /** Include spelled and resolved paths for symlinked homes. */
+  sourcePaths: readonly string[]
   tomlPath: string
   beforeHooks: HooksByEvent
   afterHooks: HooksByEvent
   writeHooks: () => void
 }): void {
-  const moves = getMovedCodexUserHookTrust(args.sourcePath, args.beforeHooks, args.afterHooks)
+  const moves = args.sourcePaths.flatMap((sourcePath) =>
+    getMovedCodexUserHookTrust(sourcePath, args.beforeHooks, args.afterHooks)
+  )
   args.writeHooks()
   try {
     moveHookTrustEntries(args.tomlPath, moves)
   } catch (error) {
-    // Why no rollback: the hooks write is what was asked for; Codex lists the
-    // moved hooks for review, which the user can approve there.
+    // Keep the requested hooks write; Codex can ask the user to reapprove moved hooks.
     console.warn('[codex-user-hook-trust] could not move shifted user hook trust:', error)
   }
 }

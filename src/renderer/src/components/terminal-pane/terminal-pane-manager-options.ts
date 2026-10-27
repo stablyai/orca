@@ -30,8 +30,9 @@ import {
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 
-/** Builds the imperative PaneManager option bag from the mount context. */
 export function createTerminalPaneManagerOptions(
   context: TerminalPaneManagerOptionsContext
 ): PaneManagerOptions {
@@ -105,6 +106,14 @@ export function createTerminalPaneManagerOptions(
     },
     resolveExternalPaneDropTarget,
     onExternalPaneDrop,
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN
+      ? layoutOwnerPaneGestures({
+          worktreeId,
+          tabId,
+          managerRef,
+          shouldPersistLayout: context.shouldPersistLayout
+        })
+      : {}),
     terminalLigaturesEnabled: () =>
       resolveTerminalLigaturesEnabled(
         settingsRef.current?.terminalLigatures,

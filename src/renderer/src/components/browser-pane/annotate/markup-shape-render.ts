@@ -1,15 +1,16 @@
-// Canvas rendering for markup shapes. Shared by the live overlay (draws into the
-// visible canvas) and the compositor (draws into the offscreen export canvas), so
-// on-screen preview and the delivered PNG are pixel-identical.
+// Use one shape renderer for the live canvas and exported PNG so preview and delivery agree.
 
 import {
   arrowHeadGeometry,
   highlightWidth,
   normalizeRect,
+  strokeDotRadius,
+  textHaloWidth,
   HIGHLIGHT_ALPHA,
   type ArrowShape,
   type EllipseShape,
   type MarkupShape,
+  type NormalizedRect,
   type PenShape,
   type HighlightShape,
   type RectShape,
@@ -60,8 +61,7 @@ function drawStroke(ctx: CanvasRenderingContext2D, shape: PenShape): void {
 }
 
 function drawHighlight(ctx: CanvasRenderingContext2D, shape: HighlightShape): void {
-  // Why: translucent + fat so it reads as a marker pass over the screenshot
-  // without hiding the pixels beneath.
+  // Translucent wide ink reads as highlighting without hiding the screenshot.
   ctx.globalAlpha = HIGHLIGHT_ALPHA
   const width = highlightWidth(shape.width)
   ctx.lineWidth = width
@@ -80,7 +80,7 @@ function strokePolyline(
     // Why: a tap (single point) still leaves a visible dot.
     const point = points[0]
     ctx.beginPath()
-    ctx.arc(point.x, point.y, Math.max(width / 2, 1), 0, Math.PI * 2)
+    ctx.arc(point.x, point.y, strokeDotRadius(width), 0, Math.PI * 2)
     ctx.fill()
     return
   }
@@ -125,17 +125,36 @@ function drawEllipse(ctx: CanvasRenderingContext2D, shape: EllipseShape): void {
   ctx.stroke()
 }
 
-function drawText(ctx: CanvasRenderingContext2D, shape: TextShape): void {
+// Shared by draw and measure so the measured ink box matches the drawn glyphs.
+function applyTextStyle(ctx: CanvasRenderingContext2D, shape: TextShape): void {
   ctx.font = `600 ${shape.fontSize}px ${TEXT_FONT_FAMILY}`
   ctx.textBaseline = 'top'
-  // Why: a thin contrasting halo keeps text legible over busy screenshots
-  // regardless of the underlying pixels.
-  ctx.lineWidth = Math.max(shape.fontSize / 6, 2)
-  ctx.strokeStyle = haloColor(shape.color)
+  // A contrasting halo keeps text legible over busy screenshots.
+  ctx.lineWidth = textHaloWidth(shape.fontSize)
   ctx.lineJoin = 'round'
+}
+
+function drawText(ctx: CanvasRenderingContext2D, shape: TextShape): void {
+  applyTextStyle(ctx, shape)
+  ctx.strokeStyle = haloColor(shape.color)
   // Text comes from a single-line input, so there are no newlines to lay out.
   ctx.strokeText(shape.text, shape.at.x, shape.at.y)
   ctx.fillText(shape.text, shape.at.x, shape.at.y)
+}
+
+// The box the drawn text (glyphs plus halo) actually covers.
+export function textInkBox(ctx: CanvasRenderingContext2D, shape: TextShape): NormalizedRect {
+  ctx.save()
+  applyTextStyle(ctx, shape)
+  const metrics = ctx.measureText(shape.text)
+  ctx.restore()
+  const halo = textHaloWidth(shape.fontSize)
+  return {
+    x: shape.at.x - metrics.actualBoundingBoxLeft - halo / 2,
+    y: shape.at.y - metrics.actualBoundingBoxAscent - halo / 2,
+    width: metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight + halo,
+    height: metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent + halo
+  }
 }
 
 // White text gets a dark halo, everything else a light halo.

@@ -1,20 +1,8 @@
-// The only place a new fence number is chosen.
-//
-// Normally that is just "one past the current fence". For a record the one-time import took from
-// the records file's backup, or found beside a set-aside copy, it is not: the commit that never
-// landed may already have granted a fence the copy cannot show, and `isAgentSessionFenceCurrent`
-// compares with STRICT EQUALITY, so minting that exact number would hand a second writer a lease
-// the first one still believes it holds.
-//
-// Recovery records the floor instead of rewriting the current fence, because `live` means a handle
-// proven at exactly the current fence — moving it would invalidate the very records recovery exists
-// to save. A source-level ratchet rejects direct `+ 1` mints, while acquisition-transition tests
-// pin the one-step bound and floor; an indirected mint is not caught.
+// Imported backup/set-aside records may hide an already granted fence: choose above the recovery floor to prevent a second equal-fence writer.
+// Keep the current fence for proven live handles; moving it invalidates them. The source ratchet catches direct + 1 mints only; transition tests pin the bound/floor.
 
 import type { AgentSessionLease } from './agent-session-record'
 
-export function nextAgentSessionFence(
-  lease: Pick<AgentSessionLease, 'runtimeFence' | 'minimumNextFence'>
-): number {
+export function nextAgentSessionFence(lease: AgentSessionLease): number {
   return Math.max(lease.runtimeFence + 1, lease.minimumNextFence ?? 0)
 }

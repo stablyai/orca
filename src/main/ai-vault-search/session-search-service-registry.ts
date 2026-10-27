@@ -6,6 +6,12 @@ import {
 } from '../../shared/ai-vault-search-contract'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
 import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
+import { resolveProjectHostSetupProjection } from '../../shared/project-host-setup-hydration'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import {
+  compileSessionSearchProjectOwnership,
+  materializeSessionSearchOwnership
+} from './session-search-project-ownership'
 import { resolveSessionSearchScope } from './session-search-scope-resolution'
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
 import {
@@ -14,6 +20,8 @@ import {
   type SessionSearchTransport
 } from '../../shared/ai-vault-search-transport'
 import type { SessionSearchService } from './session-search-service'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { compatibleSearchAgents } from '../../shared/ai-vault-search-agent-compatibility'
 
 let service: SessionSearchService | null = null
 
@@ -31,25 +39,97 @@ export async function searchSessionService(
   if (!current) {
     return { kind: 'unavailable', reason: 'no-service' }
   }
-  // The choke point every entry point funnels through, so every host kind
-  // resolves alike; the verdict goes to the service, which answers off and
-  // not-ready first.
-  const { within, ...request } = parsed
-  const hostScope = within
-    ? resolveSessionSearchScope(within, sessionSearchScopeCatalog())
-    : undefined
+  // Let the service answer disabled/not-ready before scope errors.
+  const { within, supportedAgents, supportsQoderHistory, supportsJcodeHistory, ...request } = parsed
+  // Older clients reject the whole page when a hit has an unknown agent tag.
+  const requestedAgents = request.filters?.agents
+  const agents = requestedAgents?.length ? requestedAgents : AI_VAULT_AGENTS
+  const compatibleAgents = compatibleSearchAgents(
+    agents,
+    transport === 'ipc'
+      ? { supportedAgents: [...AI_VAULT_AGENTS] }
+      : {
+          // An explicit tag also proves the requesting parser understands that agent.
+          supportedAgents:
+            supportedAgents ?? (requestedAgents?.length ? requestedAgents : undefined),
+          supportsQoderHistory,
+          supportsJcodeHistory
+        }
+  )
+  const compatibleRequest =
+    compatibleAgents.length === 0 || compatibleAgents.length === agents.length
+      ? request
+      : {
+          ...request,
+          filters: {
+            ...request.filters,
+            agents: compatibleAgents
+          }
+        }
   const freshness =
     request.freshness === 'wait-until-current'
       ? await reconcileWithin(current, freshnessTimeoutMs)
       : false
-  const result = AiVaultSearchResponseSchema.parse(await current.search(request, hostScope))
+  const canonical = within?.kind === 'project' && within.canonicalProjectKey
+  const catalog = within ? sessionSearchScopeCatalog() : null
+  const input = canonical ? materializeSessionSearchOwnership(catalog) : null
+  const snapshot = JSON.stringify(input)
+  const selection =
+    canonical && catalog && input
+      ? await compileSessionSearchProjectOwnership(catalog, canonical, input)
+      : null
+  const legacy =
+    catalog &&
+    within &&
+    !canonical &&
+    resolveProjectHostSetupProjection(catalog.repos, catalog.projects, catalog.projectHostSetups)
+  const legacyCatalog =
+    catalog && legacy
+      ? {
+          ...catalog,
+          settings: {
+            workspaceDir: catalog.settings.workspaceDir,
+            nestWorkspaces: catalog.settings.nestWorkspaces
+          },
+          projects: legacy.projects,
+          projectHostSetups: legacy.setups.filter(
+            (setup) => setup.hostId === (catalog.executionHostId ?? 'local')
+          ),
+          repos: catalog.repos.filter(
+            (repo) => getRepoExecutionHostId(repo) === (catalog.executionHostId ?? 'local')
+          )
+        }
+      : null
+  const hostScope = selection
+    ? { kind: 'canonical' as const, selection }
+    : within
+      ? resolveSessionSearchScope(within, legacyCatalog)
+      : undefined
+  const retrievalScope =
+    compatibleAgents.length === 0 && hostScope?.kind !== 'unknown'
+      ? { kind: 'resolved' as const, paths: [''] }
+      : hostScope
+  const moved = () =>
+    snapshot !== JSON.stringify(materializeSessionSearchOwnership(sessionSearchScopeCatalog()))
+  if (canonical && moved()) {
+    return { kind: 'stale-cursor', generation: 0 }
+  }
+  const result = AiVaultSearchResponseSchema.parse(
+    await current.search(compatibleRequest, retrievalScope)
+  )
+  if (canonical && moved()) {
+    return { kind: 'stale-cursor', generation: result.kind === 'results' ? result.generation : 0 }
+  }
   if (result.kind !== 'results') {
     return result
   }
   const { debug, ...fields } = result
   return {
     ...fields,
-    hits: result.hits.map((hit) => redactForTransport(hit, transport)),
+    ...(compatibleAgents.length === 0 ? { page: { cursor: null, hasMore: false } } : {}),
+    hits: result.hits
+      .filter((hit) => compatibleAgents.includes(hit.agent))
+      .map((hit) => redactForTransport(hit, transport)),
     truncated: { ...result.truncated, freshness: result.truncated.freshness || freshness },
     ...(request.debug && debug ? { debug } : {})
   }
@@ -61,9 +141,12 @@ export async function sessionSearchServiceStatus(
 ): Promise<AiVaultSearchStatus> {
   AiVaultSearchStatusRequestSchema.parse(raw)
   return redactStatusForTransport(
-    AiVaultSearchStatusSchema.parse(
-      service ? await service.status() : unavailableSessionSearchStatus()
-    ),
+    AiVaultSearchStatusSchema.parse({
+      ...(service ? await service.status() : unavailableSessionSearchStatus()),
+      supportedAgents: [...AI_VAULT_AGENTS],
+      supportsQoderHistory: true,
+      supportsJcodeHistory: true
+    }),
     transport
   )
 }

@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 
-// Why the mocks: this file only proves the structured-session seam, and the real orchestrator's
-// import graph reaches git, electron, and the agent-hook installers.
+// Mock the orchestrator to isolate this seam from Git, Electron and hook installers.
 const { renameCalls } = vi.hoisted(() => ({ renameCalls: [] as unknown[][] }))
 vi.mock('../agent-hooks/first-work-branch-rename', () => ({
   maybeAutoRenameBranchOnFirstWork: (...args: unknown[]) => {

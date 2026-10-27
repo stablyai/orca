@@ -2,95 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
-import type { GlobalSettings } from '../../src/shared/global-settings-types'
+import {
+  enableNativeChatSetting,
+  seedClaudeProviderSession,
+  toggleTerminalTabToChatView,
+  claudeTranscriptLines
+} from './helpers/native-chat-transcript-fixture'
 
 const LOADING_TITLE = 'Loading conversation…'
 const ERROR_TITLE = 'Could not load conversation'
-
-async function enableNativeChatSetting(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
-    window.__store?.setState({ settings: nextSettings as GlobalSettings })
-  })
-}
-
-// Why: seeding agentStatusByPaneKey directly (rather than posting a real
-// `/hook/claude` event) mirrors the technique agent-session-quit-resume.spec.ts
-// uses to stay hermetic — it exercises the identical store → NativeChatView
-// path a real Claude Code hook would drive, without an installed CLI.
-async function seedClaudeProviderSession(
-  page: Page,
-  args: { paneKey: string; worktreeId: string; sessionId: string; transcriptPath: string }
-): Promise<void> {
-  await page.evaluate(({ paneKey, worktreeId, sessionId, transcriptPath }) => {
-    window.__store
-      ?.getState()
-      .setAgentStatus(
-        paneKey,
-        { state: 'working', prompt: 'e2e first-flush race probe', agentType: 'claude' },
-        'Claude',
-        undefined,
-        { worktreeId },
-        { providerSession: { key: 'session_id', id: sessionId, transcriptPath } }
-      )
-  }, args)
-}
-
-// Why: toggleTabViewMode keys off the *unified* tab id, which can differ from
-// the terminal tab id embedded in paneKey — resolve it the same way
-// TerminalPane.tsx does before calling the store action a real toggle/shortcut
-// would use.
-async function toggleTerminalTabToChatView(
-  page: Page,
-  args: { tabId: string; worktreeId: string }
-): Promise<void> {
-  await page.evaluate(({ tabId, worktreeId }) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    const state = store.getState()
-    const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-      (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
-    )
-    if (!unifiedTab) {
-      throw new Error('Unified terminal tab not found for chat toggle')
-    }
-    state.toggleTabViewMode(unifiedTab.id)
-  }, args)
-}
-
-function claudeTranscriptLines(args: {
-  sessionId: string
-  userText: string
-  assistantText: string
-}): string {
-  // Why: distinct timestamps keep the rendered order deterministic (a tie is
-  // broken by uuid, which would put the assistant turn first).
-  const userTime = new Date()
-  const assistantTime = new Date(userTime.getTime() + 2_000)
-  const lines = [
-    {
-      sessionId: args.sessionId,
-      uuid: `${args.sessionId}-user`,
-      timestamp: userTime.toISOString(),
-      type: 'user',
-      message: { role: 'user', content: [{ type: 'text', text: args.userText }] }
-    },
-    {
-      sessionId: args.sessionId,
-      uuid: `${args.sessionId}-assistant`,
-      timestamp: assistantTime.toISOString(),
-      type: 'assistant',
-      message: { model: 'claude-opus-4', content: [{ type: 'text', text: args.assistantText }] }
-    }
-  ]
-  return `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`
-}
 
 test.describe('Native chat first-flush transcript race (#8401)', () => {
   test('stays in loading (never errors) until a not-yet-flushed transcript appears, then hydrates live', async ({
@@ -105,17 +28,11 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
     const [tabId] = descriptor.paneKey.split(':')
     const sessionId = `e2e-first-flush-${randomUUID()}`
 
-    // Why: a real Claude Code session flushes its first JSONL line up to
-    // minutes after launch (#8401) — this directory intentionally has no file
-    // yet when the pane resolves its providerSession.
+    // #8401: Claude may flush its first JSONL minutes after launch; resolve providerSession before creating the file.
     const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-'))
     const transcriptPath = path.join(scratchDir, `${sessionId}.jsonl`)
 
-    const screenshotDir = path.join(
-      process.cwd(),
-      'validation-screenshots',
-      `native-chat-first-flush-race-${Date.now()}`
-    )
+    const screenshotDir = testInfo.outputPath('screenshots')
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -141,11 +58,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
         path: path.join(screenshotDir, '01-loading-no-error.png')
       })
 
-      // Why observe, not sleep: 1_500ms is exactly UNFLUSHED_SETTLE_MS, so a fixed
-      // wait straddles the boundary where the host reports the transcript pending
-      // and the renderer cancels its own retry. Read through the same IPC instead,
-      // proving the miss directly. A notFound is never cached, so this cannot
-      // perturb the hydration the assertions below measure.
+      // Observe the uncached miss through IPC: a fixed 1500ms wait races UNFLUSHED_SETTLE_MS and retry cancellation.
       await expect
         .poll(
           () =>
@@ -166,8 +79,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
         'The main process now retries a not-yet-flushed transcript instead of caching a permanent miss.'
       writeFileSync(transcriptPath, claudeTranscriptLines({ sessionId, userText, assistantText }))
 
-      // Why: the user text also surfaces as chrome (worktree row, tab
-      // title), so scope hydration assertions to the transcript subtree.
+      // Scope to transcript content because user text also appears in workspace/tab chrome.
       const transcript = orcaPage.locator('[data-native-chat-root="true"]')
       await expect(transcript.getByText(userText)).toBeVisible({ timeout: 30_000 })
       await expect(transcript.getByText(assistantText)).toBeVisible({ timeout: 30_000 })

@@ -11,28 +11,26 @@ import { routeDictationTranscript } from '../terminal/terminal-live-dictation-ro
 import {
   sendMobileNativeChatMessageWithOutcome,
   clearMobileNativeChatInput
-} from './mobile-native-chat-send'
+} from './native-chat/mobile-native-chat-send'
 import { sendMobileTerminalQueryReply } from '../terminal/mobile-terminal-query-reply'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
-import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
+import { pasteMobileNativeChatImagePaths } from './native-chat/composer/mobile-native-chat-image-send'
 
 vi.mock('react-native', () => ({ Keyboard: { dismiss: vi.fn() } }))
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
 vi.mock('expo-clipboard', () => ({ getStringAsync: async () => 'pasted text' }))
-// Reached through the media seam, which the paste hook now holds instead of the picker modules.
 vi.mock('./mobile-image-source-picker', () => ({
   pickMobileImage: vi.fn(),
   pickMobileImages: vi.fn()
 }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: '/tmp' } }))
-vi.mock('expo-image-manipulator', () => ({ ImageManipulator: {}, SaveFormat: {} }))
 
 const REPORT = 'orchestration.workerTerminalUserInput'
 const ref = <T>(current: T) => ({ current })
 const renderers: ReactTestRenderer[] = []
 function clientFixture() {
   return {
-    sendRequest: vi.fn(async (method: string) => ({
+    sendRequest: vi.fn(async (method: string, _params?: unknown) => ({
       id: 'rpc',
       ok: true as const,
       result:
@@ -162,6 +160,7 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
         connected: true,
         handle,
         hostSupportsQueryReplyInput: true,
+        hostSupportsProgramStatus: true,
         subscribedTerminals: new Set([handle])
       }),
     'image heal': () =>

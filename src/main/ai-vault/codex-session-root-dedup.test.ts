@@ -286,8 +286,6 @@ describe('dedupeCodexRolloutCopyAliases', () => {
     expect(readSessionMetaId).toHaveBeenCalledTimes(2)
   })
 
-  // Why: the proof reads run inside the scan's 130s deadline, so a superseded
-  // scan must stop rather than drain a whole second history copy (#17888).
   it('stops proving copies once the scan is cancelled', async () => {
     const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
     const managed = { agent: 'codex', path: MANAGED_HOME_ROLLOUT, codexHome: MANAGED_HOME }

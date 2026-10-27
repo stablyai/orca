@@ -15,6 +15,8 @@ const WORKSPACE = 'acknowledgement-workspace'
 const PANE_A = makePaneKey('tab-a', '11111111-1111-4111-8111-111111111111')
 const PANE_B = makePaneKey('tab-b', '22222222-2222-4222-8222-222222222222')
 let acknowledgements: Record<string, number> = {}
+// Default live hook records to rendered rows so unread detection sees the same entries.
+let liveTurns: Record<string, DashboardAgentRow['entry']> = {}
 let focusedPaneKey: string | null = null
 
 vi.mock('@/store', () => ({
@@ -22,6 +24,8 @@ vi.mock('@/store', () => ({
     selector({
       agentActivityDisplayMode: 'compact',
       acknowledgedAgentsByPaneKey: acknowledgements,
+      agentStatusByPaneKey: liveTurns,
+      retainedAgentsByPaneKey: {},
       agentSendPopoverTargetMode: null,
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
@@ -79,7 +83,11 @@ function agentRow(
   }
 }
 
-function renderLabels(agents: DashboardAgentRow[]): HTMLElement[] {
+function renderLabels(
+  agents: DashboardAgentRow[],
+  turns = Object.fromEntries(agents.map((agent) => [agent.paneKey, agent.entry]))
+): HTMLElement[] {
+  liveTurns = turns
   const container = document.createElement('div')
   container.innerHTML = renderToStaticMarkup(
     <TooltipProvider>
@@ -100,6 +108,7 @@ function expectEmphasis(label: HTMLElement | undefined, unvisited: boolean): voi
 
 beforeEach(() => {
   acknowledgements = { [PANE_B]: 2000 }
+  liveTurns = {}
   focusedPaneKey = null
   clearWorktreeAgentExpansionStateForTests()
   seedWorktreeAgentExpansionStateForTests(WORKSPACE, {
@@ -163,6 +172,26 @@ describe('compact acknowledgement emphasis through WorktreeCardAgents', () => {
     const [label] = renderLabels([agentRow(PANE_A, 'done', { interrupted: true })])
     expectEmphasis(label, true)
     expect(label?.nextElementSibling?.textContent).toContain('Interrupted by user')
+  })
+
+  it('emphasizes only rows with an unread hook turn, never title-derived or subagent rows', () => {
+    // Title/subagent rows have no hook turn; title timestamps restamp on rebuild and cannot prove unread activity.
+    acknowledgements = {}
+    const hook = agentRow(PANE_A)
+    const title = { ...agentRow(PANE_B, 'idle', { stateStartedAt: 9000 }), startedAt: 0 }
+    const child = {
+      ...agentRow(`${PANE_A}\u0000subagent:s1`, 'working'),
+      rowSource: 'subagent' as const,
+      activationPaneKey: PANE_A
+    }
+    const turns = { [PANE_A]: hook.entry }
+    const labels = renderLabels([hook, title, child], turns)
+    expect(labels).toHaveLength(3)
+    expectEmphasis(labels[0], true)
+    expectEmphasis(labels[1], false)
+    expectEmphasis(labels[2], false)
+    acknowledgements = { [PANE_A]: 2000 }
+    expectEmphasis(renderLabels([hook, title, child], turns)[0], false)
   })
 
   it('does not treat same-state output as a new turn, but admits a newer timestamp', () => {

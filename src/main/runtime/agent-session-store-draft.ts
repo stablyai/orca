@@ -1,19 +1,17 @@
-/**
- * A transaction applies to a draft of the published store state, and the store publishes the draft
- * only once its rows have committed, so no reader ever sees a change that might still roll back.
- */
+// Publish drafts only after row commit so readers never see changes that can roll back.
 
+import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import type {
   AgentSessionStoreState,
   RetiredAgentSessionClaimKey
-} from './agent-session-record-store-file'
+} from './agent-session-store-state'
 import {
   isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
-import type { PersistedAgentSessionTab } from './agent-session-tab-table'
+import type { PersistedAgentSessionTab } from './agent-session/agent-session-tab-table'
 
 /** Unreadable rows are derived at load and never written, so the draft shares them. */
 export function draftAgentSessionStoreState(state: AgentSessionStoreState): AgentSessionStoreState {
@@ -28,13 +26,12 @@ export function draftAgentSessionStoreState(state: AgentSessionStoreState): Agen
 
 type KeyedRowWrites = { upsert: [key: string, json: string][]; remove: string[] }
 
-/** Exactly the rows a draft changed, each serialized as it will be stored. */
 export type AgentSessionStoreRowWrites = {
   records: KeyedRowWrites
   operations: KeyedRowWrites
   /** The whole list when it changed, else null. */
   retiredClaimKeys: RetiredAgentSessionClaimKey[] | null
-  /** The whole index when it changed: `recorded: false` is a store that has never recorded one. */
+  /** Complete changed index; recorded: false distinguishes a never-recorded index. */
   sessionTabs: { recorded: boolean; tabs: PersistedAgentSessionTab[] } | null
 }
 
@@ -42,7 +39,8 @@ export type AgentSessionStoreRowWrites = {
 function serializeChangedRows<V>(
   published: ReadonlyMap<string, V>,
   next: ReadonlyMap<string, V>,
-  readable: (key: string, written: unknown) => boolean
+  readable: (key: string, written: unknown) => boolean,
+  stored: (value: V) => unknown = (value) => value
 ): KeyedRowWrites {
   const writes: KeyedRowWrites = { upsert: [], remove: [] }
   let added = 0
@@ -51,7 +49,7 @@ function serializeChangedRows<V>(
     if (prior === value) {
       continue
     }
-    const json = JSON.stringify(value)
+    const json = JSON.stringify(stored(value))
     if (json === undefined || !readable(key, JSON.parse(json))) {
       throw new Error('agent_session_store_write_invalid')
     }
@@ -76,17 +74,16 @@ function retiredClaimKeysChanged(
   return published.length !== next.length || published.some((entry, index) => entry !== next[index])
 }
 
-/**
- * The rows a draft changed relative to the published state, by identity, or null when it changed
- * none. Each changed row is checked as written against the rules a load applies, so a row a later
- * load would refuse rejects its own transaction instead of living in memory unreadable.
- */
+/** Diff rows by identity; validate their serialized form with load rules before committing. */
 export function agentSessionStoreDraftRowWrites(
   published: AgentSessionStoreState,
   draft: AgentSessionStoreState
 ): AgentSessionStoreRowWrites | null {
-  const records = serializeChangedRows(published.records, draft.records, (sessionId, written) =>
-    isReadableAgentSessionStoreRecord(sessionId, written)
+  const records = serializeChangedRows(
+    published.records,
+    draft.records,
+    (sessionId, written) => isReadableAgentSessionStoreRecord(sessionId, written),
+    encodeAgentSessionRecord
   )
   const operations = serializeChangedRows(published.operations, draft.operations, (key, written) =>
     isReadableAgentSessionStoreOperation(key, written)

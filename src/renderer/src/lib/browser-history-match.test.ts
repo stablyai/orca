@@ -3,6 +3,7 @@ import type { BrowserHistoryEntry } from '../../../shared/browser-workspace-type
 import {
   matchBrowserHistory,
   prepareBrowserHistoryEntries,
+  rankBrowserTopSites,
   type BrowserHistoryMatchTier
 } from './browser-history-match'
 
@@ -142,7 +143,6 @@ describe('browser history match', () => {
     const missB = matchBrowserHistory({ prepared, query: 'also-nothing', limit: 3, now: NOW })
 
     expect(missA).toHaveLength(0)
-    // Identity: an empty result must not churn the caller's memos.
     expect(missA).toBe(missB)
     expect(matchBrowserHistory({ prepared, query: '   ', limit: 3, now: NOW })).toBe(missA)
     expect(matchBrowserHistory({ prepared, query: 'git', limit: 0, now: NOW })).toBe(missA)
@@ -210,5 +210,27 @@ describe('browser history match', () => {
           .sort()
       ).toEqual(reference)
     }
+  })
+})
+
+describe('rankBrowserTopSites', () => {
+  it('ranks pages by visits and recency, leaving out dev servers and non-web pages', () => {
+    const ranked = rankBrowserTopSites({
+      prepared: prepareBrowserHistoryEntries([
+        entry({ url: 'https://react.dev/', visitCount: 3, lastVisitedAt: NOW - 48 * HOUR }),
+        entry({ url: 'https://github.com/acme/orca', visitCount: 2, lastVisitedAt: NOW }),
+        entry({ url: 'http://localhost:5173/', visitCount: 40 }),
+        entry({ url: 'http://web.orca.localhost:3000/', visitCount: 40 }),
+        entry({ url: 'file:///tmp/notes.html', visitCount: 40 }),
+        entry({ url: 'https://example.com/', visitCount: 1, lastVisitedAt: NOW - 48 * HOUR })
+      ]),
+      limit: 2,
+      now: NOW
+    })
+
+    expect(ranked.map((page) => page.url)).toEqual([
+      'https://github.com/acme/orca',
+      'https://react.dev/'
+    ])
   })
 })

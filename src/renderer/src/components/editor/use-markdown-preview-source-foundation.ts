@@ -3,8 +3,9 @@ import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolu
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useAppStore } from '@/store'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
 import type { MarkdownPreviewSearchInstance } from './markdown-preview-search'
 import {
@@ -15,18 +16,21 @@ import {
 } from './markdown-preview-source-routing'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function useMarkdownPreviewSourceFoundation({
   content,
   filePath,
   sourceFileId,
   sourceWorktreeId,
-  sourceRuntimeEnvironmentId
+  sourceRuntimeEnvironmentId,
+  prewarmImages = true
 }: {
   content: string
   filePath: string
   sourceFileId: string | null
   sourceWorktreeId: string | null
+  prewarmImages?: boolean
   sourceRuntimeEnvironmentId: string | null | undefined
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -44,7 +48,6 @@ export function useMarkdownPreviewSourceFoundation({
   const matchesRef = useRef<Range[]>([])
   const searchInstanceRef = useRef<MarkdownPreviewSearchInstance>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
-  const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -56,13 +59,12 @@ export function useMarkdownPreviewSourceFoundation({
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const frontmatterVisibleByFile = useAppStore((s) => s.markdownFrontmatterVisible)
-  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const keybindings = useAppStore((s) => s.keybindings)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const sourceOpenFile = useAppStore((s) =>
     findMarkdownPreviewSourceOpenFile(s.openFiles, {
       sourceFileId,
@@ -121,23 +123,28 @@ export function useMarkdownPreviewSourceFoundation({
       ),
     [allDiffComments, sourceRelativePath]
   )
-  const settings = useAppStore((s) => s.settings)
+  const sourceRuntimeTarget = useFileOwnerRuntimeTarget(
+    sourceRoutingWorktreeId,
+    resolvedSourceRuntimeEnvironmentId
+  )
   const imageRuntimeContext = useMemo(
     () =>
-      sourceRoutingWorktreeId && worktreeRoot
-        ? {
-            settings: settingsForRuntimeOwner(settings, resolvedSourceRuntimeEnvironmentId),
-            worktreeId: sourceRoutingWorktreeId,
-            worktreePath: worktreeRoot,
-            connectionId: sourceConnectionId,
-            expectedExternalSshTargetId: sourceOpenFile?.externalSshTargetId
-          }
-        : undefined,
+      !sourceRoutingWorktreeId || !worktreeRoot
+        ? undefined
+        : sourceRuntimeTarget
+          ? {
+              target: sourceRuntimeTarget,
+              worktreeId: sourceRoutingWorktreeId,
+              worktreePath: worktreeRoot,
+              connectionId: sourceConnectionId,
+              expectedExternalSshTargetId: sourceOpenFile?.externalSshTargetId
+            }
+          : // Why null, not undefined: undefined reads as a plain local file and would read here.
+            null,
     [
-      settings,
+      sourceRuntimeTarget,
       sourceConnectionId,
       sourceOpenFile?.externalSshTargetId,
-      resolvedSourceRuntimeEnvironmentId,
       sourceRoutingWorktreeId,
       worktreeRoot
     ]
@@ -149,11 +156,14 @@ export function useMarkdownPreviewSourceFoundation({
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 
   useEffect(() => {
+    if (!prewarmImages || exceedsMarkdownRichModeSizeLimit(renderedContent)) {
+      return
+    }
     const prewarm = prewarmMarkdownPreviewLocalImages(renderedContent, filePath, {
       runtimeContext: imageRuntimeContext
     })
     return prewarm.cancel
-  }, [renderedContent, filePath, imageRuntimeContext])
+  }, [renderedContent, filePath, imageRuntimeContext, prewarmImages])
 
   return {
     rootRef,
@@ -163,7 +173,6 @@ export function useMarkdownPreviewSourceFoundation({
     matchesRef,
     searchInstanceRef,
     lastAppliedInitialAnchorRef,
-    pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
     query,
@@ -180,7 +189,6 @@ export function useMarkdownPreviewSourceFoundation({
     openMarkdownPreview,
     setMarkdownViewMode,
     frontmatterVisibleByFile,
-    setPendingEditorReveal,
     addDiffComment,
     deleteDiffComment,
     updateDiffComment,

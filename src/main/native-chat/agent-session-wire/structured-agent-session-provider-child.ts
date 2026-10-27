@@ -1,17 +1,12 @@
-// The provider child behind a conversation, kept as its own record on the conversation's entry.
-//
-// The entry is the conversation and outlives any number of children. A child enters only when an
-// attach has fully succeeded, and leaves only through `endProviderChild`, which every ending shares:
-// an exit, a failed re-attach, a Stop and an eviction. Each is matched on the child's generation
-// and fence, so an ending that arrives late for an older child cannot end a newer one.
+// Match child endings by generation/fence so stale exits cannot end newer children; conversation state outlives them.
 
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionEndedChild,
   StructuredAgentSessionHostSession,
-  StructuredAgentSessionOwedWindDown,
   StructuredAgentSessionProviderChild,
   StructuredAgentSessionProviderChildIdentity
 } from './structured-agent-session-host-types'
@@ -20,16 +15,15 @@ type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedC
   journal: Pick<AgentSessionJournal, 'cursor'>
 }
 
-/** The fence a conversation write carries: the record's, which is where the next child starts. A
- *  child's own writes carry `child.fence`, which equals it while that child holds the lease. */
+/** Conversation writes use the record fence; provider writes retain the child’s acquisition fence. */
 export function structuredAgentSessionConversationFence(
-  store: Pick<AgentSessionRecordStore, 'getRecord'>,
+  store: Pick<AgentSessionRecordStore, 'getConversation'>,
   sessionId: string
 ): number {
-  return store.getRecord(sessionId)?.lease.runtimeFence ?? 0
+  return store.getConversation(sessionId)?.currentFence ?? 0
 }
 
-/** For the end of a successful attach only: a failed one never wrote a child to take back. */
+/** Index only successful attaches; failures have no child to remove. */
 export function indexProviderChild(
   session: ChildBearer,
   child: StructuredAgentSessionProviderChild
@@ -48,8 +42,50 @@ export function markProviderChildStarted(
   return child !== null
 }
 
-/** `endedAt` is a stop's ask; an exit ends where the journal stands. */
+/** Current adapter-held children prove life without PID probes; previous runtimes prove nothing here. */
+export function holdsLiveProviderChild(
+  session: Pick<ChildBearer, 'child'> | undefined,
+  fence: number,
+  processLive: (acquisitionGeneration: string) => boolean
+): boolean {
+  const child = session?.child
+  return (
+    !!child && child.fence === fence && child.generation !== null && processLive(child.generation)
+  )
+}
+
+export type ProviderChildSessions = {
+  get(sessionId: string): Pick<ChildBearer, 'child'> | undefined
+}
+
+export function heldProviderChildReader(
+  sessions: ProviderChildSessions,
+  adapter: Pick<StructuredAgentSessionAdapter, 'holdsLiveProviderProcess'> | undefined
+): (sessionId: string, fence: number) => boolean {
+  return (sessionId, fence) =>
+    holdsLiveProviderChild(
+      sessions.get(sessionId),
+      fence,
+      (generation) => adapter?.holdsLiveProviderProcess?.(sessionId, generation) === true
+    )
+}
+
+/** Requested close retains its Stop boundary; spontaneous exit uses the current cursor. */
 export function endProviderChild(
+  session: ChildBearer,
+  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'> & {
+    endedAt?: AgentJournalCursor
+  }
+): boolean {
+  if (!recordProviderChildEnd(session, ended)) {
+    return false
+  }
+  session.child = null
+  return true
+}
+
+/** Mark ended for all readers while retaining the child for its own teardown. */
+export function recordProviderChildEnd(
   session: ChildBearer,
   ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'> & {
     endedAt?: AgentJournalCursor
@@ -59,7 +95,6 @@ export function endProviderChild(
   if (!child) {
     return false
   }
-  session.child = null
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),
@@ -68,22 +103,12 @@ export function endProviderChild(
   return true
 }
 
-/** The conversation's last start died before it proved itself, and nothing started since. Only a
- *  send retries it: a view or an exit recovery would respawn into the same failure, adding a row. */
+/** Only sends retry failed startup; views/exit recovery must not respawn the same failure. */
 export function failedProviderChildStart(
   session: Pick<ChildBearer, 'child' | 'lastEndedChild'>
 ): StructuredAgentSessionEndedChild | null {
   const ended = session.lastEndedChild
   return !session.child && ended?.duringStartup && ended.cause !== 'user-stop' ? ended : null
-}
-
-/** The owed wind-down an operation reaching the provider finishes first. One owed for another child
- *  never outranks the child in front of it, which that child's own stop finishes. */
-export function pendingProviderChildWindDown(
-  session: Pick<StructuredAgentSessionHostSession, 'child' | 'owesProviderChildWindDown'>
-): StructuredAgentSessionOwedWindDown | undefined {
-  const { child, owesProviderChildWindDown: owed } = session
-  return owed && (!child || sameProviderChild(child, owed)) ? owed : undefined
 }
 
 export function sameProviderChild(

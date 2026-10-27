@@ -2,6 +2,11 @@ import { statSync } from 'node:fs'
 import type { MessageBoxOptions, MessageBoxReturnValue } from 'electron'
 import { getActiveProfileStateLocation } from './profile-state-active-location'
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
+import type { ProfileStateRepairSection } from './profile-state-section-repair'
+import {
+  includesProjectListSection,
+  profileStateSectionLabels
+} from './profile-state-section-labels'
 
 export type ProfileStateStartupRecoveryDialogDeps = {
   message: string
@@ -10,7 +15,7 @@ export type ProfileStateStartupRecoveryDialogDeps = {
   copyToClipboard: (text: string) => void
 }
 
-/** Present the only safe desktop recovery action without changing the failed authority. */
+/** Present recovery without mutating the failed authority. */
 export async function presentProfileStateStartupRecoveryDialog(
   deps: ProfileStateStartupRecoveryDialogDeps
 ): Promise<void> {
@@ -41,7 +46,7 @@ export type ProfileStateCopyChoiceDialogDeps = {
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
 }
 
-/** Best-effort save times; SQLite's latest commit may live only in its WAL, and -shm changes on every open. */
+/** Best effort: WAL can hold the latest commit; shm mtimes reflect opens, not saves. */
 export function readProfileStateCopySavedTimes(userDataPath: string): {
   sqliteSavedAt?: Date
   jsonSavedAt?: Date
@@ -71,7 +76,7 @@ function modifiedAt(path: string): Date | undefined {
   return statSync(path, { throwIfNoEntry: false })?.mtime
 }
 
-/** Ask which diverged copy to keep; undefined means quit without changing either. */
+/** Undefined quits without changing either diverged copy. */
 export async function chooseProfileStateCopy(
   deps: ProfileStateCopyChoiceDialogDeps
 ): Promise<ProfileStateCopyChoice | undefined> {
@@ -97,4 +102,54 @@ export async function chooseProfileStateCopy(
     ].join('\n')
   })
   return response === 0 ? 'current-sqlite' : response === 1 ? 'current-json' : undefined
+}
+
+export type ProfileStateRepairChoiceDialogDeps = {
+  sections: readonly ProfileStateRepairSection[]
+  formatTime?: (time: Date) => string
+  showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
+}
+
+/** Confirm replacement with older sections; false quits unchanged. */
+export async function chooseProfileStateRepair(
+  deps: ProfileStateRepairChoiceDialogDeps
+): Promise<boolean> {
+  const format = deps.formatTime ?? ((time: Date) => time.toLocaleString())
+  const lines = deps.sections.map(({ domain, backupCreatedAtMs }) => {
+    const [label] = profileStateSectionLabels([domain])
+    return backupCreatedAtMs === undefined
+      ? `${label}: no readable backup, so it will start empty.`
+      : `${label}: restored from the backup saved ${format(new Date(backupCreatedAtMs))}.`
+  })
+  const projectSections = deps.sections.filter(({ domain }) => includesProjectListSection([domain]))
+  const projectNote =
+    projectSections.length === 0
+      ? []
+      : projectSections.some(({ backupCreatedAtMs }) => backupCreatedAtMs === undefined)
+        ? [
+            'Orca will forget your projects and their workspace details. Files on disk are not touched.',
+            ''
+          ]
+        : [
+            'Projects added after that backup will be removed from Orca, along with their workspace details. Files on disk are not touched.',
+            ''
+          ]
+  const { response } = await deps.showMessageBox({
+    type: 'warning',
+    buttons: ['Repair and Restart', 'Quit'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+    title: 'Repair profile',
+    message: "Part of this profile's saved state is damaged.",
+    detail: [
+      ...new Set(lines),
+      '',
+      'Everything else stays as it is now.',
+      '',
+      ...projectNote,
+      'Orca keeps a copy of the damaged file in its data folder, then restarts.'
+    ].join('\n')
+  })
+  return response === 0
 }

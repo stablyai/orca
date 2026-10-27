@@ -1,17 +1,22 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
+import { agentBrowserCommandOf } from '../browser/agent-browser-bridge-test-harness'
 import { ExternalChromiumBrowserProcess } from './external-chromium-browser-process'
-import { installedElectronCandidates, resolveOrcadBrowserProvider } from './orcad-browser-provider'
-import { orcadAgentBrowserNativeName } from './orcad-agent-browser-binary'
+import {
+  installedElectronCandidates,
+  resolveInstalledElectronExecutable,
+  resolveOrcadBrowserProvider
+} from './orcad-browser-provider'
+import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 import {
   runtimeBrowserUnavailableCause,
   setRuntimeBrowserUnavailableCause
 } from '../runtime/runtime-browser-commands-factory'
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
   spawnProcess: vi.fn()
 }))
@@ -27,14 +32,6 @@ let root: string
 let screenshotPath: string
 let browserState: BrowserState
 
-function commandFromArgs(args: readonly string[]): string[] {
-  let index = 0
-  while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {
-    index += 2
-  }
-  return args.slice(index, -1)
-}
-
 function success(data: unknown) {
   return Promise.resolve({
     code: 0,
@@ -47,7 +44,7 @@ function success(data: unknown) {
 
 function installAgentBrowserMock(): void {
   runProcessMock.mockImplementation(async (spec) => {
-    const command = commandFromArgs(spec.args ?? [])
+    const command = agentBrowserCommandOf(spec.args ?? [], spec.input)
     if (command[0] === 'open') {
       const active = browserState.tabs.find((tab) => tab.tabId === browserState.activeTabId)!
       active.url = command[1]
@@ -109,8 +106,6 @@ describe('ExternalChromiumBrowserProcess', () => {
       getAgentBrowserBridge: () => null,
       resolveWorktreeSelector: async (selector) => ({ id: selector }),
       resolveBrowserWorkspace: async (selector) => ({ id: selector }),
-      // Unused by the sidecar command paths under test; the daemon's real host is
-      // OrcaRuntimeService, which owns the client-hosted registries.
       resolveBrowserNetworkExecutionHost: () => {
         throw new Error('No browser network execution host')
       },
@@ -193,6 +188,34 @@ describe('cross-platform browser provider paths', () => {
     expect(orcadAgentBrowserNativeName('darwin', 'arm64')).toBe('agent-browser-darwin-arm64')
     expect(orcadAgentBrowserNativeName('linux', 'x64')).toBe('agent-browser-linux-x64')
     expect(orcadAgentBrowserNativeName('win32', 'x64')).toBe('agent-browser-win32-x64.exe')
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('resolveInstalledElectronExecutable', () => {
+  async function writeExecutable(path: string, content: Buffer | string): Promise<void> {
+    await mkdir(join(path, '..'), { recursive: true })
+    await writeFile(path, content)
+    await chmod(path, 0o755)
+  }
+
+  it('rejects a symlink to the bash CLI shim and picks the install-dir binary', async () => {
+    const shim = join(root, 'share', 'orca-ide-shim')
+    const link = join(root, 'bin', 'orca-ide')
+    const electron = join(root, 'opt', 'Orca', 'orca-ide')
+    await writeExecutable(shim, '#!/usr/bin/env bash\nexec true\n')
+    await mkdir(join(link, '..'), { recursive: true })
+    await symlink(shim, link)
+    await writeExecutable(electron, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0]))
+
+    await expect(resolveInstalledElectronExecutable([link, electron])).resolves.toBe(electron)
+    await expect(resolveInstalledElectronExecutable([link])).resolves.toBeNull()
+  })
+
+  it('still accepts an AppImage-style binary', async () => {
+    const appImage = join(root, 'Orca.AppImage')
+    await writeExecutable(appImage, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0]))
+
+    await expect(resolveInstalledElectronExecutable([appImage])).resolves.toBe(appImage)
   })
 })
 

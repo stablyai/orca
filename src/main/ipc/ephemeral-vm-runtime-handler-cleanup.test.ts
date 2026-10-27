@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
+import type * as RuntimeEnvironmentStore from '../../shared/runtime-environment-store'
 
 const handlers = new Map<string, (_event: unknown, args: { runtimeId: string }) => unknown>()
 const { getPathMock, handleMock, removeRuntimeOwnedSshTargetMock, removeHandlerMock } = vi.hoisted(
@@ -19,7 +20,22 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
 }))
 
-vi.mock('../ephemeral-vm-runtime-ssh', () => ({
+const { listEnvironmentsMock, removeEnvironmentMock } = vi.hoisted(() => ({
+  listEnvironmentsMock: vi.fn((): { id: string }[] => []),
+  removeEnvironmentMock: vi.fn()
+}))
+
+vi.mock('../../shared/runtime-environment-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+  listEnvironments: listEnvironmentsMock,
+  removeEnvironment: removeEnvironmentMock
+}))
+
+vi.mock('./runtime-environments/runtime-environments', () => ({
+  invalidateRuntimeEnvironmentTransport: vi.fn(async () => {})
+}))
+
+vi.mock('../ephemeral-vm/runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: vi.fn(),
   disconnectRuntimeOwnedSshTarget: vi.fn(),
   removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock
@@ -147,4 +163,56 @@ it('stops in-flight cleanup and retains the runtime for retry', async () => {
     cleanupLastError: 'Cleanup stopped by user.'
   })
   await expect(cleanup).resolves.toMatchObject({ status: 'cleanup_failed' })
+})
+
+it("retires a recipe server's session partition once its VM is destroyed (#33805)", async () => {
+  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-handler-'))
+  const repoPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-repo-'))
+  tempDirs.push(userDataPath, repoPath)
+  getPathMock.mockReturnValue(userDataPath)
+  const destroyPath = join(repoPath, 'destroy.js')
+  writeFileSync(destroyPath, 'process.exit(0)')
+  listEnvironmentsMock.mockReturnValue([{ id: 'env-recipe' }])
+  upsertEphemeralVmRuntime(userDataPath, {
+    id: 'runtime-paired',
+    recipeId: 'cloud-sandbox',
+    recipe: {
+      id: 'cloud-sandbox',
+      name: 'Cloud Sandbox',
+      create: 'unused',
+      destroy: nodeCommand(destroyPath)
+    },
+    repoId: 'repo-1',
+    workspaceId: 'test1',
+    runtimeEnvironmentId: 'env-recipe',
+    status: 'running',
+    cleanupStatus: 'not_started',
+    createdAt: 1,
+    updatedAt: 1,
+    recipeResult: {
+      schemaVersion: 1,
+      connection: { type: 'orca-server', pairingCode: 'unused', projectRoot: '/workspace/repo' }
+    }
+  })
+  const removeWorkspaceSessionHost = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cleanup reads only getRepo and the removed-server store methods this fake implements.
+  registerEphemeralVmRuntimeHandlers({
+    getRepo: vi.fn(() => ({
+      id: 'repo-1',
+      path: repoPath,
+      displayName: 'Repo',
+      badgeColor: '#000',
+      addedAt: 0
+    })),
+    removeWorkspaceSessionHost,
+    getRemoteLayoutSnapshot: vi.fn(),
+    setRemoteLayoutSnapshot: vi.fn()
+  } as never)
+
+  await expect(
+    handlers.get('ephemeralVm:cleanup')?.(null, { runtimeId: 'runtime-paired' })
+  ).resolves.toMatchObject({ cleanupStatus: 'succeeded' })
+
+  expect(removeEnvironmentMock).toHaveBeenCalledWith(userDataPath, 'env-recipe')
+  expect(removeWorkspaceSessionHost).toHaveBeenCalledWith('runtime:env-recipe')
 })

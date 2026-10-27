@@ -1,28 +1,31 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { WorktreeRuntimeOwnerState } from '../lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '../lib/worktree-runtime-owner-state'
 import { buildPersistedUnifiedTabSessionData } from '../lib/workspace-session-unified-tabs'
 import { buildHydratedTabState } from '../store/slices/tabs-hydration'
-import {
-  applyLocalStructuredSessionTabSnapshots,
-  projectLocalStructuredSessionTabs,
-  resetLocalStructuredSessionVersionForTests,
-  startLocalStructuredSessionTabsSync
-} from './local-structured-session-tabs-sync'
-import {
-  applyWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+import { applyLocalStructuredSessionTabSnapshots } from './local-structured-session-tabs-sync/snapshot-apply'
+import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
+import { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'
+import { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
 } from './web-session-focus-intent'
+
+const mocks = vi.hoisted(() => ({ recheckUnconfirmedLaunches: vi.fn() }))
+
+vi.mock('../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck', () => ({
+  recheckUnconfirmedStructuredAgentLaunches: mocks.recheckUnconfirmedLaunches
+}))
 
 const WORKTREE_ID = 'repo-1::worktree-1'
 const TERMINAL_ID = 'terminal-1'
@@ -110,6 +113,7 @@ function createSnapshot(): WebSessionTabsSyncState {
       }
     },
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: { [TERMINAL_ID]: ['pty-1'] },
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: { [WORKTREE_ID]: [TERMINAL_ID, STRUCTURED_ID] },
@@ -244,6 +248,54 @@ describe('local structured session tab projection', () => {
     }
   })
 
+  it('re-checks unconfirmed chat starts each time the host stream reopens, not on each frame', async () => {
+    vi.useFakeTimers()
+    mocks.recheckUnconfirmedLaunches.mockClear()
+    const priorApi = window.api
+    const callbacks: ((response: unknown) => void)[] = []
+    const subscribe = vi.fn(async (_args: unknown, callback: (response: unknown) => void) => {
+      callbacks.push(callback)
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        runtime: {
+          getStatus: vi.fn().mockResolvedValue({
+            capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+          }),
+          call: vi.fn().mockResolvedValue({ ok: true, result: { snapshots: [] } }),
+          subscribe
+        }
+      }
+    })
+    const census = { ok: true, result: { type: 'snapshots', snapshots: [], authoritative: true } }
+    try {
+      await startLocalStructuredSessionTabsSync({
+        isDisposed: () => false,
+        setUnsubscribe: () => undefined
+      })
+      // The startup inventory alone is not the stream reopening.
+      expect(mocks.recheckUnconfirmedLaunches).not.toHaveBeenCalled()
+
+      callbacks[0]?.(census)
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledOnce()
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledWith('local')
+      callbacks[0]?.({ ok: true, result: { type: 'updated', ...structuredInventory('e', 3, 'c') } })
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledOnce()
+
+      // The runtime restarted: the stream ends and the resubscribe opens with a new census.
+      callbacks[0]?.({ ok: true, result: { type: 'end' } })
+      await vi.advanceTimersByTimeAsync(250)
+      await Promise.resolve()
+      expect(subscribe).toHaveBeenCalledTimes(2)
+      callbacks[1]?.(census)
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledTimes(2)
+    } finally {
+      Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
+    }
+  })
+
   it('starts the session-tabs inventory without waiting for the capability refresh', async () => {
     const priorApi = window.api
     let releaseStatus = (): void => undefined
@@ -262,7 +314,7 @@ describe('local structured session tab projection', () => {
     try {
       vi.resetModules()
       const { restoreLocalStructuredSessionTabsOnce } =
-        await import('./local-structured-session-tabs-sync')
+        await import('./local-structured-session-tabs-sync/inventory-refresh')
       let settled = false
       const restored = restoreLocalStructuredSessionTabsOnce().finally(() => {
         settled = true
@@ -341,6 +393,27 @@ describe('local structured session tab projection', () => {
         expect.arrayContaining([expect.objectContaining({ contentType: 'agent-session' })])
       )
     }
+  })
+
+  it('mirrors floating-panel chats from this machine but never from a paired host', () => {
+    const floating = {
+      ...structuredInventory('epoch-1', 5, 'floating-1'),
+      worktree: FLOATING_TERMINAL_WORKTREE_ID
+    }
+    const paired = applyWebSessionTabsSnapshot(createSnapshot(), floating, 'server-1')
+    expect(paired.unifiedTabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
+
+    const published = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [floating])
+    expect(published.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({ contentType: 'agent-session', entityId: 'floating-1' })
+    ])
+
+    // The panel's last chat closing must keep its cursor, or a late older frame brings it back.
+    const closed = applyLocalStructuredSessionTabSnapshots(published, [
+      { ...floating, snapshotVersion: 6, tabs: [], tabGroups: [] }
+    ])
+    const late = applyLocalStructuredSessionTabSnapshots(closed, [floating])
+    expect(late.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
   })
 
   it('forgets publisher versions when a worktree is removed', () => {

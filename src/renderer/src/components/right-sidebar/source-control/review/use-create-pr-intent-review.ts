@@ -1,9 +1,17 @@
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getWorkspaceJiraIssueKey,
+  prefixJiraReviewTitle
+} from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
+import { useAppStore } from '@/store'
+import { operationGitContext } from '../listing/operation-target'
 import { translate } from '@/i18n/i18n'
-import { generateRuntimePullRequestFields } from '@/runtime/runtime-git-client'
+import { generateRuntimePullRequestFields } from '@/runtime/runtime-git-generation-client'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/hosted-review'
+import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
 import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
-import { resolveCreateReviewDraftTitle } from '../../create-review-draft-title'
+import { resolveCreateReviewSeedText } from '../../create-review-draft-title'
 import {
   createPrIntentRunTokenMatches,
   resolveCreatePrIntentGeneratedReviewFields,
@@ -23,10 +31,7 @@ import type { SourceControlCreateReviewComposer } from './use-create-review-comp
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 
-/**
- * Create-PR intent's unattended review step: it must resolve its own base/title/body (no composer to
- * read) and only reveal the result when the run still owns the foreground worktree.
- */
+/** Resolve unattended review fields without a composer; reveal only while the run owns the foreground worktree. */
 export function useSourceControlCreatePrIntentReview({
   activeRepo,
   createHostedReview,
@@ -86,12 +91,18 @@ export function useSourceControlCreatePrIntentReview({
         return false
       }
 
+      const jiraIssueKey =
+        eligibility.provider === 'github' || eligibility.provider === 'gitlab'
+          ? getWorkspaceJiraIssueKey(
+              useAppStore
+                .getState()
+                .getKnownWorktreeById(token.worktreeId, getRepoExecutionHostId(activeRepo))
+            )
+          : null
       let fields = {
         base,
-        title: resolveCreateReviewDraftTitle({
-          branch: token.branch,
-          eligibilityTitle: eligibility.title
-        }),
+        title: resolveCreateReviewSeedText({ branch: token.branch, eligibility, jiraIssueKey })
+          .title,
         body: eligibility.body ?? prBody,
         draft: resolvedPrCreationDefaults.draft
       }
@@ -113,11 +124,14 @@ export function useSourceControlCreatePrIntentReview({
         })
         const target = getCreatePrIntentOperationTarget(token)
         try {
-          const generated = await generateRuntimePullRequestFields(target, {
-            ...fields,
-            provider: eligibility.provider,
-            useTemplate: resolvedPrCreationDefaults.useTemplate
-          })
+          const generated = await generateRuntimePullRequestFields(
+            operationGitContext(target, useAppStore.getState().settings),
+            {
+              ...fields,
+              provider: eligibility.provider,
+              useTemplate: resolvedPrCreationDefaults.useTemplate
+            }
+          )
           if (generated.branchChangedByPreparation) {
             setCreatePrIntentNoticeForWorktree(token.worktreeId, {
               tone: 'muted',
@@ -162,7 +176,7 @@ export function useSourceControlCreatePrIntentReview({
       const createPrIntentIsForeground = (): boolean =>
         createPrIntentRunTokenMatches(token, createPrIntentCurrentTargetRef.current)
 
-      const title = fields.title.trim()
+      const title = prefixJiraReviewTitle(fields.title, jiraIssueKey).trim()
       if (!title) {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
@@ -242,7 +256,7 @@ export function useSourceControlCreatePrIntentReview({
 
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
-          message: result.error
+          message: localizedCreateFailure(result, eligibility.provider)
         })
         return false
       } catch (error) {

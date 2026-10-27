@@ -1,4 +1,5 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +15,9 @@ import { createTrackedJournalOpener } from '../native-chat/agent-session-journal
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
+import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -22,7 +25,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: THREAD }
+  providerHandle: codexProviderHandle(THREAD)
 }
 
 let root: string | null = null
@@ -54,8 +57,6 @@ function goalFrame(goal: Record<string, unknown> = {}) {
   }
 }
 
-/** The host's own sink bound to a real journal. Its publish is what a subscriber
- *  receives: the page after the cursor it had caught up to. */
 function journalSink(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const published: AgentSessionHistoryPage[] = []
@@ -80,7 +81,6 @@ function journalSink(journal: AgentSessionJournal) {
   return {
     sink: deferred.sink,
     drained: () => deferred.drained(),
-    /** A subscriber caught up to the journal's head from here on. */
     subscribe: () => {
       subscriberCursor = journal.cursor()
     },
@@ -89,6 +89,72 @@ function journalSink(journal: AgentSessionJournal) {
 }
 
 describe('codex goal accounting revisions', () => {
+  it('projects recorded Codex 0.163.0 goal controls through the journal to the banner state', async () => {
+    // Actual UI Set/Pause/Resume/Edit/Clear notifications; only provider IDs are redacted.
+    const notifications: {
+      receivedAt: string
+      frame: { method: string; params: { threadId: string }; emittedAtMs: number }
+    }[] = readFileSync(
+      join(__dirname, '__fixtures__', 'codex-app-server-goal-lifecycle.jsonl'),
+      'utf8'
+    )
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const threadId = '<threadId-1>'
+    root = await mkdtemp(join(tmpdir(), 'orca-goal-recorded-'))
+    const journal = await journals.open({
+      identity: { ...IDENTITY, providerHandle: codexProviderHandle(threadId) },
+      stateDirectory: root
+    })
+    const { sink, drained } = journalSink(journal)
+    const translator = createCodexJournalTranslator({
+      sink,
+      sessionId: IDENTITY.sessionId,
+      primaryThreadId: () => threadId
+    })
+    const projected: ReturnType<typeof currentAgentSessionThreadGoal>[] = []
+    for (const { receivedAt, frame } of notifications) {
+      expect(
+        translator.handle({
+          type: 'notification',
+          sessionId: IDENTITY.sessionId,
+          threadId: frame.params.threadId,
+          method: frame.method,
+          params: frame.params,
+          observedAt: Date.parse(receivedAt)
+        })
+      ).toEqual({ accepted: true })
+      await drained()
+      projected.push(currentAgentSessionThreadGoal(journal.snapshot().items))
+    }
+    const original = {
+      objective:
+        'Inspect each of samples/sample-01.txt through sample-12.txt in order using a separate read for each, then compare inventory.txt and README.md and report a 12-row summary. No file edits or external network.',
+      status: 'active',
+      tokenBudget: null,
+      tokensUsed: 0,
+      timeUsedSeconds: 0,
+      createdAt: 1792823727_000,
+      updatedAt: 1792823727_000
+    }
+    expect(projected).toEqual([
+      original,
+      { ...original, status: 'paused', updatedAt: 1792823728_000 },
+      { ...original, updatedAt: 1792823737_000 },
+      null,
+      {
+        ...original,
+        objective:
+          'Inspect samples/sample-12.txt through samples/sample-01.txt in reverse order using a separate read for each, compare their fruit with inventory.txt, and report a reverse-order 12-row summary. No edits or external network.',
+        createdAt: 1792823753_000,
+        updatedAt: 1792823753_000
+      },
+      null
+    ])
+    translator.dispose()
+  })
+
   it('revises the goal row in place: one visible row, pinned sequence, fresh counters', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-goal-revision-'))
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
@@ -110,7 +176,6 @@ describe('codex goal accounting revisions', () => {
     )
     subscribe()
 
-    // A tick inside the revision interval is not worth a persisted row, or a publish.
     goals.handle({
       threadId: THREAD,
       method: 'thread/goal/updated',
@@ -141,8 +206,6 @@ describe('codex goal accounting revisions', () => {
       timeUsedSeconds: 45,
       updatedAt: 1789068033_000
     })
-    // The write reaches a caught-up subscriber as one live page carrying the
-    // revised row under its original sequence, not a second goal row.
     expect(published).toEqual([
       expect.objectContaining({
         items: [
@@ -174,7 +237,7 @@ describe('codex goal accounting revisions', () => {
     const resumed = new CodexJournalGoals(second.sink, () => ({
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }))
-    // Only a few seconds more: a resume snapshot still refreshes, since no live tick follows.
+    // Resume snapshots refresh even inside the live revision interval.
     const snapshot = goalFrame({ timeUsedSeconds: 3, updatedAt: 1789067991 })
     resumed.handle({ threadId: THREAD, method: 'thread/goal/updated', params: snapshot })
     await second.drained()

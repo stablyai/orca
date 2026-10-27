@@ -1,26 +1,20 @@
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 
-// Pure presentation logic for the PR sidebar's conflicting-files section. No
-// React/native imports so it is unit-testable under the node Vitest config (KTD5).
-// Ports the LOGIC of the desktop ConflictingFilesSection / MergeConflictNotice,
-// not their components.
+// Keep conflict view-model pure and RN-free; follow desktop ConflictingFilesSection/MergeConflictNotice logic.
 
 export type ConflictDisplay = {
-  // The conflicting file paths (may be empty when the host has detected a
-  // conflict but the file list is not yet available).
+  // Host may report conflicts before file list becomes available.
   files: string[]
   commitsBehind: number | null
   baseCommit: string | null
-  // True when conflicts exist but no file list is available — desktop shows a
-  // fallback notice instead of the file list in this case.
+  // Missing-list conflicts need desktop-style fallback notice.
   fileDetailsUnavailable: boolean
   // True when the host reports conflicts but the local merge simulation is clean.
   localMergeClean: boolean
   mergeabilityRefreshCommands: string | null
 }
 
-// Conflicts exist only when the host reports CONFLICTING. Anything else (MERGEABLE
-// / UNKNOWN) means the section should not render at all (desktop parity).
+// Render only hosted CONFLICTING; MERGEABLE/UNKNOWN show no section, matching desktop.
 export function hasMergeConflicts(pr: Pick<PRInfo, 'mergeable'>): boolean {
   return pr.mergeable === 'CONFLICTING'
 }
@@ -33,9 +27,7 @@ export function buildMergeabilityRefreshCommands(): string {
   ].join('\n')
 }
 
-// Resolve the conflict view-model, or null when there is nothing to show. Returns
-// a model both when files are listed AND when conflicts exist without a file list
-// (so the section can render the fallback notice, matching desktop).
+// Return conflict model for both listed and missing-file cases so fallback still renders; null when no hosted conflict.
 export function resolveConflictDisplay(
   pr: Pick<PRInfo, 'mergeable' | 'conflictSummary'>
 ): ConflictDisplay | null {

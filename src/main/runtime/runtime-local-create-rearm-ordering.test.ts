@@ -1,5 +1,4 @@
-// Re-arming the prepared-checkout pool is a full `reset --hard`. Firing it before the create's
-// terminals are launched puts that checkout in front of the startup agent's first git reads.
+// Rearm resets the prepared pool with reset --hard; launching terminals first keeps startup agent Git reads ahead of that mutation.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -33,12 +32,15 @@ vi.mock('./runtime-local-worktree-setup', () => ({
   }))
 }))
 
-vi.mock('../ipc/filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: vi.fn(),
+vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn()
+}))
+vi.mock('../ipc/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const repo = { id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: 'blue', kind: 'git' }
 
@@ -61,8 +63,7 @@ function makeRuntime(): OrcaRuntimeService {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/worktrees' }),
     getProjectHostSetups: () => []
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every store method this create path reaches is supplied above.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the named members all exist on the service; the cast only exposes non-public ones to the spies.
   const internals = runtime as unknown as RuntimeInternals
   vi.spyOn(internals, 'resolveRepoSelector').mockResolvedValue(repo)

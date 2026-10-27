@@ -1,5 +1,14 @@
-import { Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
+import { useMemo } from 'react'
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  RefreshControl,
+  SectionList,
+  Text,
+  View
+} from 'react-native'
+import { ChevronDown, ChevronRight, FolderTree, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
@@ -8,14 +17,24 @@ import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
-import { HostWorkspaceListStates } from '../worktree/host-workspace-list-states'
-import { getWorktreeStatus } from '../worktree/workspace-list-sections'
-import { repoColor } from '../worktree/repo-color'
+import {
+  HostWorkspaceListReopen,
+  HostWorkspaceListStates
+} from '../worktree/host-workspace-list-states'
+import { getWorktreeDotStatus } from '../worktree/workspace-list-ordering'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
+import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
+import { buildRepoLookById } from './host-repo-looks'
+import { HostPendingCreationRow } from './host-pending-creation-row'
+import { useSlowPendingKeys } from './use-slow-pending-keys'
+import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
+  const colorScheme = useMobileColorScheme()
   const {
     actions,
     activeWorktreeScroll,
@@ -40,11 +59,24 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     settings,
     state
   } = controller
-  const { rawSections, sections, uniqueRepoColors } = sectionsResult
+  const { rawSections, sections, repoById } = sectionsResult
+  const { pending } = settings.pendingViewChanges
+  // A collapse the desktop has not answered within SLOW_PENDING_MS spins on its header.
+  const pendingCollapseKeys = useSlowPendingKeys(
+    useMemo(
+      () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
+      [pending]
+    )
+  )
+  const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
+  const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
+  const cardDetails = useMemo(
+    () => getWorktreeCardDetails(worktreeCardProperties, { compactWorktreeCards, newCardStyle }),
+    [worktreeCardProperties, compactWorktreeCards, newCardStyle]
+  )
 
   return (
     <>
-      {/* Auth failed: a latched relay rejection must reach the same re-pair affordance. */}
       {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
         <AuthFailedBanner
           canRetry={!!hostId && forceReconnectHost !== null}
@@ -65,16 +97,20 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       ) : null}
 
-      {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}
       {routeNotice && (
         <HostRouteNoticeBanner
           message={routeNotice}
           onDismiss={() => setDismissedNotice(noticeParam ?? null)}
         />
       )}
+      {state.serverNotice ? (
+        <HostRouteNoticeBanner
+          message={state.serverNotice}
+          onDismiss={() => state.setServerNotice(null)}
+        />
+      ) : null}
 
-      {/* An action that did not happen. Above the list and dismissible, because the list, the
-          header and the confirm it re-opens all have to stay on screen. */}
+      {/* Keep action errors above the list so the header and reopened confirm remain usable. */}
       {state.actionError !== '' && (
         <HostRouteNoticeBanner
           message={state.actionError}
@@ -83,42 +119,52 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
-      {/* Search bar */}
       {state.showSearch && (
         <View style={styles.searchBar}>
           <MobileSearchField
             value={state.search}
             onChangeText={state.setSearch}
-            placeholder="Search worktrees…"
+            placeholder="Search workspaces…"
             autoFocus
-            // Why: new key per open remounts the focus effect across rapid toggles so the keyboard reappears.
+            // Remount the focus effect per open so rapid search toggles reopen the keyboard.
             focusKey={state.showSearch}
-            accessibilityLabel="Search worktrees"
+            accessibilityLabel="Search workspaces"
           />
         </View>
       )}
 
-      <HostWorkspaceListStates
-        connState={connState}
-        worktreesLoaded={state.worktreesLoaded}
-        displayCount={displayWorktrees.length}
-        sectionCount={sections.length}
-        catalogError={state.catalogError}
-        search={state.search}
-        activeFilterCount={settings.activeFilterCount}
-      />
+      {controller.feed?.kind === 'reopen' ? (
+        <HostWorkspaceListReopen aboveRows={sections.length > 0} />
+      ) : (
+        <HostWorkspaceListStates
+          connState={connState}
+          connectionVerdict={controller.connectionVerdict}
+          // A feed-built list is loaded once the feed installs; rows draw before worktree.ps answers.
+          worktreesLoaded={
+            controller.feed ? controller.feed.kind === 'ready' : state.worktreesLoaded
+          }
+          // A feed-built list counts its sections, so collapsed ones and a failing worktree.ps never blank it.
+          displayCount={controller.feed ? sections.length : displayWorktrees.length}
+          sectionCount={sections.length}
+          catalogError={state.catalogError}
+          search={state.search}
+          activeFilterCount={controller.activeFilterCount}
+        />
+      )}
 
       {sections.length > 0 && (
         <SectionList
           ref={activeWorktreeScroll.sectionListRef}
           sections={sections}
+          extraData={colorScheme}
           keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
           stickySectionHeadersEnabled={false}
-          // Why: keep the search IME up while tapping clear / scrolling results.
+          // Why: keep the search IME up while tapping clear.
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          // React Native Web dismisses on-drag for any scroll, including one caused by narrowing search.
+          keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
           onScrollToIndexFailed={activeWorktreeScroll.onScrollToIndexFailed}
-          // Why: edge-to-edge under the system nav bar; insets.bottom keeps the last row above it.
+          // Keep the final row above the system navigation bar in edge-to-edge layouts.
           contentContainerStyle={[
             styles.list,
             // Reserve room so the last row stays tappable above the phone's floating "+" (embedded uses the toolbar +).
@@ -127,41 +173,66 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
           renderSectionHeader={({ section }) => {
+            const pendingCreations = section.pendingCreations?.map((creation) => (
+              <HostPendingCreationRow key={creation.key} creation={creation} />
+            ))
             if (!section.title) {
-              return null
+              return pendingCreations ? <>{pendingCreations}</> : null
             }
-            const isCollapsed = state.collapsedGroups.has(section.key)
-            const rawSection = rawSections.find((s) => s.key === section.key)
-            const count = rawSection?.data.length ?? 0
-            const repoSectionColor =
-              state.groupMode === 'repo' ? uniqueRepoColors.get(section.title) : null
-            const repoSectionIcon =
-              state.groupMode === 'repo' ? state.repoIconsByName.get(section.title) : null
+            const isCollapsed = controller.collapsedGroups.has(section.key)
+            const count =
+              section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
+            const repoSectionLook =
+              state.view.groupBy === 'repo' && section.repo
+                ? repoLookById.get(section.repo.id)
+                : null
+            const repoSectionColor = repoSectionLook?.color ?? null
+            const repoSectionIcon = repoSectionLook?.icon ?? null
             return (
-              <Pressable
-                style={styles.sectionHeader}
-                onPress={() => settings.toggleCollapsed(section.key)}
-              >
-                {isCollapsed ? (
-                  <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                ) : (
-                  <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {section.icon === 'pin' && (
-                  <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {state.groupMode === 'repo' ? (
-                  <View style={styles.sectionRepoIcon}>
-                    <MobileRepoIcon
-                      repoIcon={repoSectionIcon}
-                      size={14}
-                      color={repoSectionColor ?? colors.textSecondary}
+              <>
+                <Pressable
+                  style={[
+                    styles.sectionHeader,
+                    section.projectGroupDepth
+                      ? {
+                          paddingLeft:
+                            spacing.lg + projectGroupHeaderIndent(section.projectGroupDepth)
+                        }
+                      : null
+                  ]}
+                  onPress={() => settings.toggleCollapsed(section.key)}
+                >
+                  {isCollapsed ? (
+                    <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
+                  ) : (
+                    <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
+                  )}
+                  {section.icon === 'pin' && (
+                    <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
+                  )}
+                  {state.view.groupBy === 'repo' && section.isProjectGroup ? (
+                    <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
+                  ) : state.view.groupBy === 'repo' ? (
+                    <View style={styles.sectionRepoIcon}>
+                      <MobileRepoIcon
+                        repoIcon={repoSectionIcon}
+                        size={14}
+                        color={repoSectionColor ?? colors.textSecondary}
+                      />
+                    </View>
+                  ) : null}
+                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  <Text style={styles.sectionCount}>{count}</Text>
+                  {pendingCollapseKeys.has(section.key) && (
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.textMuted}
+                      style={styles.sectionPendingSpinner}
                     />
-                  </View>
-                ) : null}
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <Text style={styles.sectionCount}>{count}</Text>
-              </Pressable>
+                  )}
+                </Pressable>
+                {pendingCreations}
+              </>
             )
           }}
           ItemSeparatorComponent={ListSeparator}
@@ -179,11 +250,15 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               item={item}
               isReadOnly={isReadOnly}
               now={now}
-              status={getWorktreeStatus(item)}
-              repoColor={uniqueRepoColors.get(item.repo) ?? repoColor(item.repo)}
-              repoIcon={state.repoIconsByName.get(item.repo) ?? null}
-              hideRepo={state.groupMode === 'repo'}
+              status={getWorktreeDotStatus(item)}
+              repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
+              repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
+              hideRepo={state.view.groupBy === 'repo' && !item.showProjectName}
+              cardDetails={cardDetails}
+              agentActivityDisplayMode={state.view.agentActivityDisplayMode}
               onPress={actions.openWorktreeSession}
+              onAgentPress={actions.openWorktreeSession}
+              statusLive={connState === 'connected' && !item.hostContextHealthLabel}
               onLongPress={
                 item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
               }
@@ -193,7 +268,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
-      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
       {!embedded && (
         <NewWorkspaceFab
           onPress={actions.openNewWorktreeModal}
@@ -205,5 +279,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
 }
 
 function ListSeparator() {
+  useMobileColorScheme()
   return <View style={styles.separator} />
 }

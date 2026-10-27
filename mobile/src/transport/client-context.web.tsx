@@ -1,32 +1,15 @@
-// Web sibling: RN Web has no pairing keychain and no websocket transport of its own, so the page's
-// client is the shell bridge. Nothing here dials, retries or pairs — the native client on the other
-// side of the bridge already did, and this provider only carries what it holds across the boundary.
+// The shell owns pairing and transport; carry its existing client through the page bridge.
 import { createContext, useContext, useMemo, useRef, type ReactNode } from 'react'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import { BRIDGE_PAGE_CLIENT_ID } from '../mobile-web-shell/bridge/bridge-page-client-identity'
 import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 
-export {
-  useDisconnectHostClient,
-  useForceReconnect,
-  useForgetHostClient,
-  useHostClient,
-  usePrimeHosts,
-  useRefreshHostClient
-} from './host-client-hooks'
-
 const Ctx = createContext<RpcClientContextValue | null>(null)
-/** The page's own client, which is more than an `RpcClient`: the route seam reads the session off
- *  it to decide which screens are this document's. Separate from `Ctx` so the shared contract above
- *  stays the one every screen sees, page or native. */
+// Keep page session routing separate from the shared screen client contract.
 const PageClientCtx = createContext<BridgeRpcClient | null>(null)
 
-/**
- * The client is injected rather than built here: the entry owns it, because it has to wait for
- * `init` before it renders anything at all, and a provider that built its own would be a second
- * client reading the one `onmessage` slot the page's channel has.
- */
+// Inject the entry’s initialized client; building another would compete for the channel’s one onmessage slot.
 export function RpcClientProvider({
   client,
   children
@@ -38,19 +21,16 @@ export function RpcClientProvider({
 
   const value = useMemo<RpcClientContextValue>(() => {
     return {
-      // One client for one page: the shell opened this document for one host, so whichever host
-      // the route names is the host on the other side of the bridge.
+      // Every route in this document reaches the one host the shell opened.
       acquire: (hostId: string) => {
         acquiredRef.current.add(hostId)
         return client
       },
-      // The shell owns the connection, and a page client cannot be reopened once it says goodbye.
-      // Every member that would close, drop or re-dial one is inert here for that reason.
+      // The shell owns connection lifecycle; the page cannot reopen a client after goodbye.
       release: () => {},
       releaseAndCloseIfUnused: () => {},
       closeIfUnused: () => {},
-      // Absent rather than inert: a Retry or Reconnect wired to it would be a control that can only
-      // do nothing, so callers read null as "offer none" and wait for the shell's own reconnect.
+      // Null hides reconnect controls the page cannot fulfill; wait for shell recovery.
       forceReconnect: null,
       refreshHostClient: () => {},
       forgetHostClient: () => {},
@@ -62,8 +42,7 @@ export function RpcClientProvider({
       getClientId: () => BRIDGE_PAGE_CLIENT_ID,
       getReconnectAttempt: () => client.getReconnectAttempt(),
       getLastConnectedAt: () => client.getLastConnectedAt(),
-      // The page reaches its host through the shell bridge, which rides whatever path the RN
-      // client already negotiated. 'relay' is the honest default until init carries the real one.
+      // Use relay until init carries the negotiated native path; the page has no independent transport.
       getActivePath: () => 'relay',
       getPendingPath: () => null,
       // Both are pairing verdicts, and pairing happened natively before this document existed.
@@ -87,14 +66,7 @@ export function RpcClientProvider({
   )
 }
 
-/**
- * The page's bridge when this tree is inside one, and null when it is not.
- *
- * For the seams a component shared with the native app reaches through: `MountedBottomDrawer`
- * renders under the page's provider on a route and under nothing at all in a bare mount, and a
- * shared component that threw for want of a shell would take the screen down rather than degrade.
- * A seam that needs a bridge to mean anything answers nothing without one.
- */
+// Shared/native mounts may have no page provider; return null so optional seams degrade without crashing.
 export function usePageBridgeClientIfPresent(): BridgeRpcClient | null {
   return useContext(PageClientCtx) ?? null
 }

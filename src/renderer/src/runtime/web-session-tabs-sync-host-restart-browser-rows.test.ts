@@ -6,7 +6,8 @@ import {
 } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import { hostSnapshotAffirmsWorktreeContents } from './host-session-snapshot-authority'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   NOW,
@@ -83,10 +84,7 @@ function hostedUnifiedTab(): Tab {
   }
 }
 
-/**
- * A page the host already published once, so the staged/restored carve-outs are spent. This is the
- * steady state a live client is in when the runtime process restarts underneath it.
- */
+// Previously published pages have exhausted staged/restored carve-outs; test steady-state runtime restart.
 function adoptedState(
   placement: WebSessionTabsSyncState['remoteBrowserPageHandlesByPageId'][string]['placement']
 ): WebSessionTabsSyncState {
@@ -142,8 +140,7 @@ function applyToState(
 describe('client-hosted browser rows across a host restart', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
-  // Why: the guest is running on this desktop and outlived the runtime process, so an empty frame
-  // from a runtime that has published nothing yet is not evidence the tab was closed.
+  // Desktop guests outlive runtime restart; unpublished empty frames cannot prove close.
   it('keeps a client-hosted row through an unpublished-worktree snapshot', () => {
     const next = applyToState(adoptedState(CLIENT_PLACEMENT), unpublishedWorktreeSnapshot())
 
@@ -152,8 +149,7 @@ describe('client-hosted browser rows across a host restart', () => {
     expect(next.remoteBrowserPageHandlesByPageId[PAGE_ID]).toBeDefined()
   })
 
-  // The other half of the carve-out: a runtime that really did publish this worktree is answering,
-  // and a page missing from that answer was closed.
+  // A published, complete frame’s missing page does prove close.
   it('still culls a client-hosted row the host affirms is gone', () => {
     const next = applyToState(
       adoptedState(CLIENT_PLACEMENT),
@@ -164,9 +160,7 @@ describe('client-hosted browser rows across a host restart', () => {
     expect(next.remoteBrowserPageHandlesByPageId[PAGE_ID]).toBeUndefined()
   })
 
-  // The harder half: this frame is real. A restarted runtime rehydrated its terminals from disk and
-  // published a versioned snapshot under a real epoch, so the worktree-level gate affirms it -- only
-  // the flag says the browser rows in it are still incomplete.
+  // Real epoch/version can accompany rehydrated terminals but incomplete browser rows; worktree-level authority alone is insufficient.
   it('keeps a client-hosted row through a real frame flagged unreconciled', () => {
     const next = applyToState(
       adoptedState(CLIENT_PLACEMENT),
@@ -195,8 +189,7 @@ describe('client-hosted browser rows across a host restart', () => {
     expect(next.remoteBrowserPageHandlesByPageId[PAGE_ID]).toBeUndefined()
   })
 
-  // Why scoped to client-hosted: a server-placed page lives in the runtime process, so a restart
-  // really did destroy it. Only a guest this desktop still runs can outlive the host.
+  // Server-placed pages die with the runtime; only client-hosted guests survive restart.
   it('culls a server-hosted row on an unpublished-worktree snapshot', () => {
     const next = applyToState(adoptedState(SERVER_PLACEMENT), unpublishedWorktreeSnapshot())
 
@@ -206,8 +199,7 @@ describe('client-hosted browser rows across a host restart', () => {
 })
 
 describe('reading whether a snapshot answers for a worktree', () => {
-  // Pinned to the literal, not the constant: this string is the wire contract with hosts that
-  // predate the constant, and a test written against the constant moves with it.
+  // Pin the literal wire contract with older hosts; importing the constant would let both drift together.
   it('treats the placeholder epoch at version zero as no answer', () => {
     expect(UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH).toBe('none')
     expect(
@@ -215,17 +207,32 @@ describe('reading whether a snapshot answers for a worktree', () => {
     ).toBe(false)
   })
 
-  // Both halves are load-bearing: a published worktree can legitimately sit at version zero, and
-  // only the placeholder epoch marks a frame the runtime synthesized without consulting anything.
+  // Version zero can be published; only placeholder epoch proves a synthesized frame.
   it('answers for a real epoch even at version zero', () => {
     expect(
       hostSnapshotAffirmsWorktreeContents({ publicationEpoch: 'headless:abc', snapshotVersion: 0 })
     ).toBe(true)
   })
 
-  it('answers for the placeholder epoch once it carries a version', () => {
+  // A paired client's projection renames the epoch and adds its navigation revision to the version.
+  it('treats a paired client projection of the placeholder as no answer', () => {
     expect(
-      hostSnapshotAffirmsWorktreeContents({ publicationEpoch: 'none', snapshotVersion: 1 })
+      hostSnapshotAffirmsWorktreeContents({
+        publicationEpoch: 'none:client-navigation',
+        snapshotVersion: 0
+      })
+    ).toBe(false)
+    expect(
+      hostSnapshotAffirmsWorktreeContents({
+        publicationEpoch: 'none:client-navigation',
+        snapshotVersion: 2
+      })
+    ).toBe(false)
+    expect(
+      hostSnapshotAffirmsWorktreeContents({
+        publicationEpoch: 'epoch-1:client-navigation',
+        snapshotVersion: 0
+      })
     ).toBe(true)
   })
 })
@@ -258,8 +265,7 @@ describe('scoping the carve-out to this environment', () => {
     }
   }
 
-  // Why: the carve-out asks whether THIS desktop hosts a page of the environment that is speaking.
-  // A guest hosted for some other environment says nothing about this one's silence.
+  // This desktop must host a page for the speaking environment; another environment’s guest proves nothing.
   it('does not let a page of another environment hold the row', () => {
     const next = applyToState(mixedEnvironmentState(), unpublishedWorktreeSnapshot())
 

@@ -20,7 +20,6 @@ const identity = {
   executionHostIdentity: '["orca-browser-execution-host-storage",1,"authority","env-a"]'
 }
 
-/** Identity an older build derived, embedding the remote's per-process runtimeId. */
 function legacyIdentityFor(runtimeId: string): typeof identity {
   return {
     orcaProfileId,
@@ -50,7 +49,6 @@ function createSessionRegistry(filePath: string): BrowserRouteSessionRegistry {
     setupPolicies: vi.fn(),
     clearPolicies: vi.fn(),
     retirePageAuthority: vi.fn(() => true),
-    // Why: the shipping adapter forwards to one persisted store, so the test uses the real one.
     bindingStore: {
       get: (partition) => store.get(partition),
       set: (partition, fingerprint, scope) => store.set(partition, fingerprint, scope),
@@ -61,7 +59,6 @@ function createSessionRegistry(filePath: string): BrowserRouteSessionRegistry {
   })
 }
 
-/** One full client-hosted page preparation, released again so the partition is not retained. */
 async function preparePartition(
   registry: BrowserRouteSessionRegistry,
   legacyRuntimeId: string | null
@@ -80,7 +77,6 @@ async function preparePartition(
   return partition
 }
 
-/** What an older build persisted: a partition named from the then-current runtimeId. */
 function seedLegacyBinding(filePath: string, runtimeId: string): string {
   const derived = deriveBrowserRoutePartition(legacyIdentityFor(runtimeId))
   new BrowserRoutePartitionBindingStore({ filePath }).set(
@@ -107,7 +103,6 @@ describe('route partition identity migration', () => {
 
     expect(prepared).toBe(legacyPartition)
     expect(bindings(filePath).size).toBe(1)
-    // The binding now answers to the durable fingerprint, so the legacy name is never needed again.
     expect(bindings(filePath).get(legacyPartition)?.fingerprint).toBe(
       deriveBrowserRoutePartition(identity).bindingFingerprint
     )
@@ -138,8 +133,6 @@ describe('route partition identity migration', () => {
     expect(bindings(filePath).size).toBe(1)
   })
 
-  // Why: the derived name is already taken, so walking off to the pre-migration partition
-  // would abandon a jar this identity holds and leave it behind as an orphan.
   it('never leaves a partition name this identity already holds', () => {
     const legacyIdentity = legacyIdentityFor('runtime-before-upgrade')
     const derived = deriveBrowserRoutePartition(identity)
@@ -170,7 +163,6 @@ describe('route partition identity migration', () => {
     const filePath = createStorePath()
     const otherLegacy = legacyIdentityFor('runtime-before-upgrade')
     const derivedOther = deriveBrowserRoutePartition(otherLegacy)
-    // Why: same partition name, a fingerprint from some other identity -- adoption must decline.
     new BrowserRoutePartitionBindingStore({ filePath }).set(
       derivedOther.partition,
       'c'.repeat(64),
@@ -184,5 +176,30 @@ describe('route partition identity migration', () => {
 
     expect(prepared).toBe(deriveBrowserRoutePartition(identity).partition)
     expect(bindings(filePath).get(derivedOther.partition)?.fingerprint).toBe('c'.repeat(64))
+  })
+
+  it('lets a re-paired server open pages in its jar while the old pages are still open', async () => {
+    const registry = createSessionRegistry(createStorePath())
+    const pairingAt = (revision: number) => ({
+      ...identity,
+      authorityConnectionIdentity: `paired-runtime:pairing-${revision}`
+    })
+    const open = (revision: number, browserPageId: string) =>
+      registry.preparePage({
+        identity,
+        compatibleIdentity: pairingAt(revision),
+        storageScope,
+        browserPageId,
+        pageHostGeneration: revision,
+        rendererWebContentsId: 11,
+        proxyEndpoint: { host: '127.0.0.1', port: 43123 }
+      })
+
+    const before = await open(1, 'page-before')
+    const after = await open(2, 'page-after')
+
+    expect(after.partition).toBe(before.partition)
+    before.release()
+    after.release()
   })
 })

@@ -1,9 +1,16 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
+import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
+import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import {
   getWorkspaceBoardTaskStatusSyncRequest,
   syncWorkspaceBoardTaskStatuses,
@@ -41,6 +48,12 @@ function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessag
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.a5b6c7d8e9',
         'Could not sync Linear issue {{value0}}.',
+        { value0: message.issueIdentifier }
+      )
+    case 'owner-ambiguous':
+      return translate(
+        'auto.components.sidebar.WorkspaceKanbanDrawer.f0a1b2c3d4',
+        'Skipped Linear issue {{value0}}: this workspace is on more than one host.',
         { value0: message.issueIdentifier }
       )
     case 'unexpected-error':
@@ -109,10 +122,23 @@ function reportTaskStatusSyncResult(result: WorkspaceBoardTaskStatusSyncResult):
   )
 }
 
+/** Linear settings of the worktree's owner, or `null` to skip a worktree whose owner is ambiguous. */
+export function linearSettingsForBoardWorktree(
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): RuntimeLinearSettings | null {
+  // Why: a workspace no row places is this computer's, but a twin must not borrow its Linear account.
+  const target = getRuntimeTargetForWorktreeOwner(state, worktreeId)
+  if (!target) {
+    warnAmbiguousOwnerOnce(worktreeId, 'sync a board task status')
+  }
+  return target
+}
+
 export function useWorkspaceBoardTaskStatusSync(args: {
   enabled: boolean
   worktreesById: ReadonlyMap<string, Worktree>
-  workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }): (worktreeIds: readonly string[], status: WorkspaceStatus) => void {
   return useCallback(
     (worktreeIds, status) => {
@@ -131,7 +157,7 @@ export function useWorkspaceBoardTaskStatusSync(args: {
         targetStatus: request.targetStatus,
         worktreesById: args.worktreesById,
         getSettingsForWorktree: (worktreeId) =>
-          getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), worktreeId),
+          linearSettingsForBoardWorktree(useAppStore.getState(), worktreeId),
         getLatestWorkspaceStatus: (worktreeId) =>
           useAppStore.getState().getKnownWorktreeById(worktreeId)?.workspaceStatus
       })

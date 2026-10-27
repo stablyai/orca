@@ -45,11 +45,7 @@ export type PopupOwnerContext = {
   rootGuestWebContentsId: number
 }
 
-/**
- * What a guest is allowed to be. A browsing guest is the web — popups, clicked-link routing and
- * auth-identity tracking all apply. A workspace-document guest renders one granted document and gets none
- * of that; `host` is the renderer that minted its grant, and the only sink for what it reports.
- */
+/** Document guests render one grant and report only to its host; browsing policies do not apply. */
 export type BrowserGuestPolicy =
   | { profile: 'browsing' }
   | { profile: 'workspace-doc'; host: Electron.WebContents }
@@ -61,7 +57,7 @@ export type PendingMainFrameNavigation = {
   supersededUrls: string[]
 }
 
-/** An Emulation.setUserAgentOverride payload; an empty userAgent clears the override. */
+/** An empty userAgent clears the CDP override. */
 export type CdpUserAgentOverride = {
   userAgent: string
   userAgentMetadata?: UserAgentMetadata
@@ -93,7 +89,7 @@ export const SAFE_POPUP_WINDOW_OPTIONS = {
   skipTaskbar: false,
   titleBarStyle: 'default',
   transparent: false,
-  // Why: Electron applies these before createWindow; feature strings/opener inheritance must not relax the child's isolation.
+  // Apply isolation before createWindow so features and opener inheritance cannot weaken it.
   webPreferences: {
     allowRunningInsecureContent: false,
     contextIsolation: true,

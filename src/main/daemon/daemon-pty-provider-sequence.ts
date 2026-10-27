@@ -1,5 +1,5 @@
 import type { CreateOrAttachResult } from './types'
-import type { PtySpawnResult } from '../providers/types'
+import type { PtySpawnResult } from '../providers/pty-provider-contract'
 
 export function providerSequenceFromCreateOrAttach(
   result: CreateOrAttachResult

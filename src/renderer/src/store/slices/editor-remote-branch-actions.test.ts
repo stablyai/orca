@@ -144,12 +144,24 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('refuses a git operation whose worktree no row places, instead of using the focused server', async () => {
+    const store = createEditorStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
+
+    await expect(store.getState().pushBranch('wt-unknown', '/elsewhere')).rejects.toThrow(
+      'The workspace host is unresolved'
+    )
+
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
   it('routes git operations through the explicit runtime owner instead of ambient focus', async () => {
     const store = createEditorStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
 
     await store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
-      runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+      runtimeTarget: { kind: 'local' }
     })
 
     expect(gitPushMock).toHaveBeenCalledWith({
@@ -329,11 +341,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('runs publish branch through push with publish=true', async () => {
-    // Why: pushBranch no longer awaits a post-op git status / upstream
-    // refresh. The 3s git-status poll and the upstream-status effect in the
-    // sidebar reconcile state shortly after the IPC returns; keeping the
-    // mutation tight stops compound flows from stalling between commit and
-    // push.
+    // Push returns after mutation; polling/upstream effects reconcile without stalling commit→push compound flows.
     const store = createEditorStore()
 
     await store.getState().pushBranch('wt-1', '/repo', true)
@@ -582,9 +590,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('runs fetchBranch and clears the busy flag on success', async () => {
-    // Why: fetchBranch no longer awaits a post-op upstream refresh.
-    // useGitStatusPolling and the sidebar's upstream effect handle the
-    // reconcile, keeping the mutation focused on the single IPC.
+    // Fetch returns after IPC; status polling/upstream effect owns later reconciliation.
     const store = createEditorStore()
     await store.getState().fetchBranch('wt-1', '/repo')
 
@@ -609,10 +615,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('preserves prior upstream status when fetch fails', async () => {
-    // Why: a transient upstream fetch failure (network blip, auth prompt
-    // timeout) must not erase the last-known ahead/behind counts — doing so
-    // would briefly flip the UI to an unknown/no-upstream state that
-    // misrepresents the branch's relationship to its remote.
+    // Transient upstream failures retain known ahead/behind counts instead of flashing unknown/no-upstream state.
     const store = createEditorStore()
     store.getState().setUpstreamStatus('wt-1', {
       hasUpstream: true,
@@ -633,10 +636,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('keeps isRemoteOperationActive true while any remote op is in flight', async () => {
-    // Why: a bare boolean races across worktrees — if push A finishes while
-    // pull B is still running, flipping the flag off would prematurely
-    // re-enable B's button. The refcount-derived boolean must stay true
-    // until every in-flight remote op has finished.
+    // Refcount remote operations across worktrees; push A settling must not reenable still-running pull B.
     const store = createEditorStore()
 
     let resolveA: () => void = () => {}
@@ -660,7 +660,9 @@ describe('createEditorSlice remote branch actions', () => {
     await Promise.resolve()
     expect(store.getState().isRemoteOperationActive).toBe(true)
 
-    const pushB = store.getState().pushBranch('wt-2', '/b')
+    const pushB = store.getState().pushBranch('wt-2', '/b', false, undefined, undefined, {
+      runtimeTarget: { kind: 'local' }
+    })
     await Promise.resolve()
     expect(store.getState().isRemoteOperationActive).toBe(true)
 
@@ -675,10 +677,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('runs syncBranch end-to-end (fetch+pull+push) on success', async () => {
-    // Why: syncBranch no longer awaits a post-op git status / upstream
-    // refresh. The polling layer reconciles state after the mutation
-    // returns; the in-mutation upstream-status read remains because it
-    // gates whether the inner push stage runs.
+    // Sync leaves post-op reconciliation to polling but retains in-operation status because it gates push.
     const store = createEditorStore()
 
     await store.getState().syncBranch('wt-1', '/repo')
@@ -704,8 +703,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('skips the inner push when syncBranch sees ahead=0', async () => {
-    // Why: guards against a no-op push round-trip after a pure fast-forward
-    // pull. See syncBranch's ahead>0 guard in editor.ts.
+    // Require ahead>0 guard to avoid no-op push after pure fast-forward pull.
     const store = createEditorStore()
     gitUpstreamStatusMock
       .mockResolvedValueOnce({
@@ -754,10 +752,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('surfaces a sync-labeled toast when syncBranch inner push fails with auth error', async () => {
-    // Why: the user invoked Sync — the toast must read "Sync failed..." even
-    // though the underlying step is push. Detail extraction still surfaces
-    // the actionable fatal/remote line so auth/protected-branch reasons stay
-    // visible.
+    // Sync’s inner push failure needs sync framing plus actionable auth/protection detail.
     const store = createEditorStore()
     const authError = new Error(
       'git push failed: Command failed: git push origin feature\nremote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/private-repo.git'
@@ -774,9 +769,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('surfaces a single sync-labeled toast when syncBranch inner push is non-fast-forward', async () => {
-    // Why: under sync, NFF means the remote raced ahead between fetch and
-    // push — sync just pulled, so the bare "Pull first" guidance is wrong.
-    // Surface a sync-shaped retry hint instead.
+    // NFF after sync pull means remote raced ahead; offer sync retry rather than stale Pull first guidance.
     const store = createEditorStore()
     const pushError = new Error(
       'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
@@ -839,9 +832,7 @@ describe('createEditorSlice remote branch actions', () => {
   })
 
   it('surfaces the pull-blocked toast when syncBranch pull stage fails', async () => {
-    // Why: failures in sync's fetch/pull/status stages flow through the
-    // outer catch's generic path; push-specific framing only applies to
-    // the inner push stage.
+    // Outer fetch/pull/status failures use generic sync catch; push-specific wording applies only to inner push.
     const store = createEditorStore()
     gitPullMock.mockRejectedValueOnce(
       new Error(

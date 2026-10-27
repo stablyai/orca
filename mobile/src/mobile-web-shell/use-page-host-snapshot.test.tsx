@@ -1,14 +1,12 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Doubles = {
   store: Map<string, string>
   writes: { key: string; value: string | null }[]
   hostsReject: boolean
-  /** The stored name identity the app's host record carries, beside its resolved name. */
   hostIdentity: Record<string, string>
-  /** Holds every store read open, which is how the two reads are made to answer out of order. */
   holdReads: boolean
   releaseReads: (() => void)[]
 }
@@ -25,8 +23,7 @@ const doubles = vi.hoisted((): Doubles => ({
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     multiGet: async (keys: readonly string[]) => {
-      // Read first, held after: a store answers with what it held when it was asked, which is what
-      // makes a write that lands while the read is open something the answer cannot know about.
+      // Snapshot at read start, then defer completion so intervening writes can make the answer stale.
       const answer = keys.map((key) => [key, doubles.store.get(key) ?? null])
       if (doubles.holdReads) {
         await new Promise<void>((resolve) => doubles.releaseReads.push(resolve))
@@ -41,8 +38,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
       doubles.writes.push({ key, value: null })
       doubles.store.delete(key)
     },
-    // Read back by the mirror after every write it makes, which is how the note follows what the
-    // store took rather than what it was handed (ruling 35).
     getItem: async (key: string) => doubles.store.get(key) ?? null
   }
 }))
@@ -64,7 +59,7 @@ vi.mock('../transport/host-store', () => ({
 }))
 
 import { savePinnedIds } from '../storage/preferences'
-import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo'
+import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from './page-storage-keys'
 import { usePageHostSnapshot, type PageHostSnapshotView } from './use-page-host-snapshot'
 
@@ -72,8 +67,23 @@ const PINS = 'orca:pins:host-1'
 const LAST_VISITED = 'orca:last-visited-worktree'
 const CHAT_TABS = 'orca:nativeChatTabs:host-1:wt-1'
 const JOURNAL = 'orca:mobileStructuredSendOperations:v1'
-/** The route every case below mounts for: the one page route with workspace-scoped keys. */
 const SESSION_ROUTE = '/h/host-1/session/wt-1'
+
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(async () => {
+  await act(async () => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
 
 async function mount(routePathname = SESSION_ROUTE): Promise<{ view: () => PageHostSnapshotView }> {
   const held: { view: PageHostSnapshotView | null } = { view: null }
@@ -82,7 +92,7 @@ async function mount(routePathname = SESSION_ROUTE): Promise<{ view: () => PageH
     return null
   }
   await act(async () => {
-    create(createElement(Probe))
+    createTracked(createElement(Probe))
   })
   return {
     view: () => {
@@ -114,8 +124,7 @@ describe('what the shell puts on every init', () => {
     doubles.store.set(PINS, '["one"]')
     const mounted = await mount()
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["one"]' })
-    // The device repro: the page writes, its document reloads inside this same mount, and the
-    // `init` that primes the new document has to carry the write rather than what came before it.
+    // Reloading the document in the same mount must receive its latest write in init.
     await act(async () => {
       mounted.view().writeStorage(PINS, '["one","two"]')
     })
@@ -135,13 +144,15 @@ describe('what the shell puts on every init', () => {
   it('carries what the app wrote from its own screens on the next init, not the one after', async () => {
     const mounted = await mount()
     expect(mounted.view().readStorage().storage).toEqual({})
-    // The device repro: the session screen writes while the page is open, the document reloads,
-    // and the `init` answering its ready is built from this map with no read in between. A mirror
-    // only the store read refreshed would hand the drawer the repo the user left, an `init` late.
-    writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'host-1/repo/wt' })
+    // Native writers must update the mirror before reload; no store reread occurs before this init.
+    await writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'host-1/repo/wt' })
     await savePinnedIds('host-1', new Set(['one']))
     expect(mounted.view().readStorage().storage).toEqual({
-      [LAST_VISITED]: JSON.stringify({ hostId: 'host-1', worktreeId: 'host-1/repo/wt' }),
+      [LAST_VISITED]: JSON.stringify({
+        hostId: 'host-1',
+        worktreeId: 'host-1/repo/wt',
+        byHost: { 'host-1': { worktreeId: 'host-1/repo/wt' } }
+      }),
       [PINS]: '["one"]'
     })
   })
@@ -156,8 +167,6 @@ describe('what the shell puts on every init', () => {
       releaseReads()
       await seated
     })
-    // The read was already behind the write when it answered, so putting it back would undo a pin
-    // the page has been told is set.
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["just-written"]' })
   })
 
@@ -179,10 +188,11 @@ describe('what the shell puts on every init', () => {
       mounted.view().refreshStorage()
     })
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["mine"]' })
-    // And a write for one is refused rather than mirrored, so a later read cannot answer with it.
     await act(async () => {
-      mounted.view().writeStorage('orca:pins:host-2', '["theirs"]')
+      mounted.view().writeStorage('orca:pins:host-2', '["overwritten"]')
     })
+    expect(doubles.writes).toEqual([])
+    expect(doubles.store.get('orca:pins:host-2')).toBe('["theirs"]')
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["mine"]' })
   })
 
@@ -197,6 +207,8 @@ describe('what the shell puts on every init', () => {
     await act(async () => {
       mounted.view().writeStorage('orca:nativeChatTabs:host-1:wt-2', '{}')
     })
+    expect(doubles.writes).toEqual([])
+    expect(doubles.store.get('orca:nativeChatTabs:host-1:wt-2')).toBe('{"tab-9":"chat"}')
     expect(mounted.view().readStorage().storage).toEqual({ [CHAT_TABS]: '{"tab-1":"chat"}' })
   })
 
@@ -210,8 +222,7 @@ describe('what the shell puts on every init', () => {
   })
 
   it('leaves out a value the page would refuse the whole frame over, and says which', async () => {
-    // The send journal is the real one: 48 unsettled sends put it past the cap, and `init` is
-    // refined on that bound — so handing it over takes the session screen down rather than one key.
+    // A real 48-send journal exceeds the value cap; sending it whole would reject all of init.
     const warned: unknown[][] = []
     const warn = console.warn
     console.warn = (...args: unknown[]) => warned.push(args)
@@ -242,9 +253,7 @@ describe('what the shell puts on every init', () => {
 
 describe('the host the page is handed', () => {
   it('is not built until the store has answered as well as the keychain', async () => {
-    // Two unordered reads: the host is built from the snapshot and answers the page's pending
-    // `ready` at once, so a profile that beat the store would prime the page from an empty map and
-    // the list would paint unpinned until the catalog reply reconciled it.
+    // Resolve profile before storage to prove host construction waits for both instead of priming unpinned state.
     doubles.store.set(PINS, '["one"]')
     doubles.holdReads = true
     const mounted = await mount()
@@ -283,7 +292,7 @@ describe('a host the app store would not answer for', () => {
     expect(mounted.view().unreadable).toBe(true)
   })
 
-  it('is not the same as a host that is simply not there', async () => {
+  it('reports a readable host without an unreadable-store failure', async () => {
     const mounted = await mount()
     expect(mounted.view().snapshot?.host.id).toBe('host-1')
     expect(mounted.view().unreadable).toBe(false)

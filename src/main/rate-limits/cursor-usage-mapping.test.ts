@@ -28,13 +28,41 @@ describe('mapCursorUsageSummary', () => {
     expect(mapped.monthly?.resetsAt).toBe(Date.parse(CYCLE.billingCycleEnd))
   })
 
-  it('prefers the used/limit pair over the rounded percentage Cursor renders', () => {
+  it('uses the reported plan percentage when the base allowance reports 100%', () => {
     const mapped = mapCursorUsageSummary({
       ...CYCLE,
-      individualUsage: { plan: { enabled: true, used: 1_000, limit: 3_000, totalPercentUsed: 33 } }
+      individualUsage: { plan: { enabled: true, used: 2_000, limit: 2_000, totalPercentUsed: 12 } }
     })
-    expect(mapped.monthly?.usedPercent).toBeCloseTo(33.333, 3)
+    expect(mapped.monthly?.usedPercent).toBe(12)
   })
+
+  it.each([0, '0', 140, -2])(
+    'keeps reported plan percentage %s authoritative',
+    (totalPercentUsed) => {
+      const mapped = mapCursorUsageSummary({
+        ...CYCLE,
+        individualUsage: {
+          plan: { enabled: true, used: 100, limit: 100, totalPercentUsed },
+          onDemand: { enabled: true, used: 95, limit: 100, totalPercentUsed: 4 }
+        }
+      })
+      expect(mapped.monthly?.usedPercent).toBe(Math.max(0, Math.min(100, Number(totalPercentUsed))))
+      expect(mapped.buckets.find((bucket) => bucket.name === 'On-demand')?.usedPercent).toBe(95)
+    }
+  )
+
+  it.each([undefined, null, '', 'invalid', Number.POSITIVE_INFINITY, Number.NaN])(
+    'falls back to the raw allowance for missing or invalid plan percentage %s',
+    (totalPercentUsed) => {
+      const mapped = mapCursorUsageSummary(
+        parseCursorUsageSummary({
+          ...CYCLE,
+          individualUsage: { plan: { enabled: true, used: 25, limit: 100, totalPercentUsed } }
+        })
+      )
+      expect(mapped.monthly?.usedPercent).toBe(25)
+    }
+  )
 
   it('falls back to the percentage when no cents allowance is reported', () => {
     const mapped = mapCursorUsageSummary({
@@ -75,8 +103,7 @@ describe('mapCursorUsageSummary', () => {
   })
 
   it('publishes no pools for a plan the account does not own', () => {
-    // Why: a team-billed account still reports 0% pools. Publishing them would
-    // paint a healthy 0% meter and skip the request-quota fallback.
+    // Team-owned zero pools must not suppress the legacy request-quota fallback.
     const mapped = mapCursorUsageSummary({
       ...CYCLE,
       individualUsage: {
@@ -108,8 +135,7 @@ describe('mapCursorUsageSummary', () => {
   })
 
   it('keeps the plan when a sibling pool arrives as null', () => {
-    // Why: the route sends `null` for an absent sub-object, and a stricter schema
-    // would drop the whole body — plan pools and billing cycle included.
+    // Null subobjects must not discard valid pools and billing-cycle data.
     const mapped = mapCursorUsageSummary(
       parseCursorUsageSummary({
         ...CYCLE,

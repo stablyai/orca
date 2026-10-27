@@ -50,16 +50,6 @@ function parseAheadBehind(stdout: string): { ahead: number; behind: number } {
   }
 }
 
-async function remoteExists(runGit: GitForkSyncRunner, remote: string): Promise<boolean> {
-  const { stdout } = await runGit(['remote'])
-  for (const rawLine of iterateGitOutputLines(stdout)) {
-    if (rawLine.trim() === remote) {
-      return true
-    }
-  }
-  return false
-}
-
 function* iterateGitOutputLines(output: string): Generator<string> {
   let lineStart = 0
 
@@ -207,8 +197,7 @@ async function resolveRemoteDefaultBranch(
       return branchName
     }
   } catch {
-    // Fall through to common branch names so offline/stale remote metadata can
-    // still support the conservative fast-forward check when refs exist.
+    // Offline/stale metadata may still leave common default refs usable for conservative fast-forward checks.
   }
 
   for (const branchName of DEFAULT_BRANCH_FALLBACKS) {
@@ -247,11 +236,12 @@ export async function syncForkDefaultBranch(
   const upstreamRemote = options.upstreamRemote ?? DEFAULT_UPSTREAM_REMOTE
   const expectedUpstream = validateGitForkSyncExpectedUpstream(options.expectedUpstream)
   const baseResult = { originRemote, upstreamRemote, ahead: 0, behind: 0 }
-
-  if (!(await remoteExists(runGit, originRemote))) {
+  const { stdout: remoteStdout } = await runGit(['remote'])
+  const remotes = new Set(Array.from(iterateGitOutputLines(remoteStdout), (line) => line.trim()))
+  if (!remotes.has(originRemote)) {
     return { ...baseResult, status: 'blocked', reason: 'missing-origin' }
   }
-  if (!(await remoteExists(runGit, upstreamRemote))) {
+  if (!remotes.has(upstreamRemote)) {
     return { ...baseResult, status: 'blocked', reason: 'missing-upstream' }
   }
   if (
@@ -287,9 +277,13 @@ export async function syncForkDefaultBranch(
     return { ...resultWithBranch, status: 'blocked', reason: 'missing-origin-branch' }
   }
 
-  const counts = parseAheadBehind(
-    (await runGit(['rev-list', '--left-right', '--count', `${originOid}...${upstreamOid}`])).stdout
-  )
+  const counts =
+    originOid === upstreamOid && /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(originOid)
+      ? { ahead: 0, behind: 0 }
+      : parseAheadBehind(
+          (await runGit(['rev-list', '--left-right', '--count', `${originOid}...${upstreamOid}`]))
+            .stdout
+        )
 
   if (counts.ahead > 0 || !(await isAncestor(runGit, originOid, upstreamOid))) {
     return { ...resultWithBranch, ...counts, status: 'blocked', reason: 'diverged' }

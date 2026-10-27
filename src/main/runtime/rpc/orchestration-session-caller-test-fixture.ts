@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { vi } from 'vitest'
 import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -14,6 +15,7 @@ import { structuredWorkerIdentities } from '../structured-worker-identity'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 export const SESSION_X = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 export const SESSION_Y = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
@@ -43,11 +45,7 @@ export function sessionRecord(
     location: { ...base.location, workspaceId: WORKSPACE_X, ...overrides.location },
     providerHandleChain: base.providerHandleChain.map((link) => ({
       ...link,
-      handle: {
-        provider: 'claude' as const,
-        sessionId: overrides.providerId ?? `provider-${sessionId}`,
-        leafUuid: null
-      }
+      handle: claudeProviderHandle(overrides.providerId ?? `provider-${sessionId}`, null)
     }))
   }
 }
@@ -64,7 +62,13 @@ export type SessionCallerHarness = {
   close: () => void
 }
 
-export function createSessionCallerHarness(hostRef: SessionHostRef): SessionCallerHarness {
+export function createSessionCallerHarness(
+  hostRef: SessionHostRef,
+  getVisibleSessionTabIndex: () => { present: boolean; sessionIds: string[] } = () => ({
+    present: false,
+    sessionIds: []
+  })
+): SessionCallerHarness {
   const db = new OrchestrationDb(':memory:')
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
@@ -83,7 +87,20 @@ export function createSessionCallerHarness(hostRef: SessionHostRef): SessionCall
     deps: {
       store: {
         getRecord: (sessionId: string) => records.get(sessionId) ?? null,
-        listRecords: () => [...records.values()]
+        getConversation: (id: string) => {
+          const record = records.get(id)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => [...records.values()].map(agentSessionConversationView),
+        requireWritableRecord: (id: string) => {
+          const record = records.get(id)
+          if (!record) {
+            throw new Error('Missing test record')
+          }
+          return record
+        },
+        listRecords: () => [...records.values()],
+        getVisibleSessionTabIndex
       }
     }
   }
@@ -158,7 +175,6 @@ export function resultOf(response: unknown): Record<string, unknown> {
   return response.result
 }
 
-/** The `id` of a row a receipt carries. */
 export function idOf(row: unknown): string {
   if (!isRecord(row) || typeof row.id !== 'string') {
     throw new Error(`expected a row with an id, got ${JSON.stringify(row)}`)

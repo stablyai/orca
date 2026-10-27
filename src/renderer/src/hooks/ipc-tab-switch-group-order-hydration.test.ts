@@ -1,7 +1,4 @@
-// STA-3475: the tab-cycle chord runs through the real group order helper here (no mock), because
-// the bug was the seam between them — a group tab the strip renders but group.tabOrder had not
-// learned about yet left the cycle with <=1 tab, so Terminal.tsx consumed the chord and nothing
-// moved until a mouse click rewrote the group state.
+/** Use real group order: stale group.tabOrder once omitted visible tabs, consuming cycle chords until a click repaired it (STA-3475). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
 
@@ -64,8 +61,7 @@ function stateWithGroupOrder(tabOrder: string[]) {
     activateTab: vi.fn(),
     getActiveTab: (_worktreeId: string): unknown => null
   }
-  // Why the real resolver: a hand-written stub would decide the group-scoped answer the code
-  // under test is meant to exercise.
+  // The real resolver must decide group scope; a stub would precompute the answer under test.
   store.getActiveTab = createTabsFocusActions(
     (() => {}) as unknown as TabsSliceSet,
     (() => store) as unknown as TabsSliceGet

@@ -5,13 +5,14 @@ import process from 'node:process'
 
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
+import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
-// Why: test-only modules live beside their spec as `*-test-harness.ts` / `*-test-rig.ts` / `*-fixtures.ts` here, not under `__tests__/`.
-const TEST_SUPPORT_FILE_PATTERN =
-  /[.-](?:test-harness|test-rig|test-fixtures?|test-state|test-support|fixtures?)\.[cm]?[jt]sx?$/
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
+const CLASS_PROPERTY_NAMES = new Set(['className', 'classNames'])
+// Why: the children of these elements are CSS or code, never copy a translator should see.
+const NON_COPY_JSX_ELEMENTS = new Set(['style', 'script'])
 const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
   'ariaLabel',
   'aria-label',
@@ -63,8 +64,7 @@ const USER_VISIBLE_OBJECT_METHODS = new Set([
   'warning'
 ])
 const USER_VISIBLE_OBJECT_NAMES = new Set(['toast'])
-// Why: only comparison operands are code, not copy. Bailing on every non-`+`
-// operator hid whole subtrees behind `cond && <JSX/>` guards and `?? 'fallback'`.
+// Only comparison operands are non-copy; rejecting all non-+ operators hides guarded JSX and ?? fallback strings.
 const COPY_PRESERVING_BINARY_OPERATORS = new Set([
   ts.SyntaxKind.PlusToken,
   ts.SyntaxKind.QuestionQuestionToken,
@@ -78,13 +78,7 @@ function normalizePath(root, filePath) {
 
 export function isSkippedFile(root, filePath) {
   const relative = normalizePath(root, filePath)
-  if (
-    relative.endsWith('.d.ts') ||
-    relative.includes('.test.') ||
-    relative.includes('.spec.') ||
-    relative.includes('/__tests__/') ||
-    TEST_SUPPORT_FILE_PATTERN.test(relative)
-  ) {
+  if (relative.endsWith('.d.ts') || isTestOnlySourcePath(relative)) {
     return true
   }
   return relative.split('/').some((part) => SKIP_PATH_PARTS.has(part))
@@ -321,8 +315,16 @@ function isUserVisibleCallArgument(node) {
   )
 }
 
+function isInsideNonCopyJsxElement(node) {
+  const element = findAncestor(node, (ancestor) => ts.isJsxElement(ancestor))
+  return Boolean(element && NON_COPY_JSX_ELEMENTS.has(element.openingElement.tagName.getText()))
+}
+
 function classifyStringNode(node) {
-  if (hasAncestorObjectPropertyName(node, new Set(['className', 'classNames']))) {
+  if (
+    hasAncestorObjectPropertyName(node, CLASS_PROPERTY_NAMES) ||
+    isInsideNonCopyJsxElement(node)
+  ) {
     return undefined
   }
 
@@ -432,10 +434,16 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
       return
     }
 
-    const kind = classifyStringNode(node)
-    if (kind) {
-      for (const part of stringParts(node)) {
-        pushReport(node, kind, part.text, part.dynamic)
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateExpression(node)
+    ) {
+      const kind = classifyStringNode(node)
+      if (kind) {
+        for (const part of stringParts(node)) {
+          pushReport(node, kind, part.text, part.dynamic)
+        }
       }
     }
 

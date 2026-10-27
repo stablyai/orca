@@ -6,5 +6,9 @@ export function resolveOpenCodeConfigDirectory(
   environment: NodeJS.ProcessEnv | Record<string, string> = process.env,
   homeDirectory = homedir()
 ): string {
-  return join(environment.XDG_CONFIG_HOME?.trim() || join(homeDirectory, '.config'), 'opencode')
+  const executionHome = process.platform === 'win32' ? environment.USERPROFILE : environment.HOME
+  return join(
+    environment.XDG_CONFIG_HOME?.trim() || join(executionHome || homeDirectory, '.config'),
+    'opencode'
+  )
 }

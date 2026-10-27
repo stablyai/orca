@@ -4,12 +4,7 @@ import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   getDuplicateProjectDetailsById,
   type ProjectSetupDirectory
@@ -154,18 +149,10 @@ function getProjectGroupDetail(group: ProjectGroup): string {
 }
 
 export function getNewWorkspaceProjectGroupHostId(group: ProjectGroup): ExecutionHostId {
-  const executionHost = parseExecutionHostId(group.executionHostId)
-  if (executionHost) {
-    return executionHost.id
-  }
-  const connectionId = group.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  return getRepoExecutionHostId(group)
 }
 
-/**
- * A folder workspace can only be backed by a group whose host is still actionable — a removed
- * or unreachable host must not be selectable, restorable from a draft, or kept once selected.
- */
+/** Require actionable hosts for folder selection, draft restore and retention of an existing pick. */
 export function findActionableFolderProjectGroup({
   projectGroups,
   groupId,

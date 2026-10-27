@@ -22,10 +22,7 @@ import {
   translateWslOutputPaths,
   wslAwareSpawn
 } from './runner'
-import {
-  GitAdmissionScheduler,
-  _resetGitAdmissionForTests
-} from './command-runner/git-subprocess-admission'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
 
 afterEach(() => _resetGitAdmissionForTests())
 
@@ -46,10 +43,7 @@ function createMockChildProcess(pid: number): MockChildProcess {
   return child
 }
 
-/**
- * Spawn stand-in for the gh/glab deadline tests: the CLI hangs, while the `ps`
- * quiescence probe the tree termination runs answers immediately.
- */
+/** Hang the CLI while allowing its process-tree quiescence probes to answer. */
 function mockWedgedCliSpawn(child: MockChildProcess): void {
   spawnMock.mockImplementation((program: string) => {
     if (program !== 'ps') {
@@ -296,9 +290,7 @@ describe('runner execFile timeout handling', () => {
     }
   )
 
-  // Why the group and not the child (#18234): `gh` and `glab` on PATH are often
-  // shims, so the deadline has a chain to reap. Signalling only the direct child
-  // leaves the rest of it running under init long after the deadline passed.
+  // CLI shims have descendants; direct-child signals can leave them running beyond the deadline.
   it('signals the whole gh process group when gh never calls back', async () => {
     const child = createMockChildProcess(1234)
     mockWedgedCliSpawn(child)
@@ -433,9 +425,6 @@ describe('runner execFile timeout handling', () => {
     expect(capturedEnv?.ORCA_TEST_ENV).toBe('kept')
   })
 
-  // Issue #5308: git read-path calls must be forced non-interactive so a
-  // credential / SSH host-key prompt fails fast instead of blocking forever on
-  // stdin and wedging the serve runtime for all clients.
   it('runs git non-interactively so a prompt fails fast instead of hanging', async () => {
     const child = createMockChildProcess(1234)
     let capturedEnv: NodeJS.ProcessEnv | undefined
@@ -456,220 +445,6 @@ describe('runner execFile timeout handling', () => {
     expect(capturedEnv?.GIT_SSH_COMMAND).toContain('BatchMode=yes')
   })
 
-  it('probes core.sshCommand for opted-in network git calls', async () => {
-    const child = createMockChildProcess(1234)
-    const calls: { args: string[]; env: NodeJS.ProcessEnv }[] = []
-    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
-      calls.push({ args, env: opts.env })
-      cb(null, args[0] === 'config' ? 'ssh -F ~/.ssh/github-work -i ~/.ssh/work_key\n' : '', '')
-      return child
-    })
-
-    await gitExecFileAsync(['fetch', 'origin'], {
-      cwd: '/repo',
-      env: {},
-      useConfiguredSshCommandForNetwork: true
-    })
-
-    expect(calls[0]?.args).toEqual(['config', '--get', 'core.sshCommand'])
-    expect(calls[0]?.env.GIT_TERMINAL_PROMPT).toBe('0')
-    expect(calls[0]?.env.GIT_SSH_COMMAND).toBeUndefined()
-    expect(calls[1]?.args).toEqual(['fetch', 'origin'])
-    expect(calls[1]?.env.GIT_SSH_COMMAND).toBe(
-      'ssh -F ~/.ssh/github-work -i ~/.ssh/work_key -o BatchMode=yes'
-    )
-  })
-
-  it('admits the core.sshCommand probe before spawning it', async () => {
-    const scheduler = new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 })
-    _resetGitAdmissionForTests(scheduler)
-    const blocker = await scheduler.acquire({ args: ['status'], cwd: '/repo', tier: 'status' })
-    const calls: string[][] = []
-    execFileMock.mockImplementation((_cmd, args, _opts, cb) => {
-      const child = createMockChildProcess(1234 + calls.length)
-      calls.push(args)
-      cb(null, '', '')
-      queueMicrotask(() => child.emit('close', 0, null))
-      return child
-    })
-
-    const pending = gitExecFileAsync(['fetch', '--no-write-fetch-head', 'origin'], {
-      cwd: '/repo',
-      env: {},
-      useConfiguredSshCommandForNetwork: true
-    })
-    await Promise.resolve()
-    expect(execFileMock).not.toHaveBeenCalled()
-
-    blocker.release()
-    await pending
-
-    expect(calls).toEqual([
-      ['config', '--get', 'core.sshCommand'],
-      ['fetch', '--no-write-fetch-head', 'origin']
-    ])
-  })
-
-  it('replaces configured BatchMode for opted-in mergeable OpenSSH commands', async () => {
-    const child = createMockChildProcess(1234)
-    let capturedEnv: NodeJS.ProcessEnv | undefined
-    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
-      if (args[0] === 'config') {
-        cb(null, 'ssh -o BatchMode=no -i ~/.ssh/personal\n', '')
-      } else {
-        capturedEnv = opts.env
-        cb(null, '', '')
-      }
-      return child
-    })
-
-    await gitExecFileAsync(['fetch', 'origin'], {
-      cwd: '/repo',
-      env: {},
-      useConfiguredSshCommandForNetwork: true
-    })
-
-    expect(capturedEnv?.GIT_SSH_COMMAND).toBe('ssh -i ~/.ssh/personal -o BatchMode=yes')
-  })
-
-  it('merges quoted ssh.exe command shapes for opted-in network calls', async () => {
-    const child = createMockChildProcess(1234)
-    let capturedEnv: NodeJS.ProcessEnv | undefined
-    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
-      if (args[0] === 'config') {
-        cb(null, '"C:/Program Files/Git/usr/bin/ssh.exe" -F ~/.ssh/config\n', '')
-      } else {
-        capturedEnv = opts.env
-        cb(null, '', '')
-      }
-      return child
-    })
-
-    await gitExecFileAsync(['fetch', 'origin'], {
-      cwd: '/repo',
-      env: {},
-      useConfiguredSshCommandForNetwork: true
-    })
-
-    expect(capturedEnv?.GIT_SSH_COMMAND).toBe(
-      "'C:/Program Files/Git/usr/bin/ssh.exe' -F ~/.ssh/config -o BatchMode=yes"
-    )
-  })
-
-  it('merges unquoted Windows ssh.exe paths for opted-in network calls', async () => {
-    const child = createMockChildProcess(1234)
-    let capturedEnv: NodeJS.ProcessEnv | undefined
-    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
-      if (args[0] === 'config') {
-        cb(null, `${String.raw`C:\Git\usr\bin\ssh.exe -i C:\Users\me\.ssh\work_key`}\n`, '')
-      } else {
-        capturedEnv = opts.env
-        cb(null, '', '')
-      }
-      return child
-    })
-
-    await gitExecFileAsync(['fetch', 'origin'], {
-      cwd: '/repo',
-      env: {},
-      useConfiguredSshCommandForNetwork: true
-    })
-
-    expect(capturedEnv?.GIT_SSH_COMMAND).toBe(
-      String.raw`'C:\Git\usr\bin\ssh.exe' -i 'C:\Users\me\.ssh\work_key' -o BatchMode=yes`
-    )
-  })
-
-  it('passes through unmergeable core.sshCommand wrappers without generic fallback', async () => {
-    const child = createMockChildProcess(1234)
-    let capturedEnv: NodeJS.ProcessEnv | undefined
-    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
-      if (args[0] === 'config') {
-        cb(null, '/usr/local/bin/work-ssh-wrapper --account work\n', '')
-      } else {
-        capturedEnv = opts.env
-        cb(null, '', '')
-      }
-      return child
-    })
-
-    await gitExecFileAsync(['fetch', 'origin'], {
-      cwd: '/repo',
-      env: {},
-      useConfiguredSshCommandForNetwork: true
-    })
-
-    expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
-    expect(capturedEnv?.GIT_ASKPASS).toBe('')
-    expect(capturedEnv?.SSH_ASKPASS).toBe('')
-    expect(capturedEnv?.GIT_SSH_COMMAND).toBeUndefined()
-  })
-
-  it('passes through shell-expanding OpenSSH configs without changing expansion semantics', async () => {
-    const child = createMockChildProcess(1234)
-    let capturedEnv: NodeJS.ProcessEnv | undefined
-    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
-      if (args[0] === 'config') {
-        cb(null, 'ssh -i "$HOME/.ssh/work_key"\n', '')
-      } else {
-        capturedEnv = opts.env
-        cb(null, '', '')
-      }
-      return child
-    })
-
-    await gitExecFileAsync(['fetch', 'origin'], {
-      cwd: '/repo',
-      env: {},
-      useConfiguredSshCommandForNetwork: true
-    })
-
-    expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
-    expect(capturedEnv?.GIT_SSH_COMMAND).toBeUndefined()
-  })
-
-  it('falls back to generic batch-mode SSH when opted-in config is unset', async () => {
-    const child = createMockChildProcess(1234)
-    let capturedEnv: NodeJS.ProcessEnv | undefined
-    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
-      if (args[0] === 'config') {
-        cb(Object.assign(new Error('missing'), { code: 1 }), '', '')
-      } else {
-        capturedEnv = opts.env
-        cb(null, '', '')
-      }
-      return child
-    })
-
-    await gitExecFileAsync(['fetch', 'origin'], {
-      cwd: '/repo',
-      env: {},
-      useConfiguredSshCommandForNetwork: true
-    })
-
-    expect(capturedEnv?.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
-  })
-
-  it('preserves explicit GIT_SSH_COMMAND and skips the opted-in config probe', async () => {
-    const child = createMockChildProcess(1234)
-    let capturedEnv: NodeJS.ProcessEnv | undefined
-    execFileMock.mockImplementation((_cmd, _args, opts, cb) => {
-      capturedEnv = opts.env
-      cb(null, '', '')
-      return child
-    })
-
-    await gitExecFileAsync(['fetch', 'origin'], {
-      cwd: '/repo',
-      env: { GIT_SSH_COMMAND: 'custom-ssh -o IdentityAgent=none' },
-      useConfiguredSshCommandForNetwork: true
-    })
-
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-    expect(capturedEnv?.GIT_SSH_COMMAND).toBe('custom-ssh -o IdentityAgent=none')
-    expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
-  })
-
   it('routes git through the selected WSL distro login shell when requested', async () => {
     await withPlatform('win32', async () => {
       const child = createMockChildProcess(1234)
@@ -686,10 +461,7 @@ describe('runner execFile timeout handling', () => {
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
         ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
-        // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-        // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-        // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
-        // asserted below).
+        // Use a stable Win32 cwd instead of inheriting Orca's deletable UNC cwd.
         expect.objectContaining({ cwd: expect.any(String) }),
         expect.any(Function)
       )
@@ -723,10 +495,7 @@ describe('runner execFile timeout handling', () => {
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
         ['-d', 'Ubuntu', '--exec', 'bash', '-c', expect.any(String)],
-        // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-        // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-        // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
-        // asserted below).
+        // Use a stable Win32 cwd instead of inheriting Orca's deletable UNC cwd.
         expect.objectContaining({ cwd: expect.any(String) }),
         expect.any(Function)
       )
@@ -840,7 +609,6 @@ describe('gitStreamStdout', () => {
     let calls = 0
     const promise = gitStreamStdout(['status'], {
       cwd: '/repo',
-      // Stop after the first chunk — mirrors a parser hitting its entry limit.
       onStdout: () => {
         calls += 1
         return true

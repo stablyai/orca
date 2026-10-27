@@ -1,13 +1,8 @@
-// A mutation applied in place: its steps write into drafts over the committed maps, only what they
-// touched is re-validated, and the drafts land together or not at all. The committed store was
-// valid, so a record the mutation did not touch, and whose dependencies it did not touch, still is.
+// Mutate drafts and commit atomically; revalidate touched records/dependencies only because the committed store was already valid.
 
 import type { AgentStatusStoreMutation } from './agent-status-store-contract'
-import { agentStatusStoreHeaderBytes } from './agent-status-store-byte-budget'
-import { AGENT_STATUS_STORE_LIMITS } from './agent-status-store-contract'
 import {
   commitAgentStatusStoreIndexes,
-  draftedRecordBytes,
   inMapOrder,
   type AgentStatusStoreDrafts,
   type AgentStatusStoreIndexes
@@ -17,7 +12,6 @@ import {
   type AgentStatusStoreMutationTables
 } from './agent-status-store-mutation'
 import {
-  agentStatusStoreSizesFit,
   storedAliasIsValid,
   storedChildIsValid,
   storedFactIsValid,
@@ -156,19 +150,6 @@ function touchedAreValid(
   return true
 }
 
-function fitsByteBudget(
-  epoch: string,
-  revision: number,
-  drafts: AgentStatusStoreDrafts,
-  recordBytes: Record<keyof AgentStatusStoreDrafts, number>
-): boolean {
-  let bytes = agentStatusStoreHeaderBytes(epoch, revision)
-  for (const name of ['parents', 'children', 'aliases', 'facts', 'tombstones'] as const) {
-    bytes += Math.max(0, drafts[name].size - 1) + recordBytes[name]
-  }
-  return bytes <= AGENT_STATUS_STORE_LIMITS.serializedBytes
-}
-
 /** Apply one mutation to the committed store in place; false (and nothing changed) on refusal. */
 export function commitAgentStatusStoreMutation(
   state: AgentStatusStoreState,
@@ -179,16 +160,11 @@ export function commitAgentStatusStoreMutation(
   const { drafts, tables } = draftTables(state, indexes, revision)
   if (
     !applyAgentStatusStoreMutationSteps(tables, mutation, revision) ||
-    !agentStatusStoreSizesFit(drafts) ||
     !touchedAreValid(drafts, tables)
   ) {
     return false
   }
-  const recordBytes = draftedRecordBytes(indexes, drafts)
-  if (!fitsByteBudget(state.epoch, revision, drafts, recordBytes)) {
-    return false
-  }
-  commitAgentStatusStoreIndexes(indexes, drafts, recordBytes)
+  commitAgentStatusStoreIndexes(indexes, drafts)
   drafts.parents.commitInto(state.parents)
   drafts.children.commitInto(state.children)
   drafts.aliases.commitInto(state.aliases)

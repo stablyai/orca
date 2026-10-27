@@ -7,12 +7,8 @@
  * That path passed even before the Wayland fix; it does not prove #15299 is fixed.
  * Reproducing #15299 still requires the nested Wayland session below.
  *
- * To run the Wayland reproduction on a machine with gnome-shell and ibus-hangul:
- *
- *   Xvfb :65 -extension GLX &
- *   DISPLAY=:65 gnome-shell --nested --wayland     # nested, NOT --headless
- *   ORCA_E2E_NATIVE_IBUS_HANGUL=1 ORCA_E2E_IME_INJECTOR=nested npx playwright test \
- *     tests/e2e/terminal-hangul-terminating-digit-native.spec.ts
+ * Run the Terminal IME E2E workflow on the candidate branch for hosted native validation.
+ * Its runner owns the isolated Xvfb display, nested compositor and IBus session.
  *
  * Nested Wayland prerequisites:
  *
@@ -22,8 +18,8 @@
  *  - Pick an unused display. Attaching to a stale Xvfb silently hands the run someone else's
  *    session, and a stale ibus-daemon wins the XIM selection over the new one.
  *  - The session script must not exit: ibus-daemon dies with its parent.
- *  - Under Playwright the window can stay hidden in a Wayland session, so the compositor has
- *    nothing to focus and zero DOM events arrive. The spec forces show()/focus().
+ *  - The owned window starts hidden, then the guarded native fixture presents it on hosted CI's
+ *    isolated display so the compositor can deliver real input.
  *  - Send Escape before the byte reader starts, or GNOME's overview keeps focus and the Escape
  *    bytes corrupt the first line.
  *  - Check the session's ibus-daemon is not running --panel=disable before trusting anything that
@@ -43,7 +39,9 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { presentNativeIbusWindow } from './terminal-native-ibus-window'
 import { appendImeEngagementReceipt } from './terminal-ime-engagement-receipt'
+import { installTerminalWaylandInputDiagnostics } from './terminal-wayland-input-diagnostics'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -54,8 +52,10 @@ import {
 import {
   disposeTerminalImeBoundaryProbe,
   installTerminalImeBoundaryProbe,
-  readTerminalImeBoundaryTrace
+  readTerminalImeBoundaryTrace,
+  type TerminalImeBoundaryTrace
 } from './terminal-ime-boundary-probe'
+import { readImeDomDeliveredText } from './terminal-ime-dom-delivery'
 import {
   createTerminalImeByteReader,
   removeTerminalImeByteReader,
@@ -65,6 +65,9 @@ import {
 
 const NATIVE_COMMAND_TIMEOUT_MS = 10_000
 const REPETITIONS = Number(process.env.ORCA_E2E_DIGIT_REPETITIONS ?? 3)
+// Why: nested mutter + IBus occasionally discards a preedit or a keydown before Chromium sees it;
+// those attempts are retried, bounded so a broken IME session still fails.
+const MAX_ATTEMPTS = REPETITIONS * 2
 const INJECTOR = process.env.ORCA_E2E_IME_INJECTOR ?? 'xdotool'
 const WAYLAND_INJECT = process.env.ORCA_E2E_WAYLAND_INJECT ?? '/tmp/ime15299/wayland-inject.py'
 // The nested compositor is one X11 window; keys land on it and mutter routes
@@ -80,6 +83,7 @@ test.use({
     IBUS_ENABLE_SYNC_MODE: '1',
     QT_IM_MODULE: 'ibus',
     XMODIFIERS: '@im=ibus',
+    ...(process.env.ORCA_E2E_WAYLAND_INPUT_DIAGNOSTICS === '1' ? { WAYLAND_DEBUG: 'client' } : {}),
     ...(process.env.ORCA_E2E_EXTRA_APP_ENV
       ? (JSON.parse(process.env.ORCA_E2E_EXTRA_APP_ENV) as Record<string, string>)
       : {})
@@ -176,78 +180,126 @@ test.describe('Hangul terminating digit @headful', () => {
     orcaPage: page,
     testRepoPath
   }, testInfo) => {
-    const launchDiagnostics = await electronApp.evaluate(({ app: electron, BrowserWindow }) => ({
-      waylandDisplay: process.env.WAYLAND_DISPLAY ?? null,
-      display: process.env.DISPLAY ?? null,
-      xdgRuntimeDir: process.env.XDG_RUNTIME_DIR ?? null,
-      ozonePlatform: electron.commandLine.getSwitchValue('ozone-platform'),
-      disableGpu: electron.commandLine.hasSwitch('disable-gpu'),
-      windows: BrowserWindow.getAllWindows().map((window) => ({
-        visible: window.isVisible(),
-        minimized: window.isMinimized(),
-        bounds: window.getBounds()
-      }))
-    }))
-    console.log(`[digit-diag] ${JSON.stringify(launchDiagnostics)}`)
-    if (INJECTOR === 'nested') {
-      expect(launchDiagnostics.ozonePlatform).toBe('wayland')
-      expect(launchDiagnostics.waylandDisplay).toBeTruthy()
-      // Under Wayland the app's ready-to-show never fires here, so the window
-      // stays hidden and the compositor has nothing to give keyboard focus to.
-      await electronApp.evaluate(({ BrowserWindow }) => {
-        for (const window of BrowserWindow.getAllWindows()) {
-          window.show()
-          window.focus()
-        }
-      })
-      await page.waitForTimeout(2_000)
-    }
-    await waitForSessionReady(page)
-    await waitForActiveWorktree(page)
-    await ensureTerminalVisible(page)
-    await waitForActiveTerminalManager(page, 30_000)
-
-    const ptyId = await waitForActivePanePtyId(page)
-    const reader = createTerminalImeByteReader(testRepoPath, REPETITIONS)
-    let receivedBytes: string[] = []
-    const expectedHex = Buffer.from(`${EXPECTED_LINE}\n`).toString('hex')
+    const diagnostics =
+      process.env.ORCA_E2E_WAYLAND_INPUT_DIAGNOSTICS === '1'
+        ? await installTerminalWaylandInputDiagnostics(electronApp, page)
+        : null
+    let completed = false
+    let diagnosticError: unknown
     try {
+      const launchDiagnostics = await electronApp.evaluate(({ app: electron, BrowserWindow }) => ({
+        waylandDisplay: process.env.WAYLAND_DISPLAY ?? null,
+        display: process.env.DISPLAY ?? null,
+        xdgRuntimeDir: process.env.XDG_RUNTIME_DIR ?? null,
+        ozonePlatform: electron.commandLine.getSwitchValue('ozone-platform'),
+        disableGpu: electron.commandLine.hasSwitch('disable-gpu'),
+        background: process.env.ORCA_BACKGROUND_LAUNCH,
+        nativeIsolatedDisplay: process.env.ORCA_E2E_NATIVE_IBUS_XVFB,
+        windows: BrowserWindow.getAllWindows().map((window) => ({
+          visible: window.isVisible(),
+          minimized: window.isMinimized(),
+          bounds: window.getBounds()
+        }))
+      }))
+      console.log(`[digit-diag] ${JSON.stringify(launchDiagnostics)}`)
+      await presentNativeIbusWindow(electronApp, page)
       if (INJECTOR === 'nested') {
-        leaveNestedOverview()
-        await page.waitForTimeout(1_500)
-        captureNestedScreen('nested-before-reader')
+        expect(launchDiagnostics.ozonePlatform).toBe('wayland')
+        expect(launchDiagnostics.waylandDisplay).toBeTruthy()
+        await page.waitForTimeout(2_000)
       }
-      await startTerminalImeByteReader(page, ptyId, reader)
-      await focusNativeTerminalWindow(page)
-      if (INJECTOR === 'nested') {
-        captureNestedScreen('nested-before-typing')
-      }
-      await installTerminalImeBoundaryProbe(page)
+      await waitForSessionReady(page)
+      await waitForActiveWorktree(page)
+      await ensureTerminalVisible(page)
+      await waitForActiveTerminalManager(page, 30_000)
 
-      for (let index = 0; index < REPETITIONS; index += 1) {
-        injectKeys(KEY_TOKENS)
-        await page.waitForTimeout(500)
+      const ptyId = await waitForActivePanePtyId(page)
+      const reader = createTerminalImeByteReader(testRepoPath, MAX_ATTEMPTS)
+      let receivedBytes: string[] = []
+      const attempts: {
+        line: string | null
+        domDelivered: string
+        trace: TerminalImeBoundaryTrace
+      }[] = []
+      const expectedHex = Buffer.from(`${EXPECTED_LINE}\n`).toString('hex')
+      try {
+        if (INJECTOR === 'nested') {
+          leaveNestedOverview()
+          await page.waitForTimeout(1_500)
+          captureNestedScreen('nested-before-reader')
+        }
+        await startTerminalImeByteReader(page, ptyId, reader)
+        await diagnostics?.attachTerminal()
+        await focusNativeTerminalWindow(page)
+        if (INJECTOR === 'nested') {
+          captureNestedScreen('nested-before-typing')
+        }
+        const expectedLine = `${EXPECTED_LINE}\n`
+        let accepted = 0
+        let trace: TerminalImeBoundaryTrace = { dom: [], onData: [] }
+        for (let attempt = 0; attempt < MAX_ATTEMPTS && accepted < REPETITIONS; attempt += 1) {
+          await installTerminalImeBoundaryProbe(page)
+          injectKeys(KEY_TOKENS)
+          const lineIndex = receivedBytes.length
+          receivedBytes = await waitForTerminalImeBytes(page, reader, 10_000, lineIndex + 1).catch(
+            () => receivedBytes
+          )
+          const attemptTrace = await readTerminalImeBoundaryTrace(page)
+          const domDelivered = readImeDomDeliveredText(attemptTrace)
+          const lineHex = receivedBytes[lineIndex]
+          const line = lineHex === undefined ? null : Buffer.from(lineHex, 'hex').toString('utf8')
+          attempts.push({ line, domDelivered, trace: attemptTrace })
+          if (line === expectedLine) {
+            accepted += 1
+            trace = attemptTrace
+            continue
+          }
+          // Why: whenever the page received every key the pty line must match; only input the
+          // IME/compositor itself never delivered (a discarded preedit, a lost keydown) is retried.
+          expect(
+            domDelivered,
+            `Orca lost input the page received: ${JSON.stringify(line)}`
+          ).not.toBe(expectedLine)
+          if (line === null) {
+            // Why: Ctrl-U drops the partial line a lost Enter leaves in the reader's tty buffer.
+            await sendToTerminal(page, ptyId, '\x15')
+          }
+        }
+        if (INJECTOR === 'nested') {
+          captureNestedScreen('nested-after-typing')
+        }
+        const summary = attempts.map(({ line, domDelivered }) => ({ line, domDelivered }))
+        expect(accepted, `attempts: ${JSON.stringify(summary)}`).toBe(REPETITIONS)
+        appendImeEngagementReceipt(testInfo.title, trace)
+        completed = true
+      } finally {
+        await writeEvidence(page, testInfo, 'hangul-terminating-digit', {
+          expectedHex,
+          expectedLine: EXPECTED_LINE,
+          receivedBytes,
+          decoded: receivedBytes.map((hex) => Buffer.from(hex, 'hex').toString('utf8')),
+          attempts
+        }).catch(() => undefined)
+        await disposeTerminalImeBoundaryProbe(page).catch(() => undefined)
+        await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)
+        removeTerminalImeByteReader(reader)
       }
-      if (INJECTOR === 'nested') {
-        captureNestedScreen('nested-after-typing')
-      }
-
-      receivedBytes = await waitForTerminalImeBytes(page, reader, 20_000)
-      expect(receivedBytes.map((hex) => Buffer.from(hex, 'hex').toString('utf8'))).toEqual(
-        Array.from({ length: REPETITIONS }, () => `${EXPECTED_LINE}\n`)
-      )
-      const trace = await readTerminalImeBoundaryTrace(page)
-      appendImeEngagementReceipt(testInfo.title, trace)
     } finally {
-      await writeEvidence(page, testInfo, 'hangul-terminating-digit', {
-        expectedHex,
-        expectedLine: EXPECTED_LINE,
-        receivedBytes,
-        decoded: receivedBytes.map((hex) => Buffer.from(hex, 'hex').toString('utf8'))
-      }).catch(() => undefined)
-      await disposeTerminalImeBoundaryProbe(page).catch(() => undefined)
-      await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)
-      removeTerminalImeByteReader(reader)
+      if (diagnostics) {
+        try {
+          await diagnostics.write(testInfo)
+        } catch (error) {
+          diagnosticError = error
+          console.error('Could not retain passive Wayland diagnostics', error)
+        } finally {
+          await diagnostics
+            .dispose()
+            .catch((error) => console.error('Could not dispose passive Wayland diagnostics', error))
+        }
+      }
+    }
+    if (completed && diagnosticError) {
+      throw diagnosticError
     }
   })
 })

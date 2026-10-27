@@ -7,6 +7,11 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
 import {
+  getPortsPanelOwnerKey,
+  portsPanelHostForOwnerKey,
+  portsPanelReachesSshHost
+} from './ports-panel-host'
+import {
   collectInstalledPluginTabKeys,
   usePluginPanels,
   usePluginPanelsStore,
@@ -35,8 +40,7 @@ export function useRightSidebarActivityItems({
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
-  // Why: source control and checks are meaningless for non-git folders.
-  // Hide those tabs so the activity bar only shows relevant actions.
+  // Hide Git-only tabs for folder workspaces.
   const activeWorktree = useAppStore((s) =>
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
@@ -44,7 +48,13 @@ export function useRightSidebarActivityItems({
   const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
-  const isSshRepo = Boolean(activeRepo?.connectionId)
+  // Why the owner: a managed server's workspace names its server, not an SSH connection.
+  const hasSshHost = useAppStore((s) =>
+    portsPanelReachesSshHost(
+      portsPanelHostForOwnerKey(getPortsPanelOwnerKey(s, activeWorktreeId)),
+      s.runtimeEnvironments
+    )
+  )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
@@ -111,8 +121,7 @@ export function useRightSidebarActivityItems({
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
       },
-      // Why: plugin panels append after the built-in tabs so core navigation
-      // keeps stable positions regardless of which plugins are installed.
+      // Append plugin tabs to preserve built-in navigation positions.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
     ],
     [
@@ -130,9 +139,9 @@ export function useRightSidebarActivityItems({
       getVisibleRightSidebarActivityItems(activityItems, {
         isFolder,
         isFolderWorkspace,
-        isSshRepo
+        hasSshHost
       }),
-    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+    [activityItems, isFolder, isFolderWorkspace, hasSshHost]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null

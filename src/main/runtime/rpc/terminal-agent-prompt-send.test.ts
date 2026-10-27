@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
@@ -47,7 +48,7 @@ describe('terminal agent prompt send RPC', () => {
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('terminal-1', 'review this change', {
       inputKind: 'driving',
       beforeWrite: undefined,
-      signal: undefined
+      observationSignal: undefined
     })
     expect(sendTerminal).not.toHaveBeenCalled()
   })

@@ -63,6 +63,7 @@ function seedLegacyDatabase(
   const path = databasePath()
   const db = new Database(path)
   try {
+    db.exec('BEGIN')
     db.exec(`
       CREATE TABLE profile_state_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
       CREATE TABLE profile_state_documents (
@@ -116,6 +117,12 @@ function seedLegacyDatabase(
       }
     }
     db.pragma(`user_version = ${version}`)
+    db.exec('COMMIT')
+  } catch (error) {
+    if (db.isTransaction) {
+      db.exec('ROLLBACK')
+    }
+    throw error
   } finally {
     db.close()
   }

@@ -1,6 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
-import type { Worktree } from '../../../shared/worktree/types'
+import type { Tab } from '../../../shared/tab-types'
 import {
   getPaletteWorktreeIdentity,
   isPaletteCurrentWorktree,
@@ -8,83 +6,49 @@ import {
 } from './palette-repo-resolution'
 import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,
   matchPaletteTabDocument,
   preparePaletteTabQuery
-} from './palette-match/tab-match'
-import { buildPaletteTabDocument } from './palette-match/tab-document'
+} from '../../../shared/palette-match/tab-match'
+import { buildPaletteTabDocument } from '../../../shared/palette-match/tab-document'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
-import type { MatchRange } from './palette-match/normalized-text'
-import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
-import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
 import {
   createPaletteSearchContext,
   encodePaletteIdentity,
   maxValidPaletteActivityTimestamp,
   preparePaletteActivity,
-  type PaletteActivityRank,
   type PaletteSearchContext
-} from './palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
+import type {
+  BuildSearchableSimulatorTabsOptions,
+  SearchableSimulatorTab,
+  SimulatorPaletteSearchResult
+} from './simulator-palette-search-types'
+
+export type {
+  BuildSearchableSimulatorTabsOptions,
+  SearchableSimulatorTab,
+  SimulatorPaletteSearchResult
+} from './simulator-palette-search-types'
 
 const NO_RANGES: readonly MatchRange[] = []
 
-export type SearchableSimulatorTab = {
-  tab: Tab
-  worktree: Worktree
-  repoName: string
-  worktreeSortIndex: number
-  isCurrentTab: boolean
-  isCurrentWorktree: boolean
-  /** Normalized field index, built once per entry rather than per keystroke. */
-  document: PaletteDocument
-}
-
-export type SimulatorPaletteSearchResult = {
-  /** Worktree ids collide across hosts; activation must not resolve by id alone. */
-  executionHostId?: ExecutionHostId
-  paletteIdentity: string
-  tabId: string
-  worktreeId: string
-  groupId: string
-  title: string
-  secondaryText: string
-  secondaryMatches: readonly { text: string; ranges: readonly MatchRange[] }[]
-  repoName: string
-  worktreeName: string
-  branchName: string
-  titleRanges: readonly MatchRange[]
-  secondaryRanges: readonly MatchRange[]
-  repoRanges: readonly MatchRange[]
-  worktreeRanges: readonly MatchRange[]
-  branchRanges: readonly MatchRange[]
-  typeAliasMatch?: { text: string; ranges: readonly MatchRange[] } | null
-  typeAliasMatches: readonly { text: string; ranges: readonly MatchRange[] }[]
-  isCurrentTab: boolean
-  isCurrentWorktree: boolean
-  score: number
-  qualityClass: PaletteResultQualityClass | null
-  rank: PaletteDocumentRank | null
-  lastActiveAt?: number | null
-  activity: PaletteActivityRank
-}
-
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 
-// Why search-only: the row icon already says "emulator"; a fixed secondary label
-// crowds Cmd+J the same way "Terminal tab" did. Keep these strings matchable so
-// typing "mobile" / "simulator" still finds emulator tabs.
+// Keep type aliases searchable but undisplayed; the icon already identifies emulator rows without redundant secondary text.
 export const SIMULATOR_TYPE_SEARCH_ALIASES = [
   'mobile emulator tab',
   'mobile emulator',
@@ -97,20 +61,6 @@ function isSimulatorPaletteQueryTooLarge(
   maxBytes = SIMULATOR_PALETTE_QUERY_MAX_BYTES
 ): boolean {
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
-}
-
-export type BuildSearchableSimulatorTabsOptions = {
-  worktrees: readonly Worktree[]
-  ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
-  repoMap: ReadonlyMap<string, { displayName?: string | null }>
-  repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
-  worktreeOrder: ReadonlyMap<string, number>
-  unifiedTabsByWorktree: Record<string, readonly Tab[] | undefined>
-  activeGroupIdByWorktree: Record<string, string | undefined>
-  groupsByWorktree: Record<string, readonly TabGroup[] | undefined>
-  activeWorktreeId: string | null
-  activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  activeTabType: WorkspaceVisibleTabType
 }
 
 function compareText(a: string, b: string): number {
@@ -137,8 +87,7 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-// Why: empty-query simulator ordering stays deterministic and context-first;
-// lastActiveAt only breaks ties between equally-ranked query matches.
+// Empty queries use deterministic context order; lastActiveAt only breaks equal-ranked match ties.
 function positionScore(entry: SearchableSimulatorTab): number {
   if (entry.isCurrentTab) {
     return entry.worktreeSortIndex * 100 - 4000
@@ -241,8 +190,7 @@ export function buildSearchableSimulatorTabs({
         worktree,
         repoName,
         worktreeSortIndex,
-        // Why: simulator tabs are unified tabs; terminal activeTabId does not
-        // identify the visible emulator tab after split-group activation.
+        // Use unified tab selection; terminal activeTabId cannot identify split-group emulator activation.
         isCurrentTab: activeUnifiedTabId === tab.id,
         isCurrentWorktree: isPaletteCurrentWorktree(
           worktree,
@@ -296,8 +244,7 @@ export function searchSimulatorTabs(
       repoRanges: match.repoRanges,
       worktreeRanges: match.worktreeRanges,
       branchRanges: match.branchRanges,
-      // Ranges are into the alias string, not the row: the icon explains the hit,
-      // so nothing on the row is highlighted from them.
+      // Alias ranges index search-only text; the icon explains the match, so never highlight them on the row.
       typeAliasMatch: alias ? { text: alias, ranges: match.typeAlias?.ranges ?? NO_RANGES } : null,
       typeAliasMatches: match.typeAliasMatches.map((typeAlias) => ({
         text: SIMULATOR_TYPE_SEARCH_ALIASES[typeAlias.index] ?? '',

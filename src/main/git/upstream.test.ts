@@ -23,7 +23,6 @@ describe('getUpstreamStatus', () => {
     invalidateGitUpstreamStatusReads()
   })
 
-  // Why: the CI-enforced guard that the native/WSL path actually coalesces rather than fanning out.
   it('shares one physical read across ten identical native callers', async () => {
     let resolveSymbolicRef = (): void => {}
     const symbolicRefGate = new Promise<void>((resolve) => {
@@ -51,7 +50,6 @@ describe('getUpstreamStatus', () => {
       gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'symbolic-ref')
     ).toHaveLength(1)
     expect(new Set(results).size).toBe(1)
-    // A settled lease is dropped, so the next read must issue fresh Git work.
     await getUpstreamStatus('/repo')
     expect(
       gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'symbolic-ref')
@@ -222,9 +220,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockResolvedValueOnce({ stdout: '\n' })
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -240,9 +236,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockRejectedValueOnce(new Error('fatal: no upstream configured'))
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -258,9 +252,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockRejectedValueOnce(missingTrackingRefError)
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -613,6 +605,8 @@ describe('getUpstreamStatus', () => {
       [
         [
           'log',
+          '--no-show-signature',
+          '--no-color',
           '--oneline',
           '--cherry-mark',
           '--right-only',

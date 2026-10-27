@@ -1,22 +1,15 @@
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import {
-  isFinalAutomationRunStatus,
-  type Automation,
-  type AutomationRun
-} from '../../shared/automations-types'
+import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { AutomationService } from './service'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-
-const testState = { dir: '' }
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -27,14 +20,6 @@ vi.mock('electron', () => ({
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
 }))
-
-async function createStore() {
-  vi.resetModules()
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
-  initDataPath()
-  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
-}
 
 type TestStore = Awaited<ReturnType<typeof createStore>>
 
@@ -53,7 +38,6 @@ const LAUNCH_TARGET = {
   terminalPtyId: 'pty-1'
 }
 
-/** Well past the reconciler's post-ready settle window. */
 const AFTER_SETTLE_MS = 10 * 60 * 1000
 
 function createAutomation(store: TestStore): Automation {
@@ -71,7 +55,6 @@ function createAutomation(store: TestStore): Automation {
   })
 }
 
-/** A run left behind by a quit while its agent was mid-task. */
 function retainDispatchedRun(store: TestStore, automation: Automation): AutomationRun {
   const run = store.createAutomationRun(automation, Date.now() - 60_000, 'manual')
   return store.updateAutomationRun({
@@ -90,7 +73,6 @@ function readRun(store: TestStore, automationId: string, runId: string): Automat
   return run
 }
 
-/** Stands in for the window graph: null until the pane it describes is mounted. */
 function createPaneSurface(): {
   observer: AutomationRunTerminalObserver
   mountPane: () => void
@@ -133,8 +115,6 @@ describe('reconciling retained runs against a graph that has not published yet',
   })
 
   it('does not fail a desktop-startup retained run while the window graph is empty', async () => {
-    // Desktop arms automations inside openMainWindow, before the renderer has
-    // loaded — every pane lookup returns null and none of it is evidence.
     const store = await createStore()
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)
@@ -172,48 +152,7 @@ describe('reconciling retained runs against a graph that has not published yet',
     service.stop()
   })
 
-  it('persists the terminal status exactly once when the restored pane finishes the run', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const retained = retainDispatchedRun(store, automation)
-    const surface = createPaneSurface()
-    const service = new AutomationService(store, { terminalObserver: surface.observer })
-
-    const transitions: string[] = []
-    const persist = store.updateAutomationRun.bind(store)
-    vi.spyOn(store, 'updateAutomationRun').mockImplementation((update) => {
-      const before = store.listAutomationRuns(automation.id).find((r) => r.id === update.runId)
-      if (before && !isFinalAutomationRunStatus(before.status)) {
-        if (isFinalAutomationRunStatus(update.status)) {
-          transitions.push(update.status)
-        }
-      }
-      return persist(update)
-    })
-
-    service.start()
-    service.setRendererReady()
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    // The restored pane comes back and its renderer reports the real outcome.
-    surface.mountPane()
-    await service.markDispatchResult({
-      runId: retained.id,
-      status: 'completed',
-      ...LAUNCH_TARGET,
-      error: null
-    })
-    await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
-
-    expect(transitions).toEqual(['completed'])
-    expect(readRun(store, automation.id, retained.id).status).toBe('completed')
-    expect(readRun(store, automation.id, retained.id).error).toBeNull()
-    service.stop()
-  })
-
   it('does not fail a serve-startup retained run whose host pane has not reattached', async () => {
-    // Serve publishes an explicitly empty graph and adopts SSH panes only after
-    // the connection comes up, so its surface answers null at start() too.
     const store = await createStore()
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)

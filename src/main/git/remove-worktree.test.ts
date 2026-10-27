@@ -54,8 +54,7 @@ import {
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
-// Why: removal argv carries core.longpaths on Windows, so pin a non-Windows default or the
-// exact-argv assertions below fail for a maintainer running vitest on Windows.
+// Pin non-Windows argv; Windows removal also sets core.longpaths.
 let platformSpy: MockInstance<() => NodeJS.Platform>
 
 beforeEach(() => {
@@ -249,11 +248,11 @@ branch refs/heads/main
 
     await removeWorktree('/repo', '/repo-feature')
 
-    // A large checkout takes Git 30 s or more to delete; any timeout here would cut that short.
-    // Exempt from general admission: deletes queue under their own limit instead.
+    // Large deletions must finish without a deadline; their own queue bounds admission.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'remove', '/repo-feature'], {
       cwd: '/repo',
-      admissionExempt: true
+      admissionExempt: true,
+      ...(process.platform === 'darwin' ? { spawnOnWorkerThread: true } : {})
     })
     expect(getGitCalls()).not.toContain('git worktree prune')
     expect(getGitCalls()).toContain('git branch -d -- feature/test')
@@ -432,7 +431,7 @@ branch refs/heads/main
     expect(getGitCalls()).toContain('git worktree remove --force /repo-feature')
   })
 
-  it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
+  it('preserves Git refusal even when parent status cannot reveal unpublished submodule commits', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -457,25 +456,14 @@ branch refs/heads/main
       'git status --porcelain --untracked-files=all': { stdout: '' }
     })
 
-    await removeWorktree('/repo', '/repo-feature')
-
-    const calls = getGitCalls()
-    expectGitCallOrder(
-      calls,
-      'git worktree remove /repo-feature',
-      'git worktree remove --force /repo-feature'
+    await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
+      'git worktree remove failed'
     )
-    // The re-proof of cleanliness between the refusal and the forced retry.
-    expect(calls.lastIndexOf('git status --porcelain --untracked-files=all')).toBeGreaterThan(
-      calls.indexOf('git worktree remove /repo-feature')
-    )
-    expect(calls.lastIndexOf('git status --porcelain --untracked-files=all')).toBeLessThan(
-      calls.indexOf('git worktree remove --force /repo-feature')
-    )
-    expect(calls).toContain('git branch -d -- feature/test')
+    expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
+    expect(getGitCalls()).not.toContain('git branch -d -- feature/test')
   })
 
-  it('surfaces uncommitted changes instead of force-removing a dirty submodule worktree', async () => {
+  it('preserves Git refusal for a dirty submodule worktree', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -495,7 +483,7 @@ branch refs/heads/feature/test
     })
 
     await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
-      'Worktree has uncommitted or untracked changes.'
+      'git worktree remove failed'
     )
     expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
   })
@@ -546,7 +534,6 @@ branch refs/heads/feature/test
       'git worktree remove failed'
     )
     expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
-    // An unrelated failure must not re-prove cleanliness.
     expect(getGitCalls()).not.toContain('git status --porcelain --untracked-files=all')
   })
 
@@ -656,9 +643,7 @@ branch refs/heads/feature/test
 
     await removeWorktree('/repo', '/repo-feature', false, { deleteBranch: false })
 
-    // Why not assert size 0: the pre-removal `listWorktrees` lookup inside `performRemoveWorktree`
-    // re-annotates every row it saw (including the untouched main worktree), caching a fresh entry
-    // for `/repo`. Only the removed path's own entry must be gone, proven by a fresh stat call below.
+    // Other rows may be re-cached during removal; only the removed path must require a fresh stat.
     const statCallsBefore = statMock.mock.calls.length
     expect(await detectSparseCheckoutCached('/repo', '/repo-feature')).toBe(false)
     expect(statMock.mock.calls.length).toBeGreaterThan(statCallsBefore)

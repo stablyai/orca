@@ -16,7 +16,7 @@ vi.mock('expo-crypto', () => ({
 
 import { deriveSharedKey } from './e2ee'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
-import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
 import {
   MobileE2EEAuthenticationError,
   MobileE2EEV2PhysicalChannel,
@@ -116,10 +116,51 @@ describe('mobile E2EE v2 physical channel', () => {
     const ctx = setup(async () => null)
     await authenticate(ctx)
 
-    expect(JSON.parse(ctx.sent[0] as string)).toEqual(ctx.session.hello)
-    expect(typeof ctx.sent[1]).toBe('string')
+    const hello = ctx.sent[0]
+    const auth = ctx.sent[1]
+    if (typeof hello !== 'string' || typeof auth !== 'string') {
+      throw new Error('Expected hello and encrypted auth text frames')
+    }
+    expect(JSON.parse(hello)).toEqual(ctx.session.hello)
+    const plaintext = openMobileE2EEV2Frame({
+      frame: Buffer.from(auth, 'base64'),
+      key: ctx.schedule.mobileToDesktopKey,
+      sessionId: ctx.schedule.sessionId,
+      direction: 'mobile-to-desktop',
+      payloadKind: 'text',
+      expectedCounter: 0n
+    })
+    if (!plaintext) {
+      throw new Error('Auth frame failed desktop decryption')
+    }
+    expect(JSON.parse(new TextDecoder().decode(plaintext))).toEqual({
+      type: 'e2ee_auth',
+      v: 2,
+      transcriptHashB64: '0MsOjvXsuyjwleiCNSASug/uFkz8+rYlIfG2h2p5OPk=',
+      deviceToken: 'valid-token'
+    })
     expect(ctx.onAuthenticated).toHaveBeenCalledOnce()
     expect(ctx.onError).not.toHaveBeenCalled()
+
+    const wrongTranscript = setup(async () => null)
+    await wrongTranscript.channel.handleMessage(JSON.stringify(wrongTranscript.ready))
+    const response = serverFrame(
+      new TextEncoder().encode(
+        JSON.stringify({
+          type: 'e2ee_authenticated',
+          v: 2,
+          transcriptHashB64: 'A'.repeat(44)
+        })
+      ),
+      'text',
+      0n,
+      wrongTranscript.schedule
+    )
+    await wrongTranscript.channel.handleMessage(Buffer.from(response).toString('base64'))
+    expect(wrongTranscript.onAuthenticated).not.toHaveBeenCalled()
+    expect(wrongTranscript.onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'Invalid E2EE v2 authenticated response' })
+    )
   })
 
   it('classifies the encrypted desktop device-token rejection as global auth failure', async () => {
@@ -199,10 +240,18 @@ describe('mobile E2EE v2 physical channel', () => {
     await authenticate(ctx)
     ctx.socket.bufferedAmount = 9 * 1024 * 1024
     const megabyte = new Uint8Array(1024 * 1024)
-    for (let index = 0; index < 65; index++) {
+    for (let index = 0; index < 63; index++) {
       expect(ctx.channel.sendBinary(megabyte)).toBe(true)
     }
-    expect(ctx.onError).toHaveBeenCalledOnce()
-    expect(ctx.onError.mock.calls[0]![0].message).toBe('E2EE v2 outbound buffer overflow')
+    expect(ctx.onError).not.toHaveBeenCalled()
+    expect(ctx.sent).toHaveLength(2)
+    expect(ctx.channel.sendBinary(megabyte)).toBe(true)
+    expect(ctx.onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'E2EE v2 outbound buffer overflow' })
+    )
+    ctx.socket.bufferedAmount = 0
+    vi.runOnlyPendingTimers()
+    expect(ctx.sent).toHaveLength(2)
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

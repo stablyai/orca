@@ -1,11 +1,9 @@
-// Queued drafts across conversation commands: a /compact is a queued message
-// and then a turn, so a capable send during it becomes a card that waits for it
-// like any turn, while Delete and Send-now answer at once; a /clear in flight
-// admits no draft onto the source it is superseding; and a draft /clear carries
-// to its replacement is fingerprinted for the replacement, so the provider's
-// echo folds into its sent bubble.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { activeProviderContext } from '../../../shared/agent-session-provider-context'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import {
   createQueuedMessageTestRig,
@@ -14,8 +12,9 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
-  HOST_TEST_THREAD as THREAD,
+  HOST_TEST_SESSION as SESSION,
   hostTestMessage,
+  hostTestAttachParams,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 
@@ -55,8 +54,6 @@ async function queuedId(
 }
 
 describe('a /compact in flight', () => {
-  /** A /compact the provider took: a queued message, then its own turn, running until the
-   *  provider ends it (`finishCompact`). */
   async function compactRunning(): Promise<void> {
     expect(await command('compact')).toMatchObject({ ok: true, value: { command: 'compact' } })
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
@@ -66,7 +63,6 @@ describe('a /compact in flight', () => {
     await compactRunning()
     const draftId = await queuedId(rig.send('sent while compacting', 'queue-if-active').result)
     expect(await rig.drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
-    // The compaction's turn owes work, so the drain waits behind it like any turn.
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect(await rig.handoff(draftId)).toBeUndefined()
     rig.finishCompact()
@@ -79,7 +75,6 @@ describe('a /compact in flight', () => {
     const deletedId = await queuedId(rig.send('deleted while compacting', 'queue-if-active').result)
     const sentId = await queuedId(rig.send('sent now while compacting', 'queue-if-active').result)
     const hung = new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 2_000))
-    // Nothing holds the session's lane for the compaction's length any more.
     expect(await Promise.race([rig.deleteQueued(deletedId), hung])).toMatchObject({
       ok: true,
       value: { deleted: true }
@@ -88,7 +83,6 @@ describe('a /compact in flight', () => {
       ok: true,
       value: { submission: { queuedMessageId: sentId } }
     })
-    // Accepted, then handed over only once the compaction ends — the order every send keeps.
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect(rig.dispatch).toHaveBeenCalledTimes(0)
     rig.finishCompact()
@@ -97,120 +91,237 @@ describe('a /compact in flight', () => {
 })
 
 describe('/clear', () => {
-  it('in flight, refuses a capable send as today: no card lands on the source it supersedes', async () => {
-    const commit = rig.store.commitConversationClear
+  it('refuses a send arriving while clear is stopping the context', async () => {
     let release: (() => void) | undefined
     const released = new Promise<void>((resolve) => {
       release = resolve
     })
-    const committing = vi.fn()
-    const spy = vi
-      .spyOn(rig.store, 'commitConversationClear')
-      .mockImplementationOnce(async (clear) => {
-        committing()
-        await released
-        return commit(clear)
-      })
+    const stopping = vi.fn()
+    const spy = rig.closeSession.mockImplementationOnce(async () => {
+      stopping()
+      await released
+      return true
+    })
     try {
       const cleared = command('clear')
-      await eventually(() => expect(committing).toHaveBeenCalledOnce())
-      expect(await rig.send('sent while clearing', 'queue-if-active').result).toEqual(WAIT_REFUSAL)
+      await eventually(() => expect(stopping).toHaveBeenCalledOnce())
+      const sent = rig.send('sent while clearing', 'queue-if-active').result
       release?.()
-      const done = await cleared
-      const replacementId = done.ok ? done.value.replacementSessionId : undefined
-      if (!replacementId) {
-        throw new Error('expected a replacement session')
-      }
+      expect(await sent).toEqual(WAIT_REFUSAL)
+      expect(await cleared).toMatchObject({ ok: true, value: { command: 'clear' } })
       expect(await rig.drafts()).toHaveLength(0)
-      expect(await rig.drafts(replacementId)).toHaveLength(0)
     } finally {
-      spy.mockRestore()
+      release?.()
+      spy.mockResolvedValue(true)
     }
   })
 
-  it('carries drafts to a replacement no agent has started, before it answers; the first send starts the agent ahead of them', async () => {
+  it('keeps waiting card identities and starts a fresh context ahead of their drain', async () => {
     const working = await rig.workingSend()
     const firstId = await queuedId(rig.send('first draft', 'queue-if-active').result)
     const secondId = await queuedId(rig.send('second draft', 'queue-if-active').result)
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    const cleared = await command('clear')
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    if (!replacementId) {
-      throw new Error('expected a replacement session')
-    }
-    // The clear started nothing, yet the drafts had already moved when it answered.
-    expect(rig.store.getRecord(replacementId)).toMatchObject({
-      providerHandleChain: [],
-      lease: { claimStatus: 'released' }
-    })
-    expect(rig.host.collaboratorsForTests().sessions.get(replacementId)?.child ?? null).toBeNull()
-    expect(await rig.drafts()).toHaveLength(0)
-    expect(await rig.drafts(replacementId)).toEqual([
+    expect(await command('clear')).toMatchObject({ ok: true })
+    expect(rig.store.getRecord(SESSION)?.providerHandleChain).toEqual([])
+    expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child ?? null).toBeNull()
+    expect(await rig.drafts()).toEqual([
       { messageId: firstId, state: 'waiting' },
       { messageId: secondId, state: 'waiting' }
     ])
-    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'cleared' })
-
-    const body = hostTestMessage('first in the new chat')
-    const fields = { body, delivery: 'queue-if-active' as const }
-    const sentId = hostTestOperationId()
-    expect(
-      await rig.host.send(CALLER, {
-        envelope: rig.envelope(fields, 'agentSession.send', sentId, replacementId),
-        ...fields,
-        userSend: true
-      })
-    ).toMatchObject({ ok: true, value: { submission: expect.anything() } })
+    expect(await rig.handoff(firstId)).toBeUndefined()
+    const sent = rig.send('first in the new context', 'queue-if-active')
+    expect(await sent.result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
     await eventually(() =>
-      expect(rig.store.getRecord(replacementId)?.providerHandleChain).toHaveLength(1)
+      expect(rig.store.getRecord(SESSION)?.providerHandleChain).toHaveLength(1)
     )
+    await eventually(() =>
+      expect(activeProviderContext(rig.store.getRecord(SESSION)!).head).not.toBeNull()
+    )
+    const thread = activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle.nativeId
     await rig.host.settleLateDispatch({
-      sessionId: replacementId,
-      clientMessageId: sentId,
-      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-first', ordinal: 0 }
+      sessionId: SESSION,
+      clientMessageId: sent.id,
+      providerIdentity: { provider: 'codex', threadId: thread, turnId: 'turn-first', ordinal: 0 }
     })
-    await eventually(async () =>
-      expect(
-        (await rig.host.journalSnapshot(replacementId)).submissions.map((entry) =>
-          entry.clientMessageId === sentId ? 'sent' : entry.queuedMessageId
-        )
-      ).toEqual(['sent', firstId])
-    )
-    expect(await rig.queuePause(replacementId)).toBeNull()
+    await eventually(async () => expect(await rig.handoff(firstId)).toBeDefined())
+    expect(await rig.queuePause()).toBeNull()
   })
 
-  it("a carried draft sent on the replacement: the provider's echo folds into its one bubble", async () => {
+  it('compacts the new context without removing clear ancestry or its divider', async () => {
+    expect(await command('clear')).toMatchObject({ ok: true })
+    const boundary = rig.store.getRecord(SESSION)!.providerContextBoundary
+    expect(await command('compact')).toMatchObject({ ok: true })
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    expect(activeProviderContext(rig.store.getRecord(SESSION)!).head?.replaces).toBeUndefined()
+    expect(rig.store.getRecord(SESSION)!.providerHandleChain).toHaveLength(1)
+    rig.finishCompact()
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    await eventually(() =>
+      expect(rig.store.getRecord(SESSION)?.conversationCommand?.state).toBe('completed')
+    )
+    expect(rig.store.getRecord(SESSION)!.providerContextBoundary).toEqual(boundary)
+    expect(journal.context.floor()).not.toBeNull()
+  })
+
+  it('a waiting card sent after clear gets one provider echo bubble in that context', async () => {
     const working = await rig.workingSend()
-    const draftId = await queuedId(rig.send('carried text', 'queue-if-active').result)
+    const draftId = await queuedId(rig.send('waiting text', 'queue-if-active').result)
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    const cleared = await command('clear')
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    if (!replacementId) {
-      throw new Error('expected a replacement session')
-    }
-    expect(await rig.sendNow(draftId, hostTestOperationId(), replacementId)).toMatchObject({
-      ok: true,
-      value: { submission: expect.anything() }
-    })
-    const journal = rig.host.collaboratorsForTests().sessions.get(replacementId)?.journal
-    const sent = journal?.submissions().findLast((entry) => entry.queuedMessageId === draftId)
-    if (!journal || !sent) {
-      throw new Error('expected the carried draft sent on the replacement')
-    }
+    expect(await command('clear')).toMatchObject({ ok: true })
+    expect(await rig.sendNow(draftId, hostTestOperationId())).toMatchObject({ ok: true })
+    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const sent = journal.submissions().findLast((entry) => entry.queuedMessageId === draftId)!
+    await eventually(() =>
+      expect(activeProviderContext(rig.store.getRecord(SESSION)!).head).not.toBeNull()
+    )
+    const thread = activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle.nativeId
     await journal.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'turn-echo', ordinal: 0 },
-      hostTestMessage('carried text'),
+      { provider: 'codex', threadId: thread, turnId: 'turn-echo', ordinal: 0 },
+      hostTestMessage('waiting text'),
       { fence: sent.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const snapshot = await rig.host.journalSnapshot(replacementId)
-    const userBubbles = snapshot.items.filter(
-      (item) => item.body.kind === 'message' && item.body.role === 'user'
-    )
-    expect(userBubbles).toHaveLength(1)
-    expect(snapshot.submissions.find((entry) => entry.queuedMessageId === draftId)).toMatchObject({
-      dispatchState: 'accepted'
-    })
+    const floor = journal.context.floor()!.sequence
+    expect(
+      journal
+        .snapshot()
+        .items.filter(
+          (item) =>
+            item.sequence > floor && item.body.kind === 'message' && item.body.role === 'user'
+        )
+    ).toHaveLength(1)
+    expect(journal.submission(sent.clientMessageId)?.dispatchState).toBe('accepted')
   })
+})
+
+it('replays /compact across callers with one submission and one provider command', async () => {
+  const id = hostTestOperationId()
+  const fields = { command: 'compact' as const }
+  const params = {
+    ...fields,
+    envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+  }
+  const admit = vi
+    .spyOn(rig.store, 'admitMutationOperation')
+    .mockRejectedValue(new Error('ledger unavailable'))
+  const original = await rig.host.conversationCommand(CALLER, params)
+  expect(original).toMatchObject({ ok: true, replayed: false })
+  await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+  const replay = await rig.host.conversationCommand({ callerKey: 'second-caller' }, params)
+  expect(replay).toMatchObject({ ok: true, replayed: true })
+  if (!original.ok || !replay.ok) {
+    throw new Error('expected accepted commands')
+  }
+  expect(replay.value).toEqual(original.value)
+  expect((await rig.host.journalSnapshot(params.envelope.sessionId)).submissions).toHaveLength(1)
+  expect(rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)).toEqual({
+    verdict: 'absent'
+  })
+  expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
+    verdict: 'readable',
+    receipt: { callerKey: CALLER.callerKey }
+  })
+  expect(admit).not.toHaveBeenCalled()
+  expect(rig.compact).toHaveBeenCalledOnce()
+})
+
+it('refuses another caller reusing a send id for /compact as a receipt conflict', async () => {
+  const { id, result } = rig.send('a different request')
+  await result
+  const fields = { command: 'compact' as const }
+  await expect(
+    rig.host.conversationCommand(
+      { callerKey: 'second-caller' },
+      {
+        ...fields,
+        envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+      }
+    )
+  ).resolves.toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
+  })
+  expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect(rig.compact).not.toHaveBeenCalled()
+})
+
+it("refuses /compact reusing another caller's id for a different conversation", async () => {
+  const id = hostTestOperationId()
+  const fields = { command: 'compact' as const }
+  await expect(
+    rig.host.conversationCommand(CALLER, {
+      ...fields,
+      envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+    })
+  ).resolves.toMatchObject({ ok: true })
+  const otherSessionId = 'session-beta'
+  const caller = { callerKey: 'second-caller' }
+  const attach = hostTestAttachParams(null)
+  await expect(
+    rig.host.attach(
+      caller,
+      hostTestAttachParams(null, {
+        envelope: { ...attach.envelope, sessionId: otherSessionId },
+        providerHandle: { kind: 'codex', threadId: '019fd532-7c11-7a90-b6de-4e1a2c3d5f61' }
+      })
+    )
+  ).resolves.toMatchObject({ ok: true })
+  await expect(
+    rig.host.conversationCommand(caller, {
+      ...fields,
+      envelope: rig.envelope(fields, 'agentSession.conversationCommand', id, otherSessionId)
+    })
+  ).resolves.toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
+  })
+  expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect((await rig.host.journalSnapshot(otherSessionId)).submissions).toHaveLength(0)
+  expect(rig.compact).toHaveBeenCalledOnce()
+})
+
+it('replays a completed compact after reopening an unreadable writer without compacting again', async () => {
+  const fields = { command: 'compact' as const }
+  const params = {
+    ...fields,
+    envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
+  }
+  expect(await rig.host.conversationCommand(CALLER, params)).toMatchObject({ ok: true })
+  await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+  rig.finishCompact()
+  const { command } = rig.compact.mock.calls[0]![0]
+  await eventually(async () =>
+    expect(
+      (await rig.host.journalSnapshot(SESSION)).items.find(
+        ({ itemId }) => itemId === agentJournalItemKey(command.identity)
+      )?.body
+    ).toMatchObject({ ...command.running, state: 'completed', outcome: 'success' })
+  )
+  expect(await rig.host.conversationCommand(CALLER, params)).toMatchObject({
+    ok: true,
+    replayed: true
+  })
+  expect(rig.compact).toHaveBeenCalledOnce()
+  rig.host.stopDelivery()
+  await rig.host.flushAllStreamedEvents()
+  openTestJournalHostDatabase(rig.root)
+    .db.prepare(
+      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+    )
+    .run(SESSION)
+  const store = await openTestAgentSessionRecordStore(rig.root)
+  const restored = new StructuredAgentSessionHost({ ...rig.host.deps, store })
+  try {
+    expect(store.getRecord(SESSION)).toBeNull()
+    expect(await restored.conversationCommand(CALLER, params)).toMatchObject({
+      ok: true,
+      replayed: true
+    })
+    expect(rig.compact).toHaveBeenCalledOnce()
+  } finally {
+    restored.stopDelivery()
+    await restored.flushAllStreamedEvents()
+  }
 })

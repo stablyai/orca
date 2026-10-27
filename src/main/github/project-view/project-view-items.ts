@@ -1,11 +1,11 @@
 import type { GitHubProjectOwnerType, GitHubProjectRow } from '../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
 import { projectGhExecOptions, runGraphql } from './internals'
-import { driftError, errorsIndicateParentField } from './project-error-classification'
+import { driftError, unsupportedItemFieldsFromErrors } from './project-error-classification'
 import {
-  hasParentFieldRetried,
+  getUnsupportedItemFields,
   hasParentFieldWarningLogged,
-  markParentFieldRetried,
+  markItemFieldsUnsupported,
   markParentFieldWarningLogged,
   ownerScopeKey,
   parentFieldProbeInFlight
@@ -27,86 +27,65 @@ export async function fetchAllItems(args: {
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
   | { ok: false; error: GitHubProjectViewError; totalCount?: number }
 > {
-  // Why: isolate missing Issue.parent capability by owner, type, and host.
   const scopeKey = ownerScopeKey(args.owner, args.ownerType, args.host)
-  // Why: await the same-scope probe, then re-read state because it may have changed.
   const inFlight = parentFieldProbeInFlight.get(scopeKey)
-  if (inFlight) {
+  if (inFlight && getUnsupportedItemFields(scopeKey).size < 3) {
     await inFlight.catch(() => {})
   }
-  let includeParent = !hasParentFieldRetried(scopeKey)
-  let parentFieldDropped = !includeParent
-  // Single-flight the with-parent probe per owner; assign the in-flight promise synchronously (no await between get() and set()) so callers share one probe.
-  let first: Awaited<ReturnType<typeof fetchItemsPageWithRaw>>
-  let probePromise: Promise<Awaited<ReturnType<typeof fetchItemsPageWithRaw>>> | null = null
-  if (includeParent && !parentFieldProbeInFlight.has(scopeKey)) {
-    let resolveProbe: () => void = () => {}
-    const probe = new Promise<void>((resolve) => {
-      resolveProbe = resolve
-    })
-    parentFieldProbeInFlight.set(scopeKey, probe)
-    probePromise = (async () => {
-      try {
-        const result = await fetchItemsPageWithRaw({
-          owner: args.owner,
-          ownerType: args.ownerType,
-          projectNumber: args.projectNumber,
-          query: args.query,
-          first: ITEM_PAGE_SIZE,
-          after: null,
-          includeParent: true,
-          host: args.host
-        })
-        // Why: set the retried flag BEFORE resolving/clearing the probe so siblings awoken on inFlight.catch() see it and don't fire duplicate with-parent probes.
-        if (!result.ok && errorsIndicateParentField(result.rawErrors, result.stderr)) {
-          markParentFieldRetried(scopeKey)
-        }
-        return result
-      } finally {
-        resolveProbe()
-        parentFieldProbeInFlight.delete(scopeKey)
-      }
-    })()
-    first = await probePromise
-  } else {
-    first = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
+  const unsupportedFields = new Set(getUnsupportedItemFields(scopeKey))
+  const fetchPage = (after: string | null) =>
+    fetchItemsPageWithRaw({
+      ...args,
       first: ITEM_PAGE_SIZE,
-      after: null,
-      includeParent,
-      host: args.host
+      after,
+      unsupportedFields
     })
-  }
-  if (!first.ok && includeParent && errorsIndicateParentField(first.rawErrors, first.stderr)) {
-    // Retry the whole table without parent; mark this owner retried so later fetches skip the probe (other owners unaffected).
-    markParentFieldRetried(scopeKey)
-    includeParent = false
-    parentFieldDropped = true
-    if (!hasParentFieldWarningLogged(scopeKey)) {
-      console.warn(
-        `[project-view] Issue.parent is not available for ${args.owner} on this token — retrying without the parent selection.`
+  const fetchFirstPage = async () => {
+    let result = await fetchPage(null)
+    while (!result.ok) {
+      const missing = unsupportedItemFieldsFromErrors(result.rawErrors, result.stderr).filter(
+        (field) => !unsupportedFields.has(field)
       )
-      markParentFieldWarningLogged(scopeKey)
+      if (missing.length === 0) {
+        break
+      }
+      missing.forEach((field) => unsupportedFields.add(field))
+      markItemFieldsUnsupported(scopeKey, missing)
+      if (missing.includes('parent') && !hasParentFieldWarningLogged(scopeKey)) {
+        console.warn(
+          `[project-view] Issue.parent is not available for ${args.owner} on this token — retrying without the parent selection.`
+        )
+        markParentFieldWarningLogged(scopeKey)
+      }
+      // Each validation retry removes at least one of the three optional selections.
+      result = await fetchPage(null)
     }
-    first = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
-      first: ITEM_PAGE_SIZE,
-      after: null,
-      includeParent: false,
-      host: args.host
-    })
+    return result
   }
+  let first: Awaited<ReturnType<typeof fetchItemsPageWithRaw>>
+  if (unsupportedFields.size < 3 && !parentFieldProbeInFlight.has(scopeKey)) {
+    let resolveProbe: () => void = () => {}
+    parentFieldProbeInFlight.set(
+      scopeKey,
+      new Promise<void>((resolve) => {
+        resolveProbe = resolve
+      })
+    )
+    try {
+      first = await fetchFirstPage()
+    } finally {
+      resolveProbe()
+      parentFieldProbeInFlight.delete(scopeKey)
+    }
+  } else {
+    first = await fetchFirstPage()
+  }
+  const parentFieldDropped = unsupportedFields.has('parent')
+
   if (!first.ok) {
     return { ok: false, error: first.error }
   }
 
-  // Drift guards
   if (first.page.totalCount === undefined || first.page.totalCount === null) {
     return { ok: false, error: driftError('items.totalCount missing') }
   }
@@ -118,7 +97,6 @@ export async function fetchAllItems(args: {
     return { ok: false, error: driftError('items.nodes missing'), totalCount }
   }
 
-  // Size cap
   if (totalCount > MAX_ITEMS) {
     return {
       ok: false,
@@ -148,27 +126,17 @@ export async function fetchAllItems(args: {
     return { ok: false, error: e1, totalCount }
   }
 
-  // Paginate
   let hasNext = first.page.pageInfo.hasNextPage === true
   let cursor: string | null | undefined = first.page.pageInfo.endCursor
-  if (hasNext && typeof cursor !== 'string') {
-    return {
-      ok: false,
-      error: driftError('items.pageInfo.endCursor missing with hasNextPage=true'),
-      totalCount
-    }
-  }
   while (hasNext) {
-    const next = await fetchItemsPageWithRaw({
-      owner: args.owner,
-      ownerType: args.ownerType,
-      projectNumber: args.projectNumber,
-      query: args.query,
-      first: ITEM_PAGE_SIZE,
-      after: cursor as string,
-      includeParent,
-      host: args.host
-    })
+    if (typeof cursor !== 'string') {
+      return {
+        ok: false,
+        error: driftError('items.pageInfo.endCursor missing with hasNextPage=true'),
+        totalCount
+      }
+    }
+    const next = await fetchPage(cursor)
     if (!next.ok) {
       return { ok: false, error: next.error, totalCount }
     }
@@ -188,18 +156,9 @@ export async function fetchAllItems(args: {
     }
     hasNext = next.page.pageInfo.hasNextPage === true
     cursor = next.page.pageInfo.endCursor
-    if (hasNext && typeof cursor !== 'string') {
-      return {
-        ok: false,
-        error: driftError('items.pageInfo.endCursor missing with hasNextPage=true'),
-        totalCount
-      }
-    }
   }
   return { ok: true, rows, totalCount, parentFieldDropped }
 }
-
-// ─── Cheap count-only query (for unsupported_layout) ──────────────────
 
 export async function fetchItemsCountOnly(args: {
   owner: string

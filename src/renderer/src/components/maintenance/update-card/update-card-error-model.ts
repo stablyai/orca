@@ -1,3 +1,4 @@
+import { getUpdateInstallBlockGuidance } from './update-install-block-guidance'
 import type { UpdateStatus } from '../../../../../shared/update-status-types'
 import type { UpdateErrorCardModel } from '../../UpdateErrorCardContent'
 import {
@@ -46,6 +47,37 @@ export function buildUpdateCardErrorModel({
           }
         }
       : null
+  }
+  if (status.installBlock && status.retryAction === 'install' && status.retryable !== false) {
+    return {
+      variant: 'waiting',
+      ...getUpdateInstallBlockGuidance(status.installBlock),
+      blockers: status.installBlock.instances,
+      detail: status.message,
+      deferLabel: translate('updates.installBlock.later', 'Later'),
+      footnote: {
+        text: translate(
+          'updates.installBlock.retainedDownload',
+          'Orca stays open. No need to download again.'
+        )
+      },
+      primaryAction: {
+        label: translate('updates.installBlock.retryInstallation', 'Retry installation'),
+        onClick: onInstallRetry
+      }
+    }
+  }
+  if (status.retryAction === 'install' && status.retryable !== false) {
+    return {
+      title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
+      summary: status.message,
+      detail: status.message,
+      releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
+      primaryAction: {
+        label: translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
+        onClick: onInstallRetry
+      }
+    }
   }
   if (isLocalBuild) {
     return {

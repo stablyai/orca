@@ -177,8 +177,7 @@ describe('manual Dispatch observation', () => {
       worker: { state: 'unsupervised', stage: 'context_only', agentTerminalHandle: 'term_worker' },
       observation: { status: 'live', exactWorker: true }
     })
-    // Why: worker-show published only PTY liveness, so it read `live` for a dispatch that
-    // worker-list called `unverifiable` — and worker-list's nextAction sent you back here.
+    // worker-show must match worker-list's agent verdict, not report PTY-live while list directs recovery here.
     expect(workerShow.projection?.liveness.verdict).toBe(
       workerList.workers[0].projection.liveness.verdict
     )

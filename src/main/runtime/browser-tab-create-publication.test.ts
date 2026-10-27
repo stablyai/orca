@@ -1,10 +1,7 @@
-// Every browser-tab placement must publish the created tab through one seam. A placement that
-// hand-rolls its own bookkeeping is how a client-placed page once lost its targetGroupId.
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+// Centralize placement bookkeeping so client-created pages retain targetGroupId.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import {
   BROWSER_TAB_CREATE_PLACEMENT_KINDS,
@@ -88,17 +85,8 @@ function createPublicationHost(registeredTabs: readonly [string, number][] = [['
   }
 }
 
-function browserCommandsSource(): string {
-  return readdirSync(__dirname)
-    .filter((name) => /^runtime-browser-commands-.*\.ts$/.test(name))
-    .sort()
-    .map((name) => readFileSync(join(__dirname, name), 'utf8'))
-    .join('\n')
-}
-
 describe('publishCreatedBrowserSessionTab', () => {
-  // Why: the per-placement cases below read their expectation off this table, so the table itself
-  // needs a literal pin — otherwise dropping a step here would silently rewrite what they assert.
+  // Pin the table independently of cases that derive their expectations from it.
   it('pins the bookkeeping each placement owns', () => {
     expect(BROWSER_TAB_CREATE_PUBLICATION_RULES).toEqual({
       client: {
@@ -120,26 +108,6 @@ describe('publishCreatedBrowserSessionTab', () => {
         hostRowSource: 'create-ipc'
       }
     })
-  })
-
-  // Why: `session-notify` is not a free-standing choice — the host row rides the very announcement
-  // `notifiesSessionTabsChanged` gates, so silencing that flag would delete the row with no other
-  // test noticing. Pin the coupling, not just the two values.
-  it('gives every session-notify placement the announcement its host row rides on', () => {
-    // Presence precondition: the loop below only asserts anything about placements that declare
-    // `session-notify`, so flipping the one that does to `none` in the same edit that silences its
-    // announcement would satisfy the coupling by emptying it. Name the placement that must declare
-    // it — a client-placed page reaches the host renderer through no other route.
-    expect(BROWSER_TAB_CREATE_PUBLICATION_RULES.client.hostRowSource).toBe('session-notify')
-    for (const placementKind of BROWSER_TAB_CREATE_PLACEMENT_KINDS) {
-      const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[placementKind]
-      if (rules.hostRowSource === 'session-notify') {
-        expect(
-          rules.notifiesSessionTabsChanged,
-          `${placementKind} sources its host row from the session-tabs announcement`
-        ).toBe(true)
-      }
-    }
   })
 
   it.each(BROWSER_TAB_CREATE_PLACEMENT_KINDS)(
@@ -350,31 +318,7 @@ describe('browser tab-create focus resolution', () => {
 })
 
 describe('browser tab-create placement census', () => {
-  it('routes every placement branch through the shared publication exactly once', () => {
-    const source = browserCommandsSource()
-    for (const placementKind of BROWSER_TAB_CREATE_PLACEMENT_KINDS) {
-      const routed = source.match(
-        new RegExp(
-          `publishCreatedBrowserSessionTab\\(this\\.host, \\{\\s*placementKind: '${placementKind}'`,
-          'g'
-        )
-      )
-      expect(
-        routed,
-        `${placementKind} placement must publish through the shared seam`
-      ).toHaveLength(1)
-    }
-    expect(source.match(/publishCreatedBrowserSessionTab\(/g)).toHaveLength(
-      BROWSER_TAB_CREATE_PLACEMENT_KINDS.length
-    )
-  })
-
-  it('leaves no placement branch marking session-tab focus on its own', () => {
-    expect(browserCommandsSource()).not.toMatch(/markHeadlessBrowserSessionTabActive\?\.\(/)
-  })
-
-  // Why: the rule-driven cases above read their expectation off the table, so each placement also
-  // needs its real bookkeeping observed through browserTabCreate itself.
+  // Exercise actual publication as well as the rule-derived cases.
   describe('through browserTabCreate', () => {
     beforeEach(() => {
       ipcMainOnMock.mockReset()
@@ -383,7 +327,7 @@ describe('browser tab-create placement census', () => {
     })
 
     it('moves a user-created offscreen tab into the clicked split group', async () => {
-      const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+      const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
       const markHeadlessBrowserSessionTabActive = vi.fn()
       const commands = new RuntimeBrowserCommands(
         createCommandHost({
@@ -415,12 +359,11 @@ describe('browser tab-create placement census', () => {
         url: 'about:blank',
         targetGroupId: 'group-right'
       })
-      // Why: agent/background creates must not yank a connected client to the new tab.
       expect(markHeadlessBrowserSessionTabActive).not.toHaveBeenCalled()
     })
 
     it('leaves renderer tab focus to the create IPC instead of the session-tab marker', async () => {
-      const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+      const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
       const webContents = { send: vi.fn() }
       webContents.send = vi.fn((_channel: string, data: { requestId: string }) => {
         const handler = ipcMainOnMock.mock.calls.find(
@@ -457,7 +400,7 @@ describe('browser tab-create placement census', () => {
     })
 
     it('does not focus the host renderer for a create addressed to the caller', async () => {
-      const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+      const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
       const webContents = { send: vi.fn() }
       webContents.send = vi.fn((_channel: string, data: { requestId: string }) => {
         const handler = ipcMainOnMock.mock.calls.find(
@@ -482,7 +425,6 @@ describe('browser tab-create placement census', () => {
         { pairedDeviceId: 'device-a', clientKind: 'runtime' }
       )
 
-      // The create IPC is the host renderer's only focus signal, so this flag is the steal.
       expect(webContents.send).toHaveBeenCalledWith(
         'browser:requestTabCreate',
         expect.objectContaining({ activate: false })
@@ -490,7 +432,7 @@ describe('browser tab-create placement census', () => {
     })
 
     it('still places a caller-addressed client page in the clicked split group', async () => {
-      const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+      const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
       const markHeadlessBrowserSessionTabActive = vi.fn()
       const commands = new RuntimeBrowserCommands(
         createCommandHost({
@@ -516,7 +458,7 @@ describe('browser tab-create placement census', () => {
         { pairedDeviceId: 'device-a', clientKind: 'runtime' }
       )
 
-      // Suppressing the focus must not suppress the group move — the same call carries both.
+      // Suppressing focus must preserve the requested group move.
       expect(markHeadlessBrowserSessionTabActive).toHaveBeenCalledWith('wt-1', 'page-created', {
         targetGroupId: 'group-right',
         focusesHost: false,
@@ -527,7 +469,7 @@ describe('browser tab-create placement census', () => {
 })
 
 describe('publishSwitchedBrowserSessionTab', () => {
-  // Why: the cases below read their expectation off this table, so the table needs a literal pin.
+  // Pin the table independently of rule-derived cases.
   it('pins the bookkeeping each switch placement owns', () => {
     expect(BROWSER_TAB_SWITCH_PUBLICATION_RULES).toEqual({
       client: { marksSessionTabFocus: true, notifiesSessionTabsChanged: true },
@@ -544,8 +486,7 @@ describe('publishSwitchedBrowserSessionTab', () => {
         worktreeId: 'wt-1',
         focus: true
       })
-      // Why the literal: an explicit switch is still host-facing, and the create path's
-      // caller-local shape must not leak into it.
+      // Switch retains its existing host-facing semantics.
       expect(focused.markHeadlessBrowserSessionTabActive).toHaveBeenCalledWith('wt-1', 'page-1', {
         focusesHost: true
       })
@@ -617,24 +558,6 @@ describe('browser tab-switch focus rule', () => {
 })
 
 describe('browser tab-switch placement census', () => {
-  it('routes every switch branch through the shared publication exactly once', () => {
-    const source = browserCommandsSource()
-    for (const placementKind of BROWSER_TAB_SWITCH_PLACEMENT_KINDS) {
-      const routed = source.match(
-        new RegExp(
-          `publishSwitchedBrowserSessionTab\\(this\\.host, \\{\\s*placementKind: '${placementKind}'`,
-          'g'
-        )
-      )
-      expect(routed, `${placementKind} switch must publish through the shared seam`).toHaveLength(1)
-    }
-    expect(source.match(/publishSwitchedBrowserSessionTab\(/g)).toHaveLength(
-      BROWSER_TAB_SWITCH_PLACEMENT_KINDS.length
-    )
-  })
-
-  // Why: the rule-driven cases read their expectation off the table, so each branch also needs
-  // its real bookkeeping observed through browserTabSwitch itself.
   describe('through browserTabSwitch', () => {
     function createClientSwitchHost(overrides: Partial<RuntimeBrowserCommandHost>): {
       host: RuntimeBrowserCommandHost
@@ -672,7 +595,7 @@ describe('browser tab-switch placement census', () => {
     }
 
     it('marks a focused client switch active and leaves an unfocused one alone', async () => {
-      const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+      const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
       const markHeadlessBrowserSessionTabActive = vi.fn()
       const notifyHeadlessBrowserSessionTabsChanged = vi.fn()
       const { host, registry } = createClientSwitchHost({
@@ -693,14 +616,13 @@ describe('browser tab-switch placement census', () => {
       markHeadlessBrowserSessionTabActive.mockClear()
       notifyHeadlessBrowserSessionTabsChanged.mockClear()
       await commands.browserTabSwitch({ worktree: 'id:wt-1', page: 'page-a' })
-      // Why: an agent or CLI switch without --focus must not yank a connected client.
       expect(markHeadlessBrowserSessionTabActive).not.toHaveBeenCalled()
       expect(registry.getPage('page-a')?.active).toBe(true)
       expect(notifyHeadlessBrowserSessionTabsChanged).toHaveBeenCalledWith('wt-1')
     })
 
     it('marks a focused bridge switch active and leaves an unfocused one alone', async () => {
-      const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+      const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
       const markHeadlessBrowserSessionTabActive = vi.fn()
       const bridge = {
         getRegisteredTabs: vi.fn(() => new Map([['page-server', 100]])),

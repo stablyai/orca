@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react'
 import {
   AlertTriangle,
   Ellipsis,
+  Link2,
   Loader2,
   Pencil,
   Plug,
@@ -26,16 +27,16 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { runtimePairingRepairRoute } from '../../../../shared/runtime-environments'
 import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
-import {
-  clearRuntimeCompatibilityCache,
-  unwrapRuntimeRpcResult
-} from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { HostHeaderRow } from './host-section-rows'
+import type { HostHeaderRow } from '../../../../shared/sidebar-list/host-section-rows'
 import { buildHostHeaderMenuModel } from './host-header-menu-items'
 import { HostRenameDialog } from './HostRenameDialog'
 import { HostRemoveDialog } from './HostRemoveDialog'
+import { RuntimeRepairDialog } from '../settings/RuntimeRepairDialog'
 import { resolveHostRemoval } from './host-rename-remove'
 
 function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
@@ -50,8 +51,7 @@ function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
       )
 }
 
-// Why: SSH and paired runtime hosts share the sidebar model, but Settings keeps
-// their management pages separate so each connection type can explain itself.
+// Shared sidebar host rows route to connection-specific management pages in Settings.
 function openManageHost(row: HostHeaderRow): void {
   const state = useAppStore.getState()
   if (row.kind === 'runtime') {
@@ -74,6 +74,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const [busy, setBusy] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
+  const [repairOpen, setRepairOpen] = useState(false)
   const mountedRef = useMountedRef()
   const sshStatus = useAppStore((s) => {
     const parsed = parseExecutionHostId(row.hostId)
@@ -83,11 +84,20 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     return s.sshConnectionStates.get(parsed.targetId)?.status ?? null
   })
 
+  const parsedHost = parseExecutionHostId(row.hostId)
+  const runtimeEnvironmentId = parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+  const repairRoute = useAppStore((s) => {
+    const environment = s.runtimeEnvironments.find((entry) => entry.id === runtimeEnvironmentId)
+    return environment ? runtimePairingRepairRoute(environment) : 'access-link'
+  })
+  const repairableWithAccessLink = repairRoute === 'access-link'
   const model = buildHostHeaderMenuModel({
     kind: row.kind,
     health: row.health,
     sshConnected: sshStatus === 'connected',
-    compatibility: row.compatibility
+    compatibility: row.compatibility,
+    blockedReason: row.blockedReason,
+    repairableWithAccessLink
   })
   const removalTarget = resolveHostRemoval(row.hostId)
 
@@ -133,17 +143,22 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
       return
     }
     setBusy(true)
-    // Why: drop any cached "compatible" verdict so the re-probe re-evaluates
-    // version skew instead of trusting the prior pass.
+    // Discard cached compatibility so this check re-evaluates version skew.
     clearRuntimeCompatibilityCache(parsed.environmentId)
+    // Managed SSH can repair revoked pairing; connect retries it rather than rereading refusal.
+    const retryPairing = row.blockedReason === 'access-revoked' && repairRoute === 'ssh'
     try {
-      const response = await window.api.runtimeEnvironments.getStatus({
+      const response = await (
+        retryPairing
+          ? window.api.runtimeEnvironments.connect
+          : window.api.runtimeEnvironments.getStatus
+      )({
         selector: parsed.environmentId,
-        timeoutMs: 10_000
+        // Re-pairing needs time for SSH, readiness and two handshakes.
+        timeoutMs: retryPairing ? 45_000 : 10_000
       })
       unwrapRuntimeRpcResult<RuntimeStatus>(response)
-      // Why: feed the probe result into the shared store so the host header and
-      // other host pickers reflect this check without a separate fetch.
+      // Publish refreshed host status to other pickers through the shared store.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
       toast.success(
         translate(
@@ -155,8 +170,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         )
       )
     } catch (err) {
-      // Why: record the failed probe so the host registry can drop a previously
-      // healthy verdict instead of showing stale "compatible" state.
+      // Publish failed probes so the registry cannot retain stale compatibility.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
       toast.error(
         err instanceof Error
@@ -171,7 +185,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         setBusy(false)
       }
     }
-  }, [mountedRef, row.hostId, row.label])
+  }, [mountedRef, repairRoute, row.blockedReason, row.hostId, row.label])
 
   return (
     <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
@@ -188,8 +202,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
                 'Host actions for {{value0}}',
                 { value0: row.label }
               )}
-              // Why: the host header row itself toggles collapse on click;
-              // opening the menu must not also fold the section.
+              // Opening the menu must not bubble into host-section collapse.
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
             >
@@ -206,6 +219,18 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
+        {model.actions.includes('runtime-repair') && (
+          <>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => setRepairOpen(true)}
+            >
+              <Link2 className="size-3.5" />
+              {translate('auto.components.sidebar.HostSectionHeaderMenu.repair', 'Re-pair…')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         {model.blocked && (
           <>
             <Tooltip>
@@ -282,6 +307,14 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         hostId={row.hostId}
         derivedLabel={row.label}
       />
+      {runtimeEnvironmentId && (
+        <RuntimeRepairDialog
+          open={repairOpen}
+          onOpenChange={setRepairOpen}
+          environmentId={runtimeEnvironmentId}
+          name={row.label}
+        />
+      )}
       {removalTarget && (
         <HostRemoveDialog
           open={removeOpen}

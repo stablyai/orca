@@ -1,7 +1,4 @@
-/**
- * `repos:isGitAvailable` gates the create dialog's Git option. Only a spawn that never started may
- * answer `false`; everything else rejects so the renderer's existing `unknown` branch is reachable.
- */
+/** Only failure to start proves Git absent; other failures must reach the renderer as unknown. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
@@ -21,8 +18,6 @@ vi.mock('../registered-worktree-roots-cache', () => ({
 vi.mock('./repo-added-telemetry', () => ({ emitRepoAdded: vi.fn() }))
 vi.mock('./repos-changed-notification', () => ({ notifyReposChanged: vi.fn() }))
 vi.mock('./local-repo-registration', () => ({ addLocalRepoFromPath: vi.fn() }))
-vi.mock('./remote-repo-registration', () => ({ addRemoteRepoFromPath: vi.fn() }))
-vi.mock('./remote-repo-creation', () => ({ createRemoteRepo: vi.fn() }))
 
 import { probeLocalGitAvailability } from './repo-creation-handlers'
 

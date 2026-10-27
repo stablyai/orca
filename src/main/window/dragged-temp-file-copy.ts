@@ -1,34 +1,24 @@
-import { constants, createWriteStream, type Dir, type Stats } from 'node:fs'
-import { lstat, mkdtemp, open, opendir, readdir, realpath, rm, writeFile } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { constants, createWriteStream, type Stats } from 'node:fs'
+import { lstat, mkdtemp, open, realpath, rm, writeFile } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session-attachments'
+import { readNodeFileHandleWithinLimit } from '../../shared/node-bounded-file-reader'
 import type { NativeFileDropCopyFailureReason } from '../../shared/native-file-drop'
 import {
   formatByteCeiling,
   REMOTE_IMPORT_MAX_FILE_BYTES,
   REMOTE_IMPORT_MAX_TOTAL_BYTES
 } from '../ipc/runtime-import-limits'
-import {
-  ensureOwnedTempStagingRoot,
-  getOwnedTempStagingRoot,
-  isSafeOwnedDirectory,
-  sweepExpiredOwnedDirectories
-} from './owned-temp-staging-root'
+import { ensureOwnedTempStagingRoot, getOwnedTempStagingRoot } from './owned-temp-staging-root'
 
-// Why: macOS screenshot thumbnails live in `$TMPDIR/TemporaryItems/NSIRD_*`,
-// which only processes attributed to Orca main may open. The detached PTY
-// daemon is not, so agents in local terminals get EPERM on the original path.
+// macOS drag thumbnails require Orca-main TCC attribution; detached PTY daemons get EPERM on TemporaryItems/NSIRD_* originals.
 
 const TEMPORARY_ITEMS_SEGMENT = 'TemporaryItems'
 const DRAG_PROVIDER_DIR_PREFIX = 'NSIRD_'
-const COPY_ROOT_NAME = 'orca-drops'
 const COPY_DIR_PREFIX = 'orca-drop-'
-const COPY_DIR_PATTERN = /^orca-drop-[A-Za-z0-9]{6}$/
-// Why: open drafts and startup prompts read the copy lazily, often days later, so
-// keep it well past the drop; the TTL still bounds what the copy budget holds.
-export const DRAG_TEMP_COPY_TTL_MS = 7 * 24 * 60 * 60 * 1000
-const SWEEP_FIRST_DELAY_MS = 30 * 1000
-const SWEEP_INTERVAL_MS = 60 * 60 * 1000
+const DRAG_TEMP_COPY_ROOT_NAME = 'orca-drops'
+// No expiry: terminal agents/drafts/messages may still name copies without ownership signals. New structured-chat copies enter the chat store before publication.
 
 export type DragTempCopyEnvironment = {
   platform: NodeJS.Platform
@@ -39,13 +29,26 @@ export type DragTempCopyEnvironment = {
 }
 
 export type DragTempCopyItemResult =
-  | { sourcePath: string; status: 'imported'; destPath: string }
+  | {
+      sourcePath: string
+      status: 'imported'
+      destPath: string
+      byteLength?: number
+      directory?: string
+    }
+  | { sourcePath: string; status: 'buffered'; bytes: Buffer }
   /** Left as the original path, which only main's children can open. */
   | { sourcePath: string; status: 'uncopied'; reason: 'too-large' | 'storage-full' }
   | { sourcePath: string; status: 'failed'; reason: NativeFileDropCopyFailureReason }
 
+export class DragTempCopyBatch {
+  readonly completed = new Map<string, DragTempCopyItemResult>()
+  readonly directories = new Set<string>()
+  constructor(public remainingMemory = -1) {}
+}
+
 export function getDragTempCopyRoot(appTempRoot: string): string {
-  return getOwnedTempStagingRoot(appTempRoot, COPY_ROOT_NAME)
+  return getOwnedTempStagingRoot(appTempRoot, DRAG_TEMP_COPY_ROOT_NAME)
 }
 
 /** Lexical check only: whether a path could be a drag-temp file worth inspecting. */
@@ -55,53 +58,81 @@ export function mayNeedDragTempCopy(path: string, platform: NodeJS.Platform): bo
 
 /**
  * Copy every drag-temp path in a drop into Orca-owned storage, sequentially,
- * under the byte budget storage has left. Other paths pass through unchanged.
+ * within the per-drop byte budget. Other paths pass through unchanged.
  */
 export async function materializeDragTempPaths(
   paths: readonly string[],
   env: DragTempCopyEnvironment,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  batch = new DragTempCopyBatch()
 ): Promise<DragTempCopyItemResult[]> {
-  const results: DragTempCopyItemResult[] = []
-  const completed = new Map<string, DragTempCopyItemResult>()
-  // Why: the budget spans every retained copy, so repeated drops cannot fill the disk.
-  let remainingBytes =
-    env.platform === 'darwin'
-      ? REMOTE_IMPORT_MAX_TOTAL_BYTES - (await measureRetainedCopyBytes(env.copyRoot))
-      : 0
+  const { completed } = batch
+  // Budget per drop; retained earlier copies must not block later drops.
+  let remainingBytes = env.platform === 'darwin' ? REMOTE_IMPORT_MAX_TOTAL_BYTES : 0
   try {
     for (const sourcePath of paths) {
       signal?.throwIfAborted()
-      // Why: reuse one copy so composer de-duplication still sees equal paths.
-      const previous = completed.get(sourcePath)
-      if (previous) {
-        results.push(previous)
+      if (completed.has(sourcePath)) {
         continue
       }
-      const { result, copiedBytes } = await materializeDragTempPath(
-        sourcePath,
-        remainingBytes,
-        env,
-        signal
-      )
-      remainingBytes -= copiedBytes
-      completed.set(sourcePath, result)
-      results.push(result)
+      let capture = await materializeDragTempPath(sourcePath, remainingBytes, env, signal, batch)
+      while (!capture) {
+        batch.remainingMemory = -1
+        for (const [path, result] of completed) {
+          if (result.status === 'buffered') {
+            const staged = await stageCapturedDragTempBytes(path, result.bytes, env, batch, signal)
+            completed.set(path, staged)
+            if (staged.status === 'failed') {
+              remainingBytes += result.bytes.length
+            }
+          }
+        }
+        // Spill waits invalidate prospective provider stats: acquire it normally again.
+        capture = await materializeDragTempPath(sourcePath, remainingBytes, env, signal, batch)
+      }
+      remainingBytes -= capture.copiedBytes
+      completed.set(sourcePath, capture.result)
     }
     signal?.throwIfAborted()
-    return results
+    return paths.map((path) => completed.get(path)!)
   } catch (error) {
-    // Why: a caller that gave up never hands these out; don't hold budget until the sweep.
-    await removeCopies(completed.values())
+    completed.clear()
+    await removeCreatedDragTempCopies(batch.directories)
     throw error
   }
 }
 
-async function removeCopies(results: Iterable<DragTempCopyItemResult>): Promise<void> {
-  for (const result of results) {
-    if (result.status === 'imported' && result.destPath !== result.sourcePath) {
-      await rm(dirname(result.destPath), { recursive: true, force: true }).catch(() => undefined)
+export async function removeCreatedDragTempCopies(directories: Iterable<string>): Promise<void> {
+  for (const directory of directories) {
+    await rm(directory, { recursive: true, force: true }).catch(() => undefined)
+  }
+}
+
+export async function stageCapturedDragTempBytes(
+  sourcePath: string,
+  bytes: Buffer,
+  env: DragTempCopyEnvironment,
+  batch: DragTempCopyBatch,
+  signal?: AbortSignal
+): Promise<DragTempCopyItemResult> {
+  let directory: string | undefined
+  try {
+    signal?.throwIfAborted()
+    directory = await createCopyDirectory(env.copyRoot, batch)
+    signal?.throwIfAborted()
+    const destPath = join(directory, basename(sourcePath))
+    await writeFile(destPath, bytes, { flag: 'wx', mode: 0o600, signal })
+    if ((await lstat(destPath)).size !== bytes.length) {
+      throw new DropCopyError('changed')
     }
+    signal?.throwIfAborted()
+    return { sourcePath, status: 'imported', destPath, byteLength: bytes.length, directory }
+  } catch (error) {
+    if (directory) {
+      await removeCreatedDragTempCopies([directory])
+    }
+    signal?.throwIfAborted()
+    return classifyFailure(sourcePath, error)
   }
 }
 
@@ -109,8 +140,9 @@ export async function materializeDragTempPath(
   sourcePath: string,
   remainingBytes: number,
   env: DragTempCopyEnvironment,
-  signal?: AbortSignal
-): Promise<{ result: DragTempCopyItemResult; copiedBytes: number }> {
+  signal?: AbortSignal,
+  batch = new DragTempCopyBatch()
+): Promise<{ result: DragTempCopyItemResult; copiedBytes: number } | null> {
   const passThrough = { result: imported(sourcePath, sourcePath), copiedBytes: 0 }
   if (!mayNeedDragTempCopy(sourcePath, env.platform)) {
     return passThrough
@@ -131,7 +163,7 @@ export async function materializeDragTempPath(
       throw error
     }
     if (!inspected.isFile()) {
-      // Why: directories and symlinks keep today's reference-in-place behaviour.
+      // Keep directories/symlinks referenced in place.
       return passThrough
     }
     const canonicalSource = await realpath(sourcePath)
@@ -148,7 +180,7 @@ export async function materializeDragTempPath(
       }
       const size = opened.size
       if (size > REMOTE_IMPORT_MAX_FILE_BYTES || size > remainingBytes) {
-        // Why: targets read by main can still use the original; the relay decides.
+        // Main-attributed targets can still use the original; let the relay decide.
         console.warn('[drop] leaving a drag-temp file uncopied: over the copy budget', {
           bytes: formatByteCeiling(size),
           remaining: formatByteCeiling(Math.max(remainingBytes, 0))
@@ -158,12 +190,30 @@ export async function materializeDragTempPath(
       }
       signal?.throwIfAborted()
 
-      copyDir = await createCopyDirectory(env.copyRoot)
+      if (batch.remainingMemory >= 0) {
+        if (size > batch.remainingMemory) {
+          return null
+        }
+        const read = await readNodeFileHandleWithinLimit(
+          handle,
+          AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+          {
+            regularFileOnly: true,
+            signal,
+            window: { offset: 0, length: size }
+          }
+        )
+        if (!isSameSnapshot(read.stats, opened) || !isSameSnapshot(await handle.stat(), opened)) {
+          throw new DropCopyError('changed')
+        }
+        signal?.throwIfAborted()
+        batch.remainingMemory -= size
+        return { result: { sourcePath, status: 'buffered', bytes: read.buffer }, copiedBytes: size }
+      }
+      copyDir = await createCopyDirectory(env.copyRoot, batch)
+      signal?.throwIfAborted()
       const destPath = join(copyDir, basename(canonicalSource))
-      // Why: stream from the checked handle, capped at the inspected size, so a
-      // swapped or growing source cannot slip through; unlike cp, ditto or
-      // clonefile it copies no xattrs. A read stream with `end: -1` throws, so
-      // an empty source gets its own branch.
+      // Copy from the checked handle, capped at inspected size, without xattrs. Empty files need a separate branch because stream end:-1 throws.
       await (size === 0
         ? writeFile(destPath, '', { flag: 'wx', mode: 0o600 })
         : pipeline(
@@ -176,16 +226,19 @@ export async function materializeDragTempPath(
       if (written.size !== size || !isSameSnapshot(afterRead, opened)) {
         throw new DropCopyError('changed')
       }
-      // Why: a caller that gave up mid-copy never hands this path out; don't retain it.
+      // Abort before publishing the path so abandoned copies can be removed.
       signal?.throwIfAborted()
       console.debug('[drop] copied a drag-temp file into Orca storage', { bytes: size })
-      return { result: imported(sourcePath, destPath), copiedBytes: size }
+      return {
+        result: { sourcePath, status: 'imported', destPath, byteLength: size, directory: copyDir },
+        copiedBytes: size
+      }
     } finally {
       await handle.close()
     }
   } catch (error) {
     if (copyDir) {
-      // Why: cleanup must not hide the original failure or stop later items.
+      // Cleanup must preserve the original failure and allow later items.
       await rm(copyDir, { recursive: true, force: true }).catch(() => undefined)
     }
     if (signal?.aborted) {
@@ -193,75 +246,6 @@ export async function materializeDragTempPath(
     }
     return { result: classifyFailure(sourcePath, error), copiedBytes: 0 }
   }
-}
-
-/** Remove `orca-drop-*` copies older than the TTL; younger ones may still be read lazily. */
-export async function sweepExpiredDragTempCopies(
-  copyRoot: string,
-  nowMs = Date.now()
-): Promise<void> {
-  try {
-    if (!isSafeOwnedDirectory(await lstat(copyRoot))) {
-      return
-    }
-  } catch {
-    // Missing or unreadable root: nothing of ours to sweep.
-    return
-  }
-  await sweepExpiredOwnedDirectories(copyRoot, {
-    nowMs,
-    ttlMs: DRAG_TEMP_COPY_TTL_MS,
-    ownsEntry: (name) => COPY_DIR_PATTERN.test(name)
-  })
-}
-
-/** Bytes held by `orca-drop-*` copies still on disk; unreadable entries count as zero. */
-async function measureRetainedCopyBytes(copyRoot: string): Promise<number> {
-  let total = 0
-  let rootDir: Dir
-  try {
-    rootDir = await opendir(copyRoot)
-  } catch {
-    return 0
-  }
-  try {
-    for await (const entry of rootDir) {
-      if (!entry.isDirectory() || !COPY_DIR_PATTERN.test(entry.name)) {
-        continue
-      }
-      const copyDir = join(copyRoot, entry.name)
-      const names = await readdir(copyDir).catch(() => [])
-      for (const name of names) {
-        total += await lstat(join(copyDir, name)).then(
-          (stats) => (stats.isFile() ? stats.size : 0),
-          () => 0
-        )
-      }
-    }
-  } catch {
-    // A partial count still bounds growth; the next drop measures again.
-  }
-  return total
-}
-
-let sweepScheduled = false
-
-/** Sweep shortly after startup, then hourly, so a long-running app still expires copies. */
-export function scheduleDragTempCopySweep(
-  getCopyRoot: () => string,
-  platform: NodeJS.Platform = process.platform
-): void {
-  if (sweepScheduled || platform !== 'darwin') {
-    return
-  }
-  sweepScheduled = true
-  const sweep = (): void => {
-    void Promise.resolve()
-      .then(() => sweepExpiredDragTempCopies(getCopyRoot()))
-      .catch(() => undefined)
-  }
-  setTimeout(sweep, SWEEP_FIRST_DELAY_MS).unref()
-  setInterval(sweep, SWEEP_INTERVAL_MS).unref()
 }
 
 // True when the segments hold `TemporaryItems/NSIRD_*/<entry>`: something below the provider dir.
@@ -284,7 +268,7 @@ function relativeSegments(root: string, candidate: string): string[] {
     return []
   }
   const segments = rel.split(sep)
-  // Why: anchor at the temp root so a nested lookalike elsewhere is not copied.
+  // Anchor at the real temp root; never copy lookalike paths elsewhere.
   return segments[0] === TEMPORARY_ITEMS_SEGMENT ? segments : []
 }
 
@@ -293,17 +277,19 @@ function isPathWithin(root: string, candidate: string): boolean {
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
 }
 
-async function createCopyDirectory(copyRoot: string): Promise<string> {
+async function createCopyDirectory(copyRoot: string, batch: DragTempCopyBatch): Promise<string> {
   try {
     if (!(await ensureOwnedTempStagingRoot(copyRoot))) {
       throw new DropCopyError('storage-not-private')
     }
-    return await mkdtemp(join(copyRoot, COPY_DIR_PREFIX))
+    const directory = await mkdtemp(join(copyRoot, COPY_DIR_PREFIX))
+    batch.directories.add(directory)
+    return directory
   } catch (error) {
     if (error instanceof DropCopyError) {
       throw error
     }
-    // Why: a storage fault must not read as a missing or unreadable dropped file.
+    // Distinguish storage faults from missing/unreadable sources.
     console.warn('[drop] could not create drop storage', { code: errorCode(error) })
     throw new DropCopyError(isOutOfSpace(errorCode(error)) ? 'out-of-space' : 'storage-unavailable')
   }

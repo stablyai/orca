@@ -19,6 +19,7 @@ let items: AgentJournalRenderItem[] = []
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionQuietRepeatedStop: mocks.quietRepeatedStop
 }))
@@ -39,13 +40,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: () => 'operation-1',
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: () => 'operation-1'
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
@@ -119,8 +122,7 @@ function renderPane() {
   )
 }
 
-// The fence moves while the command is in flight, as a start during the command does, and then
-// the command's reply lands. The reply still answers what this pane asked.
+// Move the fence during the command, then deliver its reply; it still answers this pane’s original request.
 async function commandAcrossFenceMove(
   command: 'clear' | 'compact',
   reply: unknown,
@@ -159,7 +161,7 @@ afterEach(async () => {
 describe('a conversation command whose reply lands after the fence moved', () => {
   it("shows, in the reader's language, why a start during the command failed", async () => {
     await i18n.changeLanguage('fr')
-    // A /clear's start is its new chat's; a /compact's restarts this one.
+    // /clear starts a new chat; /compact restarts the current chat.
     for (const [command, failure, error] of [
       ['clear', START_FAILED, "Codex n'a pas pu démarrer. Relancez /clear."],
       ['compact', RESTART_FAILED, "Codex n'a pas pu redémarrer. Relancez /compact."]
@@ -184,8 +186,7 @@ describe('a conversation command whose reply lands after the fence moved', () =>
     items = [startFailureRow(NOT_SIGNED_IN)]
     const outcome = await commandAcrossFenceMove('clear', commandReply('clear', NOT_SIGNED_IN))
     expect(outcome.accepted).toBe(false)
-    expect(outcome.error).toMatch(/^Codex n'est pas connecté/)
-    expect(outcome.error).toContain('/clear')
+    expect(outcome.error).toBe('Codex n’est pas connecté. Exécutez `codex login`. Relancez /clear.')
   })
 
   it('clears the draft for a /compact that started', async () => {
@@ -196,7 +197,6 @@ describe('a conversation command whose reply lands after the fence moved', () =>
   })
 
   it("says nothing for a /compact whose start failed, when that start's row is loaded", async () => {
-    // The row arrives with the new fence, after the command was sent.
     expect(
       await commandAcrossFenceMove('compact', commandReply('compact', RESTART_FAILED), undefined, [
         startFailureRow(RESTART_FAILED)
@@ -223,7 +223,6 @@ describe('a conversation command whose reply lands after the fence moved', () =>
   })
 
   it('keeps the reply of a /clear that stopped the running agent: done clears the draft, failed says why', async () => {
-    // A live runtime at fence 3; stopping it for the new chat moves the fence during the request.
     expect(await commandAcrossFenceMove('clear', commandReply('clear'))).toEqual({
       accepted: true,
       error: null
@@ -231,31 +230,17 @@ describe('a conversation command whose reply lands after the fence moved', () =>
     fence = 3
     expect(await commandAcrossFenceMove('clear', commandReply('clear', NOT_SIGNED_IN))).toEqual({
       accepted: false,
-      error: expect.stringMatching(/^Codex is not signed in.*\/clear/)
+      error: "Codex isn't signed in. Run `codex login`. Run /clear again."
     })
   })
 
-  it('drops a reply the pane stopped waiting on: it left the chat and came back', async () => {
-    const answer = heldWrites()
-    const { result, rerender } = renderPane()
-    let sent: Promise<{ accepted: boolean; error: string | null }> = Promise.resolve({
-      accepted: true,
-      error: null
-    })
-    act(() => {
-      sent = result.current.runConversationCommand('clear')
-    })
-    fence = 5
-    rerender({ sessionId: 'session-2', transportEnabled: true })
-    rerender({ sessionId: 'session-1', transportEnabled: true })
-    await act(async () => {
-      answer(commandReply('clear', NOT_SIGNED_IN))
-      await sent
-    })
-    expect(await sent).toEqual({ accepted: false, error: null })
-  })
-
-  it('drops a reply the pane stopped waiting on: a newer command replaced it', async () => {
+  it.each([
+    ['agentSession.threadGoal', 'agentSession.threadGoal'],
+    ['agentSession.rewind', 'agentSession.threadGoal'],
+    ['agentSession.conversationCommand', 'agentSession.threadGoal'],
+    ['agentSession.setOption', 'agentSession.threadGoal'],
+    ['agentSession.conversationCommand', 'agentSession.conversationCommand']
+  ])('settles %s independently when %s overlaps startup', async (earlier, later) => {
     const answers: ((reply: unknown) => void)[] = []
     mocks.call.mockImplementation(
       () =>
@@ -271,32 +256,17 @@ describe('a conversation command whose reply lands after the fence moved', () =>
         stateRef
       })
     )
-    const command = (): Promise<unknown> =>
-      result.current.write('agentSession.conversationCommand', 'agentSession.conversationCommand', {
-        command: 'clear'
-      })
-    const older = command()
-    const newer = command()
+    const command = (name: string): Promise<unknown> => result.current.write(name, name, {})
+    const older = command(earlier)
+    const newer = command(later)
     stateRef.current.fence = 5
     await act(async () => {
       answers[0](commandReply('clear', NOT_SIGNED_IN))
       answers[1](commandReply('clear'))
       await Promise.all([older, newer])
     })
-    expect(await older).toEqual({ kind: 'dropped' })
+    expect(await older).toEqual({ kind: 'done', value: commandReply('clear', NOT_SIGNED_IN).value })
     expect(await newer).toEqual({ kind: 'done', value: commandReply('clear').value })
-  })
-
-  it('drops a reply once the pane has moved to another chat or closed', async () => {
-    for (const pane of [
-      { sessionId: 'session-2', transportEnabled: true },
-      { sessionId: 'session-1', transportEnabled: false }
-    ]) {
-      fence = 3
-      expect(
-        await commandAcrossFenceMove('clear', commandReply('clear', NOT_SIGNED_IN), pane)
-      ).toEqual({ accepted: false, error: null })
-    }
   })
 })
 
@@ -304,42 +274,22 @@ describe('any other write across a fence move', () => {
   it.each([
     ['a host without the quiet repeated Stop', false],
     ['a host with it', true]
-  ])(
-    'drops the result: it answered for the runtime this pane replaced (%s)',
-    async (_host, quiet) => {
-      mocks.quietRepeatedStop.mockResolvedValueOnce(quiet)
-      const answer = heldWrites()
-      const { result, rerender } = renderPane()
-      let stopped: Promise<unknown> = Promise.resolve('unset')
-      act(() => {
-        stopped = result.current.cancel('turn-1')
-      })
-      fence = 5
-      rerender({ sessionId: 'session-1', transportEnabled: true })
-      await act(async () => {
-        // The Stop reaches the host once the client knows the host's capabilities.
-        await vi.waitFor(() => expect(mocks.call).toHaveBeenCalled())
-        answer({ ok: true, replayed: false, fence: 3, value: { cancelled: true } })
-        await stopped
-      })
-      expect(await stopped).toBeNull()
-      expect(mocks.toastError).not.toHaveBeenCalled()
-    }
-  )
-
-  it('keeps a result the same fence answers', async () => {
+  ])('keeps the Stop result after the provider starts (%s)', async (_host, quiet) => {
+    mocks.quietRepeatedStop.mockResolvedValueOnce(quiet)
     const answer = heldWrites()
-    const { result } = renderPane()
+    const { result, rerender } = renderPane()
     let stopped: Promise<unknown> = Promise.resolve('unset')
     act(() => {
       stopped = result.current.cancel('turn-1')
     })
+    fence = 5
+    rerender({ sessionId: 'session-1', transportEnabled: true })
     await act(async () => {
-      // The Stop reaches the host once the client knows the host's capabilities.
       await vi.waitFor(() => expect(mocks.call).toHaveBeenCalled())
       answer({ ok: true, replayed: false, fence: 3, value: { cancelled: true } })
       await stopped
     })
     expect(await stopped).toEqual({ cancelled: true })
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 })

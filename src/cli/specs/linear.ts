@@ -212,6 +212,35 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     notes: ['Use --body-file - to read multiline comment bodies from stdin.']
   },
   {
+    path: ['linear', 'comment', 'edit'],
+    summary: 'Replace the body of a Linear comment',
+    usage:
+      'orca linear comment edit <commentId> (--body <text> | --body-file <path|->) [--workspace <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'body', 'body-file', 'workspace', 'id'],
+    positionalArgs: ['id'],
+    examples: [
+      'orca linear comment edit <commentId> --body "Updated: ready for review."',
+      'orca linear comment edit <commentId> --body-file - --json'
+    ],
+    notes: [
+      'Comment ids come from `comment add` output or `orca linear issue <id> --comments --json`.',
+      'Linear only lets a comment be edited by its author.'
+    ]
+  },
+  {
+    path: ['linear', 'comment', 'delete'],
+    destructive: true,
+    aliases: [['linear', 'comment', 'rm']],
+    summary: 'Delete a Linear comment',
+    usage: 'orca linear comment delete <commentId> [--workspace <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'workspace', 'id'],
+    positionalArgs: ['id'],
+    examples: ['orca linear comment delete <commentId> --json'],
+    notes: [
+      'Comment ids come from `comment add` output or `orca linear issue <id> --comments --json`.'
+    ]
+  },
+  {
     path: ['linear', 'attach'],
     summary: 'Attach a link to a Linear issue',
     usage:

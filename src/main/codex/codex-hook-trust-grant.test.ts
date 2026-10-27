@@ -7,15 +7,15 @@ import {
   type CodexHookTrustGrantRequest,
   type CodexHookTrustGrantSessionResult
 } from './codex-app-server-client'
-import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
+import { codexAppServerCapabilityCache } from './app-server/codex-app-server-capability-cache'
 import {
   _internals,
-  CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS,
   getCodexTrustGrantDiagnostics,
   grantManagedCodexHookTrust,
   type CodexManagedTrustGrantPlan
 } from './codex-hook-trust-grant'
 import { removeSelfComputedTrustBeforeGrant } from './codex-managed-trust-grant-plan'
+import { CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS } from './codex-trust-grant-cooldown'
 import { setCodexTrustGrantTelemetry } from './codex-trust-grant-telemetry'
 import { readCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import {
@@ -27,6 +27,17 @@ import {
   type CodexTrustEntry
 } from './config-toml-trust'
 
+// Unavailable wsl.exe leaves guest grants unstamped.
+vi.mock('@orca/process-host', () => ({
+  runProcess: vi.fn(async () => ({
+    code: 1,
+    signal: null,
+    timedOut: false,
+    stdout: '',
+    stderr: ''
+  }))
+}))
+
 let userDataDir: string
 let runtimeHomeDir: string
 let previousUserDataPath: string | undefined
@@ -34,8 +45,7 @@ let previousUserDataPath: string | undefined
 beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-grant-userdata-'))
   runtimeHomeDir = join(userDataDir, 'codex-runtime-home', 'home')
-  // Why: production writes hooks.json before granting trust; keeping that
-  // ordering prevents test-only canonical-path drift during ledger setup.
+  // Create hooks.json before granting trust to match production canonical-path resolution.
   mkdirSync(runtimeHomeDir, { recursive: true })
   writeFileSync(join(runtimeHomeDir, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -73,15 +83,18 @@ function managedEntry(eventLabel: CodexTrustEntry['eventLabel']): CodexTrustEntr
 
 function buildPlan(
   entries: CodexTrustEntry[],
-  host: CodexManagedTrustGrantPlan['host'] = { kind: 'native' }
+  host: CodexManagedTrustGrantPlan['host'] = {
+    kind: 'wsl',
+    distro: 'Ubuntu',
+    linuxRuntimeHome: runtimeHomeDir
+  }
 ): CodexManagedTrustGrantPlan {
   return {
     runtimeHomePath: runtimeHomeDir,
     tomlPath: join(runtimeHomeDir, 'config.toml'),
     managedCommand: MANAGED_COMMAND,
     managedEntries: entries,
-    host,
-    telemetryLane: 'real-home'
+    host
   }
 }
 
@@ -117,6 +130,18 @@ describe('grantManagedCodexHookTrust', () => {
     expect(runner).not.toHaveBeenCalled()
   })
 
+  it('treats an unreadable session index as pending instead of running a trust RPC', async () => {
+    writeFileSync(join(runtimeHomeDir, 'state_5.sqlite'), 'not a sqlite database')
+    const runner = vi.fn()
+    _internals.setGrantSessionRunner(runner)
+
+    expect(await grantManagedCodexHookTrust(buildPlan([managedEntry('stop')]))).toMatchObject({
+      lane: 'fallback',
+      reason: 'retry-cached'
+    })
+    expect(runner).not.toHaveBeenCalled()
+  })
+
   it('returns granted entries with codex-verbatim hashes and records the ledger', async () => {
     const entries = [managedEntry('session_start'), managedEntry('stop')]
     const runner = vi.fn(async (_request: CodexHookTrustGrantRequest) =>
@@ -137,7 +162,7 @@ describe('grantManagedCodexHookTrust', () => {
     const request = runner.mock.calls[0]![0]!
     expect(request.managedCommand).toBe(MANAGED_COMMAND)
     expect(request.expectedTrustKeys).toHaveLength(2)
-    expect(request.invocation.env?.CODEX_HOME).toBe(runtimeHomeDir)
+    expect(request.hooksListCwd).toBe(runtimeHomeDir)
 
     const ledgerHome = readCodexTrustGrantLedgerHome(runtimeHomeDir)
     expect(ledgerHome).not.toBeNull()
@@ -145,28 +170,13 @@ describe('grantManagedCodexHookTrust', () => {
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ granted: 1, fellBack: 0 })
   })
 
-  it('builds a default-home grant invocation without an inherited CODEX_HOME', async () => {
-    const entries = [managedEntry('stop')]
-    const runner = vi.fn(async (_request: CodexHookTrustGrantRequest) =>
-      grantedSessionResult(entries)
-    )
-    _internals.setGrantSessionRunner(runner)
-
-    expect(
-      await grantManagedCodexHookTrust({ ...buildPlan(entries), useDefaultCodexHome: true })
-    ).toMatchObject({ lane: 'rpc' })
-    const invocation = runner.mock.calls[0]![0]!.invocation
-    expect(invocation.env?.CODEX_HOME).toBeUndefined()
-    expect(invocation.envToDelete).toContain('CODEX_HOME')
-  })
-
   it('removes equivalent Windows fallback keys before the RPC writes canonical trust', async () => {
     const entry: CodexTrustEntry = {
       ...managedEntry('stop'),
       sourcePath: String.raw`C:\Users\Alice\.codex\hooks.json`
     }
-    const plan: CodexManagedTrustGrantPlan = { ...buildPlan([entry]), telemetryLane: 'managed' }
-    // Why: the managed fallback lane's write, both separator variants.
+    const plan = buildPlan([entry])
+    // Seed fallback trust under both Windows separator variants.
     upsertHookTrustEntries(plan.tomlPath, [entry])
     expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(entry))?.trustedHash).toBe(
       computeTrustedHash(entry)
@@ -194,7 +204,7 @@ describe('grantManagedCodexHookTrust', () => {
     upsertHookTrustEntries(plan.tomlPath, [
       { ...entries[0], trustedHash: 'sha256:codex-session_start' }
     ])
-    // Why: a clear before the ledger check would delete the record the ledger proves, forcing a session per launch.
+    // Clearing before ledger validation would force a session on every launch.
     expect(await grantManagedCodexHookTrust(plan, beforeSession)).toMatchObject({ lane: 'rpc' })
     expect(beforeSession).toHaveBeenCalledTimes(1)
   })
@@ -209,8 +219,7 @@ describe('grantManagedCodexHookTrust', () => {
     expect(first.lane).toBe('rpc')
     expect(runner).toHaveBeenCalledTimes(1)
 
-    // Why: the ledger skip only holds while config.toml still carries the
-    // granted hash at the granted key — write it the way codex left it.
+    // Model Codex's write: ledger hits require the granted hash still at its key.
     upsertHookTrustEntries(plan.tomlPath, [
       { ...entries[0], trustedHash: 'sha256:codex-session_start' }
     ])
@@ -219,7 +228,6 @@ describe('grantManagedCodexHookTrust', () => {
     expect(runner).toHaveBeenCalledTimes(1)
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ granted: 1, ledgerHits: 1 })
 
-    // Config drift (user wiped the trust entry) must re-run the session.
     upsertHookTrustEntries(plan.tomlPath, [{ ...entries[0], trustedHash: 'sha256:wiped' }])
     const third = await grantManagedCodexHookTrust(plan)
     expect(third.lane).toBe('rpc')
@@ -258,7 +266,6 @@ describe('grantManagedCodexHookTrust', () => {
     })
     expect(runner).toHaveBeenCalledTimes(1)
 
-    // Cached: the second install skips the probe entirely.
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({
       lane: 'fallback',
       reason: 'unsupported-cached'
@@ -285,8 +292,8 @@ describe('grantManagedCodexHookTrust', () => {
       reason: 'retry-cached'
     })
     expect(runner).toHaveBeenCalledTimes(1)
-    expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
-    // Why: an inline grant costs its launch the full timeout, so it keeps the long cooldown.
+    expect(codexAppServerCapabilityCache.shouldTry('wsl:Ubuntu')).toBe(true)
+    // Inline grants pay the full launch timeout, so their cooldown exceeds 10s.
     vi.setSystemTime(1_000 + 10_001)
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ reason: 'retry-cached' })
     expect(runner).toHaveBeenCalledTimes(1)
@@ -295,28 +302,6 @@ describe('grantManagedCodexHookTrust', () => {
     vi.setSystemTime(1_000 + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS)
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'rpc' })
     expect(runner).toHaveBeenCalledTimes(2)
-  })
-
-  it('neither starts nor waits on a cooldown for a background grant', async () => {
-    const entries = [managedEntry('session_start')]
-    const runner = vi.fn((): Promise<CodexHookTrustGrantSessionResult> => {
-      throw new Error('codex app-server exited before completing the session')
-    })
-    _internals.setGrantSessionRunner(runner)
-    const background: CodexManagedTrustGrantPlan = { ...buildPlan(entries), background: true }
-    const inline = buildPlan(entries)
-
-    // Why: the real-home lane schedules a background retry; a second schedule here could only disagree.
-    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
-    expect(_internals.transientCooldownCountForTests()).toBe(0)
-    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
-    expect(runner).toHaveBeenCalledTimes(2)
-
-    // Why: the launch-path cooldown stays on its own lane.
-    expect(await grantManagedCodexHookTrust(inline)).toMatchObject({ reason: 'error' })
-    expect(await grantManagedCodexHookTrust(inline)).toMatchObject({ reason: 'retry-cached' })
-    expect(await grantManagedCodexHookTrust(background)).toMatchObject({ reason: 'error' })
-    expect(runner).toHaveBeenCalledTimes(4)
   })
 
   it('bounds transient cooldowns when host identities churn', async () => {
@@ -345,7 +330,7 @@ describe('grantManagedCodexHookTrust', () => {
       lane: 'fallback',
       reason: 'verify-failed'
     })
-    expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
+    expect(codexAppServerCapabilityCache.shouldTry('wsl:Ubuntu')).toBe(true)
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ verifyFailed: 1 })
   })
 
@@ -376,8 +361,6 @@ describe('grantManagedCodexHookTrust', () => {
     })
   })
 
-  // Why no restore: the session writes trust only at Orca's own keys, and a
-  // snapshot restore would also undo a save that landed during it.
   it('keeps a config.toml save made during a failed session', async () => {
     const entries = [managedEntry('session_start')]
     const plan = buildPlan(entries)
@@ -434,9 +417,8 @@ describe('grantManagedCodexHookTrust', () => {
     const entries = [managedEntry('session_start')]
     const otherHome = join(userDataDir, 'codex-accounts', 'other', 'home')
     mkdirSync(otherHome, { recursive: true })
-    // Why: the probe dedupe only holds the first session on an unproven host.
-    // A known-supported host must keep its intended launch concurrency.
-    codexAppServerCapabilityCache.rememberSupported('native')
+    // Mark support proven so first-probe deduplication does not mask launch concurrency.
+    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     let inFlight = 0
     let maxInFlight = 0
     const releases: (() => void)[] = []
@@ -514,22 +496,13 @@ describe('trust-grant telemetry detail', () => {
     return events
   }
 
-  it('attributes the plan lane on granted events', async () => {
+  it('reports granted events on the managed lane', async () => {
     const events = captureTelemetry()
     const entries = [managedEntry('session_start')]
     _internals.setGrantSessionRunner(async () => grantedSessionResult(entries))
 
     expect(await grantManagedCodexHookTrust(buildPlan(entries))).toMatchObject({ lane: 'rpc' })
-    expect(events).toEqual([{ outcome: 'granted', hostKind: 'native', lane: 'real-home' }])
-  })
-
-  it('reports the managed lane independently of host kind', async () => {
-    const events = captureTelemetry()
-    const entries = [managedEntry('session_start')]
-    _internals.setGrantSessionRunner(async () => grantedSessionResult(entries))
-
-    await grantManagedCodexHookTrust({ ...buildPlan(entries), telemetryLane: 'managed' })
-    expect(events).toEqual([{ outcome: 'granted', hostKind: 'native', lane: 'managed' }])
+    expect(events).toEqual([{ outcome: 'granted', hostKind: 'wsl', lane: 'managed' }])
   })
 
   it('classifies error fallbacks on the wire', async () => {
@@ -546,8 +519,8 @@ describe('trust-grant telemetry detail', () => {
     expect(events).toEqual([
       {
         outcome: 'fallback',
-        hostKind: 'native',
-        lane: 'real-home',
+        hostKind: 'wsl',
+        lane: 'managed',
         reason: 'error',
         errorClass: 'binary-missing'
       }
@@ -567,8 +540,8 @@ describe('trust-grant telemetry detail', () => {
     expect(events).toEqual([
       {
         outcome: 'verify_failed',
-        hostKind: 'native',
-        lane: 'real-home',
+        hostKind: 'wsl',
+        lane: 'managed',
         reason: 'verify-failed',
         verifyClass: 'post-grant-untrusted'
       }
@@ -584,8 +557,8 @@ describe('trust-grant telemetry detail', () => {
     expect(events).toEqual([
       {
         outcome: 'verify_failed',
-        hostKind: 'native',
-        lane: 'real-home',
+        hostKind: 'wsl',
+        lane: 'managed',
         reason: 'verify-failed',
         verifyClass: 'duplicate-key'
       }

@@ -157,10 +157,33 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     expect(withSixelDa1Attribute('\x1b[?1;2c')).toBe('\x1b[?1;2;4c')
     expect(withSixelDa1Attribute('\x1b[?61;4c')).toBe('\x1b[?61;4c')
     expect(withSixelDa1Attribute('\x1b[?62;4;9;22c')).toBe('\x1b[?62;4;9;22c')
-    // Leaves anything that is not a DA1 response untouched.
     expect(withSixelDa1Attribute('\x1b[0m')).toBe('\x1b[0m')
   })
 
+  it('does not answer OSC color queries when the pane skips them (jcode)', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    term.options.theme = {
+      foreground: '#2e3434',
+      background: '#ffffff'
+    }
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false,
+      skipOscColorQueryReplies: () => true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b]10;?\x1b\\\x1b]11;?\x1b\\')
+
+      expect(sendInput).not.toHaveBeenCalled()
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
   it('answers OSC foreground and background color queries from the active theme', async () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     term.options.theme = {

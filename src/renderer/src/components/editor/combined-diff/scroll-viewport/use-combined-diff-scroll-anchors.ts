@@ -8,9 +8,11 @@ import {
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-anchor-recording'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '../../diff-section-types'
-import { combinedDiffScrollAnchorCache } from '../remember-view/combined-diff-view-memory'
+import {
+  rememberCombinedDiffView,
+  type CombinedDiffViewLease
+} from '../remember-view/combined-diff-view-cache'
 
 export type CombinedDiffScrollAnchors = {
   persistScrollAnchor: (refreshDomAnchor?: boolean) => void
@@ -35,7 +37,7 @@ export function useCombinedDiffScrollAnchors({
   sideBySide,
   structureRevision,
   totalSize,
-  viewStateKey,
+  memoryLeaseRef,
   virtualizer
 }: {
   clampRestoreCount: number
@@ -52,7 +54,7 @@ export function useCombinedDiffScrollAnchors({
   sideBySide: boolean
   structureRevision: number
   totalSize: number
-  viewStateKey: string
+  memoryLeaseRef: React.RefObject<CombinedDiffViewLease | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): CombinedDiffScrollAnchors {
   const getCombinedDiffSectionKey = useCallback((section: DiffSection): string => section.key, [])
@@ -120,13 +122,10 @@ export function useCombinedDiffScrollAnchors({
     return true
   }, [latestDomScrollAnchorRef, scrollAnchorRef, scrollContainerRef])
   const writeScrollAnchor = useCallback((): void => {
-    const anchor = scrollAnchorRef.current
-    if (anchor) {
-      setWithLRU(combinedDiffScrollAnchorCache, viewStateKey, anchor)
-    } else {
-      combinedDiffScrollAnchorCache.delete(viewStateKey)
-    }
-  }, [scrollAnchorRef, viewStateKey])
+    rememberCombinedDiffView(memoryLeaseRef.current, {
+      scrollAnchor: scrollAnchorRef.current ?? undefined
+    })
+  }, [memoryLeaseRef, scrollAnchorRef])
   const persistScrollAnchor = useCallback(
     (refreshDomAnchor = true): void => {
       if (refreshDomAnchor) {
@@ -137,13 +136,10 @@ export function useCombinedDiffScrollAnchors({
     [recordDomScrollAnchor, writeScrollAnchor]
   )
 
-  // Why: restore only on structural changes — restoring on measurement churn overwrote scrollTop during active wheel input.
+  // Restore on structural changes only; measurement churn must not overwrite active wheel scrolling.
   const combinedDiffRestoreSignal = useMemo(
     () =>
-      // Why: a single-section reload drops that row's measured height, so it shifts rows
-      // below it — still a structural change even though `generation` no longer moves.
-      // structureRevision moves iff a section key/collapsed/contentGeneration moved, so this is
-      // the same signal the per-section join produced without rebuilding it once per load.
+      // Reload generations invalidate row heights; structureRevision captures those and collapse/key changes without full key joins.
       `${generation}|${sideBySide ? 'sbs' : 'inline'}|${clampRestoreCount}|${structureRevision}`,
     [clampRestoreCount, generation, sideBySide, structureRevision]
   )
@@ -172,7 +168,7 @@ export function useCombinedDiffScrollAnchors({
       scrollAnchorRef.current = null
       latestDomScrollAnchorRef.current = null
       virtualizer.scrollToIndex(index, { align: 'start' })
-      // Why: this jump is programmatic (no scroll event records an anchor); snapshot the destination once layout settles.
+      // Programmatic jumps emit no anchor-recording scroll; snapshot the destination after layout settles.
       window.requestAnimationFrame(() => {
         scrollContainerRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
       })

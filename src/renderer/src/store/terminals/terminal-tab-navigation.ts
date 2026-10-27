@@ -1,6 +1,7 @@
 import { resolveActiveTabOwnerWorktreeId } from '../slices/active-tab-owner-worktree'
 import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { ownsGlobalSelection } from '../global-selection-owner'
 
 export function createTerminalTabNavigationActions(
   set: TerminalStoreSet,
@@ -31,7 +32,6 @@ export function createTerminalTabNavigationActions(
     },
     setTabBarOrder: (worktreeId, order) => {
       set((s) => {
-        // Update unified visual order
         const newTabBarOrder = { ...s.tabBarOrderByWorktree, [worktreeId]: order }
         // Keep terminal tab sortOrder in sync for persistence
         const tabs = s.tabsByWorktree[worktreeId]
@@ -39,7 +39,6 @@ export function createTerminalTabNavigationActions(
           return { tabBarOrderByWorktree: newTabBarOrder }
         }
         const tabMap = new Map(tabs.map((t) => [t.id, t]))
-        // Extract terminal IDs in their new relative order
         const terminalIdsInOrder = order.filter((id) => tabMap.has(id))
         const orderedSet = new Set(terminalIdsInOrder)
         const missingTabs = tabs.filter((t) => !orderedSet.has(t.id))
@@ -56,34 +55,20 @@ export function createTerminalTabNavigationActions(
     setActiveTab: (tabId) => {
       let tabOwnerWorktreeId: string | null = null
       set((s) => {
-        // Why: clear bells only for visible tabs; background bells must persist.
         tabOwnerWorktreeId = resolveActiveTabOwnerWorktreeId(
           s.tabsByWorktree,
           s.activeWorktreeId,
           tabId
         )
         const isActiveWorktreeTab =
-          tabOwnerWorktreeId !== null && tabOwnerWorktreeId === s.activeWorktreeId
-        const nextUnreadTerminalTabs =
-          isActiveWorktreeTab && s.unreadTerminalTabs[tabId]
-            ? (() => {
-                const copy = { ...s.unreadTerminalTabs }
-                delete copy[tabId]
-                return copy
-              })()
-            : s.unreadTerminalTabs
-        // Why: activeTabId marks the visible tab, so background bells remain unread.
+          tabOwnerWorktreeId !== null && ownsGlobalSelection(s, tabOwnerWorktreeId)
         return {
           activeTabId: isActiveWorktreeTab ? tabId : s.activeTabId,
-          // Why: a redundant activation must not reallocate this map — Terminal's
-          // active-terminal repair effect depends on it, so a re-activation that
-          // can't converge activeTabId (tab id reused by an earlier-scanned
-          // worktree) would otherwise re-trigger itself into React error #185.
+          // Preserve map identity on redundant activation; duplicate tab IDs can prevent convergence and retrigger Terminal’s repair effect into React #185.
           activeTabIdByWorktree:
             tabOwnerWorktreeId !== null && s.activeTabIdByWorktree[tabOwnerWorktreeId] !== tabId
               ? { ...s.activeTabIdByWorktree, [tabOwnerWorktreeId]: tabId }
-              : s.activeTabIdByWorktree,
-          unreadTerminalTabs: nextUnreadTerminalTabs
+              : s.activeTabIdByWorktree
         }
       })
       const state = get()
@@ -92,7 +77,7 @@ export function createTerminalTabNavigationActions(
         Object.hasOwn(state.unifiedTabsByWorktree, tabOwnerWorktreeId)
           ? state.unifiedTabsByWorktree[tabOwnerWorktreeId]
           : []
-      // Why: a duplicated entity id must activate the same owner chosen above.
+      // Duplicate entity IDs must use the owner chosen above.
       const item =
         ownerUnifiedTabs.find(
           (entry) => entry.contentType === 'terminal' && entry.entityId === tabId

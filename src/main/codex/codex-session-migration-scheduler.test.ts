@@ -113,10 +113,8 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledOnce())
 
     const options = startBackfill.mock.calls[0]?.[0]
-    // The open pane only holds its own date pending; publication is not blocked.
     expect(options?.retainPendingScanDates).toBe(true)
     expect(options?.canWriteCompletionMarker?.()).toBe(true)
-    // Preparation is handed the dates so it can persist them before the walk.
     expect(prepareScheduledRun).toHaveBeenCalledWith([['2026', '08', '05']])
   })
 
@@ -634,7 +632,6 @@ describe('createCodexSessionMigrationScheduler', () => {
       initialDelayMs: 1_000
     })
 
-    // The ignored incarnation never reports its exit, so only the newer launch ever finishes.
     scheduler.ignoreLaunch('stable-pty', 1)
     scheduler.beginLaunch('stable-pty', false, new Date(), 2)
     await vi.advanceTimersByTimeAsync(61_000)

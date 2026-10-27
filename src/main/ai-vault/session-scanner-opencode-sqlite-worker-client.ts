@@ -2,6 +2,8 @@ import type { WorkerThreadFactory } from '../lazy-worker-thread-host'
 import { WorkerThreadRequestQueue } from '../worker-thread-request-queue'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type {
+  OpenCodeNativeChatReadRequest,
+  OpenCodeNativeChatReadValue,
   OpenCodeSqliteCaptureValue,
   OpenCodeSqliteListValue,
   OpenCodeSqliteWorkerRequest,
@@ -10,32 +12,21 @@ import type {
 import { parseOpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-response'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { runOpenCodeSqliteScanRequest } from './session-scanner-opencode-sqlite-scan-scope'
 
-// Why (#8864): a lazily-spawned, unref'd worker runs OpenCode SQLite reads off
-// the main-process event loop. This module owns only the OpenCode legs; the
-// request half (FIFO one-at-a-time dispatch, per-call timeouts, respawn-on-fault)
-// is WorkerThreadRequestQueue and the thread's lifetime is LazyWorkerThreadHost,
-// both shared with the port-scan probe and usage scan clients. The default spawn
-// + shared singleton live in session-scanner-opencode-sqlite-worker-spawn.ts.
+// Adapt OpenCode reads to the shared worker queue and lazy host; spawning is wired in worker-spawn.
 
 export const LIST_TIMEOUT_MS = 30_000
 export const PARSE_TIMEOUT_MS = 15_000
-// Longer than a parse because it reads every part of the session rather than
-// the newest window, and shorter than nothing at all because the queue is FIFO.
+// Full captures need more time than previews but must not block the FIFO queue indefinitely.
 export const CAPTURE_TIMEOUT_MS = 30_000
 export const IDLE_TEARDOWN_MS = 30_000
-// After this many consecutive worker deaths, fail the remaining queued calls to
-// scan issues instead of respawning so a DB that reliably kills the worker can't
-// spin a crash loop. Reset on any successful response, after draining, and when a
-// fresh scan burst starts from idle (so the cap is per-scan, not process-wide).
+// Bound crash loops per active burst; successful responses or a fresh idle burst reset the death count.
 export const MAX_CONSECUTIVE_DEATHS = 3
 
-// Distinguishes "no worker available at all" from a timeout or crash so callers
-// can surface a precise issue while keeping synchronous SQLite off the main thread.
 class OpenCodeSqliteWorkerUnavailableError extends Error {}
 
-// One session failed, not the whole source: the scanner turns this throw into a
-// per-session scan issue and the search index records a failed read.
+// Reject failed session reads so scans report them and search indexing can retry.
 function sessionReadFailure(err: unknown): Error {
   if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
     return new Error('OpenCode SQLite background scanner could not start.')
@@ -43,14 +34,7 @@ function sessionReadFailure(err: unknown): Error {
   return err instanceof Error ? err : new Error(String(err))
 }
 
-/**
- * Main-thread bridge that runs OpenCode SQLite reads on a persistent worker
- * thread. The shared request queue dispatches one request at a time (FIFO),
- * times each request out from dispatch, respawns after faults (capped by
- * `MAX_CONSECUTIVE_DEATHS`), tears the worker down after `IDLE_TEARDOWN_MS` of
- * inactivity, and fails closed when no worker can be spawned rather than moving
- * SQLite work onto the main thread.
- */
+/** Serialize timed worker reads and fail closed; never run synchronous SQLite on the main thread. */
 export class OpenCodeSqliteWorkerClient {
   private readonly requestTimeoutMs: number | undefined
   private readonly requests: WorkerThreadRequestQueue<
@@ -76,29 +60,19 @@ export class OpenCodeSqliteWorkerClient {
       describeExit: (code) => `OpenCode SQLite worker exited with code ${code}`,
       describeCrashLoop: (lastError) =>
         `OpenCode SQLite worker crashed repeatedly; skipping remaining sessions (${lastError})`,
-      // Why (#8864): never fall back to synchronous SQLite reads here; a missing
-      // bundle or resource-exhausted spawn must omit OpenCode history rather than
-      // reintroduce the main-process hang this worker boundary prevents.
+      // Missing bundles or failed spawns must not reintroduce main-thread SQLite hangs (#8864).
       onUnavailable: (err) =>
         log(`OpenCode SQLite worker unavailable; skipping its history. ${errorMessage(err)}`)
     })
   }
 
-  /**
-   * List session candidates from the given OpenCode databases on the worker.
-   * @param args.dbPaths - Absolute paths to opencode.db files to scan.
-   * @param args.limit - Maximum number of sessions to return per database.
-   * @param args.issues - Collected scan issues (worker issues are merged in).
-   * @param args.agent - 'opencode2' reads the v2 channel-scoped schema; omitted
-   *   (or 'opencode') reads the v1 schema.
-   * @returns Synthetic candidates sorted by effective recency; empty (with a
-   *   scan issue) when the worker is unavailable, times out, or crashes.
-   */
+  /** Return no candidates and a scope issue when the background worker fails. */
   async list(args: {
     dbPaths: readonly string[]
     limit: number
     issues: AiVaultScanIssue[]
     agent?: 'opencode2' | 'zcode'
+    scopePaths?: readonly string[]
     signal?: AbortSignal
   }): Promise<SessionFileCandidate[]> {
     if (args.dbPaths.length === 0) {
@@ -112,10 +86,12 @@ export class OpenCodeSqliteWorkerClient {
           kind: 'list',
           dbPaths: args.dbPaths,
           limit: Number.isFinite(args.limit) ? args.limit : null,
-          ...(args.agent ? { agent: args.agent } : {})
+          ...(args.agent ? { agent: args.agent } : {}),
+          ...(args.scopePaths?.length ? { scopePaths: args.scopePaths } : {})
         }),
         LIST_TIMEOUT_MS,
-        args.signal
+        args.signal,
+        args.agent
       )) as OpenCodeSqliteListValue
       args.issues.push(...value.issues)
       return value.candidates
@@ -124,7 +100,6 @@ export class OpenCodeSqliteWorkerClient {
         throw err
       }
       if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
-        // Kinded: a whole source failed, not a transcript.
         args.issues.push({
           agent: args.agent ?? 'opencode',
           kind: 'scope',
@@ -134,8 +109,6 @@ export class OpenCodeSqliteWorkerClient {
         })
         return []
       }
-      // Timeout/crash: this storage dir's SQLite DBs contribute no sessions this
-      // scan, surfaced as one scan issue rather than an unbounded stall.
       args.issues.push({
         agent: args.agent ?? 'opencode',
         kind: 'scope',
@@ -146,16 +119,7 @@ export class OpenCodeSqliteWorkerClient {
     }
   }
 
-  /**
-   * Parse a single OpenCode session on the worker.
-   * @param args.dbPath - Absolute path to the opencode.db file.
-   * @param args.sessionId - Primary key in the `session` table.
-   * @param args.platform - Platform used for resume-command generation.
-   * @param args.agent - 'opencode2' reads the v2 channel-scoped schema; omitted
-   *   (or 'opencode') reads the v1 schema.
-   * @returns The parsed session, or `null` when it does not exist; rejects on
-   *   worker timeout/crash so the scanner records a per-session scan issue.
-   */
+  /** Missing sessions return null; worker failures reject for per-session scan reporting. */
   async parse(args: {
     fullFirstUserPrompt?: boolean
     dbPath: string
@@ -176,7 +140,8 @@ export class OpenCodeSqliteWorkerClient {
           ...(args.agent ? { agent: args.agent } : {})
         }),
         PARSE_TIMEOUT_MS,
-        args.signal
+        args.signal,
+        args.agent
       )
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker's parse leg returns exactly this, built by the repo's own reader on the other side of a structured clone.
       return value as AiVaultSession | null
@@ -185,18 +150,7 @@ export class OpenCodeSqliteWorkerClient {
     }
   }
 
-  /**
-   * Read one OpenCode session and its whole transcript on the worker.
-   *
-   * One request rather than a parse plus a second read: both halves then come
-   * from a single open of the database, so the messages the index folds cannot
-   * belong to a different generation of the session than the panel shows.
-   * @param args.dbPath - Absolute path to the opencode.db file.
-   * @param args.sessionId - Primary key in the `session` table.
-   * @param args.platform - Platform used for resume-command generation.
-   * @returns The session (null when it does not exist) and its messages;
-   *   rejects on worker timeout/crash so the read is recorded as failed.
-   */
+  /** Request metadata and the full transcript together; reject worker failures so indexing can retry. */
   async capture(args: {
     dbPath: string
     sessionId: string
@@ -215,12 +169,27 @@ export class OpenCodeSqliteWorkerClient {
           ...(args.agent ? { agent: args.agent } : {})
         }),
         CAPTURE_TIMEOUT_MS,
-        args.signal
+        args.signal,
+        args.agent
       )
       return parseOpenCodeSqliteCaptureValue(value)
     } catch (err) {
       throw sessionReadFailure(err)
     }
+  }
+
+  async readNativeChat(
+    args: Omit<OpenCodeNativeChatReadRequest, 'id'>,
+    signal?: AbortSignal
+  ): Promise<OpenCodeNativeChatReadValue> {
+    const value = await this.dispatch(
+      (id) => ({ ...args, id }),
+      PARSE_TIMEOUT_MS,
+      signal,
+      'native-chat'
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only this build's internal worker dispatch constructs page/signal results; they are not client-supplied paths or frames.
+    return value as OpenCodeNativeChatReadValue
   }
 
   dispose(): void {
@@ -230,13 +199,20 @@ export class OpenCodeSqliteWorkerClient {
   private async dispatch(
     buildRequest: (id: number) => OpenCodeSqliteWorkerRequest,
     timeoutMs: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    agent?: 'opencode2' | 'zcode' | 'native-chat'
   ): Promise<unknown> {
     const deadline = this.requestTimeoutMs ?? timeoutMs
-    const response = await this.requests.dispatch(
-      (id) => ({ ...buildRequest(id), timeoutMs: deadline }),
-      deadline,
-      signal
+    const response = await runOpenCodeSqliteScanRequest(
+      signal,
+      (requestSignal, owner) =>
+        this.requests.dispatch(
+          (id) => ({ ...buildRequest(id), timeoutMs: deadline }),
+          deadline,
+          requestSignal,
+          owner
+        ),
+      agent
     )
     if (!response.ok) {
       throw new Error(response.error)

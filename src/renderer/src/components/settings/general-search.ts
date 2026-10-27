@@ -173,18 +173,19 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.GeneralPane.confirm_running_terminal_close',
-      'Confirm before closing running terminals'
+      'auto.components.settings.GeneralPane.confirm_running_work_close',
+      'Confirm before closing active chats or terminals'
     ),
     description: translate(
-      'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
-      'Ask before stopping a running agent or command when closing a terminal.'
+      'auto.components.settings.GeneralPane.confirm_running_work_close_description',
+      'Ask before stopping an active agent or command when closing its chat or terminal.'
     ),
     keywords: [
       ...translateSearchKeyword(
         'auto.components.settings.general.search.running_terminal',
         'running'
       ),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.chat', 'chat'),
       ...translateSearchKeyword('auto.components.settings.general.search.terminal', 'terminal'),
       ...translateSearchKeyword('auto.components.settings.general.search.agent', 'agent'),
       ...translateSearchKeyword('auto.components.settings.general.search.command', 'command'),
@@ -228,8 +229,7 @@ export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.general.search.bda108e66c', 'skill'),
-      ...translateSearchKeyword('auto.components.settings.general.search.baa263d6d8', 'agents'),
-      ...translateSearchKeyword('auto.components.settings.general.search.6382fe9724', 'npx')
+      ...translateSearchKeyword('auto.components.settings.general.search.baa263d6d8', 'agents')
     ]
   }
 ])

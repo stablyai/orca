@@ -1,20 +1,13 @@
-// The effects behind send / cancel / respond / setOption.
-//
-// Admission (writer lease, idempotency) has already passed by the time anything
-// here runs; these functions own only the journal writes and the adapter call,
-// in that order. Journal first is deliberate: a crash between the two leaves a
-// row the next attach settles as `unknown`, whereas the reverse would lose a
-// turn the provider already accepted.
+// Admission already passed; journal before adapter effects so a crash leaves recoverable unknown work.
+// Calling the adapter first could lose a turn it accepted.
 
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import {
-  agentSessionFailureWords,
-  type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   refuse,
   type AgentSessionRefusalReason,
@@ -22,27 +15,19 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type {
-  AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter,
-  StructuredAgentSessionProviderChildPhase
-} from './structured-agent-session-adapter'
-import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import {
-  handOverStructuredAgentSessionCommand,
-  structuredAgentSessionHandoverOrigin,
-  type StructuredAgentSessionCommandHandoverContext
-} from './structured-agent-session-command-turn'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   classifyJournalOpenFailure,
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-export { performSetOption } from './structured-agent-session-turns-options'
+import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
+import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 export { performCancel } from './structured-agent-session-turns-cancel'
 
@@ -50,22 +35,28 @@ export type AgentSessionTurnContext = {
   sessionId: string
   journal: AgentSessionJournal
   fence: number
+  /** Read fresh: child exit may change current work mid-operation. */
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
   adapter: StructuredAgentSessionAdapter
+  /** Registry declarations; agents.capabilities(agent) is this session’s answer. */
+  agents: StructuredAgentRegistry
+  agent: string
   logger: StructuredAgentSessionLogger
   persistedOptions?: Readonly<Record<string, string>>
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
-  /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string
-  /** Republishes state kept outside the journal, such as the record's options or rewind phase.
-   *  Journal appends reach readers on their own. */
+  /** Publish non-journal state; appends publish themselves. */
   publish: () => void
-  /** Drains provider lifecycle already accepted by the execution host. */
-  flushStreamedEvents: () => Promise<void>
-  /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
-  providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
-  /** Who a Stop's refusal row names. */
   failureTextContext?: AgentSessionFailureWordsContext
+  /** Commit success alongside its accepting write or standalone receipt. */
+  operationReceipt?: AgentSessionOperationReceipt
   now: () => number
+}
+
+export type AgentSessionOperationReceipt = JournalOperationReceipt & {
+  isCommitted: () => boolean
+  /** No-op once committed. */
+  commitAlone: () => Promise<void>
 }
 
 export type TurnOutcome<TValue> =
@@ -79,53 +70,29 @@ function invalid(
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
- *  rather than as a rejection — unless the child had not proven its start. Such a child has
- *  accepted nothing (input is written only after it initializes), so a dispatch it could not
- *  take is provably unwritten and is rejected with the cause the adapter gave. */
-async function dispatchSafely(
-  ctx: AgentSessionHandoverContext,
-  clientMessageId: string,
-  body: AgentJournalMessageItem,
-  requestedAt: number
-): Promise<AgentSessionDispatchOutcome> {
-  try {
-    return await ctx.adapter.dispatch({
-      sessionId: ctx.sessionId,
-      clientMessageId,
-      body,
-      fence: ctx.fence,
-      requestedAt
-    })
-  } catch (error) {
-    if (ctx.providerChildPhase?.() === 'starting') {
-      return {
-        state: 'rejected',
-        ...structuredAgentSessionStartFailure({ error }, ctx.failureTextContext)
-      }
-    }
-    return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
-  }
+export function agentSessionAttachmentExpiredRefusal(): {
+  ok: false
+  refusal: AgentSessionWireRefusal
+} {
+  return invalid(
+    'attachmentExpired',
+    'A chat attachment in this message is no longer stored on the host, so it was not sent.'
+  )
 }
 
-/**
- * One id, one delivery. A submission that already exists replays its recorded
- * outcome and NEVER goes back on the wire, whatever state it is in and whatever
- * `retryUnknown` the client sent: `unknown` cannot prove non-delivery — that is
- * the whole content of the word — and one message reached the model five times
- * when this was a judgement call instead of an invariant. A distinct send after
- * a terminal rejection uses a fresh id, which is a first delivery.
- *
- * Accepting only records the message; the session's delivery loop hands it over.
- */
+/** Accept once per ID; existing submissions replay without redelivery because unknown cannot prove non-delivery.
+ * Delivery runs separately; a fresh send after terminal rejection needs a fresh ID. */
 export async function performSend(
   ctx: AgentSessionTurnContext,
   input: {
     clientMessageId: string
     payloadFingerprint: string
     body: AgentJournalMessageItem
-    /** Who asked for the turn; absent on callers that predate it. */
+    /** Absent on older callers. */
     origin?: 'client' | 'host'
+    /** Persist only source kind in the submission. */
+    source?: AgentSessionMessageSource
+    options?: Readonly<Record<string, string>>
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -140,15 +107,32 @@ export async function performSend(
   if (existing) {
     return {
       ok: true,
-      value: { clientMessageId: input.clientMessageId, submission: existing }
+      value: { clientMessageId: input.clientMessageId, submission: { ...existing } }
     }
   }
+  const captured = captureStructuredExecutionOptions(ctx, input.options)
+  if ('refusal' in captured) {
+    return { ok: false, refusal: captured.refusal }
+  }
   try {
-    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence, handoverRecorded: true })
+    await ctx.journal.appendSubmission(
+      { ...input, options: captured.options, fence: ctx.fence, handoverRecorded: true },
+      undefined,
+      ctx.operationReceipt
+    )
   } catch (error) {
-    // Damage SQLite proves is the chat's, and no retry writes past it: say so, as an open does. So
-    // does a chat holding a newer Orca's rows, which only an update writes past, and a refusal the
-    // journal already classified (a copy that did not verify).
+    if (error instanceof CommandReceiptExistsError) {
+      throw error
+    }
+    ctx.logger.warn('recording a message failed', {
+      scope: 'send-journal-write',
+      sessionId: ctx.sessionId,
+      error
+    })
+    if (isAgentSessionAttachmentExpiredError(error)) {
+      return agentSessionAttachmentExpiredRefusal()
+    }
+    // Preserve typed refusals, corrupt-database errors and newer-version guards; never retry writes past them.
     if (
       isAgentSessionRefusalError(error) ||
       classifyJournalOpenFailure(error) === 'journalCorrupt' ||
@@ -162,88 +146,8 @@ export async function performSend(
     ok: true,
     value: {
       clientMessageId: input.clientMessageId,
-      submission: requireSubmission(ctx, input.clientMessageId)
+      submission: { ...requireSubmission(ctx, input.clientMessageId) }
     }
-  }
-}
-
-export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext
-
-/**
- * Hands one queued submission to the provider. The `dispatch{pending}` row goes first: a crash
- * after it leaves a message in doubt, never one that reads as queued and so provably unwritten.
- */
-export async function handOverSubmission(
-  ctx: AgentSessionHandoverContext,
-  submission: AgentJournalSubmission
-): Promise<void> {
-  const { clientMessageId } = submission
-  const body = ctx.journal.itemBody(agentJournalSubmissionKey(clientMessageId))
-  if (body?.kind !== 'message') {
-    await ctx.journal.resolveDispatch({
-      clientMessageId,
-      state: 'rejected',
-      ...agentSessionFailureWords(agentSessionFailureFact('hostFault'), { surface: 'rejection' }),
-      fence: ctx.fence
-    })
-    return
-  }
-  if (body.command) {
-    await handOverStructuredAgentSessionCommand(ctx, submission, body)
-    return
-  }
-  // The message joins the turn running at handover, a steer, or opens its own.
-  await ctx.journal.resolveDispatch({
-    clientMessageId,
-    state: 'pending',
-    fence: ctx.fence,
-    turnScope: ctx.journal.liveTurnScope()
-  })
-  // The handover row's instant on the host clock; the turn this dispatch opens records it so the
-  // live counter never re-anchors at turn-open.
-  const outcome = await dispatchSafely(
-    ctx,
-    clientMessageId,
-    body,
-    structuredAgentSessionHandoverOrigin(ctx.journal, submission)
-  )
-  // An admission needs no dispatch row: the submission is already pending.
-  if (outcome.state === 'admitted') {
-    return
-  }
-  try {
-    await ctx.journal.resolveDispatch(
-      outcome.state === 'accepted'
-        ? {
-            clientMessageId,
-            state: 'accepted',
-            providerIdentity: outcome.providerIdentity,
-            fence: ctx.fence
-          }
-        : outcome.state === 'rejected'
-          ? {
-              clientMessageId,
-              state: 'rejected',
-              reason: outcome.reason,
-              rejection: outcome.rejection,
-              fence: ctx.fence
-            }
-          : { clientMessageId, state: 'unknown', reason: outcome.reason, fence: ctx.fence }
-    )
-  } catch (error) {
-    // A failed resolution must not strand a pending row; an unknown result is
-    // explicitly replayable.
-    try {
-      await ctx.journal.resolveDispatch({
-        clientMessageId,
-        state: 'unknown',
-        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
-        fence: ctx.fence
-      })
-    } catch {
-      // Nothing further to record; the pending row is settled on the next open.
-    }
-    throw error
   }
 }
 
@@ -257,5 +161,16 @@ function requireSubmission(
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
-  return submission
+  // Return this step’s answer; later journal settlement must not mutate it.
+  return { ...submission }
+}
+
+export type AgentSessionReplayContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
+> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'cursor' | 'submission' | 'submissions' | 'epoch' | 'threadGoal'
+  > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
 }

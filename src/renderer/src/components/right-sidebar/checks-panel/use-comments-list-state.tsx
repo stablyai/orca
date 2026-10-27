@@ -31,6 +31,7 @@ import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import { translate } from '@/i18n/i18n'
 import { PRCommentGroupView } from './comment-group'
 import { useNow } from '@/hooks/use-now'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 export type PRCommentsListDisplayMode = 'triage' | 'timeline'
 export const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']
@@ -42,6 +43,8 @@ export function getPRCommentsListDisplayModeLabel(mode: PRCommentsListDisplayMod
 
 export type PRCommentsListProps = {
   comments: PRComment[]
+  /** Set when the last read failed; replaces the empty-list copy. */
+  commentsError?: string | null
   commentsLoading: boolean
   reviewKind?: 'PR' | 'MR'
   commentsDisabled?: boolean
@@ -61,6 +64,7 @@ export type PRCommentsListProps = {
     content: GitHubReactionContent,
     reacted: boolean
   ) => Promise<boolean>
+  onOpenLocation?: (path: string, line: number) => void
 }
 
 export function useCommentsListState({
@@ -75,7 +79,8 @@ export function useCommentsListState({
   onEditComment,
   onDeleteComment,
   onSetReaction,
-  onResolveSelectedCommentsWithAI
+  onResolveSelectedCommentsWithAI,
+  onOpenLocation
 }: PRCommentsListProps) {
   function findVerticalScrollParent(element: HTMLElement): HTMLElement | null {
     let parent = element.parentElement
@@ -93,7 +98,7 @@ export function useCommentsListState({
   function scrollElementBottomIntoView(element: HTMLElement): void {
     const scrollParent = findVerticalScrollParent(element)
     if (!scrollParent) {
-      element.scrollIntoView({ block: 'end', behavior: 'smooth' })
+      element.scrollIntoView({ block: 'end', behavior: motionSafeScrollBehavior() })
       return
     }
 
@@ -104,7 +109,7 @@ export function useCommentsListState({
     if (bottomOverflow > 0) {
       scrollParent.scrollTo({
         top: scrollParent.scrollTop + bottomOverflow,
-        behavior: 'smooth'
+        behavior: motionSafeScrollBehavior()
       })
       return
     }
@@ -113,7 +118,7 @@ export function useCommentsListState({
     if (topOverflow < 0) {
       scrollParent.scrollTo({
         top: Math.max(0, scrollParent.scrollTop + topOverflow),
-        behavior: 'smooth'
+        behavior: motionSafeScrollBehavior()
       })
     }
   }
@@ -147,11 +152,9 @@ export function useCommentsListState({
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const triageGroups = React.useMemo(
-    // Why: grouped sections read newest-first so recent discussion surfaces at the top.
     () => partitionPRCommentGroupsForTriage(sortPRCommentGroupsByRecency(groups, 'newest-first')),
     [groups]
   )
-  // Why: timeline reads oldest-first so the discussion history unfolds in order.
   const timelineGroups = React.useMemo(() => sortPRCommentGroupsByRecency(groups), [groups])
   const canShowResolveWithAI = Boolean(
     onResolveSelectedCommentsWithAI && selectableGroups.length > 0
@@ -173,8 +176,7 @@ export function useCommentsListState({
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(scrollComposerIntoView)
     })
-    // Why: the composer expands and focuses in separate layout passes; the
-    // timeout catches the final height so the footer is visible in short panels.
+    // Wait for separate expand/focus layout passes so scrolling uses the composer's final height.
     const settledTimer = window.setTimeout(scrollComposerIntoView, 120)
     return () => {
       window.cancelAnimationFrame(firstFrame)
@@ -247,6 +249,7 @@ export function useCommentsListState({
         onDeleteComment={onDeleteComment}
         onSetReaction={onSetReaction}
         onQueueForAgent={canQueue ? () => addGroupToSelection(groupId) : undefined}
+        onOpenLocation={onOpenLocation}
       />
     )
   }

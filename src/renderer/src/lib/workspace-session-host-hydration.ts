@@ -25,10 +25,7 @@ import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-
 
 type SessionReadApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
-  /** Every partition persistence actually holds. Boot used to infer the set from the repo catalog
-   *  alone, which cannot see an SSH target whose only workspace is a folder — that partition was
-   *  written by the runtime and then read by nobody. Optional so a renderer paired with an older
-   *  main still boots on the catalog-derived set. */
+  /** Enumerate actual persisted partitions, including SSH folder-only hosts absent from repos. Optional channel preserves older-main catalog-only startup. */
   listHostIds?: () => Promise<ExecutionHostId[]>
 }
 
@@ -37,6 +34,8 @@ export type WorkspaceSessionHostRead = {
   runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   contestedHostWorkspaceSessions: HostSessionSlices
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
+  /** Runtime partitions this read actually loaded, so a later write may speak for all of their rows. */
+  hydratedRuntimeSessionHostIds: ExecutionHostId[]
 }
 
 const WORKSPACE_SESSION_KEYED_FIELDS = [
@@ -87,8 +86,7 @@ function collectWorkspaceSessionKeysFromHostSession(session: WorkspaceSessionSta
     }
   }
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
-    // Why: a hibernated agent can be the only restored session evidence for a
-    // runtime worktree before its remote catalog answers.
+    // Sleeping agent records can prove a restored runtime workspace before its catalog answers.
     addWorkspaceSessionKeyForOwnerMap(ids, record.worktreeId)
   }
   return [...ids]
@@ -112,16 +110,13 @@ function buildRuntimeHostIdByWorkspaceSessionKey(
   return owners
 }
 
-/** Collect the distinct runtime hosts owning any persisted repo. */
 export function listKnownRuntimeHostIds(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
 ): ExecutionHostId[] {
   return listKnownPartitionHostIds(repos, 'runtime')
 }
 
-/** Collect the distinct SSH hosts owning any persisted repo. Their partitions are read separately
- *  from the runtime ones: an `ssh:*` partition is not a rival claimant of the same workspace id,
- *  it is the other half of ONE host's session that shipping builds split in two (#12723). */
+/** Read SSH partitions separately: local plus ssh:<target> often represents one workspace split by older builds, not rival claimants (#12723). */
 export function listKnownSshHostIds(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
 ): ExecutionHostId[] {
@@ -142,13 +137,7 @@ function listKnownPartitionHostIds(
   return [...hostIds]
 }
 
-/** Boot-time hydration: fetch the local partition, one partition per known runtime host (from
- *  loaded repos and saved runtime ids) and one per known SSH host, then merge them into the
- *  unified session the hydrators expect.
- *
- *  Fail-soft: a partition whose fetch rejects is skipped — boot proceeds with
- *  the rest. Corrupt partitions never reach here; persistence zod-validates
- *  each one and falls back to defaults on the main side. */
+/** Read local plus saved/repo runtime and SSH partitions, then merge for hydrators. Skip rejected reads; main already validates corrupt partitions and substitutes defaults. */
 export async function fetchWorkspaceSessionFromHosts(
   api: SessionReadApi,
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[],
@@ -174,8 +163,7 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   const slices: HostSessionSlices = {
     [LOCAL_EXECUTION_HOST_ID]: await api.get()
   }
-  // Why: startup can know saved runtime session hosts before their repo
-  // catalogs hydrate, so include those partitions in the first read.
+  // Read saved runtime session hosts before their repo catalogs hydrate.
   const runtimeHostIds = new Set<ExecutionHostId>([
     ...listKnownRuntimeHostIds(repos),
     ...additionalRuntimeHostIds
@@ -194,34 +182,26 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       })
     ),
     Promise.all(
-      // Sorted so two SSH partitions naming one bare id resolve the same way on every boot; the
-      // repo catalog's order is not stable across repo add/remove.
+      // Sort SSH partitions for deterministic same-ID adoption; catalog order changes on repo add/remove.
       [...sshHostIds].sort().map(async (hostId) => [hostId, await readPartition(hostId)] as const)
     )
   ])
   const merged = mergeWorkspaceSessionsWithHostShadow(slices)
-  // Why the ssh partitions stay out of `slices`: the contention split reads two slices holding one
-  // workspace id as two DIFFERENT workspaces on rival hosts and parks one of them. 'local' and
-  // `ssh:<targetId>` are the same workspace written twice, so they are reunited afterwards instead
-  // — and a workspace the merged session has no tabs for is adopted rather than read as a
-  // deletion (#12721). Routing sends the reunited rows back to the owning partition.
+  // Keep SSH out of rival contention splitting: local/ssh are often legacy halves of one workspace. Reunite afterwards, adopting empty session gaps instead of treating them as deletions (#12721).
   let session = merged.session
-  // Why the merge's verdict is widened here: it arbitrates only the slices it was given, and the
-  // ssh ones are kept out of that claimant set on purpose. Adoption is the one place an ssh row
-  // meets a bare id another host also claims.
+  // Widen contention evidence during SSH adoption, the only point those excluded partitions meet rival bare IDs.
   const attribution = sshPartitionCatalogAttribution(
     repos,
     sshPartitions,
     merged.contestedSessionKeys
   )
   const primaryHostBySessionKey = { ...merged.primaryHostBySessionKey }
-  // Why the ssh partitions get shadow entries of their own: the contention split only parks rows
-  // for the slices it arbitrates, and these are not among them. Everything this read leaves behind
-  // in an ssh partition still has to survive the next write to it.
+  // Give excluded SSH partitions their own shadows so nonadopted rows survive the next write.
   const shadow: HostSessionSlices = { ...merged.shadow }
   for (const [hostId, slice] of sshPartitions) {
     const adoption = adoptStrandedHostPartitionSession(session, slice, {
       contestedSessionKeys: attribution.contestedSessionKeys,
+      ownedSessionKeys: attribution.ownedSessionKeysByHostId.get(hostId),
       foreignSessionKeys: unownedSessionKeys(
         session,
         attribution.contestedSessionKeys,
@@ -236,25 +216,21 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       }
     }
     for (const workspaceId of adoption.adoptedWorkspaceIds) {
-      // Why this overrides the merge's answer: the merge saw only the leftover half in 'local' and
-      // named it the owner. These rows came out of the partition that owns them, and routing has to
-      // return them there even on a boot whose repo catalog cannot name the host yet — otherwise
-      // the write moves them back into 'local' and re-strands them (#12723).
+      // Read-source ownership overrides local-residue merge results; return adopted SSH rows to their actual partition even without hydrated catalog proof (#12723).
       primaryHostBySessionKey[workspaceId] = hostId
     }
   }
   return {
     session,
-    // Why the merged slices and not the raw ones: a row parked out of the renderer session must not
-    // still name its host as the owner, or startup builds runtime placeholders for a local row.
+    // Derive owners from surviving merged rows, never parked raw rows, or startup creates runtime placeholders for local winners.
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(merged.slices),
     contestedHostWorkspaceSessions: shadow,
-    contestedPrimaryHostBySessionKey: primaryHostBySessionKey
+    contestedPrimaryHostBySessionKey: primaryHostBySessionKey,
+    hydratedRuntimeSessionHostIds: [...runtimeHostIds].filter((hostId) => slices[hostId])
   }
 }
 
-/** SSH partitions persistence holds, whether or not a repo still names the target. Fail-soft: an
- *  older main without the channel leaves the catalog-derived set as the whole answer. */
+/** Include every stored SSH partition even without a repo; older mains lacking census fall back to catalog hosts. */
 async function listPersistedSshPartitionHostIds(api: SessionReadApi): Promise<ExecutionHostId[]> {
   if (!api.listHostIds) {
     return []
@@ -269,32 +245,15 @@ async function listPersistedSshPartitionHostIds(api: SessionReadApi): Promise<Ex
   }
 }
 
-/**
- * What the repo catalog says about the workspaces each SSH partition names.
- *
- * `contested` — "one workspace written twice" is false, so adoption may gap-fill but never replace.
- * Three sources, none of which is bare co-presence in 'local' and `ssh:<targetId>`; that pair IS the
- * shape the repair exists for, and reading it as a collision disables the repair:
- *  - the local/runtime rivalry the contention split already arbitrated;
- *  - two SSH partitions both naming the id, which that split never sees;
- *  - a repo id the catalog registers on more than one host.
- *
- * `foreign` — the catalog positively resolves the id to a different host. That is residue, not a
- * rival claim: adopting it would show a stale row in front of the live one and then route it into
- * the live partition. The same "positively says otherwise" rule `catalogReattributedAwayFrom` uses
- * — an id the catalog cannot speak for is neither contested nor foreign, so a boot whose repos have
- * not hydrated still reunites its rows.
- */
+/** Contested SSH adoption may gap-fill, never replace: evidence is prior local/runtime rivalry, duplicate SSH partitions, or catalog multi-host repo IDs. Mere local/ssh co-presence is the repair’s input, not collision proof. Foreign means positive catalog reattribution; unknown catalogs prove neither, so unhydrated boot still reunites rows. */
 function sshPartitionCatalogAttribution(
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[],
   sshPartitions: readonly (readonly [ExecutionHostId, WorkspaceSessionState | null])[],
   mergedContested: ReadonlySet<string>
-): {
-  contestedSessionKeys: Set<string>
-  foreignSessionKeysByHostId: Map<ExecutionHostId, Set<string>>
-} {
+) {
   const contestedSessionKeys = new Set(mergedContested)
   const foreignSessionKeysByHostId = new Map<ExecutionHostId, Set<string>>()
+  const ownedSessionKeysByHostId = new Map<ExecutionHostId, Set<string>>()
   const repoLookup = createRepoRowExecutionHostLookup(repos)
   const ownedByHostId = new Map<ExecutionHostId, Set<string>>()
   for (const [hostId, slice] of sshPartitions) {
@@ -303,10 +262,9 @@ function sshPartitionCatalogAttribution(
     }
     const foreign = new Set<string>()
     const owned = new Set<string>()
+    const catalogOwned = new Set<string>()
     for (const workspaceId of workspaceIdsNamedByPartition(slice)) {
-      // A folder key carries no repo id at all, and `getRepoIdFromWorktreeId` hands back the whole
-      // key rather than nothing, so the catalog would be asked about `folder:<uuid>` and answer
-      // `unknown`. Right verdict, wasted resolution; skip it by shape instead.
+      // Folder keys have no repo; skip resolver work that would only answer unknown for folder:<uuid>.
       const resolution = isWorktreeSessionKey(workspaceId)
         ? resolveWorktreeExecutionHost(repoLookup, {
             repoId: getRepoIdFromWorktreeId(workspaceId),
@@ -317,7 +275,9 @@ function sshPartitionCatalogAttribution(
         foreign.add(workspaceId)
         continue
       }
-      if (resolution?.kind === 'unresolved' && resolution.reason === 'ambiguous') {
+      if (resolution?.kind === 'resolved') {
+        catalogOwned.add(workspaceId)
+      } else if (resolution?.reason === 'ambiguous') {
         contestedSessionKeys.add(workspaceId)
       }
       owned.add(workspaceId)
@@ -326,17 +286,15 @@ function sshPartitionCatalogAttribution(
       foreignSessionKeysByHostId.set(hostId, foreign)
     }
     ownedByHostId.set(hostId, owned)
+    ownedSessionKeysByHostId.set(hostId, catalogOwned)
   }
-  // Why co-presence is asked only of the ids left after the catalog has spoken: one partition
-  // holding residue the catalog attributes elsewhere is a single owner plus a leftover, not a
-  // collision. Counting the leftover would withhold the real owner's rows from the write.
+  // Check co-presence after catalog attribution: foreign residue is not a rival and must not withhold the real owner’s rows.
   for (const workspaceId of sessionKeysHeldByMultiplePartitionSets([...ownedByHostId.values()])) {
     contestedSessionKeys.add(workspaceId)
   }
-  return { contestedSessionKeys, foreignSessionKeysByHostId }
+  return { contestedSessionKeys, foreignSessionKeysByHostId, ownedSessionKeysByHostId }
 }
 
-/** Ids that appear in more than one of these per-partition sets. */
 function sessionKeysHeldByMultiplePartitionSets(sets: readonly ReadonlySet<string>[]): Set<string> {
   const held = new Set<string>()
   const contested = new Set<string>()
@@ -351,17 +309,7 @@ function sessionKeysHeldByMultiplePartitionSets(sets: readonly ReadonlySet<strin
   return contested
 }
 
-/**
- * Keys this partition must not contribute: the ones the catalog gave to another host, plus a
- * contested id the assembled session holds no row for at all.
- *
- * Why the second class: a contested id is withheld from the read-source override, so the write
- * re-derives an owner — and for an id the catalog cannot name, that answer is 'local'. Adopting
- * such a row would move it out of the partition that owns it and into the blob, which is the
- * two-store split this whole change removes. Gap-filling stays available for a contested id the
- * session already has a row for, because that row's own partition is what the write follows.
- * Declining to adopt leaks a row into invisibility for one boot; it never deletes one.
- */
+/** Exclude foreign keys and contested keys absent from assembled state. Without an existing read source, write would default unknown contested rows to local and re-split storage. Existing contested rows may gap-fill because their partition is retained. One-boot invisibility is preferable to moving/deleting persisted rows. */
 function unownedSessionKeys(
   session: WorkspaceSessionState,
   contestedSessionKeys: ReadonlySet<string>,

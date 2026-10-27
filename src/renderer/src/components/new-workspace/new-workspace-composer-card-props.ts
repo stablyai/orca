@@ -1,17 +1,19 @@
+import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
+import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
   NeedsSetupProjectHostOption,
   ProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
-import type { SetupConfig } from '@/lib/new-workspace'
+import type { SetupConfig } from '../../../../shared/orca-hook-setup-config'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
-import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
-import type SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import type SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -31,12 +33,24 @@ export type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
   containerClassName?: string
   contentClassName?: string
+  selectedRepoPath?: string | null
+  onNativeFileDrop?: (paths: string[], isCurrent: () => boolean) => Promise<void>
   composerRef?: React.RefObject<HTMLDivElement | null>
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
-  onQuickAgentChange: (agent: TuiAgent | null) => void
+  agentSurfaceRows?: AgentComboboxSurfaceRows
+  onQuickAgentChange: (
+    agent: TuiAgent | null,
+    surface?: AgentComboboxSurfaceRows['surface']
+  ) => void
+  /** Where the quick agent would start; null keeps the picker's plain agent list. */
+  agentRows?: ComposerAgentRows | null
+  /** Cleared picker: skip the agent and the extra shell when setup runs. */
+  quickSetupOnly?: boolean
+  onQuickSetupOnlySelect?: () => void
   eligibleRepos: readonly RepoOption[]
+  selectedRepo?: RepoOption | null
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]
   selectedProjectId?: string | null

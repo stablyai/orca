@@ -1,29 +1,14 @@
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import type { SecretServiceCollectionState } from './linux-keyring-backend-selection'
 
-/**
- * Ask the secret service whether its default collection is unlocked, out of process.
- *
- * Why out of process and not through safeStorage: the in-process answer is exactly the
- * call that can block for 76s against a locked keyring with no unlock prompter
- * (STA-5765), and it is synchronous, so there is no way to abandon it. A child we spawn
- * can be killed on a timeout.
- *
- * Why a property read and not a password lookup: reading `Locked` never triggers an
- * unlock prompt, so the probe itself cannot become the stall it is meant to detect.
- *
- * Why gdbus: it ships with glib, which Electron already links, so it is present
- * wherever this app runs. Anything unexpected — missing tool, no name owner, no
- * default alias, timeout — reports `unavailable`, which keeps Chromium's own choice.
- */
+/** Read Locked without prompting in a killable child: synchronous safeStorage can hang 76s with no prompter (STA-5765). Missing gdbus/service/alias or timeout yields unavailable, preserving Chromium choice. */
 
 const PROBE_TIMEOUT_MS = 1_500
 /** gdbus takes seconds; keep it under our own kill so gdbus reports the error itself. */
 const DBUS_CALL_TIMEOUT_SECONDS = '1'
 
 export function probeSecretServiceCollection(): SecretServiceCollectionState {
-  // Bare program name is safe here: this path is Linux-only, where spawn does not
-  // resolve relative to the cwd the way Windows does.
+  // Linux-only PATH lookup avoids Windows cwd-based executable resolution.
   let result: { code: number | null; stdout: string; timedOut: boolean }
   try {
     result = runProcessSync({

@@ -24,8 +24,7 @@ type InstallEffects = {
   storeOpened: boolean
 }
 
-/** Stands in for `install()` by performing the effect it performs, so a probe that
- *  reinstalls the host is caught by what the install *does*, not by a call count alone. */
+/** Model installation effects so a redundant install fails even if supportsCreate still answers correctly. */
 function stubStructuredHostInstall(runtime: OrcaRuntimeService): {
   effects: InstallEffects
   ensure: ReturnType<typeof vi.fn>
@@ -54,7 +53,7 @@ type TestLocation = {
 
 type SupportResult = {
   supported: boolean
-  reason?: 'agent' | 'remote' | 'wsl'
+  reason?: 'agent' | 'remote' | 'wsl' | 'chat-program'
 }
 
 function createRuntime(location: TestLocation): OrcaRuntimeService {
@@ -115,23 +114,21 @@ describe('structured agent-session create-support probe', () => {
   )
 
   it.each([
-    ['codex', true, { supported: true }],
-    ['codex', false, { supported: false, reason: 'agent' }],
-    ['claude', true, { supported: true }],
-    ['claude', false, { supported: false, reason: 'agent' }]
+    ['codex', true],
+    ['codex', false],
+    ['claude', true],
+    ['claude', false]
   ] as const)(
-    'requires native Windows process identity proof before answering %s support (%s)',
-    async (agent, proofAvailable, expected) => {
+    'answers native Windows %s support whether or not process creation times are readable (%s)',
+    async (agent, creationTimesReadable) => {
       setPlatform('win32')
-      isWindowsProcessStartTimeAvailable.mockReturnValue(proofAvailable)
+      isWindowsProcessStartTimeAvailable.mockReturnValue(creationTimesReadable)
 
       await expectSupportWithoutInstall({
         agent,
         location: { executionHostId: 'local', wslDistro: null },
-        expected
+        expected: { supported: true }
       })
-
-      expect(isWindowsProcessStartTimeAvailable).toHaveBeenCalled()
     }
   )
 

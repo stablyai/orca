@@ -6,23 +6,24 @@ import {
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
   toRemoteRuntimeClientErrorLike
-} from '../../../../../../shared/remote-runtime-client-error-classification'
+} from '../../../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 export const UNFINISHED_WORKTREE_REMOVAL_ERROR = 'The delete did not finish. Try again.'
 
-type RemovalRow = Pick<Worktree, 'id' | 'hostId' | 'removing'>
+type RemovalRow = Pick<Worktree, 'id' | 'hostId' | 'removing' | 'removalError'>
 
 function rowHostId(row: Pick<Worktree, 'hostId'>): ExecutionHostId {
   return row.hostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
-/**
- * A delete request that failed in transport (a timeout or a dropped connection) says nothing about
- * the delete: the host may have accepted it and still be deleting. A queue overload never sent it.
- */
+/** Transport loss cannot prove delete failure; host may still be deleting. Queue overload proves dispatch never happened. */
 export function isWorktreeRemovalReplyLost(error: unknown): boolean {
   const reported = toRemoteRuntimeClientErrorLike(error)
   if (isRuntimeRpcQueueOverloadError(reported)) {
@@ -38,11 +39,7 @@ export function isWorktreeRemovalReplyLost(error: unknown): boolean {
 
 const pendingJudgements = new Set<() => void>()
 
-/**
- * Settles a delete whose reply was lost from the host's listing, as every other view does: the row
- * leaving means the delete finished, and the row listed without `removing` means it did not. When
- * the listing cannot be read either, rejects with the lost reply's error.
- */
+/** Judge lost reply from refreshed host listing: absent means finished; present non-removing means failed. Unreadable listing rejects with original reply error. */
 function waitForHostWorktreeRemoval(args: {
   hostId: ExecutionHostId | undefined
   worktreeId: string
@@ -62,13 +59,12 @@ function waitForHostWorktreeRemoval(args: {
       }
       pendingJudgements.delete(judge)
       if (row) {
-        reject(new Error(UNFINISHED_WORKTREE_REMOVAL_ERROR))
+        reject(new Error(row.removalError ?? UNFINISHED_WORKTREE_REMOVAL_ERROR))
       } else {
         resolve()
       }
     }
-    // Why judge only after a refresh: the rows held when the reply was lost can predate the host
-    // accepting the delete, and would read as a delete that never started.
+    // Refresh before judging; cached rows may predate host acceptance and falsely imply delete never started.
     const fail = (): void => reject(args.replyError)
     args.refresh().then((applied) => {
       if (!applied) {
@@ -90,8 +86,8 @@ export function settleLostWorktreeRemovalReply(
   return waitForHostWorktreeRemoval({
     ...args,
     readRows: () => [
-      ...(get().worktreesByRepo[repoId] ?? []),
-      ...(get().detectedWorktreesByRepo[repoId]?.worktrees ?? [])
+      ...(selectWorktreesByRepo(get())[repoId] ?? []),
+      ...(selectDetectedWorktreesByRepo(get())[repoId]?.worktrees ?? [])
     ],
     refresh: () =>
       args.hostId

@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react'
 import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export type NativeWebViewEngineEvent = {
   readonly nativeEvent?: object
@@ -26,12 +28,9 @@ export function useTerminalWebViewEngineErrorState(onEngineError?: (message: str
   const reportEngineError = useCallback(
     (message: string, fatal: boolean) => {
       onEngineError?.(message)
-      // eslint-disable-next-line no-console
       console.warn('[terminal-webview] engine error', message)
       if (fatal) {
-        // Why: the first fatal report is the root cause; later cascades (e.g. the
-        // web-ready watchdog firing after a process-crash report) must not
-        // overwrite its more specific diagnostics. clearEngineError resets.
+        // Keep the first fatal cause; later watchdog/cascade reports are less specific until clearEngineError resets it.
         setEngineError((previous) => previous ?? message)
       }
     },
@@ -78,6 +77,7 @@ export function TerminalWebViewEngineErrorOverlay({
   message,
   onReload
 }: TerminalWebViewEngineErrorOverlayProps) {
+  useMobileColorScheme()
   return (
     <View style={styles.errorOverlay}>
       <Text style={styles.errorTitle}>Terminal failed to load</Text>
@@ -85,21 +85,21 @@ export function TerminalWebViewEngineErrorOverlay({
         {message}
       </Text>
       <Pressable accessibilityRole="button" style={styles.reloadButton} onPress={onReload}>
-        <RefreshCw size={16} color={colors.terminalBg} />
+        <RefreshCw size={16} color={colors.bgBase} />
         <Text style={styles.reloadButtonText}>Reload</Text>
       </Pressable>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   errorOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
     padding: 24,
-    backgroundColor: colors.terminalBg
+    backgroundColor: colors.bgBase
   },
   errorTitle: {
     color: colors.textPrimary,
@@ -123,8 +123,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceBright
   },
   reloadButtonText: {
-    color: colors.terminalBg,
+    color: colors.bgBase,
     fontSize: 14,
     fontWeight: '700'
   }
-})
+}))

@@ -14,8 +14,7 @@ afterEach(async () => {
   resetProjectDirCwdCacheForTests()
 })
 
-// Copied from Pi's getDefaultSessionDirPath (coding-agent session-manager.ts)
-// rather than imported from the layout module, so the fixtures stay Pi-shaped.
+// Model Pi independently so production encoder regressions cannot alter the fixture to match.
 function piSessionDirName(cwd: string): string {
   return `--${cwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`
 }
@@ -57,7 +56,6 @@ describe('scanAiVaultSessions — Pi scope discovery', () => {
       id: 'old-in-scope',
       timestamp: '2026-05-01T10:00:00.000Z'
     })
-    // Newer, out of scope, and a sibling whose encoding shares the workspace prefix.
     await writePiSession({
       sessionsDir: roots.piSessionsDir,
       cwd: '/home/ada/other',

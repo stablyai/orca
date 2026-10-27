@@ -1,3 +1,4 @@
+import { mobileFileMedia, type MobileFileMedia } from './mobile-file-media'
 import { buildImageDataUri } from '../../../src/shared/image-data-uri'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { buildMobileDiffLines, type MobileDiffLine } from '../session/mobile-diff-lines'
@@ -9,9 +10,9 @@ import {
   type MobileFileTabDocRpcSender
 } from './mobile-file-tab-doc-operations'
 
-// The ready doc a session file tab renders. Mirrors the ready arm of the route's
-// FileDocState; kept in src so the loader stays testable without the route.
+// Keep the ready document shape outside the route so its loader stays testable without Expo.
 export type MobileFileTabDoc =
+  | { status: 'ready'; kind: 'media'; media: MobileFileMedia }
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
@@ -21,10 +22,9 @@ export type MobileFileTabDocRequest = {
   worktreeId: string
   relativePath: string
   diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
+  ignoreTrimWhitespace?: boolean
 }
 
-// Throws 'binary_file'/'file_too_large'/the RPC error message; callers map those
-// to error docs.
 export async function resolveMobileFileTabDoc(
   client: MobileFileTabDocRpcSender,
   request: MobileFileTabDocRequest
@@ -39,18 +39,22 @@ export async function resolveMobileFileTabDoc(
     })
     const result = fileTabDiffRead.interpret(reply)
     if (result.kind !== 'text') {
-      // Render image diffs (add/modify/delete) from the base64 the host already
-      // sends; only non-previewable binaries stay unavailable.
       const dataUri = mobileDiffImageDataUri(result)
       if (!dataUri) {
         throw new Error('binary_file')
       }
       return { status: 'ready', kind: 'image', dataUri }
     }
-    const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+    const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent, {
+      ignoreTrimWhitespace: request.ignoreTrimWhitespace
+    })
     return { status: 'ready', kind: 'diff', lines: diff.lines, truncated: diff.truncated }
   }
 
+  const media = mobileFileMedia(request.worktreeId, relativePath)
+  if (media) {
+    return { status: 'ready', kind: 'media', media }
+  }
   const artifactKind = classifyMobileArtifact(relativePath)
   if (artifactKind === 'image') {
     const preview = await fileTabImageRead.request(client, { worktree, relativePath })

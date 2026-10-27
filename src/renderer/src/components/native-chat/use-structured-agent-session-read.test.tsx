@@ -3,12 +3,14 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  AgentJournalSubmission,
   AgentJournalCursor,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage
+  type AgentSessionHistoryPage,
+  type AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
@@ -18,8 +20,19 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
+import { useAppStore } from '@/store'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
-import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
+import {
+  getStructuredAgentSessionReadOwner,
+  findStructuredAgentSessionReadOwner,
+  retireStructuredAgentSessionReadOwner,
+  resetStructuredAgentSessionReadOwnersForTests
+} from './structured-agent-session-read-owner'
+
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../shared/structured-agent-session-send-evidence'
+
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../../shared/structured-agent-session-coalescer'
+import type { StructuredAgentSessionAdmission } from './structured-agent-session-read-owner-contract'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -197,7 +210,6 @@ describe('useStructuredAgentSessionRead history window', () => {
       first = result.current.loadOlder()
     })
     expect(result.current.loadingOlder).toBe(true)
-    // A rail jump asking while scroll-to-top's page is in flight joins it.
     act(() => {
       second = result.current.loadOlder()
     })
@@ -337,12 +349,83 @@ describe('useStructuredAgentSessionRead history window', () => {
       cursor: view.result.current.first.state.cursor
     })
     expect(unsubscribe).toHaveBeenCalledTimes(2)
+    const owner = getStructuredAgentSessionReadOwner('session-switch-a', LOCAL_TARGET)
+    act(() => owner.resync?.())
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(4))
+    expect(unsubscribe).toHaveBeenCalledTimes(3)
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+    view.unmount()
+    owner.resync?.()
+    expect(mocks.subscribe).toHaveBeenCalledTimes(4)
+    expect(unsubscribe).toHaveBeenCalledTimes(4)
   })
 })
 
-// A workspace delete closes its structured chats while the pane is still mounted, so every read
-// against that session refuses `agent_session_ownership_unknown` until the tab retires. A page that
-// lost that race must not leave the pane holding an error the live transport is about to clear.
+describe('useStructuredAgentSessionRead currency', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+  })
+
+  it('is current only once a run has been caught up with the host', async () => {
+    const emits: ((event: AgentSessionSubscribeEvent) => void)[] = []
+    mocks.call.mockResolvedValue({
+      ok: true,
+      page: page('tail', [message('m-1', 1, 'user')], false)
+    })
+    const closes: (() => void)[] = []
+    mocks.subscribe.mockImplementation((_target, _params, onEvent, _onError, onClose) => {
+      emits.push(onEvent)
+      closes.push(onClose)
+      return Promise.resolve({ unsubscribe: vi.fn() })
+    })
+    const frame = (sequence: number, hasNewer: boolean): AgentSessionSubscribeEvent => ({
+      type: 'batch',
+      sessionId: 'session-a',
+      batch: {
+        cursor: { epoch: 'epoch-a', sequence },
+        items: [],
+        removedItemIds: [],
+        submissions: []
+      },
+      ...(hasNewer ? { hasNewer: true as const } : {})
+    })
+    const view = renderHook(
+      ({ isVisible }: { isVisible: boolean }) =>
+        useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET, isVisible }),
+      { initialProps: { isVisible: true } }
+    )
+    await waitFor(() => expect(emits).toHaveLength(1))
+    expect(view.result.current.readCurrent).toBe(false)
+
+    // A resume with nothing missed is an empty frame that changes no state.
+    act(() => emits[0]!(frame(view.result.current.state.cursor!.sequence, false)))
+    expect(view.result.current.readCurrent).toBe(true)
+
+    view.rerender({ isVisible: false })
+    expect(view.result.current.readCurrent).toBe(false)
+
+    view.rerender({ isVisible: true })
+    await waitFor(() => expect(emits).toHaveLength(2))
+    act(() => emits[1]!(frame(700, true)))
+    expect(view.result.current.readCurrent).toBe(false)
+    act(() => emits[1]!(frame(900, false)))
+    await waitFor(() => expect(view.result.current.readCurrent).toBe(true))
+
+    // A close makes retained state stale; a queued stream update must not mark it current afterward.
+    act(() => {
+      emits[1]!(frame(950, false))
+      closes[1]!()
+    })
+    expect(view.result.current.readCurrent).toBe(false)
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)))
+    expect(view.result.current.readCurrent).toBe(false)
+  })
+})
+
+// Workspace deletion briefly leaves mounted chats with unknown ownership; an older-page failure must not replace the conversation the stream is retiring.
 describe('useStructuredAgentSessionRead older page failures', () => {
   afterEach(cleanup)
 
@@ -378,7 +461,6 @@ describe('useStructuredAgentSessionRead older page failures', () => {
     return { result, outcome }
   }
 
-  // A failed older page is the list's to retry; it must never replace the loaded conversation.
   it.each([
     ['a closed session', refusal('agent_session_ownership_unknown')],
     ['any other reason', new Error('journal read failed')]
@@ -408,4 +490,182 @@ describe('useStructuredAgentSessionRead older page failures', () => {
     })
     expect(result.current.olderHistoryGeneration).toBeGreaterThan(before)
   })
+})
+
+// Keep loaded chats, including empty ones, through transport blips; show explicit host refusals or initial-load failures.
+describe('useStructuredAgentSessionRead stream failures', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  const journalRefusal = (details?: { reason: string }) => ({
+    code: 'runtime_error',
+    message: 'agent_session_journal_unreadable',
+    data: {
+      refusal: { code: 'agent_session_journal_unreadable', ...(details ? { details } : {}) }
+    }
+  })
+
+  async function loadedChatWithNoMessages() {
+    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+    expect(result.current.state.status).toBe('ready')
+    return { result, onError: mocks.subscribe.mock.calls[0]?.[3] }
+  }
+
+  it('leaves a loaded chat as it was when the connection drops', async () => {
+    const { result, onError } = await loadedChatWithNoMessages()
+    act(() => onError?.({ code: 'runtime_error', message: 'connection lost' }))
+    expect(result.current.state.status).toBe('ready')
+    expect(result.current.state.error).toBeUndefined()
+    expect(result.current.state.readRefusal).toBeUndefined()
+  })
+
+  // Unknown host refusal reasons are still authoritative answers.
+  it.each([
+    ['with its reason', { reason: 'journalUnavailable' }],
+    ['without a reason', undefined]
+  ])('still reports a refusal the host sent on a loaded chat, %s', async (_case, details) => {
+    const { result, onError } = await loadedChatWithNoMessages()
+    act(() => onError?.(journalRefusal(details)))
+    expect(result.current.state.status).toBe('error')
+    expect(result.current.state.readRefusal).toEqual({
+      code: 'agent_session_journal_unreadable',
+      ...(details ? { details } : {})
+    })
+  })
+
+  it('still reports a failure that names nothing before the chat first loads', async () => {
+    mocks.call.mockRejectedValueOnce(new Error('journal read failed'))
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    expect(result.current.state.error).toBe('journal read failed')
+    expect(result.current.state.epoch).toBeNull()
+  })
+  it('retains the action-only owner continuously across replacement and retirement', async () => {
+    const owner = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    const a = Promise.withResolvers<void>()
+    const first = vi.fn<(attempt: StructuredAgentSessionAdmission) => Promise<void>>(
+      () => a.promise
+    )
+    const pending = owner.admit('A', () => true, first)
+    const next = vi.fn<(attempt: StructuredAgentSessionAdmission) => Promise<void>>(
+      () => new Promise<void>(() => {})
+    )
+    const successor = owner.admit('B', () => true, next)
+    await pending
+    expect(first.mock.calls[0][0].signal.aborted).toBe(true)
+    expect(getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)).toBe(owner)
+    expect(owner.admit('B', () => true, next)).toBe(successor)
+    a.resolve()
+    await Promise.resolve()
+    expect(next.mock.calls[0][0].current()).toBe(true)
+    retireStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    await successor
+    expect(next.mock.calls[0][0].current()).toBe(false)
+    expect(findStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)).toBeUndefined()
+  })
+  it.each([100, 1000])(
+    'reconciles %i rows only on relevant evidence, not activity frames',
+    async (n) => {
+      vi.useFakeTimers()
+      const owner = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+      let visits = 0
+      const submissions: AgentJournalSubmission[] = Array.from({ length: n }, (_, i) => ({
+        get reason() {
+          visits += 1
+          return null
+        },
+        clientMessageId: `old-${i}`,
+        fence: 1,
+        payloadFingerprint: 'send',
+        dispatchState: 'accepted',
+        providerItemId: null,
+        submittedAt: i,
+        resolvedAt: i
+      }))
+      const receipt = owner.trackSend('receipt')
+      receipt.issue()
+      owner.publishCreated({ ...page('tail', [], false), submissions })
+      receipt.settle(false)
+      expect(findStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)).toBe(owner)
+      const stop = owner.activate({
+        getState: useAppStore.getState,
+        subscribeRetryNow: () => () => {}
+      })
+      const send = owner.trackSend('unknown')
+      send.issue()
+      send.settle(true)
+      const emit: (event: AgentSessionSubscribeEvent) => void = mocks.subscribe.mock.calls[0][2]
+      const batch = {
+        cursor: { epoch: 'epoch-a', sequence: 501 },
+        items: [],
+        removedItemIds: [],
+        submissions: []
+      }
+      expect(visits).toBeGreaterThanOrEqual(n)
+      visits = 0
+      for (let i = 0; i < 10; i += 1) {
+        emit({
+          type: 'batch',
+          sessionId: 'session-a',
+          batch,
+          activity: { turnId: 't', text: `progress-${i}` }
+        })
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      }
+      expect(visits).toBe(0)
+      expect(owner.getSnapshot().state.activity?.text).toBe('progress-9')
+      const busy = (): boolean => {
+        let result = false
+        void owner.admit(
+          'check',
+          () => true,
+          (attempt) => {
+            result = attempt.busy()
+          }
+        )
+        return result
+      }
+      const row = {
+        ...submissions[0],
+        clientMessageId: 'handoff',
+        queuedMessageId: 'unknown',
+        submittedAt: n,
+        resolvedAt: n
+      }
+      for (const reason of [STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING, null]) {
+        emit({
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: { ...batch, submissions: [{ ...row, reason }] }
+        })
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+        expect(busy()).toBe(reason !== null)
+        await Promise.resolve()
+      }
+      owner.trackSend('handoff').issue()
+      expect(busy()).toBe(false)
+      await Promise.resolve()
+      visits = 0
+      emit({ type: 'batch', sessionId: 'session-a', batch })
+      await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      expect(visits).toBe(0)
+      stop()
+      owner.dispose()
+      emit({ type: 'batch', sessionId: 'session-a', batch })
+      await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      expect(visits).toBe(0)
+      vi.useRealTimers()
+    }
+  )
 })

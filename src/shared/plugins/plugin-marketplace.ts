@@ -11,11 +11,8 @@ export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
 export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
 export const OFFICIAL_MARKETPLACE_REPOSITORY = 'orca-plugins'
 
-// Why: theme/icon/skill contributions were deferred, so `contributes` now
-// rejects them and any plugin declaring one fails to install wholesale. The
-// shared marketplace index (which this build does not control) still advertises
-// such packs; hide listings that carry these categories so users never hit a
-// dead "install" path until the marketplace catches up.
+// Hide unsupported contribution categories still advertised by the externally maintained index; otherwise their manifests
+// fail wholesale and present a dead install path until the marketplace catches up.
 export const UNSUPPORTED_MARKETPLACE_CATEGORIES: readonly string[] = [
   'themes',
   'icons',
@@ -48,55 +45,67 @@ export const pluginMarketplaceGitSourceSchema = z.strictObject({
     .min(1)
     .max(32 * 1024)
     .refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
-  // Why: marketplace installs must first resolve a named ref to an exact
-  // commit; an omitted remote default would make the listing irreproducible.
+  // Require a named ref before resolving the exact commit; unspecified remote defaults are not reproducible listings.
   ref: z.string().trim().min(1).max(4_096)
 })
 
-export const pluginMarketplaceEntrySchema = z
-  .strictObject({
-    /** Canonical `<publisher>.<id>` identity expected in the source manifest. */
-    id: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
-    source: pluginMarketplaceGitSourceSchema,
-    description: z.string().min(1).max(4_096).optional(),
-    categories: z
-      .array(marketplaceCategorySchema)
-      .max(PLUGIN_MARKETPLACE_CATEGORY_LIMIT)
-      .default([])
-  })
-  .superRefine((entry, context) => {
-    const seen = new Set<string>()
-    for (const [index, category] of entry.categories.entries()) {
-      if (seen.has(category)) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['categories', index],
-          message: `duplicate category: ${category}`
-        })
-      }
-      seen.add(category)
+const marketplaceEntryFields = {
+  /** Canonical `<publisher>.<id>` identity expected in the source manifest. */
+  id: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
+  source: pluginMarketplaceGitSourceSchema,
+  description: z.string().min(1).max(4_096).optional(),
+  categories: z.array(marketplaceCategorySchema).max(PLUGIN_MARKETPLACE_CATEGORY_LIMIT).default([])
+}
+
+function rejectDuplicateCategories(
+  entry: { categories: string[] },
+  context: z.RefinementCtx
+): void {
+  const seen = new Set<string>()
+  for (const [index, category] of entry.categories.entries()) {
+    if (seen.has(category)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['categories', index],
+        message: `duplicate category: ${category}`
+      })
     }
-  })
+    seen.add(category)
+  }
+}
+
+function rejectDuplicatePluginIds(
+  marketplace: { plugins: { id: string }[] },
+  context: z.RefinementCtx
+): void {
+  const seen = new Set<string>()
+  for (const [index, plugin] of marketplace.plugins.entries()) {
+    if (seen.has(plugin.id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['plugins', index, 'id'],
+        message: `duplicate plugin id: ${plugin.id}`
+      })
+    }
+    seen.add(plugin.id)
+  }
+}
+
+export const pluginMarketplaceEntrySchema = z
+  .strictObject(marketplaceEntryFields)
+  .superRefine(rejectDuplicateCategories)
+
+const marketplaceHeaderFields = {
+  name: z.string().min(1).max(256),
+  owner: marketplaceOwnerSchema
+}
 
 export const pluginMarketplaceSchema = z
   .strictObject({
-    name: z.string().min(1).max(256),
-    owner: marketplaceOwnerSchema,
+    ...marketplaceHeaderFields,
     plugins: z.array(pluginMarketplaceEntrySchema).max(PLUGIN_MARKETPLACE_ENTRY_LIMIT)
   })
-  .superRefine((marketplace, context) => {
-    const seen = new Set<string>()
-    for (const [index, plugin] of marketplace.plugins.entries()) {
-      if (seen.has(plugin.id)) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['plugins', index, 'id'],
-          message: `duplicate plugin id: ${plugin.id}`
-        })
-      }
-      seen.add(plugin.id)
-    }
-  })
+  .superRefine(rejectDuplicatePluginIds)
 
 /** Host-derived trust metadata. Marketplace JSON cannot self-award either bit. */
 export const pluginMarketplaceTrustMetadataSchema = z

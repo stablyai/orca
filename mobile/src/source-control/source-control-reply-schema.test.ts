@@ -14,13 +14,9 @@ import {
 import { gitStatusHostPayloadSchema, gitStatusProjectionSchema } from './git-status-reply-schema'
 import { hostedReviewEligibilitySchema } from './hosted-review-reply-schema'
 
-// Four properties of these schemas that no consumer trace predicts and the reply-matrix goldens
-// found. Each one cost a golden; each one is a way a schema silently breaks a working screen.
-
 describe('source-control reply schemas', () => {
   it('decodes a reply from a host that sends members this client does not declare', () => {
-    // The whole point of not using `.strict()`. Under it the top-level member rejects the reply
-    // and the entry member drops the row, which empties a dirty worktree's Changes list.
+    // Strict schemas would reject new host fields or silently drop dirty rows.
     const fromNewerHost = {
       entries: [
         { path: 'src/app.ts', status: 'modified', area: 'staged', submoduleRoot: 'vendor/x' }
@@ -37,7 +33,7 @@ describe('source-control reply schemas', () => {
   })
 
   it('keeps a commit whose timestamp the host sent as null', () => {
-    // `z.number().optional()` drops the row instead, because null is neither.
+    // Number-or-absent would drop null timestamps.
     const parsed = gitHistoryResultSchema.safeParse({
       items: [{ id: 'a'.repeat(40), parentIds: [], subject: '', timestamp: null }]
     })
@@ -45,7 +41,6 @@ describe('source-control reply schemas', () => {
   })
 
   it('passes an eligibility token through that the shared union does not list', () => {
-    // The host publishes `reviewLookupOutcome: 'none'`, which HostedReviewLookupOutcome omits.
     const parsed = hostedReviewEligibilitySchema.safeParse({
       provider: 'gitlab',
       reviewLookupOutcome: 'none'
@@ -54,8 +49,7 @@ describe('source-control reply schemas', () => {
   })
 
   it('writes every projected member out, absent ones included', () => {
-    // The projection is built by hand upstream of this schema's consumers, so an absent member is
-    // a present `undefined`. zod's own optional-key omission would change what the goldens record.
+    // Projection preserves keys as undefined; optional-key omission would change the established shape.
     const projected = gitStatusProjectionSchema.parse({
       entries: [{ path: 'src/app.ts', status: 'modified', area: 'staged' }]
     })
@@ -75,7 +69,9 @@ describe('source-control reply schemas', () => {
       'oldPath',
       'path',
       'removed',
-      'status'
+      'status',
+      'submodule',
+      'submoduleRoot'
     ])
   })
 
@@ -91,9 +87,7 @@ describe('source-control reply schemas', () => {
   })
 })
 
-// One per open enum: the arm set is a wire surface, so an arm this build does not know degrades to
-// a member its readers already handle. The three probed values are the ones a reviewer sent against
-// the closed version, where each refused a reply every declared reader could have rendered.
+// Unknown routing enums must degrade to values readers already handle, preserving renderable replies.
 
 const STATUS_ENTRY = { path: 'src/app.ts', status: 'modified', area: 'staged' }
 
@@ -171,8 +165,7 @@ describe('an enum arm this build does not know', () => {
   })
 
   it('passes a hosted-review provider through instead of degrading it', () => {
-    // Not an openEnum: this member is sent back on create, so a fallback would rewrite the bytes
-    // rather than soften a reading.
+    // Provider round-trips; enum fallback would rewrite the host’s token.
     const parsed = hostedReviewEligibilitySchema.safeParse({ provider: 'codeberg' })
     expect(parsed.data?.provider).toBe('codeberg')
     expect(hostedReviewEligibilitySchema.safeParse({}).success).toBe(false)
@@ -180,8 +173,7 @@ describe('an enum arm this build does not know', () => {
   })
 
   it('keeps a row whose staging area it does not know, in no section', () => {
-    // Absent, not an arm: every arm offers stage, unstage or commit against a row this build
-    // cannot place. Keeping the row is what leaves it visible to the unresolved-conflict gate.
+    // Unknown area withholds actions but keeps the row in conflict gating.
     const parsed = gitStatusHostPayloadSchema.safeParse({
       entries: [{ ...STATUS_ENTRY, area: 'stashed', conflictStatus: 'unresolved' }]
     })
@@ -189,15 +181,14 @@ describe('an enum arm this build does not know', () => {
     expect(entries).toHaveLength(1)
     expect(entries[0]?.area).toBeUndefined()
     expect(entries.some((entry) => entry.conflictStatus === 'unresolved')).toBe(true)
-    expect(buildMobileSourceControlSections(entries)).toHaveLength(0)
+    expect(buildMobileSourceControlSections(entries, 'changes-first')).toHaveLength(0)
     expect(isMobileGitStageableEntry(entries[0] ?? STATUS_ENTRY)).toBe(false)
     expect(countStagedEntries(entries)).toBe(0)
     expect(countUnstagedEntries(entries)).toBe(0)
   })
 
   it('reads an explicit null entries list as an empty compare', () => {
-    // The consumer guard is `branchCompareResult?.entries ?? []`, so a host that sends null must
-    // reach it rather than fail the whole compare — the `timestamp: null` precedent.
+    // Explicit null entries must reach the consumer’s empty-list fallback.
     const parsed = gitBranchCompareResultSchema.safeParse({
       summary: { baseRef: 'origin/main', changedFiles: 0, status: 'ready' },
       entries: null

@@ -4,10 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
-// Why: the READMEs embed media from trees other jobs own (docs-site public media,
-// generated feature-wall tiles), and the docs-only classifier skips the whole CI
-// matrix for one of them. GitHub renders only committed files, so this checks the
-// git index rather than the working tree.
+// Docs-only CI skips some media owners; check index paths because GitHub cannot render uncommitted docs-site/feature-wall assets.
 const TRANSLATED_README_DIR = path.join('docs', 'readme')
 const EXTERNAL_TARGET = /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i
 const HTML_ATTRIBUTE = /\b(?:src|srcset|href)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
@@ -21,8 +18,7 @@ function readmeFiles(root) {
   return ['README.md', ...translated]
 }
 
-// Why only the referenced paths: a full `git ls-files` of this repo overflows the
-// default child buffer; asking about a few dozen pathspecs stays bounded.
+// Bound ls-files to referenced pathspecs; full-tree output overflows the child buffer.
 function trackedFiles(root, candidates) {
   if (candidates.length === 0) {
     return new Set()
@@ -37,7 +33,7 @@ function trackedFiles(root, candidates) {
 
 function* localTargets(markdown) {
   for (const match of markdown.matchAll(HTML_ATTRIBUTE)) {
-    // Why: srcset is a candidate list ("a.gif 1x, b.gif 2x"); each entry starts with a URL.
+    // srcset lists candidates; each begins with its URL.
     for (const candidate of (match[1] ?? match[2]).split(',')) {
       const target = candidate.trim().split(/\s+/)[0]
       if (target) {

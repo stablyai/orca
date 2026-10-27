@@ -15,15 +15,7 @@ import {
 } from '../../../../shared/plugins/plugin-panel-message-budget'
 import { translate } from '@/i18n/i18n'
 
-/**
- * Host side of the plugin panel postMessage bridge. Framework-free so
- * message validation, budgets, and relay behavior are directly
- * unit-testable; PluginPanel wires the returned listener to `window` while
- * the panel iframe is mounted.
- *
- * Main issues an opaque session while loading the mounted panel. The guest
- * never sees or supplies plugin identity, and main binds the session again.
- */
+/** Main binds opaque panel sessions; guests never supply plugin identity. PluginPanel mounts this framework-free postMessage listener. */
 
 export type PanelActionCall = {
   sessionToken: string
@@ -46,8 +38,7 @@ export type PanelBridgeHostOptions = {
   now?: () => number
 }
 
-/** Relays a bridge call through the preload API, degrading to a bridge-level
- *  error when the preload predates the plugins.panelAction surface. */
+/** Return a bridge error when older preloads lack plugins.panelAction. */
 export function callPanelActionViaPreload(
   call: PanelActionCall
 ): Promise<PluginPanelActionOutcome> {
@@ -73,9 +64,7 @@ export function createPanelBridgeMessageHandler(
   const now = options.now ?? (() => Date.now())
   return (event: MessageEvent): void => {
     const panelWindow = options.getPanelWindow()
-    // Why: the sandboxed srcdoc frame has an opaque origin ("null"), so the
-    // sending window's identity — not event.origin — is the only trustworthy
-    // check that this message came from our panel and not another frame.
+    // Sandboxed srcdoc has null origin; validate the sending Window identity instead of event.origin.
     if (!panelWindow || event.source !== panelWindow) {
       return
     }
@@ -84,34 +73,26 @@ export function createPanelBridgeMessageHandler(
       if (options.isActive?.() === false || options.getPanelWindow() !== requestingWindow) {
         return
       }
-      // Why: targetOrigin must be '*' — an opaque origin never matches a
-      // concrete origin, so anything stricter would silently drop the reply.
+      // Opaque origins require targetOrigin=*; concrete origins would silently drop replies.
       requestingWindow.postMessage(message, '*')
     }
-    // A valid pong is the one frame the host must never lose: it takes a
-    // reserved lane so a panel saturating its data budget can still prove it
-    // is alive. Only schema-valid pongs qualify, so near-miss pong-shaped junk
-    // cannot drain the lane the real reply needs — it falls through to the
-    // data budget below like any other malformed frame.
+    // Reserve liveness for schema-valid pongs so saturated data traffic or malformed near-pongs cannot silence the watchdog.
     const pongId = readPanelPongId(event.data)
     if (pongId !== null) {
       const timestamp = now()
-      // One walk, capped at the smaller lane bound, serves both budgets: a
-      // pong above that cap is refused here anyway.
+      // One size walk at the smaller lane cap serves both budgets; larger pongs are refused.
       const pongBytes = structuredCloneMessageBytes(
         event.data,
         controlBudget.maxBytes ?? PANEL_CONTROL_MESSAGE_MAX_BYTES
       )
-      // Charged to both: the data budget still meters this traffic, while a
-      // refusal there cannot by itself silence liveness.
+      // Meter data traffic too, but data refusal alone must not silence liveness.
       budget.admit(timestamp, pongBytes)
       if (!controlBudget.admit(timestamp, pongBytes)) {
         options.onPong?.(pongId)
       }
       return
     }
-    // Budgets run before parsing: a flood of malformed junk must not buy
-    // free schema-validation CPU either.
+    // Budget before schema parsing so malformed floods cannot consume unmetered validation CPU.
     const refusal = budget.admit(now(), structuredCloneMessageBytes(event.data, budget.maxBytes))
     if (refusal) {
       const requestId =

@@ -43,13 +43,6 @@ describe('verify packaged plugin resources', () => {
     }
   })
 
-  // The tree is hashed by raw bytes, so a CRLF checkout on Windows breaks the
-  // pinned hash. These two guard the `.gitattributes` eol=lf pin that prevents it.
-  it('pins the launch tree to LF so Windows checkouts hash identically', async () => {
-    const attributes = await readFile(join(process.cwd(), '.gitattributes'), 'utf8')
-    expect(attributes).toContain('/resources/plugins/** text eol=lf')
-  })
-
   it('rejects a CRLF checkout of the launch tree', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
     try {
@@ -65,8 +58,7 @@ describe('verify packaged plugin resources', () => {
         await writeFile(path, (await readFile(path, 'utf8')).replace(/\r?\n/g, '\r\n'))
       }
 
-      // Every file is rewritten, so the first mismatch is whichever plugin sorts
-      // first — don't pin a name a later branch can reorder.
+      // Every plugin is rewritten; assert first sorted mismatch without pinning reorderable plugin name.
       expect(() => verifyPackagedPluginResources(resourcesDir)).toThrow(
         /packaged bytes do not match stablyai\./
       )

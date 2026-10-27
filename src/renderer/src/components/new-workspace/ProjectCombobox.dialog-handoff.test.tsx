@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import ProjectCombobox from './ProjectCombobox'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 vi.mock('./use-recent-project-ids', () => ({ useRecentProjectIds: () => [] }))
 
@@ -101,7 +102,13 @@ describe.each([false, true])(
     it.each(['mouse', 'keyboard'] as const)(
       'removes the selector before the creation dialog is active via %s',
       async (input) => {
-        await act(async () => root.render(<Composer populated={populated} />))
+        await act(async () =>
+          root.render(
+            <TooltipProvider>
+              <Composer populated={populated} />
+            </TooltipProvider>
+          )
+        )
         await act(async () => projectField().click())
         expect(document.querySelector('[role="listbox"]')).not.toBeNull()
 

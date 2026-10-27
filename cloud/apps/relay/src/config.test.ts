@@ -41,6 +41,17 @@ describe('GCE relay capacity configuration', () => {
     }
   })
 
+  it('defaults reserve rehome on reconnect off and bounds its percent', () => {
+    const env = cellEnvironment(4_000)
+    expect(loadRelayConfig(env).reserveRehomePercent).toBe(0)
+    env.ORCA_RELAY_RESERVE_REHOME_PERCENT = '10'
+    expect(loadRelayConfig(env).reserveRehomePercent).toBe(10)
+    for (const invalid of ['-1', '101', '1.5', 'not-a-number']) {
+      env.ORCA_RELAY_RESERVE_REHOME_PERCENT = invalid
+      expect(() => loadRelayConfig(env)).toThrow()
+    }
+  })
+
   it('defaults readiness grace to fifteen minutes for JWKS and three for SQL', () => {
     const env = cellEnvironment(4_000)
     expect(loadRelayConfig(env)).toMatchObject({

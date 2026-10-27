@@ -5,6 +5,7 @@ describe('gitCommandTimeoutMs', () => {
   it.each([
     [['status', '--porcelain=v2'], 120_000],
     [['show', 'HEAD:file'], 120_000],
+    [['diff-tree', '--root', '-r', 'HEAD'], 120_000],
     [['fetch', 'origin'], undefined],
     [['checkout', 'main'], undefined],
     [['unknown'], undefined]
@@ -15,10 +16,6 @@ describe('gitCommandTimeoutMs', () => {
   it('preserves every explicit timeout', () => {
     expect(gitCommandTimeoutMs(['status'], 7)).toBe(7)
     expect(gitCommandTimeoutMs(['fetch'], 7)).toBe(7)
-  })
-
-  it('provides a deterministic read-timeout seam', () => {
-    expect(gitCommandTimeoutMs(['status'], undefined, 25)).toBe(25)
   })
 })
 

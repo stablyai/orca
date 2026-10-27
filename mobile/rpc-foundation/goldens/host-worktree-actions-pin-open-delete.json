@@ -100,29 +100,7 @@
       "ordinal": 8,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
     },
-    "6e959a9dd70e": {
-      "confirmRemoveHost": false,
-      "lastKnownWorktrees": [],
-      "optimisticActiveWorktreeIdentity": "|wt-1",
-      "pinnedIds": ["wt-1"],
-      "routeActionState": {},
-      "worktrees": []
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "989153283864": {
-      "name": "worktrees",
-      "ordinal": 9,
-      "value": []
-    },
-    "9a2d39ba928f": {
-      "name": "worktree.set#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}"
-    },
-    "9a9b0d6699b2": {
+    "71653dfadc9c": {
       "confirmRemoveHost": false,
       "lastKnownWorktrees": [
         {
@@ -146,7 +124,10 @@
         "$rpc": "null"
       },
       "pinnedIds": ["wt-1"],
-      "routeActionState": {},
+      "serverWorkspaces": {
+        "hosts": [],
+        "worktrees": []
+      },
       "worktrees": [
         {
           "branch": "feature/pin",
@@ -165,6 +146,20 @@
           "worktreeId": "wt-1"
         }
       ]
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "989153283864": {
+      "name": "worktrees",
+      "ordinal": 9,
+      "value": []
+    },
+    "9a2d39ba928f": {
+      "name": "worktree.set#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:wt-1\",\"isPinned\":true}}"
     },
     "ab935dad4cfb": {
       "name": "worktree.set#1",
@@ -214,6 +209,17 @@
           "worktreeId": "wt-1"
         }
       ]
+    },
+    "d5cd618d0458": {
+      "confirmRemoveHost": false,
+      "lastKnownWorktrees": [],
+      "optimisticActiveWorktreeIdentity": "|wt-1",
+      "pinnedIds": ["wt-1"],
+      "serverWorkspaces": {
+        "hosts": [],
+        "worktrees": []
+      },
+      "worktrees": []
     },
     "da6c9e1a507d": {
       "name": "lastKnownWorktrees",
@@ -320,7 +326,7 @@
             "mount": "eb79a9b3682a",
             "toggle-pin": "eb79a9b3682a"
           },
-          "state": "9a9b0d6699b2",
+          "state": "71653dfadc9c",
           "effects": ["ca91c555e48e", "da6c9e1a507d", "14ce9f03298e"]
         }
       },
@@ -335,7 +341,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6e959a9dd70e",
+          "state": "d5cd618d0458",
           "effects": [
             "ca91c555e48e",
             "da6c9e1a507d",
@@ -357,7 +363,7 @@
             "open-session": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6e959a9dd70e",
+          "state": "d5cd618d0458",
           "effects": [
             "ca91c555e48e",
             "da6c9e1a507d",

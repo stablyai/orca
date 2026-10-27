@@ -27,6 +27,8 @@ export type ClaudePendingPrompt = ClaudePromptPresentation & {
   suggestions: PermissionUpdate[]
   questionIds: readonly string[]
   settle: ClaudePromptSettle
+  /** The subagent the provider says asked; absent when the session's own agent did. */
+  agentId?: string
 }
 
 export type ClaudePromptRegistration = ClaudePromptPresentation & {
@@ -36,6 +38,7 @@ export type ClaudePromptRegistration = ClaudePromptPresentation & {
   input: Record<string, unknown>
   suggestions: PermissionUpdate[]
   settle: ClaudePromptSettle
+  agentId?: string
 }
 
 export type ClaudePromptClaim = {
@@ -66,7 +69,6 @@ function questionId(question: Record<string, unknown>, index: number): string {
 /** Session-local callback ownership; none of this state is reconstructed from the transcript. */
 export class ClaudePromptRegistry {
   private readonly prompts = new Map<string, ClaudePendingPrompt>()
-  /** Journal item id to the prompt key it shows. */
   private readonly journalBindings = new Map<string, string>()
   private readonly claims = new Map<ClaudePendingPrompt, ClaudePromptClaim>()
 
@@ -74,6 +76,7 @@ export class ClaudePromptRegistry {
     const toolUseId = readClaudePromptString(registration.toolUseId)
     const toolName = readClaudePromptString(registration.toolName)
     const input = isClaudePromptRecord(registration.input) ? registration.input : null
+    const agentId = readClaudePromptString(registration.agentId)
     if (!toolUseId || !toolName || !input) {
       return null
     }
@@ -94,13 +97,19 @@ export class ClaudePromptRegistry {
       ...(registration.matchedAskRule ? { matchedAskRule: registration.matchedAskRule } : {}),
       ...(registration.subject ? { subject: registration.subject } : {}),
       questionIds: questions.map(questionId),
-      settle: registration.settle
+      settle: registration.settle,
+      ...(agentId ? { agentId } : {})
     }
     this.prompts.set(prompt.promptKey, prompt)
     return prompt
   }
 
-  /** True only if the prompt was still pending; lets abort and answer settle once. */
+  awaitsAnswer(promptKey: string): boolean {
+    const prompt = this.prompts.get(promptKey)
+    return prompt !== undefined && !this.claims.has(prompt)
+  }
+
+  /** Prevent abort and answer from settling the same pending request twice. */
   forgetIfPending(prompt: ClaudePendingPrompt): boolean {
     if (!this.prompts.has(prompt.promptKey)) {
       return false

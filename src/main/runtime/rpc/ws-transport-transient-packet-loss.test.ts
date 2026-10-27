@@ -1,18 +1,8 @@
-// Real ws server + real ws client over loopback: a live, well-behaved peer whose pong is swallowed by
-// a transient blackhole must not be terminated (STA-3320).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
 
 const PROBE_INTERVAL_MS = 150
-
-// Why: the heartbeat calls now() exactly once per sweep, so a per-call step makes elapsed exactly one
-// interval every sweep — real scheduler jitter can never be mistaken for a suspended loop, and no
-// assertion in this file depends on wall time.
-function createStepClock(stepMs: number): () => number {
-  let calls = 0
-  return () => 1_000_000 + calls++ * stepMs
-}
 
 describe('WebSocketTransport under transient packet loss', () => {
   const transports: WebSocketTransport[] = []
@@ -26,15 +16,16 @@ describe('WebSocketTransport under transient packet loss', () => {
     sockets.length = 0
     await Promise.all(transports.map((t) => t.stop().catch(() => {})))
     transports.length = 0
+    vi.useRealTimers()
   })
 
-  async function startTransport(): Promise<WebSocketTransport> {
+  async function startTransport(now: () => number): Promise<WebSocketTransport> {
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
       port: 0,
       heartbeatIntervalMs: PROBE_INTERVAL_MS,
-      heartbeatNow: createStepClock(PROBE_INTERVAL_MS),
-      // Why: this test is about liveness, not the auth handshake; keep the pre-auth reaper out of it.
+      heartbeatNow: now,
+      // Keep pre-auth expiry outside this liveness test.
       preAuthTimeoutMs: 600_000
     })
     transports.push(transport)
@@ -43,16 +34,25 @@ describe('WebSocketTransport under transient packet loss', () => {
   }
 
   it('keeps a live client whose pong is swallowed for a single probe', async () => {
-    const transport = await startTransport()
-    // autoPong:false hands us the protocol-level pong so we can drop exactly one, the way a
-    // cellular/Tailscale blackhole drops exactly the frames in flight during the stall.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let now = 1_000_000
+    const transport = await startTransport(() => now)
+    const accepted = new Promise<WebSocket>((resolve) => {
+      transport.onMessage((_message, _reply, ws) => {
+        transport.setClientId(ws, 'test-client')
+        resolve(ws)
+      })
+    })
+    // Disable autoPong to drop exactly one protocol reply.
     const client = new WebSocket(`ws://127.0.0.1:${transport.resolvedPort}`, { autoPong: false })
     sockets.push(client)
 
     let probesReceived = 0
     const pongedProbes: number[] = []
     const swallowedProbe = 2
-    let closed = false
+    const closed = new Promise<'closed'>((resolve) => {
+      client.once('close', () => resolve('closed'))
+    })
     client.on('ping', () => {
       probesReceived += 1
       if (probesReceived === swallowedProbe) {
@@ -61,28 +61,26 @@ describe('WebSocketTransport under transient packet loss', () => {
       pongedProbes.push(probesReceived)
       client.pong()
     })
-    client.on('close', () => {
-      closed = true
-    })
     await new Promise<void>((resolve, reject) => {
       client.once('open', resolve)
       client.once('error', reject)
     })
-    // Heartbeats intentionally begin after authentication; stamp this synthetic peer as authenticated
-    // so the liveness oracle exercises the production heartbeat path rather than pre-auth expiry.
-    const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
-    for (const serverSocket of wss.clients) {
-      transport.setClientId(serverSocket, 'test-client')
+    client.send('test-peer')
+    const server = await accepted
+
+    for (let probe = 1; probe <= swallowedProbe + 2; probe += 1) {
+      const ping = new Promise<'ping'>((resolve) => client.once('ping', () => resolve('ping')))
+      const pong =
+        probe === swallowedProbe
+          ? undefined
+          : new Promise<void>((resolve) => server.once('pong', () => resolve()))
+      now += PROBE_INTERVAL_MS
+      await vi.advanceTimersByTimeAsync(PROBE_INTERVAL_MS)
+      expect(await Promise.race([ping, closed])).toBe('ping')
+      await pong
     }
 
-    // Bounded by counted probe events, never by elapsed time.
-    await vi.waitFor(() => expect(closed || probesReceived >= swallowedProbe + 2).toBe(true), {
-      timeout: 15_000,
-      interval: 10
-    })
-
-    expect({ closed, probesReceived }).toEqual({ closed: false, probesReceived: 4 })
-    // The peer was demonstrably alive across the blackhole: it answered the probes on both sides of it.
+    expect(probesReceived).toBe(4)
     expect(pongedProbes).toEqual([1, 3, 4])
     expect(client.readyState).toBe(WebSocket.OPEN)
   })

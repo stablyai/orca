@@ -63,45 +63,42 @@ export class CodexResetCreditCoordinator {
     if (this.ledger.error) {
       return Promise.reject(this.ledger.error)
     }
-    const scopeKey = resetScopeKey(expectedScope)
-    const accountScopeKey = resetAccountScopeKey(expectedScope)
-    const existing = this.ledger.get(idempotencyKey)
-    if (existing) {
-      if (existing.scopeKey !== scopeKey) {
-        return Promise.reject(new Error('That idempotency key belongs to a different reset scope.'))
-      }
-      if (existing.state === 'settled' && existing.settledOutcome) {
-        return this.dependencies.serializeMutation(async () => {
-          const { rateLimits } = this.validateScope(expectedScope, { kind: 'settledReplay' })
-          return {
-            outcome: existing.settledOutcome!,
-            scope: existing.expectedScope,
-            codex: this.dependencies.getSnapshot(),
-            rateLimits
-          }
-        })
-      }
-      if (existing.promise) {
-        return existing.promise as Promise<CodexResetCreditConsumeResult>
-      }
-      return this.startAttempt(idempotencyKey, expectedScope, existing)
-    }
-
-    const unresolvedKey = this.ledger.getUnresolvedKey(accountScopeKey)
-    if (unresolvedKey && unresolvedKey !== idempotencyKey) {
-      return Promise.reject(
-        new Error('A previous reset attempt for this account still has an unknown outcome.')
+    // Reuse unresolved account attempts even when provider refresh changes the offer revision.
+    const found = this.ledger.findAttemptFor(
+      idempotencyKey,
+      resetScopeKey(expectedScope),
+      resetAccountScopeKey(expectedScope)
+    )
+    if (!found) {
+      return this.startAttempt(
+        idempotencyKey,
+        expectedScope,
+        this.ledger.createFresh(idempotencyKey, expectedScope)
       )
     }
-    const claimedKey = this.ledger.getClaimedKey(scopeKey)
-    if (claimedKey && claimedKey !== idempotencyKey) {
-      return Promise.reject(new Error('That reset-credit offer was already attempted.'))
+    const { idempotencyKey: attemptKey, attempt: existing } = found
+    if (attemptKey === idempotencyKey && existing.scopeKey !== resetScopeKey(expectedScope)) {
+      return Promise.reject(new Error('That idempotency key belongs to a different reset scope.'))
     }
-    return this.startAttempt(
-      idempotencyKey,
-      expectedScope,
-      this.ledger.createFresh(idempotencyKey, expectedScope)
-    )
+    if (existing.state === 'settled' && existing.settledOutcome) {
+      const outcome = existing.settledOutcome
+      return this.dependencies.serializeMutation(async () => {
+        const { rateLimits } = this.validateScope(existing.expectedScope, {
+          kind: 'settledReplay'
+        })
+        return {
+          outcome,
+          scope: existing.expectedScope,
+          codex: this.dependencies.getSnapshot(),
+          rateLimits
+        }
+      })
+    }
+    if (existing.promise) {
+      return existing.promise as Promise<CodexResetCreditConsumeResult>
+    }
+    // Keep the original key and scope so the provider sees one operation.
+    return this.startAttempt(attemptKey, existing.expectedScope, existing)
   }
 
   async consumeCurrent(): Promise<CodexRateLimitResetResult> {
@@ -131,8 +128,7 @@ export class CodexResetCreditCoordinator {
       if (!expectedScope) {
         throw new Error('The managed Codex reset-credit offer is no longer available.')
       }
-      // Why: do not enter the mutation queue first; the coordinator owns that
-      // queue and nested serialization would deadlock behind this operation.
+      // consume owns the mutation queue; entering it here first would deadlock.
       const result = await this.consume(
         pendingAttempt?.idempotencyKey ?? randomUUID(),
         expectedScope
@@ -158,8 +154,7 @@ export class CodexResetCreditCoordinator {
         throw new Error('A previous reset attempt for this target still has an unknown outcome.')
       }
       const homeResolution = this.dependencies.runtimeHome.prepareForRateLimitFetch(target)
-      // Why: reject before the provider mutation — a skip must never be spent
-      // against the system-default home (#STA-4422).
+      // A skipped home cannot authorize spending a credit against system default (#STA-4422).
       if (homeResolution.kind === 'skip') {
         throw new ManagedCodexHomeTemporarilyUnavailableError()
       }
@@ -215,8 +210,7 @@ export class CodexResetCreditCoordinator {
             target: expectedScope.target,
             codexHomePath: validation.managedHomePath
           })
-        // Why: queued account selection may start as soon as this mutation resolves;
-        // capture both account selection and usage before releasing the queue.
+        // Capture selection and usage before releasing the queue to the next account mutation.
         const result: CodexResetCreditConsumedResult = {
           outcome,
           scope: expectedScope,

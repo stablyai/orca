@@ -1,7 +1,4 @@
-// One structured Codex session driven over `agentSession.*`, with nothing stubbed but the Codex
-// child: the RPC dispatcher, schemas, record store, journal, lease, Codex adapter and translation
-// are the ones that ship. The fake app-server answers the JSON-RPC calls the real one does, and a
-// test pushes notifications, blocking requests and the child's exit back through its handlers.
+// Drive shipped RPC/schemas/stores/lease/adapter with fake Codex JSON-RPC; tests inject notifications, blocking requests and exit through its handlers.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,9 +6,9 @@ import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { refuseUnroutedSteer } from '../codex/codex-structured-dispatch-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import {
@@ -29,13 +26,13 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 export const SESSION = 'session-integration-1'
 export const THREAD = 'thread-integration'
 export const TURN = 'turn-1'
 const WORKSPACE = 'workspace-1'
-// Without the pending-send capability the host holds the reply until the send settles, which is a
-// shim for clients too old to render a pending bubble — not what these suites model.
+// Older clients without pending-send support wait for settlement; these suites model pending bubbles.
 const DEFAULT_CLIENT_CAPABILITIES: readonly RuntimeCapability[] = [
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -176,22 +173,26 @@ export type StructuredCodexRpcHarness = {
     fence: number | null
   ) => { sessionId: string; clientOperationId: string; expectedRuntimeFence: number | null }
   createIntentParams: () => Record<string, unknown>
-  /** Runs a one-shot method and returns its decoded reply. */
   call: (method: string, params: unknown) => Promise<RpcResponse>
-  /** Asserts success and unwraps the host's `{ok:true, value}` mutation result. */
   ok: <T>(method: string, params: unknown) => Promise<T>
   dispose: () => Promise<void>
 }
 
 export async function openStructuredCodexRpcHarness(
-  clientCapabilities: readonly RuntimeCapability[] = DEFAULT_CLIENT_CAPABILITIES
+  clientCapabilities: readonly RuntimeCapability[] = DEFAULT_CLIENT_CAPABILITIES,
+  /** What the transport stamps, as a paired device's authenticated socket does. */
+  transport: { clientId?: string; pairedDeviceId?: string } = {}
 ): Promise<StructuredCodexRpcHarness> {
-  const client = { clientId: 'device-a', clientKind: 'runtime' as const, clientCapabilities }
+  const client = {
+    clientId: 'device-a',
+    clientKind: 'runtime' as const,
+    clientCapabilities,
+    ...transport
+  }
   let operations = 0
   const root = await mkdtemp(join(tmpdir(), 'orca-structured-integration-'))
   const codex = fakeCodex()
-  // `<13-digit ms>-<32 hex>`, the only shape the durable ledger accepts. Real time, not a frozen
-  // constant: the runtime under test stamps the ledger with its own clock and refuses a future id.
+  // Use ledger-shaped ids with its clock; future-dated ids are refused.
   const operationId = (): string => {
     operations += 1
     return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
@@ -213,20 +214,22 @@ export async function openStructuredCodexRpcHarness(
     claimKeyId: 'key-1',
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
     resolveCodexCommand: () => '/usr/local/bin/codex',
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({
       PATH: '/shell/bin:/usr/bin',
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
       CODEX_HOME: '/shell/home'
     }),
-    resolveCodexOverrides: () => ({ CODEX_PROFILE: 'configured' }),
-    openCodexConnection: codex.openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000
+    resolveAgentLaunchEnv: (agent): Record<string, string> =>
+      agent === 'codex' ? { CODEX_PROFILE: 'configured' } : {},
+    ...scriptedCodexTransport(codex.openConnection)
   })
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
+    structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {
         envelope: _envelope,

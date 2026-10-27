@@ -37,14 +37,20 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-// Fields that can name a party: the caller in ORCHESTRATION_CALLER_PARAM, a target in ORCHESTRATION_TARGET_PARAM.
-const PARTY_NAMING_FIELDS = ['to', 'from', 'terminal', 'callerTerminalHandle', 'sessionId'] as const
-// `method field` pairs with such a field that is neither, so never resolves as a party.
+// Caller and target params are named by ORCHESTRATION_CALLER_PARAM and ORCHESTRATION_TARGET_PARAM.
+const PARTY_NAMING_FIELDS = [
+  'to',
+  'from',
+  'terminal',
+  'callerTerminalHandle',
+  'sessionId',
+  'address'
+] as const
+// These identity-adjacent fields must never resolve as parties.
 const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.run from': 'retired; refused before any handler',
   'orchestration.runShow from': 'reads a Run by id; `from` is unused',
   'orchestration.dispatchShow from': '`from` only fills the preview preamble text',
-  'orchestration.workerStart terminal': 'adopts an existing PTY pane, which a session never has',
   'orchestration.federationAttachStart terminal': 'names the remote worker terminal',
   'orchestration.workerTerminalUserInput terminal': 'names the worker terminal',
   'orchestration.workerTerminalUserInput sessionId':
@@ -95,9 +101,9 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 43 registered methods carrying 27 party-naming fields.
-    expect(registry.size).toBe(43)
-    expect(partyNaming).toHaveLength(27)
+    // The population: 44 registered methods carrying 28 party-naming fields.
+    expect(registry.size).toBe(44)
+    expect(partyNaming).toHaveLength(28)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(
@@ -149,8 +155,7 @@ describe('orchestration session callers at the dispatch entry', () => {
         })
       )
 
-      // Whatever the method answers, it answered as the session: no host-boundary or session refusal,
-      // and terminal evidence on the same request never attested anyone.
+      // Replies must use session identity without host/session refusal; terminal evidence on the same request must never attest.
       if (!response.ok) {
         expect(Object.values(CODES)).not.toContain(response.error.code)
         expect(response.error.message).not.toContain('term_other')
@@ -272,9 +277,43 @@ describe('orchestration session callers at the dispatch entry', () => {
       await expectRefusedWithNoEffects(PROVIDER_ID_X, CODES.providerId, /changes on \/clear/)
     })
 
-    it('a released lease', async () => {
+    it('a released lease reading its mail, while its background commands still send as it', async () => {
       h.records.set(SESSION_X, sessionRecord(SESSION_X, { lease: { claimStatus: 'released' } }))
-      await expectRefusedWithNoEffects(SESSION_X, CODES.notLive, /is not running right now/)
+      const { messageId } = seedPendingMail()
+      for (const [method, params] of [
+        ['orchestration.check', {}],
+        ['orchestration.check', { wait: true, timeoutMs: 1 }],
+        ['orchestration.check', { peek: true }],
+        ['orchestration.ask', { question: 'q', to: 'term_worker', timeoutMs: 1 }]
+      ] as const) {
+        const response = await h.dispatch(
+          orchestrationRequest(method, params, { sessionId: SESSION_X })
+        )
+        expect(response, method).toMatchObject({
+          ok: false,
+          error: { code: CODES.notLive, message: expect.stringMatching(/is not running right now/) }
+        })
+      }
+      expect(h.db.getMessageById(messageId)).toMatchObject({ read: 0 })
+
+      const sent = await h.dispatch(
+        orchestrationRequest(
+          'orchestration.send',
+          { to: ADDRESS_X, subject: 'wake' },
+          { sessionId: SESSION_X }
+        )
+      )
+      expect(h.db.getMessageById(idOf(resultOf(sent).message))).toMatchObject({
+        from_handle: ADDRESS_X
+      })
+    })
+
+    it('a released lease the host has not reconciled since restart', async () => {
+      h.records.set(
+        SESSION_X,
+        sessionRecord(SESSION_X, { lease: { claimStatus: 'released', unreconciled: true } })
+      )
+      await expectRefusedWithNoEffects(SESSION_X, CODES.notLive, /no live owner/)
     })
 
     it('a lease mid owner change', async () => {

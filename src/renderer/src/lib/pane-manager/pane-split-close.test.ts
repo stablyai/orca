@@ -156,7 +156,10 @@ describe('splitManagedPane', () => {
     expect(result?.id).toBe(newPane.id)
     expect(setActivePaneId).toHaveBeenCalledWith(newPane.id)
     expect(newPane.terminal.focus).toHaveBeenCalledOnce()
-    expect(publishPaneCreated).toHaveBeenCalledWith(newPane, { cwdPromise })
+    expect(publishPaneCreated).toHaveBeenCalledWith(newPane, {
+      cwdPromise,
+      placement: { kind: 'split', parentLeafId: existingPane.leafId, direction: 'vertical' }
+    })
   })
 
   it('prepares every pane under a moved mounted subtree for split reparenting', () => {
@@ -213,7 +216,7 @@ describe('splitManagedPane', () => {
       newPane.container,
       true,
       expect.anything(),
-      undefined
+      { ratio: undefined, newPaneFirst: undefined }
     )
     expect(scheduleSplitScrollRestore).toHaveBeenCalledTimes(2)
     expect(scheduleSplitScrollRestore).toHaveBeenNthCalledWith(

@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-/**
- * Agents present on the machine the install targets, or null while that cannot
- * be answered — a paired runtime environment is probed by its own host, not
- * from here, so the picker must not claim its agents are missing.
- */
+/** Report target-host agents, or null when unknown; remote detection must not infer absence from client-local probes. */
 export function useSkillInstallDetectedAgents(target: {
   environmentId: string
   wslDistro?: string | null

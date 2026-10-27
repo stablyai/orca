@@ -38,7 +38,12 @@ export default function GitHubItemDialog({
   const issueAttachedWorkspace = useMemo(
     () =>
       workItem?.type === 'issue'
-        ? findGithubIssueWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        ? findGithubIssueWorkspaceAttachment(
+            allWorktrees,
+            effectiveRepoId,
+            workItem.number,
+            workItem.url
+          )
         : null,
     [allWorktrees, effectiveRepoId, workItem]
   )
@@ -51,7 +56,8 @@ export default function GitHubItemDialog({
       const currentAttached = findGithubIssueWorkspaceAttachment(
         useAppStore.getState().allWorktrees(),
         effectiveRepoId,
-        item.number
+        item.number,
+        item.url
       )
       if (!currentAttached) {
         onUse(item)
@@ -248,7 +254,6 @@ export default function GitHubItemDialog({
   ) : null
 
   return (
-    // Why: rendered inline (not a Radix dialog), so e2e needs a stable hook to scope assertions to this detail surface.
     <div
       data-testid="github-item-detail"
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm"

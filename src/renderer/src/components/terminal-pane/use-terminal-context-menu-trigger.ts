@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { TerminalPasteSource } from './terminal-paste-coordinator'
+import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { TerminalPasteSource } from './terminal-paste-model'
 import { copyTerminalSelection } from './terminal-selection-copy'
-
-const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import {
+  claimTerminalRightClickPasteMouseDown,
+  isTerminalRightClickPasteGesture
+} from './terminal-right-click-paste-gesture'
 
 type UseTerminalContextMenuTriggerDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -21,6 +24,7 @@ type TerminalContextMenuTrigger = {
   point: { x: number; y: number }
   menuOpenedAtRef: React.RefObject<number>
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
+  onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
 }
 
@@ -64,8 +68,7 @@ export function useTerminalContextMenuTrigger({
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: when users opt into terminal-style right-click, a selection copies
-    // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
+    // Configured right-click copies selection or pastes; Ctrl+right-click preserves menu access.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       if (!clickedPane) {
@@ -77,7 +80,7 @@ export function useTerminalContextMenuTrigger({
           writeClipboardText: window.api.ui.writeTerminalClipboardText,
           clearSelectionOnSuccess: true
         }).catch(() => {
-          /* ignore clipboard write failures */
+          // Failed copy leaves selection available for retry.
         })
       } else {
         void pasteResolvedPane('right-click')
@@ -91,21 +94,32 @@ export function useTerminalContextMenuTrigger({
     setOpen(true)
   }
 
-  const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
+  const findClickedPane = (target: EventTarget | null): ManagedPane | null => {
     const manager = managerRef.current
-    if (!manager) {
-      event.preventDefault()
-      contextPaneIdRef.current = null
+    if (!manager || !(target instanceof Node)) {
+      return null
+    }
+    return manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
+  }
+
+  const onMouseDownCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (!isTerminalRightClickPasteGesture(event, rightClickToPaste)) {
       return
     }
+    const clickedPane = findClickedPane(event.target)
+    if (clickedPane) {
+      claimTerminalRightClickPasteMouseDown(event, clickedPane.terminal)
+    }
+  }
+
+  const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
     const target = event.target
-    if (!(target instanceof Node)) {
+    if (!managerRef.current || !(target instanceof Node)) {
       event.preventDefault()
       contextPaneIdRef.current = null
       return
     }
-    const clickedPane = manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
-    openContextMenu(event, clickedPane?.id ?? null, event.currentTarget)
+    openContextMenu(event, findClickedPane(target)?.id ?? null, event.currentTarget)
   }
 
   const onPaneTitleContextMenu = (event: React.MouseEvent<HTMLElement>, paneId: number): void => {
@@ -117,5 +131,13 @@ export function useTerminalContextMenuTrigger({
     openContextMenu(event, paneId, boundsElement)
   }
 
-  return { open, setOpen, point, menuOpenedAtRef, onContextMenuCapture, onPaneTitleContextMenu }
+  return {
+    open,
+    setOpen,
+    point,
+    menuOpenedAtRef,
+    onContextMenuCapture,
+    onMouseDownCapture,
+    onPaneTitleContextMenu
+  }
 }

@@ -1,17 +1,19 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { SetupSplitDirection } from '../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
+import type { PendingWorktreeCreation } from './pending-worktree-creation'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
+  pendingWorktreeCreations?: Record<string, PendingWorktreeCreation>
   closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   createTab: (
@@ -24,6 +26,18 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       recordInteraction?: boolean
       viewMode?: Tab['viewMode']
       activate?: boolean
+      pendingStartup?: {
+        command: string
+        env?: Record<string, string>
+        launchConfig?: SleepingAgentLaunchConfig
+        resumeProviderSession?: AgentProviderSessionMetadata
+        launchToken?: string
+        launchAgent?: TuiAgent
+        draftPrompt?: string
+        initialAgentStatus?: { agent: TuiAgent; prompt: string }
+        showSessionRestoredBanner?: boolean
+        telemetry?: AgentStartedTelemetry
+      }
     }
   ) => { id: string }
   setActiveTab: (tabId: string) => void
@@ -35,49 +49,28 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   setTabColor: (tabId: string, color: string | null) => void
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
   reconcileWorktreeTabModel: (worktreeId: string) => { renderableTabCount: number }
-  queueTabStartupCommand: (
-    tabId: string,
-    startup: {
-      command: string
-      env?: Record<string, string>
-      launchConfig?: SleepingAgentLaunchConfig
-      resumeProviderSession?: AgentProviderSessionMetadata
-      launchToken?: string
-      launchAgent?: TuiAgent
-      draftPrompt?: string
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
-      showSessionRestoredBanner?: boolean
-      telemetry?: AgentStartedTelemetry
-    }
-  ) => void
-  queueTabSetupSplit: (
-    tabId: string,
-    startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }
-  ) => void
   queueTabIssueCommandSplit: (
     tabId: string,
     startup: { command: string; env?: Record<string, string> }
   ) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
-  settings?: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
+  settings?: Pick<GlobalSettings, 'experimentalNativeChat'> | null
 }
 
 export type InitialTerminalOptions = {
+  /** Only the creation owner may seed a plain surface before its pending entry is cleared. */
+  worktreeCreationId?: string
   activateCreatedTabs?: boolean
   backendStartupTerminalSpawned?: boolean
   /** Create a preserved fallback startup beside setup/default terminals. */
   createNewTerminalForStartup?: boolean
-  /** Why: an explicit empty terminal row is a "user closed the last tab" tombstone. Startup
-   *  hydration honours it through Terminal.tsx's passive auto-create (which never calls this
-   *  function), but opening the workspace on purpose (sidebar, palette, automation "Resume
-   *  workspace", wake) has to hand back a usable surface. Activation sets this unless the
-   *  caller says it provides its own surface; background worktree creation leaves it unset. */
+  /** Explicit empty rows preserve last-close tombstones during passive startup. Deliberate activation may request a usable surface unless the caller supplies its own; background creation leaves this unset. */
   reseedEmptiedWorkspace?: boolean
-  /** Set by callers that open their own primary surface (a structured native chat session).
-   *  Setup/issue work still runs, but work that needs no host terminal must not seed a shell
-   *  beside the chat the caller is about to create. */
+  // Native-chat callers provide their own primary surface; setup/issue work still runs without seeding an extra shell.
   callerProvidesSurface?: boolean
   /** The user deliberately opened this workspace with no surface choice, so it may open their
    *  default agent chat instead of a bare shell. */
   seedUserDefaultSurface?: boolean
+  /** The host a create targeted: a same-path twin on another host cannot make the owner ambiguous. */
+  executionHostId?: ExecutionHostId
 }

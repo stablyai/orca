@@ -119,7 +119,7 @@ describe('worktree create preparation registry', () => {
   it('claims across the local/remote spelling of the same base and reports the retarget', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
 
-    // `main` has no local ref here, so the canonical forms differ and only the base family matches.
+    // Different canonical refs leave only the branch-family retarget path.
     await expect(
       consumePreparedWorktreeCreate({
         repoPath: repo.path,
@@ -131,10 +131,13 @@ describe('worktree create preparation registry', () => {
     ).resolves.toEqual({
       status: 'hit',
       retargeted: true,
+      reset: 'none',
+      buildMs: expect.any(Number),
+      idleMs: expect.any(Number),
+      origin: 'prefetch',
       result: {},
       rearm: expect.any(Function)
     })
-    // Finalize still receives the requested base, so it resets onto the requested commit.
     expect(mocks.finalize).toHaveBeenCalledWith(
       repo.path,
       expect.any(String),
@@ -162,14 +165,12 @@ describe('worktree create preparation registry', () => {
       })
     ).resolves.toEqual({ status: 'miss', reason: 'retarget_too_divergent' })
     expect(mocks.finalize).not.toHaveBeenCalled()
-    // The preparation is left armed for the base it actually holds.
     expect(mocks.discard).not.toHaveBeenCalled()
   })
 
   it('separates a drift check that said no from one that could not answer', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    // A timed-out or aborted walk skipped a retarget that may well have been cheap; that is a
-    // tuning signal, not the bound working as intended, so it must not report as excess drift.
+    // Unverifiable drift must not be reported as measured excess divergence.
     mocks.measureDivergence.mockResolvedValue('unknown')
 
     await expect(
@@ -213,6 +214,10 @@ describe('worktree create preparation registry', () => {
     ).resolves.toEqual({
       status: 'hit',
       retargeted: false,
+      reset: 'none',
+      buildMs: expect.any(Number),
+      idleMs: expect.any(Number),
+      origin: 'prefetch',
       result: {},
       rearm: expect.any(Function)
     })
@@ -221,8 +226,7 @@ describe('worktree create preparation registry', () => {
   it('never hands the same prepared checkout to two concurrent creates', async () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
 
-    // `main` needs the ref probe, so the claim has to await mid-flight — the window where a
-    // second create could otherwise walk away with the same preparation.
+    // The ref probe yields during claim, allowing a second create to race it.
     const [first, second] = await Promise.all([
       consumePreparedWorktreeCreate({
         repoPath: repo.path,
@@ -284,13 +288,10 @@ describe('worktree create preparation registry', () => {
   it("evicts a repo's own stale preparation before another repo's", async () => {
     const otherRepo = { id: 'repo-2', path: '/other-repo' } as Repo
     await prepareWorktreeCreateForRepo(store, otherRepo, 'origin/main')
-    // Fill the pool from one repo, as flipping the composer's base picker does, until the next
-    // arm has to evict something.
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     await prepareWorktreeCreateForRepo(store, repo, 'origin/release')
     await prepareWorktreeCreateForRepo(store, repo, 'main')
 
-    // The eviction must cost `repo` a slot, not `otherRepo` its warm checkout.
     await expect(
       consumePreparedWorktreeCreate({
         repoPath: otherRepo.path,
@@ -499,7 +500,6 @@ describe('worktree create preparation registry', () => {
     expect(mocks.discard).not.toHaveBeenCalled()
   })
 
-  /** Mirrors a real create: consume, then run the deferred re-arm once the create has returned. */
   async function consumeOnce(name: string): Promise<void> {
     const attempt = await consumePreparedWorktreeCreate({
       repoPath: repo.path,
@@ -517,7 +517,6 @@ describe('worktree create preparation registry', () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     await consumeOnce('only')
 
-    // Why: a lone create would otherwise leave a full spare checkout on disk for the whole TTL.
     expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
   })
 
@@ -531,7 +530,6 @@ describe('worktree create preparation registry', () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
 
     expect(mocks.prepareCheckout).toHaveBeenCalledTimes(3)
-    // The replacement is claimable, so a third create still skips the cold add.
     await expect(
       consumePreparedWorktreeCreate({
         repoPath: repo.path,
@@ -543,6 +541,10 @@ describe('worktree create preparation registry', () => {
     ).resolves.toEqual({
       status: 'hit',
       retargeted: false,
+      reset: 'none',
+      buildMs: expect.any(Number),
+      idleMs: expect.any(Number),
+      origin: 'rearm_then_prefetch',
       result: {},
       rearm: expect.any(Function)
     })
@@ -563,10 +565,8 @@ describe('worktree create preparation registry', () => {
       baseBranch: 'origin/main'
     })
 
-    // Drained first: an eager re-arm reaches prepareCheckout only after the pool awaits stale
-    // cleanup, so asserting in the same turn would pass with the deferral removed.
+    // Drain first; an eager re-arm also awaits cleanup and would otherwise evade this assertion.
     await flushBackgroundWork()
-    // The replacement checkout would otherwise hold a git admission slot for the rest of the create.
     expect(mocks.prepareCheckout).not.toHaveBeenCalled()
     expect(attempt.status).toBe('hit')
     if (attempt.status === 'hit') {
@@ -590,7 +590,6 @@ describe('worktree create preparation registry', () => {
     })
     expect(attempt.status).toBe('hit')
 
-    // The user reopens the composer while the create is still finishing.
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     expect(mocks.prepareCheckout).toHaveBeenCalledTimes(2)
     mocks.prepareCheckout.mockClear()
@@ -623,13 +622,11 @@ describe('worktree create preparation registry', () => {
       })
     )
     const arming = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    // Anchor on the scan actually starting, not on a fixed number of microtasks: an await added
-    // ahead of it would otherwise make this pass vacuously rather than fail.
+    // Wait for the scan to start so an earlier await cannot make this pass without testing the gate.
     while (mocks.listWorktreeGraph.mock.calls.length === 0) {
       await Promise.resolve()
     }
 
-    // Why: the idle gate must not start repo maintenance while crash recovery is mid-scan.
     expect(hasPendingWorktreeCreatePreparations()).toBe(true)
 
     releaseListing()

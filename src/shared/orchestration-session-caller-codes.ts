@@ -9,7 +9,5 @@ export const ORCHESTRATION_SESSION_CALLER_ERROR_CODES = {
   /** The session exists but has no live owner here: released, switching owners, or unreconciled. */
   notLive: 'session_caller_not_live',
   /** A request with no session id named a chat's address as its caller. */
-  chatNotDeclarable: 'session_caller_chat_not_declarable',
-  /** A Dispatch named a chat as its assignee, which a chat cannot be yet. */
-  chatNotDispatchable: 'session_chat_not_dispatchable'
+  chatNotDeclarable: 'session_caller_chat_not_declarable'
 } as const

@@ -1,21 +1,18 @@
-// Which of a set of markers are still offers, read off the host's own live journals.
-//
-// A different question from storage: the durable record decides which markers are still present;
-// this decides which of those a resume may act on. The offer, the click and the pre-send check all
-// ask it, and all get the same answer.
+// Recheck stored offers against live journals and the same launch support used by startup.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import { latestStructuredAgentSessionPrompt } from '../../../shared/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { hostCanStartRecord } from './structured-agent-session-provider-support'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import {
   structuredAgentSessionResumableSet,
   type StructuredAgentSessionResumableSet
 } from './structured-agent-session-restart-resume-set'
 
-/** The only part of a live session this reads. */
 export type StructuredAgentSessionRestartJournalSource = { journal: AgentSessionJournal }
 
 export type StructuredAgentSessionRestartCandidateReader = (
@@ -24,23 +21,56 @@ export type StructuredAgentSessionRestartCandidateReader = (
 ) => StructuredAgentSessionResumableSet
 
 export function createStructuredAgentSessionRestartCandidateReader(deps: {
-  /** The host's live session map; a marker's chat is readable once listing has revealed it. */
+  /** Listing reveals marker chats before these map reads. */
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartJournalSource>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
-  /** Whether the chat moved on since the offer was taken; see the offer withdrawal. */
+  agents: Pick<StructuredAgentRegistry, 'definition'>
   movedOn: (marker: AgentSessionResumeMarker) => boolean
+  savedByNewerOrca: (sessionId: string) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
   return (markers, leaseState) =>
     structuredAgentSessionResumableSet({
       markers,
       getRecord: deps.getRecord,
-      supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
+      supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
+      savedByNewerOrca: deps.savedByNewerOrca,
       latestPrompt: (sessionId) =>
         latestStructuredAgentSessionPrompt(
           deps.sessions.get(sessionId)?.journal.snapshot().items ?? []
         ),
       leaseState
     })
+}
+
+/** Listing skips newer chats; pre-send must retain them so refused sends preserve their offers. */
+export function createStructuredAgentSessionRestartCandidateReaders(
+  deps: Parameters<typeof createStructuredAgentSessionRestartCandidateReader>[0]
+): {
+  derive: StructuredAgentSessionRestartCandidateReader
+  deriveAtSend: StructuredAgentSessionRestartCandidateReader
+} {
+  return {
+    derive: createStructuredAgentSessionRestartCandidateReader(deps),
+    deriveAtSend: createStructuredAgentSessionRestartCandidateReader({
+      ...deps,
+      savedByNewerOrca: () => false
+    })
+  }
+}
+
+/** Transient newer-chat flags, re-derived by reveal; listing must never spend their offers. */
+export function createNewerOrcaChats(databaseIsNewer: () => boolean) {
+  const chats = new Set<string>()
+  return {
+    has: (sessionId: string): boolean => databaseIsNewer() || chats.has(sessionId),
+    note: (sessionId: string, revealed: { openRefusal?: AgentSessionWireRefusal } | null): void => {
+      if (revealed?.openRefusal?.details?.reason === 'journalWrittenByNewerOrca') {
+        chats.add(sessionId)
+      } else {
+        chats.delete(sessionId)
+      }
+    }
+  }
 }

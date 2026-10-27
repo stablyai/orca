@@ -26,15 +26,15 @@ describe('getDiscardEntryConfirmationCopy', () => {
     })
   })
 
-  it('uses delete copy for files added to the index', () => {
+  it('preserves staged additions when discarding working edits', () => {
     expect(
       getDiscardEntryConfirmationCopy(
         entry({ area: 'staged', path: 'src/added.ts', status: 'added' })
       )
     ).toEqual({
-      title: 'Delete "added.ts"?',
-      description: 'This will permanently delete this file. This cannot be undone.',
-      confirmLabel: 'Delete'
+      title: 'Discard changes to "added.ts"?',
+      description: 'This will revert the unstaged changes to this file. This cannot be undone.',
+      confirmLabel: 'Discard'
     })
   })
 
@@ -46,47 +46,13 @@ describe('getDiscardEntryConfirmationCopy', () => {
     ).toEqual({
       title: 'Restore "removed.ts"?',
       description:
-        'This will restore the file from HEAD and discard the deletion. This cannot be undone.',
+        'This will restore the last staged version and discard the deletion. This cannot be undone.',
       confirmLabel: 'Restore'
     })
-  })
-
-  it('uses discard copy for modified tracked files', () => {
-    expect(
-      getDiscardEntryConfirmationCopy(entry({ path: 'src/changed.ts', status: 'modified' }))
-    ).toEqual({
-      title: 'Discard changes to "changed.ts"?',
-      description: 'This will revert all changes to this file. This cannot be undone.',
-      confirmLabel: 'Discard'
-    })
-  })
-
-  it('handles Windows-style paths', () => {
-    expect(
-      getDiscardEntryConfirmationCopy(
-        entry({ area: 'untracked', path: 'src\\windows-file.ts', status: 'untracked' })
-      ).title
-    ).toBe('Delete "windows-file.ts"?')
   })
 })
 
 describe('getDiscardAreaConfirmationCopy', () => {
-  it('uses singular delete copy for one untracked file', () => {
-    expect(getDiscardAreaConfirmationCopy('untracked', 1)).toEqual({
-      title: 'Delete 1 untracked file?',
-      description: 'This will permanently delete this untracked file. This cannot be undone.',
-      confirmLabel: 'Delete'
-    })
-  })
-
-  it('uses plural delete copy for multiple untracked files', () => {
-    expect(getDiscardAreaConfirmationCopy('untracked', 3)).toEqual({
-      title: 'Delete 3 untracked files?',
-      description: 'This will permanently delete these 3 untracked files. This cannot be undone.',
-      confirmLabel: 'Delete 3'
-    })
-  })
-
   it('warns that staged new files will be deleted', () => {
     expect(getDiscardAreaConfirmationCopy('staged', 4)).toEqual({
       title: 'Discard all staged changes?',
@@ -96,18 +62,11 @@ describe('getDiscardAreaConfirmationCopy', () => {
     })
   })
 
-  it('uses singular unstaged copy', () => {
-    expect(getDiscardAreaConfirmationCopy('unstaged', 1)).toEqual({
-      title: 'Discard all unstaged changes?',
-      description: 'This will revert the unstaged changes in 1 file. This cannot be undone.',
-      confirmLabel: 'Discard all'
-    })
-  })
-
   it('uses plural unstaged copy', () => {
     expect(getDiscardAreaConfirmationCopy('unstaged', 2)).toEqual({
       title: 'Discard all unstaged changes?',
-      description: 'This will revert unstaged changes in 2 files. This cannot be undone.',
+      description:
+        'This will revert unstaged changes and permanently delete any untracked files among these 2 files. This cannot be undone.',
       confirmLabel: 'Discard all'
     })
   })

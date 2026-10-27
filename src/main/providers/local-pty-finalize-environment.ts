@@ -27,7 +27,7 @@ import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import { getShellLaunchConfig } from './local-pty-shell-ready'
 import { finalizeWindowsLocalPtySpawnEnvironment } from './local-pty-windows-spawn-environment'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 export function finalizeLocalPtySpawnEnvironment(args: {
   spawn: PtySpawnOptions
@@ -53,15 +53,15 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     env,
     requestedEnv ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)] : undefined
   )
-  // Why: raw requested PATH promotion runs after the host-env scrub.
+  // Requested PATH is promoted after the host scrub, so strip legacy shims again.
   stripLegacyTerminalShimEnv(env, process.platform)
-  // Why after every deletion pass: an envToDelete of CONDA_PREFIX must not leave the sentinel behind.
+  // envToDelete can remove CONDA_PREFIX after scrubbing; drop its now-incoherent sentinel.
   dropIncoherentCondaActivationEnv(env, process.platform)
 
-  // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
+  // Scope history per workspace to avoid sharing a global shell history.
   const worktreeId = spawn.worktreeId
   const historyEnabled = worktreeId && (getOptions().isHistoryEnabled?.() ?? true)
-  // Effective shell for history injection: WSL's outer exe is wsl.exe but the inner login shell is bash.
+  // WSL launches wsl.exe outside, but history targets the inner bash shell.
   const isWslTerminal =
     Boolean(plan.wslInfo || plan.worktreeWslContext || plan.preferredWslContext) ||
     pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
@@ -77,21 +77,16 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     }
     logHistoryInjection(worktreeId, historyResult)
   } else {
-    // Why: injectHistoryEnv is what normally clears it, so when history is off
-    // an inherited ORCA_HISTFILE would still reach the wrapper. Credit: #11146.
+    // History-off bypasses injectHistoryEnv, so clear inherited Orca history explicitly (#11146).
     delete env.ORCA_HISTFILE
-    // Same for an exported `fish_history` from the fish pane that launched this
-    // Orca: history off means fish's own default, not another worktree's file.
+    // Exported fish_history must not select the launching workspace history when isolation is off.
     dropInheritedOrcaFishHistory(env)
-    // And for an exported HISTFILE: history off means the shell's own default,
-    // not the history file of the worktree this Orca was launched from.
+    // Exported HISTFILE must not select the launching workspace history when isolation is off.
     dropInheritedOrcaHistFile(env)
   }
 
   if (!plan.wslInfo && process.platform !== 'win32') {
-    // Why after history injection: the wrapper is what repairs a worktree
-    // HISTFILE that the system zshrc clobbers, so the decision to wrap has to
-    // see whether this spawn actually injected one.
+    // Wrap after history injection so zsh can repair HISTFILE clobbered by system zshrc.
     const isCodexStartupCommand = plan.startupAgentRecognition?.agent === 'codex'
     const codexStartupCommand = isCodexStartupCommand ? spawn.command : undefined
     const codexRequiresShellReady =
@@ -100,11 +95,10 @@ export function finalizeLocalPtySpawnEnvironment(args: {
         command: codexStartupCommand,
         startupCommandDelivery: spawn.startupCommandDelivery
       })
-    // Why delete: ORCA_SHELL_FEATURES is Orca-owned, and only the launch
-    // config below may name features for this shell.
+    // Only this shell launch config may choose Orca-owned features.
     delete env.ORCA_SHELL_FEATURES
     delete env[POSIX_SHELL_STARTUP_COMMAND_ENV]
-    // Why captured now: the launch env below prefixes XDG_DATA_DIRS.
+    // Capture before launch config prefixes XDG_DATA_DIRS.
     const fishLaunch = {
       inheritedXdgDataDirs: env.XDG_DATA_DIRS,
       shellArgs: plan.shellArgs
@@ -114,9 +108,7 @@ export function finalizeLocalPtySpawnEnvironment(args: {
         codexStartupCommand !== undefined && supportsPosixShellStartupCommand(shell)
           ? codexStartupCommand
           : undefined
-      // Why no line-editor widening here (unlike the daemon and relay): a Codex
-      // startup command this provider wraps is run by the wrapper's own prompt
-      // hook, never written into the PTY, so there is no early write to double-echo.
+      // Wrapped Codex runs from the prompt hook; no PTY command write needs line-editor double-echo protection.
       const waitsForShellReady =
         Boolean(spawn.command) && (!isCodexStartupCommand || codexRequiresShellReady)
       return getShellLaunchConfig(
@@ -126,8 +118,7 @@ export function finalizeLocalPtySpawnEnvironment(args: {
           env,
           hasStartupCommand: Boolean(spawn.command),
           waitsForShellReady,
-          // Why identical: the identity marker exists so the readiness
-          // handshake can bind output to the right shell PID.
+          // Readiness must bind output to the shell PID through its identity marker.
           emitsStartupIdentity: waitsForShellReady
         }),
         wrapperStartupCommand,

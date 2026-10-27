@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import {
   hasPendingTerminalImeComposition,
   installTerminalImeCompositionRoute,
@@ -146,8 +146,7 @@ describe('installTerminalImeCompositionRoute', () => {
     expect(harness.input).not.toHaveBeenCalled()
   })
 
-  // A route that never saw the start cannot deliver the commit, so cancelling the event would
-  // suppress xterm's own triggerDataEvent with nothing standing in for it.
+  // A route installed mid-session cannot replace xterm’s commit; cancelling would lose the text.
   it('leaves an uncaptured session to xterm when installed mid-composition', () => {
     const harness = createHarness()
 
@@ -169,7 +168,6 @@ describe('installTerminalImeCompositionRoute', () => {
     const firstRoute = install()
 
     element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
-    // Reconnect/effect re-run swaps the route while the preedit is still open.
     firstRoute.dispose()
     const secondRoute = install()
 
@@ -186,7 +184,6 @@ describe('installTerminalImeCompositionRoute', () => {
     harness.start(1)
     harness.state.currentTransport = createTransport('pty-replacement')
 
-    // Owned, so xterm must stand down — dropping the commit is this route's decision.
     expect(harness.end(1, '한')).toBe(false)
     expect(harness.input).not.toHaveBeenCalled()
   })

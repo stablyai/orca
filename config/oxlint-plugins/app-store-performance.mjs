@@ -78,11 +78,12 @@ function returnedExpressions(selector) {
   return expressions
 }
 
-function unwrapShallowSelector(selector, shallowHooks) {
+function unwrapShallowSelector(selector, state) {
   if (
     selector?.type === 'CallExpression' &&
     selector.callee.type === 'Identifier' &&
-    shallowHooks.has(selector.callee.name)
+    state.hookNames.has(selector.callee.name) &&
+    state.shallowHooks.has(variableFor(selector.callee, state))
   ) {
     return { selector: selector.arguments[0], shallow: true }
   }
@@ -99,12 +100,7 @@ function isIdentitySelector(selector) {
   )
 }
 
-/**
- * `everyBranch` decides how a conditional counts. An inline selector is flagged
- * when ANY branch allocates; a helper the selector delegates to must allocate on
- * EVERY branch, so the `cache.get(k) ?? build(state)` identity-caching shape is
- * not a false positive.
- */
+// Inline selectors flag ANY allocating branch; delegated helpers require EVERY branch so cache.get(k) ?? build(state) remains valid.
 function allocates(expression, everyBranch) {
   const branches =
     expression?.type === 'ConditionalExpression'
@@ -157,37 +153,44 @@ function isModuleScope(node) {
   )
 }
 
-/** Records module-scope `const selectX = (state) => ...` so identifier selectors resolve. */
-function recordNamedSelector(node, state) {
-  if (!isModuleScope(node)) {
-    return
-  }
-  const declared =
-    node.type === 'FunctionDeclaration'
-      ? [[node.id, node]]
-      : node.declarations.map((declarator) => [declarator.id, declarator.init])
-  for (const [id, initializer] of declared) {
-    const name = identifierName(id)
-    if (name && functionNode(initializer)) {
-      state.namedSelectors.set(name, initializer)
+/** Resolve the binding at the use site, including nested lexical shadows. */
+function variableFor(node, state) {
+  const name = identifierName(node)
+  for (let scope = name && state.sourceCode.getScope(node); scope; scope = scope.upper) {
+    const variable = scope.set.get(name)
+    if (variable) {
+      return variable
     }
   }
+  return null
 }
 
-/** Inline function, or a module-scope selector referenced by name. */
+/** Inline function, or a module-scope selector referenced by its lexical binding. */
 function resolveSelector(argument, state) {
-  return functionNode(argument) ?? state.namedSelectors.get(identifierName(argument)) ?? null
+  if (functionNode(argument)) {
+    return argument
+  }
+  const definition = variableFor(argument, state)?.defs[0]
+  const declaration = definition?.node
+  if (
+    definition?.type === 'FunctionName' &&
+    declaration.type === 'FunctionDeclaration' &&
+    isModuleScope(declaration)
+  ) {
+    return declaration
+  }
+  return definition?.type === 'Variable' &&
+    declaration.type === 'VariableDeclarator' &&
+    isModuleScope(declaration.parent)
+    ? functionNode(declaration.init)
+    : null
 }
 
-/**
- * One hop: a selector that delegates to a module-scope helper is the idiomatic
- * shape here, and neither the inline-body check nor a reviewer reading the call
- * site can see what that helper returns. An unresolvable helper is left alone.
- */
+// Inspect one delegated module helper hop to catch hidden allocations; leave unresolved helpers alone.
 function expandThroughNamedHelper(expression, state) {
   const helper =
-    expression?.type === 'CallExpression'
-      ? state.namedSelectors.get(identifierName(expression.callee))
+    expression?.type === 'CallExpression' && expression.callee.type === 'Identifier'
+      ? resolveSelector(expression.callee, state)
       : undefined
   const returned = helper ? returnedExpressions(helper) : []
   return returned.length > 0 && returned.every((entry) => allocates(entry, true))
@@ -195,11 +198,12 @@ function expandThroughNamedHelper(expression, state) {
     : [expression]
 }
 
-function createRuleState() {
+function createRuleState(sourceCode) {
   return {
     appStoreHooks: new Set(),
     shallowHooks: new Set(),
-    namedSelectors: new Map(),
+    hookNames: new Set(),
+    sourceCode,
     deferredCalls: []
   }
 }
@@ -211,21 +215,23 @@ function recordImports(node, state) {
       continue
     }
     const imported = identifierName(specifier.imported)
-    const localName = identifierName(specifier.local)
-    if (!imported || !localName) {
-      continue
-    }
-    if (source === 'zustand/react/shallow' && imported === 'useShallow') {
-      state.shallowHooks.add(localName)
-    }
+    const shallow = source === 'zustand/react/shallow' && imported === 'useShallow'
     // useAppStore is the app store wherever it is re-exported from; sibling
     // stores are trusted by naming convention only when they come from this codebase.
-    if (
-      STORE_HOOK_NAME.test(imported) &&
+    const store =
+      STORE_HOOK_NAME.test(imported ?? '') &&
       !NON_STORE_HOOKS.has(imported) &&
       (imported === 'useAppStore' || isLocalModuleSource(source))
-    ) {
-      state.appStoreHooks.add(localName)
+    // Why: getScope builds the whole scope tree, so only resolve bindings this rule tracks.
+    const variable = shallow || store ? variableFor(specifier.local, state) : null
+    if (!variable) {
+      continue
+    }
+    state.hookNames.add(specifier.local.name)
+    if (shallow) {
+      state.shallowHooks.add(variable)
+    } else {
+      state.appStoreHooks.add(variable)
     }
   }
 }
@@ -233,13 +239,14 @@ function recordImports(node, state) {
 function isAppStoreCall(node, state) {
   return (
     node.callee.type === 'Identifier' &&
-    state.appStoreHooks.has(node.callee.name) &&
+    state.hookNames.has(node.callee.name) &&
+    state.appStoreHooks.has(variableFor(node.callee, state)) &&
     node.optional !== true
   )
 }
 
-function requireSelectorRule() {
-  const state = createRuleState()
+function requireSelectorRule(sourceCode) {
+  const state = createRuleState(sourceCode)
   return {
     ImportDeclaration(node) {
       recordImports(node, state)
@@ -256,21 +263,12 @@ function requireSelectorRule() {
   }
 }
 
-/**
- * Selector arguments are collected during traversal and judged at Program:exit so a
- * selector hoisted below its call site still resolves.
- */
-function deferredSelectorRule(inspect) {
-  const state = createRuleState()
+// Judge at Program:exit so selectors declared after call sites resolve.
+function deferredSelectorRule(sourceCode, inspect) {
+  const state = createRuleState(sourceCode)
   return {
     ImportDeclaration(node) {
       recordImports(node, state)
-    },
-    FunctionDeclaration(node) {
-      recordNamedSelector(node, state)
-    },
-    VariableDeclaration(node) {
-      recordNamedSelector(node, state)
     },
     CallExpression(node) {
       if (isAppStoreCall(node, state)) {
@@ -279,10 +277,7 @@ function deferredSelectorRule(inspect) {
     },
     'Program:exit'() {
       for (const node of state.deferredCalls) {
-        const { selector: argument, shallow } = unwrapShallowSelector(
-          node.arguments[0],
-          state.shallowHooks
-        )
+        const { selector: argument, shallow } = unwrapShallowSelector(node.arguments[0], state)
         const report = inspect({
           selector: resolveSelector(argument, state),
           shallow,
@@ -296,8 +291,8 @@ function deferredSelectorRule(inspect) {
   }
 }
 
-function noIdentitySelectorRule() {
-  return deferredSelectorRule(({ selector }) =>
+function noIdentitySelectorRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector }) =>
     isIdentitySelector(selector)
       ? {
           node: selector,
@@ -308,8 +303,8 @@ function noIdentitySelectorRule() {
   )
 }
 
-function noFreshSelectorResultRule() {
-  return deferredSelectorRule(({ selector, shallow, state }) => {
+function noFreshSelectorResultRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector, shallow, state }) => {
     if (shallow || !selector) {
       return null
     }
@@ -321,6 +316,78 @@ function noFreshSelectorResultRule() {
           node: freshResult,
           message:
             'This selector returns a fresh reference on every store write; select a stable field, cache the result, or use useShallow.'
+        }
+      : null
+  })
+}
+
+// Host observations replace this map on every meaningful change (runtime-status.ts).
+const HOT_STORE_FIELDS = new Set(['runtimeStatusByEnvironmentId'])
+
+function selectorLocalConstant(variable, selector) {
+  const definition = variable?.defs[0]
+  const declaration = definition?.node
+  if (definition?.type !== 'Variable' || declaration.parent.kind !== 'const') {
+    return null
+  }
+  for (let parent = declaration.parent; parent; parent = parent.parent) {
+    if (parent === selector) {
+      return declaration
+    }
+  }
+  return null
+}
+
+// Resolve only the selector parameter and its local const aliases, never a same-named outer value.
+function selectorValue(expression, selector, state, seen = new Set()) {
+  if (expression?.type === 'MemberExpression') {
+    const field = propertyName(expression)
+    return HOT_STORE_FIELDS.has(field) &&
+      selectorValue(expression.object, selector, state, seen) === 'state'
+      ? field
+      : null
+  }
+  const variable = variableFor(expression, state)
+  if (!variable || seen.has(variable)) {
+    return null
+  }
+  seen.add(variable)
+  const parameter = selector.params[0]
+  if (parameter?.type === 'Identifier' && variableFor(parameter, state) === variable) {
+    return 'state'
+  }
+  const declaration = selectorLocalConstant(variable, selector)
+  const pattern = declaration?.id ?? parameter
+  if (pattern?.type === 'ObjectPattern') {
+    const property = pattern.properties.find(
+      (entry) => entry.type === 'Property' && variable.identifiers.includes(entry.value)
+    )
+    const field = property && !property.computed ? identifierName(property.key) : null
+    if (
+      HOT_STORE_FIELDS.has(field) &&
+      (pattern === parameter || selectorValue(declaration.init, selector, state, seen) === 'state')
+    ) {
+      return field
+    }
+  }
+  return declaration?.id.type === 'Identifier'
+    ? selectorValue(declaration.init, selector, state, seen)
+    : null
+}
+
+function noWholeHotMapSelectorRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector, state }) => {
+    if (!selector) {
+      return null
+    }
+    const result = returnedExpressions(selector).find((expression) =>
+      HOT_STORE_FIELDS.has(selectorValue(expression, selector, state))
+    )
+    return result
+      ? {
+          node: result,
+          message:
+            'This whole host-status map changes for every host. Select the derived answer for your own host/item with a stable result (see paired-runtime-parking-capabilities.ts), or add a disable comment with a reason if this consumer needs every host.'
         }
       : null
   })
@@ -339,8 +406,8 @@ function nestedFreshValues(expression) {
   return []
 }
 
-function noNestedFreshUnderShallowRule() {
-  return deferredSelectorRule(({ selector, shallow, state }) => {
+function noNestedFreshUnderShallowRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector, shallow, state }) => {
     if (!shallow || !selector) {
       return null
     }
@@ -359,9 +426,48 @@ function noNestedFreshUnderShallowRule() {
   })
 }
 
+function noRawProjectCatalogComputedRule(sourceCode) {
+  return {
+    MemberExpression(node) {
+      if (!node.computed || node.property.type !== 'Identifier') {
+        return
+      }
+      const definition = variableFor(node.property, { sourceCode })?.defs[0]
+      const declaration = definition?.node
+      if (
+        definition?.type === 'Variable' &&
+        declaration.parent.kind === 'const' &&
+        declaration.init?.type === 'Literal' &&
+        ['endpointProjects', 'endpointProjectHostSetups'].includes(declaration.init.value)
+      ) {
+        this.report({
+          node,
+          message: 'Read canonical project affiliation through the project catalog selector.'
+        })
+      }
+    }
+  }
+}
+
+// Skip JS AST deserialization in files that cannot name a store hook.
+const STORE_HOOK_TEXT = /use[A-Z][A-Za-z0-9]*Store/
+
 function bindContext(createVisitors) {
   return (context) => {
-    const visitors = createVisitors()
+    if (
+      createVisitors !== noRawProjectCatalogComputedRule &&
+      !STORE_HOOK_TEXT.test(context.sourceCode.text) &&
+      !context.sourceCode.text.includes('\\')
+    ) {
+      return {}
+    }
+    if (
+      createVisitors === noWholeHotMapSelectorRule &&
+      /\.(?:test|spec)\.[^/\\]+$/.test(context.filename)
+    ) {
+      return {}
+    }
+    const visitors = createVisitors(context.sourceCode)
     for (const [nodeType, visit] of Object.entries(visitors)) {
       visitors[nodeType] = visit.bind(context)
     }
@@ -373,8 +479,10 @@ export default {
   meta: { name: 'app-store-performance' },
   rules: {
     'require-selector': { create: bindContext(requireSelectorRule) },
+    'no-raw-project-catalog-computed': { create: bindContext(noRawProjectCatalogComputedRule) },
     'no-identity-selector': { create: bindContext(noIdentitySelectorRule) },
     'no-fresh-selector-result': { create: bindContext(noFreshSelectorResultRule) },
+    'no-whole-hot-map-selector': { create: bindContext(noWholeHotMapSelectorRule) },
     'no-nested-fresh-under-shallow': { create: bindContext(noNestedFreshUnderShallowRule) }
   }
 }

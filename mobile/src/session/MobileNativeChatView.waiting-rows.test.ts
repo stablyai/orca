@@ -1,3 +1,4 @@
+import './MobileNativeChatView.harness.test-fixture'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -13,6 +14,7 @@ vi.mock('react-native', async () => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])
       return React.createElement('FlatList', props)
     }),
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',
@@ -36,16 +38,23 @@ vi.mock('lucide-react-native', () => ({
   ChevronsUpDown: 'ChevronsUpDown',
   Square: 'Square'
 }))
-vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
-vi.mock('./MobileNativeChatTurnStatus', () => ({ MobileNativeChatTurnActivity: 'LiveStatus' }))
-vi.mock('./MobileNativeChatComposer', () => ({ MobileNativeChatComposer: 'Composer' }))
+vi.mock('./native-chat/transcript/MobileNativeChatMessage', () => ({
+  MobileNativeChatMessage: 'ChatMessage'
+}))
+vi.mock('./native-chat/transcript/MobileNativeChatLiveLine', () => ({
+  MobileNativeChatLiveLine: 'LiveStatus'
+}))
+vi.mock('./native-chat/composer/MobileNativeChatComposer', () => ({
+  MobileNativeChatDraftComposer: 'Composer'
+}))
 // The queue's action sheet pulls in the animation runtime, which this react-native mock can't host.
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
-vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
+vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
+vi.mock('./native-chat/input/MobileNativeChatPermission', () => ({
+  MobileNativeChatPermission: 'ChatPermission'
+}))
+vi.mock('./native-chat/input/MobileNativeChatQuestion', () => ({
+  MobileNativeChatQuestion: 'ChatQuestion'
 }))
 
 let renderer: ReactTestRenderer | null = null
@@ -92,7 +101,7 @@ function renderView(
         getSendCompletionGeneration: () => 0,
         getComposerEditGeneration: () => 0,
         pending: [],
-        composerText: '',
+        draftKey: null,
         onComposerTextChange: vi.fn(),
         structuredActivityUi: true,
         agentWorking: true,

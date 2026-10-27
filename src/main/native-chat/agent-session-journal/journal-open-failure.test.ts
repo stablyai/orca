@@ -3,17 +3,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { NO_LEGACY_JOURNAL_RECORDS, openJournalDatabase } from './journal-database'
+import { openJournalDatabase } from './journal-database'
 import {
   classifyJournalOpenFailure,
   createJournalOpenReadRefusals,
   journalOpenReadRefusal,
   journalOpenRefusal,
-  journalOpenRefusalError
+  journalOpenRefusalError,
+  failLoadOnUnloadableJournal
 } from './journal-open-failure'
 import { AgentSessionJournalError } from './journal-write-guards'
 import { journalDatabasePath } from './journal-host-database'
 import { replayJournal } from './journal-open'
+import { createJournalReducerState } from './journal-reducer'
 import { recordingStructuredAgentSessionLogger } from '../agent-session-wire/structured-agent-session-logger-test-support'
 
 let root: string
@@ -26,10 +28,9 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** What the journal's own open, then a chat's replay, throws for the file as it stands. */
 function openFailure(): unknown {
   try {
-    const db = openJournalDatabase(journalDatabasePath(root), NO_LEGACY_JOURNAL_RECORDS).db
+    const db = openJournalDatabase(journalDatabasePath(root)).db
     try {
       replayJournal(db, 'session-1')
     } finally {
@@ -41,7 +42,6 @@ function openFailure(): unknown {
   throw new Error('the journal opened')
 }
 
-/** A thrown value shaped as node:sqlite shapes one, with the result code it reports. */
 function nodeSqliteError(errcode: number): Error {
   return Object.assign(new Error('sqlite'), { code: 'ERR_SQLITE_ERROR', errcode })
 }
@@ -60,11 +60,11 @@ describe('classifyJournalOpenFailure', () => {
 
   it('calls a journal whose pages are damaged corrupt', async () => {
     const path = journalDatabasePath(root)
-    const opened = openJournalDatabase(path, NO_LEGACY_JOURNAL_RECORDS).db
+    const opened = openJournalDatabase(path).db
     opened.exec('PRAGMA journal_mode = DELETE')
     opened.close()
     const bytes = await readFile(path)
-    // Page 1 holds the header and schema; every table's root page follows it.
+    // Preserve header/schema while corrupting table root pages.
     bytes.fill(0xab, 4096)
     await writeFile(path, bytes)
     const error = openFailure()
@@ -169,16 +169,71 @@ describe('createJournalOpenReadRefusals', () => {
       'open-for-read'
     ])
   })
+
+  it('logs a chat again when its load fails for another reason, naming where each failed', () => {
+    const log = recordingStructuredAgentSessionLogger()
+    const refusals = createJournalOpenReadRefusals(log.logger)
+    const state = createJournalReducerState('session-1', 'epoch-1')
+    const refusedFor = (load: Parameters<typeof failLoadOnUnloadableJournal>[1]) => {
+      try {
+        failLoadOnUnloadableJournal('session-1', load)
+      } catch (error) {
+        return error
+      }
+      throw new Error('the load was not refused')
+    }
+    const newer = refusedFor({ state, newer: { sequence: 7 }, damage: null })
+    const damaged = refusedFor({
+      state,
+      newer: null,
+      damage: { sequence: 3, cause: 'sequence-gap' }
+    })
+
+    for (const error of [newer, newer, damaged, damaged]) {
+      refusals.refusal('session-1', error)
+    }
+
+    const causes = log.entries.map((entry) => {
+      const error = entry.fields.error
+      return error instanceof Error && error.cause instanceof Error ? error.cause.message : ''
+    })
+    expect(causes).toEqual([
+      expect.stringContaining("newer Orca's row at sequence 7"),
+      expect.stringContaining('damaged at sequence 3: sequence-gap')
+    ])
+  })
+
+  it("logs a load refused as a newer Orca's chat, or as damage, once per session until it opens", () => {
+    const log = recordingStructuredAgentSessionLogger()
+    const refusals = createJournalOpenReadRefusals(log.logger)
+    const newer = journalOpenRefusalError(
+      new AgentSessionJournalError('journal_read_only', 'a newer Orca wrote session-1')
+    )
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(refusals.refusal('session-1', newer)).toBe(newer)
+    }
+    expect(log.entries.map((entry) => entry.fields.sessionId)).toEqual(['session-1'])
+    refusals.refusal('session-2', newer)
+    refusals.forget('session-1')
+    refusals.refusal('session-1', newer)
+    expect(log.entries.map((entry) => entry.fields.sessionId)).toEqual([
+      'session-1',
+      'session-2',
+      'session-1'
+    ])
+    refusals.refusal(
+      'session-3',
+      agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
+    )
+    expect(log.entries).toHaveLength(3)
+  })
 })
 
-// Only an update gets past a journal a newer Orca wrote, so it has a reason of its own: a client
-// that chose words by `journalUnavailable` said to try again, and retrying never cleared it.
 describe('a journal a newer Orca wrote', () => {
   const readOnly = () =>
     new AgentSessionJournalError('journal_read_only', 'the journal uses a newer schema')
 
   it('refuses a write with its own reason, and the words released clients print', () => {
-    // As the wire carries it (the mobile and older-client tests read this shape).
     expect(JSON.parse(JSON.stringify(journalOpenRefusal(readOnly())))).toEqual({
       code: 'agent_session_journal_unreadable',
       message: 'Chats were saved by a newer Orca. Update Orca to keep using them.',

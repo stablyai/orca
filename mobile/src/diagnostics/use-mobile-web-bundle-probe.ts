@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useHostClient } from '../transport/client-context'
+import { useHostClient } from '../transport/host-client-hooks'
 import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
 import { readMobileWebBundleErrorCode } from '../transport/mobile-web-bundle-operations'
 import { startDiagnosticFetchTimeout } from './diagnostic-fetch-timeout'
 
-/**
- * How long a tap waits for the host's client object before it gives up.
- *
- * Generous, because acquiring one can queue behind another screen's, but bounded, because none of
- * that is a network round trip: the connect and request timeouts live below this, inside the fetch,
- * and only apply once a client exists. Without a bound here a host that never opens leaves the row
- * reading `Connecting…` with its button disabled for the life of the screen.
- */
+// Bound client acquisition so an unopened host cannot leave Connecting… disabled forever; network/request timeouts apply later inside the fetch.
 const HOST_CLIENT_DIAL_DEADLINE_MS = 10_000
 
 export type MobileWebBundleProbeState =
@@ -26,8 +19,7 @@ export type MobileWebBundleProbeState =
     }
   | { status: 'failed'; detail: string }
 
-/** The host's own code when it refused, its message otherwise. A client-side integrity failure has
- *  no code, and so does a schema refusal the dispatcher raised before the handler ran. */
+// Integrity failures and dispatcher schema refusals have no host code; fall back to the message.
 function describeFailure(error: unknown): string {
   const code = readMobileWebBundleErrorCode(error)
   if (code !== null) {
@@ -36,16 +28,8 @@ function describeFailure(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/**
- * Drives one bundle fetch from the troubleshooting screen. Dev-only: nothing in a shipped build
- * mounts this, and nothing here caches or renders what it downloads.
- *
- * The host is dialled on the first tap, not on mount: acquiring a client is what opens a connection,
- * and opening Troubleshoot opened none before this row existed. Each request owns its
- * `AbortController` so a re-run, an unmount, or StrictMode's second mount abandons the previous
- * fetch instead of racing it — and, since the fetch checks that signal before every chunk, stops its
- * reads rather than letting them hold the host's read slots.
- */
+// Dev-only: dial on tap, preserving Troubleshoot’s connection-free mount.
+// Each run owns an abort signal so reruns, unmount and StrictMode stop chunk reads and release the host’s read slots.
 export function useMobileWebBundleProbe(hostId: string | null): {
   state: MobileWebBundleProbeState
   run: () => void
@@ -97,7 +81,7 @@ export function useMobileWebBundleProbe(hostId: string | null): {
         status: 'failed',
         detail: `no client for the host within ${HOST_CLIENT_DIAL_DEADLINE_MS / 1000}s`
       })
-      // Drops the acquisition too, so a host that never opens stops being dialled.
+      // Dispose acquisition too so an unopened host stops being dialled.
       setRequest(null)
     }
     deadline.signal.addEventListener('abort', giveUp)

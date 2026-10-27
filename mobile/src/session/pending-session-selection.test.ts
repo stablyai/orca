@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
-  LAUNCHED_SELECTION_SNAPSHOT_BUDGET,
+  isLaunchedSurfaceListed,
   launchedSelection,
   pendingSelectionHandle,
   pendingSelectionTabId,
@@ -73,7 +73,6 @@ describe('resolveLaunchedSelection', () => {
       selection: { kind: 'terminal', handle: 'term_9', tabId: `${PANE.tabId}::${PANE.leafId}` },
       landedTabId: `${PANE.tabId}::${PANE.leafId}`
     })
-    // Listed before its handle is issued: landed by tab id alone.
     expect(resolveLaunchedSelection(selection, [reservedTerminalTab(null)]).selection).toEqual({
       kind: 'tab',
       tabId: `${PANE.tabId}::${PANE.leafId}`
@@ -100,13 +99,13 @@ describe('resolveLaunchedSelection', () => {
 
   it('waits without a countdown until the reply, then gives up after the budget', () => {
     let selection: PendingSessionSelection | null = launchedSelection('l1', { pane: PANE }, null)
-    for (let snapshot = 0; snapshot < LAUNCHED_SELECTION_SNAPSHOT_BUDGET * 2; snapshot += 1) {
+    for (let snapshot = 0; snapshot < 10; snapshot += 1) {
       selection = resolveLaunchedSelection(selection, []).selection
     }
     expect(selection).toEqual(launchedSelection('l1', { pane: PANE }, null))
 
     selection = withLaunchReply(selection, 'l1', { handle: 'term_9' })
-    for (let snapshot = 1; snapshot < LAUNCHED_SELECTION_SNAPSHOT_BUDGET; snapshot += 1) {
+    for (let snapshot = 1; snapshot < 5; snapshot += 1) {
       const next = resolveLaunchedSelection(selection, [chatTab('other', 'claude_other')])
       expect(next.landedTabId).toBeNull()
       expect(next.selection?.kind).toBe('launched')
@@ -163,5 +162,22 @@ describe('the halves of a pick', () => {
     expect(pendingSelectionWantsHandle(launchedSelection('l1', { sessionId: 's' }), 'term_1')).toBe(
       false
     )
+  })
+})
+
+describe('isLaunchedSurfaceListed', () => {
+  it('reads a listed terminal as a started agent', () => {
+    expect(isLaunchedSurfaceListed([reservedTerminalTab('term_1')], { pane: PANE })).toBe(true)
+  })
+
+  it('does not read a tab the host showed before its agent existed as a start', () => {
+    expect(isLaunchedSurfaceListed([reservedTerminalTab(null)], { pane: PANE })).toBe(false)
+  })
+
+  it('still lands the selection on that tab, so the phone shows it at once', () => {
+    const resolved = resolveLaunchedSelection(launchedSelection('lock', { pane: PANE }, null), [
+      reservedTerminalTab(null)
+    ])
+    expect(resolved.landedTabId).toBe(`${PANE.tabId}::${PANE.leafId}`)
   })
 })

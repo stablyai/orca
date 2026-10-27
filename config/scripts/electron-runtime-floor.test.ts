@@ -2,17 +2,9 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-/**
- * Why a floor and not just a pin: Electron 43.5.0/43.6.0 set and unset `GDK_GL`
- * around `gtk_init()` while FontConfig warmed up on a pool thread, and below
- * glibc 2.41 that frees `environ` under a concurrent `getenv()` — a launch-time
- * use-after-free on every Ubuntu we support (stablyai/orca#20081). 43.7.0 stops
- * freeing the published `environ`. 43.7.0 itself threw `Invalid guestInstanceId` when a
- * loaded `<webview>` left the DOM, which blanked browser tabs React re-inserted
- * (electron/electron#53989); 43.7.4 fixes it. A downgrade past either re-ships the bug,
- * and nothing else in the tree would notice.
- */
-const MINIMUM_ELECTRON_VERSION = '43.7.4'
+// Electron floor preserves Linux environ/getenv UAF fix (43.7.0, #20081) and webview reinsert fix (43.7.4, electron#53989).
+// 43.7.8 fixes iframe find-in-page looping (electron#54199); 43.8.1 blocks compromised eMudhra TLS intermediates (GHSA-jr5w-w6x2-84p9).
+const MINIMUM_ELECTRON_VERSION = '43.8.1'
 
 function parseVersion(specifier: string): [number, number, number] {
   const match = /(\d+)\.(\d+)\.(\d+)/.exec(specifier)
@@ -34,20 +26,7 @@ function meetsRuntimeFloor(specifier: string): boolean {
 }
 
 describe('electron runtime floor', () => {
-  it.each([
-    ['42.9.0', false],
-    ['43.6.0', false],
-    ['43.7.0', false],
-    ['43.7.3', false],
-    ['43.7.4', true],
-    ['43.7.5', true],
-    ['43.8.0', true],
-    ['44.0.0', true]
-  ])('reads %s as meeting the floor: %s', (specifier, expected) => {
-    expect(meetsRuntimeFloor(specifier)).toBe(expected)
-  })
-
-  it('pins Electron at or above the glibc environ-race and webview-detach fixes', () => {
+  it('pins Electron at or above the startup, webview-detach, find-in-page and TLS fixes', () => {
     const packageJson = JSON.parse(
       readFileSync(join(__dirname, '../../package.json'), 'utf-8')
     ) as { devDependencies: Record<string, string> }

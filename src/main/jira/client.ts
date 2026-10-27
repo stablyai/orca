@@ -6,11 +6,11 @@ import type {
   JiraSite,
   JiraSiteSelection,
   JiraViewer
-} from '../../shared/jira-types'
-import { clearAttachmentImagesForSite } from './attachment-image-cache'
+} from '../../shared/jira/jira-types'
+import { clearAttachmentImagesForSite } from './attachments/image-cache'
 import { acquire, release } from './request-queue'
 import {
-  credentialErrors,
+  getCredentialError,
   deleteToken,
   getSiteFile,
   hasStoredToken,
@@ -24,10 +24,10 @@ import {
   authHeader,
   JiraApiError,
   jiraRequest,
-  requestWithCredentials,
   type JiraClientForSite
 } from './authenticated-request'
 import { getSiteId, normalizeJiraSiteUrl, siteToViewer, toViewer } from './site-identity'
+import { verifyJiraCredentials } from './credential-verification'
 
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
@@ -42,11 +42,7 @@ export function getClients(selection?: JiraSiteSelection | null): JiraClientForS
     try {
       token = readToken(site.id)
     } catch (error) {
-      // Why: under an 'all' selection one un-decryptable site must not collapse
-      // reads for the healthy ones. readToken already recorded the per-site
-      // credentialError for getStatus to surface, so skip this site like a
-      // missing token. A specific-site selection still rethrows so the renderer
-      // can surface the decrypt banner promptly.
+      // For all-sites reads, skip unreadable credentials; explicit site reads still throw and status retains the error.
       if (isAllSelection && error instanceof CredentialDecryptionError) {
         return []
       }
@@ -61,10 +57,9 @@ export function getStatus(): JiraConnectionStatus {
   const sites = file.sites.filter((site) => hasStoredToken(site.id))
   const activeSite = sites.find((site) => site.id === file.activeSiteId) ?? sites[0] ?? null
   const credentialError = sites
-    .map((site) => credentialErrors.get(site.id))
+    .map((site) => getCredentialError(site.id))
     .find((message) => message !== undefined)
-  // Why any-not-active: sealing is a host-wide property, so a second site stored while
-  // the keyring was missing is exposed even when the active one is sealed.
+  // Protection is host-wide: inactive sites with plaintext credentials still matter.
   const credentialProtection = sites.some((site) => getSiteTokenProtection(site.id) === 'plaintext')
     ? 'plaintext'
     : null
@@ -75,7 +70,8 @@ export function getStatus(): JiraConnectionStatus {
     activeSiteId: activeSite?.id ?? null,
     selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null,
     ...(credentialError ? { credentialError } : {}),
-    credentialProtection
+    credentialProtection,
+    supportsScopedTokens: true
   }
 }
 
@@ -101,28 +97,14 @@ export async function connect(
         error: email ? 'Password is required.' : 'Personal access token is required.'
       }
     }
-  } else if (!email || !apiToken) {
-    return { ok: false, error: 'Email and API token are required.' }
+  } else if (!apiToken) {
+    return { ok: false, error: 'API token is required.' }
   }
 
   await acquire()
   try {
-    const myselfPath = authType === 'server' ? '/rest/api/2/myself' : '/rest/api/3/myself'
-    const viewer = toViewer(
-      (await requestWithCredentials(
-        siteUrl,
-        email,
-        apiToken,
-        myselfPath,
-        undefined,
-        authType
-      )) as Record<string, unknown>,
-      email || siteUrl
-    )
-    // PAT sites have no email, so keying on it alone would collide every PAT
-    // connection to the same host into one id (silently overwriting a prior
-    // account + token). Fall back to the verified viewer identity so distinct
-    // accounts stay distinct. Cloud/Basic keep keying on their non-empty email.
+    const { viewer, apiBaseUrl } = await verifyJiraCredentials(siteUrl, email, apiToken, authType)
+    // PAT sites lack email; verified viewer identity prevents same-host account collisions.
     const id = getSiteId(siteUrl, email || viewer.accountId)
     const site: JiraSite = {
       id,
@@ -130,8 +112,10 @@ export async function connect(
       email,
       displayName: viewer.displayName,
       accountId: viewer.accountId,
-      authType
+      authType,
+      ...(apiBaseUrl ? { apiBaseUrl } : {})
     }
+    clearAttachmentImagesForSite(id)
     saveToken(id, apiToken)
     const file = getSiteFile()
     writeSiteFile({
@@ -154,8 +138,6 @@ export function disconnect(siteId?: string): void {
   for (const id of ids) {
     deleteToken(id)
   }
-  // Why: drop cached attachment data URLs for disconnected sites so main does
-  // not retain multi-MB strings after logout.
   clearAttachmentImagesForSite(siteId)
   writeSiteFile({
     version: 1,
@@ -206,14 +188,12 @@ export async function testConnection(
 
 export function clearToken(siteId: string): void {
   deleteToken(siteId)
-  // Why: auth failure removes the site; drop cached attachment data URLs too.
   clearAttachmentImagesForSite(siteId)
   const file = getSiteFile()
   writeSiteFile({ ...file, sites: file.sites.filter((site) => site.id !== siteId) })
 }
 
 export function isAuthError(error: unknown): boolean {
-  // Why: Jira returns 403 for project/API permission gaps even when /myself
-  // succeeds, so only 401 means the saved credential itself is invalid.
-  return error instanceof JiraApiError && error.status === 401
+  // Jira 403 may mean missing project permissions; only an unscoped 401 invalidates the credential.
+  return error instanceof JiraApiError && error.status === 401 && !error.scopeMismatch
 }

@@ -10,7 +10,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getRepositoryLocalCommandsSectionId } from '../settings/repository-settings-targets'
+import { getRepositoryLocalCommandsSectionId } from '../settings/repository/repository-settings-targets'
 import {
   requestContextualTourWhenReady,
   type RequestContextualTourWhenReadyArgs

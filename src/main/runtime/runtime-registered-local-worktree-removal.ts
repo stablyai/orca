@@ -1,11 +1,16 @@
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
+import {
+  authorizeWindowsCheckout,
+  nativeWindowsMarkerMissing,
+  usesNativeWindowsRemoval
+} from '../git/windows-worktree-removal'
+import { pruneGitWorktrees } from '../git/worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { ArchiveHookOverride } from '../../shared/worktree/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../worktree-archive-hook-gate'
 import type { Repo } from '../../shared/repo-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { gitExecFileAsync } from '../git/runner'
 import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from '../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { runHook, getEffectiveHooks } from '../hooks'
@@ -40,7 +45,7 @@ export function removeRuntimeRegisteredLocalWorktree(
   return runSerializedWorktreeRemovalAcceptance(
     args.repo.path,
     async (): Promise<RemoveWorktreeResult & { warning?: string }> =>
-      // Why: another client's removal of this worktree may have been accepted during the wait.
+      // Recheck after queue wait: another client may already have accepted this deletion.
       waitForPendingWorktreeRemoval(args.target.id)
         ? { removing: true }
         : acceptRuntimeRegisteredLocalWorktreeRemoval(args)
@@ -71,7 +76,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   finishRemoval: (
     result: RemoveWorktreeResult | undefined,
     rememberBranch: boolean,
-    // Why: re-read after the archive hook, which can move the branch out from under the pre-hook row.
+    // Archive hooks may move the branch; re-read the fallback head afterward.
     fallbackHead: string | undefined
   ) => void
   /** Fired when Git finished, not on acceptance. */
@@ -82,10 +87,13 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const canonicalPath = registeredWorktree.path
   const hooks = getEffectiveHooks(repo)
   let warning: string | undefined
-  // Precondition, not an advisory: this runs before the registration refresh, the preflights, the
-  // PTY stop and `removeWorktree`, so a throw here leaves every one of them untouched (#19334).
+  // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
-  if (hooks?.scripts.archive && args.runHooks) {
+  if (
+    hooks?.scripts.archive &&
+    args.runHooks &&
+    !(await nativeWindowsMarkerMissing(canonicalPath, localOptions))
+  ) {
     const result = await runHook(
       'archive',
       canonicalPath,
@@ -127,17 +135,32 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const ignoredLinkedPaths = args.force
     ? []
     : await findExistingWorktreeSymlinkPaths(canonicalPath, linkedPaths)
+  const markerMissing = await nativeWindowsMarkerMissing(canonicalPath, localOptions)
   try {
-    await (args.hasLocalOptions
-      ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
+    if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
+      await authorizeWindowsCheckout(
+        repo.path,
+        canonicalPath,
+        args.force,
+        {
           ...localOptions,
-          ...(ignoredLinkedPaths.length > 0 ? { ignoredUntrackedPaths: ignoredLinkedPaths } : {})
-        })
-      : ignoredLinkedPaths.length > 0
+          knownRemovedWorktree: refreshed,
+          ignoredUntrackedPaths: ignoredLinkedPaths
+        },
+        true
+      )
+    } else if (!markerMissing) {
+      await (args.hasLocalOptions
         ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
-            ignoredUntrackedPaths: ignoredLinkedPaths
+            ...localOptions,
+            ...(ignoredLinkedPaths.length > 0 ? { ignoredUntrackedPaths: ignoredLinkedPaths } : {})
           })
-        : assertWorktreeCleanForRemoval(canonicalPath, args.force))
+        : ignoredLinkedPaths.length > 0
+          ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
+              ignoredUntrackedPaths: ignoredLinkedPaths
+            })
+          : assertWorktreeCleanForRemoval(canonicalPath, args.force))
+    }
   } catch (error) {
     if (!isOrphanCompatiblePreflightError(error)) {
       throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
@@ -148,7 +171,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   let accepted = false
   try {
     await args.stopPtys()
-    if (linkedPaths.length > 0) {
+    if (!markerMissing && linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }
     accepted = true
@@ -166,8 +189,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     args.publish()
     return { ...result, ...acceptedFields }
   }
-  // Why detached: every refusal above already ran, and Git's 20-35 s delete must finish even when the
-  // request that asked for it times out; other views read the host's `removing` marker meanwhile.
+  // After all refusals, detach slow Git deletion so request timeout cannot cancel it; clients follow the removing marker.
   void startBackgroundWorktreeRemoval({
     removal: {
       worktreeId: args.target.id,
@@ -182,7 +204,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       args.onRemoved()
       return result
     },
-    publish: () => args.publish()
+    publish: () => args.publish(),
+    cleanupPushTargetRemote: () => cleanupRemovedWorktreePushTarget(args)
   })
   return { removing: true, ...acceptedFields }
 }
@@ -223,6 +246,9 @@ export async function finishRuntimeLocalWorktreeRemoval(
         refreshed.head
       )
     } catch (error) {
+      if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
+        throw error
+      }
       const recovered = await recoverLocalWindowsWorktreeRemoval({
         error,
         force: args.force,
@@ -231,7 +257,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
         localWorktreeGitOptions: localOptions,
         registeredWorktree: refreshed,
         deleteBranch: args.deleteBranch,
-        closeWatcher: args.closeWatchers
+        closeWatcher: args.closeWatchers,
+        signal: checkoutDeleteSignal
       })
       if (recovered) {
         removalResult = recovered
@@ -243,9 +270,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
           localOptions,
           args.closeWatchers
         )
-        await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path, ...localOptions }).catch(
-          () => {}
-        )
+        await pruneGitWorktrees({ cwd: repo.path, ...localOptions }).catch(() => {})
         await cleanupRemovedWorktreePushTarget(args)
         args.finishRemoval(undefined, false, refreshed.head)
         completed = true
@@ -254,7 +279,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
         throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
       }
     }
-    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    // Removal overtakes earlier scans; invalidate their catalogs.
     runWorktreeChangeInvalidators(repo.id)
     completed = true
   } finally {

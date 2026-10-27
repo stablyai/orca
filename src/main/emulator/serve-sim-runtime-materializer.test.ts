@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
 const DYLIB_CONTENT = Buffer.from('signed-simcam-dylib-mach-o-bytes')
@@ -71,7 +71,6 @@ describe('materializeServeSimRuntime', () => {
     })
 
     expect(materialized).toBe(join(root, 'runtime', '1.2.3', 'node_modules', 'serve-sim'))
-    // The dylib must be byte-identical to the bundled (Developer-ID-signed) copy.
     const dylibPath = join(materialized!, 'dist', 'simcam', 'libSimCameraInjector.dylib')
     expect(await readFile(dylibPath)).toEqual(DYLIB_CONTENT)
     expect(clearQuarantine).toHaveBeenCalledTimes(1)
@@ -125,8 +124,7 @@ describe('materializeServeSimRuntime', () => {
     const winnerNodeModulesDir = join(targetRootDir, '1.2.3', 'node_modules')
     const winnerPackageDir = join(winnerNodeModulesDir, 'serve-sim')
 
-    // Simulate another instance finishing first: right before our rename, drop a
-    // complete target dir in place so renameSync fails but the runtime is current.
+    // Simulate another instance publishing a complete runtime just before our rename.
     const materialized = materializeServeSimRuntime({
       bundledPackageDir,
       targetRootDir,
@@ -259,14 +257,13 @@ describe('materializeServeSimRuntime', () => {
     )
   })
 
-  // Regression: serve-sim 0.1.47's ESM entry imports `ws`, which a bare package copy cannot resolve.
+  // The copied ESM entry must resolve dependencies such as ws outside the original package.
   it('lets the real serve-sim entry resolve every declared dependency from the copy', async () => {
     const root = await createRoot()
     const installedPackageDir = realpathSync(join(process.cwd(), 'node_modules', 'serve-sim'))
     const manifest = JSON.parse(await readFile(join(installedPackageDir, 'package.json'), 'utf8'))
     const dependencyNames = Object.keys(manifest.dependencies ?? {})
     expect(dependencyNames).toContain('ws')
-    // Mirror the packaged app: a real serve-sim dir with its dependencies hoisted beside it.
     const bundledNodeModulesDir = join(root, 'Resources', 'node_modules')
     const bundledPackageDir = join(bundledNodeModulesDir, 'serve-sim')
     cpSync(installedPackageDir, bundledPackageDir, { recursive: true })
@@ -282,7 +279,7 @@ describe('materializeServeSimRuntime', () => {
     })
     expect(materialized).not.toBeNull()
 
-    // Probe from the entry's own directory so ESM resolution walks up exactly as serve-sim.js does.
+    // Probe beside the entry to exercise the same ESM resolution paths.
     const probePath = join(materialized!, 'dist', 'orca-dependency-probe.mjs')
     await writeFile(
       probePath,

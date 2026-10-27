@@ -1,9 +1,5 @@
-// Codex items and statuses, read in the child-work vocabulary.
-//
-// A tool is named the way Codex names it to its own hooks (`Bash`, `apply_patch`,
-// `mcp__server__tool`), so a structured Codex child running a shell reads exactly as a Codex
-// CLI agent running one does.
-
+// Match Codex hook tool names so structured and CLI child rows use the same vocabulary.
+import { ownRetainedString } from '../../shared/own-retained-string'
 import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 import {
@@ -19,7 +15,12 @@ export const CODEX_CHILD_WORK_TEXT_MAX_CHARS = 2_048
 export type CodexChildToolCall = { toolName: string; input?: string }
 
 function bounded(text: string | null | undefined): string | undefined {
-  return text ? text.slice(0, CODEX_CHILD_WORK_TEXT_MAX_CHARS) : undefined
+  if (!text) {
+    return undefined
+  }
+  return text.length > CODEX_CHILD_WORK_TEXT_MAX_CHARS
+    ? ownRetainedString(text.slice(0, CODEX_CHILD_WORK_TEXT_MAX_CHARS))
+    : text
 }
 
 function withInput(toolName: string, input: string | undefined): CodexChildToolCall {
@@ -32,8 +33,6 @@ function firstChangePath(changes: unknown): string | undefined {
   return readString(readRecord(first), 'path') ?? undefined
 }
 
-/** The tool a thread item runs, or null for an item that is not a tool call (a message, a
- *  thought, a plan). */
 export function codexChildToolCall(item: CodexThreadItem): CodexChildToolCall | null {
   switch (item.type) {
     case 'commandExecution':
@@ -58,20 +57,17 @@ export function codexChildToolCall(item: CodexThreadItem): CodexChildToolCall | 
   }
 }
 
-/** Whether an item frame says the call is over, whatever frame carried it. */
 export function codexToolCallEnded(method: string, item: CodexThreadItem): boolean {
   const status = readString(item, 'status')
   return method === 'item/completed' || (status !== null && status !== 'inProgress')
 }
 
-/** What a child said: an assistant message's text. */
 export function codexChildMessageText(item: CodexThreadItem): string | undefined {
   return item.type === 'agentMessage'
     ? bounded(readString(item, 'text') ?? readTextContent(item, 'content'))
     : undefined
 }
 
-/** A child turn's ending. Codex states three; anything else is an ending nobody classified. */
 export function codexChildTurnOutcome(state: NativeChatSubagentState): AgentChildWorkOutcome {
   switch (state) {
     case 'completed':

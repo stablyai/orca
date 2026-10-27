@@ -6,7 +6,8 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   NOW,
@@ -149,8 +150,7 @@ function worktreeRemovalFrame(): RuntimeMobileSessionTabsRemovedResult {
   }
 }
 
-/** Why the merge and not the raw patch: an untouched key and a culled key are both absent from a
- *  patch, so reading it directly makes "kept" and "erased" indistinguishable. */
+/** Read merged state: both untouched and culled keys are absent from patches, so raw diff assertions cannot distinguish them. */
 function applyToState(
   state: WebSessionTabsSyncState,
   snapshot: RuntimeMobileSessionTabsResult
@@ -167,8 +167,7 @@ function applyToState(
 describe('restored client-hosted browser rows', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
-  // Why: the seeded handle is what keeps the pane off browser.tabCreate, but it also makes the row
-  // cull-eligible. Until the host republishes the page, absence from a snapshot proves nothing.
+  // Restored handles avoid duplicate create but enable culling; absence proves nothing until the recovering host republishes the page.
   it('keeps a restored row the host has not republished yet', () => {
     const next = applyToState(
       restoredState(),
@@ -187,8 +186,7 @@ describe('restored client-hosted browser rows', () => {
     expect(next.remoteBrowserPageHandlesByPageId[PAGE_ID]).toBeDefined()
   })
 
-  // Why: without the seeded handle the republished page has nothing to match, so adoption appends
-  // a second workspace and the restored row is left pointing at the new page.
+  // Seeded handle must match republication or adoption duplicates the workspace and strands its restored row.
   it('adopts a republished page onto the restored row instead of appending a duplicate', () => {
     const next = applyToState(restoredState(), republishedSnapshot(CLIENT_PLACEMENT))
 
@@ -201,9 +199,7 @@ describe('restored client-hosted browser rows', () => {
     })
   })
 
-  // Why: a host that puts the page back on the server publishes no placement, so the handle is
-  // otherwise byte-identical to the seed — and a surviving marker pins the pane to a client-hosted
-  // view of a page this desktop does not host.
+  // Server placement omits placement metadata; clear the otherwise-identical seed marker or it pins an unhosted client pane.
   it('clears the restored client-hosted marker when the host adopts the page onto the server', () => {
     const next = applyToState(restoredState(), republishedSnapshot(undefined))
 
@@ -213,8 +209,7 @@ describe('restored client-hosted browser rows', () => {
     })
   })
 
-  // Why: once the host has published the page, the restored carve-out is spent — an adopted row
-  // that later goes missing is a real close and must still be culled.
+  // Republication spends the restore carve-out; later omission must still cull closed pages.
   it('still culls an adopted row the host stops publishing', () => {
     const next = applyToState(
       restoredState({

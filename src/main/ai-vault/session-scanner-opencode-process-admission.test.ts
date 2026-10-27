@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sqlite-process-client'
 
 const mocked = vi.hoisted(() => ({ spawn: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: mocked.spawn }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: mocked.spawn }))
 
 function child() {
   const process = Object.assign(new EventEmitter(), {
@@ -26,6 +26,7 @@ const args = { dbPath: '/home/ada/opencode.db', sessionId: 'session', platform: 
 const clients: ReturnType<typeof createOpenCodeSqliteProcessClient>[] = []
 afterEach(() => {
   clients.splice(0).forEach((client) => client.dispose())
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.clearAllMocks()
 })
@@ -57,6 +58,7 @@ describe('SQLite process launch admission', () => {
   })
 
   it('probes once per process, reuses it for every read, and reprobes after idle expiry', async () => {
+    vi.useFakeTimers()
     const admit = vi.fn(async () => {})
     const client = reader(admit, 15)
     for (let index = 0; index < 20; index++) {
@@ -64,7 +66,10 @@ describe('SQLite process launch admission', () => {
     }
     expect(admit).toHaveBeenCalledOnce()
     expect(mocked.spawn).toHaveBeenCalledOnce()
-    await vi.waitFor(() => expect(mocked.spawn.mock.results[0]?.value.kill).toHaveBeenCalled())
+    await vi.advanceTimersByTimeAsync(14)
+    expect(mocked.spawn.mock.results[0]?.value.kill).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(mocked.spawn.mock.results[0]?.value.kill).toHaveBeenCalledWith('SIGKILL')
     await client.parse(args)
     expect(admit).toHaveBeenCalledTimes(2)
     expect(mocked.spawn).toHaveBeenCalledTimes(2)

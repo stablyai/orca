@@ -4,13 +4,25 @@ import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compat
 import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
-import { makeLineage, makeWorkspaceLineage, makeWorktree } from './worktrees-slice-test-fixtures'
+import {
+  makeLineage,
+  makeWorkspaceLineage,
+  makeWorktree,
+  TEST_REPO
+} from './worktrees-slice-test-fixtures'
+
+// The client stamps a server's repo row on arrival; focus alone never names the owner.
+function createRemoteRepoStore() {
+  const store = createTestStore()
+  store.setState({ repos: [{ ...TEST_REPO, executionHostId: 'runtime:env-1' }] })
+  return store
+}
 import {
   createTestStore,
-  mockApi,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
-  runtimeEnvironmentCall
+  runtimeEnvironmentCall,
+  worktreeListMock
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -39,7 +51,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('updates remote worktree records when only lineage changes', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const initial = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -70,7 +82,9 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees('repo1')
 
-    expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
+    expect(store.getState().worktreesByRepo.repo1).toEqual([
+      { ...refreshed, projectId: 'repo:repo1', projectHostSetupId: 'repo1' }
+    ])
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
     expect(store.getState().sortEpoch).toBe(8)
   })
@@ -84,7 +98,7 @@ describe('fetchWorktrees', () => {
       branch: 'refs/heads/feature'
     })
     const refreshed = { ...initial, linkedGitLabIssue: 321 }
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({
       worktreesByRepo: { repo1: [initial] },
       sortEpoch: 7
@@ -97,14 +111,16 @@ describe('fetchWorktrees', () => {
   })
 
   it('refreshes remote lineage when the worktree payload is otherwise unchanged', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const worktree = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
       path: '/remote/wt1',
       branch: 'refs/heads/remote',
       hostId: 'runtime:env-1',
-      runtimeOwnerEnvironmentId: 'env-1'
+      runtimeOwnerEnvironmentId: 'env-1',
+      projectId: 'repo:repo1',
+      projectHostSetupId: 'repo1'
     })
     const staleLineage = makeLineage({
       worktreeId: worktree.id,
@@ -143,7 +159,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('keeps remote lineage map identity when a cloned payload is unchanged', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const worktree = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -208,7 +224,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('defers remote lineage when a caller owns the final host refresh', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const worktree = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -267,7 +283,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('keeps a lineage row written while the host lineage request was in flight', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const worktree = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -324,7 +340,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('keeps a parent reassignment written while the host lineage request was in flight', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const worktree = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -395,7 +411,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('keeps a lineage row deleted while the host lineage request was in flight', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const worktree = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -452,7 +468,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('drops a host lineage row the refresh reply no longer reports', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const worktree = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -484,7 +500,7 @@ describe('fetchWorktrees', () => {
   })
 
   it('keeps a successful remote worktree refresh when lineage refresh fails', async () => {
-    const store = createTestStore()
+    const store = createRemoteRepoStore()
     const refreshed = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -516,6 +532,8 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([
       {
         ...refreshed,
+        projectId: 'repo:repo1',
+        projectHostSetupId: 'repo1',
         hostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1'
       }

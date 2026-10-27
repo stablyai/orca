@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export type BrowserPointerModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
 
@@ -21,6 +23,7 @@ export function MobileBrowserPointerModifiers({
   selectedModifiers,
   onToggle
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View style={styles.modifierRow}>
       {BROWSER_POINTER_MODIFIERS.map((modifier) => {
@@ -56,7 +59,7 @@ export function MobileBrowserPointerModifiers({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   modifierRow: {
     flexDirection: 'row',
     gap: spacing.xs,
@@ -92,4 +95,4 @@ const styles = StyleSheet.create({
   disabledText: {
     color: colors.textMuted
   }
-})
+}))

@@ -7,8 +7,7 @@ describe('useIpcEvents updater integration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('clears stale remote PTYs when an SSH connection fully disconnects', async () => {
-    const clearDirectSshTargetPtyBindings = vi.fn(() => 1)
+  it('clears remote agent and port state when an SSH connection fully disconnects', async () => {
     const setSshConnectionState = vi.fn()
     const setSshTargetsMetadata = vi.fn()
     const clearRemovedSshTargetState = vi.fn()
@@ -54,13 +53,14 @@ describe('useIpcEvents updater integration', () => {
       setSshTargetLabels: vi.fn(),
       setSshTargetsMetadata,
       setPortForwards: vi.fn(),
+      setUnrestoredPortForwards: vi.fn(),
       clearPortForwards: vi.fn(),
       setDetectedPorts: vi.fn(),
       enqueueSshCredentialRequest: vi.fn(),
       removeSshCredentialRequest: vi.fn(),
       clearRemoteDetectedAgents: vi.fn(),
       clearRemovedSshTargetState,
-      clearDirectSshTargetPtyBindings,
+      sshConnectionStates: new Map(),
       repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
@@ -74,8 +74,7 @@ describe('useIpcEvents updater integration', () => {
       sshTargetLabels: new Map<string, string>([['conn-1', 'Remote']]),
       settings: {
         terminalFontSize: 13,
-        experimentalNativeChat: false,
-        openAgentTabsInChatByDefault: false
+        experimentalNativeChat: false
       }
     }
     vi.doMock('react', async () => {
@@ -149,6 +148,10 @@ describe('useIpcEvents updater integration', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onPublishAgentLaunchTab: () => () => {},
+          onRevealTerminalPane: () => () => {},
+          onAgentLaunchPaneVerdict: () => () => {},
+          onLaunchRecipe: () => () => {},
           onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
@@ -162,24 +165,20 @@ describe('useIpcEvents updater integration', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
-          onNewBrowserTab: () => () => {},
-          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
+          onRequestRemoteCliBrowserScope: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
           replyTabClose: () => {},
           onRequestTabSetProfile: () => () => {},
           replyTabSetProfile: () => {},
-          onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onCloseFloatingItem: () => () => {},
           onSelectFloatingIndex: () => () => {},
-          onSwitchTab: () => () => {},
-          onSwitchTabAcrossAllTypes: () => () => {},
+          onBrowserPageTabShortcut: () => () => {},
           onSwitchRecentTab: () => () => {},
-          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
@@ -197,6 +196,7 @@ describe('useIpcEvents updater integration', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -218,6 +218,7 @@ describe('useIpcEvents updater integration', () => {
         ssh: {
           listTargets,
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => {
@@ -251,8 +252,6 @@ describe('useIpcEvents updater integration', () => {
       'conn-1',
       expect.objectContaining({ status: 'disconnected' })
     )
-    expect(clearDirectSshTargetPtyBindings).toHaveBeenCalledOnce()
-    expect(clearDirectSshTargetPtyBindings).toHaveBeenCalledWith('conn-1')
     expect(storeState.clearRemoteDetectedAgents).toHaveBeenCalledWith('conn-1')
 
     setSshConnectionState.mockClear()

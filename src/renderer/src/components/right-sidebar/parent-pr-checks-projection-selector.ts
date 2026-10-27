@@ -82,15 +82,14 @@ export function createParentPrChecksProjectionSelector(
         return cached.projection
       }
       if (dependenciesAreCurrent(state, cached.cacheReferences, cached.dependencies)) {
-        // Why: adopting unrelated replacement maps keeps later store notifications O(1).
+        // Adopt unrelated replacement maps so later notifications stay O(1).
         cached.cacheReferences = selectCacheReferences(state)
         return cached.projection
       }
     }
 
     const dependencies: CacheDependency[] = []
-    // Why: global provider refreshes replace these maps frequently; track only
-    // cache keys the attached-worktree projection actually reads.
+    // Provider refreshes replace maps frequently; track only keys read by this projection.
     const projection = buildProjection({
       ...inputs,
       hostedReviewCache: trackCacheReads(state, 'hostedReviewCache', dependencies),

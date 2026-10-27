@@ -16,13 +16,11 @@ vi.mock('../wsl', () => ({
     UBUNTU_HOME,
     UBUNTU_HOME.replace('Ubuntu', 'Debian')
   ]),
-  getWslHomeAsync: vi.fn(async (distro: string) => UBUNTU_HOME.replace('Ubuntu', distro))
+  getWslHomeAsync: vi.fn(async (distro: string) => UBUNTU_HOME.replace('Ubuntu', distro)),
+  resolveWslGuestRealDirAsync: vi.fn(async (_distro: string, dir: string) => dir)
 }))
 
-// Only these UNC fixtures are readable. Every other `\\wsl.localhost\` path —
-// wrong distro, missing file — must reject, or the mock would mask a misresolve.
-// Non-WSL paths hit the real fs, so the guest Linux path stays unreadable as on a
-// real Windows host, where it would misresolve against the current drive.
+// Accept only exact UNC fixtures so wrong-distro resolutions fail; native paths use real filesystem checks.
 const READABLE_WSL_UNC_PATHS = new Set([ROLLOUT_UNC])
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -42,10 +40,21 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 const HOST_ROLLOUT = 'C:\\host\\sessions\\rollout-wsl-sess.jsonl'
-const scanned = vi.hoisted(() => ({ dirs: [] as string[], hostRootHasRollout: false }))
+const scanned = vi.hoisted(() => {
+  const state: { dirs: string[]; hostRootHasRollout: boolean; wslHits: Record<string, string> } = {
+    dirs: [],
+    hostRootHasRollout: false,
+    wslHits: {}
+  }
+  return state
+})
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
   walkSessionFiles: async (dir: string) => {
     scanned.dirs.push(dir)
+    const wslHit = scanned.wslHits[dir]
+    if (wslHit) {
+      return [wslHit]
+    }
     const isWslRoot = dir.startsWith('\\\\wsl.localhost\\')
     return scanned.hostRootHasRollout && !isWslRoot
       ? ['C:\\host\\sessions\\rollout-wsl-sess.jsonl']
@@ -55,7 +64,7 @@ vi.mock('../ai-vault/session-scanner-discovery', () => ({
 
 import { resetHostReadableTranscriptPathCacheForTests } from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
+import { getWslHomeAsync, listRunningWslHomeDirsAsync, listWslDistrosAsync } from '../wsl'
 
 const realPlatform = process.platform
 
@@ -67,8 +76,10 @@ beforeEach(() => {
   resetHostReadableTranscriptPathCacheForTests()
   vi.mocked(getWslHomeAsync).mockClear()
   vi.mocked(listWslDistrosAsync).mockClear()
+  vi.mocked(listRunningWslHomeDirsAsync).mockClear()
   scanned.dirs = []
   scanned.hostRootHasRollout = false
+  scanned.wslHits = {}
   READABLE_WSL_UNC_PATHS.clear()
   READABLE_WSL_UNC_PATHS.add(ROLLOUT_UNC)
   setPlatform('win32')
@@ -165,8 +176,6 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
   })
 
   it('does not enumerate WSL distros when a host Codex root already has the rollout', async () => {
-    // Why: listing WSL homes spawns wsl.exe per distro, which boots distros the
-    // user deliberately left stopped. It must stay a last resort.
     scanned.hostRootHasRollout = true
 
     await expect(resolveSessionFilePath('codex', 'wsl-sess')).resolves.toBe(HOST_ROLLOUT)
@@ -183,5 +192,40 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
       codexSessionsDirs: []
     })
     expect(resolved).toBeNull()
+  })
+
+  it.each([
+    ['claude', `${UBUNTU_HOME}\\.claude\\projects`, '-home-ada-repo\\wsl-sess.jsonl'],
+    ['omp', `${UBUNTU_HOME}\\.omp\\agent\\sessions`, '-home-ada-repo\\2026-07-24_wsl-sess.jsonl'],
+    [
+      'grok',
+      `${UBUNTU_HOME}\\.grok\\sessions`,
+      '%2Fhome%2Fada%2Frepo\\wsl-sess\\chat_history.jsonl'
+    ]
+  ] as const)(
+    'finds a %s transcript that exists only in a running distro',
+    async (agent, root, relative) => {
+      const transcript = `${root}\\${relative}`
+      scanned.wslHits[root] = transcript
+
+      await expect(resolveSessionFilePath(agent, 'wsl-sess')).resolves.toBe(transcript)
+    }
+  )
+
+  it('never searches the projects root of a distro that is not running', async () => {
+    vi.mocked(listRunningWslHomeDirsAsync).mockResolvedValueOnce([UBUNTU_HOME])
+
+    await expect(resolveSessionFilePath('claude', 'wsl-sess')).resolves.toBeNull()
+
+    expect(scanned.dirs).toContain(`${UBUNTU_HOME}\\.claude\\projects`)
+    expect(scanned.dirs.some((dir) => dir.includes('Debian'))).toBe(false)
+  })
+
+  it('does not enumerate WSL distros when a host Claude root already has the session', async () => {
+    scanned.hostRootHasRollout = true
+
+    await expect(resolveSessionFilePath('claude', 'wsl-sess')).resolves.toBe(HOST_ROLLOUT)
+
+    expect(vi.mocked(listRunningWslHomeDirsAsync)).not.toHaveBeenCalled()
   })
 })

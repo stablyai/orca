@@ -72,7 +72,7 @@ function hasAtMostOneShellItem(value: Buffer): boolean {
   if (value.byteLength === 0) {
     return true
   }
-  // Why: Explorer's FileNameW exposes only the first path even when its CIDA has multiple items.
+  // Explorer FileNameW lists only the first path; require single-item CIDA.
   return value.byteLength >= 12 && value.readUInt32LE(0) === 1
 }
 
@@ -82,6 +82,15 @@ export function readWindowsCopiedFilePath({
   shellIdListArray
 }: WindowsClipboardFileFormats): string | null {
   return hasAtMostOneShellItem(shellIdListArray) ? decodeFileNameW(fileNameW) : null
+}
+
+export function readWindowsCopiedImageFilePath(
+  formats: WindowsClipboardFileFormats
+): string | null {
+  const filePath = readWindowsCopiedFilePath(formats)
+  return filePath && IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase())
+    ? filePath
+    : null
 }
 
 function readPngDimensions(source: Buffer): { height: number; width: number } | null {
@@ -164,14 +173,14 @@ export async function readWindowsClipboardImageFileAsPng(
   formats: WindowsClipboardFileFormats,
   { createImageFromBuffer, openFile }: WindowsClipboardImageFileDeps
 ): Promise<Buffer | null> {
-  const filePath = readWindowsCopiedFilePath(formats)
-  if (!filePath || !IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase())) {
+  const filePath = readWindowsCopiedImageFilePath(formats)
+  if (!filePath) {
     return null
   }
 
   let handle: ClipboardImageFileHandle
   try {
-    // Why: one handle keeps validation and the bounded read on the same file if its path changes.
+    // Validate and read through one handle so path replacement cannot swap the file.
     handle = await openFile(filePath)
   } catch {
     return null
@@ -204,7 +213,7 @@ export async function readWindowsClipboardImageFileAsPng(
   if (!encodedDimensions) {
     return null
   }
-  // Why: reject pixel bombs from metadata before NativeImage allocates decoded pixels.
+  // Check encoded dimensions before NativeImage allocates a pixel bomb.
   assertClipboardImageDimensionsWithinLimit(encodedDimensions)
 
   let image: NativeImage

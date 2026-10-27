@@ -17,14 +17,20 @@ export type AgentBackgroundSessionTestState = {
     activeRuntimeEnvironmentId: string | null
     terminalMainSideEffectAuthority: boolean | undefined
   }
-  projects: {
+  endpointProjects: {
     id: string
     localWindowsRuntimePreference:
       | { kind: 'inherit-global' }
       | { kind: 'windows-host' }
       | { kind: 'wsl'; distro: string | null }
   }[]
-  repos: { id: string; connectionId: string | null; path: string; projectGroupId?: string | null }[]
+  repos: {
+    id: string
+    connectionId: string | null
+    path: string
+    projectGroupId?: string | null
+    executionHostId?: `runtime:${string}`
+  }[]
   folderWorkspaces: {
     id: string
     projectGroupId: string
@@ -63,6 +69,9 @@ export function createAgentBackgroundSessionTestState(mocks: {
   setTabLayout: TestMock
   registerAgentLaunchConfig: TestMock
 }): AgentBackgroundSessionTestState {
+  const endpointProjects: AgentBackgroundSessionTestState['endpointProjects'] = [
+    { id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }
+  ]
   const state = {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'wt-1',
@@ -72,18 +81,7 @@ export function createAgentBackgroundSessionTestState(mocks: {
       activeRuntimeEnvironmentId: null as string | null,
       terminalMainSideEffectAuthority: undefined as boolean | undefined
     },
-    projects: [
-      {
-        id: 'repo-1',
-        localWindowsRuntimePreference: { kind: 'inherit-global' as const }
-      }
-    ] as {
-      id: string
-      localWindowsRuntimePreference:
-        | { kind: 'inherit-global' }
-        | { kind: 'windows-host' }
-        | { kind: 'wsl'; distro: string | null }
-    }[],
+    endpointProjects,
     repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
     worktreesByRepo: {
       'repo-1': [
@@ -132,7 +130,9 @@ export function resetAgentBackgroundSessionTestState(state: AgentBackgroundSessi
     activeRuntimeEnvironmentId: null,
     terminalMainSideEffectAuthority: undefined
   }
-  state.projects = [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }]
+  state.endpointProjects = [
+    { id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }
+  ]
   state.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
   state.folderWorkspaces = []
   state.projectGroups = []
@@ -163,6 +163,8 @@ export function useRemoteAgentBackgroundRuntime(state: AgentBackgroundSessionTes
     activeRuntimeEnvironmentId: 'env-1',
     terminalMainSideEffectAuthority: undefined
   }
+  // The client stamps a server's rows on arrival; focus alone never names the owner.
+  state.repos = state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:env-1' }))
 }
 
 /** The tab id reserved before the spawn; the run tab adopts it once the PTY is live. */
@@ -198,7 +200,8 @@ export function stubAgentBackgroundSessionWindow(mocks: {
       runtime: { call: vi.fn() },
       runtimeEnvironments: {
         call: mocks.runtimeEnvironmentCall,
-        subscribe: mocks.runtimeEnvironmentSubscribe
+        subscribe: mocks.runtimeEnvironmentSubscribe,
+        cancelSubscription: vi.fn(async () => undefined)
       }
     }
   })
@@ -231,7 +234,7 @@ export function resetAgentBackgroundSessionTestHarness(args: {
       (args.runtimeCall as unknown as (value: unknown) => unknown)(request)
   )
   resetAgentBackgroundSessionTestState(args.state)
-  // Why: production reserves the tab id before the spawn; honoring options.id mirrors createTab's adoption contract.
+  // Honor the pre-reserved tab id to mirror createTab adoption.
   args.createTab.mockImplementation((_worktreeId, _groupId, _shellOverride, options) => {
     const tab = { id: options?.id ?? 'tab-1', title: 'Terminal 1' }
     args.state.tabsByWorktree['wt-1'].push(tab)

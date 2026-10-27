@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const workflow = parse(readFileSync('.github/workflows/node-server-tests.yml', 'utf8'))
 const steps = workflow.jobs.persistence.steps
@@ -59,6 +59,8 @@ function context(os, arch, event, ref, template = false) {
     },
     success: () => true,
     fromJSON: JSON.parse,
+    format: (template, ...values) =>
+      template.replace(/\{(\d+)\}/g, (_match, index) => String(values[Number(index)])),
     contains: (values, value) => values.includes(value)
   }
 }
@@ -148,6 +150,17 @@ describe('Windows server prebuild cache workflow', () => {
     expect(actionSteps.some((step) => step.uses === 'actions/cache/save@v5')).toBe(false)
     expect(build.if).toBeUndefined()
     expect(build['continue-on-error']).toBeUndefined()
+    for (const command of [
+      'pnpm build:orcad',
+      'pnpm test:node-server --artifact ${{ runner.os',
+      'node out/orcad/orcad.js --orcad-smoke-load-check'
+    ]) {
+      const gate = steps.find((step) => {
+        const firstLine = step.run?.split('\n')[0]
+        return firstLine === command || firstLine?.startsWith(`${command} `)
+      })
+      expect(gate, command).toBeDefined()
+    }
     for (const gate of steps.filter((step) =>
       /require-slots|--smoke|pnpm build:orcad$|test:node-server|--orcad-smoke-load-check/.test(
         step.run ?? ''
@@ -173,6 +186,38 @@ describe('SSH Windows consumers of qualified server slots', () => {
   const sshWorkflow = parse(readFileSync('.github/workflows/ssh-windows-hosts.yml', 'utf8'))
   const sshSteps = sshWorkflow.jobs.hosts.steps
   const sshPrepare = sshSteps.find((step) => step.uses === prepare.uses)
+  const inboxBackground = sshSteps.find((step) => step.id === 'inbox-capability')
+  const inboxSerial = sshSteps.find((step) => step.name?.endsWith('after the builds'))
+  const allLanes = [
+    { arch: 'x64', runner: 'windows-2022', server: 'inbox' },
+    { arch: 'x64', runner: 'windows-2022', server: 'preview', archive: 'OpenSSH-Win64.zip' },
+    { arch: 'arm64', runner: 'windows-11-arm', server: 'inbox' },
+    { arch: 'arm64', runner: 'windows-11-arm', server: 'preview', archive: 'OpenSSH-ARM64.zip' }
+  ]
+
+  function sshContext(event, inputs = {}) {
+    const ctx = context('Windows', 'ARM64', event, 'refs/heads/main')
+    ctx.github.event = { inputs, pull_request: { number: undefined } }
+    ctx.inputs = inputs
+    ctx.env = {
+      INBOX_PREPARATION_MODE: sshValue(sshWorkflow.jobs.hosts.env.INBOX_PREPARATION_MODE, ctx)
+    }
+    return ctx
+  }
+
+  function sshValue(value, ctx) {
+    return evaluate(value.slice(3, -2).trim(), ctx)
+  }
+
+  function backgroundPreparationRuns(ctx) {
+    const condition = inboxBackground.run
+      .match(/^\s*if\((.*)\)\{\s*$/m)[1]
+      .replace(/'\$\{\{ matrix\.(arch|server) \}\}'/g, (_match, name) => `matrix.${name}`)
+      .replaceAll('$env:INBOX_PREPARATION_MODE', 'env.INBOX_PREPARATION_MODE')
+      .replaceAll(' -eq ', ' === ')
+      .replaceAll(' -and ', ' && ')
+    return evaluate(condition, ctx)
+  }
 
   it.each(['pull_request', 'workflow_dispatch'])(
     'restores only PR slots and keeps manual %s qualification fresh',
@@ -188,24 +233,18 @@ describe('SSH Windows consumers of qualified server slots', () => {
 
   it('keeps both architectures, both sshd versions and the existing build order', () => {
     expect(
-      sshWorkflow.jobs.hosts.strategy.matrix.include.map(({ arch, server }) => [arch, server])
-    ).toEqual([
-      ['x64', 'inbox'],
-      ['x64', 'preview'],
-      ['arm64', 'inbox'],
-      ['arm64', 'preview']
-    ])
+      sshValue(sshWorkflow.jobs.hosts.strategy.matrix.include, sshContext('pull_request'))
+    ).toEqual(allLanes)
     const addon = sshSteps.findIndex((step) =>
-      step.run?.includes('build-windows-process-tree-relay-addon.mjs')
+      step.run?.includes('build-windows-process-tree-addon.mjs')
     )
     const template = sshSteps.findIndex((step) => step.run?.includes('build-orcad-template.mjs'))
     const hosts = sshSteps.findIndex((step) => step.name?.startsWith('Run the Windows host cells'))
     expect(addon).toBeLessThan(sshSteps.indexOf(sshPrepare))
     expect(sshSteps.indexOf(sshPrepare)).toBeLessThan(template)
     expect(template).toBeLessThan(hosts)
-    expect(sshSteps[template].env.ORCA_REQUIRE_RELAY_NATIVE_ADDONS).toBe('${{ matrix.arch }}')
     expect(sshSteps[template].run).toContain('--require-slots "win32-${{ matrix.arch }}"')
-    expect(sshSteps[hosts].run).toContain("@('pinned-cmd','pinned-powershell','legacy-opt-out')")
+    expect(sshSteps[hosts].run).toContain("@('orcad-cmd','orcad-powershell')")
     for (const workflowPaths of [
       workflow.on.pull_request.paths,
       sshWorkflow.on.pull_request.paths
@@ -215,6 +254,92 @@ describe('SSH Windows consumers of qualified server slots', () => {
     expect(sshWorkflow.on.pull_request.paths).toContain(
       'config/scripts/orcad-windows-prebuild-cache.mjs'
     )
+  })
+
+  it.each([
+    ['pull_request', {}, 'overlap', false],
+    ['pull_request', { preparation_mode: 'serial', arm_inbox_only: true }, 'overlap', false],
+    ['push', { preparation_mode: 'serial', arm_inbox_only: true }, 'overlap', false],
+    ['workflow_dispatch', {}, 'overlap', false],
+    ['workflow_dispatch', { preparation_mode: 'overlap', arm_inbox_only: false }, 'overlap', false],
+    ['workflow_dispatch', { preparation_mode: 'serial', arm_inbox_only: false }, 'serial', false],
+    ['workflow_dispatch', { preparation_mode: 'overlap', arm_inbox_only: true }, 'overlap', true],
+    ['workflow_dispatch', { preparation_mode: 'serial', arm_inbox_only: true }, 'serial', true]
+  ])('%s inputs=%j mode=%s ARM-only=%s', (event, inputs, mode, armOnly) => {
+    const ctx = sshContext(event, inputs)
+    const lanes = sshValue(sshWorkflow.jobs.hosts.strategy.matrix.include, ctx)
+    expect(lanes).toEqual(armOnly ? [allLanes[2]] : allLanes)
+    expect(ctx.env.INBOX_PREPARATION_MODE).toBe(mode)
+    for (const matrix of lanes) {
+      ctx.matrix = matrix
+      const inboxArm = matrix.server === 'inbox' && matrix.arch === 'arm64'
+      expect(backgroundPreparationRuns(ctx)).toBe(inboxArm && mode === 'overlap')
+      expect(sshValue(inboxSerial.if, ctx)).toBe(inboxArm && mode === 'serial')
+    }
+  })
+
+  it('defaults to the existing overlap schedule and keeps serial after the successful wait', () => {
+    expect(sshWorkflow.on.workflow_dispatch.inputs.preparation_mode).toMatchObject({
+      type: 'choice',
+      default: 'overlap',
+      options: ['overlap', 'serial']
+    })
+    expect(sshWorkflow.on.workflow_dispatch.inputs.arm_inbox_only).toMatchObject({
+      type: 'boolean',
+      default: false
+    })
+    const dependencies = sshSteps.findIndex((step) => step.id === 'dependencies')
+    const template = sshSteps.findIndex((step) => step.run?.includes('build-orcad-template.mjs'))
+    const wait = sshSteps.findIndex((step) => step.wait === 'inbox-capability')
+    const serial = sshSteps.indexOf(inboxSerial)
+    const hosts = sshSteps.findIndex((step) => step.name?.startsWith('Run the Windows host cells'))
+    expect(inboxBackground.background).toBe(true)
+    expect(inboxBackground.if).toBeUndefined()
+    expect(sshSteps.indexOf(inboxBackground)).toBeLessThan(dependencies)
+    expect(template).toBeLessThan(wait)
+    expect(serial).toBe(wait + 1)
+    expect(hosts).toBe(serial + 1)
+    expect(inboxSerial.background).toBeUndefined()
+    for (const preparation of [inboxBackground, inboxSerial]) {
+      expect(preparation['continue-on-error']).toBeUndefined()
+      expect(preparation.run).toContain(
+        '. config/ci/windows-ssh-provider/preview-ssh/windows-ssh-capability.ps1'
+      )
+      expect(preparation.run).toContain(
+        "-Receipt (Join-Path $receipts 'inbox-capability-preparation.json') -PreparationMode $env:INBOX_PREPARATION_MODE"
+      )
+    }
+    expect(sshSteps[hosts].run).toContain('-InboxPreparationReceipt $preparation')
+    expect(sshWorkflow.jobs.hosts.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+    expect(sshWorkflow.jobs.hosts.env.ORCA_ISOLATED_SSH_CI).toBe('1')
+    for (const event of ['pull_request', 'workflow_dispatch']) {
+      for (const preparation_mode of ['overlap', 'serial']) {
+        for (const [cells, jobMinutes, hostMinutes] of [
+          ['', 75, 50],
+          ['orcad-cli-managed', 160, 130]
+        ]) {
+          const ctx = sshContext(event, { preparation_mode, arm_inbox_only: true, cells })
+          expect(sshValue(sshWorkflow.jobs.hosts['timeout-minutes'], ctx)).toBe(jobMinutes)
+          expect(sshValue(sshSteps[hosts]['timeout-minutes'], ctx)).toBe(hostMinutes)
+        }
+      }
+    }
+  })
+
+  it('isolates manual comparison modes while preserving ordinary cancellation groups', () => {
+    const group = (ctx) =>
+      sshWorkflow.concurrency.group.replace(/\$\{\{(.*?)\}\}/g, (_match, expression) =>
+        String(evaluate(expression.trim(), ctx))
+      )
+    const regular = sshContext('pull_request')
+    regular.github.event.pull_request = { number: 28669 }
+    expect(group(regular)).toBe('ssh-windows-hosts-28669')
+    expect(group(sshContext('workflow_dispatch'))).toBe('ssh-windows-hosts-refs/heads/main')
+    for (const mode of ['overlap', 'serial']) {
+      expect(
+        group(sshContext('workflow_dispatch', { arm_inbox_only: true, preparation_mode: mode }))
+      ).toBe(`ssh-windows-hosts-refs/heads/main-${mode}`)
+    }
   })
 })
 
@@ -226,6 +351,7 @@ node() {
       IFS= read -r verdict < out/orcad-prebuilds/manifest.json
       [ "$verdict" = valid ] ;;
     *--print-slot) echo win32-x64 ;;
+    *--require-slots*|*--smoke) grep -qx valid out/orcad-prebuilds/manifest.json ;;
     *) return 41 ;;
   esac
 }
@@ -289,8 +415,8 @@ describe.skipIf(process.platform === 'win32')('Windows prebuild Bash fallback', 
     ).toBe(validates)
     expect(commands.slice(-3)).toEqual([
       'node config/scripts/build-orcad-prebuilds.mjs --print-slot',
-      'pnpm build:orcad-prebuilds --require-slots win32-x64',
-      'pnpm build:orcad-prebuilds --smoke'
+      'node config/scripts/build-orcad-prebuilds.mjs --require-slots win32-x64',
+      'node config/scripts/build-orcad-prebuilds.mjs --smoke'
     ])
   })
 
@@ -311,3 +437,20 @@ describe.skipIf(process.platform === 'win32')('Windows prebuild Bash fallback', 
     expect(commands.at(-1)).toBe('pnpm build:orcad-prebuilds')
   })
 })
+
+it.each(['X64', 'ARM64'])(
+  'reuses exact native slots in fast %s qualification but saves only after success',
+  (arch) => {
+    const ctx = context('Windows', arch, 'workflow_dispatch', 'refs/heads/feature', true)
+    ctx.inputs.fast_runners = true
+    ctx.inputs.ref = 'a'.repeat(40)
+    expect(evaluate(identity.if, actionContext(ctx))).toBe(true)
+    expect(evaluate(restore.if, actionContext(ctx))).toBe(true)
+    expect(evaluate(save.if, ctx)).toBe(true)
+    ctx.success = () => false
+    expect(evaluate(save.if, ctx)).toBe(false)
+    ctx.success = () => true
+    ctx.github.event_name = 'pull_request'
+    expect(evaluate(save.if, ctx)).toBe(false)
+  }
+)

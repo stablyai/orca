@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { Check, Copy, FileWarning, Sparkles } from 'lucide-react-native'
 import { useClipboardWriter } from '../../platform/clipboard'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import { PRSection } from './PRSection'
 import { resolveConflictDisplay } from './pr-conflict-presentation'
@@ -23,25 +24,19 @@ export type PrConflictsTriage = {
 }
 
 type Props = {
-  // What it reads, not the whole PR: the conflict view-model is the only thing derived here, and
-  // a caller holding a full `PRInfo` satisfies this.
+  // Accept conflict view-model inputs only; full PRInfo remains compatible.
   pr: Pick<PRInfo, 'mergeable' | 'conflictSummary'>
-  // True while a refresh is in flight, so the fallback notice can explain that
-  // missing conflict file details may still be loading (desktop parity).
+  // Explain absent file details as loading while refresh is in flight, matching desktop.
   isRefreshing?: boolean
   triage?: PrConflictsTriage
 }
 
-// Conflicting-files section — shown only when the hosted review reports merge
-// conflicts. Lists the conflicting file paths, or a fallback notice when the file
-// list is not yet available. Ports the desktop ConflictingFilesSection +
-// MergeConflictNotice into the mobile card shell.
+// Show hosted conflicts as paths or missing-list fallback, matching desktop conflict/notice components.
 export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: Props) {
-  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
-  // context, which the iOS custom scheme is not and Android's https is.
+  useMobileColorScheme()
+  // Use clipboard seam: iOS custom scheme lacks page secure context, while Android https provides one.
   const clipboard = useClipboardWriter()
-  // Three states, not a boolean: a refused write used to be caught and dropped, so the tap was
-  // indistinguishable from one that copied. The tasks page reports its refusals the same way.
+  // Track idle/success/failure: dropping pasteboard refusal used to look like successful copy, unlike Tasks error reporting.
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const copiedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const conflict = resolveConflictDisplay(pr)
@@ -153,8 +148,7 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
         </View>
       )}
 
-      {/* "Resolve conflicts with AI" — mirrors desktop's PRTriageStrip. Launches an
-          agent that brings the base branch in and completes the merge. */}
+      {/* Launch desktop-style conflict agent to bring base branch in and complete merge. */}
       {triage ? (
         <View style={triageStyles.triageArea}>
           <Pressable

@@ -22,6 +22,36 @@ function file(overrides: Partial<OpenFile> & Pick<OpenFile, 'id' | 'filePath'>):
 }
 
 describe('editor external watch path batch index', () => {
+  it('routes POSIX literal-backslash updates only to the matching tab', () => {
+    const scope = { worktreeId: 'wt-posix', worktreePath: '/repo', runtimeEnvironmentId: null }
+    const literal = file({
+      id: 'literal',
+      worktreeId: scope.worktreeId,
+      filePath: '/repo/a\\b.txt',
+      relativePath: 'a\\b.txt'
+    })
+    const nested = file({
+      id: 'nested',
+      worktreeId: scope.worktreeId,
+      filePath: '/repo/a/b.txt',
+      relativePath: 'a/b.txt'
+    })
+    const index = indexEditorExternalWatchBatchPaths(
+      {
+        worktreePath: scope.worktreePath,
+        events: [
+          { kind: 'update', absolutePath: literal.filePath },
+          { kind: 'update', absolutePath: nested.filePath }
+        ]
+      },
+      [literal, nested],
+      scope
+    )
+    expect(index.changes.map((change) => change.relativePath)).toEqual(['a\\b.txt', 'a/b.txt'])
+    expect(index.matchingOpenFiles(index.changes[0])).toEqual([literal])
+    expect(index.matchingOpenFiles(index.changes[1])).toEqual([nested])
+  })
+
   it('matches UNC aliases for updates, deletes, and restored tombstones', () => {
     const restored = file({
       id: 'restored',
@@ -86,6 +116,28 @@ describe('editor external watch path batch index', () => {
 
     expect(matching.matchingOpenFiles(matching.changes[0])).toEqual([mounted])
     expect(wrongLinuxCase.matchingOpenFiles(wrongLinuxCase.changes[0])).toEqual([])
+  })
+
+  it('matches Windows tabs across separator and drive spellings, but not tail case or POSIX //', () => {
+    const scope = { worktreeId: 'wt-wsl', worktreePath: 'C:/Repo', runtimeEnvironmentId: null }
+    const tab = file({ id: 'tab', filePath: 'c:\\Repo\\File.ts', relativePath: 'File.ts' })
+    const otherCase = file({ id: 'other', filePath: 'c:\\Repo\\file.ts', relativePath: 'file.ts' })
+    const windows = indexEditorExternalWatchBatchPaths(
+      {
+        worktreePath: scope.worktreePath,
+        events: [{ kind: 'update', absolutePath: 'C:/Repo/File.ts' }]
+      },
+      [tab, otherCase],
+      scope
+    )
+    const posix = indexEditorExternalWatchBatchPaths(
+      { worktreePath: '//repo', events: [{ kind: 'update', absolutePath: '//repo/a/b.ts' }] },
+      [file({ id: 'posix', filePath: '//repo/a\\b.ts', relativePath: 'a\\b.ts' })],
+      { ...scope, worktreePath: '//repo' }
+    )
+
+    expect(windows.matchingOpenFiles(windows.changes[0])).toEqual([tab])
+    expect(posix.matchingOpenFiles(posix.changes[0])).toEqual([])
   })
 
   it('keeps aliases literal for SSH, runtimes, and POSIX scopes', () => {

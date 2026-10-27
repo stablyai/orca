@@ -1,56 +1,70 @@
 import { describe, expect, it } from 'vitest'
-import { resolveMobilePrMergeMethod, resolvePrActionAvailability } from './pr-actions-state'
+import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+import { presentPrMerge, resolvePrActionAvailability } from './pr-actions-state'
 
 describe('resolvePrActionAvailability', () => {
-  it('merged: only unlink', () => {
-    expect(resolvePrActionAvailability('merged')).toEqual({
+  it('offers Ready for review instead of Merge on drafts, like desktop', () => {
+    expect(resolvePrActionAvailability('draft')).toMatchObject({
       canMerge: false,
-      canAutoMerge: false,
-      canClose: false,
-      canReopen: false,
-      canUnlink: true
+      canMarkReady: true,
+      canClose: true
     })
-  })
-
-  it('closed: reopen + unlink, no merge', () => {
-    const a = resolvePrActionAvailability('closed')
-    expect(a.canReopen).toBe(true)
-    expect(a.canUnlink).toBe(true)
-    expect(a.canMerge).toBe(false)
-    expect(a.canClose).toBe(false)
-  })
-
-  it('open and draft: merge/auto-merge/close allowed', () => {
-    for (const state of ['open', 'draft'] as const) {
-      const a = resolvePrActionAvailability(state)
-      expect(a.canMerge).toBe(true)
-      expect(a.canAutoMerge).toBe(true)
-      expect(a.canClose).toBe(true)
-      expect(a.canReopen).toBe(false)
-    }
+    expect(resolvePrActionAvailability('open')).toMatchObject({
+      canMerge: true,
+      canMarkReady: false,
+      canClose: true
+    })
   })
 })
 
-describe('resolveMobilePrMergeMethod', () => {
-  it('uses squash when repository settings are unavailable', () => {
-    expect(resolveMobilePrMergeMethod(undefined)).toBe('squash')
+describe('presentPrMerge', () => {
+  const pr: PRInfo = {
+    number: 202,
+    title: 'API',
+    state: 'open',
+    url: 'https://example.test/202',
+    checksStatus: 'success',
+    updatedAt: '',
+    mergeable: 'CONFLICTING'
+  }
+  const entry = {
+    title: '',
+    url: '',
+    state: 'open' as const,
+    checksStatus: 'success' as const,
+    mergeable: 'MERGEABLE' as const
+  }
+
+  it('disables Merge with desktop copy when GitHub reports conflicts', () => {
+    expect(presentPrMerge(pr, 'squash')).toMatchObject({
+      enabled: false,
+      label: 'Conflicts',
+      hint: 'GitHub reports merge conflicts'
+    })
   })
 
-  it('uses the repository default when it is allowed', () => {
-    expect(
-      resolveMobilePrMergeMethod({
-        defaultMethod: 'rebase',
-        allowedMethods: { merge: false, squash: true, rebase: true }
-      })
-    ).toBe('rebase')
-  })
-
-  it('falls back to an allowed method when the default is disabled', () => {
-    expect(
-      resolveMobilePrMergeMethod({
-        defaultMethod: 'rebase',
-        allowedMethods: { merge: false, squash: true, rebase: false }
-      })
-    ).toBe('squash')
+  it('lets a complete stack merge through, and names a blocking downstack PR', () => {
+    const stack = {
+      number: 51,
+      position: 2,
+      size: 3,
+      baseRefName: 'main',
+      entries: [
+        { ...entry, position: 1, number: 201 },
+        { ...entry, position: 2, number: 202 }
+      ]
+    }
+    expect(presentPrMerge({ ...pr, stack }, 'squash')).toMatchObject({
+      enabled: true,
+      label: 'Merge through #202 · 2 PRs'
+    })
+    const blocked = {
+      ...stack,
+      entries: [{ ...entry, position: 1, number: 201, state: 'draft' as const }, stack.entries[1]]
+    }
+    expect(presentPrMerge({ ...pr, stack: blocked }, 'squash')).toMatchObject({
+      enabled: false,
+      hint: '#201 is still a draft.'
+    })
   })
 })

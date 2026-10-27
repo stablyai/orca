@@ -1,4 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -7,16 +19,9 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
-// Client-side wire regression: the host dimensions every snapshot it publishes,
-// but only the REQUESTED snapshot path ever read `cols`/`rows` back. Both PUSH
-// paths (initial subscribe, server recovery) dropped them, so the pane parsed a
-// host-grid image at its own grid and an idle TUI never repainted the damage.
-// This drives REAL binary frames through the REAL multiplexer
-// (decodeSnapshotInfo → onSnapshot meta) into the REAL transport
-// (processData → onReplayData meta). One stream carries every case: the
-// multiplexer is a module-level singleton, so separate cases would need
-// separate module registries.
+// Drive initial/recovery push grids through real codec→multiplexer→transport; use one singleton stream so every replay retains host dimensions and old-host omission remains unknown.
 
 describe('remote transport snapshot source-grid threading', () => {
   const runtimeCall = vi.fn()
@@ -52,11 +57,7 @@ describe('remote transport snapshot source-grid threading', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   it('carries the host grid on pushed snapshots and omits it when the host has none', async () => {

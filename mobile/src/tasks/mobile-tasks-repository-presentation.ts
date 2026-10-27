@@ -1,12 +1,14 @@
+import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  getHostContextLabel,
+  type HostContextLabelSources
+} from '../../../src/shared/worktree/host-context-labels'
 import { colors } from './mobile-tasks-dependencies'
 import { taskTime } from './mobile-tasks-item-mapping'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import type { RepoSummary } from './mobile-tasks-provider-detail-types'
 import type { TaskSort } from './mobile-tasks-view-state-types'
-
-export function isFailedGitHubCheck(check: { conclusion?: string | null }): boolean {
-  return ['failure', 'cancelled', 'timed_out'].includes(check.conclusion ?? '')
-}
 
 export function repositoryCount(count: number): string {
   return `${count} ${count === 1 ? 'repository' : 'repositories'}`
@@ -25,12 +27,22 @@ export function repoColor(name: string): string {
   return palette[Math.abs(hash) % palette.length]!
 }
 
-export function getRepoBadgeColor(repo: RepoSummary | undefined, fallbackName: string): string {
-  return repo?.badgeColor || repoColor(repo?.displayName ?? fallbackName)
+// Name hosts only for mixed-source lists; SSH repos retain bare paths because no target labels are available here.
+export function getTaskRepoDetail(
+  repo: RepoSummary,
+  sources: HostContextLabelSources | null
+): string {
+  const hostId = getRepoExecutionHostId(repo)
+  if (!sources || parseExecutionHostId(hostId)?.kind === 'ssh') {
+    return repo.path
+  }
+  return `${getHostContextLabel(hostId, sources)} · ${repo.path}`
 }
 
-// `undefined` as well as `null`: a checked `repo.hooks` reader does not require `source`, and the
-// recorded reply for a repo with no hooks file carries none.
+export function getRepoBadgeColor(repo: RepoSummary | undefined): string {
+  return resolveRepoBadgeColor(repo?.badgeColor)
+}
+
 export function setupSourceLabel(source: string | null | undefined): string {
   if (source === 'orca.yaml') {
     return 'orca.yaml'
@@ -50,7 +62,7 @@ export function taskRepositoryMeta(
     return {
       key: item.source.repoId,
       label: repo?.displayName ?? item.source.repoName,
-      color: getRepoBadgeColor(repo, item.source.repoName)
+      color: getRepoBadgeColor(repo)
     }
   }
   if (item.provider === 'gitlabTodo') {
@@ -58,6 +70,14 @@ export function taskRepositoryMeta(
       key: item.source.projectPath,
       label: item.source.projectPath,
       color: repoColor(item.source.projectPath)
+    }
+  }
+  if (item.provider === 'jira') {
+    // Jira lacks issue colors; derive a stable project color as for GitLab todos.
+    return {
+      key: item.source.project.id,
+      label: item.source.project.name || item.source.project.key,
+      color: repoColor(item.source.project.key)
     }
   }
   return {

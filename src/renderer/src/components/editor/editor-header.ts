@@ -2,6 +2,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { getEditorDisplayLabel } from './editor-labels'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export type EditorHeaderCopyState = {
   copyText: string | null
@@ -14,9 +15,9 @@ export type EditorHeaderOpenFileState = {
   canOpen: boolean
 }
 
-/** Whether the panel shows its own path header; check-details names the document itself. */
+/** Whether the panel shows its own path header; virtual tabs name the document themselves. */
 export function shouldShowEditorPanelHeader(file: OpenFile, isCombinedDiff: boolean): boolean {
-  return !isCombinedDiff && file.mode !== 'check-details'
+  return !isCombinedDiff && !isVirtualEditorFile(file)
 }
 
 export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState {
@@ -89,9 +90,7 @@ export function getEditorHeaderOpenFileState(
     return { canOpen: false }
   }
 
-  // Why: diff tabs can outlive the current Source Control snapshot. If the
-  // live entry is missing, keep the action enabled instead of hiding a valid
-  // open-file path just because sidebar polling has moved on.
+  // Diff snapshots outlive status rows; missing live entries must not hide an otherwise valid open-file action.
   if (!worktreeEntry) {
     return { canOpen: true }
   }

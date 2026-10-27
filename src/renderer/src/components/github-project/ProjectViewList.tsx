@@ -23,7 +23,7 @@ import type {
   GitHubProjectSortDirection,
   GitHubProjectTable
 } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 
 type SortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
@@ -35,8 +35,7 @@ function buildProjectGridTemplate(
   fields: GitHubProjectField[],
   widths: Readonly<Record<string, number>>
 ): string {
-  // Why: the first two columns are frozen during horizontal scroll, so their
-  // actual widths must be deterministic for the second sticky offset.
+  // Frozen columns need deterministic pixel widths for the second column’s sticky offset.
   const cols = fields.map((field, index) =>
     index < 2
       ? `${resolveWidth(field, widths)}px`
@@ -59,7 +58,7 @@ type Props = {
   onEditIssueType?: (row: GitHubProjectRow, issueType: GitHubIssueType | null) => void
   onStartWork?: (row: GitHubProjectRow) => void
   onOpenInBrowser?: (row: GitHubProjectRow) => void
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
 }
 
 export default function ProjectViewList({
@@ -71,23 +70,19 @@ export default function ProjectViewList({
   onEditIssueType,
   onStartWork,
   onOpenInBrowser,
-  sourceSettings
+  sourceTarget
 }: Props): React.JSX.Element {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
-  // Why: column-header clicks override the view's saved sortByFields locally
-  // without persisting to GitHub — matches GitHub Projects' transient
-  // header-sort behavior. `null` means "use the view's sort as authored".
+  // Keep header sorting local; null restores the view’s saved GitHub sort order.
   const [sortOverride, setSortOverride] = useState<SortOverride | null>(null)
 
-  // Why: include project id so the same view id colliding across projects
-  // doesn't cross-pollute hidden-column preferences.
+  // Include the project id so colliding view ids cannot share hidden-column preferences.
   const scopeKey = `${table.project.id}:${table.selectedView.id}`
   const availableFields = useMemo(
     () => getAvailableColumns(table.selectedView),
     [table.selectedView]
   )
-  // Why: switching project views should not paint one commit with the
-  // previous view's local column preferences before an Effect catches up.
+  // Load by scope before paint so switching views cannot briefly show prior column preferences.
   const persistedHidden = useMemo(() => loadHiddenColumns(scopeKey), [scopeKey])
   const [hiddenByScope, setHiddenByScope] = useState<
     Readonly<Record<string, ReadonlySet<string> | undefined>>
@@ -123,8 +118,7 @@ export default function ProjectViewList({
   const gridTemplate = useMemo(() => buildProjectGridTemplate(fields, widths), [fields, widths])
 
   const handleListScroll = useCallback((event: React.UIEvent<HTMLDivElement>): void => {
-    // Why: frozen columns need the horizontal offset, but piping every scroll
-    // tick through React state rerenders the entire project row set.
+    // Update the frozen-column offset without rerendering every project row on scroll.
     event.currentTarget.style.setProperty(
       '--project-scroll-left',
       `${event.currentTarget.scrollLeft}px`
@@ -162,9 +156,7 @@ export default function ProjectViewList({
   }, [table, fields, sortOverride])
 
   const groups = useMemo(() => {
-    // Why: sort first, then group. Sorting the flat stream ensures rows within
-    // each group honor the view's sortByFields too — groupRows preserves input
-    // order within each bucket.
+    // Sort before grouping because groupRows preserves input order within each bucket.
     const sorted = sortRows(effectiveTable, effectiveTable.rows)
     return groupRows(effectiveTable, sorted)
   }, [effectiveTable])
@@ -185,9 +177,6 @@ export default function ProjectViewList({
     return <ProjectItemsEmptyState filter={table.selectedView.filter} />
   }
 
-  // Why: the visible sort indicator reflects either the local override or the
-  // first persisted sort from the view, so users see what's actually driving
-  // row order.
   const activeSort: SortOverride | null = sortOverride
     ? sortOverride
     : effectiveTable.selectedView.sortByFields[0]
@@ -253,7 +242,7 @@ export default function ProjectViewList({
                     onStartWork={() => onStartWork?.(row)}
                     onOpenInBrowser={() => onOpenInBrowser?.(row)}
                     sourceHost={table.project.host}
-                    sourceSettings={sourceSettings}
+                    sourceTarget={sourceTarget}
                   />
                 ))
               : null}
@@ -285,9 +274,6 @@ function ProjectHeaderRow({
   gridTemplate: string
   onResizeColumn: (fieldId: string, width: number, nextFieldId: string, nextWidth: number) => void
 }): React.JSX.Element {
-  // Why: matches GitHub Projects' fixed column header — sticky so it stays
-  // pinned while scrolling the rows beneath it. The trailing slot mirrors the
-  // hover-action column in ProjectRow so columns line up exactly.
   return (
     <div
       className="sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur"
@@ -296,11 +282,7 @@ function ProjectHeaderRow({
       {fields.map((f, idx) => {
         const isActive = activeSort?.fieldId === f.id
         const Icon = isActive ? (activeSort.direction === 'ASC' ? ArrowUp : ArrowDown) : ArrowUpDown
-        // Why: only render a resize handle when there is a neighbor to
-        // borrow width from. The trailing field has no field neighbor on
-        // its right (the action column is fixed and not part of the
-        // user-resizable pair set), so omit its handle to keep the total
-        // table width invariant.
+        // Resize only between fields; the trailing fixed action column cannot supply width.
         const next = fields[idx + 1]
         const frozen = idx < 2
         return (
@@ -372,9 +354,7 @@ function ProjectHeaderRow({
               {translate('auto.components.github.project.ProjectViewList.989f81dc2a', 'Columns')}
             </div>
             {availableFields.map((f) => {
-              // Why: TITLE is the only column that anchors the row's identity
-              // and click target — disallow hiding it so users can't end up
-              // with a row of metadata they can't open.
+              // Keep TITLE visible because it supplies the row’s identity and open action.
               const locked = f.dataType === 'TITLE'
               const visible = !hidden.has(f.id)
               return (

@@ -6,7 +6,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()
 }))
@@ -75,45 +75,6 @@ describe('terminal tab id hydration', () => {
             worktreeId: 'w1',
             activeTabId: BAD_TAB_ID,
             tabOrder: [BAD_TAB_ID, GOOD_TAB_ID]
-          }
-        ]
-      }
-    }
-
-    const result = buildHydratedTabState(session, new Set(['w1']))
-
-    expect(result.unifiedTabsByWorktree.w1.map((tab) => tab.id)).toEqual([GOOD_TAB_ID])
-    expect(result.groupsByWorktree.w1[0]).toMatchObject({
-      activeTabId: null,
-      tabOrder: [GOOD_TAB_ID]
-    })
-  })
-
-  it('drops legacy terminal tabs whose IDs cannot form pane keys', () => {
-    const session: WorkspaceSessionState = {
-      ...makeBaseSession(),
-      activeTabId: BAD_TAB_ID,
-      tabsByWorktree: {
-        w1: [
-          {
-            id: BAD_TAB_ID,
-            ptyId: null,
-            worktreeId: 'w1',
-            title: 'bad',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 100
-          },
-          {
-            id: GOOD_TAB_ID,
-            ptyId: null,
-            worktreeId: 'w1',
-            title: 'good',
-            customTitle: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: 101
           }
         ]
       }

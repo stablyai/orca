@@ -1,5 +1,3 @@
-// A dispatch row's typed rejection fact, as the reducer folds it onto the submission.
-
 import { describe, expect, it } from 'vitest'
 import {
   classifyDispatchRejection,
@@ -45,14 +43,14 @@ describe('a rejected dispatch', () => {
         clientMessageId: 'cm_1',
         state: 'rejected',
         providerItemId: null,
-        reason: 'The provider did not accept this message.',
+        reason: "The agent didn't accept this message.",
         rejection: { kind: 'providerRejected', detail: { text: 'Too long', audience: 'person' } },
         ...base(2)
       }
     ])
     expect(state.submissions.get('cm_1')).toMatchObject({
       dispatchState: 'rejected',
-      reason: 'The provider did not accept this message.',
+      reason: "The agent didn't accept this message.",
       rejection
     })
 
@@ -81,10 +79,9 @@ describe('a rejected dispatch', () => {
         reason: DISPATCH_REJECTED_QUEUE_FULL,
         ...base(2)
       }
-      // A row read from disk carries whatever the host that wrote it did.
       return Object.assign(row, { rejection })
     }
-    // A newer host's kind: the marker beside it must not decide.
+    // Unknown typed facts must not fall back to conflicting reason markers.
     const newer = fold([submission, rejected({ kind: 'futureKind', detail: 'x' })])
     const settled = newer.submissions.get('cm_1')
     expect(settled).toMatchObject({ dispatchState: 'rejected', rejection: { kind: 'futureKind' } })
@@ -92,7 +89,6 @@ describe('a rejected dispatch', () => {
       category: 'undelivered',
       verdict: null
     })
-    // Not a fact at all: dropped, leaving the reason.
     const malformed = fold([submission, rejected('queueFull')]).submissions.get('cm_1')
     expect(malformed).not.toHaveProperty('rejection')
     expect(malformed && classifyDispatchRejection(malformed)).toMatchObject({ kind: 'queueFull' })

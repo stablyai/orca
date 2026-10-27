@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { HEADLESS_RUNTIME_WINDOW_ID, OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeClientEvent } from '../orca-runtime-test-mocks.spec'
 import {
@@ -72,8 +73,7 @@ describe('terminal side-effect fact channel', () => {
   })
 
   it('bounds decorative title delivery per paired client below the local heartbeat', () => {
-    // Why the clock steps: main throttles decorative repeats on the local fact stream, so each
-    // round must clear that heartbeat for the per-client gate to be what collapses them here.
+    // Clear the local heartbeat each round so only the per-client gate can collapse repeats.
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       const { runtime, batches } = createSideEffectRuntime()
@@ -122,7 +122,6 @@ describe('terminal side-effect fact channel', () => {
       expect(firstClientEvents).toEqual([])
       expect(secondClientEvents).toHaveLength(ptyIds.length)
 
-      // A real title change is never throttled — no clock step needed.
       for (const ptyId of ptyIds) {
         runtime.ingestSyntheticTitleFrame(ptyId, '\x1b]0;Cursor ready\x07')
       }
@@ -178,8 +177,7 @@ describe('terminal side-effect fact channel', () => {
 
       runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData(ptyId, 'output without a title\r\n', 101)
-      // The phone is still subscribed: disposing trackers on this edge would cancel
-      // its armed stale-working-title timer and strand a 'working' spinner (#1437).
+      // A remaining phone subscriber still needs the tracker's stale-working timer (#1437).
       unsubscribeDesktop()
 
       await vi.advanceTimersByTimeAsync(3_000)
@@ -228,7 +226,7 @@ describe('terminal side-effect fact channel', () => {
       { kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' },
       { kind: 'agent-working' },
       { kind: 'title', normalizedTitle: 'Codex done', rawTitle: 'Codex done' },
-      { kind: 'agent-idle', title: 'Codex done' },
+      { kind: 'agent-idle', title: 'Codex done', status: 'idle' },
       { kind: 'bell' }
     ])
   })
@@ -248,7 +246,6 @@ describe('terminal side-effect fact channel', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
 
-    // Plain output and a BEL-terminated non-title OSC stay fact-free.
     runtime.onPtyData('pty-1', 'plain output\r\n', 100)
     runtime.onPtyData('pty-1', '\x1b]7;file://host', 101)
     runtime.onPtyData('pty-1', '/tmp\x07', 102)
@@ -275,7 +272,7 @@ describe('terminal side-effect fact channel', () => {
 
       await vi.advanceTimersByTimeAsync(3_000)
 
-      // staleWorkingTitleClear tells the renderer to clear state without scheduling a task-complete notification the unthrottled timer didn't earn.
+      // Clear stale state without sending an unearned completion notification.
       expect(batches.flatMap((batch) => batch.facts)).toEqual([
         {
           kind: 'title',
@@ -283,7 +280,7 @@ describe('terminal side-effect fact channel', () => {
           rawTitle: 'Codex',
           staleWorkingTitleClear: true
         },
-        { kind: 'agent-idle', title: 'Codex', staleWorkingTitleClear: true }
+        { kind: 'agent-idle', title: 'Codex', status: 'idle', staleWorkingTitleClear: true }
       ])
     } finally {
       vi.useRealTimers()
@@ -299,10 +296,9 @@ describe('terminal side-effect fact channel', () => {
     expect(batches).toHaveLength(1)
     expect(batches[0].facts).toEqual([
       { kind: 'title', normalizedTitle: '⠋ Cursor Agent', rawTitle: '⠋ Cursor Agent' },
-      // Synthesized spinner classifies as working — agent facts derive from synthetic frames the same as from real bytes.
       { kind: 'agent-working' }
     ])
-    // Synthetic frames are fabricated by main, so they must not advance the metered output sequence the renderer ACK budget uses.
+    // Synthetic frames must not advance the metered output sequence used by ACK budgets.
     expect(runtime.getPtyOutputSequence('pty-1')).toBe(0)
   })
 
@@ -376,7 +372,7 @@ describe('terminal side-effect fact channel', () => {
   it('lets an explicit terminal rename override cached Cursor identity and restores it after clearing', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-1' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -490,7 +486,7 @@ describe('terminal side-effect fact channel', () => {
 
     await vi.waitFor(() => expect(checkPresence).toHaveBeenCalled())
     await new Promise((resolve) => setTimeout(resolve, 50))
-    // Why: an unanswered process check (Codex, SSH, Windows) must still reach the foreground read.
+    // An unanswered process check must fall through to the foreground read.
     expect(batches.flatMap((batch) => batch.facts).some((f) => f.kind === 'agent-exited')).toBe(
       exited
     )
@@ -522,7 +518,7 @@ describe('terminal side-effect fact channel', () => {
   ])(
     'treats synchronous foreground read failures as unavailable (hook presence $presence)',
     async ({ presence, exited }) => {
-      // Why: only a pane with an identified owner keeps its agent on silence; others keep today's exit.
+      // Only identified owners retain agent identity through silence.
       const { runtime, batches } = createSideEffectRuntime(async () => presence)
       syncSinglePty(runtime)
       runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
@@ -723,7 +719,6 @@ describe('terminal side-effect fact channel', () => {
 
     runtime.onPtyData('pty-1', 'PR https://github.com/acme/orca/pull/4', 100)
     runtime.onPtyData('pty-1', '2\r\nand https://github.com/acme/orca/pull/43 done\r\n', 101)
-    // Repeated URL: deduped per PTY, like the renderer byte detector.
     runtime.onPtyData('pty-1', 'again https://github.com/acme/orca/pull/42\r\n', 102)
 
     expect(batches).toHaveLength(1)

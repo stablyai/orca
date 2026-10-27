@@ -62,7 +62,7 @@ describe('workspace delete app command', () => {
     mocks.hoveredTarget = { kind: 'worktree', worktree: {} as never }
   })
 
-  it('claims the chord and immediately deletes the active workspace', () => {
+  it('claims the chord and immediately deletes the hovered workspace', () => {
     const input = shortcutInput()
     const handler = createAppCommandHandlers(shortcutState(), input, 'terminal').get(
       'workspace.delete'

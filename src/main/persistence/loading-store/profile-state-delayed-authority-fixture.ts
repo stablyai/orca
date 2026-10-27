@@ -11,6 +11,7 @@ import type {
   ProfileStateDomainReplacement
 } from './profile-state-authority'
 import { Store } from './store'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 
 export function deferred<T>() {
   let resolve!: (value: T) => void
@@ -22,7 +23,6 @@ export function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-/** Delay the authority boundary while retaining real SQLite and Store serialization. */
 export class DelayedAuthority implements AsyncProfileStateAuthority {
   readonly asynchronous = true
   private next:
@@ -36,7 +36,6 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
 
   constructor(readonly inner: ProfileStateSqliteAuthority) {}
 
-  /** Fail the next profile write the way a full disk would, after any paused gate opens. */
   failNextWrite() {
     this.failNext = true
   }
@@ -86,9 +85,6 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
   async writeLatestJsonExport(path: string) {
     return writeVersionedProfileStateExport(path, this.inner.writeJsonExport.bind(this.inner))
   }
-  async writeJsonCompatibilityExport(path: string) {
-    return this.inner.writeJsonCompatibilityExportAsync(path)
-  }
   async quarantineDatabase(root?: string, reason?: string) {
     return this.inner.quarantineDatabase(root, reason)
   }
@@ -113,12 +109,21 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-export async function fixture() {
+export async function fixture(legacyOpenCodeGoApiKey?: string) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-worker-coordination-'))
   const path = join(directory, 'profile-state.db')
   const inner = new ProfileStateSqliteAuthority(path, 'coordination-test')
+  const initial = buildProfileStateCutoverFixture(directory)
   inner.writeSerializedState(
-    Buffer.from(JSON.stringify(buildProfileStateCutoverFixture(directory)))
+    Buffer.from(
+      JSON.stringify({
+        ...initial,
+        settings: {
+          ...initial.settings,
+          ...(legacyOpenCodeGoApiKey ? { opencodeGoApiKey: legacyOpenCodeGoApiKey } : {})
+        }
+      })
+    )
   )
   const authority = new DelayedAuthority(inner)
   const store = new Store({
@@ -140,4 +145,21 @@ export async function fixture() {
     }
   }
   return { store, authority, readState }
+}
+
+// Runtime spawns bind only a pane admitted before the process starts.
+export async function admitRuntimeSpawnPane(
+  store: Store,
+  pane: { worktreeId: string; tabId: string; leafId: string },
+  connectionId?: string | null
+): Promise<void> {
+  await store.admitTerminalPane(
+    {
+      type: 'createTerminalTab',
+      workspace: pane.worktreeId,
+      tabId: pane.tabId,
+      leafId: pane.leafId
+    },
+    connectionId ? toSshExecutionHostId(connectionId) : undefined
+  )
 }

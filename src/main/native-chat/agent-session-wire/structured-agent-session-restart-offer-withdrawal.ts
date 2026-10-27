@@ -1,12 +1,5 @@
-// When a restart offer ends without being acted on: the chat moved on.
-//
-// One derived fact decides it, for the offer list and for the continuation's own acceptance alike:
-// since the offer was taken, another message was accepted in the chat, or its agent proved a start.
-// A message is read against the journal position the offer recorded, so the answer survives any
-// number of handle closes. A start is known only to the host that saw it, so it is also written
-// to the recovery file when it happens. A restored row, a replayed row or a view carries neither,
-// so opening a chat withdraws nothing. The rest of a resume action does not count: its own
-// continuation, and the start that continuation waits on.
+// Compare accepted messages to the saved cursor across handle closes; persist independent proven starts.
+// Reads/replays and the offer’s own continuation/start never withdraw it.
 
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
@@ -21,7 +14,7 @@ export type StructuredAgentSessionRestartOfferWithdrawal = ReturnType<
 
 export type StructuredAgentSessionRestartOfferSession = Pick<
   StructuredAgentSessionHostSession,
-  'journal' | 'child' | 'lastEndedChild'
+  'journal' | 'child' | 'lastEndedChild' | 'restartResume'
 >
 
 export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
@@ -29,7 +22,6 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
   capsule?: Pick<AgentSessionRecoveryCapsule, 'dismiss'>
   logger: StructuredAgentSessionLogger
   now: () => number
-  /** The capsule's single mutation lane, shared with the offer's own operations. */
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
 }) {
   const movedOn = (marker: AgentSessionResumeMarker): boolean => {
@@ -38,23 +30,21 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
       return false
     }
     const taken = marker.journalCursor
-    // An older build's offer recorded no position: only a start withdraws it.
+    // Legacy offers lack cursors, so only proven startup can withdraw them.
     const accepted =
       taken !== undefined &&
       (session.journal.cursor().epoch !== taken.epoch ||
         session.journal.submissions().some(
           (submission) =>
             (submission.acceptedSequence ?? 0) > taken.sequence &&
-            // The offer's own continuation, still queued or rejected, never reached the agent: a
-            // retry sends a new one. One handed over may have, answered or not.
+            // Own queued/rejected continuations allow retry; handover may have delivered despite no answer.
             !(
               (isQueuedAgentJournalSubmission(submission) ||
                 submission.dispatchState === 'rejected') &&
               isRestartContinuationOf(marker, submission.clientMessageId)
             )
         ))
-    // Proven, not merely spawned: a start that failed during startup never ran the agent. Whose
-    // start it was is fixed when it was made, so a continuation rejected since still owns it.
+    // Require proven startup and its immutable opening-send identity, even after rejection.
     const started =
       session.child?.phase === 'ready'
         ? session.child
@@ -70,9 +60,7 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
 
   return {
     movedOn,
-    /** The chat's agent proved a start: the offer and any failure record go from the recovery file,
-     *  unless the start was for one of that offer's own continuations. Advisory: a failed write is
-     *  logged, never raised. */
+    /** Retire offer/failure after independent proven startup; failures log without blocking. */
     onAgentStarted: (sessionId: string): void => {
       const session = deps.sessions.get(sessionId)
       const capsule = deps.capsule

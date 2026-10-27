@@ -1,11 +1,4 @@
-// The session's latest request and what became of it: the verdict a sidebar row reports once
-// the session is idle, whether there is a request to list at all, and the prompt and answer its row
-// quotes.
-//
-// A request is either a turn, whose record carries the provider's verdict, or a send that never
-// became one because the agent or its start refused it. A send its handover placed inside a
-// running turn (a steer) is not a request of its own: the turn it joined answers for it. Nor is a
-// conversation command.
+// Sidebar request/verdict/preview share this read: a turn or refused send is a request; steers belong to their turn, and commands are not requests.
 
 import type {
   AgentJournalRenderItem,
@@ -18,6 +11,7 @@ import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import { withoutNativeChatVisualDirectiveLines } from './native-chat/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
   isStructuredAgentSessionCommandEntry,
@@ -38,9 +32,19 @@ export type StructuredAgentSessionLatestRequest = {
   settledAt: number | undefined
 }
 
-/** Null when the journal holds no request with a verdict to give. Accepted and unanswered sends
- *  are passed over — the session is working until their turn records — and so are sends that
- *  failed nobody (withdrawn, or left undelivered by a restart or a close). */
+/** Commands and steers have no independent request; their turns own any response. */
+export function isStructuredAgentSessionNonRequestRow(
+  item: Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'turnScope'>,
+  commandTurnItemIds: ReadonlySet<string>
+): boolean {
+  return (
+    commandTurnItemIds.has(item.itemId) ||
+    isStructuredAgentSessionCommandRow(item, commandTurnItemIds) ||
+    (item.body.kind === 'message' && item.body.role === 'user' && item.turnScope?.kind === 'turn')
+  )
+}
+
+/** Skip accepted/unanswered sends and nonfailures (withdrawal/restart/close); null when no request has a verdict. */
 export function latestStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]
@@ -49,14 +53,20 @@ export function latestStructuredAgentSessionRequest(
   const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    // A conversation command is not a request: the verdict stays the last real request's.
+    // Commands retain the last real request’s verdict.
     if (
       !item ||
       !isRootAgentJournalItem(item) ||
-      commandTurns.has(item.itemId) ||
-      isStructuredAgentSessionCommandEntry(item.body)
+      isStructuredAgentSessionNonRequestRow(item, commandTurns)
     ) {
       continue
+    }
+    if (
+      item.body.kind === 'message' &&
+      item.body.role === 'user' &&
+      item.turnScope?.kind === 'unknown'
+    ) {
+      return null
     }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
@@ -69,11 +79,11 @@ export function latestStructuredAgentSessionRequest(
       }
     }
     const submission = rejected.get(item.itemId)
+    // Rejection relocates a refused steer to the thread, but its turn remains the request.
     if (
       submission &&
-      classifyDispatchRejection(submission).verdict === 'failure' &&
-      // Handed into a running turn (a steer): that turn answers for it.
-      item.turnScope?.kind !== 'turn'
+      submission.answeredInTurn?.via !== 'steer' &&
+      classifyDispatchRejection(submission).verdict === 'failure'
     ) {
       return {
         kind: 'refused-send',
@@ -87,10 +97,7 @@ export function latestStructuredAgentSessionRequest(
   return null
 }
 
-/** Whether the session has a request to list. A send that failed nobody and never became a turn
- *  leaves nothing to report, so a session holding only those is not listed; a user message the
- *  provider journaled itself (history, an older host) still is. Deliberately NOT scoped by
- *  producer: a session whose only content came from a subagent still has content. */
+/** Exclude sends that failed nobody and never became turns; include provider-journaled user rows, even from children/history/old hosts. */
 export function hasStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
@@ -140,10 +147,7 @@ function messageProse(blocks: readonly NativeChatBlock[]): string {
   return blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
 }
 
-/** The newest prompt the session's own user turn carries, as the sidebar quotes
- *  it. Scoped to root rows for the same reason the assistant line is: a provider
- *  that journals a subagent's own prompt would otherwise requote it as the
- *  session's. */
+/** Root user prompts only; child prompts share this journal but must not become the session preview. */
 export function latestStructuredAgentSessionPrompt(
   items: readonly AgentJournalRenderItem[]
 ): string {
@@ -168,10 +172,7 @@ export function latestStructuredAgentSessionUserItem(
   return null
 }
 
-/** The newest prose THE SESSION'S OWN AGENT wrote in the latest user turn — not a
- *  subagent's, whose rows share this journal and are usually the newer ones while
- *  a child runs. Tool-only assistant items are skipped; the user boundary clears
- *  prose from the preceding turn. */
+/** Newest root-agent prose in the latest user turn; skip child/tool-only output and clear at the user boundary. */
 export function latestStructuredAgentSessionAssistantMessage(
   items: readonly AgentJournalRenderItem[]
 ): string {
@@ -179,7 +180,6 @@ export function latestStructuredAgentSessionAssistantMessage(
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body
-    // A command and what its turn produced are not the conversation's latest answer.
     if (!isRootAgentJournalItem(item) || isStructuredAgentSessionCommandRow(item, commandTurns)) {
       continue
     }
@@ -187,7 +187,8 @@ export function latestStructuredAgentSessionAssistantMessage(
       return ''
     }
     if (body?.kind === 'message' && body.role === 'assistant') {
-      const prose = messageProse(body.blocks)
+      // Visual directives belong only in the transcript, not plain-text previews.
+      const prose = withoutNativeChatVisualDirectiveLines(messageProse(body.blocks))
       if (prose.trim()) {
         return prose
       }

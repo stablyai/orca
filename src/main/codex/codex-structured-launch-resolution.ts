@@ -1,36 +1,35 @@
-// How a durable session record becomes a Codex process launch.
-//
-// Every input is read back from the record the store already made durable, not
-// from the call that triggered the acquire. A client that attaches twice must
-// land in the same working directory under the same account home, and a resume
-// must name the thread this session actually proved — never one a caller asks
-// for, which is how a resume becomes a fork wearing a resume's name.
-
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import { delimiter, isAbsolute, resolve } from 'node:path'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { resolveCodexCommand } from '../codex-cli/command'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
-import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
-import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
+import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import {
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
+  withNativeChatVisualsEnv
+} from '../native-chat/native-chat-visuals-delivery'
 
-export type CodexStructuredLaunchResolverDeps = {
-  store: AgentSessionRecordStore
-  /** Absolute path of a workspace on this host. Rejects when the workspace no
-   *  longer resolves, which is the case a stale mobile client hits. */
-  resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  /** Overridden in tests; production scans the boot-cached PATH and version-manager dirs. */
+export type CodexStructuredLaunchPartDeps = {
+  resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
-  /** Fresh shell/configured environment for this spawn; never written to the session record. */
+}
+
+export type CodexStructuredInvocationDeps = Pick<
+  CodexStructuredLaunchPartDeps,
+  'resolveCommand'
+> & {
+  signal?: AbortSignal
+  /** Fresh spawn environment, never persisted in the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
-  resolveRollout?: typeof resolvePinnedCodexRolloutProof
-  /** Test seam for the host capability; production uses the native process table. */
-  isWindowsProcessStartTimeAvailable?: () => boolean
-  /** The user's Agent Permissions setting as thread policy, re-read per acquisition.
-   *  States both postures outright — a resume inherits the last one for any field left absent. */
-  resolvePermissionPolicy?: () => CodexStructuredPermissionPolicy
+  /** Refresh after a missing binary; absence disables retry. */
+  refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
+  /** Resolve relative PATH entries from the spawn directory; defaults to Orca's cwd. */
+  resolveWorkingDirectory?: () => Promise<string> | string
 }
 
 export type CodexStructuredInvocation = {
@@ -38,18 +37,38 @@ export type CodexStructuredInvocation = {
   environment: NodeJS.ProcessEnv | undefined
 }
 
-/**
- * The one place a structured Codex child's binary and environment are
- * resolved. The session launch and the session-less catalog probe both build
- * on it, so a probe can never list under a different binary or env than the
- * session it stands in for. Env VALUES stay out of the catalog fingerprint:
- * drift there heals on the next refresh.
- */
-export async function resolveCodexStructuredInvocation(
-  deps: Pick<CodexStructuredLaunchResolverDeps, 'resolveCommand' | 'resolveEnvironment'>
+/** Keep session launches and catalog probes on the same binary/environment resolution path. */
+export function resolveCodexStructuredInvocation(
+  deps: CodexStructuredInvocationDeps
 ): Promise<CodexStructuredInvocation> {
-  const environment = await deps.resolveEnvironment?.()
-  const pathEnv = environment?.PATH ?? environment?.Path ?? null
+  return resolveAgainAfterRefreshOnMissingProgram(
+    () => readCodexStructuredInvocation(deps),
+    deps.refreshEnvironmentAfterMiss,
+    {
+      env: ({ environment }) => environment,
+      cwd: deps.resolveWorkingDirectory,
+      signal: deps.signal
+    }
+  )
+}
+
+async function readCodexStructuredInvocation(
+  deps: CodexStructuredInvocationDeps
+): Promise<CodexStructuredInvocation> {
+  const environment = await waitForPromiseWithSignal(
+    Promise.resolve(deps.resolveEnvironment?.()),
+    deps.signal
+  )
+  const cwd = await waitForPromiseWithSignal(
+    Promise.resolve(deps.resolveWorkingDirectory?.()),
+    deps.signal
+  )
+  deps.signal?.throwIfAborted()
+  const pathEnv =
+    (environment?.PATH ?? environment?.Path)
+      ?.split(delimiter)
+      .map((entry) => (entry && !isAbsolute(entry) ? resolve(cwd ?? process.cwd(), entry) : entry))
+      .join(delimiter) ?? null
   const homePath = environment?.HOME ?? environment?.USERPROFILE
   const command = (deps.resolveCommand ?? resolveCodexCommand)({
     pathEnv,
@@ -58,66 +77,52 @@ export async function resolveCodexStructuredInvocation(
   return { command, environment }
 }
 
-export function createCodexStructuredLaunchResolver(
-  deps: CodexStructuredLaunchResolverDeps
-): (input: { identity: AgentSessionJournalIdentity }) => Promise<CodexStructuredLaunch> {
-  return async ({ identity }) => {
-    const record = deps.store.getRecord(identity.sessionId)
-    if (!record) {
-      throw new Error(`no durable agent-session record for ${identity.sessionId}`)
-    }
-    const { location, accountHome } = record
-    if (record.provider !== 'codex') {
-      throw new Error(`session ${identity.sessionId} is a ${record.provider} session`)
-    }
-    // This adapter spawns a child on the machine the runtime itself runs on.
-    // A session pinned elsewhere belongs to that host's runtime, and quietly
-    // starting it here would put a second writer on the same thread.
-    if (location.executionHostId !== LOCAL_EXECUTION_HOST_ID || location.wslDistro !== null) {
-      throw new Error(
-        `codex structured sessions run on the local host, not ${location.executionHostId}`
-      )
-    }
-    // Refuse before resolving launch data; a PID alone cannot prove Windows ownership.
-    if (
-      process.platform === 'win32' &&
-      !(deps.isWindowsProcessStartTimeAvailable ?? isWindowsProcessStartTimeAvailable)()
-    ) {
-      throw new Error('codex structured sessions require Windows process creation-time proof')
-    }
-    if (accountHome.variable !== 'CODEX_HOME') {
-      throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
-    }
-    const { command, environment } = await resolveCodexStructuredInvocation(deps)
-    // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
-    // concern, and the permission posture they used to smuggle in is derived per acquisition.
-    const permissionPolicy = deps.resolvePermissionPolicy?.()
+/** Derive resume identity and account home from the durable record. */
+export function codexStructuredLaunchPart(
+  deps: CodexStructuredLaunchPartDeps
+): StructuredAgentLaunchPartResolver<CodexStructuredLaunch> {
+  return async (basis) => {
+    const { record } = basis
+    const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
+    const { command } = await resolveCodexStructuredInvocation({
+      ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+      refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
+      resolveWorkingDirectory: basis.launchDirectory,
+      resolveEnvironment: basis.environment
+    })
+    const environment = await basis.environment()
+    const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
-    // The same saved options every turn sends, so the thread and its turns name one model.
+    const resumeThreadId = head?.handle.nativeId ?? null
+    // Match the first turn's model to avoid duplicate prompt injection on a model switch.
     const model = record.options?.model
+    const visuals = await basis.visuals()
+    await basis.launchDirectory()
     return {
-      command,
-      args: ['app-server'],
-      cwd: await deps.resolveWorkspacePath(location.workspaceId),
-      codexHome: accountHome.path,
-      ...(environment ? { env: { ...environment } as Record<string, string> } : {}),
-      // An empty chain is a session that has never proved a thread, so it
-      // starts one; anything else resumes the last link this session proved.
-      resumeThreadId,
-      // Only a thread this session created may still be one Codex never saved: a resumed,
-      // forked or adopted head names a conversation Codex held.
-      ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
-      ...(permissionPolicy ? { permissionPolicy } : {}),
-      ...(model ? { model } : {}),
-      ...(resumeThreadId
-        ? {
-            resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(
-              accountHome.path,
-              resumeThreadId
-            )
-          }
-        : {})
+      launch: {
+        command,
+        args: [...args, 'app-server'],
+        codexHome: accountHome.path,
+        resumeThreadId,
+        // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
+        ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
+        // Own settings leaves a new thread to config and a resumed thread to its saved policy.
+        ...(basis.permissionMode === 'own'
+          ? {}
+          : { permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask') }),
+        ...(model ? { model } : {}),
+        ...(visuals ? { visuals } : {})
+      },
+      env: withNativeChatVisualsEnv(
+        { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
+        visuals
+      ),
+      // Clear inherited scratch paths that may belong to another chat.
+      inheritedEnvToDelete: [
+        ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
+        LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
+      ],
+      cliRuntimeCommand: command
     }
   }
 }

@@ -2,6 +2,8 @@ import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 export type ActionSheetAction = {
@@ -38,11 +40,14 @@ function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon):
 type ContentProps = {
   title?: string
   message?: string
+  /** Drawn between the header and the actions. */
+  children?: ReactNode
   actions: ActionSheetAction[]
   onClose?: () => void
 }
 
-export function ActionSheetContent({ title, message, actions, onClose }: ContentProps) {
+export function ActionSheetContent({ title, message, children, actions, onClose }: ContentProps) {
+  useMobileColorScheme()
   return (
     <>
       {(title || message) && (
@@ -55,6 +60,8 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
           {message ? <Text style={styles.message}>{message}</Text> : null}
         </View>
       )}
+
+      {children}
 
       <View style={styles.actionGroup}>
         {actions.map((action, i) => {
@@ -125,8 +132,7 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
       visible={visible}
       onClose={onClose}
       onAfterClose={() => {
-        // Why: iOS cannot present a second native modal until the action
-        // sheet's native window has fully unmounted.
+        // Wait for iOS sheet window to unmount before presenting another native modal.
         const pendingAction = pendingActionRef.current
         pendingActionRef.current = null
         pendingAction?.()
@@ -143,7 +149,7 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -201,4 +207,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     color: colors.textMuted
   }
-})
+}))

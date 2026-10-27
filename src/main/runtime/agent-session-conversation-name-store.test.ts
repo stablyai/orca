@@ -1,4 +1,3 @@
-// The name is durable state on the record: the store is the only thing that writes it.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -18,7 +17,6 @@ const NATIVE: AgentSessionExecutionLocation = {
 }
 
 let counter = 0
-/** Same shape the store's own suite uses: `<now>-<32 hex>`. */
 function operationId(): string {
   counter += 1
   return `${NOW}-${String(counter)
@@ -73,7 +71,7 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     const name = store.getRecord(SESSION)?.conversationName ?? ''
     expect(name).toHaveLength(200)
     expect(name.startsWith('Fix the ')).toBe(true)
-    // A reload validates every record; an over-long name would be dropped as unreadable.
+    // Reload validates rows; oversized names must not make the record unreadable.
     const reloaded = await openTestAgentSessionRecordStore(directory)
     expect(reloaded.getRecord(SESSION)?.conversationName).toBe(name)
   })
@@ -85,6 +83,42 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     await store.setConversationName(SESSION, null)
 
     expect(store.getRecord(SESSION)?.conversationName).toBeUndefined()
+  })
+
+  it('compares against the committed name before applying a generated title', async () => {
+    const store = await reservedStore()
+    await store.compareAndSetConversationName(SESSION, 'First prompt', null)
+    await store.setConversationName(SESSION, 'Manual name')
+    const stale = await store.compareAndSetConversationName(
+      SESSION,
+      'Late generated name',
+      'First prompt'
+    )
+    expect(stale).toBeNull()
+    expect(store.getRecord(SESSION)?.conversationName).toBe('Manual name')
+    await store.compareAndSetConversationName(SESSION, 'Generated name', 'Manual name')
+    expect(store.getRecord(SESSION)?.conversationName).toBe('Generated name')
+    const stillNamed = await store.compareAndSetConversationName(
+      SESSION,
+      'Another placeholder',
+      null
+    )
+    expect(stillNamed).toBeNull()
+  })
+
+  it('reports a failed seed even when another writer stored the same placeholder', async () => {
+    const store = await reservedStore()
+    const placeholder = 'First prompt'
+    expect(await store.compareAndSetConversationName(SESSION, placeholder, null)).toMatchObject({
+      conversationName: placeholder
+    })
+    expect(await store.compareAndSetConversationName(SESSION, placeholder, null)).toBeNull()
+    expect(
+      await store.compareAndSetConversationName(SESSION, 'Generated name', placeholder)
+    ).toMatchObject({ conversationName: 'Generated name' })
+    expect(
+      await store.compareAndSetConversationName(SESSION, 'Stale generation', placeholder)
+    ).toBeNull()
   })
 
   it('refuses a session it has no record for', async () => {

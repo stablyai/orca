@@ -4,14 +4,16 @@ import {
   reduceStructuredAgentSession
 } from '../../../../shared/structured-agent-session-reducer'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import type { AgentSessionCurrentRequestsMarker } from '../../../../shared/agent-session-current-requests-wire'
 import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
 
-const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), watchHostContact: vi.fn() }))
+const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn(), watchHostContact: vi.fn() }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: mocks.call,
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
@@ -19,6 +21,7 @@ vi.mock('@/runtime/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: mocks.watchHostContact
 }))
 
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 
@@ -32,7 +35,10 @@ type SubscribeAttempt = {
 
 const target = { kind: 'local' } as const
 
-function snapshot(sequence: number): AgentSessionSubscribeEvent {
+function snapshot(
+  sequence: number,
+  currentRequests?: AgentSessionCurrentRequestsMarker
+): AgentSessionSubscribeEvent {
   const cursor: AgentJournalCursor = { epoch: 'epoch-a', sequence }
   const page: AgentSessionHistoryPage = {
     sessionId: 'session-a',
@@ -46,7 +52,13 @@ function snapshot(sequence: number): AgentSessionSubscribeEvent {
     hasOlder: false,
     hasNewer: false
   }
-  return { type: 'snapshot', sessionId: 'session-a', page, fence: sequence }
+  return {
+    type: 'snapshot',
+    sessionId: 'session-a',
+    page,
+    fence: sequence,
+    ...(currentRequests ? { currentRequests } : {})
+  }
 }
 
 async function flushPromises(): Promise<void> {
@@ -73,11 +85,16 @@ describe('structured agent-session read transport generations', () => {
     })
   })
 
-  function start(applyEvent: (event: AgentSessionSubscribeEvent) => void, applyError = vi.fn()) {
+  function start(
+    applyEvent: Parameters<typeof startStructuredAgentSessionReadTransport>[0]['applyEvent'],
+    applyError = vi.fn()
+  ) {
     return startStructuredAgentSessionReadTransport({
+      subscribeRetryNow: () => () => {},
       applyEvent,
       applyError,
       getCursor: () => null,
+      onContactLost: vi.fn(),
       onHistoryReadInvalidated: () => undefined,
       hydrate: async () => undefined,
       sessionId: 'session-a',
@@ -90,11 +107,13 @@ describe('structured agent-session read transport generations', () => {
     try {
       let state = EMPTY_STRUCTURED_AGENT_SESSION
       const transport = startStructuredAgentSessionReadTransport({
+        subscribeRetryNow: () => () => {},
         applyEvent: (event) => {
           state = reduceStructuredAgentSession(state, { type: 'event', event })
         },
         applyError: vi.fn(),
         getCursor: () => state.cursor,
+        onContactLost: vi.fn(),
         onHistoryReadInvalidated: () => undefined,
         sessionId: 'session-a',
         target
@@ -185,12 +204,85 @@ describe('structured agent-session read transport generations', () => {
       vi.useRealTimers()
     }
   })
+
+  it("applies each subscription's first batch alone and marked, and coalesces the rest", async () => {
+    vi.useFakeTimers()
+    try {
+      const applied: [number | undefined, boolean][] = []
+      const batch = (sequence: number): AgentSessionSubscribeEvent => ({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        }
+      })
+      const transport = start((event, options) => {
+        applied.push([
+          event.type === 'batch' ? event.batch.cursor.sequence : undefined,
+          options?.opensSubscription === true
+        ])
+      })
+      await flushPromises()
+      attempts[0].onEvent(batch(1))
+      attempts[0].onEvent(batch(2))
+      attempts[0].onEvent(batch(3))
+      expect(applied).toEqual([[1, true]])
+      await vi.advanceTimersByTimeAsync(60)
+      expect(applied).toEqual([
+        [1, true],
+        [3, false]
+      ])
+
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      attempts[0].onClose()
+      await vi.advanceTimersByTimeAsync(750)
+      attempts[1].onEvent(batch(4))
+      expect(applied.at(-1)).toEqual([4, true])
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reopens once for a current-request version whose read keeps failing', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.call.mockRejectedValue(new Error('Invalid current requests'))
+      const currentRequests = {
+        contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+        sessionId: 'session-a',
+        epoch: 'epoch-a',
+        publisher: 'publisher-a',
+        revision: 1,
+        owner: 'owner-a',
+        version: 'version-a'
+      }
+      const transport = start(vi.fn())
+      await flushPromises()
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      attempts[0].onEvent(snapshot(1, currentRequests))
+      await vi.advanceTimersByTimeAsync(750)
+      expect(attempts).toHaveLength(2)
+
+      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
+      await flushPromises()
+      attempts[1].onEvent(snapshot(1, currentRequests))
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(mocks.call).toHaveBeenCalledTimes(2)
+      expect(attempts).toHaveLength(2)
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
-// The refusal a host raises for a session it holds no object for — after a chat close, or before
-// the surface's hold attaches one. Deleting a workspace closes its chats while the pane is still
-// mounted, so this landed on screen as `Could not load conversation` for the frames before the tab
-// retired.
+// Ownership may briefly be unattached during hold acquisition or workspace teardown; suppress transient close-time errors.
 const UNATTACHED = 'agent_session_ownership_unknown'
 
 describe('structured agent-session read transport unattached refusals', () => {
@@ -218,9 +310,11 @@ describe('structured agent-session read transport unattached refusals', () => {
     applyEvent = vi.fn()
   ) {
     return startStructuredAgentSessionReadTransport({
+      subscribeRetryNow: () => () => {},
       applyEvent,
       applyError,
       getCursor: () => null,
+      onContactLost: vi.fn(),
       onHistoryReadInvalidated: () => undefined,
       hydrate,
       sessionId: 'session-a',
@@ -263,15 +357,13 @@ describe('structured agent-session read transport unattached refusals', () => {
       await flushPromises()
       expect(applyError).not.toHaveBeenCalled()
 
-      // Every reconnect re-asks and refuses the same way. Nothing reaches the pane inside the
-      // window a teardown or a pending hold could explain...
+      // Keep suppressing repeated refusals inside the acquisition/teardown grace window.
       for (let elapsed = 0; elapsed < 4_500; elapsed += 750) {
         await vi.advanceTimersByTimeAsync(750)
         attempts.at(-1)?.onError(rpcRefusal(UNATTACHED))
       }
       expect(applyError).not.toHaveBeenCalled()
 
-      // ...and the failure is owed once it has passed.
       await vi.advanceTimersByTimeAsync(750)
       attempts.at(-1)?.onError(rpcRefusal(UNATTACHED))
       expect(applyError).toHaveBeenCalledWith(UNATTACHED)
@@ -308,7 +400,6 @@ describe('structured agent-session read transport unattached refusals', () => {
       expect(applyError).not.toHaveBeenCalled()
 
       attempts[0].onError({ code: 'runtime_error', message: 'transport died' })
-      // The host's own words, never `[object Object]` (P2-04).
       expect(applyError).toHaveBeenCalledExactlyOnceWith('transport died')
       transport.dispose()
     } finally {
@@ -316,45 +407,47 @@ describe('structured agent-session read transport unattached refusals', () => {
     }
   })
 
-  it('hands the pane the refusal a read met, and stops reconnecting only past damage', async () => {
-    vi.useFakeTimers()
-    try {
-      const journalRefusal = (reason: string) => ({
-        code: 'runtime_error',
-        message: 'agent_session_journal_unreadable',
-        data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
-      })
-      const applyError = vi.fn()
-      const transport = startWithHydration(async () => undefined, applyError)
-      await flushPromises()
-      expect(attempts).toHaveLength(1)
+  it.each(['journalCorrupt', 'journalWrittenByNewerOrca'])(
+    'hands the pane the refusal a read met, and stops reconnecting only past %s',
+    async (final) => {
+      vi.useFakeTimers()
+      try {
+        const journalRefusal = (reason: string) => ({
+          code: 'runtime_error',
+          message: 'agent_session_journal_unreadable',
+          data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
+        })
+        const applyError = vi.fn()
+        const transport = startWithHydration(async () => undefined, applyError)
+        await flushPromises()
+        expect(attempts).toHaveLength(1)
 
-      // An open that can clear keeps reconnecting.
-      attempts[0].onError(journalRefusal('journalUnavailable'))
-      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
-      await flushPromises()
-      expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
-        code: 'agent_session_journal_unreadable',
-        details: { reason: 'journalUnavailable' }
-      })
-      await vi.advanceTimersByTimeAsync(750)
-      expect(attempts).toHaveLength(2)
+        attempts[0].onError(journalRefusal('journalUnavailable'))
+        attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+        await flushPromises()
+        expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
+          code: 'agent_session_journal_unreadable',
+          details: { reason: 'journalUnavailable' }
+        })
+        await vi.advanceTimersByTimeAsync(750)
+        expect(attempts).toHaveLength(2)
 
-      // Damage no retry reads past: decided from the reason, not the message, which is the same.
-      attempts[1].onError(journalRefusal('journalCorrupt'))
-      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
-      await flushPromises()
-      expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
-        code: 'agent_session_journal_unreadable',
-        details: { reason: 'journalCorrupt' }
-      })
-      await vi.advanceTimersByTimeAsync(60_000)
-      expect(attempts).toHaveLength(2)
-      transport.dispose()
-    } finally {
-      vi.useRealTimers()
+        // Final damage/newer-format reasons end retry even when their message matches transient failures.
+        attempts[1].onError(journalRefusal(final))
+        attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
+        await flushPromises()
+        expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
+          code: 'agent_session_journal_unreadable',
+          details: { reason: final }
+        })
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(attempts).toHaveLength(2)
+        transport.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
     }
-  })
+  )
 
   it('reads a thrown hydrate refusal the same way, and a new run reads again', async () => {
     vi.useFakeTimers()
@@ -381,7 +474,6 @@ describe('structured agent-session read transport unattached refusals', () => {
       expect(attempts).toHaveLength(0)
       first.dispose()
 
-      // Reopening the chat is a new run, which reads again.
       const second = startWithHydration(hydrate, vi.fn())
       await flushPromises()
       expect(hydrate).toHaveBeenCalledTimes(2)
@@ -391,8 +483,7 @@ describe('structured agent-session read transport unattached refusals', () => {
     }
   })
 
-  // As `mapRuntimeError` sends a thrown refusal (pinned in `rpc/errors.test.ts`): its message is the
-  // bare code, and its reason rides in data.
+  // Mirror mapped thrown refusals: bare code message, structured reason in data (rpc/errors.test.ts).
   function thrownRefusal(details: Record<string, unknown>) {
     return {
       code: 'runtime_error',
@@ -452,7 +543,6 @@ describe('structured agent-session read transport unattached refusals', () => {
       await flushPromises()
       expect(applyError).toHaveBeenCalledExactlyOnceWith('disk full')
 
-      // The retry re-asks, and the host's open runs again: a fault that cleared now reads.
       await vi.advanceTimersByTimeAsync(750)
       expect(attempts).toHaveLength(2)
       attempts[1].onEvent(snapshot(1))
@@ -530,7 +620,6 @@ describe('structured agent-session read transport unattached refusals', () => {
       await refuseLatest()
       await expectReopenAfter(1_500)
 
-      // Damage still ends reconnecting, however far the wait has grown.
       const latest = attempts.at(-1)!
       latest.closed.resolve({ unsubscribe: latest.unsubscribe })
       await flushPromises()
@@ -566,10 +655,12 @@ describe('structured agent-session read transport unattached refusals', () => {
         applyEvent: vi.fn(),
         applyError: vi.fn(),
         getCursor: () => null,
+        onContactLost: vi.fn(),
         onHistoryReadInvalidated: () => undefined,
         hydrate: async () => undefined,
         sessionId: 'session-a',
-        target: { kind: 'environment', environmentId: 'env-a' }
+        target: { kind: 'environment', environmentId: 'env-a' },
+        subscribeRetryNow: (retry) => mocks.watchHostContact('env-a', retry)
       })
       expect(mocks.watchHostContact).toHaveBeenCalledWith('env-a', expect.any(Function))
       await flushPromises()
@@ -593,7 +684,6 @@ describe('structured agent-session read transport unattached refusals', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(attempts).toHaveLength(opened + 1)
 
-      // The wait starts over too, so a failure right after reconnect is retried soon.
       await refuseLatest()
       await vi.advanceTimersByTimeAsync(750)
       expect(attempts).toHaveLength(opened + 2)

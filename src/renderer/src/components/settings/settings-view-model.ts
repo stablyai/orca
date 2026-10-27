@@ -7,7 +7,14 @@ import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import { getSettingsNavGroupDefinitionsForSearch } from './settings-navigation-foundations'
 
 export function useSettingsNavigationActions(
-  model: SettingsStoreModel,
+  model: Pick<
+    SettingsStoreModel,
+    | 'activeSectionId'
+    | 'setActiveSectionId'
+    | 'setPendingNavRequestTick'
+    | 'setSettingsSearchQuery'
+    | 'settingsSearchQuery'
+  >,
   interactions: SettingsInteractionController
 ) {
   const {
@@ -33,7 +40,7 @@ export function useSettingsNavigationActions(
         container.scrollTo({ top: 0 })
       }
       if (settingsSearchQuery.trim() !== '') {
-        // Why: clear the search filter so selecting a result shows that pane, not the stale query's.
+        // Clear stale filtering when selecting a result’s pane.
         setSettingsSearchQuery('')
       }
       setActiveSectionId(sectionId)
@@ -58,7 +65,7 @@ export function useSettingsNavigationActions(
       setSettingsSearchQuery('')
       return
     }
-    // Why: pending refs don't schedule a render; bump state to rerun the jump effect.
+    // Pending refs cannot schedule the jump effect; trigger a render.
     setPendingNavRequestTick((tick) => tick + 1)
   }, [
     confirmDiscardSourceControlAiPromptChanges,

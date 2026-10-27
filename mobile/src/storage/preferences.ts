@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
 import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
+import { HOST_SIDEBAR_MIN_WIDTH } from '../layout/responsive-layout-metrics'
 
 const PINS_PREFIX = 'orca:pins:'
-// Consent to the push service is separate from the old socket notification choice.
+// Push-service consent is independent of legacy socket notifications.
 const NOTIF_KEY = 'orca:pushServiceNotificationsEnabled'
 
 export type PushNotificationsPreference = {
@@ -11,8 +12,7 @@ export type PushNotificationsPreference = {
   readonly loaded: boolean
 }
 
-// Why: null distinguishes people who have never made the one-time onboarding
-// decision from people who explicitly chose Not now or disabled notifications.
+// Null means no onboarding choice; false includes explicit Not now or disabling later.
 export async function readPushNotificationsPreference(): Promise<PushNotificationsPreference> {
   try {
     const raw = await AsyncStorage.getItem(NOTIF_KEY)
@@ -22,8 +22,7 @@ export async function readPushNotificationsPreference(): Promise<PushNotificatio
   }
 }
 
-// Why: default-off prevents background notification events from opening the
-// system prompt; only the onboarding CTA or Settings switch requests permission.
+// Default off so background events cannot request OS permission; only user actions may do that.
 export async function loadPushNotificationsEnabled(): Promise<boolean> {
   const preference = await readPushNotificationsPreference()
   return preference.value ?? false
@@ -35,9 +34,7 @@ export async function savePushNotificationsEnabled(enabled: boolean): Promise<vo
 
 const REMOTE_PUSH_HOST_REGISTRATIONS_KEY = 'orca:remotePushHostRegistrations'
 
-// Why persisted: switching off while a host is offline leaves a token the gateway
-// would still push to. The pending list is the phone's side of the desktop's
-// unregister outbox — it survives a restart so the retry actually happens.
+// Persist unregister retries: disabling while a host is offline otherwise leaves its gateway token live.
 export type RemotePushHostRegistrations = {
   readonly registeredHostIds: readonly string[]
   readonly pendingUnregisterHostIds: readonly string[]
@@ -72,8 +69,7 @@ export async function saveRemotePushHostRegistrations(
 
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
-// Declared beside the terminal that applies them, because the document is bundled for the WebView
-// and must not reach this module's storage import; re-exported here for the settings screen.
+// Keep definitions in the bundled terminal document so it need not import storage.
 export { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 const DEFAULT_TEXT_SCALE = 1
 
@@ -94,16 +90,12 @@ export async function loadTerminalTextScale(): Promise<number> {
 
 export async function saveTerminalTextScale(scale: number): Promise<void> {
   const value = String(scale)
-  // Through the one write path: the hybrid shell hands this key to the page on every `init`,
-  // built synchronously, and what it reads is noted there on an accepted write (ruling 35).
   await persistMirrored(TEXT_SCALE_KEY, value)
 }
 
 const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
 
-// Why: terminal command inputs default to autocorrect/suggestions OFF so the
-// keyboard never mangles commands, flags, or paths. Users who want phone-style
-// typing opt in via Settings → Terminal; the choice persists locally per device.
+// Default autocorrect off so keyboards cannot alter commands, flags or paths; phone-style typing is opt-in.
 export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
   try {
     const raw = await AsyncStorage.getItem(AUTOCOMPLETE_KEY)
@@ -116,67 +108,6 @@ export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
 export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise<void> {
   const value = String(enabled)
   await persistMirrored(AUTOCOMPLETE_KEY, value)
-}
-
-const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
-
-export type MobileShellBuildKind = 'native' | 'ota'
-
-/**
- * Which shell this binary was built for, and the only place the build-time constant is spelled.
- *
- * `babel-preset-expo`'s inline-env-vars plugin replaces a literal `process.env.EXPO_PUBLIC_*`
- * member expression with the build machine's value, so in a release bundle this function has no
- * variable left in it. That rewrite only fires on a literal member expression: a destructure, a
- * computed key or a copy through another binding is not inlined and would read `undefined` on a
- * device, which is why every caller goes through this one and never through `process.env`.
- *
- * Anything but the exact string `ota` — unset, empty, a typo, a value from a stale shell — is
- * native. A release built without the variable is the native app, which is every default build.
- */
-export function mobileShellBuildKind(): MobileShellBuildKind {
-  return process.env.EXPO_PUBLIC_MOBILE_SHELL === 'ota' ? 'ota' : 'native'
-}
-
-// Why: the hybrid shell route is dark in every build but an OTA one. Default-off means a native
-// store build never fetches, writes or sweeps a bundle cache — anything but `'true'`, including an
-// unreadable store, is off there.
-/**
- * Whether this build can have the flag on at all.
- *
- * A native release build never reads the key: it shares its bundle id with the development build
- * and with an OTA build, and the iOS data container survives an install-over, so a flag either of
- * those left on would otherwise follow the native store build in and mount the shell on a deep
- * link. The ability comes from the build, never from storage, which is what makes that impossible.
- *
- * Named rather than spelled twice. The hook beside the reader starts its state on this answer so
- * a native store build is decided on its first render rather than after an effect, and two
- * spellings of one build-kind test would be two things to keep true.
- */
-export function mobileWebShellFlagCanBeOn(): boolean {
-  return (typeof __DEV__ !== 'undefined' && __DEV__) || mobileShellBuildKind() === 'ota'
-}
-
-export async function loadMobileWebShellEnabled(): Promise<boolean> {
-  if (!mobileWebShellFlagCanBeOn()) {
-    return false
-  }
-  try {
-    const raw = await AsyncStorage.getItem(MOBILE_WEB_SHELL_KEY)
-    // An untouched OTA install mounts the page on first launch; a development build keeps its
-    // opt-in. Either way a stored value decides, so the Troubleshoot toggle can switch an OTA
-    // build off and that choice survives the next launch.
-    if (raw === null) {
-      return mobileShellBuildKind() === 'ota'
-    }
-    return raw === 'true'
-  } catch {
-    return false
-  }
-}
-
-export async function saveMobileWebShellEnabled(enabled: boolean): Promise<void> {
-  await AsyncStorage.setItem(MOBILE_WEB_SHELL_KEY, String(enabled))
 }
 
 const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
@@ -227,29 +158,21 @@ export async function saveDisabledTerminalLiveInputHandles(
 
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
 
-// Bounds for the draggable host worktree-list sidebar on tablet/foldable
-// layouts (mirrors the desktop's resizable sidebar). The caller additionally
-// caps the max against the window so the detail pane keeps usable space.
-export const HOST_SIDEBAR_MIN_WIDTH = 280
+// Caller also caps this tablet/foldable sidebar against the window to preserve detail space.
+export { HOST_SIDEBAR_MIN_WIDTH }
 export const HOST_SIDEBAR_MAX_WIDTH = 560
-export const HOST_SIDEBAR_DEFAULT_WIDTH = 340
 
 export function clampHostSidebarWidth(width: number): number {
-  if (!Number.isFinite(width)) {
-    return HOST_SIDEBAR_DEFAULT_WIDTH
-  }
   return Math.min(HOST_SIDEBAR_MAX_WIDTH, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
 }
 
-export async function loadHostSidebarWidth(): Promise<number> {
+// Null until the user drags the sidebar; the layout then sizes it from the window.
+export async function loadHostSidebarWidth(): Promise<number | null> {
   try {
-    const raw = await AsyncStorage.getItem(SIDEBAR_WIDTH_KEY)
-    if (raw === null) {
-      return HOST_SIDEBAR_DEFAULT_WIDTH
-    }
-    return clampHostSidebarWidth(Number(raw))
+    const width = Number((await AsyncStorage.getItem(SIDEBAR_WIDTH_KEY)) ?? Number.NaN)
+    return Number.isFinite(width) ? clampHostSidebarWidth(width) : null
   } catch {
-    return HOST_SIDEBAR_DEFAULT_WIDTH
+    return null
   }
 }
 
@@ -260,11 +183,7 @@ export async function saveHostSidebarWidth(width: number): Promise<void> {
 
 const DOCK_WIDTH_KEY = 'orca:hostDockWidth'
 
-// Bounds for the draggable right-hand session dock (Source Control / Files / PR)
-// on wide layouts. Mirrors the left worktree-list sidebar's bounds so the two
-// resizable columns read as a matched pair; the default matches the left default.
-// The caller additionally caps the max against the window so the terminal keeps
-// usable space.
+// Match left sidebar bounds; caller caps the dock against window width to preserve terminal space.
 export const HOST_DOCK_MIN_WIDTH = 280
 export const HOST_DOCK_MAX_WIDTH = 560
 export const HOST_DOCK_DEFAULT_WIDTH = 340
@@ -297,8 +216,10 @@ export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
 export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
+let terminalLinkWriteBarrier: Promise<void> | null = null
 
 export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
+  await terminalLinkWriteBarrier
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
     return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
@@ -307,8 +228,18 @@ export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpen
   }
 }
 
-export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
-  await persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+export function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
+  const write = (terminalLinkWriteBarrier ?? Promise.resolve()).then(() =>
+    persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+  )
+  const barrier = write.catch(() => undefined)
+  terminalLinkWriteBarrier = barrier
+  void barrier.then(() => {
+    if (terminalLinkWriteBarrier === barrier) {
+      terminalLinkWriteBarrier = null
+    }
+  })
+  return write
 }
 
 function stringArray(value: unknown): string[] {
