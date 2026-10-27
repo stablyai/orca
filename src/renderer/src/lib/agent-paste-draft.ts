@@ -13,7 +13,10 @@ import {
 } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { waitForAgentReady } from './agent-ready-wait'
-import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
+import {
+  sendAgentDraftPasteContentNow,
+  type AgentDraftPtyInputWriter
+} from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
@@ -152,11 +155,14 @@ export async function submitPromptToAgentPty(args: {
   ptyId: string
   content: string
 }): Promise<boolean> {
+  // Why: a write refused by a retired PTY must fail the submission instead of reporting a delivered prompt.
   return await sendBracketedPasteToAgent({
     ptyId: args.ptyId,
     content: args.content,
     submit: true,
-    inputKind: 'driving'
+    inputKind: 'driving',
+    writePty: (data) =>
+      sendRuntimePtyInputVerified(args.ptyId, data, 'driving', { requireWriteSettlement: true })
   })
 }
 
@@ -173,27 +179,31 @@ async function sendBracketedPasteToAgent(args: {
   submit: boolean
   agent?: TuiAgent
   inputKind: TerminalInputKind
+  writePty?: AgentDraftPtyInputWriter
 }): Promise<boolean> {
   const { ptyId, content, submit, agent } = args
   const { inputKind } = args
+  const writePty =
+    args.writePty ??
+    ((data: string): Promise<boolean> => sendRuntimePtyInputVerified(ptyId, data, inputKind))
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
   try {
     // Keep paste, Enter and retry under one PTY lock or another paste could submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
-      const pasted = await sendAgentDraftPasteContentNow(ptyId, content, inputKind)
+      const pasted = await sendAgentDraftPasteContentNow(ptyId, content, inputKind, writePty)
       if (!pasted || !submit) {
         return pasted
       }
 
       // Defer Enter to the next turn so Claude processes bracketed-paste termination before submission.
       await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-      const submitted = await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
+      const submitted = await writePty('\r')
 
       if (submitRetryDelayMs !== undefined) {
         // Some composers render before accepting Enter; retry best-effort without downgrading the first submission verdict.
         await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
         try {
-          await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
+          await writePty('\r')
         } catch {
           // Why: a rejected retry leaves the first Enter's verdict untouched.
         }
