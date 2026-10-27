@@ -1,5 +1,4 @@
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../shared/browser-annotation-viewport-bridge'
-import { SHADOW_ROOTS_ABOVE_SCRIPT } from '../../shared/browser-shadow-roots-above-script'
 
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
@@ -64,13 +63,14 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     host.style.pointerEvents = 'none';
     var el = document.elementFromPoint(e.clientX, e.clientY);
     // Document hit-testing stops at a shadow host; closed roots stay opaque.
-    // Page code can override shadowRoot, so the overlay must get its pointer events back regardless.
+    // Page code can shadow shadowRoot (e.g. a form control named "shadowRoot"); keep the deepest real hit.
     try {
       while (el && el.shadowRoot) {
         var inner = el.shadowRoot.elementFromPoint(e.clientX, e.clientY);
         if (!inner || inner === el) break;
         el = inner;
       }
+    } catch (err) {
     } finally {
       host.style.pointerEvents = 'all';
     }
@@ -88,7 +88,6 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   var frozenFrame = 0;
   var frozenResizeObserver = null;
   var frozenShadowRoots = [];
-${SHADOW_ROOTS_ABOVE_SCRIPT}
 
   function refreshFrozenHighlight() {
     frozenFrame = 0;

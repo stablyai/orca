@@ -4,7 +4,7 @@ export const GRAB_GUEST_REACT_SCRIPT = `  function isElementFixed(el) {
       var position = window.getComputedStyle(current).position;
       if (position === 'fixed' || position === 'sticky') return true;
       // Cross into the host so a fixed web component still counts for elements inside it.
-      current = current.assignedSlot || current.parentElement || (current.parentNode && current.parentNode.host);
+      current = composedParent(current);
     }
     return false;
   }

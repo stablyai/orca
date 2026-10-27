@@ -1,5 +1,5 @@
 import type { BrowserGrabRect } from './browser-grab-types'
-import { SHADOW_ROOTS_ABOVE_SCRIPT } from './browser-shadow-roots-above-script'
+import { COMPOSED_TREE_SCRIPT } from './browser-composed-tree-script'
 import { isValidBrowserGrabRect } from './browser-annotation-viewport-report'
 
 export type BrowserAnnotationViewportBridgeMarker = {
@@ -84,7 +84,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   const hostAttribute = 'data-orca-browser-annotation-overlay';
   const selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
   const markerSize = 24;
-${SHADOW_ROOTS_ABOVE_SCRIPT}
+${COMPOSED_TREE_SCRIPT}
 
   const removeOverlay = (state) => {
     if (state && state.host && state.host.parentNode) {
