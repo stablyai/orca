@@ -1,4 +1,5 @@
-import { useCallback, useMemo, type KeyboardEvent } from 'react'
+import { useCallback, type KeyboardEvent } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { stepRemoteFileBrowserHighlight } from './remote-file-browser-highlight'
@@ -14,14 +15,14 @@ export function useRemoteFileBrowserProjectFolders(
   currentPath: string,
   visible: boolean
 ): readonly string[] {
-  const repos = useAppStore((s) => s.repos)
   const { targetId, runtimeEnvironmentId } = host
-  return useMemo(
-    () =>
+  // Why shallow: catalog refreshes replace repo rows; equal paths must keep the array, or the highlight resets.
+  return useAppStore(
+    useShallow((s) =>
       visible
-        ? remoteFileBrowserProjectFolders(repos, { targetId, runtimeEnvironmentId }, currentPath)
-        : NO_FOLDERS,
-    [repos, targetId, runtimeEnvironmentId, currentPath, visible]
+        ? remoteFileBrowserProjectFolders(s.repos, { targetId, runtimeEnvironmentId }, currentPath)
+        : NO_FOLDERS
+    )
   )
 }
 

@@ -8,6 +8,7 @@ import type { DirEntry } from './remote-file-browser-entry-actions'
 import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-control-paste'
 import type { PreviewState } from './remote-file-browser-path-preview-resolver'
 import { translate } from '@/i18n/i18n'
+import { collapseHomePath } from '../../../../../shared/bundled-skill-locations'
 
 type RemoteFileBrowserEntryListProps = {
   loading: boolean
@@ -16,6 +17,8 @@ type RemoteFileBrowserEntryListProps = {
   displayEntries: readonly DirEntry[]
   activeIndex: number
   projectFolders: readonly string[]
+  /** Resolved `~` of the browsed host, once listed; folder rows read relative to it. */
+  homePath: string | null
   activeProjectFolderIndex: number
   listboxId: string
   filter: string
@@ -45,6 +48,7 @@ export function RemoteFileBrowserEntryList({
   displayEntries,
   activeIndex,
   projectFolders,
+  homePath,
   activeProjectFolderIndex,
   listboxId,
   filter,
@@ -104,6 +108,7 @@ export function RemoteFileBrowserEntryList({
           >
             <div
               id={projectFoldersLabelId}
+              role="presentation"
               className="px-3 pt-2 pb-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
               {translate(
@@ -137,7 +142,9 @@ export function RemoteFileBrowserEntryList({
                     open={false}
                     className="size-3.5 text-muted-foreground shrink-0"
                   />
-                  <span className="truncate flex-1 min-w-0">{folderPath}</span>
+                  <span className="truncate flex-1 min-w-0 font-mono text-2xs">
+                    {homePath ? collapseHomePath(folderPath, homePath) : folderPath}
+                  </span>
                   <ChevronRight className="size-3.5 text-muted-foreground/60 shrink-0" />
                 </button>
               )
