@@ -16,7 +16,7 @@ import {
   claudeLaunchAccountId,
   findClaudeSwitchSessions,
   findQueuedClaudeRestartsOnAccount,
-  isClaudePaneMidTurn
+  isClaudePaneBusyForRestart
 } from './claude-session-account-move'
 import { resolveClaudePaneFolder, type ClaudeHostFolders } from './claude-pane-account-folder'
 
@@ -352,7 +352,7 @@ describe('resolveClaudePaneFolder', () => {
   })
 })
 
-describe('isClaudePaneMidTurn', () => {
+describe('isClaudePaneBusyForRestart', () => {
   it('waits on a reply, a permission prompt or a question, not on an idle session', () => {
     seedPanes([
       { n: 1, agentType: 'claude', state: 'working' },
@@ -362,7 +362,7 @@ describe('isClaudePaneMidTurn', () => {
     ])
     const state = useAppStore.getState()
     const midTurn = [1, 2, 3, 4].map((n) =>
-      isClaudePaneMidTurn(state, makePaneKey(tabId(n), leafId(n)))
+      isClaudePaneBusyForRestart(state, makePaneKey(tabId(n), leafId(n)))
     )
 
     expect(midTurn).toEqual([true, true, true, false])
