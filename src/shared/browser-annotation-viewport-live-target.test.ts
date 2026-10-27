@@ -19,7 +19,7 @@ afterEach(async () => {
   await Promise.all(guestAborts.splice(0).map((abort) => abort()))
 })
 
-async function createGuest(targetIsRoot = false) {
+async function createGuest(targetIsRoot = false, inShadowRoot = false) {
   const { Window } = await import('happy-dom')
   const window = new Window({ width: 1000, height: 800 })
   guestAborts.push(() => window.happyDOM.abort())
@@ -28,7 +28,10 @@ async function createGuest(targetIsRoot = false) {
   const target = targetIsRoot ? document.documentElement : document.createElement('section')
   if (!targetIsRoot) {
     scroller.appendChild(target)
-    document.body.appendChild(scroller)
+    const container = inShadowRoot
+      ? document.body.appendChild(document.createElement('div')).attachShadow({ mode: 'open' })
+      : document.body
+    container.appendChild(scroller)
   }
   let targetRect: Rect = { x: 40, y: 300, width: 120, height: 30 }
   const contentSize = { width: 120, height: 30 }
@@ -202,6 +205,19 @@ describe('annotation viewport bridge live target', () => {
     })
 
     // A box scrolling inside the page leaves window scroll unchanged.
+    guest.moveTarget({ x: 40, y: 120, width: 120, height: 30 })
+    guest.scroller.dispatchEvent(new guest.window.Event('scroll'))
+    guest.flushFrames()
+    expect(guest.lastReport()?.target).toEqual({ x: 40, y: 120, width: 120, height: 30 })
+  })
+
+  it('tracks a selected element inside an open shadow root, including scroll inside it', async () => {
+    const guest = await createGuest(false, true)
+    guest.target.setAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE, 'selection-1')
+    guest.install(true)
+    guest.flushFrames()
+    expect(guest.lastReport()?.target).toEqual({ x: 40, y: 300, width: 120, height: 30 })
+
     guest.moveTarget({ x: 40, y: 120, width: 120, height: 30 })
     guest.scroller.dispatchEvent(new guest.window.Event('scroll'))
     guest.flushFrames()

@@ -1,4 +1,5 @@
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../shared/browser-annotation-viewport-bridge'
+import { SHADOW_ROOTS_ABOVE_SCRIPT } from '../../shared/browser-shadow-roots-above-script'
 
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
@@ -62,6 +63,12 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     // Exclude the overlay from hit testing to find the page element underneath.
     host.style.pointerEvents = 'none';
     var el = document.elementFromPoint(e.clientX, e.clientY);
+    // Document hit-testing stops at a shadow host; closed roots stay opaque.
+    while (el && el.shadowRoot) {
+      var inner = el.shadowRoot.elementFromPoint(e.clientX, e.clientY);
+      if (!inner || inner === el) break;
+      el = inner;
+    }
     host.style.pointerEvents = 'all';
     if (el) {
       requestAnimationFrame(function() { updateHighlight(el); });
@@ -76,6 +83,8 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   var previousSelectedValue = null;
   var frozenFrame = 0;
   var frozenResizeObserver = null;
+  var frozenShadowRoots = [];
+${SHADOW_ROOTS_ABOVE_SCRIPT}
 
   function refreshFrozenHighlight() {
     frozenFrame = 0;
@@ -93,6 +102,10 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
 
   function stopTrackingSelection() {
     window.removeEventListener('scroll', scheduleFrozenHighlight, true);
+    frozenShadowRoots.forEach(function(root) {
+      root.removeEventListener('scroll', scheduleFrozenHighlight, true);
+    });
+    frozenShadowRoots = [];
     window.removeEventListener('resize', scheduleFrozenHighlight, true);
     if (frozenResizeObserver) frozenResizeObserver.disconnect();
     frozenResizeObserver = null;
@@ -127,6 +140,10 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
       selectedEl.setAttribute(selectedAttribute, selectionId);
       highlightBox.style.transition = 'none';
       window.addEventListener('scroll', scheduleFrozenHighlight, true);
+      frozenShadowRoots = shadowRootsAbove(selectedEl);
+      frozenShadowRoots.forEach(function(root) {
+        root.addEventListener('scroll', scheduleFrozenHighlight, true);
+      });
       window.addEventListener('resize', scheduleFrozenHighlight, true);
       if (typeof ResizeObserver === 'function') {
         frozenResizeObserver = new ResizeObserver(scheduleFrozenHighlight);
