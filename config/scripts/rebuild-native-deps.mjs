@@ -245,10 +245,9 @@ function assertNodePtyConptySourceDeniesMsysBreakaway() {
 }
 
 function buildSharedElectronModule(moduleName) {
-  exitWhenSameHostElectronCannotStart()
   const target = { platform: rebuildPlatform, arch: rebuildArch }
   // An N-API build serves Electron and Node alike, so either can vouch for it on this host.
-  const executable = electronPackageIsUsable() ? getElectronExecutablePath() : process.execPath
+  const executable = exitWhenSameHostElectronCannotStart() ?? process.execPath
   sharedNativeBuild.ensureSharedNativeBuild({
     moduleName,
     packageDir: resolveNativePackageDir(moduleName, projectDir),
@@ -261,11 +260,14 @@ function buildSharedElectronModule(moduleName) {
   })
 }
 
-/** Only where Electron vouches for addons: a failed probe, or a shared build's load check. */
+/**
+ * Only where Electron vouches for addons: a failed probe, or a shared build's load check.
+ * Returns what can vouch here, or null when Electron isn't installed.
+ */
 function exitWhenSameHostElectronCannotStart() {
-  if (!isCrossHostRebuild && osPlatform() === 'linux' && electronPackageIsUsable()) {
-    exitWhenElectronCannotStart(getElectronExecutablePath())
-  }
+  const electron = electronPackageIsUsable() ? getElectronExecutablePath() : null
+  const sameHostLinux = electron && !isCrossHostRebuild && osPlatform() === 'linux'
+  return sameHostLinux ? exitWhenElectronCannotStart(electron, { forced: forceRebuild }) : electron
 }
 
 function restoreNodePtyWindowsConptyRuntime() {

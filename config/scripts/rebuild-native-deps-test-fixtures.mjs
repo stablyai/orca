@@ -5,6 +5,8 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -511,4 +513,47 @@ export function writePatchedNodePtyBuildArtifacts(
   if (process.platform === 'darwin') {
     writeFileSync(join(buildDir, 'spawn-helper'), '')
   }
+}
+
+const FAKE_NAPI_ADDON = 'fake N-API addon\n'
+
+/**
+ * node-pty linked from a store outside the project, with a published build whose addon Node can
+ * load through `nodeOptions`, as it would a real N-API one.
+ */
+export function writeFakeSharedNodePtyBuild(projectDir, storeDir) {
+  const packageDir = join(storeDir, 'node-pty')
+  const entryDir = join(packageDir, 'build', `orca-napi-linux-${process.arch}`)
+  mkdirSync(entryDir, { recursive: true })
+  writeFileSync(join(packageDir, 'package.json'), '{"name":"node-pty"}\n')
+  writeFileSync(join(entryDir, 'pty.node'), FAKE_NAPI_ADDON)
+  symlinkSync(packageDir, join(projectDir, 'node_modules', 'node-pty'), 'junction')
+
+  mkdirSync(join(projectDir, 'node_modules', '@orca'), { recursive: true })
+  symlinkSync(
+    realpathSync(fileURLToPath(new URL('../../node_modules/@orca/process-host', import.meta.url))),
+    join(projectDir, 'node_modules', '@orca', 'process-host'),
+    'junction'
+  )
+  copyScriptWithLocalModules(
+    fileURLToPath(new URL('./native-build-entry-probe.cjs', import.meta.url)),
+    join(projectDir, 'config', 'scripts')
+  )
+
+  const loaderPath = join(projectDir, 'fake-napi-addon-loader.cjs')
+  writeFileSync(
+    loaderPath,
+    `const Module = require('node:module')
+const { readFileSync } = require('node:fs')
+const loadAddon = Module._extensions['.node']
+Module._extensions['.node'] = (module, filename) => {
+  if (readFileSync(filename, 'utf8') === ${JSON.stringify(FAKE_NAPI_ADDON)}) {
+    module.exports = {}
+    return
+  }
+  loadAddon(module, filename)
+}
+`
+  )
+  return { nodeOptions: `--require ${JSON.stringify(loaderPath)}` }
 }

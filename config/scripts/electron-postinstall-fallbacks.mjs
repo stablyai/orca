@@ -59,11 +59,19 @@ export function continuePostinstallWithoutElectron() {
   return true
 }
 
-/** A host without Electron's desktop libraries can't vouch for any addon, so none is blamed. */
-export function exitWhenElectronCannotStart(executable) {
+/**
+ * A host without Electron's desktop libraries can't vouch for any addon, so none is blamed.
+ * Returns what can vouch: a forced build (e.g. electron-builder's hook) must not need Electron,
+ * so it gets Node, which loads an N-API build as well, instead of an exit.
+ */
+export function exitWhenElectronCannotStart(executable, { forced = false } = {}) {
   const library = findMissingElectronLibrary(executable)
   if (!library) {
-    return
+    return executable
+  }
+  if (forced) {
+    console.log(`[rebuild] Electron can't start here without ${library}; checking in Node instead.`)
+    return process.execPath
   }
   console.error(`[rebuild] ${describeMissingElectronLibrary(library)}`)
   if (isPostinstall() && process.env.ORCA_STRICT_NATIVE_REBUILD !== '1') {
