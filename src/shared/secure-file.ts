@@ -4,10 +4,12 @@ import {
   closeSync,
   existsSync,
   fsyncSync,
+  linkSync,
   mkdirSync,
   openSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { dirname } from 'node:path'
@@ -26,6 +28,7 @@ import {
   restrictWindowsPathSync,
   writeRestrictedWindowsFile
 } from './secure-path-windows-acl'
+import { loadWindowsSecurity } from './windows-security-addon'
 import {
   getHardenedPathCacheEntry,
   hardenedPathCacheEntriesMatch,
@@ -113,7 +116,7 @@ export function writeDurableSecureJsonFile(targetPath: string, value: unknown): 
 export function writeSecureFile(
   targetPath: string,
   contents: string,
-  options: { durable?: boolean; shouldPublish?: () => boolean } = {}
+  options: { durable?: boolean; shouldPublish?: () => boolean; noClobber?: boolean } = {}
 ): boolean {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
@@ -123,12 +126,23 @@ export function writeSecureFile(
   hardenSecurePathOnce(dir, true)
 
   const tmpFile = `${targetPath}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
+  let linkedNoClobber = false
   try {
+    // Bearer output must not even stage plaintext when the Windows ACL addon is unavailable.
+    if (options.noClobber && process.platform === 'win32' && 'error' in loadWindowsSecurity()) {
+      throw new Error('Bearer output could not be secured')
+    }
     // Create restricted on Windows: mode is ignored there, leaving inherited DACL exposure until a later fix.
     const restricted =
       process.platform === 'win32'
         ? writeRestrictedWindowsFile(tmpFile, contents)
-        : writeModeRestrictedFile(tmpFile, contents)
+        : writeModeRestrictedFile(tmpFile, contents, options.noClobber)
+    if (
+      options.noClobber &&
+      (!restricted || (process.platform !== 'win32' && (statSync(tmpFile).mode & 0o777) !== 0o600))
+    ) {
+      throw new Error('Bearer output could not be secured')
+    }
     if (options.durable) {
       fsyncFileSync(tmpFile)
     }
@@ -137,8 +151,20 @@ export function writeSecureFile(
       rmSync(tmpFile, { force: true })
       return false
     }
-    // The rename publishes the staged inode, so its DACL or mode is already the published file's.
-    renameSync(tmpFile, targetPath)
+    // Hard-link publication is atomic and fails if another writer created the destination.
+    // Both names refer to the already restricted staged inode until its temporary name is removed.
+    if (options.noClobber) {
+      linkSync(tmpFile, targetPath)
+      linkedNoClobber = true
+      // Read back the final name. An ACL check of only the staged name cannot prove the
+      // published path remained restricted on the target filesystem.
+      if (process.platform === 'win32' && !restrictWindowsPathSync(targetPath, false)) {
+        throw new Error('Bearer output could not be secured')
+      }
+      rmSync(tmpFile, { force: true })
+    } else {
+      renameSync(tmpFile, targetPath)
+    }
     // Cache only on confirmed success so failures retry; a success also clears the read path's backoff.
     if (restricted) {
       rememberHardenedPath(targetPath, false)
@@ -149,13 +175,34 @@ export function writeSecureFile(
     }
     return restricted
   } catch (error) {
+    if (linkedNoClobber) {
+      try {
+        const staged = statSync(tmpFile)
+        const published = statSync(targetPath)
+        // Remove only the name still linked to our stage. A competing replacement is not ours.
+        if (staged.ino !== 0 && staged.dev === published.dev && staged.ino === published.ino) {
+          rmSync(targetPath, { force: true })
+        }
+      } catch {
+        // If identity cannot be proven, leave the restricted file; the admin revokes its token.
+      }
+    }
     rmSync(tmpFile, { force: true })
     throw error
   }
 }
 
-function writeModeRestrictedFile(tmpFile: string, contents: string): boolean {
-  writeFileSync(tmpFile, contents, { encoding: 'utf-8', mode: 0o600 })
+/** Publish a bearer only when the destination is absent and user-only permissions are proven. */
+export function writeSecureFileNoClobber(targetPath: string, contents: string): boolean {
+  return writeSecureFile(targetPath, contents, { durable: true, noClobber: true })
+}
+
+function writeModeRestrictedFile(tmpFile: string, contents: string, exclusive = false): boolean {
+  writeFileSync(tmpFile, contents, {
+    encoding: 'utf-8',
+    mode: 0o600,
+    flag: exclusive ? 'wx' : 'w'
+  })
   // The umask can strip bits from `mode` but never add them; chmod sets exactly 0o600.
   chmodSync(tmpFile, 0o600)
   return true

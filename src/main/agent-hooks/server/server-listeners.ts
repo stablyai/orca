@@ -216,6 +216,65 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
   }
 
+  /**
+   * Observer-only producer boundary. It scans at most scanLimit source records and
+   * materializes at most rowLimit matching projections; it never builds/sorts the full snapshot.
+   */
+  getBoundedStatusSnapshot(
+    worktreeId: string,
+    scanLimit: number,
+    rowLimit: number
+  ): { rows: AgentStatusIpcPayload[]; truncated: boolean } {
+    const safeScanLimit = Math.max(0, Math.floor(scanLimit))
+    const safeRowLimit = Math.max(0, Math.floor(rowLimit))
+    const rows: AgentStatusIpcPayload[] = []
+    let scanned = 0
+    let truncated = false
+    const consume = (entry: EnrichedAgentHookEventPayload): boolean => {
+      if (scanned >= safeScanLimit) {
+        truncated = true
+        return false
+      }
+      scanned += 1
+      if (entry.worktreeId === worktreeId) {
+        if (rows.length < safeRowLimit) {
+          rows.push(toAgentStatusIpcPayload(entry))
+        } else {
+          truncated = true
+        }
+      }
+      return true
+    }
+
+    for (const entry of this.state.lastStatusByPaneKey.values()) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows.
+      const enriched = this.programStatusFacets.stitch(entry as EnrichedAgentHookEventPayload)
+      if (!consume(enriched)) {
+        break
+      }
+    }
+
+    if (scanned >= safeScanLimit && !truncated) {
+      truncated = this.canonicalStatusStore.getParents(1).length > 0
+    } else if (scanned < safeScanLimit) {
+      const remainingWithSentinel = safeScanLimit - scanned + 1
+      for (const parent of this.canonicalStatusStore.getParents(remainingWithSentinel)) {
+        if (!parent.status || isTmuxInnerSubject(parent.subject)) {
+          if (scanned >= safeScanLimit) {
+            truncated = true
+            break
+          }
+          scanned += 1
+          continue
+        }
+        if (!consume(structuredStatusLegacyEvent(parent.status))) {
+          break
+        }
+      }
+    }
+    return { rows, truncated }
+  }
+
   /** Include metadata-only provider identities. */
   getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
     return this.buildStatusChangeNotification().providerSessions

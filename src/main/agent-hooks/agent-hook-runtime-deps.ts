@@ -21,6 +21,8 @@ export function agentHookRuntimeDeps(
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
     // Include resume identities so mobile can locate provider transcripts, including Pi sessions.
     getAgentProviderSessionSnapshot: () => server.getStatusSnapshot(),
+    getBoundedAgentProviderSessionSnapshot: (worktreeId, scanLimit, rowLimit) =>
+      server.getBoundedStatusSnapshot(worktreeId, scanLimit, rowLimit),
     getAgentProviderSessionRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
     subscribeAgentProviderSessionChanges: (listener) =>
       server.subscribeProviderSessionChanges(listener),

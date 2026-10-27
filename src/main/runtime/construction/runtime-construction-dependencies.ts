@@ -36,6 +36,12 @@ export type RuntimeConstructionDependencies = {
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
   getAgentProviderSessionSnapshot?: () => AgentStatusIpcPayload[]
+  /** Producer-bounded observer view; must not materialize or sort the unbounded status store. */
+  getBoundedAgentProviderSessionSnapshot?: (
+    worktreeId: string,
+    scanLimit: number,
+    rowLimit: number
+  ) => { rows: AgentStatusIpcPayload[]; truncated: boolean }
   getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   subscribeAgentProviderSessionChanges?: (
     listener: (sessions: readonly { paneKey: string; sessionId: string }[]) => void

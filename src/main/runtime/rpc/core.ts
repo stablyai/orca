@@ -104,6 +104,13 @@ export type RpcContext = {
   pairedDeviceParentId?: string
   // Host-assigned transport identity; absent means the caller could not be established.
   caller?: RpcCallerIdentity
+  /** Transport-authenticated observer scope; never accepted from request params. */
+  observer?: Readonly<{
+    credentialId: string
+    worktreeId: string
+    worktreeInstanceId: string
+    expiresAt: number
+  }>
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
   // Trust socket-negotiated capabilities, never destructive request assertions.

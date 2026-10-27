@@ -9,6 +9,13 @@ export type RpcCallerScope =
   /** Delegated phones inherit at most their paired desktop's scope, which never includes pairing-admin. */
   | { kind: 'mobile'; delegated?: boolean }
   | { kind: 'runtime-paired'; grants: readonly RuntimeDeviceGrant[] }
+  | {
+      kind: 'observer'
+      credentialId: string
+      worktreeId: string
+      worktreeInstanceId: string
+      expiresAt: number
+    }
 
 export const OWNER_RPC_CALLER_SCOPE: RpcCallerScope = { kind: 'owner' }
 
@@ -37,7 +44,17 @@ export function denyRpcMethodForCaller(
       ? `Method '${methodName}' is not available to a phone connected through a paired desktop`
       : null
   }
-  if (scope.kind === 'owner' || permission === undefined) {
+  if (scope.kind === 'owner') {
+    return null
+  }
+  // Refuse unknown names as forbidden too: observer callers cannot enumerate the wider registry,
+  // and every rejection receives the same effect:false receipt from the admission prologue.
+  if (scope.kind === 'observer') {
+    return permission === 'observer-read'
+      ? null
+      : `Method '${methodName}' is outside the observer-only RPC surface (stablyai/orca#31308)`
+  }
+  if (permission === undefined) {
     return null
   }
   return !RUNTIME_PAIRED_STANDARD.has(permission) &&

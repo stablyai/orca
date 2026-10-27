@@ -138,6 +138,19 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     if (request.authToken === this.authToken) {
       return { request, callerScope: OWNER_RPC_CALLER_SCOPE }
     }
+    const observer = this.observerCredentialStore.authenticate(request.authToken)
+    if (observer) {
+      return {
+        request,
+        callerScope: {
+          kind: 'observer',
+          credentialId: observer.id,
+          worktreeId: observer.worktreeId,
+          worktreeInstanceId: observer.worktreeInstanceId,
+          expiresAt: observer.expiresAt
+        }
+      }
+    }
     return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
   }
 

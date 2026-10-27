@@ -56,6 +56,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly structuredAgentStatusSinkFn: HostServices['structuredAgentStatusSinkFn']
   declare readonly readObservedAgentStatusPaneIdentityFn: HostServices['readObservedAgentStatusPaneIdentityFn']
   declare protected readonly getAgentProviderSessionSnapshotFn: HostServices['getAgentProviderSessionSnapshotFn']
+  declare protected readonly getBoundedAgentProviderSessionSnapshotFn: HostServices['getBoundedAgentProviderSessionSnapshotFn']
   declare protected readonly getAgentProviderSessionRowsForPaneFn: HostServices['getAgentProviderSessionRowsForPaneFn']
   declare protected readonly attestAgentHookCompatibilityAuthorityFn: HostServices['attestAgentHookCompatibilityAuthorityFn']
   declare protected readonly retireAgentHookCompatibilityAuthorityFn: HostServices['retireAgentHookCompatibilityAuthorityFn']
@@ -216,6 +217,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
+    this.getBoundedAgentProviderSessionSnapshotFn =
+      deps?.getBoundedAgentProviderSessionSnapshot ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
     this.attestAgentHookCompatibilityAuthorityFn =
       deps?.attestAgentHookCompatibilityAuthority ?? null

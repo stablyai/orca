@@ -2,6 +2,8 @@
  * Workspace already runs host-user code; separate tiers allow narrower callers to refuse terminal-equivalent operations. Mobile has a method allowlist.
  * Paired runtime clients need a pairing-time desktop-control grant and never receive pairing-admin. */
 export type RpcMethodPermission =
+  /** Bounded, side-effect-free observer inventory only. See https://github.com/stablyai/orca/issues/31308. */
+  | 'observer-read'
   /** Projects, worktrees, terminals, files, git, browser, orchestration and integrations; equals
    *  running commands as this host's user. */
   | 'workspace'
@@ -27,6 +29,7 @@ export const RUNTIME_DEVICE_GRANTS = [
 export type RuntimeDeviceGrant = (typeof RUNTIME_DEVICE_GRANTS)[number]
 
 export const RPC_METHOD_PERMISSIONS: readonly RpcMethodPermission[] = [
+  'observer-read',
   'workspace',
   'desktop-control',
   'accounts-admin',

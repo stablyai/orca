@@ -118,6 +118,10 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     | HostBindings['getAgentProviderSessionSnapshot']
     | null
 
+  protected readonly getBoundedAgentProviderSessionSnapshotFn!:
+    | HostBindings['getBoundedAgentProviderSessionSnapshot']
+    | null
+
   protected readonly getAgentProviderSessionRowsForPaneFn!:
     | HostBindings['getAgentProviderSessionRowsForPane']
     | null
@@ -137,6 +141,19 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   /** Includes resume-identity-only provider rows. */
   getAgentProviderSessionRows(): AgentStatusIpcPayload[] {
     return this.getAgentProviderSessionSnapshotFn?.() ?? []
+  }
+
+  getBoundedAgentProviderSessionRows(
+    worktreeId: string,
+    scanLimit: number,
+    rowLimit: number
+  ): { rows: AgentStatusIpcPayload[]; truncated: boolean } {
+    return (
+      this.getBoundedAgentProviderSessionSnapshotFn?.(worktreeId, scanLimit, rowLimit) ?? {
+        rows: [],
+        truncated: true
+      }
+    )
   }
 
   getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
@@ -232,7 +249,10 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
         undefined,
         connectionId,
         false,
-        { includeForegroundProcessEvidence: false, refreshForegroundAgents: false }
+        {
+          includeForegroundProcessEvidence: false,
+          refreshForegroundAgents: false
+        }
       ),
     runMutation: (worktreeId, operation) => this.runWorktreeTerminalMutation(worktreeId, operation),
     getActivation: (worktreeId) => this.getLegacyWorkerRecoveryActivation(worktreeId),

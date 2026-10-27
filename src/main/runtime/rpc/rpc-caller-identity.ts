@@ -9,6 +9,8 @@ export type RpcCallerIdentity =
   | { kind: 'desktop' }
   /** A paired phone or remote desktop, by its device subject, which survives credential rotation. */
   | { kind: 'paired-device'; deviceId: string }
+  /** A server-authenticated, read-only observer credential; never collapse into an agent CLI. */
+  | { kind: 'observer'; credentialId: string }
 
 export const DESKTOP_RPC_CALLER: RpcCallerIdentity = { kind: 'desktop' }
 
@@ -21,9 +23,16 @@ export function isAgentRpcCaller(caller: RpcCallerIdentity | undefined): boolean
  * SSH CLI bridges/browser automation share that namespace; before plugins ship, require explicit local-cli stamping (plan §4). */
 export function resolveRpcCallerIdentity(
   transport:
-    | Pick<RpcDispatchStreamingOptions, 'caller' | 'clientKind' | 'pairedDeviceId'>
+    | Pick<RpcDispatchStreamingOptions, 'caller' | 'callerScope' | 'clientKind' | 'pairedDeviceId'>
     | undefined
 ): RpcCallerIdentity | undefined {
+  // Observer scope is transport-authenticated and must dominate any future in-process caller hint.
+  if (transport?.callerScope?.kind === 'observer') {
+    return {
+      kind: 'observer',
+      credentialId: transport.callerScope.credentialId
+    }
+  }
   if (transport?.caller) {
     return transport.caller
   }
@@ -43,5 +52,7 @@ export function rpcCallerOperationKey(caller: RpcCallerIdentity): string {
       return 'trusted-local:desktop'
     case 'paired-device':
       return caller.deviceId
+    case 'observer':
+      return `observer:${caller.credentialId}`
   }
 }

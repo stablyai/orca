@@ -53,6 +53,15 @@ export function rpcContextFromTransport(
     pairedDeviceId: options?.pairedDeviceId,
     pairedDeviceParentId: options?.pairedDeviceParentId,
     caller: resolveRpcCallerIdentity(options),
+    observer:
+      options?.callerScope?.kind === 'observer'
+        ? {
+            credentialId: options.callerScope.credentialId,
+            worktreeId: options.callerScope.worktreeId,
+            worktreeInstanceId: options.callerScope.worktreeInstanceId,
+            expiresAt: options.callerScope.expiresAt
+          }
+        : undefined,
     clientKind: options?.clientKind,
     clientCapabilities: options?.clientCapabilities,
     updateClientCapabilities: options?.updateClientCapabilities,

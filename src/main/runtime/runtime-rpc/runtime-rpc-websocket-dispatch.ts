@@ -131,6 +131,50 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       typeof (request as Record<string, unknown>).deviceToken === 'string'
         ? ((request as Record<string, unknown>).deviceToken as string)
         : null
+    const socketObserver = authenticatedSocket?.device.observer
+    if (socketObserver) {
+      // The handshake alone may be stale: resolve the separate store for every plaintext RPC.
+      // Observer sockets never enter relay, paired-device, long-poll, or binary routing.
+      const observerToken = authenticatedSocket.device.deviceToken
+      const observer =
+        authenticatedSocket.transport.transport === 'direct' && observerToken
+          ? this.observerCredentialStore.resolve(socketObserver.id, observerToken)
+          : null
+      if (!observer) {
+        reply(
+          JSON.stringify(
+            this.buildError(request.id, 'unauthorized', 'Observer credential expired or revoked')
+          )
+        )
+        return
+      }
+      if (requestToken || request.authToken) {
+        reply(
+          JSON.stringify(
+            this.buildError(
+              request.id,
+              'unauthorized',
+              'Observer request credentials are not accepted after E2EE authentication'
+            )
+          )
+        )
+        return
+      }
+      const boundedReply = limitRuntimeRpcReplySize(request.id, reply, (id, code, message) =>
+        this.buildError(id, code, message)
+      )
+      await this.dispatcher.dispatchStreaming(request, boundedReply, {
+        callerScope: {
+          kind: 'observer',
+          credentialId: observer.id,
+          worktreeId: observer.worktreeId,
+          worktreeInstanceId: observer.worktreeInstanceId,
+          expiresAt: observer.expiresAt
+        }
+      })
+      return
+    }
+
     // Why: a keyed socket proved no token, so any request token is a mismatch.
     const boundToken = authenticatedSocket
       ? (authenticatedSocket.device.deviceToken ?? null)
@@ -145,6 +189,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
       return
     }
+
     // Recheck device/credential revision per request so revocation refuses immediately, before socket close.
     const device = authenticatedSocket
       ? this.deviceRegistry?.resolveAuthenticatedPrincipal(authenticatedSocket.device)

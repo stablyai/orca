@@ -76,6 +76,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_LAUNCH_TARGET_FORBIDDEN_CODE,
   'agent_launch_replay_unsupported',
   'runtime_unavailable',
+  'observer_scope_stale',
   'chat_fork_source_unavailable',
   'chat_fork_runtime_incompatible',
   'chat_fork_anchor_changed',

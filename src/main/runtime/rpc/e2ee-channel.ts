@@ -28,6 +28,7 @@ import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { track } from '../../telemetry/client'
 import type { DevicePrincipal } from '../device-principal'
+import type { ObserverCredential } from '../observer-credential-store'
 
 type OutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']
 
@@ -49,6 +50,8 @@ export type E2EEChannelOptions = {
 export type E2EEAuthenticatedDevice = DevicePrincipal & {
   // Absent for a keyed row, which never presented a bearer.
   deviceToken?: string
+  /** Present only for a direct observer bearer; never synthesized from request fields. */
+  observer?: ObserverCredential
 }
 
 export class E2EEChannel {

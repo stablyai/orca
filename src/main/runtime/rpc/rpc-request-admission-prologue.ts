@@ -43,7 +43,25 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
   const callerScope = pinnedCallerScope ?? options?.callerScope ?? OWNER_RPC_CALLER_SCOPE
   const denial = denyRpcMethodForCaller(callerScope, rawRequest.method, method?.permission)
   if (denial) {
-    return reject(errorResponse(rawRequest.id, meta, 'forbidden', denial))
+    return reject(
+      errorResponse(
+        rawRequest.id,
+        meta,
+        'forbidden',
+        denial,
+        callerScope.kind === 'observer'
+          ? {
+              receipt: {
+                requestId: rawRequest.id,
+                credentialId: callerScope.credentialId,
+                method: rawRequest.method,
+                deniedAt: Date.now(),
+                effect: false
+              }
+            }
+          : undefined
+      )
+    )
   }
   if (!method) {
     return reject(

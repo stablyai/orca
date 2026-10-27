@@ -31,6 +31,7 @@ import type {
   PairingOfferUnavailable
 } from './runtime-rpc-pairing-types'
 import { DEFAULT_WS_PORT } from './runtime-rpc-pairing-types'
+import { ObserverCredentialStore } from '../observer-credential-store'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -52,6 +53,7 @@ export class RuntimeRpcState {
   // Stop fences new exposure and waits pending rebind before taking transport snapshots (STA-2370).
   protected stopping = false
   protected readonly authToken = randomBytes(24).toString('hex')
+  protected readonly observerCredentialStore: ObserverCredentialStore
   protected readonly keepaliveIntervalMs: number
   protected readonly longPollCap: number
   protected readonly metadataOwnershipPollMs: number
@@ -122,6 +124,7 @@ export class RuntimeRpcState {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? ALL_RPC_METHODS })
     this.userDataPath = userDataPath
+    this.observerCredentialStore = new ObserverCredentialStore(userDataPath)
     this.pid = pid
     this.platform = platform
     this.enableWebSocket = enableWebSocket

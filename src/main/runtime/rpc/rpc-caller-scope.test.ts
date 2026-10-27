@@ -4,6 +4,7 @@ import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ALL_RPC_METHODS } from './methods'
 import type { RpcCallerScope } from './rpc-caller-scope'
+import { resolveRpcCallerIdentity } from './rpc-caller-identity'
 import { RPC_METHOD_PERMISSIONS } from './rpc-method-permission'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
@@ -65,6 +66,23 @@ describe('every RPC method declares a known permission', () => {
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has(name)).toBe(
       MOBILE_RPC_METHOD_ALLOWLIST.has('terminal.create')
     )
+  })
+})
+
+describe('transport caller identity', () => {
+  it('keeps authenticated observer scope ahead of a conflicting local-cli hint', () => {
+    expect(
+      resolveRpcCallerIdentity({
+        callerScope: {
+          kind: 'observer',
+          credentialId: 'observer-credential',
+          worktreeId: 'worktree',
+          worktreeInstanceId: 'instance',
+          expiresAt: 1
+        },
+        caller: { kind: 'local-cli' }
+      })
+    ).toEqual({ kind: 'observer', credentialId: 'observer-credential' })
   })
 })
 
