@@ -6,7 +6,10 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
+import {
+  buildWrappedLogicalLine,
+  rangeForParsedFileLink
+} from '../../../../shared/wrapped-terminal-link-ranges'
 import {
   extractOrchestrationTaskLinks,
   focusRuntimeOrchestrationTask,

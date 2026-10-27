@@ -8,7 +8,9 @@ const wslMocks = vi.hoisted(() => ({
 vi.mock('../wsl', () => wslMocks)
 
 import {
+  assertWslUncPathRunning,
   guardWslUncPathAccess,
+  runAsWslUserAct,
   noteWslDistroMayHaveStopped,
   WSL_UNC_RUNNING_LEASE_MS,
   WslDistroStoppedError,
@@ -17,8 +19,12 @@ import {
 import {
   _resetWslBackgroundDistroGateForTests,
   deferUntilWslDistroRunning,
+  noteWslDistroLaunched,
+  noteWslDistrosRunning,
   WSL_STOP_SETTLE_MS
 } from '../wsl-background-distro-gate'
+import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
+import { isWslUserActFor } from './wsl-user-act-scope'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
@@ -174,5 +180,87 @@ describe('guardWslUncPathAccess', () => {
       )
     ).rejects.toThrow('EIO')
     expect(resumed).not.toHaveBeenCalled()
+  })
+})
+
+describe('assertWslUncPathRunning for Git', () => {
+  it('covers a host path whose Git runs through wsl.exe in a distro', async () => {
+    running = []
+    await expect(assertWslUncPathRunning('C:\\repo', 'Ubuntu')).rejects.toBeInstanceOf(
+      WslDistroStoppedError
+    )
+    await expect(assertWslUncPathRunning('C:\\repo')).resolves.toBeUndefined()
+    expect(probe).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('runAsWslUserAct', () => {
+  it('lets gated work inside a user act start its own distro, and no other', async () => {
+    running = []
+    await runAsWslUserAct('ubuntu', async () => {
+      await expect(assertWslUncPathRunning(UNC)).resolves.toBeUndefined()
+      await expect(
+        assertWslUncPathRunning('\\\\wsl.localhost\\Debian\\repo')
+      ).rejects.toBeInstanceOf(WslDistroStoppedError)
+    })
+    await expect(assertWslUncPathRunning(UNC)).rejects.toBeInstanceOf(WslDistroStoppedError)
+  })
+
+  it('after a user act starts the distro, background reads no longer trust the old stopped read', async () => {
+    running = []
+    await expect(guardWslUncPathAccess(UNC, async () => 'read')).rejects.toBeInstanceOf(
+      WslDistroStoppedError
+    )
+    // The wake read's 9P touch started the distro.
+    running = ['Ubuntu']
+    await guardWslUncPathAccess(UNC, async () => 'read', { wake: true })
+    await expect(guardWslUncPathAccess(UNC, async () => 'read')).resolves.toBe('read')
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('explicit acts that start a distro', () => {
+  it('a wsl.exe launch for a distro last read as stopped makes background reads look again', async () => {
+    running = []
+    await expect(guardWslUncPathAccess(UNC, async () => 'read')).rejects.toBeInstanceOf(
+      WslDistroStoppedError
+    )
+    // A commit or a WSL terminal ran through wsl.exe and started it.
+    running = ['Ubuntu']
+    noteWslDistroLaunched('Ubuntu')
+    await expect(guardWslUncPathAccess(UNC, async () => 'read')).resolves.toBe('read')
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
+  it('a launch for a distro already read as running costs no extra read', async () => {
+    await guardWslUncPathAccess(UNC, async () => 'read')
+    noteWslDistroLaunched('Ubuntu')
+    await guardWslUncPathAccess(UNC, async () => 'read')
+    expect(probe).toHaveBeenCalledOnce()
+  })
+
+  it('settles for as long as the orcad liveness exit window', () => {
+    expect(WSL_STOP_SETTLE_MS).toBe(EXIT_SETTLE_MS)
+  })
+})
+
+describe('user-act scope does not leak', () => {
+  it('deferred work drained inside a user act runs outside it', async () => {
+    const inherited: boolean[] = []
+    deferUntilWslDistroRunning('Ubuntu', 'leak', () => {
+      inherited.push(isWslUserActFor('Ubuntu'))
+    })
+    await runAsWslUserAct('Ubuntu', async () => noteWslDistrosRunning(['Ubuntu']))
+    expect(inherited).toEqual([false])
+  })
+
+  it('work a probe started inside a user act releases runs outside it', async () => {
+    running = ['Ubuntu']
+    const inherited: boolean[] = []
+    deferUntilWslDistroRunning('Ubuntu', 'leak', () => {
+      inherited.push(isWslUserActFor('Ubuntu'))
+    })
+    await runAsWslUserAct('Ubuntu', () => resolveRunningWslDistros(probe))
+    expect(inherited).toEqual([false])
   })
 })

@@ -27,7 +27,7 @@ import { nativeChatToolRunOutcome } from '../../../../shared/native-chat/tools/n
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
-} from '../../../../shared/native-chat-ask-row'
+} from '../../../../shared/native-chat/input/native-chat-ask-row'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'

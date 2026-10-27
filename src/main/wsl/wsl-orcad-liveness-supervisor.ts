@@ -35,6 +35,8 @@ import {
 } from './wsl-orcad-liveness-verdict'
 import { WslOrcadReconnectBackoff, wslOrcadVerifyRetryDelayMs } from './wsl-orcad-reconnect-backoff'
 
+const VERIFY: Trigger = { source: 'verify' }
+
 export class WslOrcadLivenessSupervisor {
   private readonly supervised = new Map<string, Supervised>()
   private readonly now: () => number
@@ -244,9 +246,9 @@ export class WslOrcadLivenessSupervisor {
     const connection = this.deps.manager.get(entry.distro)
     await gatherWslLivenessEvidence(evidence, {
       readIdentity: () => this.deps.readIdentity(entry.distro, connection?.pid ?? null),
-      // A held watch proves the port; opening a fresh one is the probe.
+      // A held watch proves the port; a fresh one probes it; a retired listener proves nothing.
       probePort: async () =>
-        connection && !entry.watch ? this.attachWatch(entry, connection) : 'ready'
+        !connection ? 'refused' : entry.watch ? 'ready' : this.attachWatch(entry, connection)
     })
     if (entry.generation === generation) {
       await this.act(entry, classifyWslOrcadLiveness(evidence))
@@ -289,7 +291,7 @@ export class WslOrcadLivenessSupervisor {
         if (!this.deps.hasUserVisibleWork(entry.distro)) {
           // Relaunch without visible demand would defeat managed orcad idle exit.
           this.publish(entry, { state: 'idle', terminals: 'unverifiable' })
-          return
+          return this.deps.manager.retireListener(entry.distro)
         }
         return this.recover(entry, 'orcad-exited')
     }
@@ -301,13 +303,12 @@ export class WslOrcadLivenessSupervisor {
     if (entry.state !== 'distro-stopped') {
       this.publish(entry, { state: 'distro-stopped', terminals: 'exited', recovering: false })
     }
+    // Read before the retire: a connect starting during it must make the deferred verify a no-op.
+    const { generation, key } = entry
+    await this.deps.manager.retireListener(entry.distro)
     // A confirmed stop stays down, even with visible work, until the user or a running distro (E9).
-    const generation = entry.generation
-    this.deps.deferUntilRunning(entry.distro, `wsl-orcad-liveness:${entry.key}`, () => {
-      if (entry.generation === generation) {
-        this.trigger(entry, { source: 'verify' })
-      }
-    })
+    const verify = (): unknown => entry.generation === generation && this.trigger(entry, VERIFY)
+    this.deps.deferUntilRunning(entry.distro, `wsl-orcad-liveness:${key}`, verify)
   }
 
   private async recover(entry: Supervised, reason: WslOrcadRecoveryReason): Promise<void> {

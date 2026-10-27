@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import type { AskAnswerSelection, AskPrompt } from '../../../../../src/shared/native-chat-ask'
+import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-session-journal-types'
 import {
   askAcceptsEmptyAnswer,

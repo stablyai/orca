@@ -35,6 +35,7 @@ export type TerminalDocumentCell = {
 
 export type TerminalDocumentLine = {
   readonly length: number
+  readonly isWrapped: boolean
   translateToString: (trimRight: boolean, startColumn?: number, endColumn?: number) => string
   getCell?: (x: number, cell?: TerminalDocumentCell) => TerminalDocumentCell | undefined
 }

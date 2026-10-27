@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
-import type { AskPrompt } from '../../../../../src/shared/native-chat-ask'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import {
   resolveNativeChatInteractivePromptCard,
   type ChatApproval

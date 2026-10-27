@@ -3,7 +3,8 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalApprovalSubject
 } from './agent-session-journal-types'
-import { parseAskFromStatus, resolveNativeChatAsk, type AskPrompt } from './native-chat-ask'
+import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat/input/native-chat-ask'
+import type { AskPrompt } from './native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from './native-chat-types'
 import { parseOmpPlanReviewPrompt } from './omp-plan-review-prompt'
 

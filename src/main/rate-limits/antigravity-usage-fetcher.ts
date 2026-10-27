@@ -227,6 +227,14 @@ export async function fetchAntigravityRateLimits(
     )
   }
 
+  if (reading.buckets.length === 0) {
+    return unavailable(
+      'Antigravity usage is not available. agy reported no quota for this account.',
+      'usage-unavailable',
+      now()
+    )
+  }
+
   return {
     provider: 'antigravity',
     session: reading.session,

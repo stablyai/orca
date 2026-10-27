@@ -1,11 +1,14 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { isWslUserActFor, runAsWslUserAct } from './wsl-user-act-scope'
 import {
+  noteWslDistroWoken,
   noteWslDistrosRunning,
   readWslDistroRunningState,
   type WslDistroRunningState
 } from '../wsl-background-distro-gate'
 
 export { noteWslDistroMayHaveStopped } from '../wsl-background-distro-gate'
+export { runAsWslUserAct } from './wsl-user-act-scope'
 
 // Any 9P touch of `\\wsl.localhost\<distro>` boots a stopped distro, so background reads ask first.
 // Stops are signalled (watcher or relay exit, or a read that saw it), so a running read is trusted
@@ -34,20 +37,31 @@ export class WslDistroUnverifiableError extends Error {
 
 export type BlockedWslDistro = { distro: string; state: Exclude<WslDistroRunningState, 'running'> }
 
-/** Why a background touch of `path` must not happen now, or null when it is safe. */
-export async function blockedWslDistroForPath(path: string): Promise<BlockedWslDistro | null> {
+/** The distro a touch of `path` (or Git run for it) would run in; null off Windows or for a host path. */
+export function wslDistroForPath(path: string, wslDistro?: string | null): string | null {
   if (process.platform !== 'win32') {
     return null
   }
-  const parsed = parseWslUncPath(path)
-  if (!parsed) {
+  return parseWslUncPath(path)?.distro ?? wslDistro ?? null
+}
+
+/**
+ * Why a background touch of `path` must not happen now, or null when it is safe. `wslDistro` covers
+ * a host path whose Git still runs through `wsl.exe` in that distro.
+ */
+export async function blockedWslDistroForPath(
+  path: string,
+  wslDistro?: string | null
+): Promise<BlockedWslDistro | null> {
+  const distro = wslDistroForPath(path, wslDistro)
+  if (!distro || isWslUserActFor(distro)) {
     return null
   }
-  const state = await readWslDistroRunningState(parsed.distro, {
+  const state = await readWslDistroRunningState(distro, {
     startedAfter: performance.now() - WSL_UNC_RUNNING_LEASE_MS,
     retryUnverifiable: true
   })
-  return state === 'running' ? null : { distro: parsed.distro, state }
+  return state === 'running' ? null : { distro, state }
 }
 
 /**
@@ -60,20 +74,29 @@ export async function guardWslUncPathAccess<T>(
   options: { wake?: boolean } = {}
 ): Promise<T> {
   if (options.wake) {
-    const result = await access()
-    const parsed = process.platform === 'win32' ? parseWslUncPath(path) : null
-    if (parsed) {
-      noteWslDistrosRunning([parsed.distro])
-    }
+    const result = await runAsWslUserAct(wslDistroForPath(path), access)
+    noteWslDistroWokenForPath(path)
     return result
   }
   await assertWslUncPathRunning(path)
   return access()
 }
 
-/** Throws when a background touch of `path` would boot its distro, or WSL can't say it won't. */
-export async function assertWslUncPathRunning(path: string): Promise<void> {
-  const blocked = await blockedWslDistroForPath(path)
+/** A user act's touch of `path` (or its Git) succeeded: its distro runs now, so waiting work resumes. */
+export function noteWslDistroWokenForPath(path: string, wslDistro?: string | null): void {
+  const distro = wslDistroForPath(path, wslDistro)
+  if (distro) {
+    noteWslDistroWoken(distro)
+    noteWslDistrosRunning([distro])
+  }
+}
+
+/** Throws when a background touch of `path` (or its Git) would boot a distro, or WSL can't say it won't. */
+export async function assertWslUncPathRunning(
+  path: string,
+  wslDistro?: string | null
+): Promise<void> {
+  const blocked = await blockedWslDistroForPath(path, wslDistro)
   if (blocked?.state === 'stopped') {
     throw new WslDistroStoppedError(blocked.distro)
   }

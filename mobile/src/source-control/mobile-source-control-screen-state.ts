@@ -39,6 +39,7 @@ export type LoadStatusOptions = {
   preserveReadyOnFailure?: boolean
   clearActionErrorOnSuccess?: boolean
   force?: boolean
+  rereadSettings?: boolean
 }
 
 export type StatusLoadInFlight = {

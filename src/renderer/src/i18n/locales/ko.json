@@ -20554,6 +20554,12 @@
       "findInFolder": "{{path}}에서 찾기",
       "folderLoadError": "이 폴더를 불러오지 못했습니다:",
       "emptyFolder": "이 폴더에 파일이 없습니다"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
+      "titleTrash": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
+      "description": "이 작업은 되돌릴 수 없습니다.",
+      "confirm": "영구 삭제"
     }
   },
   "sparsePreset": {

@@ -4,7 +4,7 @@ import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
 import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { userNamedFileAccess } from './local-file-access'
-import { isPathInsideWorktree } from './terminal-links'
+import { isPathInsideWorktree } from '../../../shared/terminal-links'
 
 export type UserOpenedPathStat = {
   isDirectory: boolean

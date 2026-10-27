@@ -1,10 +1,10 @@
-import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
 import {
   readTerminalPathExistence,
   type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
-import type { IBufferLine, IBufferRange } from '@xterm/xterm'
-import { extractTerminalFileLinkCandidates } from '@/lib/terminal-links'
+import type { IBufferLine } from '@xterm/xterm'
+import { findTerminalFileLinksAtBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
+import { terminalLogicalLinkHasOscLink } from '../../../../shared/terminal-osc-link-cells'
 import {
   getTerminalFileContext,
   openDetectedFilePath,
@@ -20,15 +20,8 @@ import {
   type FileLinkTarget
 } from './terminal-file-link-target'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
-import { terminalLogicalLinkHasOscLink } from './terminal-osc-link-cells'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import {
-  buildHardWrappedPathLogicalLineCandidates,
-  buildWrappedLogicalLine,
-  rangeForParsedFileLink,
-  type WrappedLogicalLine
-} from './wrapped-terminal-link-ranges'
 
 type FileLinkHitTestDeps = {
   startupCwd: string
@@ -62,37 +55,31 @@ export function openFilePathLinkAtBufferPosition(
 ): boolean {
   const gesture = ++latestClickGesture
   const links: ClickedFileLink[] = []
-  for (const logicalLine of buildCandidateLogicalLinesForBufferPosition(buffer, position.y)) {
-    for (const parsed of extractTerminalFileLinkCandidates(logicalLine.text)) {
-      const target = resolveFileLinkTarget(parsed, {
-        cwd: deps.startupCwd,
-        homePath: deps.terminalHomePath,
-        worktreeId: deps.worktreeId,
-        worktreePath: deps.worktreePath,
-        runtimeEnvironmentId: deps.runtimeEnvironmentId,
-        wslDistro: deps.wslDistro
-      })
-      if (!target) {
-        continue
-      }
-      const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
-      if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
-        continue
-      }
-      links.push({
-        ...target,
-        pathText: parsed.pathText,
-        cachedExists: deps.pathExistsCache
-          ? readTerminalPathExistence(deps.pathExistsCache, target.cacheKey)
-          : undefined,
-        hasOscLink: terminalLogicalLinkHasOscLink(
-          buffer,
-          logicalLine,
-          parsed.startIndex,
-          parsed.endIndex
-        )
-      })
+  for (const parsed of findTerminalFileLinksAtBufferPosition(buffer, position, terminalColumns)) {
+    const target = resolveFileLinkTarget(parsed, {
+      cwd: deps.startupCwd,
+      homePath: deps.terminalHomePath,
+      worktreeId: deps.worktreeId,
+      worktreePath: deps.worktreePath,
+      runtimeEnvironmentId: deps.runtimeEnvironmentId,
+      wslDistro: deps.wslDistro
+    })
+    if (!target) {
+      continue
     }
+    links.push({
+      ...target,
+      pathText: parsed.pathText,
+      cachedExists: deps.pathExistsCache
+        ? readTerminalPathExistence(deps.pathExistsCache, target.cacheKey)
+        : undefined,
+      hasOscLink: terminalLogicalLinkHasOscLink(
+        buffer,
+        parsed.logicalLine,
+        parsed.startIndex,
+        parsed.endIndex
+      )
+    })
   }
 
   // Why: a failure names the path the user sees, not a longer joined guess.
@@ -192,27 +179,4 @@ function longestPath(links: ClickedFileLink[]): ClickedFileLink | undefined {
     (best, link) => (!best || link.pathText.length > best.pathText.length ? link : best),
     undefined
   )
-}
-
-export function buildCandidateLogicalLinesForBufferPosition(
-  buffer: { getLine(y: number): IBufferLine | undefined },
-  bufferLineNumber: number
-): WrappedLogicalLine[] {
-  const hardWrappedCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber)
-  const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
-  const candidates = softWrappedLogicalLine
-    ? [...hardWrappedCandidates, softWrappedLogicalLine]
-    : hardWrappedCandidates
-  return dedupeLogicalLines(candidates)
-}
-
-function rangeContainsBufferPosition(
-  range: IBufferRange,
-  position: { x: number; y: number },
-  terminalColumns: number
-): boolean {
-  const lower = range.start.y * terminalColumns + range.start.x
-  const upper = range.end.y * terminalColumns + range.end.x
-  const current = position.y * terminalColumns + position.x
-  return lower <= current && current <= upper
 }

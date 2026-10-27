@@ -97,6 +97,8 @@ export class RuntimeClientSettingsController {
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       // Paired clients order their Source Control lists the way this desktop does.
       sourceControlGroupOrder: normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder),
+      sourceControlCompareAgainstUpstream: settings.sourceControlCompareAgainstUpstream === true,
+      diffShowWhitespace: settings.diffShowWhitespace === true,
       // Omitted without a service: clients treat absence as "ask the host", which names the real cause.
       ...(this.sharingServices?.artifacts() === false
         ? {}

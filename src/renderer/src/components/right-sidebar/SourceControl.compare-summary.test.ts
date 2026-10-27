@@ -11,7 +11,7 @@ import {
   resolveSourceControlCompareBaseRef,
   resolveSourceControlPickerBaseRef,
   shouldClearBranchCompareForMissingBase
-} from './source-control/sync/base-ref-resolution'
+} from '../../../../shared/source-control-base-ref-resolution'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
 

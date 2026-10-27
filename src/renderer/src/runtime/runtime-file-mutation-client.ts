@@ -208,7 +208,8 @@ export async function copyRuntimePath(
 export async function deleteRuntimePath(
   context: RuntimeFileOperationArgs,
   targetPath: string,
-  recursive?: boolean
+  recursive?: boolean,
+  options?: { permanent?: boolean }
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, targetPath)
   if (!remoteArgs) {
@@ -217,7 +218,8 @@ export async function deleteRuntimePath(
       withSshMutationExpectation(context, {
         targetPath,
         connectionId: context.connectionId,
-        recursive
+        recursive,
+        ...(options?.permanent === true ? { permanent: true } : {})
       })
     )
     return

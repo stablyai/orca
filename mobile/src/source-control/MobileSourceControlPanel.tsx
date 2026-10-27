@@ -206,7 +206,7 @@ export function MobileSourceControlPanel({
   }, [isHostedRepo, prBranch, prController.prSidebarState])
 
   const onRefresh = useCallback(() => {
-    void loadStatus({ preserveReadyOnFailure: true })
+    void loadStatus({ preserveReadyOnFailure: true, rereadSettings: true })
     if (activeTab === 'history') {
       setHistoryRefreshNonce((n) => n + 1)
       return

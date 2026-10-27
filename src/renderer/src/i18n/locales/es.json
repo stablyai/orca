@@ -20384,6 +20384,12 @@
       "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "No se pudo mover '{{name}}' a la Papelera de reciclaje. ¿Eliminarlo permanentemente?",
+      "titleTrash": "No se pudo mover '{{name}}' a la Papelera. ¿Eliminarlo permanentemente?",
+      "description": "Esto no se puede deshacer.",
+      "confirm": "Eliminar permanentemente"
     }
   },
   "sparsePreset": {

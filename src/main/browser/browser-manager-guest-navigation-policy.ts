@@ -3,7 +3,10 @@ import {
   toSecureCertificateEndpoint
 } from '../../shared/browser-url'
 import { isChromiumInternalErrorUrl } from './browser-manager-types'
-import { BrowserManagerGuestPopupPolicy } from './browser-manager-guest-popup-policy'
+import {
+  BrowserManagerGuestPopupPolicy,
+  isLocalFileLinkFromLocalPage
+} from './browser-manager-guest-popup-policy'
 import { allowPageUnload } from './browser-guest-unload-policy'
 import { initiatingFrameUrl } from './browser-external-app-launch'
 
@@ -32,8 +35,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     const willNavigateHandler = (event: Electron.Event, url: string): void => {
-      // Permit local file links without allowing web pages into the filesystem.
-      if (url.startsWith('file:') && guest.getURL().startsWith('file:')) {
+      if (isLocalFileLinkFromLocalPage(guest, url)) {
         return
       }
       navigationGuard(event, url)

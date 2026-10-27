@@ -20680,6 +20680,12 @@
       "findInFolder": "Buscar em {{path}}",
       "folderLoadError": "Não foi possível carregar esta pasta:",
       "emptyFolder": "Nenhum arquivo nesta pasta"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "Não foi possível mover '{{name}}' para a Lixeira. Excluir permanentemente?",
+      "titleTrash": "Não foi possível mover '{{name}}' para a Lixeira. Excluir permanentemente?",
+      "description": "Isso não pode ser desfeito.",
+      "confirm": "Excluir permanentemente"
     }
   },
   "sparsePreset": {

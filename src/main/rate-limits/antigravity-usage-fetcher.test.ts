@@ -197,6 +197,19 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('Sign in with `agy`')
   })
 
+  it('reports a login with no quota groups as unavailable, not a failed refresh', async () => {
+    const stdout = JSON.stringify({
+      status: 'SUCCESS',
+      num_turns: 0,
+      command: { name: 'usage', data: { groups: [] } }
+    })
+    const result = await harness({ result: processResult({ stdout }) }).fetch()
+
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toContain('no quota for this account')
+  })
+
   it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
     // Incidental auth-like words must not trigger credential guidance.
     const result = await harness({

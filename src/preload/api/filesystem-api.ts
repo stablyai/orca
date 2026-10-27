@@ -159,6 +159,7 @@ export type FilesystemApi = {
         targetPath: string
         connectionId?: string
         recursive?: boolean
+        permanent?: boolean
       } & SshMutationExpectation
     ) => Promise<void>
     stat: (args: {

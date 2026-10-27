@@ -54,7 +54,7 @@ export function diffReviewMountAdapters(
       return {
         action(name, args) {
           if (name === 'snapshot') {
-            return loaders.loadMobileDiffReviewSnapshot(client, WORKTREE).then((value) => {
+            return loaders.loadMobileDiffReviewSnapshot(client, WORKTREE, false).then((value) => {
               snapshot = value
               return value
             })

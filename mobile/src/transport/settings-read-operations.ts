@@ -149,30 +149,39 @@ export const hostListSettingsRead = bindDeferredRpcOperation(
   })
 )
 
-// Older hosts omit the setting; the shared normalizer falls back to desktop's default order.
-const sourceControlGroupOrderReader: RpcCompatibleReader<
+export type MobileSourceControlSettings = {
+  groupOrder: SourceControlGroupOrder
+  compareAgainstUpstream: boolean
+  diffShowWhitespace: boolean
+}
+
+// Older hosts omit these settings; absence reads as desktop's defaults.
+const sourceControlSettingsReader: RpcCompatibleReader<
   unknown,
-  'source-control-group-order',
-  SourceControlGroupOrder
+  'source-control-settings',
+  MobileSourceControlSettings
 > = (raw) => {
   const settings = raw == null ? undefined : settingsMember(raw)
+  const field = (key: string) => (settings == null ? undefined : settingsField(settings, key))
   return {
     compatible: true,
-    variant: 'source-control-group-order',
-    value: normalizeSourceControlGroupOrder(
-      settings == null ? undefined : settingsField(settings, 'sourceControlGroupOrder')
-    ),
+    variant: 'source-control-settings',
+    value: {
+      groupOrder: normalizeSourceControlGroupOrder(field('sourceControlGroupOrder')),
+      compareAgainstUpstream: field('sourceControlCompareAgainstUpstream') === true,
+      diffShowWhitespace: field('diffShowWhitespace') === true
+    },
     salvage: { droppedPaths: [], droppedCount: 0 }
   }
 }
 
-export const sourceControlGroupOrderRead = bindDeferredRpcOperation(
+export const sourceControlSettingsRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'settings.source-control-group-order-or-skip',
+    name: 'settings.source-control-settings-or-skip',
     method: 'settings.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: sourceControlGroupOrderReader
+    read: sourceControlSettingsReader
   })
 )
 

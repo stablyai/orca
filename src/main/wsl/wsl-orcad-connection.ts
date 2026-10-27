@@ -150,6 +150,19 @@ export class WslOrcadConnectionManager {
     this.dependencies.onChange?.(entry.connection.distro, null, { state: 'closed' })
   }
 
+  /**
+   * Ends the loopback listener but keeps the published status: once orcad idled out or the distro
+   * stopped, any dial to it would spawn wsl.exe and boot the distro again.
+   */
+  async retireListener(distro: string): Promise<void> {
+    const key = wslDistroHolderKey(distro)
+    const entry = this.active.get(key)
+    // A user connect in flight owns the next entry; retiring it would undo that connect.
+    if (entry && !this.inFlight.has(key)) {
+      await this.drop(key, entry)
+    }
+  }
+
   /** Retires one bridge; unlike close, a connect queued behind it still runs. */
   private async drop(key: string, entry: ActiveWslOrcadConnection): Promise<void> {
     if (this.active.get(key) === entry) {

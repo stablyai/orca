@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type MutableRefObject } from 'react'
+import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import {
   conflictOverviewView,
   conflictOverviewViewsKey
@@ -12,7 +12,8 @@ import type { EditorPanelDiffContentLoader } from './useEditorPanelDiffContentLo
 import type { EditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
 import { useQuickOpenHistoryVisit } from './use-quick-open-history-visit'
 
-// Showing a tab is a user act: its first load may start a stopped WSL distro.
+// Showing a tab is a user act: its first load may start a stopped WSL distro. Re-runs from
+// polls (git status, overview views) are not, so they read without waking.
 const ACTIVE_TAB_LOAD = { wakeWslDistro: true }
 
 type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree']
@@ -94,10 +95,14 @@ export function useEditorPanelActiveTabContentLoad({
     )
   }
 
+  const wokenTabIdRef = useRef<string | null>(null)
   useEffect(() => {
     if (!isVisible) {
       return
     }
+    const tabId = selectedConflictReviewFile?.id ?? activeFile?.id ?? null
+    const load = tabId !== wokenTabIdRef.current ? ACTIVE_TAB_LOAD : undefined
+    wokenTabIdRef.current = tabId
     if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {
       const snapshotEntries = activeFile.conflictReview?.entries ?? []
       if (snapshotEntries.length === 0) {
@@ -125,20 +130,8 @@ export function useEditorPanelActiveTabContentLoad({
         // Why the view's own owner: another workspace's view must load as it would, never re-owned.
         if (view ? needsFileRead(view.id) : needsFileRead(absolutePath)) {
           void (view
-            ? loadFileContent(
-                view.filePath,
-                view.id,
-                view.worktreeId,
-                view.relativePath,
-                ACTIVE_TAB_LOAD
-              )
-            : loadFileContent(
-                absolutePath,
-                absolutePath,
-                activeFile.worktreeId,
-                entry.path,
-                ACTIVE_TAB_LOAD
-              ))
+            ? loadFileContent(view.filePath, view.id, view.worktreeId, view.relativePath, load)
+            : loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path, load))
         }
       }
       return
@@ -158,7 +151,7 @@ export function useEditorPanelActiveTabContentLoad({
           fileToLoad.id,
           fileToLoad.worktreeId,
           fileToLoad.relativePath,
-          ACTIVE_TAB_LOAD
+          load
         )
       }
       if (isChangesMode && needsDiffRead(fileToLoad.id)) {

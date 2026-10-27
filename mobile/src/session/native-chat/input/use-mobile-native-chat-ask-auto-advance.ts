@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat-question-auto-advance'
+import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat/input/native-chat-question-auto-advance'
 
 /** Mirrors desktop's useNativeChatQuestionAutoAdvance; shared code cannot import this app's React. */
 export function useMobileNativeChatAskAutoAdvance(): {

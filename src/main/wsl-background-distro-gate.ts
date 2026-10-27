@@ -1,9 +1,10 @@
 import { listRunningWslDistrosAsync, listWslDistrosAsync } from './wsl'
+import { outsideWslUserAct } from './wsl/wsl-user-act-scope'
 import {
   onConfirmedRunningWslDistros,
-  onRunningWslDistrosStopped
+  onRunningWslDistrosStopped,
+  peekConfirmedRunningWslDistros
 } from './wsl-running-distro-cache'
-import { EXIT_SETTLE_MS } from './wsl/wsl-orcad-liveness-evidence'
 
 // Background work must not boot stopped distros: old WSL idle-stop can erase VM-wide WSLInterop (microsoft/WSL#13885).
 
@@ -12,8 +13,10 @@ type DeferredTask = () => unknown
 const deferredTasksByDistro = new Map<string, Map<string, DeferredTask>>()
 let unsubscribeObservations: (() => void) | null = null
 // Right after a stop WSL can still list the distro; a running read started inside this window never counts.
-export const WSL_STOP_SETTLE_MS = EXIT_SETTLE_MS
+// Same window as the orcad liveness EXIT_SETTLE_MS; not imported, to keep this module's graph small.
+export const WSL_STOP_SETTLE_MS = 500
 const mayHaveStoppedAt = new Map<string, number>()
+const wokenAt = new Map<string, number>()
 let unsubscribeStops: (() => void) | null = null
 
 function distroKey(distro: string): string {
@@ -50,6 +53,19 @@ export function noteWslDistroMayHaveStopped(distro: string): void {
   mayHaveStoppedAt.set(distroKey(distro), performance.now())
 }
 
+/** A user act just touched the distro, which starts it: an older 'stopped' read no longer answers. */
+export function noteWslDistroWoken(distro: string): void {
+  wokenAt.set(distroKey(distro), performance.now())
+}
+
+/** A wsl.exe launch starts its distro: if the last read said stopped, that read no longer answers. */
+export function noteWslDistroLaunched(distro: string): void {
+  const running = peekConfirmedRunningWslDistros()
+  if (running && !running.some((candidate) => distroKey(candidate) === distroKey(distro))) {
+    noteWslDistroWoken(distro)
+  }
+}
+
 // The earliest start a running read may have: after `startedAfter` and any stop's settle window.
 async function settledStartedAfter(
   distro: string,
@@ -61,10 +77,12 @@ async function settledStartedAfter(
     }
   })
   const stoppedAt = mayHaveStoppedAt.get(distroKey(distro))
-  const anchor =
-    stoppedAt === undefined
-      ? startedAfter
-      : Math.max(startedAfter ?? -Infinity, stoppedAt + WSL_STOP_SETTLE_MS)
+  const woken = wokenAt.get(distroKey(distro))
+  const floor = Math.max(
+    stoppedAt === undefined ? -Infinity : stoppedAt + WSL_STOP_SETTLE_MS,
+    woken ?? -Infinity
+  )
+  const anchor = floor === -Infinity ? startedAfter : Math.max(startedAfter ?? -Infinity, floor)
   const waitMs = (anchor ?? -Infinity) - performance.now()
   if (waitMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, waitMs))
@@ -120,7 +138,10 @@ export function deferUntilWslDistroRunning(
   if (!keyForDistro) {
     return () => {}
   }
-  unsubscribeObservations ??= onConfirmedRunningWslDistros(noteWslDistrosRunning)
+  // A probe started inside a user act must not hand its boot allowance to the drain it causes.
+  unsubscribeObservations ??= onConfirmedRunningWslDistros((distros) =>
+    outsideWslUserAct(() => noteWslDistrosRunning(distros))
+  )
   let tasks = deferredTasksByDistro.get(keyForDistro)
   if (!tasks) {
     tasks = new Map()
@@ -146,7 +167,8 @@ export function noteWslDistrosRunning(distros: readonly string[]): void {
     deferredTasksByDistro.delete(keyForDistro)
     for (const task of tasks.values()) {
       try {
-        void Promise.resolve(task()).catch(logDeferredTaskFailure)
+        // A drain inside a user act must not hand its boot allowance to deferred work.
+        void Promise.resolve(outsideWslUserAct(task)).catch(logDeferredTaskFailure)
       } catch (error) {
         logDeferredTaskFailure(error)
       }
@@ -166,6 +188,7 @@ export function _resetWslBackgroundDistroGateForTests(): void {
   unsubscribeObservations?.()
   unsubscribeObservations = null
   mayHaveStoppedAt.clear()
+  wokenAt.clear()
   unsubscribeStops?.()
   unsubscribeStops = null
 }

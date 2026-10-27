@@ -83,13 +83,20 @@ describe('conflict-review overview loads', () => {
     expect(loadFileContent).toHaveBeenLastCalledWith(PATH, view.id, 'wt-1', 'file.ts', WAKE)
 
     act(() => state().closeFile(view.id))
-    expect(loadFileContent).toHaveBeenLastCalledWith(PATH, PATH, 'wt-2', 'file.ts', WAKE)
+    // Re-keying under the same active tab is not a user act, so it reads without waking.
+    expect(loadFileContent).toHaveBeenLastCalledWith(PATH, PATH, 'wt-2', 'file.ts', undefined)
 
     let reopened: OpenFile | undefined
     act(() => {
       reopened = openView('wt-1')
     })
-    expect(loadFileContent).toHaveBeenLastCalledWith(PATH, reopened!.id, 'wt-1', 'file.ts', WAKE)
+    expect(loadFileContent).toHaveBeenLastCalledWith(
+      PATH,
+      reopened!.id,
+      'wt-1',
+      'file.ts',
+      undefined
+    )
     expect(loadFileContent).toHaveBeenCalledTimes(3)
   })
 })

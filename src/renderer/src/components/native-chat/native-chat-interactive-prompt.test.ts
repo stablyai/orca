@@ -4,11 +4,11 @@ import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
-  hasAskAnswer,
-  parseAskFromStatus,
-  sayNativeChatApprovalTranslated,
-  type AskPrompt
-} from './native-chat-interactive-prompt'
+  hasAskAnswer
+} from '../../../../shared/native-chat-ask-answer'
+import { parseAskFromStatus } from '../../../../shared/native-chat/input/native-chat-ask'
+import { sayNativeChatApprovalTranslated } from './native-chat-interactive-prompt'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { parseApprovalFromStatus } from '../../../../shared/native-chat-interactive-prompt'
 
 const ESC = String.fromCharCode(27)
