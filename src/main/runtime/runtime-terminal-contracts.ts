@@ -1,5 +1,6 @@
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
@@ -29,6 +30,8 @@ import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
 
 export type TerminalCreateOptions = {
+  executionHostId?: ExecutionHostId
+  projectHostSetupId?: string
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string

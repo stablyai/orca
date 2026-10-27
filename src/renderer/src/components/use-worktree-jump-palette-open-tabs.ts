@@ -13,6 +13,8 @@ import {
 } from '@/lib/workspace-tab-palette-search'
 import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
 import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
+import { getLocalSourceWorktreeIds } from '@/lib/terminal-worktree-route'
+import { useAppStore } from '@/store'
 import type {
   BrowserPaletteItem,
   OpenTabPaletteItem,
@@ -159,6 +161,14 @@ export function useWorktreeJumpPaletteOpenTabs({
       }),
     [simulatorTabEntries, deferredQuery, paletteSearchContext]
   )
+  // Why a primitive key: re-render only when local-source proof changes; NUL cannot occur in an id path.
+  const localSourceKey = useAppStore((state) =>
+    paletteStatusInputsActive ? [...getLocalSourceWorktreeIds(state)].sort().join('\0') : ''
+  )
+  const localSourceWorktreeIds = useMemo(
+    () => new Set(localSourceKey.split('\0').filter(Boolean)),
+    [localSourceKey]
+  )
   const workspaceTabEntries = useMemo<SearchableWorkspaceTab[]>(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_WORKSPACE_TAB_ENTRIES
@@ -166,6 +176,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     return buildSearchableWorkspaceTabs({
       worktrees: browserSortedWorktrees,
       ownershipWorktrees: workspaces,
+      localSourceWorktreeIds,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -204,6 +215,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     agentStatusByPaneKey,
     browserSortedWorktrees,
     groupsByWorktree,
+    localSourceWorktreeIds,
     openFiles,
     repoMap,
     repoByHostIdentity,

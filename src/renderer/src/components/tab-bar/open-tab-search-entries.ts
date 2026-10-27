@@ -18,6 +18,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
+import { isPositivelyLocalSourceWorktree } from '@/lib/terminal-worktree-route'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -47,6 +48,8 @@ export type OpenTabSearchEntryState = Pick<
 > & {
   executionHostId: ExecutionHostId
   generatedTitlesEnabled: boolean
+  /** Primitive so the shallow selector stays stable; admits this worktree's host-stamped terminals. */
+  isLocalSource?: boolean
   repo: Pick<Repo, 'connectionId' | 'displayName' | 'executionHostId' | 'id'> | null
   worktree: Worktree
 }
@@ -152,6 +155,7 @@ export function selectOpenTabSearchEntryState(
     folderWorkspaces: selectFolderWorkspaces(state),
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     groupsByWorktree: state.groupsByWorktree,
+    isLocalSource: isPositivelyLocalSourceWorktree(state, worktreeId),
     openFiles: state.openFiles,
     repo,
     tabsByWorktree: state.tabsByWorktree,
@@ -209,6 +213,7 @@ export function buildOpenTabSearchEntries(
   return {
     workspaceTabs: buildSearchableWorkspaceTabs({
       ...scope,
+      ...(state.isLocalSource ? { localSourceWorktreeIds: new Set([state.worktree.id]) } : {}),
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       tabsByWorktree: state.tabsByWorktree,
       openFiles: state.openFiles,

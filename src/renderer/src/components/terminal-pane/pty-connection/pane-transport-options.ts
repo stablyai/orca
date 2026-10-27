@@ -113,6 +113,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.startupCommandDelivery,
     executionHostId: session.executionHostId,
     worktreeId: session.deps.worktreeId,
+    ...(session.hostTerminal ? { hostTerminalTarget: session.hostTerminal } : {}),
     // Flush pane↔PTY binding before spawn reply so a SIGKILL cannot lose it.
     tabId: session.deps.tabId,
     leafId: session.pane.leafId,

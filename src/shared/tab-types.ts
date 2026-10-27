@@ -46,6 +46,15 @@ export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleT
   return 'editor'
 }
 
+/** Any value a persisted session JSON can hold. */
+export type StoredJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | StoredJsonValue[]
+  | { [key: string]: StoredJsonValue }
+
 export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
   entityId: string // ID of the backing content (terminal tab ID, file path, browser workspace ID)
@@ -53,6 +62,9 @@ export type Tab = {
   worktreeId: string
   /** Owning execution host when the same worktree id is visible from multiple hosts. */
   executionHostId?: ExecutionHostId
+  /** The project's setup on `executionHostId` a cross-host terminal tab starts in. Kept as stored:
+   *  a corrupt value is still a stamp (workspace-layout/terminal-host-stamp.ts). */
+  projectHostSetupId?: StoredJsonValue
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null

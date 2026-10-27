@@ -12,6 +12,7 @@ import type { TerminalGrid, TerminalPaneLayoutNode, TerminalTab } from '../termi
 import type { PersistedOpenFile } from '../workspace-session-state-types'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import type { LayoutEditorView } from './layout-editor-view'
+import type { TerminalHostStamp } from './terminal-host-stamp'
 
 export type LayoutTerminalPanes = {
   root: TerminalPaneLayoutNode | null
@@ -32,6 +33,8 @@ type LayoutTabFields = {
   viewMode?: 'terminal' | 'chat'
   isPreview?: boolean
   agentSessionAgent?: AgentType
+  /** The tab-bar entry's cross-host stamp, carried verbatim; absent on an ordinary tab. */
+  hostStamp?: TerminalHostStamp
 }
 
 export type LayoutTerminalCreation = Pick<

@@ -53,6 +53,8 @@ type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]
   ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
+  /** From getLocalSourceWorktreeIds; without it host-stamped terminals stay out of the palette. */
+  localSourceWorktreeIds?: ReadonlySet<string>
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
   repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>

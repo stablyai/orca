@@ -1,4 +1,5 @@
 import type { TerminalState } from './terminal-state'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -89,6 +90,10 @@ export type TerminalActions = {
       viewMode?: Tab['viewMode']
       startupCwd?: string
       forceHostRuntime?: boolean
+      /** The host this tab runs on when not the worktree's; its live PTY comes as `initialPtyId`. */
+      executionHostId?: ExecutionHostId
+      /** The project's setup on `executionHostId`; its folder is the terminal's cwd there. */
+      projectHostSetupId?: string
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>

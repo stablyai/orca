@@ -16,6 +16,7 @@ import {
   splitServerPane,
   type SplitInMainRequest
 } from './terminal-pane-split-in-main'
+import { splitHostTerminalPane } from './terminal-pane-host-terminal-split'
 
 type SplitArgs = {
   worktreeId: string
@@ -31,6 +32,9 @@ type SplitArgs = {
 }
 
 export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
+  if (splitHostTerminalPane(args)) {
+    return
+  }
   const sourcePane = { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.pane.leafId }
   // Why the host's binding: a pane whose attach is still in flight has no transport id yet.
   const ptyId =

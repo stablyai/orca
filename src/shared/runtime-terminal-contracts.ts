@@ -336,3 +336,5 @@ export type RuntimeTerminalWait = {
   exitCause?: TerminalExitCause
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
+
+export { isTerminalCreatedHere } from './runtime-terminal-create-disposition'

@@ -4,7 +4,11 @@ import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { isLocalExecutionHost } from '../../../../../shared/execution-host'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import {
+  classifyHostStampedTerminal,
+  resolveHostTerminalRoute,
+  resolveTerminalWorktreeRoute
+} from '@/lib/terminal-worktree-route'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
@@ -81,18 +85,41 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     session.deps.worktreeId
   )
   session.explicitRuntimeEnvironmentId = session.terminalWorktreeRoute?.runtimeEnvironmentId ?? null
+  // Why: only a host-stamped terminal tab may leave its local source's route; a refusal fails closed, never local.
+  const hostTerminalRoute = isWebTerminalSurfaceTabId(session.deps.tabId)
+    ? null
+    : resolveHostTerminalRoute(session.state, session.deps.worktreeId, session.deps.tabId, [
+        session.restoredPtyIdForTransport,
+        session.tab?.ptyId
+      ])
+  session.hostTerminal = hostTerminalRoute?.kind === 'host-terminal' ? hostTerminalRoute : null
+  // Why: a stamp whose host's catalog has not delivered its setup waits; a removed host never parks.
+  const stamp = classifyHostStampedTerminal(
+    session.state.unifiedTabsByWorktree?.[session.deps.worktreeId],
+    session.deps.tabId
+  )
+  const hostSetupPending =
+    hostTerminalRoute?.kind === 'refused' &&
+    hostTerminalRoute.reason === 'setup_not_ready' &&
+    stamp.kind === 'stamped' &&
+    (!session.state.runtimeEnvironmentCatalogHydrated ||
+      session.state.runtimeEnvironments.some((entry) => entry.id === stamp.environmentId))
   // Why: paired-web worktrees retain HUB execution identity; their runtime-scoped mirrored pane is the session-level transport owner.
   session.mirroredRuntimeOwners = new Set(
     isWebTerminalSurfaceTabId(session.deps.tabId)
       ? [session.restoredPtyIdForTransport, session.tab?.ptyId]
           .map((ptyId) => (ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null))
           .filter((environmentId): environmentId is string => Boolean(environmentId))
-      : []
+      : session.hostTerminal
+        ? [session.hostTerminal.environmentId]
+        : []
   )
   session.mirroredRuntimeEnvironmentId = session.mirroredRuntimeOwners.values().next().value ?? null
   session.terminalOwnerUnresolved =
+    hostTerminalRoute?.kind === 'refused' ||
     session.mirroredRuntimeOwners.size > 1 ||
     (session.terminalWorktreeRoute === null && !session.mirroredRuntimeEnvironmentId)
+  session.terminalOwnerUnresolved &&= !hostSetupPending
   session.runtimeEnvironmentId = session.explicitRuntimeEnvironmentId
     ? session.explicitRuntimeEnvironmentId
     : session.mirroredRuntimeEnvironmentId
@@ -109,6 +136,7 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     !session.worktreeProvesLocalHost &&
     session.runtimeEnvironmentId === null &&
     session.worktreeConnectionId === undefined
+  session.connectionOwnerHydrating ||= hostSetupPending
   // HUB-nested SSH identity grants no direct dial authority; unconverted relay rows wait for the overlay to convert and remount.
   session.unservedSshTargetId =
     !session.terminalOwnerUnresolved &&

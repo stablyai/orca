@@ -39,7 +39,8 @@ import { readPublishedSortOrders } from '../../store/slices/worktrees/listing/wo
 
 export function registerRuntimeClientIpcBridge(
   unsubs: (() => void)[],
-  worktreeRuntime: WorktreeEventRuntime
+  worktreeRuntime: WorktreeEventRuntime,
+  remountTerminalTabsAwaitingHostHydration?: () => void
 ): () => void {
   const { worktreeChangeRefreshQueue, activateNotifiedWorktree } = worktreeRuntime
   let stopped = false
@@ -67,6 +68,10 @@ export function registerRuntimeClientIpcBridge(
       // Why: hosts without workspaceViewChanged still refresh their columns here.
       void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
+      // Why: a stamped pane parked before this host's catalog delivered its setup can route now.
+      if (!stopped) {
+        remountTerminalTabsAwaitingHostHydration?.()
+      }
       // Group/folder edits share reposChanged; refresh groups before folders to resolve their owners.
       const runtimeOwner = { runtimeEnvironmentId: environmentId }
       // Refresh catalogs/worktrees independently so two catalog RPC timeouts cannot delay lineage convergence.

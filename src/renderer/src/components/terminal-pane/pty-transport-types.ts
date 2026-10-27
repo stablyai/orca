@@ -296,6 +296,11 @@ export type IpcPtyTransportOptions = {
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null
   worktreeId?: string
+  /** Set only for a host-stamped terminal: `worktreeId`/`tabId`/`leafId` are local and mean nothing on its target. */
+  hostTerminalTarget?: {
+    targetWorktreeSelector: string
+    projectHostSetupId: string
+  }
   tabId?: string
   leafId?: string
   /** Sent on fresh spawns only; a reattach names a PTY whose leaf main already knows. */

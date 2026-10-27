@@ -229,9 +229,10 @@ export function createRemoteRuntimePtyTransport(
     agentArgsOverride,
     agentLaunchPreferences,
     worktreeId,
+    hostTerminalTarget,
     executionHostId,
-    tabId,
-    leafId,
+    tabId: localTabId,
+    leafId: localLeafId,
     activate,
     onPtyExit,
     onPtySpawn,
@@ -244,6 +245,10 @@ export function createRemoteRuntimePtyTransport(
     onAgentExited,
     onAgentStatus
   } = opts
+  // Why: a host-stamped terminal's local tab/leaf never exist in its target's graph; sending them
+  // would resolve as absent and retire the live PTY, or mint a pane under foreign identity.
+  const tabId = hostTerminalTarget ? undefined : localTabId
+  const leafId = hostTerminalTarget ? undefined : localLeafId
   let connected = false
   let attachmentReady = false
   let destroyed = false
@@ -3265,6 +3270,13 @@ export function createRemoteRuntimePtyTransport(
         await attachHostSessionMirror(options, false, generation, attachLifecycleEpoch)
         return
       }
+      if (hostTerminalTarget && persistedEnvironmentId !== currentRuntimeEnvironmentId) {
+        // Why: never adopt a handle another host owns, and never fall back to a fresh spawn.
+        connecting = false
+        emitRecoveryState()
+        surfaceErrorMessage('Remote terminal belongs to a different host.')
+        return
+      }
       if (!tabId || !leafId || !worktreeId) {
         await adoptPersistedHandle()
         return
@@ -3445,13 +3457,39 @@ export function createRemoteRuntimePtyTransport(
         )
       }
 
+      const persistedHandle = options.sessionId
+        ? getRemoteRuntimeTerminalHandle(options.sessionId)
+        : null
+      const persistedEnvironmentId = options.sessionId
+        ? getRemoteRuntimePtyEnvironmentId(options.sessionId)
+        : null
+      if (hostTerminalTarget && persistedHandle && persistedEnvironmentId) {
+        if (persistedEnvironmentId !== createEnvironmentId) {
+          throw new Error('Remote terminal belongs to a different host.')
+        }
+        // Why: the local stamped tab has no target-host pane registry entry to resolve.
+        return await adoptResolvedHostPane(
+          {
+            handle: persistedHandle,
+            tabId: tabId ?? '',
+            leafId: leafId ?? '',
+            ptyId: null,
+            worktreeId
+          },
+          options
+        )
+      }
+
       // Why: every path below subscribes after its host RPCs; opening the stream alongside saves a round trip.
       releasePrewarmedStream =
         currentPaneRevision() === getRuntimeEnvironmentRevision(createEnvironmentId)
           ? getRemoteRuntimeTerminalMultiplexer(createEnvironmentId).prewarm()
           : null
 
-      if (options.sessionId && !getRemoteRuntimeTerminalHandle(options.sessionId)) {
+      if (
+        options.sessionId &&
+        (!persistedHandle || (hostTerminalTarget && !persistedEnvironmentId))
+      ) {
         // Why: a HUB session persists host-native PTY ids; resolve its pane handle without exposing that SSH identity as a client transport id.
         const resolution = await resolvePersistedHostPane()
         if (resolution.kind === 'resolved') {
@@ -3475,6 +3513,13 @@ export function createRemoteRuntimePtyTransport(
       if (restoreSpawnIntent && (destroyed || lifecycleEpoch !== connectLifecycleEpoch)) {
         return
       }
+      if (hostTerminalTarget && launchAgentToSend) {
+        // Why: agent startup on another host is not supported yet (S3); never start it under the source.
+        connecting = false
+        emitRecoveryState()
+        surfaceErrorMessage('Starting an agent on another host is not supported yet.')
+        return
+      }
       const originOptions =
         (options.resumeOrigin ?? resumeOrigin) === 'saved'
           ? await (savedOriginOptions ??= (async () => {
@@ -3493,7 +3538,9 @@ export function createRemoteRuntimePtyTransport(
             })())
           : {}
       const legacyCreateParams = {
-        worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
+        worktree:
+          hostTerminalTarget?.targetWorktreeSelector ??
+          toRuntimeTerminalWorktreeSelector(worktreeId),
         clientMutationId: terminalCreateMutationId,
         ...(commandToSend !== undefined ? { command: commandToSend } : {}),
         ...(startupCommandDeliveryToSend !== undefined

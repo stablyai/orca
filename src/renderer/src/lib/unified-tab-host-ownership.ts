@@ -8,6 +8,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
+import { classifyHostStampedTerminal } from './terminal-worktree-route'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { dedupePaletteWorktrees } from './palette-repo-resolution'
@@ -62,13 +63,28 @@ export function getActiveExecutionHostIdForWorktree(
   )
 }
 
+type HostStampableTab = Pick<
+  Tab,
+  'id' | 'contentType' | 'executionHostId' | 'projectHostSetupId' | 'worktreeId'
+>
+
 export function isUnifiedTabOwnedByWorktree(
-  tab: Pick<Tab, 'executionHostId' | 'worktreeId'> | undefined,
+  tab: HostStampableTab | undefined,
   worktree: Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>,
-  ambiguousWorktreeIds: ReadonlySet<string>
+  ambiguousWorktreeIds: ReadonlySet<string>,
+  /** State-derived proof (getLocalSourceWorktreeIds); without it a host-stamped terminal is never owned. */
+  localSourceWorktreeIds?: ReadonlySet<string>
 ): boolean {
   if (!tab || tab.worktreeId !== worktree.id) {
     return false
+  }
+  if (tab.projectHostSetupId !== undefined) {
+    // Why: a host-stamped terminal sits in its local source's group, so only positive local proof admits it.
+    return (
+      classifyHostStampedTerminal([tab], tab.id).kind === 'stamped' &&
+      !ambiguousWorktreeIds.has(worktree.id) &&
+      localSourceWorktreeIds?.has(worktree.id) === true
+    )
   }
   if (tab.executionHostId) {
     return isExecutionHostAliasForWorktree(tab.executionHostId, worktree)
@@ -111,6 +127,7 @@ export function hasOpenFileExecutionHostEvidence(
   return Boolean(file.operationProvenance || file.externalSshTargetId || file.runtimeEnvironmentId)
 }
 
+/** The SOURCE workspace's host, which selects and activates it; a host-stamped terminal's target stays on its tab. */
 export function getUnifiedTabPaletteExecutionHostId(
   tab: Pick<Tab, 'executionHostId'> | undefined,
   worktree: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>

@@ -2,6 +2,7 @@ import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-alias'
+import { classifyHostStampedTerminal } from '@/lib/terminal-worktree-route'
 
 type WorktreeHostAliases = Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
 
@@ -15,6 +16,8 @@ export type UnifiedTabCreatePlacementInput = {
   executionHostId?: ExecutionHostId
   /** Records sharing this worktree id; host aliases only count when exactly one exists. */
   lookupWorktrees: () => readonly WorktreeHostAliases[]
+  /** Positive local-source proof; without it a host-stamped terminal is never an anchor. */
+  isLocalSourceWorktree?: () => boolean
 }
 
 export type UnifiedTabCreatePlacement = {
@@ -23,11 +26,19 @@ export type UnifiedTabCreatePlacement = {
   anchorTabId: string | undefined
 }
 
-function isAnchorHostCompatible(
-  anchorHostId: ExecutionHostId | undefined,
-  input: UnifiedTabCreatePlacementInput
-): boolean {
+function isAnchorHostCompatible(anchor: Tab, input: UnifiedTabCreatePlacementInput): boolean {
   const requestedHostId = input.executionHostId
+  if (anchor.projectHostSetupId !== undefined) {
+    // Why: a host-stamped terminal sits in its local source's group, so local tabs may follow it there.
+    const worktrees = input.lookupWorktrees()
+    return (
+      classifyHostStampedTerminal([anchor], anchor.id).kind === 'stamped' &&
+      input.isLocalSourceWorktree?.() === true &&
+      (!requestedHostId ||
+        (worktrees.length === 1 && isExecutionHostAliasForWorktree(requestedHostId, worktrees[0])))
+    )
+  }
+  const anchorHostId = anchor.executionHostId
   if (!requestedHostId || !anchorHostId || anchorHostId === requestedHostId) {
     return true
   }
@@ -52,7 +63,7 @@ function resolveAnchor(input: UnifiedTabCreatePlacementInput): Tab | undefined {
   if (!group?.tabOrder.includes(anchor.id)) {
     return undefined
   }
-  return isAnchorHostCompatible(anchor.executionHostId, input) ? anchor : undefined
+  return isAnchorHostCompatible(anchor, input) ? anchor : undefined
 }
 
 /** Resolve a new tab's destination group and the live anchor it should follow there. */

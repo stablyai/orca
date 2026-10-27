@@ -18,6 +18,7 @@ import {
   TerminalWait
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import { TerminalHostCreateError } from '../../../terminal-create-host-forwarding'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
@@ -38,6 +39,15 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     params: TerminalCreateParams,
     handler: async (params, context) => {
       const { runtime, pairedDeviceId, clientId, clientKind } = context
+      if (params.executionHostId !== undefined && params.executionHostId !== 'local') {
+        if (pairedDeviceId !== undefined) {
+          throw new TerminalHostCreateError('host_kind_not_supported_yet', {
+            executionHostId: params.executionHostId,
+            projectHostSetupId: params.projectHostSetupId
+          })
+        }
+        return { terminal: await runtime.createTerminalOnHost(params) }
+      }
       // Paired viewers create in the background; only caller-local session-tab navigation may select it, never the host renderer.
       const pairedViewer = clientKind !== undefined
       const focus = pairedViewer ? false : params.focus === true

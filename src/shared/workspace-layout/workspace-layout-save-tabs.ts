@@ -76,6 +76,21 @@ export function saveTerminalRow(
   }
 }
 
+/** A stamped entry keeps its stamp verbatim; any other names the host that owns the tab. */
+function entryHost(
+  tab: LayoutTab,
+  scope: WorkspaceSaveScope
+): Pick<Tab, 'executionHostId' | 'projectHostSetupId'> {
+  if (!tab.hostStamp) {
+    return { executionHostId: tabExecutionHostId(tab, scope.workspace, scope.hostId) }
+  }
+  const { setup, executionHostId } = tab.hostStamp
+  return {
+    ...(executionHostId !== undefined ? { executionHostId } : {}),
+    projectHostSetupId: setup
+  }
+}
+
 export function saveTabBarEntry(
   tab: LayoutTab,
   placement: { groupId: string; sortOrder: number },
@@ -92,7 +107,7 @@ export function saveTabBarEntry(
     entityId: tab.entityId,
     groupId: placement.groupId,
     worktreeId: scope.worktreeId,
-    executionHostId: tabExecutionHostId(tab, scope.workspace, scope.hostId),
+    ...entryHost(tab, scope),
     contentType: tab.kind,
     label,
     ...(tab.generatedTitle !== undefined ? { generatedLabel: tab.generatedTitle } : {}),

@@ -19,6 +19,7 @@ import {
 } from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
+import { isPositivelyLocalSourceWorktree } from '@/lib/terminal-worktree-route'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
 import { selectFolderWorkspaces } from '../../workspace-record-selectors'
@@ -58,7 +59,8 @@ export function createTabsCreateActions(
             [
               ...(state.allWorktrees?.() ?? []),
               ...(selectFolderWorkspaces(state) ?? []).map(folderWorkspaceToWorktree)
-            ].filter((worktree) => worktree.id === worktreeId)
+            ].filter((worktree) => worktree.id === worktreeId),
+          isLocalSourceWorktree: () => isPositivelyLocalSourceWorktree(state, worktreeId)
         })
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
           state.groupsByWorktree,

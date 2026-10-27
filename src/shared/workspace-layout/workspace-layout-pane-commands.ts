@@ -235,6 +235,8 @@ export function movePaneToNewTab(
     customTitle: null,
     color: null,
     ...(tab.panes.chatLeafId === leafId ? { viewMode: 'chat' as const } : {}),
+    // A pane split off a stamped tab still runs on the stamped host.
+    ...(tab.hostStamp ? { hostStamp: tab.hostStamp } : {}),
     kind: 'terminal',
     terminal: {
       defaultTitle: `Terminal ${ordinal}`,

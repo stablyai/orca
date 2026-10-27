@@ -7,6 +7,7 @@ import type {
 } from './workspace-layout-model'
 import { pickStoredFields } from './stored-record-fields'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
+import { readTerminalHostStamp } from './terminal-host-stamp'
 
 const TERMINAL_CREATION_FIELDS = [
   'defaultTitle',
@@ -17,6 +18,7 @@ const TERMINAL_CREATION_FIELDS = [
 ] as const satisfies readonly (keyof LayoutTerminalCreation)[]
 
 function contentFields(entry: Tab) {
+  const hostStamp = readTerminalHostStamp(entry)
   return {
     id: entry.id,
     entityId: entry.entityId,
@@ -31,7 +33,8 @@ function contentFields(entry: Tab) {
       'isPreview',
       'agentSessionAgent'
     ]),
-    ...(entry.generatedLabel !== undefined ? { generatedTitle: entry.generatedLabel } : {})
+    ...(entry.generatedLabel !== undefined ? { generatedTitle: entry.generatedLabel } : {}),
+    ...(hostStamp ? { hostStamp } : {})
   }
 }
 

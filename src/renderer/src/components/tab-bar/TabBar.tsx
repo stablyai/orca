@@ -47,6 +47,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onNewFileTab,
     onOpenFileTab
   })
+
   const itemProjection = useTabBarItemProjection({
     props,
     resolvedGroupId: runtime.resolvedGroupId,

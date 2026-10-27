@@ -66,6 +66,7 @@
 1 src/main/runtime/session-tabs/terminal-surface-retirements.ts
 2 src/main/runtime/terminal/adoption/adopt-terminal-orphans-from-inventory.ts
 1 src/main/runtime/terminal/driver/terminal-driver-resources.ts
+1 src/main/runtime/terminal/launch/terminal-create-host.ts
 3 src/main/runtime/terminal/stop/worktree-terminal-stop.ts
 4 src/main/runtime/workspace-session-worktree-id.ts
 1 src/main/runtime/workspaces/session-hosts/get-runtime-id.ts

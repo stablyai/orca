@@ -91,12 +91,16 @@ function createHarness() {
   const starts: (() => void)[] = []
   const activateNotifiedWorktree = vi.fn(async () => {})
   const enqueue = vi.fn()
-  const start = (): (() => void) => {
+  const start = (remountTerminalTabsAwaitingHostHydration?: () => void): (() => void) => {
     const unsubs: (() => void)[] = []
-    const unsubscribeStore = registerRuntimeClientIpcBridge(unsubs, {
-      worktreeChangeRefreshQueue: { enqueue, dispose: vi.fn() },
-      activateNotifiedWorktree
-    })
+    const unsubscribeStore = registerRuntimeClientIpcBridge(
+      unsubs,
+      {
+        worktreeChangeRefreshQueue: { enqueue, dispose: vi.fn() },
+        activateNotifiedWorktree
+      },
+      remountTerminalTabsAwaitingHostHydration
+    )
     const stop = (): void => {
       unsubscribeStore()
       unsubs.forEach((unsubscribe) => unsubscribe())
@@ -472,6 +476,29 @@ it("lists a profile created on the host once the host announces it, without touc
     )
     expect(useAppStore.getState().browserSessionProfilesByHostId.local).toEqual([])
   } finally {
+    await h.finish()
+  }
+})
+
+it('remounts parked terminals once a project refresh has fetched the host catalog', async () => {
+  const h = createHarness()
+  const remount = vi.fn()
+  const repos = Promise.withResolvers<never[]>()
+  h.fetchRuntimeEnvironmentRepos.mockImplementation(() => repos.promise)
+  try {
+    h.start(remount)
+    h.emit(0, false, { type: 'reposChanged' })
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(h.fetchRuntimeEnvironmentRepos).toHaveBeenCalledWith('host-a')
+    expect(remount).not.toHaveBeenCalled()
+
+    repos.resolve([])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(remount).toHaveBeenCalled()
+    const fetchOrder = h.fetchRuntimeEnvironmentRepos.mock.invocationCallOrder[0] ?? 0
+    expect(remount.mock.invocationCallOrder[0]).toBeGreaterThan(fetchOrder)
+  } finally {
+    repos.resolve([])
     await h.finish()
   }
 })

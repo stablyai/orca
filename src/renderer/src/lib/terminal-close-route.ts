@@ -2,7 +2,11 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../shared/terminal-execution-host'
 import type { AppState } from '@/store/types'
 import { collectPtyIdsForTab } from '@/store/slices/terminal-tab-retirement'
-import { resolveTerminalWorktreeRoute, type TerminalWorktreeRoute } from './terminal-worktree-route'
+import {
+  classifyHostStampedTerminal,
+  resolveTerminalWorktreeRoute,
+  type TerminalWorktreeRoute
+} from './terminal-worktree-route'
 
 function routeForHost(hostId: string | null | undefined): TerminalWorktreeRoute | null {
   const host = parseExecutionHostId(hostId)
@@ -19,6 +23,15 @@ export function resolveTerminalCloseRoute(
   worktreeId: string,
   terminalTabId: string
 ): TerminalWorktreeRoute | null {
+  // Why: a host-stamped terminal's PTY owner is its target, not its workspace; without the catalog
+  // its close stays local, where retirement closes each stamped handle at its owner (F1).
+  const stamp = classifyHostStampedTerminal(
+    state.unifiedTabsByWorktree?.[worktreeId],
+    terminalTabId
+  )
+  if (stamp.kind !== 'none') {
+    return null
+  }
   const row = state.tabsByWorktree?.[worktreeId]?.find((tab) => tab.id === terminalTabId)
   const rowHost = parseExecutionHostId(getPtyExecutionHost(row?.ptyId))
   if (rowHost?.kind === 'runtime') {

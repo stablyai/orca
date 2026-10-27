@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 import {
   clearTerminalTabsParkedOnUnresolvedHost,
   getTabIdsAwaitingHostHydrationRemount,
@@ -66,5 +67,63 @@ describe('getTabIdsAwaitingHostHydrationRemount', () => {
     recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
     const state = { ...baseState, repos: [{ id: 'repo1', connectionId: null }] }
     expect(getTabIdsAwaitingHostHydrationRemount(state as never)).toEqual(['tab-1'])
+  })
+})
+
+describe('a parked host-stamped tab', () => {
+  const SAVED = 'remote:env-b@@handle-1'
+
+  /** A tab parked with its saved handle, which the inert attach also binds as its PTY. */
+  function stampedState(projectHostSetupId: string | undefined) {
+    const base = createTestStore().getState()
+    return {
+      ...base,
+      repos: [{ id: 'repo1', path: '/w', displayName: 'repo', badgeColor: '#000', addedAt: 1 }],
+      worktreesByRepo: base.worktreesByRepo,
+      tabsByWorktree: {
+        'repo1::/w': [
+          {
+            id: 'tab-1',
+            ptyId: SAVED,
+            worktreeId: 'repo1::/w',
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'tab-1': [SAVED] },
+      unifiedTabsByWorktree: {
+        'repo1::/w': [
+          {
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId: 'repo1::/w',
+            contentType: 'terminal' as const,
+            executionHostId: 'runtime:env-b' as const,
+            projectHostSetupId,
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    }
+  }
+
+  it('remounts once, holding only its saved handle', () => {
+    recordTerminalTabParkedOnUnresolvedHost('repo1::/w', 'tab-1')
+    expect(getTabIdsAwaitingHostHydrationRemount(stampedState('setup-b'))).toEqual(['tab-1'])
+    expect(getTabIdsAwaitingHostHydrationRemount(stampedState('setup-b'))).toEqual([])
+  })
+
+  it('leaves an unstamped tab with a PTY to the ordinary rule', () => {
+    recordTerminalTabParkedOnUnresolvedHost('repo1::/w', 'tab-1')
+    expect(getTabIdsAwaitingHostHydrationRemount(stampedState(undefined))).toEqual([])
   })
 })

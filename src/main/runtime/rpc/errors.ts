@@ -107,6 +107,8 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  'project_not_set_up_on_host',
+  'host_kind_not_supported_yet',
   WORKTREE_CREATE_COLLISION_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',

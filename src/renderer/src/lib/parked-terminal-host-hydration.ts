@@ -2,7 +2,7 @@ import { getConnectionIdFromState } from './connection-owner-resolution'
 import type { AppState } from '@/store/types'
 
 type ParkedPaneHostState = Parameters<typeof getConnectionIdFromState>[0] &
-  Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId'>
+  Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId' | 'unifiedTabsByWorktree'>
 
 // Track actual unresolved-host parks; treating every PTY-less tab as parked would repeatedly remount exited shells.
 const parkedTabIdsByWorktreeId = new Map<string, Set<string>>()
@@ -29,8 +29,11 @@ export function getTabIdsAwaitingHostHydrationRemount(state: ParkedPaneHostState
     for (const tabId of parkedTabIds) {
       const tab = tabs.find((candidate) => candidate.id === tabId)
       const hasLivePty = (state.ptyIdsByTabId?.[tabId]?.length ?? 0) > 0
-      // Consume closed/already-spawned entries too; only existing PTY-less tabs still need remount.
-      if (tab && !tab.ptyId && !hasLivePty) {
+      // Consume closed/already-spawned entries too; remount saved host handles or existing PTY-less tabs.
+      const savedHostPty = state.unifiedTabsByWorktree?.[worktreeId]?.some(
+        (entry) => entry.id === tabId && entry.projectHostSetupId !== undefined
+      )
+      if (tab && (savedHostPty || (!tab.ptyId && !hasLivePty))) {
         remountable.push(tabId)
       }
     }

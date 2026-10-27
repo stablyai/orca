@@ -6,9 +6,11 @@ import type { SleepingAgentSessionRecord } from '../../../../shared/agent-sessio
 import type { AppState } from '../types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import {
+  classifyHostStampedTerminal,
   resolveTerminalHostOwnership,
   resolveTerminalPtyOwner
 } from '@/lib/terminal-worktree-route'
+import { isLocalPaneSharer } from './terminal-tab-local-pane-sharer'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -26,7 +28,8 @@ export type TerminalTabRetirementState = WorktreeRuntimeOwnerState &
     | 'lastKnownRelayPtyIdByTabId'
     | 'deferredSshSessionIdsByTabId'
     | 'pendingReconnectPtyIdByTabId'
-  >
+  > &
+  Partial<Pick<AppState, 'groupsByWorktree'>>
 
 export type TerminalTabRetirementPlan = {
   tabId: string
@@ -110,8 +113,15 @@ function collectLiveTerminalTabs(
   return liveTabs
 }
 
+const sharesLocalPane = (
+  state: TerminalTabRetirementState,
+  tabId: string,
+  worktreeId: string,
+  identity: string
+): boolean => isLocalPaneSharer(state, tabId, worktreeId, identity, getTerminalPtyOwnershipIdentity)
+
 function hasOwnerOutsideTargets(
-  ownerTabIds: ReadonlySet<string> | undefined,
+  ownerTabIds: Iterable<string> | undefined,
   targetIds: ReadonlySet<string>
 ): boolean {
   for (const ownerTabId of ownerTabIds ?? []) {
@@ -151,7 +161,19 @@ export function hasTerminalPtyOwnerOutsidePane(
   tabId: string,
   excludedLeafId?: string
 ): boolean {
-  for (const [ownerTabId, owner] of collectLiveTerminalTabs(state)) {
+  const liveTabs = collectLiveTerminalTabs(state)
+  const ownWorktreeId = liveTabs.get(tabId)?.worktreeId
+  const stamped =
+    ownWorktreeId !== undefined &&
+    classifyHostStampedTerminal(state.unifiedTabsByWorktree[ownWorktreeId], tabId).kind ===
+      'stamped'
+  for (const [ownerTabId, owner] of liveTabs) {
+    if (stamped && ownerTabId !== tabId) {
+      if (sharesLocalPane(state, ownerTabId, owner.worktreeId, identity)) {
+        return true
+      }
+      continue
+    }
     const ids =
       ownerTabId === tabId
         ? Object.entries(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})
@@ -212,10 +234,20 @@ export function buildTerminalTabRetirementPlans(
     const cleanupOnlyPtyIds: string[] = []
     const unroutablePtyIds: string[] = []
     const providerOwnership = resolveTerminalHostOwnership(state, worktreeId, 'teardown')
+    // Why: a host-stamped terminal's PTYs live only on its stamped runtime; anything else is unroutable.
+    const hostStamp = classifyHostStampedTerminal(
+      worktreeId ? state.unifiedTabsByWorktree?.[worktreeId] : undefined,
+      tabId
+    )
 
     for (const ptyId of ptyIds) {
       const ownerIdentity = getTerminalPtyOwnershipIdentity(state, ptyId, worktreeId)
-      const ownerTabIds = ownerTabIdsByIdentity.get(ownerIdentity)
+      // Why '': an owner with no live row is never positively local, so it never shares.
+      const ownerTabIds = [...(ownerTabIdsByIdentity.get(ownerIdentity) ?? [])].filter(
+        (id) =>
+          hostStamp.kind !== 'stamped' ||
+          sharesLocalPane(state, id, liveTabs.get(id)?.worktreeId ?? '', ownerIdentity)
+      )
       if (hasOwnerOutsideTargets(ownerTabIds, targetIdSet)) {
         sharedPtyIds.push(ptyId)
         continue
@@ -227,6 +259,23 @@ export function buildTerminalTabRetirementPlans(
         continue
       }
       scheduledPtyOwners.add(ownerIdentity)
+      if (hostStamp.kind !== 'none') {
+        const stamped = parseRemoteRuntimePtyId(ptyId)
+        if (
+          hostStamp.kind === 'invalid' ||
+          !stamped?.handle.trim() ||
+          stamped.environmentId !== hostStamp.environmentId
+        ) {
+          unroutablePtyIds.push(ptyId)
+        } else {
+          runtimeTerminals.push({
+            ptyId,
+            environmentId: hostStamp.environmentId,
+            handle: stamped.handle
+          })
+        }
+        continue
+      }
       const remote = parseRemoteRuntimePtyId(ptyId)
       if (remote) {
         if (!remote.handle) {
