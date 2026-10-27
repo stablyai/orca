@@ -21,7 +21,7 @@ import { serializeTerminalCheckpointWithinLimit } from './terminal-checkpoint-se
 import { PRIVATE_FILE_MODE, tightenPathMode } from './daemon-private-file-modes'
 import { tightenTerminalHistorySessionDirMode } from './terminal-history-session-files'
 
-// Why 5MB: bounds cold-restore replay time and per-session disk; hitting the cap triggers one checkpoint that resets the log.
+// Bound replay work and disk use; a full log requests a checkpoint before accepting more output.
 const LOG_MAX_BYTES = 5 * 1024 * 1024
 
 export class TerminalHistorySessionWriter {
@@ -39,7 +39,7 @@ export class TerminalHistorySessionWriter {
     this.logPath = join(dir, 'output.log')
     this.logGeneration = fresh ? 0 : null
     this.logBytes = fresh ? 0 : null
-    // Why here: a warm attach reuses files an older daemon created at umask, which `mode` cannot fix.
+    // Warm attach must tighten files created with older, umask-derived permissions.
     tightenTerminalHistorySessionDirMode(dir)
   }
 
@@ -68,7 +68,7 @@ export class TerminalHistorySessionWriter {
     snapshot: TerminalSnapshot,
     opts?: { pendingOutputSeq?: number }
   ): Promise<{ result: 'committed' } | { result: 'retryable'; error: Error }> {
-    // Why: snapshot.cwd is null until OSC-7; preserve meta.json's usable cwd for cold restore.
+    // Preserve metadata cwd until the shell sends OSC 7.
     const effectiveCwd = snapshot.cwd ?? this.readMeta()?.cwd ?? null
     this.resolveLogState()
     const generation = (this.logGeneration ?? 0) + 1
@@ -93,9 +93,9 @@ export class TerminalHistorySessionWriter {
       }
     }
     const tmpPath = `${this.checkpointPath}.tmp`
-    // Mode on the tmp file, not after the rename: the checkpoint is never briefly world-readable.
+    // Create temporary files privately before publishing the checkpoint.
     await fsPromises.writeFile(tmpPath, data, { mode: PRIVATE_FILE_MODE })
-    // A tmp left behind by a pre-fix crash is reused in place, where `mode` no longer applies.
+    // Creation mode does not tighten a temporary file left by an earlier crash.
     tightenPathMode(tmpPath, PRIVATE_FILE_MODE)
     await fsPromises.rename(tmpPath, this.checkpointPath)
     await fsPromises.writeFile(this.logPath, encodeLogHeader(generation), {
@@ -107,7 +107,7 @@ export class TerminalHistorySessionWriter {
     return { result: 'committed' }
   }
 
-  // Why: a warm writer must append to the existing generation without clobbering its log.
+  // Warm writers must extend the existing generation without clobbering its log.
   private resolveLogState(): void {
     if (this.logBytes !== null && this.logGeneration !== null) {
       return
@@ -126,7 +126,7 @@ export class TerminalHistorySessionWriter {
         closeSync(fd)
       }
     } catch {
-      // Missing log file — fresh state below.
+      // An unreadable log falls back to a fresh header using the checkpoint generation.
     }
     if (headerGeneration !== null) {
       this.logGeneration = headerGeneration

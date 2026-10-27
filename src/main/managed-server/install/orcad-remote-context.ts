@@ -1,4 +1,3 @@
-/** Everything a managed-orcad operation needs to know about one host (SSH or WSL) before it acts. */
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
@@ -36,17 +35,14 @@ import { detectRemoteHostPlatform } from '../../ssh/ssh-remote-platform-detectio
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
 import { rememberSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
 
-/** Defaults to SSH: most lifecycle code still reads SSH-only target fields. */
+/** Default SSH generic retains compatibility with lifecycle consumers requiring SSH-only fields. */
 export type OrcadRemoteContext<Target extends OrcadHostTarget = SshTarget> = {
   activationRecord: OrcadActivationRecord
-  /** A compat runtime on hosts below the default runtime's glibc floor (design D6 rung B). */
+  /** Select a compatible runtime when host glibc is below the default pin's floor. */
   serverTarget: NodeRuntimeTarget
   connection: OrcadHostTransport
   host: RemoteHostPlatform
-  /**
-   * What `~/.orca-remote` hangs off: the login home, or this machine's own home when several
-   * machines share one (see `orcad-machine-home.ts`). `userDataDir` follows the same choice.
-   */
+  /** Login or machine-specific home for shared-home isolation; userDataDir must follow the same owner. */
   remoteHome: string
   target: Target
   userDataDir: string
@@ -76,7 +72,7 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
     rememberSshHostPlatform(target.id, host, serverTarget)
   }
   if (isWindowsRemoteHost(host)) {
-    // Every Windows host op, the activation record read included, runs on the pinned node.exe.
+    // Prepare pinned Node before even reading activation state on Windows.
     await prepareWindowsOrcadHost({
       conn: connection,
       host,
@@ -100,10 +96,7 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
   }
 }
 
-/**
- * The directory orcad's state hangs off on this machine: the login home, or this machine's own
- * home under it. Windows and WSL keep the login home: neither shares one across machines.
- */
+/** Resolve per-machine state for shared POSIX homes; Windows and WSL retain login-home placement. */
 export async function resolveOrcadMachineHome(
   remote: OrcadRemoteExecTarget,
   keyByMachine: boolean

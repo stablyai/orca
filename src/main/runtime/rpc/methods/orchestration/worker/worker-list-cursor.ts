@@ -1,5 +1,4 @@
-/** `databaseId` is the real order key. `createdAt`/`dispatchId` stay required so a cursor this
- *  server mints is still decodable by an older peer. */
+/** Order by databaseId; keep createdAt/dispatchId so older peers can decode new cursors. */
 type WorkerListCursorAfter = { createdAt: string; dispatchId: string; databaseId?: number }
 
 type WorkerListCursorV1 = {

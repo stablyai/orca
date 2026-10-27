@@ -2,7 +2,6 @@ import { translate } from '@/i18n/i18n'
 import type { NativeChatContextUsage } from '../../../../shared/native-chat-context-usage'
 import { formatContextTokenCount } from './native-chat-context-usage-summary'
 
-/** The chat host's answer to `/context` over a terminal session. */
 export function formatNativeChatContextUsageAnswer(usage: NativeChatContextUsage | null): string {
   if (!usage) {
     return translate(

@@ -47,9 +47,7 @@ export function getInclusiveEndLine(selection: IRange): number {
     return selection.endLineNumber
   }
 
-  // Why: Monaco reports a full-line selection as ending at column 1 of the
-  // following line. We translate that boundary back to the last copied line so
-  // pasted context matches what the user actually selected.
+  // Monaco’s full-line selection ends at the next line’s column 1; report the last line actually copied.
   if (selection.endColumn === 1) {
     return selection.endLineNumber - 1
   }

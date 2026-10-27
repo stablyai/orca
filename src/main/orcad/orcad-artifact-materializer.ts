@@ -39,19 +39,19 @@ import { OrcadArtifactsUnavailableError, OrcadHostUnsupportedError } from './orc
 type MaterializeOptions = PinnedRuntimeMaterializeOptions & {
   templateDir?: string
   cacheRoot?: string
-  /** WSL wake path only: reuse digests recorded by stat signature instead of re-hashing. */
+  /** WSL wake only: trust recorded stat signatures instead of rehashing bytes. */
   trustVerificationRecord?: boolean
 }
 
 const materializations = new Map<string, Promise<string>>()
-// Slots handed out this session: a deploy may still be reading one, so cache retention keeps them.
+// Retain handed-out slots: concurrent deployments may still be reading them.
 const materializedVersions = new Set<string>()
 
 export function materializedOrcadArtifactVersions(): ReadonlySet<string> {
   return materializedVersions
 }
 
-/** A verified slot directory for `target`; its runtime is referenced, not included (design D2). */
+/** Reference the runtime separately from the verified slot. */
 export async function materializeOrcadArtifact(
   target: NodeRuntimeTarget,
   options: MaterializeOptions = {}
@@ -61,7 +61,7 @@ export async function materializeOrcadArtifact(
   const cacheRoot =
     options.cacheRoot ?? join(getAppEnvironment().getPath('userData'), 'orcad-artifacts')
   const trustVerificationRecord = options.trustVerificationRecord === true
-  // Why the trust bit is keyed: an SSH or local caller must never join a record-trusting fill.
+  // SSH/local callers must not join fills that trust verification records.
   const key = `${templateDir}\0${cacheRoot}\0${target}\0${trustVerificationRecord}`
   const existing = materializations.get(key)
   if (existing) {
@@ -83,9 +83,8 @@ export async function assembleOrcadArtifact(args: {
   cacheRoot: string
   target: NodeRuntimeTarget
   manifest?: OrcadTemplateManifest
-  /** Test seam for deciding when a file's stat signature is old enough to trust. */
   now?: () => number
-  /** Off (SSH, local serve): every launch hashes, and no record is read or written. */
+  /** Disabled for SSH/local serve: hash every launch without reading/writing records. */
   trustVerificationRecord?: boolean
 }): Promise<string> {
   const trust = args.trustVerificationRecord === true
@@ -114,7 +113,6 @@ export async function assembleOrcadArtifact(args: {
   const targetDir = cached.path
   materializedVersions.add(fullVersion)
   if (cached.verified) {
-    // Retention evicts by recency, so a reused slot counts as recently used.
     const now = new Date()
     await utimes(targetDir, now, now).catch(() => undefined)
     if (trust) {
@@ -148,7 +146,7 @@ export async function assembleOrcadArtifact(args: {
       }
     }
     if (trust) {
-      // Fresh copies are not settled yet, so the next launch hashes this slot once more.
+      // Fresh copies are unsettled, so the next launch must hash again.
       await rememberVerification(targetRoot, record, identity, null)
     }
     return targetDir
@@ -197,13 +195,15 @@ function artifactSources(
     ...required,
     {
       filename: targetManifest.browserName,
-      path: join(targetDir, targetManifest.browserName),
+      path: join(
+        targetManifest.packagedBrowser ? dirname(templateDir) : targetDir,
+        targetManifest.browserName
+      ),
       executable: true
     }
   ]
 }
 
-/** The manifest digest each slot source must hash to. */
 function expectedTemplateSha256(
   target: NodeRuntimeTarget,
   manifest: OrcadTemplateManifest,
@@ -229,7 +229,7 @@ function expectedTemplateSha256(
     expected.set(filename, { sha256, label: `${target} ${filename}` })
   }
   if (targetManifest.browserName && targetManifest.browserSha256) {
-    // A browser named like a required file would replace that file's manifest digest.
+    // Browser names must not override required-file digests.
     if (expected.has(targetManifest.browserName)) {
       throw new Error(`Packaged orcad template ${target} browser name collides with a slot file`)
     }
@@ -241,16 +241,13 @@ function expectedTemplateSha256(
   return expected
 }
 
-/**
- * The page's asset names, from the template manifest (verify-packaged-orcad-template.cjs pins them
- * to the page's own manifest), so a WSL wake that trusts its record reads no extra file.
- */
+/** Read asset names from the verified template manifest without extra WSL-wake file reads. */
 function templateMobileWebAssets(manifest: OrcadTemplateManifest): string[] {
   const prefix = `${ORCAD_MOBILE_WEB_DIR}/`
   const assets = Object.keys(manifest.commonSha256).filter(
     (filename) => filename.startsWith(prefix) && filename !== ORCAD_MOBILE_WEB_MANIFEST
   )
-  // Names become copy destinations under the slot, so one escaping it must never be joined.
+  // Asset names become slot copy destinations; reject paths that escape.
   const unsafe = assets.find(
     (filename) => !isOrcadMobileWebAssetPath(filename.slice(prefix.length))
   )
@@ -266,7 +263,6 @@ async function readTemplateManifest(templateDir: string): Promise<OrcadTemplateM
   )
 }
 
-/** Content checks a manifest digest cannot express; both files are a few bytes. */
 async function verifyTemplateMarkers(
   templateDir: string,
   target: NodeRuntimeTarget
@@ -275,7 +271,7 @@ async function verifyTemplateMarkers(
   if ((await readFile(join(targetDir, ORCAD_SERVER_TARGET_FILENAME), 'utf8')).trim() !== target) {
     throw new Error(`Packaged orcad template target identity does not match ${target}`)
   }
-  // Why against this client's pin: the slot must name the runtime this client will upload.
+  // Match this client’s runtime pin: it is the runtime the client will upload.
   const runtimeReference = await readFile(
     join(targetDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
     'utf8'
@@ -301,7 +297,6 @@ export function getOrcadTemplateCandidates(): string[] {
   return [...new Set(candidates)]
 }
 
-/** Whether this build carries an orcad template at all; dev builds usually don't. */
 export function hasOrcadTemplate(): boolean {
   return getOrcadTemplateCandidates().some((candidate) => existsSync(candidate))
 }

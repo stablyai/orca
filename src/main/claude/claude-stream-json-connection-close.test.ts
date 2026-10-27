@@ -140,7 +140,6 @@ describe('Claude stream-json close ordering', () => {
     await expect(connection.close()).resolves.toBe(true)
   })
 
-  // Stdout can end before the exit is seen, as when the provider supervisor's own exit closes it.
   it('reports an exit whose stdout ended first once the exit is seen, with its usual reason', async () => {
     mocks.refresh.mockReset()
     mocks.proveClaudeChildExit.mockReset()
@@ -149,7 +148,6 @@ describe('Claude stream-json close ordering', () => {
     const stdout = new PassThrough()
     const stderr = new PassThrough()
     const child = fakeChild({ stdout, stderr })
-    // The SDK's stream ends with the child's stdout.
     const next = vi
       .fn<() => Promise<IteratorResult<Record<string, unknown>>>>()
       .mockResolvedValue({ value: undefined, done: true })
@@ -216,7 +214,6 @@ describe('Claude stream-json close ordering', () => {
     expect(next).toHaveBeenCalledOnce()
   })
 
-  // The ladder (stdin end, SIGTERM, SIGKILL) runs again for the next ask; nothing reuses the root.
   it('runs the stop ladder again on a close after an unproven attempt, refusing input meanwhile', async () => {
     mocks.refresh.mockReset()
     mocks.proveClaudeChildExit.mockReset()
@@ -252,8 +249,7 @@ describe('Claude stream-json close ordering', () => {
     expect(mocks.proveClaudeChildExit).toHaveBeenCalledTimes(2)
   })
 
-  // Whatever holds the output open past a proven exit (a process that escaped the tree) must not
-  // keep every send and Stop that joins this close waiting.
+  // Inherited pipes must not keep sends and Stops waiting after proven exit.
   it('resolves a proven close though the output never ends', async () => {
     mocks.refresh.mockReset()
     mocks.proveClaudeChildExit.mockReset()

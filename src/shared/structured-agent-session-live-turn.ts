@@ -1,21 +1,6 @@
-// What the newest turn in a structured journal is doing right now, read off the
-// tail of the item list. Every scan here stops at the turn's own record — the
-// typed `turn` item, or the legacy status row that carries one — because state
-// from an earlier turn is never this turn's state.
-//
-// These scans answer for the SESSION'S OWN agent. A subagent's rows share this
-// journal and are usually the newer ones while a child runs, so each scan skips
-// anything a subagent produced; the transcript still renders every agent.
-//
-// Each scan reads the turn record BEFORE it checks the producer, which is only
-// safe because a turn row can never carry linkage: a turn is the SESSION'S unit
-// of work, and no producer of a turn-bearing body stamps one. Both lanes were
-// checked — Claude's turn rows are built with no linkage at all, Codex writes
-// turn rows only for its primary thread (the one thread it never stamps), the
-// compact row passes only a fence, and the stale-turn and dead-generation
-// sweeps name no producer, so their turn revisions keep the turn row's own
-// (none). So a child-linked row can never be what terminates one of these
-// scans. Re-check that before giving any of those sites a producer.
+// Scan the newest turn’s own work, stopping at its typed/legacy turn record; child output never describes the root agent.
+// Read turn records before producer filters only because turn rows carry no linkage: Claude/Codex primary turns, compact fences,
+// and stale/dead-generation revisions all preserve that invariant. Recheck before adding producers to any turn-writing site.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -35,8 +20,7 @@ import {
   type StructuredAgentSessionToolAction
 } from './structured-agent-session-tool-call-block'
 
-/** `current`: a host's answer to whether the running turn's item is current work
- *  (`StructuredAgentSessionWorkScope`); one an ended generation opened is none. */
+/** Host current-work scope excludes turns from ended generations. */
 export function activeStructuredAgentSessionTurnId(
   items: readonly AgentJournalRenderItem[],
   current?: (item: AgentJournalRenderItem) => boolean
@@ -54,9 +38,7 @@ export function activeStructuredAgentSessionTurnId(
   return null
 }
 
-/** The newest turn record for items a caller holds unordered, so a reader that already has them
- *  need not render and sort a whole snapshot to ask. Sequence is the ordering key the render pass
- *  sorts on, and ties resolve to the later-reduced item exactly as that stable sort would. */
+/** Read unordered items by sequence; ties choose the later-reduced item, matching stable render sort. */
 export function newestStructuredAgentSessionTurnBySequence(
   items: Iterable<AgentJournalRenderItem>
 ): AgentJournalTurnLifecycle | null {
@@ -80,8 +62,7 @@ export function newestStructuredAgentSessionTurnBySequence(
   return newest
 }
 
-/** The scope a row written now joins: the running turn, or the conversation when none runs.
- *  By sequence, for items held unordered. */
+/** For unordered items, new rows join the running turn or the conversation if none runs. */
 export function liveStructuredAgentSessionTurnScope(
   items: Iterable<AgentJournalRenderItem>
 ): AgentJournalTurnScope {
@@ -89,7 +70,6 @@ export function liveStructuredAgentSessionTurnScope(
   return running ? { kind: 'turn', turnItemId: running.item.itemId } : AGENT_JOURNAL_THREAD_SCOPE
 }
 
-/** The newest turn record's item when that turn is running, by sequence. */
 export function runningStructuredAgentSessionTurnItemBySequence(
   items: Iterable<AgentJournalRenderItem>
 ): { item: AgentJournalRenderItem; turnId: string } | null {
@@ -106,21 +86,14 @@ export function runningStructuredAgentSessionTurnItemBySequence(
   return newest && turn?.state === 'running' ? { item: newest, turnId: turn.turnId } : null
 }
 
-/** The newest turn record whatever state it ended in, STATE INCLUDED. Restart resume compares both
- *  halves against the teardown marker: the id alone cannot tell a turn that was interrupted from
- *  one that finished, and offering a finished chat is the failure this feature exists to avoid.
- *  The running-only readers above would answer null for exactly the sessions this has to identify,
- *  because eviction settles them to `interrupted`.
- *
- *  Scans backwards rather than by sequence because every caller passes a rendered snapshot, which
- *  is already in that order. Use the by-sequence reader above for items held unordered. */
+/** Include ended state: restart resume must distinguish interrupted from finished turns, and eviction settles to interrupted.
+ * Rendered snapshots are already ordered; use the by-sequence reader for unordered items. */
 export function newestStructuredAgentSessionTurn(
   items: readonly AgentJournalRenderItem[]
 ): AgentJournalTurnLifecycle | null {
   return latestStructuredAgentSessionTurn(items)?.turn ?? null
 }
 
-/** The same record as a page publishes it, with the identity a client keys the turn by. */
 export function latestStructuredAgentSessionTurn(
   items: readonly AgentJournalRenderItem[]
 ): AgentSessionLatestTurn | null {
@@ -137,9 +110,7 @@ export function latestStructuredAgentSessionTurn(
   return null
 }
 
-/** The turn the session's own agent is running, for a client: the host's answer over the whole
- *  journal, which no loaded window can hide. Temporary: an older host sends none, so its clients
- *  still read the loaded rows' newest record; delete that arm once such hosts age out. */
+/** Prefer whole-journal host turn state; Temporary: retain loaded-row fallback until hosts omitting latestTurn age out. */
 export function runningStructuredAgentSessionTurnId(state: HostTurnSource): string | null {
   if (state.latestTurn === undefined) {
     return activeStructuredAgentSessionTurnId(state.items)
@@ -147,7 +118,6 @@ export function runningStructuredAgentSessionTurnId(state: HostTurnSource): stri
   return state.latestTurn?.turn.state === 'running' ? state.latestTurn.turn.turnId : null
 }
 
-/** The scope a row of that running turn names, read the same way. */
 export function runningStructuredAgentSessionTurnScope(
   state: HostTurnSource
 ): AgentJournalTurnScope {
@@ -164,8 +134,7 @@ type HostTurnSource = {
   latestTurn?: AgentSessionLatestTurn | null
 }
 
-/** The host's answer once `event` applies. A batch carrying rows restates it, so one without it
- *  came from an older host and falls back to the rows rather than keep a claim nothing renews. */
+/** Row-carrying batches restate latestTurn; missing fields mean older host, so drop stale claims and derive from rows. */
 export function latestTurnAfterStructuredAgentSessionBatch(
   previous: AgentSessionLatestTurn | null | undefined,
   event: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
@@ -175,8 +144,7 @@ export function latestTurnAfterStructuredAgentSessionBatch(
   return carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
 }
 
-/** The host's actionable prompts once `event` applies, under `latestTurn`'s rule: a batch carrying
- *  rows restates them, so one without them came from an older host and drops the claim. */
+/** Row-carrying batches restate actionable prompts; missing fields from older hosts clear prior claims. */
 export function actionablePromptIdsAfterStructuredAgentSessionBatch(
   previous: string[] | undefined,
   event: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
@@ -188,7 +156,7 @@ export function actionablePromptIdsAfterStructuredAgentSessionBatch(
     : previous
 }
 
-/** The host's working answer once `event` applies, under `latestTurn`'s rule. */
+/** Apply the same row-carrying/older-host reset rule as latestTurn. */
 export function hostWorkingAfterStructuredAgentSessionBatch(
   previous: boolean | undefined,
   event: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
@@ -198,9 +166,7 @@ export function hostWorkingAfterStructuredAgentSessionBatch(
   return carriesRows || event.working !== undefined ? event.working : previous
 }
 
-/** Whether a frame's turn, prompts and working answer, when it names them, are what the state
- *  already holds: a generation's end can change them with no row, so a frame that does is never a
- *  no-op. */
+/** Host work can change at generation end without any row; changed turn/prompt/working facts must prevent no-op reduction. */
 export function restatesStructuredAgentSessionHostWork(
   event: Pick<
     Extract<AgentSessionSubscribeEvent, { type: 'batch' }>,
@@ -221,8 +187,7 @@ export function restatesStructuredAgentSessionHostWork(
   )
 }
 
-/** Whether the session's own agent is working: the host's answer when it gave one, else what the
- *  client derives from its rows (an older host). */
+/** Prefer host work facts; older hosts require derivation from loaded rows. */
 export function structuredAgentSessionHostSaysWorking(
   hostWorking: boolean | undefined,
   derived: () => boolean
@@ -230,8 +195,7 @@ export function structuredAgentSessionHostSaysWorking(
   return hostWorking ?? derived()
 }
 
-/** Whether a pending prompt waits on the person: the host names the ones that do, and a prompt an
- *  agent that has ended raised is not among them. An older host names none: every pending one. */
+/** Use host-named actionable prompts; older hosts treat every pending prompt as waiting. */
 export function isActionableStructuredAgentSessionPrompt(
   itemId: string,
   actionablePromptIds: readonly string[] | undefined
@@ -239,16 +203,9 @@ export function isActionableStructuredAgentSessionPrompt(
   return actionablePromptIds === undefined || actionablePromptIds.includes(itemId)
 }
 
-/**
- * Whether the newest thing the active turn produced is the model's own reasoning.
- *
- * This is what "thinking" has to mean for the indicator to be honest: the turn is reasoning
- * *right now*. The older rule — "the turn has produced no renderable output yet" — reports
- * thinking while the request is merely in flight, and stops reporting it the moment a tool call
- * lands, which is usually when reasoning actually starts.
- */
+/** Thinking means current reasoning, not merely waiting for first output; tool arrival can precede further reasoning. */
 export function isStructuredAgentSessionThinking({ items, latestTurn }: HostTurnSource): boolean {
-  // The host's answer outranks a loaded record, whose newest revision may be off the window.
+  // Host state outranks a loaded turn whose ending revision may be outside the window.
   const hostRunning = latestTurn === undefined ? null : latestTurn?.turn.state === 'running'
   let newestContentIsReasoning: boolean | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -265,7 +222,7 @@ export function isStructuredAgentSessionThinking({ items, latestTurn }: HostTurn
       continue
     }
     if (body?.kind === 'message') {
-      // A row that says it ended is not reasoning now; a host that keeps no state says nothing.
+      // Ended reasoning is not current; old hosts may omit message state.
       newestContentIsReasoning =
         body.role === 'reasoning' && (body.state === undefined || body.state === 'running')
     } else if (
@@ -276,16 +233,13 @@ export function isStructuredAgentSessionThinking({ items, latestTurn }: HostTurn
     ) {
       newestContentIsReasoning = false
     }
-    // A status row is a notice, not newer transcript content.
   }
-  // The record is above the loaded rows, so every loaded root row is newer than it.
+  // Turn record predates the loaded window, so all loaded root content is newer.
   return hostRunning === true && newestContentIsReasoning === true
 }
 
-/** The tool the status row names for the SESSION'S OWN agent, as the chat draws it: the running
- *  turn's newest running call, else its newest tool action whatever it settled to, so the line
- *  never blanks mid-turn. Nothing is named unless the scan reaches a RUNNING turn record, so an
- *  ended turn's calls never surface; a mid-turn send's user row is not a boundary. */
+/** Root agent’s newest running tool, else newest settled tool, only inside a running turn.
+ * Keep the line through tool completion; mid-turn user sends are not turn boundaries. */
 export function statusStructuredAgentSessionToolCall(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatToolCallBlock | null {
@@ -303,7 +257,7 @@ export function statusStructuredAgentSessionToolCall(
     const turn = readAgentJournalTurn(body)
     if (turn) {
       const named = turn.state === 'running' ? (running ?? newest) : null
-      // Built only for the winner: the host re-projects this on every journal change.
+      // Project only the winning tool; the host repeats this read on every journal change.
       return named ? structuredAgentSessionToolCallBlock(named.action, named.itemId) : null
     }
     if (running || !isStructuredAgentSessionToolAction(body) || !isRootAgentJournalItem(item)) {

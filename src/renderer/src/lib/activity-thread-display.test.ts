@@ -215,8 +215,7 @@ describe('getActivityThreadStatusPreview', () => {
   })
 
   it('names what a blocked approval is waiting on', () => {
-    // Why: a permission request parks the row on 'waiting', and the tool fields are the
-    // only thing that says what the user is being asked to approve (STA-3160).
+    // Permission waits need tool fields to show what the user is approving (STA-3160).
     expect(
       getActivityThreadStatusPreview({
         state: 'waiting',
@@ -228,8 +227,7 @@ describe('getActivityThreadStatusPreview', () => {
   })
 
   it('keeps a resolved tool off a finished row', () => {
-    // Why: tool fields outlive the turn that set them; showing them once the agent is done
-    // or idle reads as work still in flight.
+    // Tool fields outlive their turn; showing them after completion implies work is still in flight.
     for (const state of ['done', 'blocked'] as const) {
       expect(
         getActivityThreadStatusPreview({

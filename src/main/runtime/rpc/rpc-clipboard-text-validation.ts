@@ -7,8 +7,7 @@ import { InvalidArgumentError } from './core'
 
 export async function assertRpcClipboardTextWriteWithinLimit(text: string): Promise<void> {
   try {
-    // Why: large accepted text must yield outside Zod's synchronous parse path
-    // while preserving the RPC invalid_argument contract for rejected payloads.
+    // Yield for large text outside synchronous Zod parse while preserving invalid_argument refusals.
     await assertClipboardTextWriteWithinLimitWithYield(text)
   } catch (error) {
     if (isClipboardTextWriteTooLargeError(error)) {

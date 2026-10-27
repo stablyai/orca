@@ -240,6 +240,13 @@ describe('shouldActivateOpenedMobileSessionTab', () => {
         activeTerminalHandle: null
       })
     ).toBe(false)
+    expect(
+      shouldActivateOpenedMobileSessionTab({
+        ...currentTerminalState,
+        activated: false,
+        activeTerminalHandle: 'pty-2'
+      })
+    ).toBe(false)
   })
 
   it('allows a structured agent-session tab to anchor chat file activation', () => {
@@ -255,5 +262,16 @@ describe('shouldActivateOpenedMobileSessionTab', () => {
         activeTabType: 'agent-session'
       })
     ).toBe(true)
+    expect(
+      shouldActivateOpenedMobileSessionTab({
+        ...currentTerminalState,
+        activated: false,
+        sourceTerminalHandle: null,
+        activeTerminalHandle: null,
+        sourceSessionTabId: 'agent-tab-1',
+        activeSessionTabId: 'agent-tab-2',
+        activeTabType: 'agent-session'
+      })
+    ).toBe(false)
   })
 })

@@ -18,9 +18,6 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 
-// Why a chat cannot start, as the probe found it: the reason rides every catalog answer until a
-// later probe answers again, and a chat's own listing never replaces it.
-
 const HOME = '/homes/selected'
 const ACCOUNT_HOME = { variable: 'GROK_HOME', path: HOME } as const
 const FINGERPRINT = agentModelCatalogFingerprint({
@@ -60,6 +57,7 @@ function rig(initialProbe: AgentModelCatalogProbe = signedOut) {
   )
   const service = createAgentModelCatalogService({
     store,
+    getConversation: () => undefined,
     getRecord: () => undefined,
     drivesRecord: () => true,
     resolveAccountHome: async () => ACCOUNT_HOME,
@@ -71,7 +69,6 @@ function rig(initialProbe: AgentModelCatalogProbe = signedOut) {
     probe,
     service,
     chat,
-    /** Lets the probe's verdict land. */
     probed: () => store.refresh(FINGERPRINT, 'grok', probe, () => probe(ACCOUNT_HOME)),
     answerWith: (next: AgentModelCatalogProbe) => (answer = next),
     pastTtl: () => (now += AGENT_MODEL_CATALOG_FAILURE_TTL_MS)
@@ -86,7 +83,7 @@ describe('a reason the probe found', () => {
   it("survives the chat's own listing, success or failure; only a probe success clears it", async () => {
     const { store, chat, probed, answerWith, service } = rig()
     await probed()
-    // A signed-out Grok still answers model/list for a live chat.
+    // Signed-out Grok can still return a live model listing.
     await store.refresh(FINGERPRINT, 'grok', chat, async () => listing('gpt-live', 'live-session'))
     expect(unavailableOf(await service.read({ agent: 'grok' }))).toEqual(SIGNED_OUT)
     await store.refresh(FINGERPRINT, 'grok', { ...chat }, () =>
@@ -114,7 +111,7 @@ describe('a reason the probe found', () => {
     const { store, probed, pastTtl } = rig()
     await probed()
     pastTtl()
-    // The live-chat background catalog skips on this check.
+    // Expired unavailability no longer blocks ordinary chat listing but remains reportable.
     expect(store.hasActiveFailure(FINGERPRINT)).toBe(false)
     expect(store.failure(FINGERPRINT)?.unavailable).toEqual(SIGNED_OUT)
   })
@@ -279,7 +276,6 @@ describe('a prewarm probe', () => {
       ...listing('gpt-gateway', 'probe'),
       unavailable: SIGNED_OUT
     }))
-    // A saved catalog marks the agent as used here.
     store.recordSuccess(FINGERPRINT, 'grok', listing('gpt-live', 'live-session'), 'live')
     await service.prewarm()
     expect(store.failure(FINGERPRINT)?.unavailable).toEqual(SIGNED_OUT)
@@ -312,7 +308,6 @@ describe("an agent's command or environment change", () => {
     expect(probe).toHaveBeenCalledTimes(2)
     expect(store.failure(FINGERPRINT)).toBeNull()
     expect(store.get(FINGERPRINT)!.models.map((model) => model.id)).toEqual(['gpt-new'])
-    // The new listing is the fresh one: nothing is due until the next change.
     await service.prewarm()
     expect(probe).toHaveBeenCalledTimes(2)
   })

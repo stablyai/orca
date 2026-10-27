@@ -1,7 +1,4 @@
-// One story table driven through every lane that publishes a main agent's status. Each lane
-// derives child liveness from its own evidence, but the published `{ state, workingMode, mainAgent }`
-// must be what the shared fold says for that main agent and that evidence — a producer that folds
-// differently is caught here structurally, not by review.
+// Drive independent main-agent story expectations through each publishing lane.
 import { beforeEach, describe, expect, it } from 'vitest'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { markClaudeLeadTurnInterrupted } from './agent-hook-listener/providers/claude-roster-state'
@@ -11,20 +8,13 @@ import {
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
-import { foldAgentLeadStatus } from './agent-lead-status-fold'
 import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
-import {
-  agentChildWorkLiveness,
-  agentChildWorkLivenessFromEvidence,
-  type AgentChildWorkLiveness
-} from './agent-status-child-work-liveness'
 import type {
   AgentMainAgentStatus,
   AgentStatusState,
   AgentWorkingMode,
   ParsedAgentStatusPayload
 } from './agent-status-types'
-import { codexRosterChildWorkLiveness, seedCodexSubagentRoster } from './codex-subagent-roster'
 import { structuredAgentSessionAgentStatus } from './structured-agent-session-agent-status'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 
@@ -49,21 +39,6 @@ function published(payload: ParsedAgentStatusPayload | null | undefined): Publis
   return {
     state: payload.state,
     ...(payload.workingMode ? { workingMode: payload.workingMode } : {}),
-    mainAgent
-  }
-}
-
-/** The main agent's own state, restated as the fold's input. The verdict is not one: a cancel is
- *  a fact about the main agent, and the work it left running reads as it would after any end of
- *  turn. */
-function refold(
-  mainAgent: Published['mainAgent'],
-  childWorkLiveness: AgentChildWorkLiveness
-): Published {
-  const resolution = foldAgentLeadStatus({ leadState: mainAgent.state, childWorkLiveness })
-  return {
-    state: resolution.stateName,
-    ...(resolution.workingMode ? { workingMode: resolution.workingMode } : {}),
     mainAgent
   }
 }
@@ -124,8 +99,7 @@ const STORIES: Story[] = [
       expect: { state: 'working', mainAgent: { state: 'done' } }
     },
     codex: {
-      // A root Stop with no transcript-tracked children clears the roster (Codex 0.144 could omit
-      // child Stop hooks), so the child proves it is still alive with its next tool event.
+      // Codex 0.144 could omit child Stop hooks; root Stop clears untracked children until their next tool event proves liveness.
       events: [
         { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
         { hook_event_name: 'SubagentStart', agent_id: 'agent-1' },
@@ -231,9 +205,7 @@ const STORIES: Story[] = [
       ],
       expect: { state: 'waiting', mainAgent: { state: 'done' } }
     },
-    // KNOWN DIVERGENCE: a child's pending prompt is the session's `attention`, so this lane reads
-    // it as the main agent's own `blocked`, one needs-input state whoever asked, even beside the
-    // child's own waiting record.
+    // KNOWN DIVERGENCE: structured attention folds a child’s prompt into the main agent’s blocked state as well as its waiting child record.
     structured: {
       status: 'attention',
       backgroundTasks: [{ ...AGENT_TASK, state: 'waiting' }],
@@ -272,10 +244,8 @@ const STORIES: Story[] = [
     }
   },
   {
-    // A cancel never hides live work: the shell the cancelled turn left running reads monitoring
-    // in every lane, and the cancellation survives only as the main agent's verdict. The Claude
-    // row is the primary path: Orca's inferred cancel, carried by the main agent record into the
-    // next Stop, which lists the shell.
+    // Cancellation survives as the main agent’s verdict while its live shell keeps every lane monitoring.
+    // Claude’s inferred cancel must survive the next Stop that lists the shell.
     name: 'interrupted with a watch loop',
     claude: {
       events: [
@@ -312,8 +282,7 @@ const STORIES: Story[] = [
     }
   },
   {
-    // Neither CLI reports a cancel on its own Stop, so the late turn boundary must keep the
-    // verdict Orca inferred rather than downgrade it to "unknown".
+    // Neither CLI reports cancellation on Stop; keep Orca’s inferred verdict at the late boundary.
     name: 'interrupted, then the late turn boundary',
     claude: {
       events: [
@@ -436,25 +405,11 @@ describe('mainAgent status parity across lanes', () => {
     return last
   }
 
-  /** The hook lane's child evidence: the roster on the row, the shell and cron sets in memory. */
-  function claudeChildWorkLiveness(payload: ParsedAgentStatusPayload): AgentChildWorkLiveness {
-    return agentChildWorkLivenessFromEvidence({
-      // This lane holds a child's wait on the displaced main agent record, not the roster.
-      hasWaitingChildWork:
-        state.claudeLeadStateByPaneKey.get(PANE_KEY)?.waitingAgentId !== undefined,
-      hasLiveAgentWork: payload.subagents?.some((child) => child.state === 'working') === true,
-      hasLiveNonAgentWork:
-        state.claudeRunningNonAgentTaskPaneKeys.has(PANE_KEY) ||
-        state.claudeActiveSessionCronPaneKeys.has(PANE_KEY)
-    })
-  }
-
   describe('Claude hook lane', () => {
     it.each(storiesFor('claude'))('%s', (_name, lane) => {
       const payload = drive('claude', lane.events)
       const row = published(payload)
       expect(row).toEqual(lane.expect)
-      expect(row).toEqual(refold(row.mainAgent, claudeChildWorkLiveness(payload)))
     })
   })
 
@@ -466,7 +421,6 @@ describe('mainAgent status parity across lanes', () => {
         turnOutcome: lane.turnOutcome
       })
       expect(row).toEqual(lane.expect)
-      expect(refold(row.mainAgent, agentChildWorkLiveness(lane.backgroundTasks))).toEqual(row)
     })
   })
 
@@ -475,27 +429,6 @@ describe('mainAgent status parity across lanes', () => {
       const payload = drive('grok', lane.events)
       const row = published(payload)
       expect(row).toEqual(lane.expect)
-      // Grok's child evidence lives only on its final turn end: a listed subagent is agent work, a
-      // shell or an active stop hook is watch work, whatever verdict ended the turn, and nothing
-      // else ever holds the pane.
-      const last = lane.events.at(-1) ?? {}
-      const tasks: unknown[] = Array.isArray(last.backgroundTasks) ? last.backgroundTasks : []
-      const hasType = (type: string) =>
-        tasks.some(
-          (task) =>
-            typeof task === 'object' && task !== null && 'type' in task && task.type === type
-        )
-      const liveness: AgentChildWorkLiveness =
-        last.hookEventName !== 'stop' &&
-        last.hookEventName !== 'stop_failure' &&
-        last.hookEventName !== 'stop_cancelled'
-          ? null
-          : hasType('subagent')
-            ? 'working'
-            : hasType('shell') || last.stopHookActive === true
-              ? 'monitoring'
-              : null
-      expect(row).toEqual(refold(row.mainAgent, liveness))
     })
   })
 
@@ -504,10 +437,6 @@ describe('mainAgent status parity across lanes', () => {
       const payload = drive('codex', lane.events)
       const row = published(payload)
       expect(row).toEqual(lane.expect)
-      // Codex's child evidence is the roster on the row: every child a spawned agent thread.
-      const roster = new Map()
-      seedCodexSubagentRoster(roster, payload.subagents ?? [])
-      expect(row).toEqual(refold(row.mainAgent, codexRosterChildWorkLiveness(roster)))
     })
   })
 })

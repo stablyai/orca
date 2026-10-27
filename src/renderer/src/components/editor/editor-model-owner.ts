@@ -1,6 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { resolveWorktreeOperationRoute } from '@/lib/worktree-operation-route'
+import { resolveEditorOwnerRoute } from '@/lib/editor-file-operation-owner'
 import {
   isDetachedEditorBufferId,
   type EditorBufferViewIndex
@@ -17,13 +17,8 @@ export function resolveEditorModelOwner(
   state: WorktreeOperationRouteState
 ): EditorModelOwner {
   const captured = file.operationProvenance?.generation.route
-  const route =
-    captured ??
-    // The same focus-free owner the file's writes take, so retained text keys on that host.
-    resolveWorktreeOperationRoute(
-      state.activeWorktreeId === file.worktreeId ? { ...state, activeWorktreeId: null } : state,
-      file.worktreeId
-    )
+  const owner = captured ? null : resolveEditorOwnerRoute(state, file.worktreeId)
+  const route = captured ?? (owner?.kind === 'resolved' ? owner.route : null)
   const environmentId = captured
     ? captured.runtimeEnvironmentId
     : file.runtimeEnvironmentId !== undefined
@@ -64,8 +59,7 @@ export function getEditorModelOwnerKey(
     resolvedEditorModelOwnerKey(owner) ??
     JSON.stringify([owner.environmentId, 'unresolved', file.worktreeId, file.id])
   const recordId = state.editorBufferIdOf?.[file.id]
-  // Why: a detached record keeps its own text, so it must never share a model with the file's
-  // other record; the host owner stays in the key so two hosts' detached models stay apart too.
+  // Detached records need separate models from their file’s other record; retain host ownership to isolate identical record IDs across hosts.
   return recordId !== undefined && isDetachedEditorBufferId(recordId)
     ? JSON.stringify(['detached', recordId, ownerKey])
     : ownerKey

@@ -35,6 +35,8 @@ const useAppStoreMock = vi.fn(
       activeTabId: string | null
       activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
       gitStatusByWorktree: Record<string, never[]>
+      endpointProjects: never[]
+      endpointProjectHostSetups: never[]
       repos: never[]
       worktreesByRepo: Record<string, never[]>
       unifiedTabsByWorktree: Record<string, unknown[]>
@@ -51,6 +53,8 @@ const useAppStoreMock = vi.fn(
       activeTabId: appStoreSnapshot.activeTabId,
       activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
       repos: [],
       worktreesByRepo: {},
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
@@ -95,6 +99,8 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeTabId: appStoreSnapshot.activeTabId,
   activeTabType: appStoreSnapshot.activeTabType,
   gitStatusByWorktree: {},
+  endpointProjects: [],
+  endpointProjectHostSetups: [],
   repos: [],
   worktreesByRepo: {},
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
@@ -334,19 +340,8 @@ describe('TabBar context menu wiring', () => {
     vi.unstubAllGlobals()
   })
 
-  it('wires the shared agent projection selector into the production TabBar', async () => {
-    const { selectTabBarAgentProjections } = await import('./tab-agent-types-by-tab-id')
-
-    await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
-
-    expect(useAppStoreMock).toHaveBeenCalledWith(selectTabBarAgentProjections)
-  })
-
   it('counts every tab kind for SortableTab.tabCount', async () => {
-    // Why: Close Others used to pass tabCount=tabs.length, where tabs is just the
-    // terminal list. With one terminal + any number of editor/browser tabs, the
-    // menu item rendered as disabled even though closeOthers can close the
-    // non-terminal siblings.
+    // Count all tab kinds so Close Others stays enabled with non-terminal siblings.
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       editorFiles: [EDITOR_FILE],
@@ -358,7 +353,7 @@ describe('TabBar context menu wiring', () => {
     expect(sortable[0].props.tabCount).toBe(2)
   })
 
-  it('keeps the tab strip content-sized until horizontal scrolling is needed', async () => {
+  it('keeps the tab strip content-sized while allowing horizontal scrolling', async () => {
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       editorFiles: [EDITOR_FILE],
@@ -367,7 +362,7 @@ describe('TabBar context menu wiring', () => {
     })
     const divs = findChildrenByType(element, 'div')
     const stripWrapper = divs.find((candidate) =>
-      String(candidate.props.className ?? '').includes('flex-[0_1_auto]')
+      String(candidate.props.className ?? '').includes('group/tab-strip')
     )
     const strip = divs.find((candidate) =>
       String(candidate.props.className ?? '').includes('terminal-tab-strip')
@@ -376,6 +371,7 @@ describe('TabBar context menu wiring', () => {
     expect(stripWrapper).toBeTruthy()
     expect(stripWrapper?.props.className).toContain('min-w-0')
     expect(stripWrapper?.props.className).toContain('max-w-full')
+    expect(stripWrapper?.props.className).toContain('flex-[0_1_auto]')
     expect(strip).toBeTruthy()
     expect(strip?.props.className).toContain('min-w-0')
     expect(strip?.props.className).toContain('flex-1')
@@ -384,10 +380,7 @@ describe('TabBar context menu wiring', () => {
   })
 
   it('passes the editor unifiedTabId when EditorFileTab triggers onCloseToRight', async () => {
-    // Why: TabBar wires the editor tab as () => onCloseToRight(item.id). The
-    // emitted id is the editor's unifiedTabId (item.id for editors), not the
-    // file entityId. TabGroupPanel must accept this id shape to close right-side
-    // tabs from an editor tab — see the matching id|entityId resolver there.
+    // Editor close-to-right emits its unified tab ID; downstream routing must accept that ID instead of only the file entity.
     const onCloseToRight = vi.fn()
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
@@ -417,7 +410,6 @@ describe('TabBar context menu wiring', () => {
 
     const sortable = findChildrenByType(element, 'SortableTab')
     expect(sortable).toHaveLength(1)
-    // First tab in the strip: nothing to its left.
     expect(sortable[0].props.hasTabsToLeft).toBe(false)
 
     const editorTabs = findChildrenByType(element, 'EditorFileTab')
@@ -463,8 +455,7 @@ describe('TabBar context menu wiring', () => {
     ;(sortable[0].props.onTogglePin as () => void)()
     await layoutApplyTestTransport.settle()
 
-    // A layout-owner build has main unpin it (tab-bar-layout-owner-props.test.ts); main's frame
-    // draws the unpin, so the window does not unpin it itself.
+    // Main-owned layouts draw the host’s unpin response; the window must not duplicate the mutation.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       expect(unpinTabMock).not.toHaveBeenCalled()
     } else {

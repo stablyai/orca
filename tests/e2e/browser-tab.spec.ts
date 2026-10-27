@@ -1,9 +1,4 @@
-/**
- * E2E tests for the browser tab: creating browser tabs and state retention.
- *
- * User Prompt:
- * - Browser works and also retains state when switching tabs etc.
- */
+// Cover browser-tab creation and state retention across tab switches.
 
 import { test, expect } from './helpers/orca-app'
 import { createServer, type Server } from 'node:http'
@@ -114,7 +109,7 @@ async function startBrowserWindowCloseServer(): Promise<{
         <!doctype html>
         <html>
           <head><title>Close link source</title></head>
-          <body><a id="window-close-link" href="${origin}/window-close" target="_blank">Open close page</a></body>
+          <body><input id="q" /><a id="window-close-link" href="${origin}/window-close" target="_blank">Open close page</a></body>
         </html>
       `)
       return
@@ -124,13 +119,12 @@ async function startBrowserWindowCloseServer(): Promise<{
       <html>
         <head><title>Window close repro</title></head>
         <body>
-          <p id="s">Attempting close…</p>
+          <button id="window-close">Close this tab</button>
           <script>
-            window.close()
-            setTimeout(() => {
-              document.getElementById('s').textContent =
-                'window.close() was blocked (expected).'
-            }, 200)
+            document.getElementById('window-close').onclick = () => {
+              window.close = () => { document.title = 'Close override ran' }
+              window.close()
+            }
           </script>
         </body>
       </html>
@@ -143,26 +137,6 @@ async function startBrowserWindowCloseServer(): Promise<{
     sourceUrl: `http://127.0.0.1:${port}/source`,
     close: () => closeServer(server)
   }
-}
-
-async function readBrowserWindowCloseStatus(
-  page: Parameters<typeof getActiveWorktreeId>[0],
-  browserTabId: string
-): Promise<string> {
-  return page.evaluate(async (targetBrowserTabId) => {
-    const slot = document.querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"]`)
-    const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
-    if (!webview) {
-      return 'webview missing'
-    }
-    try {
-      return (await webview.executeJavaScript(
-        'document.querySelector("#s")?.textContent ?? "status missing"'
-      )) as string
-    } catch {
-      return 'guest lost'
-    }
-  }, browserTabId)
 }
 
 async function closeServer(server: Server): Promise<void> {
@@ -414,7 +388,11 @@ test.describe('Browser Tab', () => {
         webview.setZoomLevel(0.5)
         for (let reload = 0; reload < 3; reload += 1) {
           await new Promise<void>((resolve) => {
-            webview.addEventListener('dom-ready', () => resolve(), { once: true })
+            const onReady = (): void => {
+              webview.removeEventListener('dom-ready', onReady)
+              resolve()
+            }
+            webview.addEventListener('dom-ready', onReady)
             if (reload === 1) {
               webview.reloadIgnoringCache()
             } else {
@@ -427,55 +405,6 @@ test.describe('Browser Tab', () => {
       }, browserTab!.id)
 
       expect(zoomLevels).toEqual([0, 0, 0, 0])
-    } finally {
-      await formServer.close()
-    }
-  })
-
-  test('Cmd/Ctrl+0 resets a zoomed browser page to 100%', async ({ orcaPage }) => {
-    const formServer = await startBrowserFormServer()
-    try {
-      const worktreeId = (await getActiveWorktreeId(orcaPage))!
-      const browserTab = await createBrowserTab(
-        orcaPage,
-        worktreeId,
-        formServer.url('Zoom reset'),
-        'Zoom Reset'
-      )
-      expect(browserTab?.id).toBeTruthy()
-      await expect
-        .poll(async () => readBrowserInputValue(orcaPage, browserTab!.id), { timeout: 5_000 })
-        .not.toBeNull()
-
-      await orcaPage.evaluate(
-        async ({ browserTabId, browserPageId, modifier }) => {
-          const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
-          const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
-          if (!webview) {
-            throw new Error(`Missing webview for browser tab ${browserTabId}`)
-          }
-          window.dispatchEvent(
-            new CustomEvent('orca:browser-page-zoom', {
-              detail: { browserPageId, direction: 'in' }
-            })
-          )
-          await webview.sendInputEvent({ type: 'keyDown', keyCode: '0', modifiers: [modifier] })
-          await webview.sendInputEvent({ type: 'keyUp', keyCode: '0', modifiers: [modifier] })
-        },
-        {
-          browserTabId: browserTab!.id,
-          browserPageId: browserTab!.pageId ?? browserTab!.id,
-          modifier: process.platform === 'darwin' ? 'meta' : 'control'
-        }
-      )
-      await expect
-        .poll(() =>
-          orcaPage.evaluate((browserTabId) => {
-            const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
-            return (slot?.querySelector('webview') as Electron.WebviewTag | null)?.getZoomLevel()
-          }, browserTab!.id)
-        )
-        .toBe(0)
     } finally {
       await formServer.close()
     }
@@ -524,7 +453,11 @@ test.describe('Browser Tab', () => {
           const untouchedA = webviewA.getZoomLevel()
 
           await new Promise<void>((resolve) => {
-            webviewA.addEventListener('dom-ready', () => resolve(), { once: true })
+            const onReady = (): void => {
+              webviewA.removeEventListener('dom-ready', onReady)
+              resolve()
+            }
+            webviewA.addEventListener('dom-ready', onReady)
             webviewA.reload()
           })
 
@@ -626,7 +559,7 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('blocked window.close in a link-created tab does not break tab switching', async ({
+  test('window.close removes a link-created tab and keeps neighboring tabs usable', async ({
     orcaPage
   }) => {
     const closeServer = await startBrowserWindowCloseServer()
@@ -635,7 +568,7 @@ test.describe('Browser Tab', () => {
       const neighboringTab = await createBrowserTab(
         orcaPage,
         worktreeId,
-        'about:blank',
+        closeServer.sourceUrl,
         'Neighboring tab'
       )
       const sourceTab = await createBrowserTab(
@@ -657,22 +590,37 @@ test.describe('Browser Tab', () => {
         })
         .not.toBeNull()
 
+      await clickBrowserLink(orcaPage, closeTabId!, '#window-close')
+      await expect
+        .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).map((tab) => tab.id))
+        .not.toContain(closeTabId)
+      expect((await getBrowserTabs(orcaPage, worktreeId)).map((tab) => tab.id)).toContain(
+        sourceTab!.id
+      )
       await orcaPage.locator(`[data-tab-id="${neighboringTab!.id}"]`).click()
       await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
-      await expect
-        .poll(() => readBrowserWindowCloseStatus(orcaPage, closeTabId!), { timeout: 5_000 })
-        .toContain('window.close() was blocked')
+      await expect(
+        orcaPage.locator(`[data-browser-overlay-tab-id="${neighboringTab!.id}"]`)
+      ).toHaveCSS('opacity', '1')
+      await writeBrowserInputValue(orcaPage, neighboringTab!.id, 'still usable after close')
     } finally {
       await closeServer.close()
     }
   })
 
-  test('directly created browser tabs block window.close and remain usable', async ({
+  test('a single-entry browser tab honors protected window.close and preserves its neighbor', async ({
     orcaPage
   }) => {
     const closeServer = await startBrowserWindowCloseServer()
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const neighboringTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        closeServer.sourceUrl,
+        'Neighbor'
+      )
+      expect(neighboringTab?.id).toBeTruthy()
       const directTab = await createBrowserTab(
         orcaPage,
         worktreeId,
@@ -681,33 +629,16 @@ test.describe('Browser Tab', () => {
       )
       expect(directTab?.id).toBeTruthy()
 
+      await clickBrowserLink(orcaPage, directTab!.id, '#window-close')
       await expect
-        .poll(() => readBrowserWindowCloseStatus(orcaPage, directTab!.id), { timeout: 5_000 })
-        .toContain('window.close() was blocked')
-
-      await expect
-        .poll(
-          () =>
-            orcaPage.evaluate(async (targetBrowserTabId) => {
-              const slot = document.querySelector(
-                `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
-              )
-              const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
-              if (!webview) {
-                return 'webview missing'
-              }
-              try {
-                return (await webview.executeJavaScript(`(() => {
-                  window.close = () => 'replacement-called'
-                  return window.close() === 'replacement-called' ? 'replacement-called' : 'blocked'
-                })()`)) as string
-              } catch {
-                return 'guest unavailable'
-              }
-            }, directTab!.id),
-          { timeout: 5_000 }
-        )
-        .toBe('blocked')
+        .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).map((tab) => tab.id))
+        .not.toContain(directTab!.id)
+      await orcaPage.locator(`[data-tab-id="${neighboringTab!.id}"]`).click()
+      await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
+      await expect(
+        orcaPage.locator(`[data-browser-overlay-tab-id="${neighboringTab!.id}"]`)
+      ).toHaveCSS('opacity', '1')
+      await writeBrowserInputValue(orcaPage, neighboringTab!.id, 'still usable after close')
     } finally {
       await closeServer.close()
     }

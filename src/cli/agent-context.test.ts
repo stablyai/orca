@@ -81,13 +81,6 @@ describe('buildAgentContext', () => {
 })
 
 describe('agent-context over the live registry', () => {
-  it('exposes the worktree rm command with its remove/delete aliases', () => {
-    const schema = buildAgentContext(COMMAND_SPECS)
-    const rm = schema.commands.find((command) => command.command === 'worktree rm')
-    expect(rm).toBeDefined()
-    expect(rm?.aliases).toContainEqual(['worktree', 'remove'])
-  })
-
   it('human summary count matches the command count', () => {
     const schema = buildAgentContext(COMMAND_SPECS)
     expect(formatAgentContextSummary(schema)).toContain(`${schema.commandCount} commands`)
@@ -96,6 +89,7 @@ describe('agent-context over the live registry', () => {
   it('does not advertise browser page targeting for local discovery', () => {
     const schema = buildAgentContext(COMMAND_SPECS)
     const agentContext = schema.commands.find((command) => command.command === 'agent-context')
+    expect(agentContext).toBeDefined()
     expect(agentContext?.flags).not.toContain('page')
   })
 

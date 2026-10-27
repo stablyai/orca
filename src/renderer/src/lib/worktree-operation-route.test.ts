@@ -272,11 +272,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
   })
 
   it('fails ownerless rows closed mid-hydration while a saved runtime could own them', () => {
-    // Why: no repo row and no active runtime, so neither the unstamped-local branch nor the
-    // focused-runtime gates can decide — the unhydrated saved-runtime catalog is what fails this
-    // closed. Flipping runtimeEnvironmentCatalogHydrated to true routes it local off the detected
-    // row, so do not re-add repos/activeRuntimeEnvironmentId here: either one decides the case
-    // earlier and leaves this branch uncovered.
+    // No repo/active-runtime evidence can decide first: only the unhydrated saved-runtime catalog fails this closed. Marking it hydrated routes local via the detected row; adding other evidence would leave this branch uncovered.
     expect(
       resolveWorktreeOperationRouteResult(
         {
@@ -374,13 +370,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
   })
 
-  // #16733: a genuinely local git worktree carries no host stamp on legacy rows. Every stamped
-  // row is already routed by resolveExplicitWorktreeOperationRouteResult, so an unstamped repo
-  // row reaching the legacy hydration gates is local by construction — the same positive-identity
-  // argument the folder-workspace branch below already makes (#10251/#10269). The repo row is the
-  // host evidence, but it is not worktree identity on its own: a worktree id no row has ever
-  // listed keeps failing closed, per 'does not treat a repo row alone as positive local
-  // identity' above (#16841).
+  // Unstamped legacy repo rows prove local host ownership (#16733), matching the folder carve-out (#10251/#10269). They do not prove worktree identity: require a listed/detected worktree too (#16841).
   describe('local git worktrees without a host stamp (#16733)', () => {
     const LOCAL_ROUTE = {
       kind: 'resolved',
@@ -416,8 +406,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
 
     it('keeps a local worktree local while the saved-runtime catalog is still hydrating', () => {
-      // Why: the repo stamp is host evidence, not runtime-environment inference — an unhydrated
-      // runtime catalog cannot turn an unstamped row into a remote one.
+      // Repo stamps prove host ownership; an unhydrated runtime catalog cannot turn unstamped local rows remote.
       expect(
         resolveWorktreeOperationRouteResult(
           {
@@ -801,17 +790,14 @@ describe('resolveWorktreeOperationRouteResult', () => {
         kind: 'resolved',
         route: { executionHostId: 'local', runtimeEnvironmentId: null }
       })
-      // Why: the folder record is positive identity evidence, so it routes where an unknown
-      // worktree in the same multi-runtime state still fails closed.
+      // Folder records prove identity, so route where unknown worktrees in the same multi-runtime state fail closed.
       expect(resolveWorktreeOperationRouteResult(state, 'repo-x::/tmp/unknown')).toEqual({
         kind: 'missing'
       })
     })
 
     it('routes a folder workspace and a git worktree alike in one local state (#16733)', () => {
-      // Why: #10269 gave folder workspaces the positive-identity carve-out and left git worktrees
-      // behind, so the same store answered `local` for one workspace kind and `missing` for the
-      // other. Both kinds are locally owned here, so both must route locally.
+      // Local folders and git worktrees must route alike; #10269 fixed only folders, leaving the same-state git case missing.
       const state = {
         repos: [{ id: 'repo-1' } as never],
         worktreesByRepo: { 'repo-1': [worktree(undefined)] },

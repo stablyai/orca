@@ -75,7 +75,6 @@ describe('isNativeChatSkillForAgent', () => {
     expect(isNativeChatSkillForAgent('grok', skill({}), claude)).toBe(false)
   })
 
-  // Both OpenCode lines read `.claude/skills` in the home folder and the project, but not plugins.
   it('shows OpenCode the Claude skill folders it reads, and not Claude plugins', () => {
     const claude = discovery('claude')
     expect(isNativeChatSkillForAgent('opencode', skill({}), claude)).toBe(true)
@@ -107,8 +106,7 @@ describe('isNativeChatSkillForAgent', () => {
         }
       ]
     } satisfies Pick<SkillDiscoveryResult, 'sources'>
-    // A symlinked skill deduped under the Codex root but also reachable
-    // through the shared root stays visible to every agent.
+    // Canonical dedup may list the Codex root first; shared-root reachability must still grant other agents visibility.
     const merged = skill({
       rootPath: '/Users/test/.codex/skills',
       rootPaths: ['/Users/test/.codex/skills', '/Users/test/.agents/skills']
@@ -215,10 +213,11 @@ describe('floating workspace skill discovery', () => {
     floatingWorkspacePath: '/home/me/scratch',
     folderWorkspaces: [],
     projectGroups: [],
-    projects: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [],
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
-    // Why a focused runtime: floating must stay local even when one is selected.
+    // Floating panels stay local even with a focused paired runtime.
     settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'env-1' },
     structuredSessionLaunchDirectoryByTabId: {},
     tabsByWorktree: {},

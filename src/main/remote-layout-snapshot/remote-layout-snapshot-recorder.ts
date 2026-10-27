@@ -1,6 +1,4 @@
-// The one writer of the display-only server layout snapshot (design 6.3, D3). It records the
-// `session.tabs.subscribeAll` frames main already relays to the window, so no server receives a
-// new request. Its one reader, `layout.getRemoteSnapshots`, has no caller yet.
+// Record existing relayed session.tabs.subscribeAll frames for display-only layout snapshots; never request another server stream.
 
 import type {
   RemoteLayoutSnapshot,
@@ -26,7 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-// Checks the identity fields only; the rest is the server's published contract.
+// Validate identity; other fields retain the server-published contract.
 function isSessionTabsResult(value: unknown): value is RuntimeMobileSessionTabsResult {
   return isRecord(value) && typeof value.worktree === 'string' && Array.isArray(value.tabs)
 }
@@ -48,7 +46,7 @@ function displayed({
   return workspace
 }
 
-// Which tabs exist and where; titles and status change far more often and can wait for a save.
+// Persist topology immediately; frequently changing titles/status can wait.
 function structure(workspace: RemoteLayoutSnapshotWorkspace | undefined): string {
   return JSON.stringify([
     workspace?.tabs.map((tab) => tab.id),
@@ -57,7 +55,6 @@ function structure(workspace: RemoteLayoutSnapshotWorkspace | undefined): string
   ])
 }
 
-/** Called for every relayed stream frame; only the window's all-worktree tab stream is recorded. */
 export function recordRemoteLayoutFrame(
   store: RemoteLayoutSnapshotStore,
   environmentId: string,
@@ -94,7 +91,6 @@ export function recordRemoteLayoutFrame(
   )
 }
 
-/** A removed server's snapshot goes with it. */
 export function forgetRemoteLayoutSnapshot(
   store: RemoteLayoutSnapshotStore,
   environmentId: string

@@ -27,10 +27,7 @@ export function splitGitRemoteKey(
   }
 }
 
-/**
- * Compare a probed remote against a pasted URL. A host-only mismatch is `'unknown'` when the
- * probed host is an SSH alias, since `git remote -v` reports it unexpanded.
- */
+/** Compare pasted/probed remote identities; a host-only mismatch is unknown when the probed host is an unexpanded SSH alias. */
 export function matchGitRemoteKeyParts(
   identity: GitRemoteKeyParts,
   target: GitRemoteKeyParts
@@ -138,4 +135,14 @@ export function deriveGitRemoteIdentity(stdout: string): GitRemoteIdentity | nul
         remoteUrl: selected.url
       }
     : null
+}
+
+export function normalizeSavedGitRemoteIdentity(
+  identity: GitRemoteIdentity | null | undefined
+): GitRemoteIdentity | null {
+  const canonicalKey =
+    typeof identity?.canonicalKey === 'string' ? identity.canonicalKey.trim() : ''
+  const remoteName = typeof identity?.remoteName === 'string' ? identity.remoteName.trim() : ''
+  const remoteUrl = typeof identity?.remoteUrl === 'string' ? identity.remoteUrl.trim() : ''
+  return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null
 }

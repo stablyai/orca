@@ -15,7 +15,7 @@ function huggingFaceFiles(
   }))
 }
 
-// Why: immutable revisions plus per-file hashes keep direct downloads equivalent to pinned archives.
+// Pinned revisions and per-file hashes keep direct downloads equivalent to pinned archives.
 const MODEL_DOWNLOAD_FILES = {
   'parakeet-tdt-0.6b-v3-int8': huggingFaceFiles(
     'csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8',

@@ -8,6 +8,8 @@ import type {
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
+import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 
@@ -70,7 +72,7 @@ function createRuntime(
   return runtime
 }
 
-// Why: an SSH-backed workspace whose spawn response was lost — the leak in #17929.
+// #17929: lost SSH spawn responses must remain reclaimable.
 function installRemoteReclaimHarness(
   runtime: OrcaRuntimeService,
   listProcesses: ReturnType<typeof vi.fn>
@@ -138,6 +140,69 @@ describe('agent-session execution namespace', () => {
       'id:worktree-1',
       expect.objectContaining({ signal })
     )
+  })
+
+  it('retains compiled policy through args-only host reconstruction and repeated recorded resume', async () => {
+    const launch = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      allowEmptyPromptLaunch: true,
+      cmdOverrides: {},
+      platform: 'linux',
+      agentArgs: '-m old-model -c model_reasoning_effort=low -c model_verbosity=low',
+      sessionOptions: { model: 'gpt-5.5', effort: 'high', permissionMode: 'ask' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+    expect(launch?.sessionOptions).toEqual({
+      model: 'gpt-5.5',
+      effort: 'high',
+      permissionMode: 'ask'
+    })
+    expect(launch?.launchCommand).not.toContain('old-model')
+    const policyTokens = [
+      'codex',
+      '-c',
+      'model_verbosity=low',
+      '-a',
+      'on-request',
+      '-s',
+      'read-only',
+      '-c',
+      'approvals_reviewer=user'
+    ]
+    expect(tokenizeStartupCommand(launch?.launchConfig.agentCommand ?? '', 'posix')).toMatchObject({
+      ok: true,
+      tokens: policyTokens
+    })
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const providerSession = { key: 'session_id' as const, id: 'provider-session-1' }
+    await runtime.ensureAgentSession({
+      kind: 'explicit',
+      worktree: 'id:worktree-1',
+      agent: 'codex',
+      providerSession,
+      agentArgs: launch?.launchConfig.agentArgs
+    })
+    const host = createTerminal.mock.calls[0]?.[1]
+    expect(tokenizeStartupCommand(host?.command ?? '', 'posix')).toMatchObject({
+      ok: true,
+      tokens: [...policyTokens, 'resume', providerSession.id]
+    })
+    expect(host?.launchConfig).toEqual(launch?.launchConfig)
+    const resumeInputs = {
+      agent: 'codex' as const,
+      providerSession,
+      platform: 'linux' as const,
+      cmdOverrides: {}
+    }
+    const resumed = buildAgentResumeStartupPlan({ ...resumeInputs, ...host?.launchConfig })
+    const resumedAgain = buildAgentResumeStartupPlan({ ...resumeInputs, ...resumed?.launchConfig })
+    expect(resumedAgain?.launchConfig).toEqual(launch?.launchConfig)
+    expect(tokenizeStartupCommand(resumedAgain?.launchCommand ?? '', 'posix')).toMatchObject({
+      ok: true,
+      tokens: [...policyTokens, 'resume', providerSession.id]
+    })
   })
 
   it('propagates probe getter failure before entering the probe failure fallback', async () => {
@@ -253,8 +318,7 @@ describe('agent-session create operation ledger', () => {
   })
 
   it('shapes the launch for the route it resolved, not a repo row on another host', async () => {
-    // `scope.repo` is display metadata and can be a row from a different host than the worktree
-    // names (#11163). Reading it made a locally-routed launch emit the SSH relay shim name.
+    // #11163: scope.repo is display metadata, possibly from another host; never derive launch routing from it.
     const runtime = createRuntime({
       supportsAgentSessionClaims: () => true,
       supportsAgentSessionCreateOperations: () => true
@@ -266,7 +330,6 @@ describe('agent-session create operation ledger', () => {
       id: 'worktree-1',
       path: '/repo/worktree-1',
       connectionId: null,
-      // The rival row names openclaw while the worktree resolved to no SSH route at all.
       repo: {
         id: 'repo-1',
         connectionId: 'openclaw',
@@ -415,7 +478,7 @@ describe('agent-session create operation ledger', () => {
   })
 
   it('starts a create however many unexpired operations are held, and still replays the first', async () => {
-    // Why: a count limit (512 per caller, 4,096 in all) refused a user's create for unrelated traffic.
+    // Per-caller/global count caps rejected unrelated user creates.
     const runtime = createRuntime()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
     const now = Date.now()

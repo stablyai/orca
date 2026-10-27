@@ -55,7 +55,6 @@ describe('a cursor walks one ranked list', () => {
     expect(pages).toBe(3)
     expect(seen).toHaveLength(25)
     expect(new Set(seen).size).toBe(25)
-    // The same walk, run again against the same generation, is the same walk.
     expect(engine.search(request).hits.map((hit) => hit.sessionId)).toEqual(seen.slice(0, 10))
   })
 
@@ -76,8 +75,7 @@ describe('a cursor walks one ranked list', () => {
   })
 
   it('breaks a tie by session, so two entries cannot swap between pages', async () => {
-    // Same text, same timestamp: every ranking key is equal, which is exactly
-    // where an unstable sort would hand one session out twice and lose another.
+    // Equal relevance and timestamps force the session-ID tie-breaker.
     harness = await openSessionSearchHarness('ss-engine-ties')
     for (let id = 1; id <= 6; id++) {
       addSyntheticSession(harness.db, { id, text: 'needle', updatedAt: '2026-09-01T00:00:00.000Z' })
@@ -93,8 +91,6 @@ describe('a cursor is refused rather than reinterpreted', () => {
   it('rejects a cursor minted before the index moved', async () => {
     const { engine, store } = await withSessions(25)
     const first = engine.search({ query: 'needle', limit: 10 })
-    // A proven deletion of a path this index really held hides a session, which
-    // is exactly the change a cursor must not be allowed to page across.
     store.removeFile('/synthetic/1.jsonl')
 
     expect(() => engine.search({ query: 'needle', limit: 10, cursor: first.page.cursor! })).toThrow(
@@ -109,13 +105,9 @@ describe('a cursor is refused rather than reinterpreted', () => {
   })
 
   it('names both generations, so a caller can tell a moved index from a bad cursor', async () => {
-    // What a caller does about it differs: a moved index means quietly ask for
-    // page one again, a bad cursor means something is wrong with the caller.
     const { engine, store } = await withSessions(25)
     const first = engine.search({ query: 'needle', limit: 10 })
     const minted = readIndexGeneration(harness!.db)
-    // Any published read moves the generation, including one for a file this
-    // page never mentioned. That is the fence working, not a defect.
     store.removeFile('/synthetic/9.jsonl')
 
     try {
@@ -157,10 +149,6 @@ describe('a cursor is refused rather than reinterpreted', () => {
     }
   })
 
-  // Every field the ranked list depends on has to be in the key, and a field
-  // that is in the key but never pinned is a field a refactor can drop while
-  // the suite stays green. One case each, through the engine, so the assertion
-  // is about a refused page and not about a hash.
   it.each([
     ['scope', { scope: 'conversation' as const }],
     ['sort', { filters: { sort: 'newest' as const } }],
@@ -237,8 +225,6 @@ describe('cursor encoding', () => {
     ['a non-integer offset', Buffer.from('{"g":1,"o":1.5,"k":"k"}').toString('base64url'), 1],
     ['a payload that is not an object', Buffer.from('"nope"').toString('base64url'), undefined],
     ['text that is not base64url JSON', 'zzz!!', undefined],
-    // A generation is a counter: neither of these is a snapshot that ever
-    // existed, so reporting one as stale would name a generation as expected.
     [
       'a fractional generation',
       Buffer.from('{"g":7.5,"o":0,"k":"k"}').toString('base64url'),
@@ -250,9 +236,6 @@ describe('cursor encoding', () => {
       undefined
     ]
   ])('rejects %s as malformed, still naming the index generation', (_name, cursor, claimed) => {
-    // The caller has to know which snapshot it was refused against whatever was
-    // wrong with the cursor, and the generation it claimed whenever that
-    // survived parsing.
     try {
       decodeSessionSearchCursor(cursor, 7, 'k', incarnation)
       expect.unreachable('a malformed cursor is not an empty one')
@@ -295,13 +278,7 @@ describe('the candidate limit is a tunable default, and says when it cut', () =>
   })
 
   it('says it gave up when the operator walk stopped scanning, not that it is done', async () => {
-    // The shape that reads as a confident empty answer: the only match sits
-    // past the walk's ceiling, so the walk stops having found nothing. Zero
-    // hits and `truncated.candidates` false would tell a caller there is
-    // nothing to find, which is a different claim from "I stopped looking".
-    // The walk reads a page at a time and gives up past a ceiling of
-    // `candidateLimit` x 20, so the corpus has to be deeper than one page for
-    // the ceiling to be what ends it. The only match is the oldest session.
+    // Put the only match beyond one scan page and the candidateLimit × 20 ceiling.
     const deep = 600
     const { db, engine } = await open('ss-engine-sparse-deep', { sessionCandidateLimit: 2 })
     for (let id = 1; id <= deep; id++) {

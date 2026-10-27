@@ -29,10 +29,7 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: signalProcessTreeMock,
   forceTerminateProcessTree: forceTerminateProcessTreeMock
 }))
-// Why: the real FETCH_HEAD key derivation walks the filesystem (realpath/stat/readFile), so
-// concurrent same-repo callers join the lock lane in libuv threadpool completion order rather
-// than call order. Keep the real FIFO lock and drop only the key walk, which owns its coverage
-// in `src/shared/git-fetch-head-lock.test.ts`.
+// Mock only filesystem key derivation so libuv completion order cannot reorder the real FIFO lock.
 vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
   const actual = await importOriginal<typeof GitFetchHeadLockModule>()
   const { runWithGitOperationLock } = await import('../../../shared/git-operation-lock')

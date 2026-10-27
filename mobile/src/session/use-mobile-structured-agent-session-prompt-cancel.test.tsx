@@ -8,7 +8,6 @@ import type { RpcClient } from '../transport/rpc-client'
 const mocks = vi.hoisted(() => ({
   sendRequest: vi.fn(),
   promptResponses: vi.fn(() => ({
-    groupedDraft: null,
     respondPermission: vi.fn(),
     respondQuestion: vi.fn()
   }))
@@ -272,7 +271,6 @@ describe('mobile structured prompt cancellation', () => {
   })
 
   it("reads Working from the host's answer, and from its rows only when an older host gives none", () => {
-    // A turn row an agent that has since ended left running: the host says it is not working.
     state = { ...state, items: [runningTurn()], working: false }
     act(() => {
       renderer = create(createElement(Harness, { promptCancelSupported: true }))
@@ -296,7 +294,6 @@ describe('mobile structured prompt cancellation', () => {
       ...state,
       items: [runningTurn(), { ...pendingApproval(), itemId: 'approval-new', revision: 9 }]
     }
-    // The hook API accepts the identity captured by the card; the state is intentionally newer.
     await act(async () => {
       expect(await hook.cancelPrompt(renderedIdentity)).toBe(true)
     })

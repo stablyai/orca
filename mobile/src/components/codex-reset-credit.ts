@@ -132,10 +132,7 @@ export function getCodexResetCreditScope(
   return parsed.success ? parsed.data : null
 }
 
-/**
- * Whether a reply's scope is the account this attempt was for. Not the offer: the host answers a
- * retry with the account's unresolved attempt, which names the offer it was made against.
- */
+// Match account scope, not offer: host may return unresolved retry attempt against earlier offer.
 function sameAccountScope(
   left: CodexResetCreditExpectedScope,
   right: CodexResetCreditExpectedScope
@@ -212,11 +209,7 @@ function decodeResetResult(
   }
 }
 
-/**
- * One redeem, the way the desktop does it: a fresh key per attempt, nothing kept on the phone. The
- * host's ledger answers a retry of the same offer, or of an account whose outcome is unknown, with
- * the attempt it already recorded, so a lost reply never spends a second credit.
- */
+// Use fresh key per attempt without phone journal; host ledger resumes same-offer/unknown-account attempts so lost replies cannot spend twice.
 export async function requestCodexResetCredit(
   client: MobileCodexResetCreditRpcSender,
   expectedScope: CodexResetCreditExpectedScope

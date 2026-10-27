@@ -2,12 +2,8 @@ import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
-// `agentSession.*` — the structured session RPC surface.
-//
-// Every method here is gated on the client advertising
-// `agent-session.structured.v1`. A client that does not is told the surface does
-// not exist rather than receiving the journal or mutation surface. Session-tab
-// inventory may expose only a metadata placeholder for an incapable mobile client.
+import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
+// Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
 
 import {
   projectBackgroundTaskEvent,
@@ -39,6 +35,7 @@ import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-sessio
 import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from './structured-agent-session-prompt-response'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS } from './structured-agent-session-regenerate-name'
+import { STRUCTURED_AGENT_SESSION_RENAME_METHODS } from './structured-agent-session-rename'
 import { STRUCTURED_AGENT_SESSION_QUEUED_METHODS } from './structured-agent-session-queued-methods'
 import { STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS } from './structured-agent-session-restart-resume'
 import {
@@ -70,9 +67,7 @@ import {
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredSessionNeverStarted } from '../../agent-session-record-founding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   noteStructuredAgentSessionClose,
@@ -147,18 +142,18 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   }),
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
   defineMethod({
-    // Releasing a chat view, not ending a conversation: the record and journal stay on disk so the
-    // same session can be attached again. Only the provider child and the in-memory entry go.
+    // Close only provider/in-memory state, preserving record/journal for future attachment.
     name: 'agentSession.close',
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
-      // Noted before the host is required: a close that fails still refuses the create it raced.
+      // Record close before requiring host so even failed closes fence racing creates.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         noteStructuredAgentSessionClose(
           params.sessionId,
-          (getStructuredAgentSessionHost()?.deps.store.getRecord(params.sessionId) ?? null) !== null
+          (getStructuredAgentSessionHost()?.deps.store.getConversation(params.sessionId) ??
+            null) !== null
         )
       }
       const host = requireStructuredCleanupHost(ctx)
@@ -201,17 +196,17 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       }
       try {
         const records = store
-          .listRecords()
+          .listConversations()
           .filter(
             (record) =>
               record.location.workspaceId === params.workspaceId &&
               record.location.executionHostId === LOCAL_EXECUTION_HOST_ID
           )
         const stoppedSessionIds = records
-          .filter(structuredSessionNeverStarted)
+          .filter((record) => record.neverStarted)
           .map((record) => record.sessionId)
         const failures = records
-          .filter((record) => !structuredSessionNeverStarted(record))
+          .filter((record) => !record.neverStarted)
           .map((record) => ({ sessionId: record.sessionId, reason: 'stop-unverifiable' as const }))
         return failures.length > 0 ? { stoppedSessionIds, failures } : { stoppedSessionIds }
       } catch (error) {
@@ -229,7 +224,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       const host = await requireInstalledHost(ctx, params.sessionId)
       return projectTurnItemHistory(
         projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(await host.history(params), ctx),
+          projectBackgroundTaskHistory(
+            await host.history(
+              params,
+              undefined,
+              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+            ),
+            ctx
+          ),
           ctx
         ),
         ctx,
@@ -250,8 +252,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       if (stream.isClosed()) {
         return
       }
-      // Resolves once the conversation is open and the opening snapshot (or the missed batch) is
-      // emitted; a close that raced the open disposes what it bound.
+      // Resolve after opening snapshot/missed batch; a racing close disposes the bound stream.
       dispose = await host.subscribe({
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
@@ -267,13 +268,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
             )
           ),
         ...(params.cursor ? { cursor: params.cursor } : {}),
-        // Desktop snapshots require settled send echoes and independent current requests.
-        snapshotCatchUp:
-          ctx.clientKind === undefined ||
-          ctx.clientKind === 'mobile' ||
-          (ctx.clientCapabilities?.includes(AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY) ===
-            true &&
-            clientReadsCurrentRequests(ctx)),
+        snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
         // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
         ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
       })
@@ -301,6 +296,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_HOLD_METHODS,
   ...STRUCTURED_AGENT_SESSION_REVEAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_RENAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
   ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,

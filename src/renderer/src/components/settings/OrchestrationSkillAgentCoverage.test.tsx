@@ -53,8 +53,7 @@ describe('OrchestrationSkillAgentCoverage', () => {
     expect(markup).toContain('Ready')
     expect(markup).toContain('Missing')
     expect(markup).not.toContain('View details')
-    // Why: an omitted target reads as "host unknown", which pins detectedIds to
-    // null and leaves the widget spinning forever.
+    // An omitted target means unknown host and leaves detection spinning forever.
     expect(useDetectedAgents).toHaveBeenCalledWith({ kind: 'local' })
   })
 })

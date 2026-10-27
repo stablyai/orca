@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   callMock: vi.fn(),
@@ -29,12 +29,8 @@ import { main } from './index'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { buildWorktree, okFixture } from './test-fixtures'
 import { RuntimeClientError } from './runtime/types'
-import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira-agent-capability'
+import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira/jira-agent-capability'
 import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachment-capabilities'
-import {
-  getWorkspaceReferenceIdentity,
-  parseWorkspaceReferenceUrl
-} from '../shared/workspace-reference-identity'
 
 const site = {
   id: 'site-1',
@@ -56,9 +52,17 @@ const issue = {
   updatedAt: '2026-10-13',
   createdAt: '2026-10-12'
 }
-const attachment = { ...parseWorkspaceReferenceUrl(issue.url), title: issue.title }
+const jiraReference = {
+  provider: 'jira' as const,
+  type: 'issue' as const,
+  number: 0,
+  identifier: 'ENG-123',
+  jiraIdentifier: 'ENG-123',
+  url: issue.url
+}
+const attachment = { ...jiraReference, title: issue.title }
 const reviewUrl = 'https://gitlab.com/acme/api/-/merge_requests/12'
-const review = parseWorkspaceReferenceUrl(reviewUrl)
+const review = { provider: 'gitlab' as const, type: 'mr' as const, number: 12, url: reviewUrl }
 const workspace = { ...buildWorktree('/tmp/api', 'api'), kind: 'worktree', name: 'api' }
 const addArgs = ['reference', 'add', 'eng-123', '--worktree', 'name:api']
 const createArgs = [
@@ -106,8 +110,16 @@ function expectNoWrite(): void {
 }
 
 describe('Jira reference keys', () => {
+  const priorExitCode = process.exitCode
+  beforeEach(() => {
+    process.exitCode = undefined
+  })
+  afterEach(() => {
+    process.exitCode = priorExitCode
+  })
   useWorktreeAwarenessEnvironment(mocks)
   beforeEach(() => {
+    mocks.runtimeClientConstructorMock.mockClear()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
     pairRuntimeEnvironment(mocks.listEnvironmentsMock, 'remote')
@@ -123,6 +135,7 @@ describe('Jira reference keys', () => {
     expect(mocks.callMock).toHaveBeenCalledWith(
       'worktree.set',
       expect.objectContaining({
+        worktree: 'id:repo::/tmp/api',
         linkedItemsBase: [],
         linkedItems: [attachment],
         linkedItemsSelectionChanged: false
@@ -132,13 +145,18 @@ describe('Jira reference keys', () => {
 
   it('uses the selected execution host for Jira lookup and workspace mutation', async () => {
     await main([...addArgs, '--environment', 'remote'], '/tmp/api')
-    expect(mocks.runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'remote')
+    expect(mocks.runtimeClientConstructorMock).toHaveBeenCalledExactlyOnceWith(undefined, 'remote')
     expect(mocks.callMock).toHaveBeenCalledWith('jira.lookupIssueSummary', {
       key: 'ENG-123',
       siteId: site.id
     })
     expect(mocks.callMock).toHaveBeenCalledWith('reference.list', { worktree: 'name:api' })
-    expect(mocks.callMock).toHaveBeenCalledWith('worktree.set', expect.anything())
+    expect(mocks.callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/api',
+      linkedItemsBase: [],
+      linkedItems: [attachment],
+      linkedItemsSelectionChanged: false
+    })
   })
 
   it('refuses ambiguous sites rather than using activeSiteId', async () => {
@@ -157,7 +175,12 @@ describe('Jira reference keys', () => {
 
   it.each(['all', 'missing'])('rejects invalid explicit site %s before lookup', async (id) => {
     await main([...addArgs, '--reference-site', id], '/tmp/api')
-    expect(console.error).toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      id === 'all'
+        ? 'Choose one Jira site ID; --reference-site all is unsupported.'
+        : 'No matching connected Jira site. Check orca jira connection and Orca Jira settings.'
+    )
+    expect(process.exitCode).toBe(1)
     expect(mocks.callMock).not.toHaveBeenCalledWith('jira.lookupIssueSummary', expect.anything())
     expectNoWrite()
   })
@@ -182,7 +205,7 @@ describe('Jira reference keys', () => {
     expect(mocks.callMock).toHaveBeenCalledWith(
       'worktree.set',
       expect.objectContaining({
-        linkedItems: [{ ...parseWorkspaceReferenceUrl(serverIssue.url), title: issue.title }]
+        linkedItems: [{ ...attachment, url: serverIssue.url }]
       })
     )
   })
@@ -198,7 +221,14 @@ describe('Jira reference keys', () => {
   ])('rejects an absent or mismatched summary %#', async (summary) => {
     responses({ 'jira.lookupIssueSummary': summary })
     await main(addArgs, '/tmp/api')
-    expect(console.error).toHaveBeenCalled()
+    expect(mocks.callMock).toHaveBeenCalledWith('jira.lookupIssueSummary', {
+      key: 'ENG-123',
+      siteId: site.id
+    })
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      'Jira did not return issue ENG-123 with a title on the selected site.'
+    )
+    expect(process.exitCode).toBe(1)
     expectNoWrite()
   })
 
@@ -241,7 +271,13 @@ describe('Jira reference keys', () => {
     responses({
       'reference.list': {
         worktree: workspace,
-        references: [{ ...stored, key: getWorkspaceReferenceIdentity(stored), selected: false }]
+        references: [
+          {
+            ...stored,
+            key: '["jira","issue","example.atlassian.net","/browse/ENG-123"]',
+            selected: false
+          }
+        ]
       }
     })
     await main([...addArgs, '--json'], '/tmp/api')
@@ -273,6 +309,7 @@ describe('Jira reference keys', () => {
   it('resolves create references before workspace creation', async () => {
     await main(createArgs, '/tmp/api')
     const methods = mocks.callMock.mock.calls.map(([method]) => method)
+    expect(methods).toContain('jira.lookupIssueSummary')
     expect(methods.indexOf('jira.lookupIssueSummary')).toBeLessThan(
       methods.indexOf('worktree.create')
     )
@@ -285,6 +322,18 @@ describe('Jira reference keys', () => {
   it('creates nothing when the Jira reference cannot resolve', async () => {
     responses({ 'jira.lookupIssueSummary': null })
     await main(createArgs, '/tmp/api')
+    expect(mocks.callMock).toHaveBeenCalledWith('jira.lookupIssueSummary', {
+      key: 'ENG-123',
+      siteId: site.id
+    })
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0])).toMatchObject({
+      ok: false,
+      error: {
+        code: 'jira_issue_unavailable',
+        message: 'Jira did not return issue ENG-123 with a title on the selected site.'
+      }
+    })
+    expect(process.exitCode).toBe(1)
     expectNoWrite()
   })
 
@@ -312,7 +361,18 @@ describe('Jira reference keys', () => {
       key: 'ENG-124',
       siteId: site.id
     })
-    expect(console.error).toHaveBeenCalled()
+    expect(
+      mocks.callMock.mock.calls
+        .filter(([method]) => method === 'jira.lookupIssueSummary')
+        .map(([, params]) => params)
+    ).toEqual([
+      { key: 'ENG-123', siteId: site.id },
+      { key: 'ENG-124', siteId: site.id }
+    ])
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      'Jira did not return issue ENG-124 with a title on the selected site.'
+    )
+    expect(process.exitCode).toBe(1)
     expectNoWrite()
   })
 
@@ -328,11 +388,11 @@ describe('Jira reference keys', () => {
   it('keeps full Jira URLs usable without a saved Jira connection', async () => {
     responses({ 'status.get': { capabilities: [WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY] } })
     await main(['reference', 'add', issue.url, '--worktree', 'name:api'], '/tmp/api')
-    expect(mocks.callMock).not.toHaveBeenCalledWith('jira.status')
+    expect(mocks.callMock.mock.calls.map(([method]) => method)).not.toContain('jira.status')
     expect(mocks.callMock).toHaveBeenCalledWith(
       'worktree.set',
       expect.objectContaining({
-        linkedItems: [parseWorkspaceReferenceUrl(issue.url)]
+        linkedItems: [jiraReference]
       })
     )
   })
@@ -341,7 +401,7 @@ describe('Jira reference keys', () => {
     responses({ 'status.get': { capabilities: [WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY] } })
     await main(addArgs, '/tmp/api')
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Update Orca'))
-    expect(mocks.callMock).not.toHaveBeenCalledWith('jira.status')
+    expect(mocks.callMock.mock.calls.map(([method]) => method)).not.toContain('jira.status')
     expectNoWrite()
   })
 })

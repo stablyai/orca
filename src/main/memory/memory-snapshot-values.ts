@@ -11,10 +11,7 @@ export function clampMemoryMetric(value: unknown): number {
   return Math.max(0, value)
 }
 
-/**
- * The one rule for every committed-bytes key: present only when the sweep could
- * measure it, because a 0 would read as "these processes commit nothing".
- */
+/** Omit unmeasured commit values; zero must mean measured zero. */
 export function optionalCommitField(
   hasPrivateMemory: boolean,
   privateMemory: number
@@ -22,7 +19,6 @@ export function optionalCommitField(
   return hasPrivateMemory ? { privateMemory: clampMemoryMetric(privateMemory) } : {}
 }
 
-/** The snapshot-level pair, which names the unit alongside the total. */
 export function snapshotCommitFields(
   hasPrivateMemory: boolean,
   totalPrivateMemory: number

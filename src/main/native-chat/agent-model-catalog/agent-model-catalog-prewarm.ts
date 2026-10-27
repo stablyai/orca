@@ -7,7 +7,6 @@ import type { AgentModelCatalogProbe, AgentModelCatalogSuccess } from './agent-m
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 
-/** The catalog a new chat of `agent` would read: the account a launch would pin right now. */
 export async function newChatCatalogKey(
   deps: AgentModelCatalogServiceDeps,
   agent: string,
@@ -53,7 +52,7 @@ export async function prewarmAgentModelCatalog(
     return
   }
   const probes = deps.probes ?? {}
-  // An agent never used here waits for its first chat, which shows the quiet placeholder.
+  // Unused agents wait for their first chat instead of spawning speculative probes.
   const used = Object.keys(probes).filter(
     (agent) =>
       !deps.listsInChatFolder?.has(agent) &&
@@ -66,7 +65,6 @@ export async function prewarmAgentModelCatalog(
     }
     const probe = probes[agent]
     const key = probe ? await newChatCatalogKey(deps, agent) : null
-    // A fresh entry, a listing already running, or a recent failure each mean nothing to do.
     if (!probe || !key || signal.aborted || !deps.store.probeDue(key.fingerprint)) {
       return
     }

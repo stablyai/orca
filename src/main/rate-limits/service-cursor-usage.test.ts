@@ -101,13 +101,11 @@ describe('RateLimitService Cursor usage', () => {
 
     const state = service.getState()
     expect(state.cursor).toMatchObject({ provider: 'cursor', status: 'error', error: 'boom' })
-    // Why: a Cursor failure must not take the rest of the cycle down with it.
     expect(state.gemini?.status).toBe('ok')
   })
 
   it("drops a previous account's usage when the signed-in account changes", async () => {
-    // Why: the stale policy keeps a recent snapshot through a failed refresh. Across
-    // an account switch that would name the new account beside the old one's figures.
+    // Stale-policy fallback must never put the previous account's figures beside a newly selected identity.
     vi.mocked(readCursorAuthSession).mockResolvedValue(signedInResult())
     vi.mocked(fetchCursorRateLimits).mockResolvedValue({
       ...okProvider('cursor', 80),
@@ -124,8 +122,7 @@ describe('RateLimitService Cursor usage', () => {
       updatedAt: Date.now(),
       error: 'Cursor sign-in expired — run `cursor-agent login` again',
       status: 'error',
-      // Why this exact shape: it is what cursor-fetcher returns for a readable but
-      // rejected session, which is the failure an account switch actually hits.
+      // Match a readable session rejected after an account switch.
       usageMetadata: { source: 'cli', failureKind: 'stale-token', authProvenance: 'account-b' }
     })
     await service.refresh()

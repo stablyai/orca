@@ -23,20 +23,9 @@ export { PLUGIN_CURRENT_POINTER_FILENAME } from './plugin-current-pointer'
 
 const INSTALLED_PLUGIN_DISCOVERY_CONCURRENCY = 8
 
-/**
- * Discovery over the hash-addressed install layout:
- *
- *   <userData>/plugins/<publisher>.<id>/current   ← text file naming the hash
- *   <userData>/plugins/<publisher>.<id>/<hash>/   ← immutable install tree
- *
- * plus dev-mode plugins loaded straight from arbitrary local directories.
- * Discovery reads manifests and checks only their declared artifact paths —
- * never plugin bytes or whole trees. Full content hashing stays lazy so
- * startup cost is bounded by installed plugins plus declared entries.
- */
+// Discovery reads manifests/declared paths only; immutable tree hashing stays lazy to bound startup cost.
 
 export type ValidDiscoveredPlugin = {
-  /** Qualified `<publisher>.<id>` key. */
   pluginKey: string
   rootDir: string
   manifest: PluginManifest
@@ -44,7 +33,7 @@ export type ValidDiscoveredPlugin = {
   consentFingerprint: string
   /** Immutable tree identity included in consent for instructional packs. */
   consentContentHash?: string | null
-  /** Content hash the install dir is named by; null for dev plugins. */
+  /** Null for mutable dev trees. */
   contentHash: string | null
   isDev: boolean
 }
@@ -162,8 +151,7 @@ async function readInstalledPlugin(
       isDev: false
     }
   }
-  // The pointer names a sibling directory; refuse anything path-like so a
-  // corrupted pointer cannot address content outside the plugin dir.
+  // Pointers may name only sibling hash directories; reject paths escaping the plugin root.
   if (!PLUGIN_CONTENT_HASH_PATTERN.test(contentHash)) {
     return {
       pluginKey: dirName,
@@ -177,8 +165,7 @@ async function readInstalledPlugin(
   if (isInvalidDiscoveredPlugin(discovered)) {
     return { ...discovered, pluginKey: dirName }
   }
-  // Why: the directory name is the install key (and the uninstall target); a
-  // mismatched manifest identity would let two dirs claim the same plugin.
+  // Install directory names own uninstall identity; mismatched manifests could duplicate ownership.
   if (discovered.pluginKey !== dirName) {
     return {
       pluginKey: dirName,
@@ -230,15 +217,13 @@ export async function discoverPlugins(options: {
   const installedEntries = entries.filter(
     (entry) => entry.isDirectory() && isQualifiedPluginKey(entry.name)
   )
-  // Installed manifests are independent immutable trees. Read them in
-  // a bounded pool so startup latency stays low without exhausting handles.
+  // Bound parallel immutable-manifest reads to avoid exhausting file handles.
   discovered.push(
     ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
   )
   for (const devPath of options.devPluginPaths) {
     const plugin = await readManifestDir(devPath, options.hostVersion, true)
-    // A dev path that duplicates an installed plugin's identity wins — that
-    // is the point of dev mode — but two dev paths must not collide.
+    // Dev paths override installed identities; two dev paths still cannot claim one identity.
     if (!isInvalidDiscoveredPlugin(plugin)) {
       const collision = discovered.find(
         (existing) =>

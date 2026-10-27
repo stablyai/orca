@@ -61,9 +61,45 @@ describe('programStatusHookYieldEndsAt', () => {
     const block = report({ state: 'waiting', agentType: 'antigravity' })
     expect(programStatusHookYieldEndsAt(hook, block)).toBe(Infinity)
     expect(programStatusHookYieldEndsAt(hook, block, NOW - 1)).toBe(Infinity)
+    expect(programStatusHookYieldEndsAt(hook, block, NOW)).toBe(Infinity)
     expect(programStatusHookYieldEndsAt(hook, block, NOW + 1)).toBeUndefined()
     for (const state of ['working', 'blocked'] as const) {
       expect(programStatusHookYieldEndsAt(hook, report({ state, agentType: 'antigravity' }))).toBe(
+        NOW + SILENCE
+      )
+    }
+  })
+
+  it("never lets a program's child roster reopen a turn the hooks settled", () => {
+    const hook = row({ state: 'done', agentType: 'pi' })
+    const heldOpen = report({
+      state: 'working',
+      agentType: 'pi',
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: NOW }
+    })
+    expect(programStatusHookYieldEndsAt(hook, heldOpen, NOW + 1)).toBe(Infinity)
+  })
+
+  it("never lets a program's done settle a turn the hooks hold open for children", () => {
+    const heldOpen = row({
+      state: 'working',
+      agentType: 'antigravity',
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: NOW }
+    })
+    expect(
+      programStatusHookYieldEndsAt(heldOpen, report({ state: 'done', agentType: 'antigravity' }))
+    ).toBe(Infinity)
+  })
+
+  it('keeps a question the hooks raised only from a working report that began before it', () => {
+    for (const state of ['waiting', 'blocked'] as const) {
+      const hook = row({ state, agentType: 'pi' })
+      const working = report({ state: 'working', agentType: 'pi' })
+      expect(programStatusHookYieldEndsAt(hook, working, NOW - 1)).toBe(Infinity)
+      expect(programStatusHookYieldEndsAt(hook, working, NOW)).toBe(Infinity)
+      expect(programStatusHookYieldEndsAt(hook, working, NOW + 1)).toBe(NOW + SILENCE)
+      expect(programStatusHookYieldEndsAt(hook, working)).toBe(NOW + SILENCE)
+      expect(programStatusHookYieldEndsAt(hook, report({ state: 'done', agentType: 'pi' }))).toBe(
         NOW + SILENCE
       )
     }

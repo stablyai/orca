@@ -27,34 +27,15 @@ import {
   type UsageSourceCacheRef
 } from './usage-source-cache-file'
 
-// Why (#20940): the Claude/Codex/OpenCode/Muse usage scans parse whole history
-// corpora and read SQLite synchronously. Running them on this worker thread
-// keeps that work off the Electron main-process event loop. The client
-// dispatches one request at a time, so this loop stays serial; imports must
-// remain electron-free (see the worker-protocol note) — the build's
-// plain-node-entry-guard enforces it for this entry.
-//
-// Child processes: this bundle can fork one. OpenCode discovery's `wslGated*`
-// calls fork the WSL transcript sidecar whenever the path is a `\\wsl$\...`
-// UNC one, which a `OPENCODE_DB` or `XDG_DATA_HOME` override can be. Measured
-// through this entry: the sidecar is reaped by `worker.terminate()`, because
-// tearing the thread down closes the IPC channel it owned and the sidecar
-// entry exits on `disconnect`. That is the only reason it is not an orphan —
-// `terminate()` itself reaps nothing. A future spawn from here that does not
-// exit when its channel closes would outlive the app's use of it, so give any
-// such child an owner that kills it explicitly. Codex needs no gate (pure
-// `areWorktreePathsEqual`). Note the sidecar is re-forked per worker
-// lifecycle rather than pooled for the app's life, as it was pre-worker.
+// #20940: serial history/SQLite scans stay off main; imports must remain Electron-free (plain-node-entry-guard).
+// OpenCode WSL overrides can fork a transcript sidecar. Worker teardown only closes IPC; the sidecar exits on disconnect. Future children need explicit ownership if disconnect does not stop them. Sidecars restart per worker lifecycle.
 
 if (!parentPort) {
   throw new Error('Usage scan worker must run with a parent port.')
 }
 const port = parentPort
 
-// Why: the client's deadline is a no-progress window, so a scan that is slow
-// because the corpus is large has to say so. Rate-limited because a 21k-file
-// corpus would otherwise wake the main thread 21k times for a counter it only
-// reads as "still moving".
+// Rate-limit file progress to avoid waking main per file while keeping the no-progress deadline alive.
 const PROGRESS_POST_INTERVAL_MS = 1_000
 
 function createProgressReporter(id: number): (count: number) => void {
@@ -91,8 +72,7 @@ async function runScan(
   request: UsageScanWorkerScanBody,
   onFilesScanned: (count: number) => void
 ): Promise<UsageScanWorkerValue> {
-  // Switched, not table-driven: each branch narrows the cache to that
-  // provider's own record type, so nothing here needs a type assertion.
+  // The switch narrows each provider's cache type without assertions.
   switch (request.providerId) {
     case 'claude': {
       const previous = await readClaudeUsageSourceCache(request.sourceCache)
@@ -164,8 +144,7 @@ async function runScan(
   }
 }
 
-// Why: like the main-thread report, a cache that cannot be written must not
-// turn a successful scan into a failed one; the next scan just starts colder.
+// Cache persistence failure must not fail a successful scan; next time it starts colder.
 async function persistSourceCache(
   sourceCache: UsageSourceCacheRef,
   sources: readonly unknown[]
@@ -194,8 +173,7 @@ port.on('message', (request: UsageScanWorkerRequest) => {
     try {
       port.postMessage(response)
     } catch {
-      // A non-cloneable result would otherwise post nothing and leave the client
-      // waiting out its timeout; fail that request fast instead.
+      // Reject non-cloneable results immediately instead of leaving the caller to time out.
       port.postMessage({
         id: request.id,
         ok: false,

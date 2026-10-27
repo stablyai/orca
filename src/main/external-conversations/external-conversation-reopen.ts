@@ -7,7 +7,6 @@ import { refusalOf } from './external-conversation-chain'
 import { bindPane, type FollowUpTerminal } from './external-conversation-send'
 import type { ConnectorRefusal } from './external-conversation-types'
 
-/** What reopening reads and drives on the host: its hook rows, the safe resume, readiness. */
 export type ReopenTerminal = Pick<
   OrcaRuntimeService,
   'resumeAgentSessionInWorkspace' | 'getAgentStatusRowsForPane'
@@ -17,17 +16,13 @@ export type ReopenTerminal = Pick<
 
 const REOPEN_REFUSALS: Record<Exclude<AgentSessionResumeRefusal, 'aborted'>, ConnectorRefusal> = {
   window_owns_wake: 'agent_asleep_in_window',
-  // Why: the old pane may still run it (an SSH host out of contact included), so it is not reopened.
+  // An unreachable SSH host may still run the old pane, so reopening would risk duplicates.
   held_elsewhere: 'agent_not_reachable',
   no_resume_command: 'reopen_refused',
   create_failed: 'reopen_refused'
 }
 
-/**
- * Resumes the linked agent's own session in a fresh pane of its workspace, through the lifecycle's
- * safe resume: it refuses while any pane may still hold the session, and never starts a shell or a
- * fresh agent. Resolves once the resumed agent is ready for input.
- */
+/** Resume only the linked session after proving it is unheld; never substitute a shell or fresh agent. */
 export async function reopenLinkedAgent(
   terminal: ReopenTerminal,
   worktreeId: string,
@@ -68,7 +63,7 @@ export async function reopenLinkedAgent(
   if (signal.aborted) {
     return { ok: false, refusal: refusalOf(signal) }
   }
-  // Why: a composer that never opened (a dialog, a dead process) must not take the message.
+  // A missing or unsatisfied composer must not accept the message.
   return ready === null || (ready && !ready.satisfied)
     ? { ok: false, refusal: 'agent_not_reachable' }
     : { ok: true, pane }

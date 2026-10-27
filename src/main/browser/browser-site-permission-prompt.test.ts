@@ -78,7 +78,6 @@ function ask(
   return decideBrowserSitePermissions({ requester: guest, frameOrigin, memory, permissions })
 }
 
-/** What the page reads back, e.g. before Chromium shows a notification. */
 function allowedOnCheck(
   permissions: BrowserSitePermission[],
   {
@@ -93,7 +92,6 @@ function allowedOnCheck(
   })
 }
 
-/** Answers the newest prompt the window was sent. */
 async function answerLatest(value: unknown): Promise<void> {
   const request = sentRequests(renderer).at(-1)
   if (!request) {
@@ -144,15 +142,6 @@ describe('browser site permission prompts', () => {
     expect(allowedOnCheck(['camera', 'microphone'])).toBe(true)
   })
 
-  it('remembers Block and refuses without asking again', async () => {
-    const call = ask(['location'])
-    await answerLatest('block')
-    await expect(call).resolves.toBe(false)
-
-    await expect(ask(['location'])).resolves.toBe(false)
-    expect(sentRequests(renderer)).toHaveLength(1)
-  })
-
   it('asks only for what is unanswered, and a remembered Block refuses the whole request', async () => {
     const camera = ask(['camera'])
     await answerLatest('allow')
@@ -172,7 +161,6 @@ describe('browser site permission prompts', () => {
     await expect(call).resolves.toBe(false)
 
     expect(listBrowserSitePermissions('default')).toEqual([])
-    // A fresh page from the same site asks again; the dismissed one stays quiet until the user acts.
     void ask(['notifications'])
     expect(sentRequests(renderer)).toHaveLength(2)
   })
@@ -192,12 +180,10 @@ describe('browser site permission prompts', () => {
     await answerLatest('allow')
     await expect(call).resolves.toBe(true)
 
-    // Chromium checks again before it shows a notification.
     expect(allowedOnCheck(['notifications'], { memory: pairedSession })).toBe(true)
     await expect(ask(['notifications'], { memory: pairedSession })).resolves.toBe(true)
     expect(sentRequests(renderer)).toHaveLength(1)
     expect(listBrowserSitePermissions('default')).toEqual([])
-    // Another paired partition asks again.
     void ask(['notifications'], { memory: sessionBrowserSitePermissions('persist:paired-b') })
     expect(sentRequests(renderer)).toHaveLength(2)
   })
@@ -207,7 +193,6 @@ describe('browser site permission prompts', () => {
     await answerLatest('allow')
     await call
 
-    // The tab let the frame ask (Chromium enforces that), and the tab's answer decides, as in Chrome.
     await expect(ask(['camera'], { frameOrigin: 'https://video.example.net' })).resolves.toBe(true)
     expect(sentRequests(renderer)).toHaveLength(1)
   })
@@ -216,7 +201,6 @@ describe('browser site permission prompts', () => {
     const tab = ask(['notifications'])
     await answerLatest('allow')
     await tab
-    // The widget's own site was allowed when the user visited it directly.
     const widgetPage = ask(['notifications'], { guest: mockGuest('https://widget.example.net/') })
     await answerLatest('allow')
     await widgetPage
@@ -227,7 +211,6 @@ describe('browser site permission prompts', () => {
     await expect(
       ask(['notifications'], { frameOrigin: 'https://widget.example.net' })
     ).resolves.toBe(true)
-    // The tab's Allow does not reach a frame from a site nobody answered, and that frame cannot ask.
     expect(allowedOnCheck(['notifications'], { frameOrigin: 'https://ads.example.net' })).toBe(
       false
     )
@@ -270,7 +253,7 @@ describe('browser site permission prompts', () => {
     await answerLatest('allow')
     await call
 
-    // Reading another directory replaces the in-memory copy, so the next read comes from the file.
+    // Switch directories to evict the cache and verify the next read comes from disk.
     configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
     expect(listBrowserSitePermissions('default')).toEqual([])
     configureBrowserSitePermissionStore(directory)

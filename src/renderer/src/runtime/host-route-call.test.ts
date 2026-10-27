@@ -21,15 +21,26 @@ beforeEach(() => {
 describe('callHostRoute', () => {
   it('calls the route target with the pairing revision captured before the call', async () => {
     callRuntimeRpc.mockResolvedValue({ ok: true })
+    const signal = new AbortController().signal
 
     await expect(
-      callHostRoute(route, 'folderWorkspace.update', { id: 'f' }, { timeoutMs: 5 })
+      callHostRoute(
+        route,
+        'folderWorkspace.update',
+        { id: 'f' },
+        { timeoutMs: 5, signal, expectedEnvironmentRuntimeId: 'runtime-a' }
+      )
     ).resolves.toEqual({ ok: true })
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       route.target,
       'folderWorkspace.update',
       { id: 'f' },
-      { timeoutMs: 5, expectedEnvironmentPairingRevision: 7 }
+      {
+        timeoutMs: 5,
+        signal,
+        expectedEnvironmentRuntimeId: 'runtime-a',
+        expectedEnvironmentPairingRevision: 7
+      }
     )
   })
 

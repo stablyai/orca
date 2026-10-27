@@ -1,15 +1,6 @@
 import { isTerminalWaitWhitespace } from '../terminal-wait-tail-window'
 
-/**
- * The composer is a bare `>` on the captured 3.7 Flash screens, but agy 1.2.7 paints the active
- * edit mode into that same line (`> Accept-edits mode: file edits auto-approved (shift+tab to
- * cycle)`), so a bare-caret-only rule never establishes readiness on a default 3.8 Flash launch.
- *
- * Why this stays narrow: every menu dialog also prefixes its highlighted row with `> ` —
- * `> Yes, I trust this folder` (trust), `> Gemini 3.8 Flash` (model picker). Matching any
- * `> <text>` would make all of them read as ready, which is the bug the bare-caret rule was
- * guarding against. Only a caret alone, or a caret followed by `<name> mode:`, counts.
- */
+/** agy 1.2.7 adds edit mode to the caret row; accept it without admitting >-prefixed menu choices. */
 function isComposerLine(value: string): boolean {
   return value === '>' || /^>\s+[a-z][a-z-]*\s+mode:\s/i.test(value)
 }
@@ -37,11 +28,7 @@ function isModelRow(line: string): boolean {
   return true
 }
 
-/**
- * The named text anchor `antigravity-text-composer`: the idle composer in the folded text tail.
- * Why code, not rows: Antigravity paints its chrome with cursor addressing, so model/account rows
- * are not stable line anchors, and telling them apart takes this whole-tail scan.
- */
+/** Cursor-addressed chrome makes row anchors unstable, requiring a whole-tail composer scan. */
 export function findAntigravityComposerIndex(normalized: string): number | null {
   const contentStart = normalized.lastIndexOf('antigravity cli')
   if (contentStart === -1) {
@@ -88,8 +75,7 @@ export function findAntigravityComposerIndex(normalized: string): number | null 
   if (composerStart === null) {
     return null
   }
-  // A trailing caret also appears on trust, sign-in, model, and onboarding menus. Those panes
-  // must remain blocked until the menu is gone; only the latest AGY screen can establish readiness.
+  // Menus also retain a caret; only the latest screen can prove readiness.
   if (
     /do you trust|sign in|select a model|collect usage|choose a theme|press enter to continue/.test(
       normalized.slice(contentStart)

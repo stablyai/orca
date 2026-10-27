@@ -1,7 +1,5 @@
 import type { ManagedDataAccountsState } from '../../shared/managed-account-types'
 
-// Why: Claude and Codex managed-account summaries both carry id+email+active id,
-// so one formatter renders either provider's block.
 type AccountsBlock = {
   accounts: readonly { id: string; email: string; needsSignIn?: true }[]
   activeAccountId: string | null
@@ -24,7 +22,6 @@ export function formatDataAccounts(label: string, state: ManagedDataAccountsStat
     .join('\n')}`
 }
 
-/** Renders a provider's managed-account list as a human-readable block, marking the active account. */
 export function formatAccountsBlock(label: string, block: AccountsBlock): string {
   if (block.accounts.length === 0) {
     return `No managed ${label} accounts.`

@@ -17,12 +17,7 @@ export type { AgentSessionOptionsResult } from './agent-session-options-result'
 export * from './agent-session-wire-refusals'
 export * from './agent-session-queued-message-wire'
 export * from './agent-session-turn-completion-wire'
-// ─── Structured agent-session wire contract ─────────────────────────────────
-// The shapes `agentSession.*` accepts and publishes. Phase 2 builds provider
-// adapters and clients against exactly these types, so everything here must be
-// plain JSON. The whole surface is gated by agent-session.structured.v1, which
-// no released baseline advertises; after that capability ships, every new field
-// must remain optional to old readers (docs/reference/remote-wire-compatibility.md).
+// Use plain JSON and optional additions after structured.v1; hosts/clients update independently (docs/reference/remote-wire-compatibility.md).
 
 import type {
   AgentJournalCursor,
@@ -52,10 +47,7 @@ export type AgentSessionTurnActivity = {
   text: string
 }
 
-/** The session's newest turn record over the WHOLE journal. A page windows the timeline and a
- *  turn's record keeps the place it opened at, so a long turn's record falls off the page; this is
- *  what tells a client a turn is running. Present null: the journal records no turn. Absent: an
- *  older host, whose clients still read the loaded rows. */
+/** Newest turn across the whole journal, including off-page long-running turns. null means no turn; older hosts omit it and clients derive from loaded rows. */
 export type AgentSessionLatestTurn = {
   /** The record's journal key, which rows of the turn name as their scope. */
   itemId: string
@@ -66,15 +58,12 @@ export type AgentSessionLatestTurn = {
 
 export const AGENT_SESSION_ID_MAX_LENGTH = 512
 
-/** Backward paging is the client's normal read; 40 matches the page size the
- *  mobile list renders without a visible fill-in. */
+/** Use 40 rows to match mobile's rendered page without visible fill-in. */
 export const AGENT_SESSION_HISTORY_DEFAULT_LIMIT = 40
 export const AGENT_SESSION_HISTORY_MAX_LIMIT = 200
 
 export const AGENT_SESSION_HISTORY_DIRECTIONS = ['tail', 'before', 'after'] as const
-/** `tail` is the newest page, `before` pages backward, `after` catches a live
- *  reader up. Only `after` needs replayable rows; the other two read the
- *  reduced timeline and so survive compaction. */
+/** tail/before read reduced history and survive compaction; after catches up from replayable rows. */
 export type AgentSessionHistoryDirection = (typeof AGENT_SESSION_HISTORY_DIRECTIONS)[number]
 
 export type AgentSessionHistoryRequest = {
@@ -105,11 +94,9 @@ export type AgentSessionHistoryPage = {
   items: AgentJournalRenderItem[]
   /** Populated by `after` reads so a disconnected client can apply tombstones. */
   removedItemIds: string[]
-  /** Submissions overlapping this page, so an unconfirmed bubble renders with
-   *  its dispatch state instead of as a plain message. */
+  /** Include overlapping submissions so uncertain bubbles retain their dispatch state. */
   submissions: AgentJournalSubmission[]
-  /** Page edges. `nextCursor` is what the client sends back for the same
-   *  direction; it equals the request cursor when the page is empty. */
+  /** Return the next same-direction request cursor; keep the request cursor on empty pages. */
   window: {
     oldest: AgentJournalCursor | null
     newest: AgentJournalCursor | null
@@ -124,11 +111,9 @@ export type AgentSessionHistoryPage = {
   /** The host's queued drafts. Absent = no claim (older host); `[]`/null = empty.
    *  Live subscription state stays authoritative over a stale history answer. */
   queuedMessages?: AgentSessionQueuedMessage[] | null
-  /** The queue's pause, published with the list: present whenever `queuedMessages` is, null
-   *  when the queue sends on its own. */
+  /** Publish pause with queuedMessages: null means automatic sending. */
   queuePause?: AgentSessionQueuePause | null
-  /** Rides with `queuedMessages`: the card the queue sends next as soon as nothing runs, null
-   *  while anything holds the queue. Absent from an older host, read as null. */
+  /** With queuedMessages, name the next unblocked send; null while held or absent on older hosts. */
   nextQueuedMessageId?: string | null
   /** Host wall clock (ms epoch) when the page was read, so a client attaching mid-turn
    *  can anchor a live counter on the real start. Absent from older hosts. */
@@ -156,9 +141,7 @@ export type AgentSessionHistoryResult =
       providerSession?: AgentProviderSessionMetadata
     }
 
-/** Cursor-qualified incremental publication. Items and submissions carry their
- *  CURRENT reduced state rather than a delta, so applying a batch twice
- *  converges instead of double-appending. */
+/** Publish cursor-qualified current reduced states, not deltas, so duplicate batches converge. */
 export type AgentSessionJournalBatch = {
   cursor: AgentJournalCursor
   items: AgentJournalRenderItem[]
@@ -187,8 +170,7 @@ export type AgentSessionSubscribeEvent =
       /** Optional so mixed-version cursors retain the ownership fence. */
       fence?: number
       backgroundTasks?: AgentSessionBackgroundTaskState | null
-      /** Whole-list draft publication. On a multi-page catch-up it rides only the
-       *  final page, so a consumed card never vanishes before its bubble arrives. */
+      /** Publish whole card lists only on the final catch-up page so cards do not vanish before their bubbles arrive. */
       queuedMessages?: AgentSessionQueuedMessage[] | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -218,9 +200,7 @@ export type AgentSessionSubscribeEvent =
 
 // ─── Status feed ────────────────────────────────────────────────────────────
 
-/** What a session list needs to know about one session. The host projects it
- *  from the journal so no client has to replay a transcript to learn whether a
- *  turn is running. Additive surface: an older host has no such method. */
+/** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
@@ -243,36 +223,23 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
+  runtimePermission?: { fence: number; mode: string | null } | null
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string
   toolInput?: string
   /** Preview of the newest assistant prose, so a settled row says what the agent said. */
   lastAssistantMessage?: string
-  /** The verdict on the latest request: the provider's, or, when it gave none, what the host
-   *  observed of the turn's end. Present only while `status` is `idle`: a running or
-   *  attention-blocked turn has no verdict yet, and a stale one must not ride along. Absent means
-   *  UNKNOWN, never success. Optional for mixed-version hosts; an older client reads an arm it
-   *  does not know as no verdict. The agent-status row publishes it as `mainAgent.outcome`. */
+  /** Latest request verdict only while idle; never carry it on running/blocked states. Absent or unknown arms mean unknown, never success. Published as mainAgent.outcome in agent status. */
   turnOutcome?: AgentTurnOutcome
-  /** Present only while `status` is 'working' and a person's Stop is still ending that work: while
-   *  the Stop settles, then until the turn it stopped or failed to stop ends. A Stop that settles
-   *  having stopped nothing clears it. Derived by the host, never stored. Absent from older hosts;
-   *  an older client ignores it. */
+  /** Host-derived, unpersisted Stop progress while working until its turn ends; clear a settled no-op Stop. Older hosts omit it and older clients ignore it. */
   stopping?: true
-  /** Live provider-owned background tasks, so session lists can render
-   *  subagent children without holding a journal reader open. Optional for
-   *  mixed-version hosts. Derived from `children` on hosts that publish it. */
+  /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
-  /** The host's running child records for this session, as views: live ones, and a finished one
-   *  whose own work still runs (it reads monitoring); finished children ride the background-task
-   *  channel only. Absent from older hosts; decode with `decodeAgentChildWorkViews`. Usage is
-   *  omitted, and an evidence clock that only ticked does not republish: per-tick freshness rides
-   *  the background-task channel. */
+  /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
   children?: AgentChildWorkView[]
   providerSession?: AgentProviderSessionMetadata
-  /** The record's saved conversation name; absent while unnamed and from older hosts. Rides this
-   *  feed because a retained summary outlives the chat's tab, so a closed chat keeps its name. */
+  /** Retain the saved conversation name beyond tab closure; absent while unnamed or on older hosts. */
   conversationName?: string
   /** Why the host could not name this chat, kept in memory only while the chat still has the
    *  name the failed run would have replaced. Absent from older hosts; older clients ignore it. */
@@ -284,29 +251,33 @@ export type AgentSessionStatusSummary = {
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string
   updatedAt: number
-  /** When the session's own agent entered `status`, dated by its own lifecycle edges and never by
-   *  row activity: `updatedAt` also moves for a subagent's rows. Absent from older hosts, and when
-   *  the journal records no such edge; readers then keep dating the state themselves. */
+  /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number
 }
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = { message: string; failedAt: number }
 
-/** A summary outlives its provider child: an evicted idle session is still idle, so the host
- *  keeps the last projection and never retracts one. Tabs, not this feed, decide what is listed. */
+export type AgentSessionConversationName = {
+  sessionId: string
+  conversationName: string | null
+  namingError?: AgentSessionNamingError
+}
+
+/** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
 export type AgentSessionStatusEvent =
-  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[]; namingActiveSessionIds?: string[] }
+  | {
+      type: 'snapshot'
+      sessions: AgentSessionStatusSummary[]
+      namingActiveSessionIds?: string[]
+      conversationNames?: AgentSessionConversationName[]
+    }
   | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
 
 // ─── Mutation envelope ──────────────────────────────────────────────────────
 
-/**
- * The four fields every mutating call carries. Same operation id and same
- * fingerprint replays the recorded outcome; a different fingerprint under one
- * operation id is a conflict, never a second effect.
- */
+/** Same operation ID/fingerprint replays; changed fingerprints conflict instead of repeating effects. */
 export type AgentSessionMutationEnvelope = {
   sessionId: string
   clientOperationId: string
@@ -335,16 +306,13 @@ export type AgentSessionAttachResult = {
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage
-  /** Submissions a crash boundary left `unknown` that provider history could not decide. */
+  /** Submissions a crash boundary left `unknown`. No client reads it; kept for older peers. */
   unconfirmedClientMessageIds: string[]
   /** The host-owned id of the tab showing this chat, when it has one. Absent from older hosts. */
   tabId?: string
 }
 
-/** The host queued the send as a draft instead of submitting it. Only clients
- *  that sent `delivery: 'queue-if-active'` — gated on
- *  `agent-session.queued-messages.v1` — ever receive this arm; `state` other
- *  than `waiting` appears only on replays of an already-settled draft. */
+/** Only queue-if-active callers with queued-messages.v1 receive this draft arm; non-waiting states occur only on settled-draft replays. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number
@@ -355,9 +323,7 @@ export type AgentSessionSendResult =
   | { clientMessageId: string; submission: AgentJournalSubmission }
   | { clientMessageId: string; queued: AgentSessionQueuedSendReceipt }
 
-/** The submission arm's payload; undefined for a queued answer. For callers that
- *  never send `delivery` the queued arm cannot arrive, and `undefined` reads as
- *  delivery-unknown rather than as an error. */
+/** Undefined for queued replies; callers never sending delivery cannot receive that arm and read undefined as delivery-unknown. */
 export function agentSessionSendSubmission(
   result: AgentSessionSendResult | undefined
 ): AgentJournalSubmission | undefined {
@@ -402,9 +368,7 @@ export type AgentSessionModelOption = {
   supportsFastMode?: boolean
   /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */
   supportsAutoMode?: boolean
-  /** Service tiers the provider lists for this model besides its standard one, each valued by the
-   *  provider's own tier id. Absent means unknown; a client that reads it offers one speed choice
-   *  (`default` for standard) in place of the Fast toggle. */
+  /** Provider tier IDs beyond standard; capable clients replace Fast with one speed choice including default. Absence means unknown. */
   serviceTiers?: AgentSessionOptionChoice[]
 }
 
@@ -416,12 +380,7 @@ export type AgentSessionFastModeSupport = {
   reason?: string
 }
 
-/**
- * The host's model catalog for an agent, answered from its own store and
- * never through a session's queue. `unknown` means this host has no listing
- * for the key yet — the client keeps its static seed. Additive read-only
- * surface: an older host simply lacks the method.
- */
+/** Read the host catalog store outside session queues. unknown keeps the static seed; older hosts lack this additive read method. */
 export type AgentSessionModelCatalogResult = {
   /** The host is running the listing this answer is waiting on (its first for the account, or
    *  the probe re-checking `unavailable`); a `waitForListing` read answers when it lands. Absent
@@ -450,9 +409,7 @@ export type AgentSessionModelCatalogResult = {
     }
 )
 
-/** One entry of the `/` menu the running provider reports for itself. `skill`
- *  marks a name the session loaded as a skill rather than a built-in command;
- *  commands the provider reserves for a terminal UI are already removed. */
+/** Provider slash menu excludes terminal-only commands; skill names came from loaded skills rather than built-ins. */
 export type AgentSessionSlashCommand = {
   name: string
   kind: 'command' | 'skill'
@@ -466,7 +423,5 @@ export type AgentSessionSlashCommand = {
   path?: string
 }
 
-/** The provider's own command surface, read per session. Additive read-only
- *  surface: a host that predates it answers `method_not_found`, and the client
- *  keeps rendering its curated catalog. */
+/** Per-session provider commands; older hosts return method_not_found and clients retain their curated catalog. */
 export type AgentSessionCommandsResult = { commands?: AgentSessionSlashCommand[] }

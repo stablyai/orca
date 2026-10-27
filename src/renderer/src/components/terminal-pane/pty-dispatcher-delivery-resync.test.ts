@@ -1,6 +1,4 @@
-// Why: pins the renderer half of the delivery-resync protocol — the singleton
-// dispatcher must answer main's probe with the cumulative processed totals
-// that back its ACKs, and must drop a PTY's total once it exits.
+// Resync reports cumulative processed totals backing ACKs and drops exited IDs so main can reconcile delivery debt.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('pty dispatcher delivery resync', () => {

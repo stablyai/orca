@@ -20,6 +20,7 @@ import {
   recordPtySurfaceClaim,
   SURFACE_CLAIM_WITHOUT_STANDING
 } from '../../pty-recorded-surface-topology'
+import { followExportedPaneKeys } from './exported-pane-key-follow'
 
 export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceRepoScanRefresh {
   /** Switch-on, a pane main owns is no proof its terminal runs: its record decides (L80). */
@@ -47,6 +48,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
 
   protected abstract invalidatePtyIncarnationHandle(ptyId: string): void
 
+  /** Date changed inventory titles once so reconciliation cannot masquerade as new shell evidence. */
   protected recordPtyWorktree(
     ptyId: string,
     worktreeId: string,
@@ -58,6 +60,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         | 'preview'
         | 'tabId'
         | 'paneKey'
+        | 'spawnPaneKey'
         | 'surfaceRecordedAtGraphSequence'
         | 'title'
         | 'connectionId'
@@ -100,19 +103,18 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
           : {
               tabId: state.tabId ?? null,
               paneKey: state.paneKey ?? null,
-              // A PTY the runtime is meeting for the first time has no prior observation for a
-              // graph statement to contradict, and the leaf map cannot answer for a pane no
-              // statement has ever named — a headless workspace has no renderer graph at all.
-              // The next statement decides it.
+              // Graph silence cannot contradict a never-observed claim, especially headless; the next statement decides.
               surfaceRecordedAtGraphSequence: Math.max(
                 this.graphSequence,
                 state.surfaceRecordedAtGraphSequence ?? this.graphSequence
               )
             }),
+        ...(state.spawnPaneKey ? { spawnPaneKey: state.spawnPaneKey } : {}),
         launchConfig: null,
         launchToken: null,
         launchIncarnationId: null,
         launchAgent: null,
+        launchCommandAgent: null,
         agentSessionOwners: (state.agentSessionOwners ?? []).map(cloneAgentSessionOwnerBinding),
         foregroundAgent: null,
         connected: state.connected ?? true,
@@ -131,6 +133,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         controllerTitle: null,
         title: state.title ?? null,
         titleUpdatedAt: titleObservedAt,
+        titleObservedAtEpochMs: titleObservedAt !== null ? Date.now() : null,
         lastOutputAt: state.lastOutputAt ?? null,
         tailBuffer: [],
         tailTranscriptBuffer: [],
@@ -150,10 +153,10 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       if (wslDistro) {
         this.wslDistroByPtyId.set(ptyId, wslDistro)
       } else if (connectionId !== null) {
-        // Why: restored SSH IDs can collide with stale local parser state; connection ownership must win before their first output is parsed.
+        // Restored SSH ids can collide with local parser state; establish connection ownership before parsing bytes.
         this.wslDistroByPtyId.delete(ptyId)
       }
-      // Why: restored/controller-discovered PTYs learn their worktree here without registerPty(), so URL enrichment must bind at this source.
+      // Restored/discovered PTYs bypass registerPty, so bind URL enrichment here.
       advertisedUrlWatcher.bindPty(ptyId, worktreeId)
       if (prior !== null) {
         noteMainPaneRecordChange(this, prior, pty)
@@ -169,8 +172,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     ) {
       pty.agentSessionOwners = []
     }
-    // Switch point: a new process under a reused id has not exited, so an exit wait cannot settle
-    // on the old process's code.
+    // A reused id's new process must not settle exit waits with the old process's code.
     if (
       ORCA_LAYOUT_OWNER_IS_MAIN &&
       state.incarnationId &&
@@ -182,6 +184,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     if (state.incarnationId !== undefined) {
       if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
         this.invalidatePtyIncarnationHandle(ptyId)
+        this.retirePredecessorPtyExitEvidence(pty)
       }
       pty.incarnationId = state.incarnationId
     }
@@ -213,13 +216,15 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       pty.tabId = state.tabId
     }
     if (state.paneKey !== undefined) {
-      // A caller that does not say where the pane came from does not get graph standing for it:
-      // the unsafe default is what let a persisted replay un-drop a pane (#18191).
+      // Persisted replay cannot gain graph standing and resurrect a dropped pane (#18191).
       recordPtySurfaceClaim(
         pty,
         state.paneKey,
         state.surfaceRecordedAtGraphSequence ?? SURFACE_CLAIM_WITHOUT_STANDING
       )
+    }
+    if (state.spawnPaneKey !== undefined) {
+      pty.spawnPaneKey = state.spawnPaneKey
     }
     if (state.connected !== undefined) {
       pty.connected = state.connected
@@ -231,18 +236,29 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     if (state.preview !== undefined && state.preview.length > 0) {
       pty.preview = state.preview
     }
-    if (state.title !== undefined && state.title !== null && state.title.length > 0) {
+    if (
+      state.title !== undefined &&
+      state.title !== null &&
+      state.title.length > 0 &&
+      state.title !== pty.title
+    ) {
       const observedAt = this.nextTitleObservationSequence()
       pty.title = state.title
       pty.titleUpdatedAt = observedAt
+      pty.titleObservedAtEpochMs = Date.now()
       this.setPtyManagementTitleFromObservedTitle(pty, state.title, observedAt)
     }
-    // Why: recordPtyWorktree is the common lifecycle point for every path that resolves a PTY's worktree (renderer restore, controller list).
+    // Bind URL enrichment at the common worktree-resolution point, including restore and controller discovery.
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
     if (prior !== null) {
       noteMainPaneRecordChange(this, prior, pty)
     }
     return pty
+  }
+
+  /** Moves agent status keyed by a re-homed terminal's exported pane key to the pane it is in. */
+  protected followExportedPaneKeys(): void {
+    followExportedPaneKeys(this.ptysById.values(), (pty) => this.paneOfPty(pty).paneKey)
   }
 
   protected makeRuntimePaneKey(
@@ -262,7 +278,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     if (!inferredWorktreeId) {
       return null
     }
-    // Why: daemon-backed PTY session IDs are prefixed with the worktree ID so mobile summaries survive renderer graph gaps and reloads.
+    // Worktree-prefixed daemon ids preserve mobile summaries across graph gaps/reloads.
     return this.recordPtyWorktree(ptyId, inferredWorktreeId)
   }
 }

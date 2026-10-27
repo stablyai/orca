@@ -37,7 +37,7 @@ const WT = 'repo1::/path/wt1'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `tab-1:${LEAF}`
 
-// The audit's case: one repo id + path published by both an SSH host and a managed runtime.
+// Same repo ID/path on both SSH and managed-runtime hosts exercises owner-qualified sleep.
 function seedTwin(store: ReturnType<typeof createTestStore>, ptyIds: string[]): void {
   seedStore(store, {
     worktreesByRepo: {

@@ -14,9 +14,7 @@ const missing = required.filter((key) => {
 })
 
 if (missing.length > 0) {
-  // Why: local developers still need ad-hoc builds for validation, but the
-  // production release path must fail fast instead of silently shipping an
-  // unsigned, unnotarized app that only looked successful in CI logs.
+  // Allow local ad-hoc validation but fail production release before unsigned/unnotarized package can appear successful.
   console.error('Missing required macOS release signing environment variables:')
   for (const key of missing) {
     console.error(`- ${key}`)

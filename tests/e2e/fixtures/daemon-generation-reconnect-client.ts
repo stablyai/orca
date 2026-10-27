@@ -143,8 +143,7 @@ function createRuntimeClosePath(
 }> {
   const pendingShutdowns: Promise<void>[] = []
   const surfaces = config.sessions.map((session, index) => {
-    // Why: app relaunch must target the same persisted mirror incarnation, not
-    // accidentally mint a different tab identity that weakens the repetition proof.
+    // Reuse mirror incarnation ids across relaunch so minting new tabs cannot weaken the repeated-close proof.
     const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
     return { session, leafId, mobileTabId: `${PARENT_TAB_ID}::${leafId}` }
   })
@@ -159,7 +158,7 @@ function createRuntimeClosePath(
       pendingShutdowns.push(shutdown)
       return true
     },
-    listProcesses: (options) => router.listProcesses(options),
+    listProcesses: (_hostId, options) => router.listProcesses(options),
     hasPty: (ptyId) => router.hasPty(ptyId),
     getForegroundProcess: (ptyId) => router.getForegroundProcess(ptyId)
   })
@@ -270,6 +269,9 @@ async function main(): Promise<void> {
         router.dispose()
       }
       router = await connectThroughDesktopDiscovery(config, burst)
+    }
+    if (!router) {
+      throw new Error('Reconnect fixture needs at least one reconnect burst')
     }
     await connectParallelRuntimeClients(config)
     const { dispatcher, targets, pendingShutdowns } = await createRuntimeClosePath(config, router)

@@ -66,8 +66,6 @@ export class CodexResetCreditLedger {
     return this.attemptsByKey.get(idempotencyKey)
   }
 
-  /** The attempt a request answers as: its own key's, its offer's claimant, or the account's
-   *  unresolved one, in that order. */
   findAttemptFor(
     idempotencyKey: string,
     scopeKey: string,
@@ -124,7 +122,7 @@ export class CodexResetCreditLedger {
     if (attempt?.state !== 'providerPending') {
       throw new Error('Codex reset-credit attempt state is inconsistent.')
     }
-    // Why: a durable providerPending attempt can only be resolved with its original key.
+    // Resolve unknown provider outcomes with the original key to avoid another spend.
     return { idempotencyKey, expectedScope: attempt.expectedScope }
   }
 
@@ -179,9 +177,7 @@ export class CodexResetCreditLedger {
     }
   }
 
-  // Why: a removed account's managed home is gone, so its unresolved providerPending
-  // attempt can never validate or be replayed; drop it so a target-scoped default reset
-  // is not wedged forever by hasPendingResetForTarget matching the orphan.
+  // Removed accounts cannot validate retries; discard orphan attempts so they cannot block target resets.
   discardForRemovedAccount(accountId: string): Promise<void> {
     return this.serializeMutation(() => this.discardAccountAttempts(accountId))
   }
@@ -200,8 +196,7 @@ export class CodexResetCreditLedger {
       )
       if (attempts.length !== this.durableLedger.attempts.length) {
         const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
-        // Persist first so a failed durability barrier leaves the in-memory
-        // fail-closed guards aligned with the ledger that will reload.
+        // Persist first so failed flushes leave memory guards aligned with the ledger reloaded on restart.
         await this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
         this.durableLedger = structuredClone(nextLedger)
       }

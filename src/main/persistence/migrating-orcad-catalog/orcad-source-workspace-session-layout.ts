@@ -27,10 +27,7 @@ export function collectOwnedTerminalTabIds(
   }
   return tabIds
 }
-/**
- * Relay PTY handles never move: the terminal gate proves their terminals exited before any move
- * commits, so the destination gets the tabs and layouts without them and starts fresh shells.
- */
+/** The terminal gate proves exit; move layouts without relay handles so destination shells start fresh. */
 export function dropOrcadMigrationTerminalBindings(fragment: WorkspaceSessionState): void {
   for (const tabs of Object.values(fragment.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
@@ -43,7 +40,7 @@ export function dropOrcadMigrationTerminalBindings(fragment: WorkspaceSessionSta
   delete fragment.remoteSessionIdsByTabId
   delete fragment.terminalPtyIncarnationsByPaneKey
   delete fragment.activeWorktreeIdsOnShutdown
-  // A folder's topology fence guarded its relay PTYs only; the manifest carries repo fences alone.
+  // Folder fences guarded relay PTYs; only repo fences migrate.
   for (const key of Object.keys(fragment.terminalTopologyRevisionByRepoId ?? {})) {
     if (parseWorkspaceKey(key)?.type === 'folder') {
       delete fragment.terminalTopologyRevisionByRepoId?.[key]

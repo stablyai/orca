@@ -4,7 +4,7 @@ import {
   compareJiraProjectsByDisplayLabel,
   getJiraProjectSelectionKey
 } from './task-page-jira-project-selection'
-import type { JiraProject } from '../../../shared/jira-types'
+import type { JiraProject } from '../../../shared/jira/jira-types'
 
 function project(overrides: Partial<JiraProject> = {}): JiraProject {
   return { id: '1', key: 'AA', name: 'Alpha', ...overrides }
@@ -20,8 +20,6 @@ describe('getJiraProjectSelectionKey', () => {
   })
 
   it('treats an empty siteId as a real site id', () => {
-    // characterization: current behavior — `??` only replaces null/undefined, so an
-    // empty siteId produces a leading-colon key.
     expect(getJiraProjectSelectionKey(project({ id: '10', siteId: '' }))).toBe(':10')
   })
 })

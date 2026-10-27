@@ -4,16 +4,13 @@ import type { WorktreeCatalogVersion } from '../shared/worktree/catalog-version'
 const generationByRepoId = new Map<string, number>()
 let generationSequence = 0
 let mutationRevision = 0
-// Why per process: generations restart with the process, so a client ordering catalog
-// publications across a host restart must see the restart as a new catalog, not an older one.
+// A new epoch lets clients distinguish a host restart from older catalog publications.
 const LOCAL_WORKTREE_CATALOG_EPOCH = randomUUID()
 
-/** The catalog version a scan that began at `generation` describes. */
 export function localWorktreeCatalogVersionAt(generation: number): WorktreeCatalogVersion {
   return { epoch: LOCAL_WORKTREE_CATALOG_EPOCH, sequence: generation }
 }
 
-/** The repo's current catalog version: what a mutation reply issued now describes. */
 export function getLocalWorktreeCatalogVersion(repoId: string): WorktreeCatalogVersion {
   return localWorktreeCatalogVersionAt(getLocalWorktreeScanGeneration(repoId))
 }
@@ -42,17 +39,7 @@ export function retireLocalWorktreeScanGeneration(repoId: string): void {
   forgetLocalWorktreeScanGeneration(repoId)
 }
 
-/**
- * Advances on every event above that can change what a worktree scan would find — repo add,
- * removal, update, and scan-cache invalidation — and on nothing else. A cache that must not answer
- * for repos it never saw compares this in O(1) instead of walking the repo list.
- *
- * Why not `generationSequence`: that also advances when `getLocalWorktreeScanGeneration` mints a key
- * for a repo id nothing has scanned yet, which is a read. Keying a snapshot on it would let a read
- * path discard a snapshot that is still perfectly valid.
- *
- * Ordering-only: the value means nothing outside a same-process comparison.
- */
+/** Same-process mutation counter; unlike generationSequence, reads cannot advance it. */
 export function getWorktreeScanMutationRevision(): number {
   return mutationRevision
 }

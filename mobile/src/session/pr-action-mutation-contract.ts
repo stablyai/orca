@@ -19,6 +19,10 @@ export type PrActionMutations = {
     state: 'open' | 'closed'
     prRepo?: GitHubPrRepoSlug | null
   }) => Promise<GitHubPrMutationOutcome>
+  markReadyForReview: (args: {
+    prNumber: number
+    prRepo?: GitHubPrRepoSlug | null
+  }) => Promise<GitHubPrMutationOutcome>
   requestReviewers: (args: {
     prNumber: number
     reviewers: string[]

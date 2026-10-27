@@ -1,8 +1,4 @@
-/**
- * The probe script runs on someone else's machine and decides whether a relay holds work,
- * so the shell itself is the part worth testing for real. These cases run the
- * generated scripts through /bin/sh against real unix sockets and real processes.
- */
+/** Run generated probes through real /bin/sh, sockets and processes because host cleanup depends on their evidence. */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,7 +33,7 @@ net.createServer(() => {}).listen(sock, () => process.stdout.write('READY\\n'))
 process.on('SIGTERM', () => process.exit(0))
 `
 
-// Self-limiting: these outlive a SIGKILLed relay under test.
+// Self-limit children that can outlive a SIGKILLed relay.
 const IDLE_SERVICE_SOURCE = 'setTimeout(() => {}, 60000)\n'
 
 function sh(script: string): Promise<string> {
@@ -120,8 +116,7 @@ afterAll(() => {
 })
 
 it('runs the holder-enumeration assertions on this machine', () => {
-  // Why asserted rather than assumed: the cases below degrade to verdict-only checks without
-  // lsof, and a silently degraded suite would stop covering the reap gate entirely.
+  // Require lsof so these cases exercise the reap gate rather than silently degrading to verdict checks.
   expect(hasLsof).toBe(true)
 })
 

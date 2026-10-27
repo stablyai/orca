@@ -1,5 +1,4 @@
-// Every agent the host registers for native chat starts as a native-chat worker, the same as a
-// chat opened any other way; an agent with no native chat still starts in a terminal.
+// Registered native-chat agents must start structured workers; agents without chat support retain terminal mode.
 
 import { describe, expect, it } from 'vitest'
 import { decideAgentLaunchMode } from '../../../agent-launch/agent-launch-mode'
@@ -51,6 +50,29 @@ describe('a worker for a registered native-chat agent', () => {
     expect(await resolveWorkerStartModeOnHost(host, mode, 'wt-1', 'opencode')).toMatchObject({
       mode: 'terminal',
       reason: 'structured_unsupported_on_host'
+    })
+  })
+
+  it('starts a terminal worker when the chat program Orca installs is missing here', async () => {
+    const mode = decideWorkerStartMode({
+      params: { agent: 'antigravity' },
+      settings: STRUCTURED_PREFERENCE
+    })
+    // A desktop chat tab can offer the install; a worker cannot, so only it asks for an installed one.
+    const host = {
+      getStructuredAgentSessionCreateSupport: async (
+        _worktree: string,
+        _agent: string,
+        options?: { requireInstalledChatProgram?: boolean }
+      ) =>
+        options?.requireInstalledChatProgram
+          ? { supported: false, reason: 'chat-program' as const }
+          : { supported: true }
+    }
+    expect(await resolveWorkerStartModeOnHost(host, mode, 'wt-1', 'antigravity')).toMatchObject({
+      mode: 'terminal',
+      preferred: 'structured',
+      reason: 'chat_runtime_not_installed'
     })
   })
 

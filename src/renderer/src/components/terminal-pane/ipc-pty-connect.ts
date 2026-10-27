@@ -1,3 +1,4 @@
+import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
@@ -80,9 +81,7 @@ export async function connectIpcPty(
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
-    // Why read it before the request and not after: a redeployed SSH relay renumbers from pty-1, so
-    // this spawn can be handed an id a dead PTY used to own. State dated at or below this fence was
-    // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
+    // Fence before spawning: redeployed relays recycle IDs, so earlier buffered state belongs to a previous PTY lifetime.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
@@ -112,13 +111,10 @@ export async function connectIpcPty(
       }
     }
 
-    // Why unconditional: this runs on identity, not timing. Whatever we attached to — fresh,
-    // reattach or cold restore — an exit naming a different incarnation of the id is not ours, so
-    // it is safe to drop even for the reattach the fence below deliberately leaves alone.
+    // Drop foreign-incarnation exits for fresh and restored sessions alike; identity proves they cannot belong to this attachment.
     discardPreHandlerPtyExitFromForeignIncarnation(spawnResult.id, spawnResult.incarnationId)
     if (!admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore) {
-      // Why only a fresh spawn: a reattach deliberately re-owns an id that already existed, so its
-      // buffered exit is the real thing. A fresh spawn's PTY did not exist yet.
+      // Only fresh spawns discard pre-request state; reattach deliberately re-owns a pre-existing ID and needs its real buffered exit.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
     context.bind(spawnResult.id)
@@ -137,7 +133,17 @@ export async function connectIpcPty(
       if (!context.isExpectedExitCurrent()) {
         return
       }
-      return { id: spawnResult.id, exitedBeforeAttach: true }
+      return {
+        ...terminalLaunchFacts(spawnResult),
+        id: spawnResult.id,
+        exitedBeforeAttach: true,
+        // Why kept: a shell that replaced a resume and then exited never resumed the agent, and a
+        // refused plan must still not be registered or consume the saved session.
+        ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {}),
+        ...(spawnResult.agentResumeRefused
+          ? { agentResumeRefused: spawnResult.agentResumeRefused }
+          : {})
+      }
     }
     if (context.isDestroyed()) {
       return
@@ -185,14 +191,7 @@ function handleConnectError(
     return undefined
   }
   if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {
-    // Why not `sessionExpired`: this string is minted by `toRelaySshPtyId`/`toAppSshPtyId` from a
-    // pure client-side id comparison, before any relay is contacted — it reports that the id is not
-    // addressable through THIS connection, never that its process died. Respawning here cold-restores
-    // the agent, and after an SSH target re-adoption the "other" connection is the same machine, so
-    // that puts a second `claude --resume` on the transcript the surviving PTY still owns
-    // (docs/reference/ssh-execution-boundary.md — an unaddressable id is `unverifiable`, not `exited`).
-    // Returning undefined without an error keeps #7661's no-red-toast outcome while routing the pane
-    // to the remount-and-reattach recovery instead of a fresh shell.
+    // An unaddressable cross-connection ID is unverifiable, not expired; reattach recovery avoids cold-resuming a second agent onto a live transcript (docs/reference/ssh-execution-boundary.md).
     return undefined
   }
   if (connectionId && message.includes('No PTY provider for connection')) {

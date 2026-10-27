@@ -216,8 +216,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       .getState()
       .fetchWorkItemsNextPage([{ repoId: 'caller-repo-id', path: '/server/repo' }], 24, 100, '', 34)
 
-    // The window 422 travels on the envelope error channel, not failedCount —
-    // resolveEmptyPageOutcome keys on this exact string (#11485).
+    // Window 422 uses envelope error string, not failedCount; resolveEmptyPageOutcome depends on it (#11485).
     expect(result).toEqual({ items: [], failedCount: 0, errorTypes: ['validation_error'] })
   })
 
@@ -274,8 +273,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       .getState()
       .fetchWorkItemsNextPage([{ repoId: 'caller-repo-id', path: '/server/repo' }], 24, 100, '', 2)
 
-    // A swallowed PR-side failure must not read as end-of-data (#11485), and a
-    // PR-side validation error must never join the issue-only window signal.
+    // PR failures are not end-of-data and PR validation must not join issue-only window errors (#11485).
     expect(result).toEqual({ items: [], failedCount: 0, errorTypes: ['unknown'] })
   })
 
@@ -356,15 +354,13 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       30
     )
 
-    // 1170 results → 39 naive pages, but the Search API 422s once a page
-    // starts past its 1000-result window; ceil(1000 / 30) = 34 stay reachable.
+    // 1170 results imply 39 pages, but 1000-result search window permits only ceil(1000/30)=34.
     expect(result).toEqual({ totalCount: 1171, totalPages: 34 })
   })
 
   it('pins the search-window cap at dividing and non-dividing per-repo limits', async () => {
     const store = createTestStore()
-    // 36 is the shipped single-repo limit: page 28 starts at result 973 and is
-    // served; page 29 starts past 1000 and 422s.
+    // Shipped limit 36: page 28 starts at 973 and succeeds; page 29 starts past 1000 and 422s.
     mockApi.gh.countWorkItems.mockResolvedValueOnce(2000)
     await expect(
       store

@@ -32,6 +32,16 @@ export function hasUnknownStructuredChat(
   )
 }
 
+/** Any chat not explicitly slept, unknown included, so the dot agrees with the sleeping-workspace check. */
+export function hasAwakeStructuredChat(
+  tabs: readonly Tab[] | undefined,
+  sleptAtByPaneKey: StructuredChatSleptAtByPaneKey = {}
+): boolean {
+  return (tabs ?? []).some(
+    (tab) => isStructuredTab(tab) && !isStructuredChatSlept(sleptAtByPaneKey, tab)
+  )
+}
+
 export const createStructuredChatSleptAtSlice: StateCreator<
   AppState,
   [],

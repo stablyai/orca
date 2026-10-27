@@ -1,11 +1,16 @@
 import type { AgentType } from './agent-status-types'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
-  isAgentChatPermissionMode,
-  newChatPermissionModeForSettings
+  isAgentChatPermissionChoice,
+  newChatPermissionModeForSettings,
+  type NewChatPermissionSettings
 } from './agent-chat-permission-mode'
 import type { GlobalSettings } from './global-settings-types'
-import { sessionOptionValueIsValid } from './agent-session-option-catalog'
+import {
+  findCatalogModel,
+  getAgentSessionOptionCatalog,
+  sessionOptionValueIsValid
+} from './agent-session-option-catalog'
 import type {
   NativeChatSessionOptionSettingsMutation,
   PersistedNativeChatSessionOptions,
@@ -21,8 +26,7 @@ export function resolveNativeChatSessionOptionDefaults(
   agent: AgentType
 ): Record<string, SessionOptionValue> | undefined {
   const entry = persisted?.[agent]
-  // Why: untouched settings must preserve the agent CLI's configured defaults;
-  // only a model explicitly selected by the user authorizes launch flags.
+  // Preserve CLI-configured defaults until the user explicitly selects a model that authorizes launch flags.
   const modelId = typeof entry?.model === 'string' && entry.model.trim() ? entry.model : undefined
   if (!modelId) {
     return undefined
@@ -54,13 +58,8 @@ export const STRUCTURED_LAUNCH_OPTION_IDS = [
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID
 ] as const
 
-/** Any chosen option set narrowed to what a structured create may seed: the seedable ids only,
- *  each encoded as a bounded string. An empty result is `undefined` rather than `{}` — an empty map fails
- *  the durable record's bounded-string guard, and `agent_session_options_invalid` is not a wire
- *  refusal code, so the throw strands the launch with no fallback.
- *
- *  Shared with orchestration, whose `--model`/`--effort` seed a worker's session the same way a
- *  saved selection seeds the user's own chat. */
+/** Share bounded-string seed narrowing with orchestration --model/--effort. Empty results must be undefined:
+ * an empty durable map throws agent_session_options_invalid outside wire refusals and strands launch fallback. */
 export function narrowStructuredLaunchSeedOptions(
   values: Readonly<Record<string, unknown>> | null | undefined
 ): Record<string, string> | undefined {
@@ -101,7 +100,7 @@ export function parseStructuredLaunchSeedOptions(
     }
   }
   const permissionMode = entries.get(AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
-  if (isAgentChatPermissionMode(permissionMode)) {
+  if (isAgentChatPermissionChoice(permissionMode)) {
     parsed[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] = permissionMode
   }
   return Object.keys(parsed).length > 0 ? parsed : undefined
@@ -118,10 +117,8 @@ export function resolveStructuredLaunchSeedOptions(
 /** A new chat's seed: the saved selection plus the permission default narrowed to the agent. */
 export function structuredLaunchSeedOptions(
   settings:
-    | Pick<
-        GlobalSettings,
-        'nativeChatSessionOptions' | 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'
-      >
+    | (Pick<GlobalSettings, 'nativeChatSessionOptions' | 'nativeChatPermissionMode'> &
+        NewChatPermissionSettings)
     | null
     | undefined,
   agent: AgentType
@@ -133,9 +130,7 @@ export function structuredLaunchSeedOptions(
     : selection
 }
 
-/** Fold a settled batch of picks onto the durable record. A surface that must send the
- *  whole object back — rather than merging key by key — applies them in one pass so a
- *  later pick in the batch cannot drop an earlier one. */
+/** Apply settled picks in one pass for surfaces replacing the whole record, so later picks cannot drop earlier ones. */
 export function applyNativeChatSessionOptionPicks(args: {
   persisted: PersistedNativeChatSessionOptions | null | undefined
   agent: AgentType
@@ -168,9 +163,7 @@ export function applyNativeChatSessionOptionSettingsMutation(
   return clearNativeChatSessionOptionModel(persisted, mutation.agent)
 }
 
-/** Why: an authoritative probe proved this id gone, and a stale `model` is emitted
- *  verbatim as a launch flag — grok exits fatally on an unknown one. Dropping only
- *  `model` keeps the per-model option values for a later reselect. */
+/** Clear ids proven retired: stale launch flags pass through verbatim and Grok exits fatally. Retain model-scoped options for reselect. */
 export function clearNativeChatSessionOptionModel(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   agent: AgentType
@@ -189,10 +182,8 @@ export function updateNativeChatSessionOptionDefaults(args: {
   modelId: string
   optionId: string
   value: SessionOptionValue
-  /** Defaults to adopting, since without a `model` no launch resolves the value at all.
-   *  Only the picker surface, which can tell a probe-confirmed id from the seed's guess
-   *  at the CLI default, withholds it: adopting a guess would emit `-m <guess>` on every
-   *  later launch, fatal on an account without that model. */
+  /** Adopt by default or no launch can use the option. Picker withholds unconfirmed CLI-default guesses:
+   * adopting one would emit -m on later launches and can fail on accounts lacking that model. */
   adoptModelAsLaunchDefault?: boolean
 }): PersistedNativeChatSessionOptions {
   const currentAgent = args.persisted?.[args.agent]
@@ -215,4 +206,54 @@ export function updateNativeChatSessionOptionDefaults(args: {
       valuesByModel
     }
   }
+}
+
+/** A different model drops the prior model’s options, keeping the chat’s permission choice. Without
+ *  a requested `model` the result only overlays the shown selection. */
+export function structuredLaunchRequestedOptions(selection: {
+  explicit?: Readonly<Record<string, string>>
+  held: Readonly<Record<string, string>>
+  seed?: Readonly<Record<string, string>>
+}): Readonly<Record<string, string>> | undefined {
+  const { explicit, held, seed } = selection
+  if (!explicit) {
+    return undefined
+  }
+  const changed = held.model !== undefined && held.model !== explicit.model
+  const permissionMode =
+    explicit[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ?? seed?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
+  return {
+    ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {}),
+    ...(changed ? {} : explicit),
+    ...held
+  }
+}
+
+/** A create without model replacement overlays the remembered effort onto a named Claude/Codex
+ *  model; the catalog default approximates omission there. */
+export function structuredLaunchCompatibleOptions(
+  agent: AgentType,
+  requested: Readonly<Record<string, string>>
+): Readonly<Record<string, string>> {
+  if (
+    (agent !== 'claude' && agent !== 'codex') ||
+    !requested.model ||
+    requested.effort !== undefined
+  ) {
+    return requested
+  }
+  const catalog = getAgentSessionOptionCatalog(agent)
+  const options =
+    catalog && (findCatalogModel(catalog, requested.model)?.options ?? catalog.unknownModelOptions)
+  const effort = options?.find((option) => option.id === 'effort')
+  return effort?.kind.type === 'select' && effort.kind.defaultValue
+    ? { ...requested, effort: effort.kind.defaultValue }
+    : requested
+}
+
+export function seededPermissionMode(
+  options: Readonly<Record<string, string>> | undefined
+): Record<string, string> {
+  const mode = options?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
+  return mode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: mode } : {}
 }

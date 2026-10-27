@@ -1,5 +1,4 @@
-// Why: the pty IPC suites force darwin and rewrite a dozen agent-home env vars per test;
-// this scope captures the real values once and puts them back afterwards.
+// Split suites rewrite platform and agent-home environment; capture and restore the host values.
 export function createPtyIpcProcessEnvScope() {
   const savedOpenCodeConfigDir = process.env.OPENCODE_CONFIG_DIR
   const savedOrcaOpenCodeConfigDir = process.env.ORCA_OPENCODE_CONFIG_DIR
@@ -20,12 +19,12 @@ export function createPtyIpcProcessEnvScope() {
   const savedOrcaUserDataPath = process.env.ORCA_USER_DATA_PATH
 
   function applyTestEnvDefaults() {
-    // Why: most PTY spawn tests assert POSIX shell behavior; Windows cases opt into win32 explicitly below.
+    // POSIX is the default fixture; Windows cases explicitly opt in.
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'darwin'
     })
-    // Why: forced darwin makes the TCC login(1) wrapper rewrite every asserted argv; its own test below re-enables it.
+    // Disable the TCC argv wrapper except in its dedicated tests.
     process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
     delete process.env.OPENCODE_CONFIG_DIR
     delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR

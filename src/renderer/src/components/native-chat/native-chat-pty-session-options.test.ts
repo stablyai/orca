@@ -126,7 +126,6 @@ describe('native chat PTY session options', () => {
       modelId: 'opus',
       optionId: 'effort',
       value: 'high',
-      // Claude tracks a real model here, so this stays a persistable selection.
       adoptModelAsLaunchDefault: true
     })
   })
@@ -239,7 +238,6 @@ describe('native chat PTY session options', () => {
     expect(dispatch).not.toHaveBeenCalled()
     const result = await surface.invokeAction('fastMode')
     expect(dispatch).toHaveBeenCalledWith('/fast')
-    // Why: a flip-only command never reports an absolute value.
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
       valueSource: 'unknown',
       action: { type: 'toggle-command' }
@@ -285,8 +283,7 @@ describe('native chat PTY session options', () => {
 
     await surface.setOption('fastMode', false)
     dispatch.mockClear()
-    // Why: a second same-target set would re-send `/fast` and invert the agent
-    // if the first flip landed — unlike set-to-value commands, flips cannot retry.
+    // Retrying flip-only commands can invert an already applied value.
     const result = await surface.setOption('fastMode', false)
     expect(dispatch).not.toHaveBeenCalled()
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
@@ -337,7 +334,7 @@ describe('native chat PTY session options', () => {
 
     const result = await surface.setOption('fastMode', false)
     expect(dispatch).toHaveBeenCalledWith('/fast')
-    // Why: flip-only never heals; applied is best-known absolute, not dispatched.
+    // Flip-only dispatch cannot prove absolute state; preserve the last applied value.
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
       valueSource: 'applied',
       kind: { type: 'boolean', currentValue: false }
@@ -370,9 +367,8 @@ describe('native chat PTY session options', () => {
 
     const first = surface.setOption('fastMode', false)
     const second = surface.setOption('effort', 'low')
-    // Why: appliers queue on microtasks — wait for the first dispatch to start.
+    // Wait for the microtask-queued applier to dispatch before testing serialization.
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
-    // Second stays queued until first finishes.
     expect(dispatch).not.toHaveBeenCalledWith('/effort low')
     releaseFirst?.()
     await first
@@ -399,7 +395,6 @@ describe('native chat PTY session options', () => {
       dispatchCommand: dispatch
     })!
 
-    // Typed `/fast` clears any prior tracking; option stays unknown.
     surface.recordOutgoingCommand('/fast')
     expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
       valueSource: 'unknown',
@@ -436,7 +431,7 @@ describe('native chat PTY session options', () => {
 
     const pending = surface.setOption('fastMode', false)
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalled())
-    // Why: typed `/fast` during await must win — do not write the picker value after.
+    // A typed flip during dispatch must supersede the picker’s value.
     surface.recordOutgoingCommand('/fast')
     resolveDispatch?.()
     await pending
@@ -474,8 +469,7 @@ describe('native chat PTY session options', () => {
     expect(surface.getSnapshot().find(({ id }) => id === 'model')).toMatchObject({
       kind: { currentValue: 'sonnet' }
     })
-    // Why: only opus carries fastMode in the catalog. The aborted flip must not
-    // pollute the destination model bucket, and must not rewrite the source.
+    // An aborted flip must preserve both source and destination model buckets.
     const cached = readNativeChatSessionOptionCache('pty-1')
     expect(cached?.valuesByModel.sonnet?.fastMode).toBeUndefined()
     expect(cached?.valuesByModel.opus?.fastMode).toMatchObject({
@@ -507,13 +501,12 @@ describe('native chat PTY session options', () => {
 
     const pending = surface.setOption('effort', 'xhigh')
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalled())
-    // Why: a model switch during await must win — do not write effort after.
+    // A model switch during dispatch must supersede the pending effort write.
     surface.recordOutgoingCommand('/model sonnet')
     resolveDispatch?.()
     await pending
 
-    // Why: the aborted effort commit must not land under the destination model
-    // nor persist there, and must leave the source model untouched.
+    // Aborted effort writes must preserve both model buckets and persisted defaults.
     const cached = readNativeChatSessionOptionCache('pty-1')
     expect(cached?.valuesByModel.sonnet?.effort).toBeUndefined()
     expect(cached?.valuesByModel.opus?.effort).toMatchObject({
@@ -619,7 +612,6 @@ describe('native chat PTY session options', () => {
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
-      // Why: current CLIs list `opus[1m]` and no plain `opus`.
       initialModels: [
         { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
         { id: 'sonnet', label: 'Sonnet', options: [] }
@@ -701,8 +693,7 @@ describe('native chat PTY session options', () => {
       kind: { currentValue: 'grok-4.7' }
     })
 
-    // Regression: the effort row hangs off that default model, so resolving the apply
-    // from the tracked model alone threw `Unknown session option: effort` on click.
+    // Resolve effort under the CLI default even when no model is tracked.
     await surface.setOption('effort', 'low')
 
     expect(dispatch).toHaveBeenCalledWith('/effort low')
@@ -713,10 +704,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('does not adopt grok’s unprobed seed default as a persisted launch model', async () => {
-    // Regression: setting an option under the CLI default wrote `model` into settings,
-    // so every later grok launch app-wide emitted `-m grok-4.7` — on an account without
-    // that model, a fatal launch the user never opted into. No discovery has run here,
-    // so `grok-4.7` is still only the seed's guess.
+    // An unprobed seed default must not become a fatal app-wide -m flag after an effort pick.
     let persisted: PersistedNativeChatSessionOptions = {}
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
@@ -738,19 +726,15 @@ describe('native chat PTY session options', () => {
     await surface.setOption('effort', 'low')
 
     expect(persisted.grok?.model).toBeUndefined()
-    // The scoped value is still remembered for a later explicit pick of that model.
     expect(persisted.grok?.valuesByModel?.['grok-4.7']?.effort).toBe('low')
     expect(resolveNativeChatSessionOptionDefaults(persisted, 'grok')).toBeUndefined()
 
-    // A model the user actually picks still becomes the launch default.
     await surface.setOption('model', 'grok-4.5')
     expect(persisted.grok?.model).toBe('grok-4.5')
   })
 
   it('commits an effort grok accepted even when discovery lands mid-dispatch', async () => {
-    // Regression: the staleness guard resolved through the model list, so a probe
-    // settling mid-dispatch moved which row is `isDefault` and looked like a model
-    // switch — discarding a value the agent had already applied.
+    // Discovery changing the default row is not a model switch and must not discard accepted effort.
     let release = (): void => {}
     let markDispatched = (): void => {}
     const dispatched = new Promise<void>((resolve) => {
@@ -787,10 +771,7 @@ describe('native chat PTY session options', () => {
   })
 
   it('files a dispatched effort under the default the probe reported, not the seed guess', async () => {
-    // With nothing tracked the session launched without `-m`, so it is running whatever
-    // grok defaults to — a fact only `grok models` knows. The pre-dispatch id is the
-    // seed's guess; committing under it would file the value against a model that was
-    // never running and blank the pill the user just set.
+    // Without -m the CLI uses its real default; discovery must replace the seed guess before storing effort.
     const persistSelection = vi.fn()
     let release = (): void => {}
     let markDispatched = (): void => {}
@@ -825,18 +806,14 @@ describe('native chat PTY session options', () => {
     expect(persistSelection).toHaveBeenCalledWith(
       expect.objectContaining({ modelId: 'grok-5', optionId: 'effort', value: 'low' })
     )
-    // A tracked model is returned verbatim by the resolver, so this re-resolution can
-    // only ever move an untracked, never-selected id — never one the user picked. The
-    // probe that landed mid-dispatch also confirmed grok-5, so it is safe to adopt.
+    // Re-resolution may move only untracked ids; the probe-confirmed default is safe to adopt.
     expect(persistSelection).toHaveBeenCalledWith(
       expect.objectContaining({ adoptModelAsLaunchDefault: true })
     )
   })
 
   it('carries an effort set under a probe-confirmed default into later launches', async () => {
-    // Regression: the value persisted under the model id while `model` stayed unset, so
-    // resolveNativeChatSessionOptionDefaults bailed and every new grok tab reverted to
-    // the catalog default — the setting silently never survived a relaunch.
+    // Persist the confirmed default too so later launches can resolve its scoped effort value.
     let persisted: PersistedNativeChatSessionOptions = {}
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',

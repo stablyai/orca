@@ -16,12 +16,12 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useActiveRepo } from '@/store/selectors'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { getTaskPageRepoSourceContext } from '@/components/task-page-source-context'
+import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import {
   openComposerForGitHubWorkItem,
   openComposerForGitLabWorkItem
-} from '@/components/work-item-workspace-composer'
+} from '@/components/task-page/work-item-workspace-composer'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { getQuickTasksRepos } from './quick-tasks-repos'

@@ -1,10 +1,6 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 
-// Why: the desktop "Add account" button is disabled when the UI drives a remote
-// runtime (a headless server). These commands run the interactive agent login
-// (`claude login` / `codex login`) in the caller's own terminal on the host and
-// register the captured account with the local runtime, giving headless hosts a
-// way to manage Claude and Codex accounts.
+// Terminal login lets headless hosts manage accounts without the desktop login UI.
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['account', 'add'],

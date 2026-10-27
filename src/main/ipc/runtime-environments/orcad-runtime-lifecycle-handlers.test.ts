@@ -3,8 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
   deploy: vi.fn(),
-  status: vi.fn(),
-  registerProvisioning: vi.fn()
+  status: vi.fn()
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle } }))
@@ -13,9 +12,6 @@ vi.mock('../../managed-server/lifecycle/orcad-runtime-deployment', () => ({
 }))
 vi.mock('../../managed-server/lifecycle/orcad-runtime-status', () => ({
   getManagedOrcadRuntimeStatus: mocks.status
-}))
-vi.mock('./orcad-ssh-provisioning-handlers', () => ({
-  registerOrcadSshProvisioningHandlers: mocks.registerProvisioning
 }))
 
 const { registerOrcadRuntimeLifecycleHandlers } = await import('./orcad-runtime-lifecycle-handlers')
@@ -34,12 +30,11 @@ describe('managed orcad lifecycle IPC', () => {
     registerOrcadRuntimeLifecycleHandlers({ getUserDataPath: () => '/profile' })
   })
 
-  it('registers only deploy, status and provisioning; maintenance and stop are not exposed', () => {
+  it('registers only deploy and status; maintenance and stop are not exposed', () => {
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual([
       'runtimeEnvironments:deployOrcad',
       'runtimeEnvironments:getOrcadStatus'
     ])
-    expect(mocks.registerProvisioning).toHaveBeenCalledOnce()
   })
 
   it('trims deploy input and treats only a literal true as force', async () => {

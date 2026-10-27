@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { checkAgentCliVersion } from './agent-cli-version-probe'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
@@ -19,6 +19,7 @@ function prints(stdout: string, result: Record<string, unknown> = {}): void {
 }
 
 describe('checkAgentCliVersion', () => {
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(() => runProcess.mockReset())
 
   it('asks the program for its version, bounded, where and as the launch would run it', async () => {

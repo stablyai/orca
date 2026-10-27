@@ -67,7 +67,7 @@ export function readCodexHistoryJournalView(
       note(turnId, agentJournalItemPosition(journal.item(itemId) ?? { sequence }))
     }
   })
-  // A send accepted before its turn row landed still names its turn through its provider item.
+  // Accepted submissions can identify turns whose rows have not landed yet.
   for (const submission of journal.submissions()) {
     const promptKey = agentJournalSubmissionKey(submission.clientMessageId)
     nativePromptKeys.add(promptKey)
@@ -120,7 +120,7 @@ function codexTurnIdOfRow(
   if (!turn) {
     return null
   }
-  // A command's turn row carries Orca's own turn id; the provider turn rides beside it.
+  // Command rows use Orca turn IDs; their provider turn ID is stored separately.
   if (body?.kind === 'turn' && body.providerTurnId) {
     return body.providerTurnId
   }

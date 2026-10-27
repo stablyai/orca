@@ -12,8 +12,8 @@ import {
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-} from '../../../shared/remote-runtime-memory-limits'
-import { REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS } from '../../../shared/remote-runtime-request-frames'
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 function publicKeyToBase64(key: Uint8Array): string {
@@ -308,7 +308,6 @@ describe('E2EEChannel', () => {
 
       ctx.channel.handleRawMessage(encrypt('{"id":"rpc-1","method":"status.get"}', sharedKey))
 
-      // The reply (ws.sent[2], after ready + authenticated) should be encrypted
       const replyEncrypted = ctx.ws.sent[2]!
       const replyPlain = decrypt(replyEncrypted, sharedKey)
       expect(replyPlain).toBe('{"id":"rpc-1","ok":true}')
@@ -402,7 +401,6 @@ describe('E2EEChannel', () => {
         ctx.channel.handleRawMessage(encrypt('bad', badKey))
       }
 
-      // Successful decrypt resets the counter
       ctx.channel.handleRawMessage(encrypt('good', sharedKey))
 
       for (let i = 0; i < 4; i++) {
@@ -428,12 +426,7 @@ describe('E2EEChannel', () => {
       expect(received).toEqual([])
     })
 
-    // Why: streaming RPC handlers (terminal.subscribe) retain the
-    // encryptedReply closure created inside handleRawMessage. If destroy()
-    // runs (mobile disconnect) before a late streaming emit, the closure's
-    // captured this.sharedKey is null. Without a guard, encrypt() would
-    // call nacl.box.after with a null key and throw an unhandled
-    // "unexpected type, use Uint8Array" rejection.
+    // Streaming handlers retain this reply closure after disconnect; destroy clears its key, so late emits must not encrypt with null.
     it('does not throw when streaming emit fires after destroy', () => {
       const ctx = setup()
       const sharedKey = doHandshake(ctx)

@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Repro command:
-//   pnpm exec vitest run --config config/vitest.config.ts src/main/git/status-upstream-probe-churn.test.ts -t "missing-upstream polling churn"
-
 const { existsSyncMock, gitExecFileAsyncMock, readFileMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
@@ -11,8 +8,6 @@ const { existsSyncMock, gitExecFileAsyncMock, readFileMock } = vi.hoisted(() => 
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
-  // Why: getStatus streams status output; forward args to the same mock so this
-  // suite's arg-routing implementation still matches the status read.
   gitStreamStdout: async (
     args: string[],
     options: { onStdout: (chunk: string) => boolean | void }
@@ -186,9 +181,7 @@ describe('getStatus missing-upstream polling churn', () => {
     expect(sameNameOriginProbeCalls).toHaveLength(1)
   })
 
-  // The pushed-but-untracked branch shape (issue #7576): the effective
-  // upstream resolves to the same-name origin ref, and before the resolved-name
-  // cache each 3s poll re-ran the whole resolution chain (~5 spawns/tick).
+  // Model a pushed branch with no configured upstream, resolved through same-name origin.
   function mockResolvedSameNameOrigin(revList: { failOnCall?: number } = {}): void {
     let revListCalls = 0
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -231,7 +224,6 @@ describe('getStatus missing-upstream polling churn', () => {
     await getStatus('/repo')
     await getStatus('/repo')
 
-    // Resolution chain ran once; the two later polls paid one rev-list each.
     expect(countCalls((args) => args[0] === 'symbolic-ref')).toBe(1)
     expect(countCalls((args) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))).toBe(1)
     expect(countCalls(isConfigListSnapshotCommand)).toBe(1)
@@ -257,13 +249,11 @@ describe('getStatus missing-upstream polling churn', () => {
   })
 
   it('falls back to a full re-resolve when the cached upstream rev-list fails', async () => {
-    // Second rev-list (the first revalidation attempt) fails, e.g. deleted ref.
     mockResolvedSameNameOrigin({ failOnCall: 2 })
 
     await getStatus('/repo')
     const status = await getStatus('/repo')
 
-    // Full chain ran twice: initial resolve + the fallback after the failure.
     expect(countCalls((args) => args[0] === 'symbolic-ref')).toBe(2)
     // rev-list: initial + failed revalidate + fallback's own rev-list.
     expect(countCalls((args) => args[0] === 'rev-list')).toBe(3)

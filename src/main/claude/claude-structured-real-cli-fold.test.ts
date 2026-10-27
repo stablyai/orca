@@ -1,10 +1,3 @@
-// The fold receipt against the real CLI: a message sent while a turn runs is
-// folded by the CLI into the running turn, and Orca must keep ONE turn row —
-// no interrupted marking, no second bar. Runs only where a signed-in Claude CLI
-// exists, like the rest of the real-CLI suite. Live sessions prove the session
-// from a SessionStart hook frame BEFORE system/init arrives, which is exactly
-// the path the fixture harness cannot fake end to end.
-
 import { randomUUID } from 'node:crypto'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -31,8 +24,7 @@ import { claudeStartupSettled } from './claude-structured-session-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'real-cli-fold'
-// Pins the live proof order (SessionStart hook frame before system/init) and lets the
-// Bash steps run unprompted, whatever the config dir under test configures.
+// Force SessionStart-before-init ordering and avoid prompts during the fold window.
 const FOLD_SESSION_SETTINGS = JSON.stringify({
   hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'echo' }] }] },
   permissions: { allow: ['Bash(sleep:*)'] }
@@ -110,7 +102,6 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
           events: sink
         })
         await claudeStartupSettled(adapter, SESSION_ID)
-        // Startup landed on the initialize answer, with no turn and so no init yet.
         expect(
           events.some(
             (event) =>
@@ -139,8 +130,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
           })
         ).resolves.toMatchObject({ state: 'admitted' })
 
-        // Wait for A's replay to open the turn, then send B mid-turn: the first
-        // `sleep 8` guarantees the CLI is still inside A's request cycle.
+        // The sleep prompt keeps A running while B is sent.
         expect(
           await until(
             () => events.some((event) => event.type === 'message' && event.startsTurn === true),
@@ -168,15 +158,12 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
           )
         expect(await until(() => results().length > 0, 90_000)).toBe(true)
 
-        // The CLI folded: one result names both sends. (If this ever reports a
-        // lone send, the steer raced past the fold window — a miss, not a fold.)
+        // A single send means B missed the fold window.
         const named = results().flatMap((message) =>
           Array.isArray(message.user_message_uuids) ? [message.user_message_uuids] : []
         )
         expect(named[0]).toHaveLength(2)
 
-        // ONE turn for the whole run: never interrupted, and B settled accepted
-        // into it under its own adopted uuid.
         expect(turnRows.every((turn) => turn.state !== 'interrupted')).toBe(true)
         expect([...new Set(turnRows.map((turn) => turn.turnId))]).toHaveLength(1)
         expect(turnRows.at(-1)).toMatchObject({ state: 'completed' })

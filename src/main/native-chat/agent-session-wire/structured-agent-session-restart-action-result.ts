@@ -1,5 +1,3 @@
-// What an explicit restart action reports: every chat it touched, and the rows left after it.
-
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-restart-resume-runner'
@@ -8,7 +6,6 @@ import type {
   StructuredAgentSessionResumeFailure
 } from './structured-agent-session-restart-resume-set'
 
-/** Chats the runner turned away before a continuation started, reported as refused. */
 export function unstartedRestartRefusals(
   resumed: readonly StructuredAgentSessionResumeOutcome[],
   continued: readonly StructuredAgentSessionContinuationOutcome[]
@@ -28,7 +25,7 @@ export function unstartedRestartRefusals(
   return refused
 }
 
-/** The rows left after an action; a failed refresh leaves them out instead of failing the action. */
+/** Failed row refresh logs and omits rows without failing the completed action. */
 export async function remainingRestartRows(
   list: () => Promise<StructuredAgentSessionResumeCandidate[]>,
   listFailures: () => Promise<StructuredAgentSessionResumeFailure[]>,

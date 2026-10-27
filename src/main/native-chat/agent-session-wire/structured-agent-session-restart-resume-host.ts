@@ -1,6 +1,4 @@
-// Restart offers are durable per-session records. Listing reserves nothing and removes only offers
-// the chat has provably moved past; an explicit action reserves records, and only a completed
-// action removes them — or files what went wrong. Starting the chat's agent again withdraws them.
+// Listing reserves nothing; actions reserve offers and settle them as completed or failed.
 
 import { randomUUID } from 'node:crypto'
 import { createRestartResumeProgress } from './structured-agent-session-restart-resume-progress'
@@ -67,7 +65,7 @@ export function createStructuredAgentSessionRestartResume(
 
   const witnesses = createStructuredAgentSessionRestartWitnesses({
     sessions,
-    getRecord: deps.store.getRecord,
+    getRecord: deps.store.getConversation,
     childWork: surfaces.readChildWork,
     childWorkOpen: surfaces.childWorkOpen,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
@@ -93,7 +91,7 @@ export function createStructuredAgentSessionRestartResume(
   })
   const failures = createStructuredAgentSessionRestartFailureLedger({
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
-    getRecord: deps.store.getRecord,
+    getRecord: deps.store.getConversation,
     retryable: (marker) => derive([marker], 'may-be-held').candidates.length === 1,
     savedByNewerOrca: newerOrca.has,
     reveal: (markers) => revealMarkers(markers),
@@ -120,8 +118,7 @@ export function createStructuredAgentSessionRestartResume(
   ): Promise<StructuredAgentSessionResumeCandidate[]> => {
     const markers = await readMarkers()
     await revealMarkers(markers)
-    // A live chat remains an offer. The user may have opened it to inspect the context and still
-    // explicitly choose whether Orca should ask the agent to continue.
+    // Inspection alone must not withdraw the offer.
     const { candidates, superseded } = derive(markers, 'may-be-held')
     retireSuperseded(superseded)
     return restartRowsFor(candidates, audience)
@@ -140,8 +137,7 @@ export function createStructuredAgentSessionRestartResume(
     stillResumable: (marker) => deriveAtSend([marker], 'may-be-held').candidates.length === 1
   }
 
-  /** One explicit action: reserve the offers, then continue each through `continueOne`, as many at
-   *  once as the admission's host-wide start limit allows. A chat is done once `continueOne` returns. */
+  /** Reserve then continue under the shared host-wide startup limit. */
   const run = async (
     sessionIds: readonly string[] | undefined,
     owner: string,
@@ -149,15 +145,13 @@ export function createStructuredAgentSessionRestartResume(
     continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>,
     progress: ReturnType<typeof createRestartResumeProgress>
   ) => {
-    // An explicit action supersedes teardown witnesses captured by this host. The durable mutation
-    // lane below also drains a publication already in flight before completion.
+    // Supersede captured witnesses; the mutation lane drains any publication already in flight.
     witnesses.clear(audience)
     const markers = await readActionMarkers(sessionIds)
     await revealMarkers(markers)
     const requested = new Set(sessionIds ?? markers.map((marker) => marker.sessionId))
     const derived = derive(markers, 'may-be-held')
     retireSuperseded(derived.superseded)
-    // Only what the caller was shown is reserved; a named offer it cannot see is not.
     const eligible = restartRowsFor(derived.candidates, audience).filter((candidate) =>
       requested.has(candidate.sessionId)
     )
@@ -167,7 +161,7 @@ export function createStructuredAgentSessionRestartResume(
     }
     const operationId = randomUUID()
     const actionAt = surfaces.now()
-    // Tagged with its offer, so a rejected one is told apart for as long as the offer lasts.
+    // Keep offer identity beyond ledger expiry to distinguish rejected continuations.
     const continuationFor = (marker: AgentSessionResumeMarker) =>
       restartContinuationId(marker, operationId, actionAt)
     const reserved =
@@ -232,8 +226,7 @@ export function createStructuredAgentSessionRestartResume(
     try {
       const continued: StructuredAgentSessionContinuationOutcome[] = []
       const verdicts: Promise<void>[] = []
-      // A chat holds its slot until its agent took the continuation or its start failed, so a batch
-      // never starts more agents at once than the runner allows; the provider's answer comes after.
+      // Hold startup slots through handover/start failure, awaiting provider answers separately.
       const action = await run(
         sessionIds,
         owner,
@@ -250,7 +243,7 @@ export function createStructuredAgentSessionRestartResume(
             progress.verdict(started.done)
             const { outcome, reason, refusal } = started.done
             if (outcome === 'refused') {
-              // Thrown as a refusal so the filed failure keeps its details beside the code.
+              // Preserve refusal details beside the filed code.
               throw refusal
                 ? new AgentSessionRefusalError(
                     agentSessionRefusalFromReference(refusal, refusal.code)
@@ -307,9 +300,8 @@ export function createStructuredAgentSessionRestartResume(
     recordMarkers: witnesses.record,
     list,
     listFailures,
-    // Do not let a teardown witness already captured in this host republish after explicit
-    // dismissal. A later capture is a new interruption and may create a fresh offer normally.
-    // "Dismiss all" keeps what this host does not list, so it reveals every record's chat first.
+    // Block old witnesses after dismissal; later captures are fresh interruptions.
+    // Reveal before dismiss-all so newer/unlisted chats remain preserved.
     dismiss: (sessionIds, audience) =>
       failures.dismiss(
         sessionIds,

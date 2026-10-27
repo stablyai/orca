@@ -15,8 +15,7 @@ describe('useMobileNativeChatTurnDisclosure with a turn journal', () => {
     renderer = null
   })
 
-  /** A journal of `entries` in order, each naming the turn it belongs to (null for none). With
-   *  `statesScope` false the rows carry no scope, as an older host writes them. */
+  // Allow missing scopes to exercise legacy-host journal ordering.
   function journalOf(
     entries: readonly [itemId: string, body: AgentJournalItemBody, turnItemId: string | null][],
     statesScope: boolean
@@ -96,7 +95,6 @@ describe('useMobileNativeChatTurnDisclosure with a turn journal', () => {
           disclosure.resolveRow(index, message)
         )
         expect(rowA.turnStatus).toEqual({ startedAt: 5_000, thinking: false, workedSeconds: null })
-        // The steered bubble shares A's turn but never carries a bar of its own.
         expect(rowB.turnStatus).toBeNull()
         expect(rowT1.activeTurnIsWorking).toBe(true)
         expect(rowT2.activeTurnIsWorking).toBe(true)
@@ -165,7 +163,6 @@ describe('useMobileNativeChatTurnDisclosure with a turn journal', () => {
           timestamp: null,
           source: 'transcript'
         })
-        // A wake turn runs; B is sent during it and folded in, so B opened nothing.
         const messages = [row('w1'), userMessage('B'), row('w2')]
         const journal = (state: 'running' | 'completed') =>
           journalOf(
@@ -188,7 +185,6 @@ describe('useMobileNativeChatTurnDisclosure with a turn journal', () => {
             })
           )
         })
-        // The wake turn settles: the host no longer names a running turn.
         vi.setSystemTime(20_000)
         act(() => {
           renderer!.update(
@@ -214,8 +210,7 @@ describe('useMobileNativeChatTurnDisclosure with a turn journal', () => {
     }
   )
 
-  // Claude runs A; B is sent mid-turn and Claude answers it after A. The journal writes B when it
-  // is sent, so A's remaining tool run and its answer follow B there, and B's turn opens after them.
+  // Journal B’s send while A still works, then open B after A’s remaining tools/answer so membership cannot follow message order alone.
   it.each(hosts)(
     "draws A's remaining rows under A's bar, then B's bubble and turn, on a host that %s",
     (_host, statesScope) => {
@@ -242,7 +237,6 @@ describe('useMobileNativeChatTurnDisclosure with a turn journal', () => {
             ['A', said('user'), null],
             ['tA', record('tA', 'completed', 'A'), null],
             ['a-tool-1', said('assistant'), 'tA'],
-            // Handed over while A runs, so the host scopes it to A's turn until its own opens.
             ['B', said('user'), 'tA'],
             ['a-tool-2', said('assistant'), 'tA'],
             ['FIRST DONE', said('assistant'), 'tA'],

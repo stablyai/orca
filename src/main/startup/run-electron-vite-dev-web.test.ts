@@ -96,8 +96,7 @@ function stashWebBuild(): () => void {
     }
   }
 
-  // Why: Windows temp can be on a different drive from the workspace, and
-  // renameSync cannot move directories across devices.
+  // Stash beside output: Windows temp may be on another drive, where rename cannot move directories.
   const tempDir = mkdtempSync(join(dirname(outWebPath), '.orca-dev-web-stash-'))
   const stashedPath = join(tempDir, 'web')
   renameSync(outWebPath, stashedPath)
@@ -156,6 +155,7 @@ describe('run-electron-vite-dev web client prepare', () => {
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_VITE_CLI: fakeVitePath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
+          ORCA_DEV_USER_DATA_PATH: join(tempDir, 'user-data'),
           ORCA_SKIP_DEV_STORAGE_RECLAIM: '1',
           ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
           ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
@@ -208,6 +208,7 @@ describe('run-electron-vite-dev web client prepare', () => {
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_VITE_CLI: fakeVitePath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
+          ORCA_DEV_USER_DATA_PATH: join(tempDir, 'user-data'),
           ORCA_SKIP_DEV_STORAGE_RECLAIM: '1',
           ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
           ORCA_DEV_WEB_PREPARE: '1',
@@ -229,6 +230,8 @@ describe('run-electron-vite-dev web client prepare', () => {
         }
       })
 
+      // The pairing build runs beside electron-vite instead of before it.
+      await waitFor(() => existsSync(viteFile))
       expect(readFileSync(viteFile, 'utf8')).toContain('build')
 
       const trackedPids = trackPidFile(pidFile)

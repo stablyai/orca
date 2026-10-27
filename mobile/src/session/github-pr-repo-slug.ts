@@ -1,10 +1,7 @@
 import type { RpcMethodName, RpcSendParams } from '../transport/rpc-params-contract'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
 
-// Why: a fork PR's head lives in a different owner/repo; the host's SlugRepo
-// (`{ owner, repo }`) identifies it. Only a subset of github.* methods accept it.
-// Why: `host` must survive the RPC boundary or GHES actions on the host fall
-// back to a same-named github.com repo (src/shared/types.ts identity contract).
+// Preserve fork owner/repo and GHES host across RPC or actions may target a same-named github.com repository.
 export type GitHubPrRepoSlug = { owner: string; repo: string; host?: string }
 
 export function githubPrRepoSlugParam(slug: GitHubPrRepoSlug): {
@@ -15,8 +12,7 @@ export function githubPrRepoSlugParam(slug: GitHubPrRepoSlug): {
   return { owner: slug.owner, repo: slug.repo, ...(slug.host ? { host: slug.host } : {}) }
 }
 
-// Why: `prRepo` remains method-asymmetric. Keep the RPC schema allow-list here
-// so fork/GHES identity reaches every PR-scoped read or mutation that accepts it.
+// Forward prRepo only for methods whose schemas declare it.
 const METHODS_ACCEPTING_PR_REPO = new Set<string>([
   'github.prChecks',
   'github.prCheckDetails',
@@ -24,6 +20,7 @@ const METHODS_ACCEPTING_PR_REPO = new Set<string>([
   'github.resolveReviewThread',
   'github.setPRFileViewed',
   'github.updatePRState',
+  'github.markPRReadyForReview',
   'github.requestPRReviewers',
   'github.removePRReviewers',
   'github.mergePR',
@@ -36,8 +33,7 @@ const METHODS_ACCEPTING_PR_REPO = new Set<string>([
   'github.addPRReviewCommentReply'
 ])
 
-// Why: only github.prChecks declares a `headSha` param (PullRequestCheckDetails
-// does not), so headSha is forwarded just to that read. Check runs are commit-keyed.
+// Only prChecks declares headSha; check runs belong to a commit.
 const METHODS_ACCEPTING_HEAD_SHA = new Set<string>(['github.prChecks'])
 
 type GitHubPrParamOptions = {
@@ -64,11 +60,7 @@ export function buildGithubPrParams(
   return built
 }
 
-/**
- * The same record, presented as one method's send params — the single seam where the PR surface's
- * record-shaped builder meets the typed operations. The builder is method-generic and returns a
- * record, so it cannot be typed per method; one assertion here rather than one per wrapper.
- */
+// Keep the generic record-to-method assertion at this single boundary.
 export function githubPrRequestParams<Method extends RpcMethodName>(
   method: Method,
   worktreeId: string,

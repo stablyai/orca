@@ -11,8 +11,7 @@ import {
 } from './database.js'
 import { HeapWindowReaper } from './heap-window-reaper.js'
 
-// Released reservations were never deleted: 13.7M rows and 9 GB in production, every one of them
-// still locked by each placement of its host. These pin what the prune may take and how it walks.
+// Unpruned released rows reached 13.7M/9GB and were locked on every host placement.
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 const schema = 'relay_released_reservation_prune_test'
@@ -106,7 +105,7 @@ describe.each(dialects)('released reservation prune (%s)', (_dialect, open) => {
 
 describePostgres('heap window reaper against PostgreSQL', () => {
   let database: RelayDatabase
-  // 200 rows of this shape fill about two pages; 6,000 spread the table over ~60 pages.
+  // 6,000 rows span ~60 pages; 200 would exercise only ~2.
   const ROWS = 6_000
 
   afterEach(async () => {
@@ -219,16 +218,35 @@ describePostgres('heap window reaper against PostgreSQL', () => {
     const client = new pg.Client({ connectionString: scopedUrl() })
     await client.connect()
     try {
-      const plan = await client.query(
-        `EXPLAIN DELETE FROM relay_control_connection_reservations WHERE ctid = ANY(ARRAY(
-           SELECT ctid FROM relay_control_connection_reservations
-           WHERE ctid >= CAST($1 AS tid) AND ctid < CAST($2 AS tid) AND ${PREDICATE.replace('?', '$3')}
-           FOR UPDATE SKIP LOCKED))`,
-        ['(0,0)', '(16,0)', NOW]
+      const plans: string[] = []
+      const query = database.query.bind(database)
+      const observed: RelayDatabase = {
+        dialect: database.dialect,
+        query: async (sql, params) => {
+          if (sql.trimStart().startsWith('DELETE')) {
+            let parameter = 0
+            const plan = await client.query(
+              `EXPLAIN ${sql.replace(/\?/g, () => `$${++parameter}`)}`,
+              params
+            )
+            plans.push(plan.rows.map((row) => String(row['QUERY PLAN'])).join('\n'))
+          }
+          return await query(sql, params)
+        },
+        queryLocked: database.queryLocked.bind(database),
+        transaction: database.transaction.bind(database),
+        close: database.close.bind(database)
+      }
+      const reaper = new HeapWindowReaper(
+        'relay_control_connection_reservations',
+        PREDICATE,
+        { pagesPerStatement: 16, maxPagesPerTick: 16, maxRowsPerTick: ROWS, budgetMs: 60_000 },
+        () => 0
       )
-      const text = plan.rows.map((row) => String(row['QUERY PLAN'])).join('\n')
-      expect(text).toContain('Tid Range Scan')
-      expect(text).not.toContain('Seq Scan')
+      expect(await reaper.reap(observed, [NOW])).toBeGreaterThan(0)
+      expect(plans).toHaveLength(1)
+      expect(plans[0]).toContain('Tid Range Scan')
+      expect(plans[0]).not.toContain('Seq Scan')
     } finally {
       await client.end()
     }

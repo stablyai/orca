@@ -2,8 +2,7 @@ import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 
 export const AGENT_MODEL_CATALOG_PICKER_WAIT_MS = 30_000
 
-/** Pickers following a fingerprint's listing work: each settles once a catalog lands, all work
- *  ends, or its fixed deadline expires. */
+/** Follow a fingerprint until success, exhaustion or a fixed deadline. */
 export class AgentModelCatalogListingWaiters {
   private readonly waiters = new Map<string, Set<() => void>>()
 

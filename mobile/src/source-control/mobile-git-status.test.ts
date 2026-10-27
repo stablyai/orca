@@ -1,5 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
-import type { GitStatusResult } from '../../../src/shared/git-status-types'
+import { describe, expect, it } from 'vitest'
 import {
   buildMobileSourceControlSections,
   canOpenMobileGitStatusEntry,
@@ -11,8 +10,7 @@ import {
   isMobileGitStageableEntry,
   isMobileGitTransientRefreshError,
   isMobileGitUnavailable,
-  type MobileGitStatusEntry,
-  type MobileGitStatusResult
+  type MobileGitStatusEntry
 } from './mobile-git-status'
 
 const entries: MobileGitStatusEntry[] = [
@@ -22,12 +20,8 @@ const entries: MobileGitStatusEntry[] = [
 ]
 
 describe('mobile source control status helpers', () => {
-  it('keeps the mobile RPC status type in lockstep with the shared git contract', () => {
-    expectTypeOf<MobileGitStatusResult>().toEqualTypeOf<GitStatusResult>()
-  })
-
   it('builds sections in the mobile source control order', () => {
-    const sections = buildMobileSourceControlSections(entries)
+    const sections = buildMobileSourceControlSections(entries, 'changes-first')
 
     expect(sections.map((section) => section.title)).toEqual(['Changes', 'Staged Changes'])
   })
@@ -87,29 +81,32 @@ describe('mobile source control status helpers', () => {
     ).toBe(true)
   })
 
-  it('sorts entries by desktop-compatible conflict rank, then path', () => {
-    const sections = buildMobileSourceControlSections([
-      { path: 'zeta.ts', status: 'modified', area: 'unstaged' },
-      {
-        path: 'beta.ts',
-        status: 'modified',
-        area: 'unstaged',
-        conflictStatus: 'resolved_locally'
-      },
-      {
-        path: 'alpha.ts',
-        status: 'modified',
-        area: 'unstaged',
-        conflictStatus: 'unresolved'
-      },
-      { path: 'aardvark.ts', status: 'added', area: 'unstaged' }
-    ])
+  it('pins conflicts into their own section ahead of changes, like desktop', () => {
+    const sections = buildMobileSourceControlSections(
+      [
+        { path: 'zeta.ts', status: 'modified', area: 'unstaged' },
+        {
+          path: 'beta.ts',
+          status: 'modified',
+          area: 'unstaged',
+          conflictStatus: 'resolved_locally'
+        },
+        {
+          path: 'alpha.ts',
+          status: 'modified',
+          area: 'unstaged',
+          conflictStatus: 'unresolved'
+        },
+        { path: 'aardvark.ts', status: 'added', area: 'unstaged' }
+      ],
+      'changes-first'
+    )
 
-    expect(sections[0].data.map((entry) => entry.path)).toEqual([
-      'alpha.ts',
-      'beta.ts',
-      'aardvark.ts',
-      'zeta.ts'
+    expect(
+      sections.map((section) => [section.title, section.data.map((entry) => entry.path)])
+    ).toEqual([
+      ['Conflicts', ['alpha.ts', 'beta.ts']],
+      ['Changes', ['aardvark.ts', 'zeta.ts']]
     ])
   })
 

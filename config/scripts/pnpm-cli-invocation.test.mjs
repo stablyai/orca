@@ -37,6 +37,20 @@ describe('resolvePnpmCliInvocation', () => {
     })
   })
 
+  it.each([
+    ['/usr/share/nodejs/npm/bin/npx-cli.js', 'linux', 'pnpm', false],
+    ['/usr/local/lib/node_modules/npm/bin/npm-cli.js', 'darwin', 'pnpm', false],
+    ['/Users/dev/.volta/tools/image/npm/10.8.0/bin/npm-cli.js', 'darwin', 'pnpm', false],
+    ['C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npx-cli.js', 'win32', 'pnpm.cmd', true]
+  ])(
+    'ignores the npm CLI %s that `npx` or `npm run` exports',
+    (npmExecPath, platform, command, shell) => {
+      expect(
+        resolvePnpmCliInvocation({ npmExecPath, nodeExecPath, platform, pnpmHome: '' })
+      ).toEqual({ command, prefixArgs: [], shell })
+    }
+  )
+
   it('does not wrap a Windows native pnpm.exe in node', () => {
     expect(
       resolvePnpmCliInvocation({
@@ -87,8 +101,7 @@ describe('resolvePnpmCliInvocation', () => {
     }
   })
 
-  // Why: `npmExecPath: undefined` would hit the destructuring default and read the ambient
-  // npm_execpath, so an explicit empty string is the only env-independent way to force this branch.
+  // Pass empty npmExecPath to force branch independently of env; undefined activates the destructuring default.
   it('falls back to PATH pnpm when npm_execpath is empty', () => {
     expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'darwin' })).toEqual(
       { command: 'pnpm', prefixArgs: [], shell: false }

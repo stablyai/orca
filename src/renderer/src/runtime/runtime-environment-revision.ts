@@ -28,8 +28,7 @@ export function replaceRuntimeEnvironmentRevisions(
   for (const id of retired) {
     continuedRevisionsByEnvironmentId.delete(id)
   }
-  // Why first: an old machine's transports must be fenced while the old revision still stands,
-  // so nothing they retry can be authenticated with the replacement's credentials.
+  // Fence old transports before publishing replacement credentials so retries cannot authenticate to another machine.
   if (retired.size > 0) {
     for (const listener of retirementListeners) {
       listener([...retired])

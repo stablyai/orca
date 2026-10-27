@@ -1,0 +1,59 @@
+name: WSL orcad E2E frozen-runner retry
+
+# ~3% of hosted Windows runners freeze during WSL2 setup (no step timeout, no logs); rerun such a job once.
+on:
+  workflow_run:
+    workflows: [WSL orcad E2E]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  retry:
+    # The name match also admits same-named fork workflows; the path pins ours.
+    if: >-
+      github.event.workflow_run.path == '.github/workflows/wsl-orcad-e2e.yml' &&
+      github.event.workflow_run.run_attempt == 1 && github.event.workflow_run.conclusion != 'success'
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      checks: read
+    steps:
+      - name: Rerun a WSL2 job reaped at its time cap
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run
+            const { owner, repo } = context.repo
+            // A newer run for the same branch and repository supersedes this one; fork branch names collide.
+            const recent = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: run.workflow_id, branch: run.head_branch, event: run.event, per_page: 20
+            })
+            const latest = recent.data.workflow_runs.find((r) => r.head_repository?.id === run.head_repository?.id)
+            if (latest?.id !== run.id) {
+              core.info('A newer run exists; not retrying')
+              return
+            }
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+              owner, repo, run_id: run.id, attempt_number: 1, per_page: 100
+            })
+            const frozen = []
+            for (const job of jobs.filter((job) => job.name.startsWith('WSL2') && job.conclusion === 'cancelled')) {
+              const annotations = await github.rest.checks.listAnnotations({ owner, repo, check_run_id: job.id })
+              // The frozen worker's only signature: a lost lease reaped at timeout-minutes, not a cancel.
+              if (annotations.data.some((a) => a.message.includes('exceeded the maximum execution time'))) {
+                frozen.push(job)
+              }
+            }
+            if (frozen.length === 0) {
+              core.info('No job was reaped at its time cap; not retrying')
+              return
+            }
+            core.notice(`Rerunning ${run.html_url} after a frozen runner: ${frozen.map((job) => job.name).join(', ')}`)
+            // A single-job rerun starts the run, so several frozen jobs go through the failed-jobs rerun.
+            if (frozen.length === 1) {
+              await github.rest.actions.reRunJobForWorkflowRun({ owner, repo, job_id: frozen[0].id })
+            } else {
+              await github.rest.actions.reRunWorkflowFailedJobs({ owner, repo, run_id: run.id })
+            }

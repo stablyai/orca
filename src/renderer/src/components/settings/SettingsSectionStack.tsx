@@ -1,11 +1,7 @@
 import type { ReactElement } from 'react'
 import { Separator } from '../ui/separator'
 
-// Why: settings panes rebuild their section list from the search query, so a pane-local
-// `key={index}` re-binds every key when an earlier section drops out. React then tears down
-// and remounts each surviving section, discarding its unsaved drafts and re-issuing its
-// loads once per keystroke. Keying by the section's own element key keeps a section that
-// stays matched mounted for the whole search.
+// Key by section identity, not filtered index, so query edits cannot remount surviving sections and lose drafts or repeat loads.
 export function SettingsSectionStack({
   sections,
   spacing

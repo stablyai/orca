@@ -105,8 +105,7 @@ describe('nativeChat:readSession handler', () => {
       ])
     )
 
-    // Point homedir-derived Claude root at our fixture via HOME so the resolver
-    // (which reads homedir() internally) finds the transcript.
+    // Point homedir-based Claude transcript resolution at the temporary fixture.
     const previousHome = process.env.HOME
     process.env.HOME = root
     try {
@@ -116,6 +115,10 @@ describe('nativeChat:readSession handler', () => {
       }
       expect(result.error).toBeUndefined()
       expect(result.messages).toHaveLength(2)
+      expect(result.messages).toMatchObject([
+        { transcriptOrder: 0 },
+        { transcriptOrder: expect.any(Number) }
+      ])
     } finally {
       if (previousHome === undefined) {
         delete process.env.HOME
@@ -130,8 +133,6 @@ describe('nativeChat:readSession handler', () => {
     tempRoots.push(root)
     const projectDir = join(root, '.claude', 'projects', '-repo')
     await mkdir(projectDir, { recursive: true })
-    // Five user turns; reading with limit 2 returns only the last two, and a
-    // larger limit pages in older ones (chronological order preserved).
     const records = [1, 2, 3, 4, 5].map((n) => ({
       type: 'user',
       uuid: `u-${n}`,
@@ -207,8 +208,7 @@ describe('nativeChat:readSession handler', () => {
         }
       )
 
-      // The listener dispatches handleSubscribe fire-and-forget; give it a beat
-      // to resolve the path and install the watcher before we append.
+      // Wait for fire-and-forget path resolution and watcher setup before appending.
       await new Promise((resolve) => setTimeout(resolve, 100))
 
       await appendFile(
@@ -221,8 +221,7 @@ describe('nativeChat:readSession handler', () => {
         })}\n`
       )
 
-      // The first frame is a bounded snapshot and later frames are appends.
-      // Collect ids across both and assert the new turn shows up.
+      // Collect turn IDs across the initial bounded snapshot and later appends.
       const appendedIds = (): string[] =>
         sent
           .filter((s) => s.channel === 'nativeChat:appended')
@@ -235,7 +234,6 @@ describe('nativeChat:readSession handler', () => {
       expect(payload.subscriptionId).toBe('sub-1')
       expect(appendedIds()).toContain('a-1')
 
-      // Destroyed window tears down the watcher without error.
       expect(sender.listenerCount('destroyed')).toBe(1)
       sender.emit('destroyed')
     } finally {
@@ -248,8 +246,7 @@ describe('nativeChat:readSession handler', () => {
   })
 
   it('settles the view with a pending frame while the transcript is unflushed', async () => {
-    // The user-visible bug: a session that has not been prompted never writes
-    // its JSONL, so with no frame at all the chat view spins indefinitely.
+    // Unprompted sessions lack JSONL; send an empty pending snapshot instead of leaving the view spinning.
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-unflushed-'))
     tempRoots.push(root)
     await mkdir(join(root, '.claude', 'projects', '-repo'), { recursive: true })

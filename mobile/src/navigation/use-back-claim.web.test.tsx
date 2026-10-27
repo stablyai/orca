@@ -1,22 +1,18 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   createPageBackConsumers,
   type PageBackConsumers
 } from '../mobile-web-shell/bridge/page-back-consumers'
 
-/** The document this hook claims into: the real stack, and what it said. */
 type PageBackProbe = {
   claims: boolean[]
   unclaimed: Mock
-  /** Null stands for a tree outside the page's provider, which has no stack at all. */
   consumers: PageBackConsumers | null
 }
 
-// Built in `beforeEach` rather than at `vi.hoisted`, which runs before this file's own imports:
-// the real stack is what the hook is measured against, and a fake answering its edges would be a
-// second copy of the rule.
+// Build the real stack after imports, not inside vi.hoisted, so no fake duplicates the behavior under test.
 const page = vi.hoisted((): PageBackProbe => ({ claims: [], unclaimed: vi.fn(), consumers: null }))
 
 vi.mock('../transport/client-context.web', () => ({
@@ -38,11 +34,14 @@ function Screen({ claim }: { claim: (() => boolean) | null }): null {
   return null
 }
 
+const trees: ReactTestRenderer[] = []
+
 function render(claim: (() => boolean) | null): ReactTestRenderer {
   let tree!: ReactTestRenderer
   act(() => {
     tree = create(createElement(Screen, { claim }))
   })
+  trees.push(tree)
   return tree
 }
 
@@ -55,22 +54,23 @@ beforeEach(() => {
   })
 })
 
-/**
- * The page half of the seam every sheet takes. There is no hardware key inside a WebView:
- * react-native-web answers `BackHandler.addEventListener` with a console warning and an inert
- * subscription, so the page claims the shell's key over the bridge instead.
- */
+afterEach(() => {
+  act(() => {
+    for (const tree of trees.splice(0)) {
+      tree.unmount()
+    }
+  })
+  page.consumers = null
+})
+
+// RN Web BackHandler is inert, so sheets must claim the shell’s key through the bridge.
 describe('a page screen claiming the device Back key from the shell', () => {
   it('claims nothing while the caller has nothing to do with the key', () => {
     render(null)
     expect(page.claims).toEqual([])
   })
 
-  /**
-   * `MountedBottomDrawer` is shared with the native app and renders under no page provider in a
-   * bare mount. Throwing for want of a shell would take the screen down; there is simply no key to
-   * claim, so nothing is claimed.
-   */
+  // Shared drawers can mount without a page provider; no available shell means no claim, never a thrown render.
   it('claims nothing, and does not throw, outside the page bridge', () => {
     page.consumers = null
     expect(() => render(() => true)).not.toThrow()
@@ -99,8 +99,7 @@ describe('a page screen claiming the device Back key from the shell', () => {
     act(() => {
       tree.update(createElement(Screen, { claim: second }))
     })
-    // One edge, so the shell heard one claim: a caller that rebuilds its handler every render must
-    // not post a frame per render.
+    // Fresh handlers must not emit another claim on every render.
     expect(page.claims).toEqual([true])
     stack().press()
     expect(first).not.toHaveBeenCalled()

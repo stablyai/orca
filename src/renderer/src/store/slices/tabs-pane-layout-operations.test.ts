@@ -3,10 +3,8 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -25,8 +23,6 @@ describe('TabsSlice', () => {
   beforeEach(() => {
     store = createTestStore()
   })
-
-  // ─── reorderUnifiedTabs ───────────────────────────────────────────
 
   describe('reorderUnifiedTabs', () => {
     it('updates tabOrder on the group and sortOrder on tabs', () => {

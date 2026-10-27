@@ -10,15 +10,14 @@ import {
   refreshLocalStructuredSessionTabs,
   restoreLocalStructuredSessionTabsOnce
 } from './inventory-refresh'
-import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
+import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { scheduleRetiredEpochRepair } from './retired-epoch-repair'
 import {
   applyStructuredSessionTabSnapshots,
   type StructuredSessionSnapshotApplyOptions
 } from './snapshot-apply'
 
-// The refresh is supplied here rather than imported by the repair lane, so nothing the snapshot
-// apply depends on depends back on it.
+// Inject refresh to avoid a dependency cycle back from snapshot apply through repair.
 const REPAIR_DROPPED_EPOCHS: StructuredSessionSnapshotApplyOptions = {
   onRetiredEpochDrop: (worktreeId, publicationEpoch) =>
     scheduleRetiredEpochRepair(worktreeId, publicationEpoch, (generation) =>
@@ -87,8 +86,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
           return
         }
         if (!response.ok) {
-          // A streaming RPC can terminate with an error response before its
-          // handle resolves; fence that generation and retry the subscription.
+          // Streaming errors can precede handle resolution; fence that generation and retry.
           subscriptionGeneration += 1
           handle?.unsubscribe()
           if (activeHandle === handle) {

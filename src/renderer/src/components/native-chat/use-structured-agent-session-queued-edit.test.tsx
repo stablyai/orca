@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// The inline editor's lifecycle against a scripted host: what it acquires and saves, and that
-// typing is never lost — a card that leaves mid-edit puts dirty text in the chat box, and lease
-// bookkeeping failing never gates typing, Save or Cancel.
+// Exercise real edit lifecycle with a scripted host: preserve dirty text on departure and keep lease failures from blocking typing/Save/Cancel.
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -494,7 +492,6 @@ describe('inline queued editor', () => {
     await act(() => vi.advanceTimersByTimeAsync(0))
     expect(hook.result.current.editor).toBeUndefined()
     expect(holdCalls('release')).toHaveLength(1)
-    // Ended: no more beats.
     await act(() => vi.advanceTimersByTimeAsync(120_000))
     expect(rpc).toHaveBeenCalledTimes(4)
     expect(toast.error).not.toHaveBeenCalled()

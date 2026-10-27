@@ -1,4 +1,3 @@
-/** Generated extensions run on the agent host without access to Orca modules. */
 export function getAgentStatusInputRedactionSourceLines(): string[] {
   return String.raw`
 function statusInputReferencesCredentialPath(value: string): boolean {

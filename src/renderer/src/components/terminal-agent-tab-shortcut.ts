@@ -8,6 +8,8 @@ import {
   resolveDefaultAgentForNewTab,
   resolveDefaultAgentForWorktreeNewTab
 } from '@/lib/agent-tab-shortcuts'
+import { chosenAgentChatUnlearned } from '@/lib/host-chat-program'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 
 export type TerminalAgentTabShortcut = {
   actionId: KeybindingActionId | null
@@ -28,13 +30,16 @@ export function resolveTerminalAgentTabShortcut({
   const state = useAppStore.getState()
   const preferences = readAgentLaunchPreferencesForWorktree(state, activeWorktreeId)
   if (matchShortcut('tab.newAgent')) {
+    const detectedAgentIds = readDetectedAgentsForWorktree(state, activeWorktreeId)
+    const chosen = preferences.defaultTuiAgent
     const agent = resolveDefaultAgentForNewTab({
       ...preferences,
-      detectedAgentIds: readDetectedAgentsForWorktree(state, activeWorktreeId)
+      detectedAgentIds,
+      chatIn: { store: state, worktreeId: activeWorktreeId }
     })
-    // Why: the cached list is empty until the host's probe lands (e.g. a paired server's
-    // workspace right after it opens); ask that host instead of reporting no agent.
-    return agent
+    const workspace = worktreeLaunchWorkspace(activeWorktreeId)
+    // Probe the workspace host when cache is cold or the chat-only default is unlearned.
+    return agent && !chosenAgentChatUnlearned(state, chosen, detectedAgentIds, workspace)
       ? { actionId: 'tab.newAgent', agent }
       : {
           actionId: 'tab.newAgent',

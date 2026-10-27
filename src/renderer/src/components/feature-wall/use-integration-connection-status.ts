@@ -15,9 +15,6 @@ export function useTaskProviderConnections(): TaskProviderConnections {
   return useAppStore(useShallow(selectTaskProviderConnections))
 }
 
-// Derives the two-step progressive flow's done-state from real provider
-// connection status, mirroring use-feature-wall-task-source-presentation so a
-// code host counts as both a review source and a task source.
 export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)

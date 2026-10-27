@@ -24,7 +24,8 @@ const mockStoreState = {
   activeWorktreeId: null,
   openModal: storeMocks.openModal,
   recordFeatureInteraction: vi.fn(),
-  projects: [],
+  endpointProjects: [],
+  endpointProjectHostSetups: [],
   repos: [],
   settings: null,
   worktreesByRepo: {}

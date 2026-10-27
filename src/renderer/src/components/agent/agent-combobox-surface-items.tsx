@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { CommandItem, CommandSeparator } from '@/components/ui/command'
-import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { AgentIcon, getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { searchAgentPickerEntries } from '@/lib/agent-picker-search'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
@@ -55,16 +55,16 @@ export function visibleSurfaceRows(
 export function surfaceCommandValues(
   model: NewTabAgentMenuModel,
   picker: {
-    agents: readonly AgentCatalogEntry[]
     query: string
     value: TuiAgent | null
     blankValue: string
     blankMatchesQuery: boolean
   }
 ): { rows: NewTabAgentMenuRow[]; selected: string | null; highlighted: string } {
-  const rows = visibleSurfaceRows(model, picker.agents, picker.query)
+  // Disabled rows are listed with their reason, so every agent is searched, not only pickable ones.
+  const rows = visibleSurfaceRows(model, getAgentCatalog(), picker.query)
   const selected =
-    surfaceRowValue(visibleSurfaceRows(model, picker.agents, ''), picker.value) ?? null
+    surfaceRowValue(visibleSurfaceRows(model, getAgentCatalog(), ''), picker.value) ?? null
   const first = rows.find((row) => row.kind !== 'chat-unavailable')
   const highlighted = !picker.query.trim()
     ? (selected ?? picker.blankValue)
@@ -86,15 +86,21 @@ export function surfaceRowValue(
   return row ? rowId(row) : undefined
 }
 
+/** A chat row's terminal button runs the agent's CLI, so only a detected CLI gets one. */
+const rowOffersTerminal = (model?: NewTabAgentMenuModel, row?: NewTabAgentMenuRow): boolean =>
+  row?.kind === 'chat' &&
+  model?.state === 'settled' &&
+  model.detection.detectedIds?.includes(row.agent) === true
+
 /** cmdk keeps focus in the search box, so ArrowRight arms the highlighted row's terminal button. */
 export function useSurfaceRowArming(
   rows: readonly NewTabAgentMenuRow[],
   commandValue: string,
   pick: (agent: TuiAgent, surface: AgentLaunchSurface) => void,
-  interactionKey: string
+  interaction: { key: string; model?: NewTabAgentMenuModel }
 ): { armedValue: string | null; onKeyDown: (event: React.KeyboardEvent) => void } {
   const [armed, setArmed] = useState<string | null>(null)
-  const key = JSON.stringify([interactionKey, commandValue])
+  const key = JSON.stringify([interaction.key, commandValue])
   const [previousKey, setPreviousKey] = useState(key)
   if (previousKey !== key) {
     setPreviousKey(key)
@@ -105,7 +111,7 @@ export function useSurfaceRowArming(
     const row = rows.find((candidate) => rowId(candidate) === commandValue)
     const input = event.target instanceof HTMLInputElement ? event.target : null
     const caretAtEnd = !input || input.selectionStart === input.value.length
-    if (event.key === 'ArrowRight' && row?.kind === 'chat' && caretAtEnd) {
+    if (event.key === 'ArrowRight' && rowOffersTerminal(interaction.model, row) && caretAtEnd) {
       event.preventDefault()
       setArmed(commandValue)
     } else if (event.key === 'Enter' && armedValue !== null && row) {
@@ -187,7 +193,7 @@ export function SurfaceAgentItems({
             <span className="shrink-0 text-muted-foreground">
               {chatUnavailableLabel(row.reason)}
             </span>
-          ) : row.kind === 'chat' ? (
+          ) : rowOffersTerminal(model, row) ? (
             <AgentTerminalLaunchButton
               title={terminalPickTitle(agentLabel)}
               aria-pressed={pressed}

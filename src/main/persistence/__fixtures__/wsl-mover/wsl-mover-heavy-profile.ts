@@ -1,4 +1,3 @@
-/** Two WSL repos with every kind of session, UI and catalog state a move must carry. */
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { WslMoveProjectionInput } from '../../moving-wsl-projects/wsl-move-state-projection'
 import {
@@ -19,7 +18,7 @@ export function heavyWslMoverProfile(paths: WslMoverPaths): WslMoveProjectionInp
   const wtA = `repo-a::${repoA.path}`
   const wtFeature = `repo-a::${paths.at('/home/dev/app-feature')}`
   const wtB = `repo-b::${repoB.path}`
-  // The destination keeps each moved UNC id so stragglers that still name it resolve (item 14).
+  // Preserve source UNC IDs as aliases for clients still using them.
   const sourceIds = new Map([
     [wtA, `repo-a::${sourcePaths.at('/home/dev/app')}`],
     [wtFeature, `repo-a::${sourcePaths.at('/home/dev/app-feature')}`],

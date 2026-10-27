@@ -16,7 +16,7 @@ import { getMobileWorkspaceRepoBadgeColor } from './new-worktree-modal-types'
 import { PickerListDrawer } from './PickerListDrawer'
 import { SetupHookTrustDrawer, type SetupTrustPrompt } from './SetupHookTrustDrawer'
 import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
-import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira-types'
+import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 
 type Composer = ReturnType<typeof useMobileComposerSource>

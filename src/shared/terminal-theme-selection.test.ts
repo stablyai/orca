@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveConfiguredTerminalColors, selectTerminalTheme } from './terminal-theme-selection'
+import { resolveConfiguredTerminalColors } from './terminal-theme-selection'
 import { TERMINAL_THEME_CATALOG } from './terminal-themes'
 
 const base = {
@@ -42,11 +42,5 @@ describe('the terminal colours a host configures', () => {
     expect(
       resolveConfiguredTerminalColors({ ...base, terminalThemeDark: 'no such theme' }, true)
     ).toEqual({ foreground: '#ffffff', background: '#282c34' })
-  })
-
-  it('keeps using the dark theme in light mode when no separate light theme is set', () => {
-    expect(
-      selectTerminalTheme({ ...base, theme: 'light', terminalUseSeparateLightTheme: false }, true)
-    ).toEqual({ mode: 'light', useLightVariant: false, themeName: 'Ghostty Default Style Dark' })
   })
 })

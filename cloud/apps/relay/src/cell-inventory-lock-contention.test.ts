@@ -173,10 +173,7 @@ describe('bounded cell-inventory lock wait', () => {
     await database.close()
   })
 
-  // Why: testing the helper alone would pass with the store still queueing for
-  // the pool's one-second default.
-  // Why: testing the helper alone would pass with the request path still queueing
-  // for the pool's full second.
+  // Helper-only tests miss request paths still waiting for the full one-second pool default.
   it('never lets a request path take the unbounded wait', async () => {
     const database = await openInMemoryRelayDatabase()
     const probe = new InventoryLockProbe(database)
@@ -292,9 +289,7 @@ describe('bounded cell-inventory lock wait', () => {
     await database.close()
   })
 
-  // Why: a bounded request-path wait raises the same 55P03 without NOWAIT. Folding
-  // it into the deferral counter would hide user-visible stalls among by-design
-  // sweep skips, which outnumber them by roughly an order of magnitude.
+  // Separate bounded 55P03 timeouts from intentional NOWAIT skips or frequent sweep deferrals hide user-visible stalls.
   it('counts an expired bounded wait apart from a NOWAIT deferral', async () => {
     const database = await openFakePostgres()
     fakes.query.mockImplementation(async (sql: string) => {
@@ -316,9 +311,7 @@ describe('bounded cell-inventory lock wait', () => {
     ).rejects.toThrow()
 
     const counts = consumeRelayCellInventoryHold(database)
-    // One per attempt, not per request: 55P03 is retryable, so an exhausted
-    // request contributes POSTGRES_TRANSACTION_ATTEMPTS timeouts. Reading the
-    // metric as affected-requests would overstate it threefold.
+    // Count attempts, not requests: three retryable 55P03 timeouts would overstate affected requests threefold.
     expect(counts.cellInventoryLockTimeouts).toBe(3)
     expect(counts.cellInventoryLockUnavailable).toBe(0)
     await database.close()

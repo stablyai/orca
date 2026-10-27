@@ -1,14 +1,5 @@
-/**
- * Centralized git/gh/command runner with transparent WSL support.
- *
- * Why: when a repo lives on a WSL filesystem, native Windows binaries (git.exe,
- * gh.exe, rg.exe) are absent or slow, so this routes execution through
- * `wsl.exe -d <distro>` with translated Linux paths.
- *
- * The implementation lives in ./command-runner/*; this module stays the entry
- * point its ~100 call sites (and their vi.mock factories) import from.
- */
-// Re-exported for existing importers; lightweight consumers should import from './exec-error' to avoid this heavy module.
+/** Stable git/gh/glab execution entry point; implementations live in command-runner. */
+// Lightweight consumers can import exec-error directly to avoid runner dependencies.
 export { extractExecError, parseRetryAfterMs } from './exec-error'
 
 export { setDefaultWslDistroOverride } from './command-runner/wsl-command-resolution'
@@ -45,5 +36,4 @@ export { glabExecFileAsync, redirectPortedHostnameToEnv } from './command-runner
 export { wslAwareSpawn } from './command-runner/wsl-aware-spawn'
 export { translateWslOutputPaths } from './command-runner/wsl-path-translation'
 
-/** Convenience re-export of wsl.ts path helpers so consumers don't import it directly. */
 export { parseWslPath, toLinuxPath, toWindowsWslPath, isWslPath } from '../wsl'

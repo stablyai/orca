@@ -5,8 +5,7 @@ import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from './native-chat-pasted-text-referen
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
 export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
 
-/** Every path from text to a document goes through here, so each image token becomes its chip and
- *  each pasted text still saving its pill. */
+/** All text-to-document paths must reconstruct image chips and pending-paste pills. */
 export function promptTextContent(text: string): JSONContent {
   return {
     type: 'doc',
@@ -29,7 +28,6 @@ export function promptTextContent(text: string): JSONContent {
   }
 }
 
-/** The document without the chips of one image. */
 export function withoutImageReferenceNodes(
   document: JSONContent,
   attachmentId: string

@@ -53,7 +53,7 @@ export async function parseGrokSessionFile(
   return finalizeSession(accumulator, platform)
 }
 
-/** The session's cwd; a scope walk reads it from summary.json without the history. */
+/** Scope discovery reads cwd from the summary without opening history. */
 export function grokSessionCwd(summary: Record<string, unknown>): string | null {
   return extractString(asRecord(summary.info)?.cwd)
 }
@@ -104,15 +104,12 @@ async function consumeGrokChatHistory(
       )
     }
   } catch (error) {
-    // Summary-only sessions still provide enough metadata for the Vault list. A
-    // gate refusal is a different thing — the history exists but is unreachable,
-    // so a message-less session must not be cached under the summary's mtime.
+    // Summary-only sessions can list; WSL refusal must propagate so incomplete history is not cached as current.
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
   } finally {
-    // readline.close() leaves the underlying stream open; destroy it so a
-    // mid-read failure cannot leak the gated transcript handle.
+    // readline.close() leaves its input open; destroy the gated stream after read failures too.
     lines.close()
     input.destroy()
   }

@@ -3,14 +3,13 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import type { RpcClient } from '../transport/rpc-client'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { useMobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const reads = vi.hoisted(() => vi.fn())
 vi.mock('./mobile-native-chat-item-read', () => ({ readMobileNativeChatItem: reads }))
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RPC is mocked; only this client's object identity is used.
-const source = { client: {} as RpcClient, sessionId: 'session' }
+const source = { client: stubRpcClient(), sessionId: 'session' }
 let latest: ReturnType<typeof useMobileNativeChatMessageDetail> | undefined
 let renderer: ReactTestRenderer | undefined
 function Probe({ messages }: { messages: NativeChatMessage[] }) {

@@ -78,7 +78,6 @@ afterEach(() => {
     })
   })
 
-  // The host's cancel names its turn, so with none running nothing is sent.
   it('sends nothing for the card when no turn is running', () => {
     mocks.promptItems = [NEWER_APPROVAL]
     render(
@@ -127,7 +126,6 @@ afterEach(() => {
     )
   }
 
-  // Nothing here answers it, so a send is the way on: it starts a turn, whose card cancel works.
   it('keeps the composer open and writable beside a card this build cannot answer', () => {
     mocks.promptItems = [NEWER_APPROVAL]
     renderSession()
@@ -230,8 +228,17 @@ afterEach(() => {
     })
   }
 
-  // The start's own row says why, so its rejected messages say only that they were not sent. Sending
-  // one again is a new message, so none offers a Retry.
+  it('renders the terminal refusal once beside the rejected message', async () => {
+    const fact: AgentSessionFailureFact = { kind: 'conversationOpenInTerminal' }
+    renderPane([rejected('terminal-held', 'Host fallback words.', fact)])
+    const row = await notice('terminal-held')
+    expect(row.textContent).toContain(
+      'Claude is already running this conversation in another terminal. Quit Claude there or close that terminal to continue here.'
+    )
+    expect(within(row).queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  // The start row owns the failure reason; resending a rejected message creates a new message.
   it("says only 'not sent', with no Retry, on each message the failed start's row explains", async () => {
     mocks.journalItems = [startFailureRow(START_FAILED)]
 

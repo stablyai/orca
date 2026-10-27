@@ -359,10 +359,32 @@ describe('CI dependency download caches', () => {
       expect(platforms.jobs['warm-windows'].if).toBeUndefined()
       expect(platforms.jobs['warm-windows'].strategy.matrix.os).toEqual([
         'windows-2022',
-        'windows-11-arm'
+        'windows-11-arm',
+        'windows-2025'
       ])
     }
   )
+
+  it.each([
+    ['windows-2022', 'X64', true],
+    ['windows-11-arm', 'ARM64', false],
+    ['windows-2025', 'X64', false]
+  ])('warms native addons without unused CLI builds on %s', (os, arch, cli) => {
+    const platforms = read(workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses)
+    const warm = platforms.jobs['warm-windows']
+    const context = { runner: { arch }, matrix: { os } }
+    for (const name of ['Cache Windows CLI launcher', 'Build the Windows native executables']) {
+      const step = warm.steps.find((step) => step.name === name)
+      expect(step, name).toBeDefined()
+      expect(runInNewContext(step.if, context)).toBe(cli)
+    }
+    const consumer = workflow('wsl-orcad-e2e').jobs.wsl2
+    const installer = './.github/actions/install-node-dependencies'
+    expect(consumer['runs-on']).toBe('windows-2025')
+    expect(warm.steps.find((step) => step.uses === installer).with['native-runtime']).toBe(
+      consumer.steps.find((step) => step.uses === installer).with['native-runtime']
+    )
+  })
 
   it('validates the omitted Linux warmer preparation in the real PR consumers', () => {
     const platforms = read(workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses)
@@ -373,9 +395,12 @@ describe('CI dependency download caches', () => {
     const warmInstall = warm.steps.find((step) => step.uses === installer)
     const unitInstall = units.steps.find((step) => step.uses === installer)
     expect(warm['runs-on']).toBe('${{ matrix.runner }}')
-    expect(warm.strategy.matrix.runner).toEqual(['ubuntu-24.04-arm', pr.jobs.test.with.runner])
+    expect(warm.strategy.matrix.runner).toEqual([
+      'blacksmith-4vcpu-ubuntu-2404-arm',
+      pr.jobs.test.with.runner
+    ])
     expect(pr.jobs.preflight['runs-on']).toBe('blacksmith-8vcpu-ubuntu-2404')
-    expect(pr.jobs.test.with.runner).toBe('blacksmith-4vcpu-ubuntu-2404')
+    expect(pr.jobs.test.with.runner).toBe('blacksmith-8vcpu-ubuntu-2404')
     expect(units['runs-on']).toBe('${{ inputs.runner }}')
     expect(JSON.parse(pr.jobs.test.with.node_versions)).toEqual(['24'])
     expect(warmInstall.if).toBeUndefined()
@@ -453,7 +478,7 @@ describe('CI dependency download caches', () => {
     }
   })
 
-  it('seeds the existing Linux PR tool cache from successful main x64 release builds', () => {
+  it('shares Linux PR downloads with main x64 release builds across runner pools', () => {
     const packaging = workflow('pr').jobs.package
     const consumer = packaging.steps.find(
       (step) => step.name === 'Cache electron-builder downloads'
@@ -465,7 +490,7 @@ describe('CI dependency download caches', () => {
     )
     const linux = release.strategy.matrix.include.find((entry) => entry.platform === 'linux-x64')
 
-    expect(packaging['runs-on']).toBe(linux.os)
+    expect([linux.os, 'blacksmith-4vcpu-ubuntu-2404']).toContain(packaging['runs-on'])
     expect(writer.if).toBe("matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'")
     expect(writer.uses).toBe('actions/cache@v5')
     expect(writer.with.path).toBe(consumer.with.path)
@@ -516,8 +541,7 @@ describe('release install targets', () => {
     }
   )
 
-  // A transient `read ECONNRESET` fetching this Node version's headers for
-  // native/windows-registry's node-gyp rebuild failed a blocking golden gate and the cut.
+  // Transient Node-header ECONNRESET once failed windows-registry rebuild and blocked the release cut.
   it('retries every release-cut install so one transient download cannot fail a cut', () => {
     const installs = installSteps('release-cut')
     expect(installs.length).toBeGreaterThan(0)

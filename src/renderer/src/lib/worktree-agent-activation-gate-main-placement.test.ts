@@ -1,7 +1,4 @@
-// Layout-owner build: the window's activation sweep asks main to place the workspace's unshown
-// live terminals as part of its listing, then only reads the answer. A pane main names is the
-// terminal's surface (main's frames draw it, maybe after the answer arrives), so the sweep writes
-// nothing and its `surfaced` verdict still decides between resuming agents and seeding a shell.
+/** Ask main to place live unshown terminals before inventory reply; frames draw its panes later. Window writes nothing, while surfaced still chooses resume versus shell seeding. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'

@@ -5,13 +5,13 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
-import { nativeChatStreamingMessage } from '../../../src/shared/native-chat-streaming'
-import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat-provider-frame-summary'
+import { nativeChatStreamingMessage } from '../../../src/shared/native-chat/native-chat-streaming'
+import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat/native-chat-provider-frame-summary'
 import {
   foldToolMessages,
   isUndrawnProviderFrameMessage
-} from '../../../src/shared/native-chat-tool-fold'
-import { projectNativeChatTaskListFrames } from '../../../src/shared/native-chat-task-list-frames'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
+import { projectNativeChatTaskListFrames } from '../../../src/shared/native-chat/input/native-chat-task-list-frames'
 import { foldSubagentItems } from '../../../src/shared/native-chat-subagent-items'
 import { prepareNativeChatMessages } from '../../../src/shared/native-chat-message-preparation'
 import {
@@ -19,13 +19,9 @@ import {
   type AgentType,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
-import { isImageSourceUserTurn } from './mobile-native-chat-image-transcript-markers'
+import { isImageSourceUserTurn } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
-/** The centered empty-state copy for a chat with no messages, mirroring the
- *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
- *  stay in lockstep. Returns null when the list should stay bare (idle, or the
- *  loading spinner owns the view). */
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
   agent: string | null,
@@ -33,8 +29,7 @@ export function mobileNativeChatEmptyState(
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
-    // No conversation found yet: the agent has not reported one, or its file is unwritten. That is
-    // a new chat or one whose history the host cannot see, so it promises neither.
+    // Missing history may mean new or unreadable; promise neither in the waiting copy.
     case 'waiting-session':
     case 'awaiting-transcript':
       return formatNativeChatEmptyStateCopy('notFound', agentLabel)
@@ -49,17 +44,12 @@ export function mobileNativeChatEmptyState(
   }
 }
 
-/** An optimistic user echo: the text and/or the local preview URIs of any images
- *  ridden along on the send, shown until the transcript catches up. */
 export type MobileNativeChatPendingItem = {
   id: string
   text: string
   images?: string[]
-  /** Transcript tail when the send was issued. The echo renders directly after
-   *  that row, so a send whose row never arrives stays where it was sent instead
-   *  of trailing every turn that lands afterwards. */
+  // Anchor unmatched echoes after their captured tail so later turns cannot reorder them.
   baselineTailMessageId?: string | null
-  /** When it was sent: the echo's time until the transcript row brings its own. */
   sentAt?: number
 }
 
@@ -67,13 +57,7 @@ export function foldMobileNativeChatMessages(
   messages: readonly NativeChatMessage[],
   agent: AgentType
 ): NativeChatMessage[] {
-  // The conversation only: a subagent's rows are that subagent's, and mobile shows
-  // each spawn as its roster row (one line per child) rather than the child's own rows.
-  // Prepared as desktop prepares them, so a skill turn and an image marker turn draw as the
-  // user's message. An unrecognised event with no words of its own is stored, not drawn, so
-  // it goes before folding and never splits a tool run. A Codex plan update draws as its task
-  // list, projected after folding as desktop does, so it never takes another call's result; one
-  // whose payload cannot be read draws nothing, as on desktop.
+  // Filter child/noise rows before folding so they cannot split tool runs; project plan updates afterward so they cannot consume another call’s result.
   return projectNativeChatTaskListFrames(
     stripNoiseMessages(
       foldToolMessages(
@@ -91,7 +75,6 @@ export function foldMobileNativeChatMessages(
   ).filter((message) => !isWordlessProviderFrameMessage(message))
 }
 
-/** Assemble the folded transcript, streaming text, and optimistic user echoes. */
 export function buildMobileNativeChatTransientData({
   messages,
   folded,
@@ -102,7 +85,6 @@ export function buildMobileNativeChatTransientData({
   /** Raw transcript rows, used to project folded-away send boundaries. */
   messages: NativeChatMessage[]
   folded: NativeChatMessage[]
-  /** Streaming bubble text, already gated by `deriveMobileNativeChatStreaming`. */
   streaming: string | null
   pending: MobileNativeChatPendingItem[]
   imagePreviewsByMessageId?: Record<string, string[]>
@@ -127,12 +109,7 @@ export function buildMobileNativeChatTransientData({
     }
     return { ...message, blocks }
   })
-  // Why anchored rather than appended: an echo whose transcript row never
-  // arrives — Claude consumes a mid-turn send without writing a user record —
-  // used to sit at the tail forever, re-reading below every turn that landed
-  // afterwards. That is what makes the conversation look re-ordered. Rendering it
-  // after the row it was sent against keeps it in place, so an unmatched echo is
-  // at worst a duplicate in the right position instead of a scrambled one.
+  // Keep echoes at their send boundary: some TUIs never record a matching user row, so appending would move them below every later turn.
   const anchoredPending = new Map<string, NativeChatMessage[]>()
   const leadingPending: NativeChatMessage[] = []
   const trailingPending: NativeChatMessage[] = []
@@ -173,8 +150,6 @@ export function buildMobileNativeChatTransientData({
     const bubble: NativeChatMessage = {
       id: item.id,
       role: 'user',
-      // Text first (when present), then a thumbnail per ridden-along image so the
-      // sent photo shows immediately, before the transcript echo lands.
       blocks: [
         ...(item.text ? [{ type: 'text' as const, text: item.text }] : []),
         ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))

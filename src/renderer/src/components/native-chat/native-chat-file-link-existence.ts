@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { ParsedTerminalFileLink } from '@/lib/terminal-links'
+import type { ParsedTerminalFileLink } from '../../../../shared/terminal-links'
 import { isWorktreeConnectionResolved } from '@/lib/connection-context'
 import type { FileLinkExists } from '@/components/sidebar/comment-markdown-native-chat-file-links'
 import { createTerminalPathExistenceBatch } from '@/components/terminal-pane/terminal-path-existence-batch'
@@ -111,8 +111,7 @@ export function createNativeChatFileLinkExistence(
     if (inFlight.get(key) === sentIn) {
       inFlight.delete(key)
     }
-    // Why: a recheck since then has asked again, or nothing shows the path (a later subscribe re-asks).
-    // An unreachable host is not evidence the file is gone.
+    // Retry only current watched requests; an unreachable host does not prove a file missing.
     if (sentIn !== generation || !holders.has(key)) {
       return
     }
@@ -133,8 +132,7 @@ export function createNativeChatFileLinkExistence(
     const sentIn = generation
     inFlight.set(key, sentIn)
     const ask = async (): Promise<boolean> => {
-      // Why: rechecks and retries reuse a held target, whose owner may since have turned
-      // ambiguous or moved hosts; ask only while the current owner still names the same host.
+      // Held targets can become ambiguous or move hosts; recheck ownership before each retry.
       const current = getTerminalFileContext(
         host.worktreeId,
         host.worktreePath,

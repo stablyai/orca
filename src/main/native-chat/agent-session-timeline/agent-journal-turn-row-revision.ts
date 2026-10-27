@@ -1,7 +1,4 @@
-// Every write to a turn row is a revision of the row as the journal holds
-// it at execution: a writer overrides only the fields it owns and keeps the
-// rest, whoever wrote them. Nothing about ended turns is kept in memory, so a
-// restart or reattach revises the same rows a live translator would.
+// Resolve revisions from journal state at execution; each writer preserves fields it does not own.
 
 import {
   MAX_CONTEXT_CATEGORIES,
@@ -27,17 +24,16 @@ import type {
   StructuredAgentSessionRevisionOptions
 } from '../agent-session-wire/structured-agent-session-event-sink'
 
-/** The row a write revises: a known one, or the newest turn in the journal. */
 export type AgentJournalTurnRowTarget = { identity: AgentJournalItemIdentity } | { newest: true }
 
 export type AgentJournalTurnRowWrite = {
-  /** The lifecycle fields this turn has now; the lifecycle writer owns all of them. */
+  /** Lifecycle writers own all lifecycle fields. */
   lifecycle?: AgentJournalTurnItem
-  /** Context parts, each replacing its namesake on the row. */
+  /** Replace only the supplied context parts. */
   contextUsage?: AgentSessionContextUsage
-  /** A window written only while no row in the journal holds one. */
+  /** Supply a window only when no journal row holds one. */
   windowIfNoneHeld?: AgentSessionContextWindow
-  /** Lands only while the row is absent or still running, so an ended turn is never rewritten. */
+  /** Never overwrite ended turns. */
   onlyWhileRunning?: true
 }
 
@@ -45,9 +41,8 @@ function jsonBytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf8')
 }
 
-/** Serialized size of the largest value of each context part the schema admits. */
 const MAX_CONTEXT_PART_BYTES: Record<keyof AgentSessionContextUsage, number> = (() => {
-  // A control character is the longest a JSON string can make one UTF-16 unit.
+  // JSON escapes control characters to the largest per-unit representation.
   const text = (length: number) => '\u0000'.repeat(length)
   const number = -Number.MAX_VALUE
   const worst: Required<AgentSessionContextUsage> = {
@@ -70,7 +65,7 @@ const MAX_CONTEXT_PART_BYTES: Record<keyof AgentSessionContextUsage, number> = (
   return { window: jsonBytes(worst.window), used: jsonBytes(worst.used) }
 })()
 
-/** A part the write carries costs its own size; one kept from the row, at most the largest. */
+/** Bound retained parts conservatively; supplied parts use their actual size. */
 function contextBytesBound(write: AgentSessionContextUsage | undefined): number {
   const parts: (keyof AgentSessionContextUsage)[] = ['window', 'used']
   return parts.reduce(
@@ -80,10 +75,9 @@ function contextBytesBound(write: AgentSessionContextUsage | undefined): number 
   )
 }
 
-/** Room for the lifecycle fields of a row this writer did not build. */
+/** Reserve lifecycle space even for rows created by other writers. */
 const TURN_ROW_BYTES_WITHOUT_CONTEXT = 8 * 1024
 
-/** `lifecycle` over the row's current body, keeping every field it does not own. */
 function reviseTurnBody(
   current: AgentJournalTurnItem | null,
   write: AgentJournalTurnRowWrite
@@ -112,7 +106,6 @@ function withoutLifecycle(turn: AgentJournalTurnItem) {
   return kept
 }
 
-/** The write with its fallback window resolved against every row, since any of them may hold the newest. */
 function withFallbackWindow(
   journal: StructuredAgentSessionRevisionJournal,
   { windowIfNoneHeld, ...write }: AgentJournalTurnRowWrite
@@ -138,7 +131,6 @@ function findTurnRow(
     const body = journal.itemBody(itemId)
     return body?.kind === 'turn' ? { itemId, body } : null
   }
-  // Only a write made while no turn is open scans.
   let found: { itemId: string; sequence: number; body: AgentJournalTurnItem } | null = null
   journal.visitItems((itemId, sequence, body) => {
     if (body.kind === 'turn' && (found === null || sequence >= found.sequence)) {
@@ -148,14 +140,12 @@ function findTurnRow(
   return found
 }
 
-/** How a turn-row write reaches live subscribers. */
 export type AgentJournalTurnRowDelivery = {
-  /** False only for a writer that publishes each write itself right after queueing it. */
+  /** False when the caller publishes immediately after queueing. */
   publish: boolean
   options?: Omit<StructuredAgentSessionRevisionOptions, 'turnScope'>
 }
 
-/** Bytes a turn-row write may resolve to. */
 export function agentJournalTurnRowReservedBytes(
   target: AgentJournalTurnRowTarget,
   write: AgentJournalTurnRowWrite
@@ -168,7 +158,7 @@ export function agentJournalTurnRowReservedBytes(
   )
 }
 
-/** The row a turn-row write lands as, read from the journal at execution; null writes nothing. */
+/** Resolve against current journal state; null writes nothing. */
 export function resolveAgentJournalTurnRowWrite(
   journal: StructuredAgentSessionRevisionJournal,
   target: AgentJournalTurnRowTarget,
@@ -188,22 +178,18 @@ export function resolveAgentJournalTurnRowWrite(
   if (estimateStructuredAgentSessionItemBytes(identity, body) <= reservedBytes) {
     return { identity, body }
   }
-  // Only a row grown by fields this build does not know gets here; the lifecycle still lands.
+  // Unknown fields can exceed the bound; preserve lifecycle delivery anyway.
   return write.lifecycle ? { identity, body: write.lifecycle } : null
 }
 
-/**
- * Queue one revision of a turn row. A lifecycle write creates the row
- * when it is absent; a context write only ever revises one that exists.
- * Without a journal-reading sink only the lifecycle is written, as it was built.
- */
+/** Lifecycle writes may create rows; context writes only revise. Nonreading sinks receive lifecycle only. */
 export function writeAgentJournalTurnRow(
   sink: StructuredAgentSessionEventSink,
   target: AgentJournalTurnRowTarget,
   write: AgentJournalTurnRowWrite,
   { publish, options: delivery = {} }: AgentJournalTurnRowDelivery
 ): void {
-  // A turn record belongs to no turn.
+  // Turn records are thread-scoped.
   const options = { ...delivery, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   const revise = publish ? sink.tryReviseResolvedItemAndPublish : sink.tryReviseResolvedItem
   if (!revise) {

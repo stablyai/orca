@@ -1,7 +1,6 @@
 'use strict'
 
-// Loads one native build dir in a fresh Node or Electron process: `<runtime> this.cjs <module> <dir>`.
-// Why a child: a failed addon load can poison the process that attempted it.
+// Probe addon load in fresh runtime process: failed native load can poison process. Usage: <runtime> this.cjs <module> <dir>.
 
 const { accessSync, constants, existsSync } = require('node:fs')
 const { join } = require('node:path')

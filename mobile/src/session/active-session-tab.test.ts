@@ -26,18 +26,6 @@ describe('resolveActiveSessionTab', () => {
     expect(result.retainSelectedSessionTabId).toBe(false)
   })
 
-  it('keeps the device on a terminal tab when an agent turn flags another terminal active', () => {
-    const result = resolveActiveSessionTab(
-      [terminalTab('agent', true), terminalTab('shell', false)],
-      {
-        pendingActiveSessionTabId: null,
-        selectedSessionTabId: 'shell'
-      }
-    )
-
-    expect(result.activeTab?.id).toBe('shell')
-  })
-
   it('follows the host when it explicitly navigates this device', () => {
     const result = resolveActiveSessionTab(
       [terminalTab('agent', true), browserTab('browser', false)],
@@ -77,7 +65,6 @@ describe('resolveActiveSessionTab', () => {
     expect(gap.activeTab?.id).toBe('agent')
     expect(gap.retainSelectedSessionTabId).toBe(true)
 
-    // The guest re-registers and the tab comes back: focus must return to it.
     const restored = resolveActiveSessionTab(
       [terminalTab('agent', true), browserTab('browser', false)],
       { pendingActiveSessionTabId: null, selectedSessionTabId: 'browser' }
@@ -136,10 +123,7 @@ describe('resolveActiveSessionTab', () => {
   })
 
   it('opens the chat a create-worktree launch landed on, over the workspace shell', () => {
-    // Why: a workspace created from the mobile sheet with an agent arrives on a fresh route with
-    // no device pick, so the host's own activation is the only thing that says "open the chat".
-    // `agent.launch` publishes and activates that tab before it answers, so it is already in the
-    // first snapshot the route fetches.
+    // A just-created route has no local pick; the host’s launch activation must open its chat.
     const result = resolveActiveSessionTab(
       [
         { id: 'shell', type: 'terminal', isActive: false },

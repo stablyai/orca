@@ -32,7 +32,8 @@ vi.mock('../../ssh/orcad-migration-delta-move', () => ({
   keepOrcadServerVersion: mocks.keep
 }))
 vi.mock('../../managed-server/lifecycle/orcad-runtime-conversion-wiring', () => ({
-  orcadMigrationDestinationFor: mocks.destinationFor
+  orcadMigrationDestinationFor: mocks.destinationFor,
+  orcadServerAutomationEnablerFor: () => vi.fn()
 }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   ensureOrcadManagedTunnel: mocks.ensure
@@ -61,7 +62,7 @@ describe('resolving a host an older build changed', () => {
   })
 
   it('builds the destination from the pairing the tunnel stands on after opening', async () => {
-    // The tunnel re-paired over SSH while it opened.
+    // Opening the tunnel can replace the saved SSH pairing.
     const repaired = { id: 'env-1', pairingRevision: 2 }
     mocks.ensure.mockResolvedValue(repaired)
     const destination = { committed: true }
@@ -82,7 +83,7 @@ describe('resolving a host an older build changed', () => {
     expect(mocks.publish).not.toHaveBeenCalled()
     mocks.move.mockResolvedValueOnce({ outcome: 'moved', migrationId: 'm' })
     await handler('runtimeEnvironments:moveOrcadDelta')(null, { sshTargetId: 'ssh-1' })
-    expect(mocks.publish).toHaveBeenCalledWith(mocks.target, 'env-1')
+    expect(mocks.publish).toHaveBeenCalledWith(mocks.target, 'env-1', 0)
   })
 
   it('refreshes the host status after keeping the server version', async () => {

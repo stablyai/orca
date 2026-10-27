@@ -11,11 +11,11 @@ export function resolvePathEnvKey(
   if (platform !== 'win32') {
     return 'PATH'
   }
-  // Why: match the daemon's env-block spelling so its merge cannot resurrect another PATH key.
+  // Match the daemon env-block spelling so merging cannot resurrect a shadow PATH key.
   return firstWindowsPathEnvKey(env) ?? firstWindowsPathEnvKey(hostEnv) ?? 'Path'
 }
 
-// Why: Win32 uses the first case-insensitive key, and object order preserves block order.
+// Object order preserves the first case-insensitive Win32 env-block match.
 function firstWindowsPathEnvKey(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>
 ): string | undefined {
@@ -29,7 +29,7 @@ function firstWindowsPathEnvKey(
 
 function normalizeSegmentKey(segment: string): string {
   const trimmed = segment.replace(/[\\/]+$/, '')
-  // Why: roots keep one separator because `C:\` and drive-relative `C:` differ.
+  // Preserve a root separator: C: is drive-relative, unlike C:\.
   return (/^[a-z]:$/i.test(trimmed) && trimmed !== segment ? `${trimmed}\\` : trimmed).toLowerCase()
 }
 

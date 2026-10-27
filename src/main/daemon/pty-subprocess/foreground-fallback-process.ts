@@ -9,16 +9,12 @@ function normalizeForegroundProcessName(processName: string | null | undefined):
   return trimmed.split(/[\\/]/).pop() || null
 }
 
-/**
- * node-pty's reported foreground name, normalized to a bare executable.
- * Windows ConPTY can report nothing useful; fall back to the spawned shell.
- */
+/** ConPTY can report no usable name; only Windows falls back to the spawned shell. */
 export function resolveFallbackForegroundProcess(
   processName: string | null | undefined,
   shellPath: string
 ): string | null {
-  // Why: node-pty names Orca's exact wrapper path while it execs the shell, and as its spawn file
-  // once the foreground group's leader has exited (`true | claude`); both mean the shell.
+  // node-pty can report Orca’s scope wrapper during exec or after the foreground leader exits.
   const normalized = normalizeForegroundProcessName(
     processName && isTerminalScopeWrapper(processName.trim()) ? shellPath : processName
   )

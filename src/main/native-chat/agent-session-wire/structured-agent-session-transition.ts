@@ -1,12 +1,5 @@
-// One provider event's journal writes, admitted as a single sink operation.
-//
-// A producer that keeps state about what it wrote must change that state only for writes the sink
-// took; when an event needs several rows, a refusal of the third after the first two were taken
-// would leave the producer and the journal disagreeing. A transition is admitted whole or not at
-// all. At execution its steps run as one turn in the journal's write queue, each resolved against
-// the fold with every earlier write landed (the steps before it included), so what a step writes
-// is decided by the journal, not by memory. Admitted whole, executed as a prefix: once a step
-// fails, the steps after it never run, the steps before it stay written, and the sink fails.
+// Admit each event’s writes whole so producer state cannot advance after partial admission.
+// Execute against the latest fold in one queue turn; failure retains the written prefix and skips later steps.
 
 import type {
   AgentJournalItemBody,
@@ -23,7 +16,6 @@ import type {
 import type { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 
-/** What a transition step reads: rows by key, every row, and the turns they joined. */
 export type StructuredAgentSessionTransitionJournal = Pick<
   AgentSessionJournal,
   'epoch' | 'visitItems' | 'itemBody' | 'item' | 'visitItemsWithLinkage' | 'canonicalItemId'
@@ -32,9 +24,8 @@ export type StructuredAgentSessionTransitionJournal = Pick<
 export type StructuredAgentSessionTransitionStep =
   | {
       kind: 'item'
-      /** Bounds what `resolve` may write; a larger write fails the sink. */
+      /** Exceeding the reservation fails the sink. */
       reservedBytes: number
-      /** The row and its whole body; null writes nothing. */
       resolve: (journal: StructuredAgentSessionTransitionJournal) => {
         identity: AgentJournalItemIdentity
         body: AgentJournalItemBody
@@ -43,12 +34,12 @@ export type StructuredAgentSessionTransitionStep =
     }
   | {
       kind: 'settlement'
-      /** Unique per settlement: the journal applies one id once. */
+      /** Journal deduplicates settlements by this ID. */
       settlementId: string
       recovered?: true
-      /** Paces the queue only; the mutations are the journal's to choose. */
+      /** Queue pacing only; the journal chooses actual mutations. */
       reservedBytes: number
-      /** Read at execution; none writes nothing. */
+      /** Resolve at execution; an empty result writes nothing. */
       resolve: (
         journal: StructuredAgentSessionTransitionJournal
       ) => readonly JournalLifecycleMutationInput[]
@@ -56,25 +47,22 @@ export type StructuredAgentSessionTransitionStep =
 
 export type StructuredAgentSessionTransition = {
   steps: readonly StructuredAgentSessionTransitionStep[]
-  /** Rides the sink's lifecycle budget: it ends or settles something. */
+  /** Charge the lifecycle budget for ending/settling work. */
   lifecycle: boolean
-  /** Internal admission only, for a provider's bounded tail after finalization. */
+  /** Internal admission for bounded provider tails after finalization. */
   finalTail?: true
-  /** Announce the writes once they land, when any step wrote. */
   publish: boolean
-  /** Host-internal delivery after these writes and their parent publication, in queue order. */
+  /** Run after writes and parent publication, in queue order. */
   onPublished?: () => void
 }
 
 const STEP_OVERFLOW = 'structured agent-session transition step exceeded its reserved size'
 
-/** The sink members a transition writer uses. */
 export type StructuredAgentSessionTransitionSink = {
-  /** Queues one event's writes as a single admitted operation. */
   tryAppendTransition?(
     transition: StructuredAgentSessionTransition
   ): StructuredAgentSessionSinkAdmission
-  /** The bound journal's rows as they stand now; null until bound. */
+  /** null until the sink binds to a journal. */
   journalItems?(): StructuredAgentSessionTransitionJournal | null
 }
 

@@ -171,8 +171,7 @@ export async function spawnGenerationCanary(options: {
   const { runtime, generation, role, worktreeId = DAEMON_GENERATION_WORKTREE_ID } = options
   const label = `${generation.label}-${role}`
   const nonce = randomUUID()
-  // Why: production daemon inventory infers ownership from the durable prefix;
-  // keep the fixture on that path so live-host adjudication cannot degrade to unknown.
+  // Use production’s durable ownership prefix so live-host adjudication cannot degrade to unknown.
   const sessionId = `${worktreeId}@@orca-9749-${label}-${randomUUID().slice(0, 8)}`
   const adapter = new DaemonPtyAdapter({
     socketPath: generation.socketPath,

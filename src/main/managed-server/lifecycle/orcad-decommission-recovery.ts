@@ -1,4 +1,3 @@
-/** Recovering an interrupted decommission from its journal entry; see orcad-decommission-transaction. */
 import { writeOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import type { OrcadActivationRecoveryResult } from '../activation/orcad-activation-recovery'
 import type { OrcadDecommissionRecoveryPlan } from './orcad-decommission-transaction'
@@ -16,13 +15,12 @@ import {
   type OrcadSlotOptions
 } from '../../ssh/orcad-recovery-slot'
 
-/** Finishes an interrupted decommission; the record is only cleared on proven exit. */
+/** Only proven exit clears an interrupted decommission journal. */
 export async function reconcileOrcadDecommission(
   options: OrcadSlotOptions,
   plan: OrcadDecommissionRecoveryPlan
 ): Promise<OrcadActivationRecoveryResult> {
   if (plan.action === 'keep-serving') {
-    // Nothing was sent, so the recorded version must still be the one serving.
     const identity = await resolveOrcadSlotIdentity(options, plan.version)
     return {
       outcome: 'recovered',
@@ -53,7 +51,7 @@ export async function reconcileOrcadDecommission(
       record: plan.record
     })
   }
-  // Only proven exit commits; a slot that is live or unanswering keeps the fence.
+  // Live or unanswered slots retain the fence; only proven exit permits commit.
   const liveness = parseOrcadLiveness(
     await execOrcadRemote(
       options,

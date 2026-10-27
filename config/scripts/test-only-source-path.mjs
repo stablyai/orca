@@ -1,9 +1,4 @@
-/**
- * Whether a repo source path is test-only by this repo's naming conventions: specs, test helpers
- * and doubles that sit beside their spec (`*-test-harness.ts`, `*-fixtures.ts`, `*-fake.ts`), and
- * test directories (`__tests__/`, `orca-runtime-tests/`). Shared by the Electron-import check and
- * the localization audit, so a helper is test-only to both or to neither.
- */
+// Centralize spec/helper/double/test-directory naming so Electron-import and localization audits classify every path identically.
 
 // Why `(?<!self)`: `*-self-test-*` modules are a shipped runtime probe, not tests.
 const TEST_ONLY_BASENAME =

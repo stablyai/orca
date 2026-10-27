@@ -5,13 +5,13 @@ import type {
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { readClaudeStructuredSessionSettings } from './claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
+import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 
-/** The host awaits this under its own start signal after the process is published. */
 export async function openClaudeStructuredSession(input: {
   request: StructuredAgentSessionProviderOpenInput
   session: ClaudeSession
@@ -55,8 +55,39 @@ export async function openClaudeStructuredSession(input: {
       })
   })
   const result = await waitForPromiseWithSignal(opened, request.signal)
-  if (sessions.get(request.sessionId) !== session || request.signal.aborted) {
-    throw new Error('claude session closed before startup completed')
+  const current = () => {
+    if (sessions.get(request.sessionId) !== session || request.signal.aborted) {
+      throw new Error('claude session closed before startup completed')
+    }
+  }
+  current()
+  // The stored leaf is set only on a resume, and is the chat's last completed turn.
+  const history = session.initialization.history
+  const leafUuid = history.leafUuid
+  if (resumesTranscript && leafUuid && session.events) {
+    history.covered = await waitForPromiseWithSignal(
+      catchUpClaudeTranscript({
+        sessionId: request.sessionId,
+        providerSessionId: session.providerSessionId,
+        leafUuid,
+        claudeConfigDir: session.initialization.claudeConfigDir,
+        cwd: session.initialization.cwd,
+        sink: session.events,
+        signal: request.signal,
+        assertCurrent: () => {
+          current()
+          if (
+            session.translator?.contextActivity !== history.contextActivity ||
+            session.dispatchSequence !== 0
+          ) {
+            throw new Error('claude made live progress before catch-up completed')
+          }
+        },
+        ...(deps.logger ? { logger: deps.logger } : {})
+      }),
+      request.signal
+    )
+    current()
   }
   return { link: session.link, ...result }
 }

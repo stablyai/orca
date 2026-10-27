@@ -8,8 +8,8 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../../../shared/abort-signal-reason'
-import { listQuickOpenFiles } from '../../../ipc/filesystem-list-files'
-import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../../../ipc/filesystem-search-file-paths'
+import { listQuickOpenFiles } from '../../../ipc/filesystem/filesystem-list-files'
+import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../../../ipc/filesystem/filesystem-search-file-paths'
 import { isMobileBinaryPath, isSafeMobileRelativePath } from '../mobile-file-kind'
 import {
   requireRuntimeFileProvider,
@@ -54,7 +54,7 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
-    // Why: an `ssh:` host lists nothing rather than failing, and never lists this machine.
+    // Unsupported SSH hosts return empty, never this machine's files.
     const files =
       route.kind === 'ssh'
         ? []
@@ -93,8 +93,7 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
-    // Why: identical paths exist on local and on several SSH hosts; the cache key must name the
-    // resolved host, which `connectionId` could not tell apart from "unresolved".
+    // Identical paths exist on multiple hosts; resolved-host identity must partition the cache.
     const cacheKey = `${target.executionHostId}:${worktree.id}:${worktree.path}`
     const inventory = await this.mobileFilePathSearchCache.get(cacheKey, async () => {
       const listed =
@@ -145,7 +144,6 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
-    // Why: an `ssh:` host reports no matches (version 0) rather than failing the keystroke.
     const quickOpenSearchVersion = route.kind === 'ssh' ? 0 : QUICK_OPEN_SEARCH_VERSION
     const result =
       !query.trim() || isQuickOpenQueryTooLarge(query) || route.kind === 'ssh'
@@ -203,7 +201,6 @@ export class RuntimeFileSearch {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const route = runtimeFileRouteForTarget(target)
     if (route.kind === 'ssh') {
-      // Why: quick-open listings degrade to empty for an `ssh:` host rather than throwing.
       return []
     }
     return listQuickOpenFiles(

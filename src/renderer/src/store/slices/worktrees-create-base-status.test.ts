@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { LocalBaseRefRefreshResult } from '../../../../shared/worktree/base-ref-drift-types'
 import { toast } from 'sonner'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { TEST_REPO, makeWorkspaceLineage, makeWorktree } from './worktrees-slice-test-fixtures'
@@ -71,8 +74,7 @@ describe('createWorktree base status merge', () => {
   })
 
   it('marks the create payload as a generated name only when the caller says so', async () => {
-    // Why: the host retires generated names permanently, and the creature pool contains ordinary
-    // words ("orca", "runner", "molly"). A name the user typed must stay reusable.
+    // Only generated creature names retire permanently; user-entered ordinary words must remain reusable.
     const store = createRepoTestStore()
     mockApi.worktrees.create.mockResolvedValue({
       worktree: makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
@@ -273,6 +275,8 @@ describe('createWorktree base status merge', () => {
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
       ...created,
+      projectId: 'repo:repo-remote',
+      projectHostSetupId: 'repo-remote',
       hostId: 'runtime:env-1',
       runtimeOwnerEnvironmentId: 'env-1'
     })
@@ -390,13 +394,17 @@ describe('createWorktree base status merge', () => {
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
-    expect(toast.warning).toHaveBeenCalledWith('Local main was not refreshed for "feature-wt"', {
-      id: 'local-base-ref-refresh-failed:repo1:main',
-      description: expect.stringContaining(expectedReason),
-      duration: Infinity,
-      dismissible: true
-    })
-    const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Local main was not refreshed for "feature-wt"',
+      expect.objectContaining({
+        id: 'local-base-ref-refresh-failed:repo1:main',
+        duration: Infinity,
+        dismissible: true
+      })
+    )
+    const description = lastWarningDescriptionText()
+    expect(description).toContain(expectedReason)
+    expect(description).not.toContain('Unshallow')
     expect(description).toContain('feature-wt')
     // Create already succeeded — guidance must push manual recovery, not "try again".
     expect(description).toMatch(/manually/i)
@@ -409,6 +417,56 @@ describe('createWorktree base status merge', () => {
     } else {
       expect(description).not.toContain('/repo')
     }
+  })
+
+  it('explains a shallow clone instead of blaming local-only commits', async () => {
+    const store = createRepoTestStore()
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: makeWorktree({
+        id: 'repo1::/path/wt1',
+        repoId: 'repo1',
+        displayName: 'feature-wt'
+      }),
+      localBaseRefRefresh: {
+        status: 'skipped_not_fast_forward',
+        baseRef: 'origin/main',
+        localBranch: 'main',
+        shallowHistory: true
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(vi.mocked(toast.warning).mock.calls.at(-1)?.[0]).toBe(
+      'Local main not updated: shallow clone'
+    )
+    const description = lastWarningDescriptionText()
+    expect(description).toContain('git fetch --unshallow origin')
+    expect(description).not.toContain('local-only commits')
+    expect(description).toContain('Unshallow')
+  })
+
+  it('offers no Unshallow button when the remote name could inject shell syntax', async () => {
+    const store = createRepoTestStore()
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: makeWorktree({
+        id: 'repo1::/path/wt1',
+        repoId: 'repo1',
+        displayName: 'feature-wt'
+      }),
+      localBaseRefRefresh: {
+        status: 'skipped_not_fast_forward',
+        baseRef: 'x;touch pwned/main',
+        localBranch: 'main',
+        shallowHistory: true
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'x;touch pwned/main')
+
+    const description = lastWarningDescriptionText()
+    expect(description).toContain('git fetch --unshallow x;touch pwned')
+    expect(description).not.toContain('Unshallow<')
   })
 
   it('falls back to the generic dirty detail when ownerWorktreePath is missing', async () => {
@@ -430,7 +488,7 @@ describe('createWorktree base status merge', () => {
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
-    const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+    const description = lastWarningDescriptionText()
     expect(description).toContain('uncommitted changes')
     expect(description).toContain('where local main is checked out')
     expect(description).not.toContain('The worktree at')
@@ -758,6 +816,13 @@ describe('createWorktree base status merge', () => {
 })
 
 // Creation routes by the project row's own host, so every test seeds that row.
+function lastWarningDescriptionText(): string {
+  const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+  const node = typeof description === 'function' ? description() : description
+  // Why the provider: the app mounts the Toaster inside TooltipProvider.
+  return renderToStaticMarkup(createElement(TooltipProvider, null, node))
+}
+
 function seedRepoHost(store: ReturnType<typeof createTestStore>, hostId: ExecutionHostId): void {
   store.setState({ repos: [{ ...TEST_REPO, executionHostId: hostId }] })
 }

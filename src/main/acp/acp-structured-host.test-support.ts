@@ -1,6 +1,3 @@
-// The ACP adapter behind the real host, with a scripted Grok, the real record store and an
-// on-disk journal.
-
 import { expect } from 'vitest'
 import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
@@ -41,6 +38,7 @@ import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
+import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-ownership'
 
 export const hello: AgentJournalMessageItem = {
@@ -57,7 +55,6 @@ export const attachParams = (fence: number | null = null) =>
     providerHandle: undefined
   })
 
-/** A launch that resumes the provider session once the chat has one. */
 export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStructuredLaunch> {
   return async () => ({
     spec,
@@ -90,12 +87,13 @@ export async function openHostRig(
     deps?: Partial<AcpStructuredSessionAdapterDeps>
     modelCatalog?: AgentModelCatalogService
     statusSink?: StructuredAgentSessionStatusSink
+    onRequestFailure?: StructuredAgentSessionHostDeps['onRequestFailure']
   } = {}
 ) {
   const state = hostTestState()
   const store = await openTestAgentSessionRecordStore(state.root)
   let generation = 0
-  // As the runtime wires it: every exit and late send settlement the adapter observes reaches the host.
+  // Forward lifecycle and late-send settlements as the runtime does.
   const hosted: { host: StructuredAgentSessionHost | null } = { host: null }
   const journalDatabase = openTestJournalHostDatabase(state.root)
   const rig = await openAcpAdapterRig({
@@ -129,6 +127,7 @@ export async function openHostRig(
     mintSpawnToken: () => 'spawn-a',
     now: () => HOST_TEST_NOW,
     statusSink: options.statusSink,
+    onRequestFailure: options.onRequestFailure,
     ...(options.modelCatalog ? { modelCatalog: options.modelCatalog } : {})
   })
   hosted.host = host
@@ -142,7 +141,6 @@ export async function openHostRig(
     (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
       .filter((row) => row.body.kind === 'message')
       .map((row) => messageText(row.body))
-  /** Orca's send of `hello` as `m1`, and Grok's reply `text`, ended or left running. */
   const exchange = async (text: string, end: boolean) => {
     await ready()
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
@@ -167,7 +165,6 @@ export async function openHostRig(
   return { rig, host, store, journalDatabase, fence, messages, exchange, ready }
 }
 
-/** Grok's capabilities: it loads and resumes sessions; Orca reopens with `session/load`. */
 export const RESUMES = {
   agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} } }
 }
@@ -198,7 +195,6 @@ export function stop(host: StructuredAgentSessionHost, turnId?: string) {
 export const framesOf = (child: FakeAcpChild, method: string) =>
   child.agent.frames.filter((frame) => frame.method === method)
 
-/** A new Grok chat the host attached; Grok loads its session on a later start, counting each. */
 export async function openAttachedHostRig(
   deps: Partial<AcpStructuredSessionAdapterDeps> & {
     script?: (agent: AcpScriptedAgent) => void

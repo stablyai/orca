@@ -203,9 +203,7 @@ export function mergeFetchedProjectCompatibilityForHost({
       !fetchedProjectIds.has(project.id) &&
       (!previousProjectHostIds(project).has(hostId) || projectHasCurrentOwnerOutsideHost(project))
   )
-  // Why: both merges always allocate (sourceRepoIds is rebuilt per project, and fetched setups
-  // arrive freshly cloned over IPC), so reconcile against `previous` to recover identity when a
-  // refresh changed nothing. Each key is what the producing merge already dedups by.
+  // Both merges allocate even when unchanged; reconcile by producer dedupe keys to recover previous row identity.
   return {
     projects: reconcileCatalogRows(
       previous.projects,

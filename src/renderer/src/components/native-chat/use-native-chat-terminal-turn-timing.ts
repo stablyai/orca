@@ -10,9 +10,7 @@ import {
 } from './native-chat-terminal-turn'
 import { resolveNativeChatHookState } from './use-native-chat-hook-status'
 
-/** The terminal-backed pane's turn timing for the message list: when its running turn began, by
- *  the host, and each finished turn's duration (the host's for the latest, the transcript's for
- *  history). All of it survives a remount of the pane. */
+/** Keep host live/latest-turn timing and historical transcript durations across pane remounts. */
 export function useNativeChatTerminalTurnTiming(
   paneKey: string,
   messages: readonly NativeChatMessage[],

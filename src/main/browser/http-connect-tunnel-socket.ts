@@ -8,7 +8,6 @@ import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream
 const MAX_RESPONSE_HEAD_BYTES = 16 * 1024
 const HEAD_TERMINATOR = Buffer.from('\r\n\r\n')
 
-/** A tunnel destination reached through an HTTP(S) proxy's CONNECT, ready once the proxy says 2xx. */
 export class HttpConnectTunnelSocket extends EventEmitter implements BrowserNetworkTunnelSocket {
   destroyed = false
   private readonly socket: Socket
@@ -24,7 +23,7 @@ export class HttpConnectTunnelSocket extends EventEmitter implements BrowserNetw
     const onConnected = (): void => {
       this.socket.write(request)
     }
-    // Why a variable: Node's tls.connect honors allowHalfOpen, but its typings omit it.
+    // tls.connect supports allowHalfOpen, but its typings omit it.
     const tlsOptions: ConnectionOptions & { allowHalfOpen: boolean } = {
       host,
       port,

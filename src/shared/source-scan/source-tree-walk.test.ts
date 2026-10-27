@@ -126,8 +126,7 @@ describe('directoryEntryNeedsStat', () => {
     isSymbolicLink: () => kind === 'link'
   })
 
-  // Filesystems without d_type report DT_UNKNOWN: every predicate is false, and
-  // without the stat a real directory's whole subtree is silently dropped.
+  // DT_UNKNOWN needs stat or an entire directory subtree can disappear from guards.
   it('stats an entry whose type readdir could not report', () => {
     expect(directoryEntryNeedsStat(probe('unknown'))).toBe(true)
   })

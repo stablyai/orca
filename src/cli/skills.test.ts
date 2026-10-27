@@ -6,7 +6,7 @@ const { guideModuleLoadMock, previewMock, runtimeClientConstructorMock } = vi.ho
   runtimeClientConstructorMock: vi.fn()
 }))
 
-// Why: these cases stop before planning; the installer itself is covered in skills-install.test.ts.
+// Installer behavior is covered separately in skills-install.test.ts.
 vi.mock('../main/skills/bundled-skill-install/cli-entry', () => ({
   localBundledSkillInput: previewMock,
   previewBundledSkillInstall: previewMock,
@@ -45,10 +45,7 @@ vi.mock('./bundled-skill-guides.js', () => {
 })
 
 vi.mock('./runtime-client', async () => {
-  // Why: re-export the REAL error classes rather than redefining them. format.ts
-  // narrows with `instanceof` against ./runtime/types, so a look-alike class
-  // here would make every CLI error fall through to the generic `runtime_error`
-  // shape — mirroring the barrel keeps the mock faithful to production.
+  // Error formatting uses instanceof, so the mock must preserve the production classes.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('./runtime/types.js')
 
   class RuntimeClient {

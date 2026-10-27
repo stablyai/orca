@@ -1,8 +1,7 @@
-// Layout-owner build: main's starts publish their status on the pane, and a start main could not
-// make leaves its pane showing why, whether it failed before the pane was written or after.
+// Main-owned starts retain a failed pane with its reason, even when failure preceded layout persistence.
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isHibernationDoneRecord } from '../../../../shared/hibernation-done-record'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type * as dependencies from '../../orca-runtime-create-terminal-dependencies'
 import {
@@ -136,7 +135,7 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
     opts: dependencies.TerminalCreateOptions = {},
     created?: dependencies.Worktree
   ): Promise<dependencies.RuntimeTerminalCreate> {
-    // Switch point: a start main could not make leaves its pane showing why, whatever failed.
+    // Keep main-owned failed panes visible regardless of which start step failed.
     if (
       ORCA_LAYOUT_OWNER_IS_MAIN &&
       opts.keepPaneOnStartFailure &&
@@ -154,11 +153,7 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
     return super.createTerminal(worktreeSelector, opts, created)
   }
 
-  /**
-   * Starts the first pane of a tab the window drew and main already wrote, under the window's ids;
-   * the window's pane attaches to it. Refused (`host_not_owned`) as a pane-named split is: switch
-   * off, or a tab main's layout does not hold, keeps the window's own start.
-   */
+  /** Start the window's saved first pane under its ids; host_not_owned preserves window starts when the switch is off or main does not own the tab. */
   startWindowTabTerminal(
     worktreeId: string,
     pane: { tabId: string; leafId: string },

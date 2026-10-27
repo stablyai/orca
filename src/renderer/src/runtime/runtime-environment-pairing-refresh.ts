@@ -1,15 +1,11 @@
-/**
- * A re-paired environment (a managed server's update rotates its pairing) gets a new pairing
- * revision in main. Every renderer request carries the revision it last read, so until the
- * renderer re-reads the catalog each retry is refused the same way. The first refusal re-reads
- * it; subscribers keyed on the revision then resubscribe and requests use the new pairing.
- */
+// Main rotates pairing revisions during managed updates. First stale-revision refusal refreshes renderer catalog, letting revision-keyed subscribers reconnect and requests use current credentials.
 const PAIRING_CHANGED_MESSAGE = 'Runtime environment pairing changed'
 
 type CatalogRefresher = () => Promise<void>
 
 let refreshCatalog: CatalogRefresher | null = null
 let inFlight: Promise<void> | null = null
+let trailing: Promise<void> | null = null
 
 export function setRuntimeEnvironmentCatalogRefresher(refresher: CatalogRefresher | null): void {
   refreshCatalog = refresher
@@ -36,7 +32,15 @@ export function refreshRuntimeEnvironmentCatalog(): Promise<void> {
   if (!refreshCatalog) {
     return Promise.resolve()
   }
-  inFlight ??= refreshCatalog()
+  if (inFlight) {
+    // The running read may predate this caller's change, so queue one more for the whole burst.
+    trailing ??= inFlight.then(() => {
+      trailing = null
+      return refreshRuntimeEnvironmentCatalog()
+    })
+    return trailing
+  }
+  inFlight = refreshCatalog()
     .catch((refreshError: unknown) => {
       console.warn(
         '[runtime-environments] Could not re-read a re-paired environment:',

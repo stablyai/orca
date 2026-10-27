@@ -6,6 +6,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/protocol-v
 import { OrchestrationDb } from '../orchestration-db'
 import { SCHEMA_VERSION, federatedStubHomeRunId } from '../contract-constants'
 import { migrateV40 } from './migrate-v40'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from '../reset/removed-orchestration-work-store'
 import { importFederatedControlMessage } from '../../federation-control-message'
 
 describe('federated home Run migration', () => {
@@ -43,6 +44,7 @@ describe('federated home Run migration', () => {
   }
 
   it('backfills a pre-upgrade attachment with a stub home Run that keeps its mailbox', () => {
+    db.db.exec(DROP_REMOVED_WORK_TRIGGERS_SQL)
     db.db.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN home_run_id')
     db.db.exec(`INSERT INTO remote_dispatch_attachments
       (dispatch_id, task_id, home_peer_fingerprint, runtime_epoch)

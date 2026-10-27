@@ -46,8 +46,6 @@ describe('readGitCommonHeadIdentities concurrency', () => {
     expect(identities.map((identity) => identity.worktreePath)).toEqual(
       Array.from({ length: WORKTREE_COUNT }, (_, index) => `/workspace/wt-${index}`)
     )
-    // The bounded worker pool should overlap independent reads without launching
-    // an unbounded promise fan-out.
     expect(concurrency.max).toBeGreaterThan(1)
     expect(concurrency.max).toBeLessThanOrEqual(8)
   })

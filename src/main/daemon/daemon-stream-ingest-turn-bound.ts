@@ -1,20 +1,15 @@
 import type { Socket } from 'node:net'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 
-/** Stream bytes one event-loop turn parses and dispatches before the reader yields. */
 export const STREAM_INGEST_TURN_BYTES = 64 * 1024
 
 export type TurnBoundedSocketReader = {
   detach(): void
-  /** Calls `done` once the bytes this process already read from the socket are consumed. */
+  /** Finish once bytes already buffered in this process have been consumed. */
   drainBuffered(done: () => void): void
 }
 
-/**
- * Reads `socket` into `consume`, pausing it once a turn has taken STREAM_INGEST_TURN_BYTES so
- * commands and IPC run between slices of an output flood. Unread bytes stay in the socket, so
- * ordering, end-of-stream after the last event, and daemon backpressure are unchanged.
- */
+/** Yield during output floods so commands and IPC run without losing stream ordering or backpressure. */
 export function attachTurnBoundedSocketReader(
   socket: Socket,
   consume: (chunk: Buffer) => void,
@@ -28,6 +23,10 @@ export function attachTurnBoundedSocketReader(
   let drainWaiters: { untilBytes: number; done: () => void }[] = []
 
   const releaseDrainWaiters = (): void => {
+    // Why: runs per socket read and waiters exist only during disconnect; skip the filter allocation.
+    if (drainWaiters.length === 0) {
+      return
+    }
     const ready = drainWaiters.filter((waiter) => consumedBytes >= waiter.untilBytes)
     if (ready.length === 0) {
       return
@@ -63,7 +62,7 @@ export function attachTurnBoundedSocketReader(
   }
 
   socket.on('data', onData)
-  // Why resume before the remainder: a remainder that fills the turn must leave the socket paused.
+  // Resume first so a remainder that fills this turn can leave the socket paused.
   socket.resume()
   if (remainder.length > 0) {
     onData(remainder)
@@ -79,7 +78,7 @@ export function attachTurnBoundedSocketReader(
         done()
         return
       }
-      // Why: bytes a pause left in this process were already received; slicing must not lose them.
+      // Account for unread process-local bytes so pausing cannot skip them during drain.
       drainWaiters.push({ untilBytes: consumedBytes + socket.readableLength, done })
     }
   }

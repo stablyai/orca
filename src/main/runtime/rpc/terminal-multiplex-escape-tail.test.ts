@@ -13,15 +13,14 @@ import {
   encodeTerminalStreamJson
 } from '../../../shared/terminal-stream-protocol'
 
-// Transport-level regression for #7329: the daemon's mid-escape tail
-// (pendingEscapeTailAnsi) must survive the terminal.multiplex wire so the
-// renderer can replay it after the reset. Without threading it through the
-// SnapshotStart JSON frame, the tail is lost and the next live chunk renders
-// literally ("colors/garbage around what I type").
+// Preserve pendingEscapeTailAnsi through SnapshotStart (#7329); after reset, missing partial escapes make subsequent live bytes render literally.
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
     ...overrides
   } as OrcaRuntimeService
 }
@@ -113,8 +112,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
         )!
       )
 
-      // Drive the subscribe promise chain (readTerminal/serialize awaits + the
-      // output-batcher flush timer) to completion.
+      // Finish read/serialize awaits and the output-batcher flush timer.
       for (let i = 0; i < 5; i += 1) {
         await vi.runOnlyPendingTimersAsync()
       }

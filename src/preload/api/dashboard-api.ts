@@ -1,9 +1,4 @@
-import type {
-  DashboardRevealAgentArgs,
-  DashboardSleepWorkspaceArgs,
-  DashboardSnapshot,
-  DashboardSpawnAgentArgs
-} from '../../shared/dashboard-snapshot'
+import type { DashboardRevealAgentArgs, DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -18,14 +13,10 @@ export type DashboardApi = {
   onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
   /** `explicit` only for a click on the card; watching an open dialog is a view. */
   onAckAgent: (callback: (paneKey: string, intent: 'view' | 'explicit') => void) => () => void
-  onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
-  onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
   requestSnapshot: () => Promise<void>
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
   revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
   ackAgent: (paneKey: string, intent: 'view' | 'explicit') => Promise<void>
-  spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
-  sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
 }
 
 export type TerminalPreviewApi = {

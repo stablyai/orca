@@ -1,25 +1,29 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { findVisibleBrowserLinkTarget } from '@/lib/visible-browser-link-target'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
+import { findPage } from '../../store/slices/browser-page-records'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/browser-page-window-close'
 import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
   endAgentInputFocusGuard,
   watchUserComposition
 } from '@/components/browser-pane/host-guest/agent-input-focus-guard'
+import {
+  setBrowserAgentPageActive,
+  showBrowserAgentCursor
+} from '@/components/browser-pane/agent-cursor/browser-agent-activity-state'
 
-/**
- * A client-hosted page is a local Electron webview on this desktop that happens to belong to a
- * remote runtime. Its guest events come from this main process, not from the host's tab sync, so
- * the blanket runtime-active guard on those channels would drop them on the floor.
- */
+/** Client-hosted webview events originate in this desktop even for remote workspaces; runtime-active guards would incorrectly drop them. */
 function isClientHostedBrowserPage(browserPageId: string): boolean {
   return (
     useAppStore.getState().remoteBrowserPageHandlesByPageId[browserPageId]?.placement?.kind ===
@@ -60,6 +64,21 @@ export function registerBrowserStateIpcBridge(
   if (unsubscribeCertificateFailure) {
     unsubs.push(unsubscribeCertificateFailure)
   }
+  // Why no runtime guard: only guests in this process report, and streamed pages have none here.
+  const unsubscribeAudioState = window.api.browser.onAudioStateChanged?.(
+    ({ browserPageId, audible }) => {
+      const store = useAppStore.getState()
+      store.setBrowserPageAudible(browserPageId, audible)
+      // Why: main reports each newly registered guest, and a new guest (eviction, crash) starts unmuted.
+      const tabId = findPage(store.browserPagesByWorkspace, browserPageId)?.workspaceId
+      if (tabId && store.browserAudioMutedTabIds[tabId]) {
+        void window.api.browser.setPageAudioMuted({ browserPageId, muted: true })
+      }
+    }
+  )
+  if (unsubscribeAudioState) {
+    unsubs.push(unsubscribeAudioState)
+  }
   unsubs.push(
     window.api.browser.onNavigationUpdate(({ browserPageId, url, title }) => {
       if (isRuntimeEnvironmentActive()) {
@@ -95,7 +114,7 @@ export function registerBrowserStateIpcBridge(
   if (unsubscribeCapturePaintHold) {
     unsubs.push(() => {
       unsubscribeCapturePaintHold()
-      // Why: the release for a live hold can no longer arrive, so it must not leave the page drawn.
+      // A dead hold cannot release later; clear it now so the page cannot remain drawn indefinitely.
       for (const token of capturePaintHoldTokens.values()) {
         releaseBrowserAutomationVisibility(token)
       }
@@ -120,6 +139,23 @@ export function registerBrowserStateIpcBridge(
       clearAgentInputFocusGuards()
     })
   }
+  const unsubscribeAgentActivity = window.api.browser.onAgentActivity?.(
+    ({ browserPageId, worktreeId, active }) => {
+      setBrowserAgentPageActive(browserPageId, active, worktreeId)
+    }
+  )
+  if (unsubscribeAgentActivity) {
+    unsubs.push(unsubscribeAgentActivity)
+  }
+  const unsubscribeAgentCursor = window.api.browser.onAgentCursor?.((event) => {
+    // Main waits for this answer, so a page nobody can see answers at once.
+    if (!showBrowserAgentCursor(event) && event.awaitsArrival) {
+      window.api.browser.agentCursorArrived(event.sequence)
+    }
+  })
+  if (unsubscribeAgentCursor) {
+    unsubs.push(unsubscribeAgentCursor)
+  }
   unsubs.push(
     window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
       if (isRuntimeEnvironmentActive()) {
@@ -141,12 +177,25 @@ export function registerBrowserStateIpcBridge(
       if (!sourcePage || runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
-      openUrlInTabBesideBrowserPage({
+      const placement = findVisibleBrowserLinkTarget(store, sourcePage.worktreeId)
+      const openedPageId = openUrlInTabBesideBrowserPage({
         sourcePageId: browserPageId,
         worktreeId: sourcePage.worktreeId,
         url,
-        activate: activate ?? true
+        activate: activate ?? true,
+        placement
       })
+      if (openedPageId) {
+        markBrowserPageOpenedByPage(openedPageId)
+        if (placement && activate !== false) {
+          store.focusGroup(sourcePage.worktreeId, placement.targetGroupId)
+        }
+      }
+    })
+  )
+  unsubs.push(
+    window.api.browser.onSessionProfilesChanged(() => {
+      void useAppStore.getState().fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
     })
   )
 }

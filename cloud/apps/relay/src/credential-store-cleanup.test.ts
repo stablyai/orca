@@ -127,8 +127,7 @@ describe('credential cleanup invite reaper', () => {
   })
 
   it('never deletes an invite that a reader could still consume, however old', async () => {
-    // Retention is measured on updated_at, and a long-lived available invite has an old one. The
-    // state filter is what keeps the reaper from deleting a credential still in use.
+    // Old updated_at does not settle a live invite; state guard must prevent reaping it.
     const database = await openInMemoryRelayDatabase()
     const store = new RelayCredentialStore(database, () => NOW)
     const ancient = NOW - 400 * DAY_MS
@@ -168,8 +167,7 @@ describe('credential cleanup invite reaper', () => {
   })
 
   it('still expires credentials the sweep owns, and only those past their deadline', async () => {
-    // The reaper runs after the sweep in the same call, so this pins that adding it did not
-    // displace any of the five state transitions the sweep is there for.
+    // Reaper follows sweep; ensure all five prior transitions still run.
     const database = await openInMemoryRelayDatabase()
     const store = new RelayCredentialStore(database, () => NOW)
     await insertInvite(database, {
@@ -245,16 +243,12 @@ describe('credential cleanup invite reaper', () => {
   })
 
   it('reaps connection bases whose deadline passed over a day ago, and nothing else', async () => {
-    // Retention is measured on deadline, and both readers of a basis require deadline >= now, so a
-    // deadline a day in the past is already unusable however the active flag reads. The active = 0
-    // clause is what keeps the batch an index range, not what makes the row safe to delete.
+    // Passed deadlines make bases unusable regardless of active flag; active=0 provides an index range, not deletion safety.
     const database = await openInMemoryRelayDatabase()
     const store = new RelayCredentialStore(database, () => NOW)
     await insertBasis(database, { id: 'stale-inactive', active: 0, deadline: NOW - 2 * DAY_MS })
     await insertBasis(database, { id: 'recent-inactive', active: 0, deadline: NOW - 60_000 })
-    // A long-lived splice: still active hours after the 30s deadline it was created with. The
-    // sweep deactivates it this cycle and the reaper takes it in the same call, which is safe
-    // precisely because no reader would have accepted it since its deadline passed.
+    // Sweep deactivates this long-lived splice and reaps it immediately; no reader accepts its already-expired basis.
     await insertBasis(database, { id: 'stale-active', active: 1, deadline: NOW - 400 * DAY_MS })
     await insertBasis(database, { id: 'live-active', active: 1, deadline: NOW + DAY_MS })
 

@@ -11,6 +11,8 @@ const mockState: {
   folderWorkspaces: never[]
   projectGroups: never[]
   repos: never[]
+  endpointProjects: never[]
+  endpointProjectHostSetups: never[]
   worktreesByRepo: Record<string, never>
 } = {
   settings: {},
@@ -18,6 +20,8 @@ const mockState: {
   folderWorkspaces: [],
   projectGroups: [],
   repos: [],
+  endpointProjects: [],
+  endpointProjectHostSetups: [],
   worktreesByRepo: {}
 }
 const updateSettingsOrThrow = vi.fn(async (next: { aiVaultSearch: { enabled: boolean } }) => {
@@ -73,11 +77,9 @@ vi.mock('./ai-vault-original-pane-actions', () => ({
 vi.mock('./ai-vault-session-delete-action', () => ({
   useAiVaultSessionDeleteAction: () => vi.fn()
 }))
-// The virtualizer measures a zero-height viewport under happy-dom; the rows it would
-// choose are exactly the grouped sessions, so render those instead.
+// happy-dom has no measurable viewport; render the real grouped sessions in place of virtualized rows.
 vi.mock('./AiVaultSessionVirtualList', () => ({
   AiVaultSessionVirtualList: ({ groups }: { groups: readonly AiVaultSessionListGroup[] }) => (
-    // A null label is what tells the real list to render this group's rows without a header.
     <ul data-group-labels={groups.map((group) => group.label ?? '(untitled)').join('|')}>
       {groups.flatMap((group) =>
         group.sessions.map((session) => <li key={session.id}>{session.title}</li>)
@@ -158,10 +160,13 @@ it('switches to index search with the same query once indexing is enabled', asyn
     aiVaultSearch: { enabled: true, historyDays: null }
   })
   await waitFor(() =>
-    expect(searchSessions).toHaveBeenCalledWith(expect.objectContaining({ query: 'foo' }), 'local')
+    expect(searchSessions).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'foo' }),
+      'local',
+      expect.any(Function)
+    )
   )
   expect(screen.queryByRole('button', { name: 'Enable' })).toBeNull()
-  // The index answered with no hits, so the title filter's own row must not linger.
   await waitFor(() => expect(screen.queryByText('Fix the foo pipeline')).toBeNull())
 })
 
@@ -173,7 +178,6 @@ it('shows the whole history and no offer while the box is empty', async () => {
   expect(screen.getByText('Fix the foo pipeline')).toBeTruthy()
   expect(screen.getByText('Rename the bar widget')).toBeTruthy()
   expect(searchSessions).not.toHaveBeenCalled()
-  // The same bar serves both modes; browsing it reports the history counts and its own sort.
   expect(screen.getByText('2 sessions')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Sort sessions: Last updated' })).toBeTruthy()
   expect(screen.queryByText('2 results')).toBeNull()

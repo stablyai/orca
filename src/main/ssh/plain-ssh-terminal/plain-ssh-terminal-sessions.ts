@@ -1,9 +1,4 @@
-/**
- * Plain SSH terminals: an unmanaged `ssh` login to a host whose move to its Orca server is blocked,
- * so the user can keep working there meanwhile. A session is not an Orca workspace or terminal:
- * nothing persists or restores it, no agent or status runs in it, and it never marks the host
- * connected. One per host; it ends when ssh exits, its window closes or reloads, or Orca quits.
- */
+/** Offer one ephemeral unmanaged SSH session per blocked-migration host; no workspace persistence, agent/status or connected-host state. End on SSH exit, window close/reload or app quit. */
 import { randomUUID } from 'node:crypto'
 import type * as pty from 'node-pty'
 import type { SshTarget } from '../../../shared/ssh-types'
@@ -18,7 +13,6 @@ import { buildPlainSshTerminalArgs } from './plain-ssh-terminal-args'
 
 export type PlainSshTerminalDeps = {
   getTarget: (targetId: string) => SshTarget | undefined
-  /** True only while the host's move to its Orca server is blocked. */
   isMoveBlocked: (targetId: string) => boolean
   findSsh: () => string | null
   mayConfigClaimAlias: (alias: string) => boolean
@@ -27,7 +21,6 @@ export type PlainSshTerminalDeps = {
   platform: NodeJS.Platform
 }
 
-/** Where a session's output and exit go; false once that window is gone. */
 type PlainSshTerminalSink = (event: PlainSshTerminalEvent) => boolean
 
 type Session = {
@@ -41,19 +34,19 @@ type Session = {
   paused: boolean
 }
 
-/** A host's one claim, taken before the first await so concurrent opens can't both spawn. */
+/** Claim before awaiting so concurrent opens cannot spawn twice. */
 type Slot = { owner: number; token: symbol; session: Session | null }
 
 const FORCE_KILL_AFTER_MS = 5_000
 const QUIT_FORCE_KILL_AFTER_MS = 1_000
-// Why: a flood (cat of a big file) must wait for the window to render, not pile up in IPC.
+// Backpressure large output until rendered instead of accumulating unbounded IPC.
 const PAUSE_ABOVE_UNACKED = 512 * 1024
 const RESUME_BELOW_UNACKED = 128 * 1024
 const MIN_SIZE = 2
 const MAX_SIZE = 1_000
 
 const slots = new Map<string, Slot>()
-/** Every process not yet exited, including ones already hung up. */
+/** Track hung-up processes until exit so quit can still enforce its deadline. */
 const sessions = new Map<string, Session>()
 let quitting = false
 
@@ -69,7 +62,6 @@ function clampSize(value: unknown, fallback: number): number {
     : fallback
 }
 
-/** Frees a host's claim; a live session in it is hung up. */
 function releaseSlot(targetId: string, slot: Slot): void {
   if (slots.get(targetId) === slot) {
     slots.delete(targetId)
@@ -79,41 +71,32 @@ function releaseSlot(targetId: string, slot: Slot): void {
   }
 }
 
-/**
- * Why: on Windows node-pty records the exit before it emits one, and a native call in that gap
- * throws ("already exited"). From an IPC listener that would reach the fatal main-process guard.
- */
+/** Windows node-pty can record exit before emitting it; catch native calls in that gap before they reach the fatal IPC guard. */
 function onLivePty(session: Session, call: (proc: pty.IPty) => void): void {
   try {
     call(session.proc)
-  } catch {
-    // Exited; its exit event follows.
-  }
+  } catch {}
 }
 
 function hangUp(session: Session, forceAfterMs: number): void {
   if (!session.hungUp) {
     session.hungUp = true
     if (session.paused) {
-      // Why: a paused Windows pty never reads its socket's end, so it would never report exit.
+      // Resume paused Windows PTYs so socket EOF can produce the exit event.
       session.paused = false
       onLivePty(session, (proc) => proc.resume())
     }
     try {
       session.proc.kill()
-    } catch {
-      // Already gone; its exit cleans up.
-    }
+    } catch {}
   }
-  // Why armed again when already hung up: quit's shorter deadline must apply to it too.
+  // Re-arm for already-hung-up sessions so quit's shorter deadline still applies.
   const forceKill = setTimeout(() => {
     if (sessions.has(session.id)) {
       try {
-        // Why: Windows rejects a signal name; its kill() above already terminated the console.
+        // Windows rejects signal names; the earlier kill already terminated its console.
         session.proc.kill('SIGKILL')
-      } catch {
-        // Already gone.
-      }
+      } catch {}
     }
   }, forceAfterMs)
   forceKill.unref?.()
@@ -127,7 +110,7 @@ export async function openPlainSshTerminal(
 ): Promise<PlainSshTerminalOpenResult> {
   const targetId = typeof request.targetId === 'string' ? request.targetId : ''
   const target = targetId ? deps.getTarget(targetId) : undefined
-  // Why `owner`: internal targets (a server's own SSH hops) are never the user's host.
+  // Internal server-owned SSH hops are not user hosts.
   if (!target || target.owner) {
     return { ok: false, reason: 'unknown-target' }
   }
@@ -141,7 +124,7 @@ export async function openPlainSshTerminal(
   if (held && held.owner !== request.owner) {
     return { ok: false, reason: 'already-open' }
   }
-  // Why the same window may replace its own: it shows one per host, so an older one is stale.
+  // Same-window opens supersede their own stale per-host claim.
   if (held) {
     releaseSlot(target.id, held)
   }
@@ -163,7 +146,7 @@ export async function openPlainSshTerminal(
   let proc: pty.IPty
   try {
     const ptySpawn = await deps.loadPtySpawn()
-    // A reload, a newer open or quit during the await took the claim; spawn nothing.
+    // Reload, replacement or quit revoked this claim during await; never spawn.
     if (!stillClaimed()) {
       return { ok: false, reason: 'cancelled' }
     }
@@ -267,7 +250,6 @@ export function ackPlainSshTerminal(sessionId: unknown, owner: number, chars: un
   }
 }
 
-/** Hangs up ssh and frees its host at once; a stuck process is killed outright later. */
 export function closePlainSshTerminal(sessionId: unknown, owner: number): void {
   const session = ownedSession(sessionId, owner)
   if (!session) {
@@ -282,7 +264,6 @@ export function closePlainSshTerminal(sessionId: unknown, owner: number): void {
   hangUp(session, FORCE_KILL_AFTER_MS)
 }
 
-/** Every session a window owns, opened or still opening, e.g. when it closes or reloads. */
 export function closePlainSshTerminalsOwnedBy(owner: number): void {
   for (const [targetId, slot] of slots) {
     if (slot.owner === owner) {
@@ -291,7 +272,7 @@ export function closePlainSshTerminalsOwnedBy(owner: number): void {
   }
 }
 
-/** On quit: nothing restores these, so none may outlive Orca. Resolves once all have exited. */
+/** Kill ephemeral sessions on quit and wait for their exits. */
 export async function closeAllPlainSshTerminals(): Promise<void> {
   quitting = true
   slots.clear()

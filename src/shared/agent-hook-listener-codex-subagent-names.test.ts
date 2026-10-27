@@ -65,7 +65,14 @@ describe('Codex child names from provider metadata', () => {
 
   it('recovers a child first seen in a tool hook and retries metadata that was not yet written', () => {
     const { writeMeta, post } = fixture()
-    expect(post('PostToolUse')?.[0]?.description).toBeUndefined()
+    expect(post('PostToolUse')).toEqual([
+      expect.objectContaining({
+        id: 'child',
+        agentType: 'default',
+        description: undefined,
+        state: 'working'
+      })
+    ])
     writeMeta({ agent_path: '/root/review/mobile' })
     expect(post('PostToolUse')?.[0]?.description).toBe('mobile')
   })

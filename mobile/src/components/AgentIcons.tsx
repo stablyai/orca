@@ -1,9 +1,7 @@
 import Svg, { Path } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
 
-// Why: SVG paths sourced from the desktop codebase
-// (src/renderer/src/components/status-bar/icons.tsx) so mobile and desktop
-// stay visually identical for Claude/Codex branding.
+// Use desktop status-bar SVG paths to keep Claude/Codex branding identical.
 
 export function ClaudeIcon({ size = 16 }: { size?: number }) {
   return (

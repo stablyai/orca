@@ -4,21 +4,14 @@ import {
   type BrowserNetworkTunnelSocket
 } from './browser-network-tunnel-stream-state'
 
-/**
- * Adapts an execution route's socket into the `Duplex` the local SOCKS server
- * pipes to. Resolves only once the underlying transport reports `connect`, so
- * the SOCKS success reply is never sent for a dial that already failed.
- */
+// Wait for connect before allowing a SOCKS success reply.
 export function openExecutionRouteSocketAsDuplex(
   socket: BrowserNetworkTunnelSocket,
   options: { connectTimeoutMs?: number } = {}
 ): Promise<Duplex> {
   return new Promise<Duplex>((resolve, reject) => {
     let settled = false
-    // Why (review P2-1): some transports flow buffered bytes on the nextTick
-    // queue while emitting 'connect' from a microtask — a server banner or TLS
-    // record can arrive before any consumer listener exists. Buffer from the
-    // very start and replay through the duplex.
+    // Transports may emit buffered data on nextTick before their connect microtask.
     const earlyData: Buffer[] = []
     let deliver = (bytes: Buffer): void => {
       earlyData.push(bytes)

@@ -18,7 +18,7 @@ function finish<T>(callback: Callback<T>, error: NodeJS.ErrnoException | null, v
   callback(null, value)
 }
 
-/** Runs the managed installers' callback-style SFTP surface against the local disk in tests. */
+/** Adapt the installers' callback-style SFTP operations to local disk for tests. */
 export function createManagedHookLocalFilesystem(): SFTPWrapper {
   const adapter = {
     readFile(path: string, _encoding: string, callback: Callback<string | Buffer>): void {
@@ -36,8 +36,7 @@ export function createManagedHookLocalFilesystem(): SFTPWrapper {
       stat(path, (error, stats) => finish(callback, error, stats))
     },
     readdir(path: string, callback: Callback<{ filename: string }[]>): void {
-      // Why names only: Kiro lists its agent configs by name; attrs have no consumer,
-      // matching the WSL adapter's `{ filename }` entries.
+      // Kiro needs names only, matching the WSL adapter.
       readdir(path, (error, names) =>
         finish(
           callback,

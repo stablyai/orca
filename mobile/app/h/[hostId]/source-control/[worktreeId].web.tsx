@@ -3,16 +3,11 @@ import { useLocalSearchParams } from 'expo-router'
 import { MobileSourceControlPanel } from '../../../../src/source-control/MobileSourceControlPanel'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 import { parseSourceControlHubTab } from '../../../../src/source-control/mobile-source-control-hub-tab'
+import { useSessionDiffOpenHandlers } from '../../../../src/session/session-diff-open-handlers'
 
-/**
- * The page's route for the source-control hub: the screen itself. The native route file mounts the shell, whose
- * native view module throws at import in a browser, and the manifest imports every route.
- */
+// Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
 export default withWorkspaceRoute(function MobileSourceControlScreen() {
-  // Through `firstParam`, as the native sibling does. The page reaches this route only through
-  // `init.route`, whose params are a `Record<string, string>`, so an array cannot arrive today —
-  // read the same way regardless, because the two files are meant to be the same screen and a
-  // difference between them is a difference nobody would look for.
+  // Match native firstParam handling even though init.route.params currently guarantees strings.
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -20,14 +15,19 @@ export default withWorkspaceRoute(function MobileSourceControlScreen() {
     origin?: string | string[]
     tab?: string | string[]
   }>()
+  const hostId = firstParam(params.hostId)
+  const worktreeId = firstParam(params.worktreeId)
+  const origin = firstParam(params.origin)
+  const sessionHandlers = useSessionDiffOpenHandlers(hostId, worktreeId)
   return (
     <MobileSourceControlPanel
-      hostId={firstParam(params.hostId)}
-      worktreeId={firstParam(params.worktreeId)}
+      hostId={hostId}
+      worktreeId={worktreeId}
       name={firstParam(params.name)}
-      origin={firstParam(params.origin)}
+      origin={origin}
       initialTab={parseSourceControlHubTab(firstParam(params.tab))}
       embedded={false}
+      {...(origin === 'session' ? sessionHandlers : undefined)}
     />
   )
 })

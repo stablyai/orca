@@ -25,8 +25,7 @@ export type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
   executionHostId: ExecutionHostId
   requireAuthoritative?: boolean
   directSshAuthority?: DirectSshAuthority
-  // Why (#10562): the caller's own view of what it is about to purge. Teardown is
-  // requested per caller, so this must never be shared with a coalesced scan.
+  // Each caller’s purge snapshot needs its own teardown; never share it with coalesced scan state (#10562).
   connectionId?: string | null
   knownWorktreeIds?: readonly string[]
   // Why a callback: staleness is judged against the client's live applied version, which a

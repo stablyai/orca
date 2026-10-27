@@ -1,9 +1,4 @@
-/**
- * The renderer's own main process refused `agent.launch` while the same renderer aimed at a remote
- * host was admitted. This drives the registered `runtime:call` / `runtime:subscribe` handlers and
- * feeds what they actually advertise to the real host gate, so wiring and gate are proved together
- * rather than each against a restatement of the other.
- */
+/** Exercise advertised IPC capabilities through the real host gate, including the local-renderer launch path. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeCapability } from '../../shared/protocol-version'
@@ -56,7 +51,7 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
       options: AdvertisedClient
     ): Promise<void> {
       advertised.streaming.push(options)
-      // Never settles: the handler only attaches a cleanup callback to this.
+      // Keep streaming open; the handler attaches only a cleanup callback.
       return new Promise<void>(() => {})
     }
   }
@@ -82,8 +77,7 @@ function invoke(channel: string, args: unknown): void {
   void handler(rendererEvent(), args)
 }
 
-/** Throws rather than defaulting: a missing record would make `supportsAgentLaunch` pass on the
- *  `clientKind === undefined` branch and every assertion below would be vacuous. */
+/** Missing dispatch must fail rather than pass the gate via undefined clientKind. */
 function onlyAdvertisedClient(records: readonly AdvertisedClient[]): AdvertisedClient {
   const client = records[0]
   if (!client) {
@@ -119,8 +113,6 @@ describe('desktop renderer reaching agent.launch on its own main process', () =>
     const client = onlyAdvertisedClient(advertised.unary)
     expect(client.clientKind).toBe('runtime')
     expect(supportsAgentLaunch(client)).toBe(true)
-    // Negative control: the gate does refuse this same caller once the capability is taken away,
-    // so the assertion above is about the advertised list, not a permissive predicate.
     expect(supportsAgentLaunch(withoutLaunchCapability(client))).toBe(false)
   })
 
@@ -144,7 +136,6 @@ describe('desktop renderer reaching agent.launch on its own main process', () =>
       expect(caller).toEqual({ kind: 'desktop' })
       expect(agentLaunchOperationCallerKey({ caller })).toBe('trusted-local:desktop')
     }
-    // Negative control: without the transport's word the same renderer has no identity at all.
     const { caller: _named, ...unnamed } = onlyAdvertisedClient(advertised.unary)
     expect(resolveRpcCallerIdentity(unnamed)).toBeUndefined()
     expect(rpcCallerOperationKey({ kind: 'local-cli' })).toBe('trusted-local:runtime')

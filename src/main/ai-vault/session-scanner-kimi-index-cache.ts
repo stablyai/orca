@@ -13,8 +13,7 @@ type KimiSessionIndexCacheEntry = {
 }
 
 export const KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS = 64
-// Active Vault scans refresh this window; closing the surface releases parsed
-// index maps soon without making a live Kimi session reread on every scan.
+// Active scans refresh expiry; idle surfaces release parsed index maps.
 export const KIMI_WORK_DIR_CACHE_TTL_MS = 5 * 60_000
 
 export class KimiSessionIndexCache {
@@ -34,8 +33,7 @@ export class KimiSessionIndexCache {
       }
     }
     this.entries.clear()
-    // Why: a read already awaiting stat/load when its owner clears the cache
-    // may finish later, but must not silently recreate the released entry.
+    // Reads started before clear must not repopulate released entries.
     this.minimumCacheGeneration = this.nextGeneration + 1
   }
 
@@ -62,8 +60,7 @@ export class KimiSessionIndexCache {
       return cached.value
     }
     if (cached && cached.generation > generation) {
-      // Why: a slower, older stat must not replace a newer file generation
-      // that another concurrent scan already cached for the same path.
+      // An older stat must not overwrite a generation cached by a newer concurrent read.
       return load()
     }
 

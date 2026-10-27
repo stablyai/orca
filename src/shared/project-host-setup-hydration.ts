@@ -2,7 +2,7 @@ import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import {
   getProjectIdentityKey,
-  projectHostSetupProjectionFromRepos,
+  projectHostSetupCompatibilityFromRepos,
   type ProjectHostSetupProjection
 } from './project-host-setup-projection'
 
@@ -38,9 +38,7 @@ function normalizeHydratedProjectHostSetupProjection(
     if (!projectId || projectId === project.id) {
       return [project]
     }
-    // Why: runtime-hosted copies of the same Git repo may hydrate path-scoped
-    // project ids. If the repo-derived project already exists, keep that bucket
-    // authoritative so VM copies group under the user's single project.
+    // Runtime copies may use path-scoped IDs; retain repo-derived canonical projects so VM copies share the user’s bucket.
     if (derivedProjectIds.has(projectId)) {
       changed = true
       return []
@@ -100,20 +98,15 @@ function mergeDerivedProjectHostSetupProjection(
   }
 }
 
-/**
- * The projects and setups a catalog groups by: the hydrated rows, normalized onto the repos'
- * identities, and backed by the repo-derived rows when any repo has no setup. The renderer's
- * selector is a memo over this.
- */
+/** Normalize hydrated IDs onto repos and fill missing setups with repo-derived rows; the renderer selector memoizes this projection. */
 export function resolveProjectHostSetupProjection(
   repos: readonly Repo[],
   projects: readonly Project[],
   setups: readonly ProjectHostSetup[],
-  derived: ProjectHostSetupProjection = projectHostSetupProjectionFromRepos(repos)
+  derived: ProjectHostSetupProjection = projectHostSetupCompatibilityFromRepos(repos)
 ): ProjectHostSetupProjection {
   const normalized = normalizeHydratedProjectHostSetupProjection(repos, projects, setups, derived)
-  // Why: older runtimes/profiles may hydrate empty or partial project/setup arrays
-  // beside legacy repos. Keep repo-backed compatibility rows visible in that case.
+  // Older runtimes/profiles may provide partial/empty project rows beside repos; keep repo-backed fallbacks visible.
   return hasReposWithoutProjectHostSetup(repos, setups) || normalized.changed
     ? mergeDerivedProjectHostSetupProjection(derived, normalized)
     : { projects, setups }

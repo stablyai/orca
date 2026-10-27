@@ -68,7 +68,8 @@ describe('activateFileExplorerNode', () => {
     expect(loadDir).toHaveBeenCalledTimes(1)
     expect(loadDir).toHaveBeenCalledWith('/repo/linked-docs', 0, {
       force: true,
-      failOnError: true
+      failOnError: true,
+      wakeWslDistro: true
     })
     expect(markPathAsDirectory).toHaveBeenCalledWith('/repo/linked-docs')
     expect(toggleDir).toHaveBeenCalledWith('wt-1', '/repo/linked-docs')

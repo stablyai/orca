@@ -1,6 +1,4 @@
-// The queued-message actions: Send-now, Delete and in-place Edit on one card, and Resume on a
-// paused queue. Not gated on agent-session.queued-messages.v1: a host without it still publishes
-// the cards it kept unsent. A host older than the queue, or than edit-v1, lacks them.
+// Do not gate queued-card actions on queued-messages.v1: hosts without it still publish unsent cards. Older pre-queue/edit hosts lack the methods.
 
 import { defineMethod } from '../core'
 import {
@@ -10,6 +8,7 @@ import {
 } from './structured-agent-session-gate'
 import {
   QueuedMessageActionParams,
+  QueuedMessageMoveParams,
   QueuedMessageUpdateParams,
   QueuedMessageEditHoldParams,
   QueuedMessagesResumeParams
@@ -53,6 +52,13 @@ export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
     params: QueuedMessageActionParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).queuedMessageDelete(callerFor(ctx), params)
+  }),
+  defineMethod({
+    name: 'agentSession.queuedMessageMove',
+    permission: 'workspace',
+    params: QueuedMessageMoveParams,
+    handler: async (params, ctx) =>
+      requireSessionHost(ctx, params.envelope.sessionId).queuedMessageMove(callerFor(ctx), params)
   }),
   defineMethod({
     name: 'agentSession.queuedMessagesResume',

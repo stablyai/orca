@@ -1,3 +1,5 @@
+import { createAiVaultAssociationObserver } from '../ai-vault-projection-dependency'
+import { invalidateAiVaultHostLegCache } from '../ai-vault-host-leg-cache'
 import {
   registerRuntimeEnvironmentSubscriptionHandlers,
   type RetainedRemoteRuntimeSubscription,
@@ -42,6 +44,7 @@ import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-en
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
 import { retireMobileDesktopRelayEnvironment } from './runtime-environment-mobile-relay-hosts'
 import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
+import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
 import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
 import { resetDesktopBrowserBridgeEnvironment } from '../desktop-browser-bridge-reconcile'
 
@@ -54,24 +57,20 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
       pending.close()
     }
   }
-  // Why: removed runtimes must not retain terminal/browser WebSockets until renderer teardown.
+  // Removed runtimes must release terminal/browser sockets before renderer teardown.
   for (const [subscriptionId, subscription] of remoteRuntimeSubscriptions) {
     if (subscription.environmentId !== environmentId) {
       continue
     }
     remoteRuntimeSubscriptions.delete(subscriptionId)
-    // Why: one failing teardown must not abandon this environment's other
-    // sockets -- that strands exactly the dead handles this sweep exists to
-    // retire. Guard the two steps independently so neither can skip the other,
-    // and so the isolation stays structural rather than resting on a claim that
-    // nothing inside notifyClosed will ever throw.
+    // Isolate close and notification failures so neither strands this environment's sibling subscriptions.
     try {
       subscription.close()
     } catch (error) {
       console.warn('[runtime-environments] subscription close failed during retirement:', error)
     }
     try {
-      // Why: a shared-control logical close never calls back, so notify directly.
+      // Shared-control logical close does not call back.
       subscription.notifyClosed()
     } catch (error) {
       console.warn('[runtime-environments] subscription close notice failed:', error)
@@ -80,7 +79,7 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
 }
 /** Returns once the environment's client-hosted browser pages have been released. */
 export function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
-  // Why: a same-id re-pair must retire every transport that still authenticates as the old peer.
+  // Same-ID re-pairing must retire every transport authenticated as the former peer.
   advanceRuntimeEnvironmentCapabilityIncarnation(environmentId)
   advanceRuntimeEnvironmentTransportGeneration(environmentId)
   closeRemoteRuntimeRequestConnection(environmentId)
@@ -99,10 +98,7 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): Pr
   )
 }
 
-/**
- * A re-pair main ran (an update or rollback from the CLI) reaches renderers only through status
- * published under the new revision; without an owner nothing publishes it (P1-C).
- */
+/** CLI update/rollback re-pairing needs a new status owner to publish the saved revision to renderers. */
 function reactivateRuntimeEnvironmentStatus(environmentId: string): void {
   const userDataPath = getUserDataPath()
   if (
@@ -121,13 +117,20 @@ let stopPreferenceWatch: (() => void) | undefined
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {
   stopPreferenceWatch?.()
-  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath())
+  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath(), () => {
+    // CLI and recipe removals skip the Settings path; drop their session partitions here too.
+    try {
+      reconcileOrphanedRuntimeSessions(store, getUserDataPath())
+    } catch (error) {
+      console.warn('[runtime-environments] orphaned session reconcile failed:', error)
+    }
+    publishRuntimeEnvironmentCatalogChanged()
+  })
   for (const pending of pendingSubscriptions.values()) {
     pending.close()
   }
   pendingSubscriptions.clear()
-  // Why: keep direct re-registration safe even though register-core-handlers
-  // normally guards this path; otherwise the binary send listener can stack.
+  // Direct re-registration must not accumulate binary-send listeners.
   resetSharedControlSupport()
   for (const channel of RUNTIME_ENVIRONMENT_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
@@ -183,6 +186,8 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     store
   })
   registerRuntimeEnvironmentSubscriptionHandlers({
+    createAssociationObserver: (environmentId, identity) =>
+      createAiVaultAssociationObserver(environmentId, identity, invalidateAiVaultHostLegCache),
     getUserDataPath,
     remoteRuntimeSubscriptions,
     pendingSubscriptions,

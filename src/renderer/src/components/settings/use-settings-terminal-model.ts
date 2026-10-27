@@ -30,7 +30,7 @@ export function useSettingsTerminalModel(
   const needsLocalWindowsRuntimeCapabilities =
     (model.isWindows || model.isWebClient) &&
     (navigation.neededSectionIds.has('agents') || navigation.neededSectionIds.has('general'))
-  // Why: a server that is no longer saved has no capabilities to load; never probe another host.
+  // Removed servers have no capabilities to load; never probe a substitute host.
   const shouldLoadWindowsTerminalCapabilities =
     model.settingsHostScope.available &&
     (hasActiveRuntimeEnvironment ||
@@ -39,14 +39,14 @@ export function useSettingsTerminalModel(
           navigation.neededSectionIds.has('accounts') ||
           needsRepoWindowsRuntimeCapabilities ||
           (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities))))
-  // Why: terminal, account, and repository settings describe the host chosen in the page.
+  // Capabilities describe the host selected in Settings.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
     true,
     windowsTerminalCapabilityOwnerKey,
     capabilityLoadTarget
   )
-  // Why: global agent and project defaults belong to the desktop, not its active remote.
+  // Global agent/project defaults belong to the desktop despite the active remote.
   const remoteViewLocalWindowsRuntimeCapabilities = useLocalWindowsTerminalCapabilities(
     needsLocalWindowsRuntimeCapabilities &&
       runtimeTarget.kind === 'environment' &&
@@ -58,7 +58,7 @@ export function useSettingsTerminalModel(
     runtimeTarget.kind === 'local' || model.isWebClient
       ? windowsTerminalCapabilities
       : remoteViewLocalWindowsRuntimeCapabilities
-  // Why: only supported-but-unavailable WSL (Windows) should render disabled controls, not unsupported WSL (macOS/Linux).
+  // Only Windows can show unavailable WSL controls; unsupported platforms must hide them.
   const runtimeWslSupportedPlatform = isWindowsTerminalCapabilityHost({
     isWindowsRenderer: model.isWindows,
     isWebClient: model.isWebClient,
@@ -74,11 +74,11 @@ export function useSettingsTerminalModel(
   const isWindowsTerminalHost = runtimeWslSupportedPlatform
 
   if ([...navigation.neededSectionIds].some((id) => !model.mountedSectionIds.has(id))) {
-    // Why: record newly needed sections during render so panes don't wait for a follow-up Effect.
+    // Record needed sections during render to avoid a blank pass before an effect.
     model.setMountedSectionIds(navigation.neededSectionIds)
   }
 
-  // Why: load hooks for the selected host's repo id, not the representative id (they differ for non-default hosts).
+  // Load hooks from the selected host’s repo ID, which may differ from the representative.
   const neededRepos = useMemo(() => {
     const reposByHostIdentity = new Map<string, Repo>()
     for (const settingsProject of model.settingsProjectList) {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 
 type BeginArgs = { beforeOpen?: (sessionId: string) => boolean | void }
@@ -9,21 +10,36 @@ type Launch = {
   tab: { id: string }
 }
 
-const mocks = vi.hoisted(() => ({
-  beginStructuredAgentSessionProvisionalLaunch: vi.fn<(args: BeginArgs) => Launch | null>(),
-  prepareAiVaultSessionForResume: vi.fn<() => Promise<{ sessionId: string }>>(),
-  activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
-  toastError: vi.fn<(message: string) => void>(),
-  admitStructuredLaunchOnHost:
-    vi.fn<(target: unknown, worktree: string, agent: string) => Promise<{ kind: string }>>(),
-  sleeping: false,
-  navigationIndex: 0,
-  activeWorktreeId: 'other-worktree'
-}))
+const mocks = vi.hoisted(() => {
+  const state: { owner: ExecutionHostId | null } = { owner: 'local' }
+  return {
+    beginStructuredAgentSessionProvisionalLaunch: vi.fn<(args: BeginArgs) => Launch | null>(),
+    prepareAiVaultSessionForResume: vi.fn<() => Promise<{ sessionId: string }>>(),
+    activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
+    toastError: vi.fn<(message: string) => void>(),
+    admitStructuredLaunchOnHost:
+      vi.fn<(target: unknown, worktree: string, agent: string) => Promise<{ kind: string }>>(),
+    ...state,
+    sleeping: false,
+    navigationIndex: 0,
+    activeWorktreeId: 'other-worktree'
+  }
+})
 
-vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
+vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
   beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch,
-  structuredLaunchOwner: () => ({ executionHostId: 'local', target: { kind: 'local' } })
+  structuredLaunchOwner: (plan: { executionHostId?: ExecutionHostId }) => {
+    const executionHostId = plan.executionHostId ?? mocks.owner
+    return executionHostId
+      ? {
+          executionHostId,
+          target:
+            executionHostId === 'local'
+              ? { kind: 'local' }
+              : { kind: 'environment', environmentId: executionHostId.slice('runtime:'.length) }
+        }
+      : null
+  }
 }))
 vi.mock('@/lib/structured-agent-session-host-admission', () => ({
   admitStructuredLaunchOnHost: mocks.admitStructuredLaunchOnHost
@@ -73,6 +89,7 @@ const session: AiVaultSession = {
 describe('resumeAiVaultSessionInNewChat', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.owner = 'local'
     mocks.sleeping = false
     mocks.navigationIndex = 0
     mocks.activeWorktreeId = 'other-worktree'
@@ -87,6 +104,71 @@ describe('resumeAiVaultSessionInNewChat', () => {
       }
     })
   })
+
+  it('keeps the recording server when workspace selection changes during preparation', async () => {
+    mocks.owner = 'runtime:server-1'
+    let finish!: (value: { sessionId: string }) => void
+    mocks.prepareAiVaultSessionForResume.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    mocks.admitStructuredLaunchOnHost.mockResolvedValue({ kind: 'admitted' })
+    const launched = resumeAiVaultSessionInNewChat(
+      { ...session, executionHostId: 'runtime:server-1' },
+      'opencode2',
+      'worktree-1',
+      'resume-click'
+    )
+    mocks.owner = 'runtime:server-2'
+    mocks.activeWorktreeId = 'worktree-1'
+    finish({ sessionId: 'provider-1' })
+    await launched
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1', {
+      executionHostId: 'runtime:server-1'
+    })
+    expect(mocks.admitStructuredLaunchOnHost).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'server-1' },
+      'id:worktree-1',
+      'opencode2'
+    )
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({ executionHostId: 'runtime:server-1' })
+      })
+    )
+  })
+
+  it.each(['local', 'runtime:server-2', null] as const)(
+    'refuses a recording-host mismatch before preparing history: %s',
+    async (owner) => {
+      mocks.owner = owner
+      await resumeAiVaultSessionInNewChat(
+        { ...session, executionHostId: 'runtime:server-1' },
+        'codex',
+        'worktree-1',
+        'resume-click'
+      )
+      expect(mocks.prepareAiVaultSessionForResume).not.toHaveBeenCalled()
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
+      expect(mocks.toastError).toHaveBeenCalledOnce()
+    }
+  )
+
+  it.each(['ssh:relay', 'runtime:unresolved-owner'] as const)(
+    'does not prepare a conversation from a non-runtime owner: %s',
+    async (executionHostId) => {
+      mocks.owner = executionHostId
+      await resumeAiVaultSessionInNewChat(
+        { ...session, executionHostId },
+        'codex',
+        'worktree-1',
+        'resume-click'
+      )
+      expect(mocks.prepareAiVaultSessionForResume).not.toHaveBeenCalled()
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
+    }
+  )
 
   it('reveals the workspace and opens chat before provider settlement', async () => {
     let settle!: (value: StructuredAgentLaunchSettlement) => void
@@ -106,7 +188,9 @@ describe('resumeAiVaultSessionInNewChat', () => {
         hooks: {}
       })
     )
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1')
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1', {
+      executionHostId: 'local'
+    })
     expect(mocks.toastError).not.toHaveBeenCalled()
     settle({ kind: 'structured', sessionId: 'session-1' })
   })
@@ -173,7 +257,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
     [
       'agent_session_conflict',
       'conversationHeldElsewhere',
-      "Orca can't confirm Codex has exited in its terminal. Stop what's running there or close the terminal, then try again."
+      'Codex is already running this conversation in another terminal. Quit Codex there or close that terminal, then open this conversation from Session History.'
     ],
     [
       'agent_session_identity_required',

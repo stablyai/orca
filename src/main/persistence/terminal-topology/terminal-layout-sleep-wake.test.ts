@@ -46,7 +46,6 @@ function record(leafId: string, id: string): SleepingAgentSessionRecord {
   }
 }
 
-/** One tab split into two bound panes; the right pane already sleeps. */
 async function storeWithSplitTab(hostId?: string): Promise<{ store: Store; directory: string }> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-layout-sleep-'))
   directories.push(directory)

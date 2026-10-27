@@ -1,18 +1,9 @@
-// What of the queue a new epoch restates. Replacing or rolling over an epoch deletes its rows,
-// the cards' rows and their hand-offs with them, so every card still owed an answer is written
-// again in the deleting transaction, the way the queue's pauses are.
-
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { JournalQueueCardChange, JournalQueuedChange } from './journal-queue-events'
 import type { QueuedMessageRow } from './queued-message-table'
 
-/**
- * THE retention rule, one for replacement and rollover: a waiting card; a returned one, with its
- * refusal written down because its own rows are going; and a card handed off as a send not yet
- * handed over, which provably never reached the agent and so waits again (a replacement's carried
- * submission relinks it). Everything else is answered, or can no longer be.
- */
+/** Restate waiting/returned cards and unhanded submissions before deleting their epoch; preserve refusals. */
 export function retainedQueueFacts(
   cards: readonly QueuedMessageRow[],
   submissions: ReadonlyMap<string, AgentJournalSubmission>
@@ -45,7 +36,6 @@ export function retainedQueueFacts(
   })
 }
 
-/** A card's own fields as a `queued` change: its text, place, time and options. */
 export function queuedChangeOf(
   card: Pick<QueuedMessageRow, 'body' | 'position' | 'queuedAt' | 'options'>
 ): JournalQueuedChange {

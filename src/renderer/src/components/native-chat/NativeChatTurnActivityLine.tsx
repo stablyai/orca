@@ -27,11 +27,7 @@ function statusLabel(key: Extract<NativeChatActiveTurnLabel, { source: 'status' 
   }
 }
 
-/** The live turn's tail line: a spinner plus what the turn is doing right now —
- *  "Stopping…" once the person's Stop is ending it, else the provider's activity text, else that
- *  it is reasoning, else plain "Working…".
- *  The clock lives in the turn bar under the user's message, not here. While the
- *  agent's open reasoning block has text, the line is that block's disclosure. */
+/** Keep the clock in the turn bar; this tail shows activity or discloses open reasoning. */
 export function NativeChatTurnActivityLine({
   line,
   onLinkClick,
@@ -54,8 +50,7 @@ export function NativeChatTurnActivityLine({
 
   return (
     <Collapsible open={open} onOpenChange={disclosure.setOpen}>
-      {/* One element for every state of the line, so a screen reader hears each new label. The
-          trigger overlays it, rather than wrapping it, and the body sits outside it. */}
+      {/* Keep one live region so label changes announce; overlay its trigger and place reasoning outside it. */}
       <div
         className="group/reasoning relative flex min-h-6 items-center gap-1.5 text-sm leading-relaxed text-chat-foreground-faint"
         data-native-chat-turn-activity="true"

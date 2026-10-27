@@ -48,9 +48,7 @@ describe('parsePorcelainV1Records', () => {
     ])
   })
 
-  // Why: a rename emits its ORIGIN as a second NUL field. Reading that origin as
-  // its own record would invent a status code from the first bytes of a path —
-  // and `?? ` is exactly what the shared-symlink filter keys on.
+  // Rename origins are extra NUL fields; treating one as a record could invent an untracked status.
   it('consumes the origin path of a rename instead of emitting it as a record', () => {
     const repo = createRepo()
     writeFileSync(join(repo, 'original.txt'), 'content\n')

@@ -129,8 +129,6 @@ describe('useTaskSourceProviderReadiness', () => {
   })
 
   it('does not read code-host connection facts out of a failed preflight snapshot', async () => {
-    // A failed refresh keeps the previous status object, so Integrations reports
-    // GitHub as disconnected; Task Sources must not disagree.
     mocks.state.preflightStatusError = 'preflight failed'
 
     await renderProbe()

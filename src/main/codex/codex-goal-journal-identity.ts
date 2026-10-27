@@ -26,7 +26,6 @@ export function codexGoalJournalIdentity(
   }
 }
 
-/** Recognizes only the host-owned rows used to record Codex goal lifecycle state. */
 export function parseCodexGoalJournalItemId(itemId: string): CodexGoalJournalState | null {
   const identity = parseAgentJournalItemKey(itemId)
   if (identity?.provider !== 'orca') {

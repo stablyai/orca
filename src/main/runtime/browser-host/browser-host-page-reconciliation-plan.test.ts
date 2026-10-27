@@ -125,7 +125,7 @@ describe('browser host page reconciliation plan', () => {
     ['different old page generation', { pageHostGeneration: 6 }]
   ])('rejects reclaim for a %s', (_label, previousOverride) => {
     const previous = {
-      authorityRuntimeId: 'runtime-old',
+      authorityRuntimeId: 'runtime-new',
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'client-a',
       browserHostGeneration: 4,
@@ -133,9 +133,13 @@ describe('browser host page reconciliation plan', () => {
       pairedDeviceId: 'device-a',
       ...previousOverride
     }
-    const intent = currentIntent(previousOverride === undefined ? {} : { reclaimFrom: previous })
+    const intent = currentIntent(
+      previousOverride === undefined
+        ? {}
+        : { browserHostClientId: previous.browserHostClientId, reclaimFrom: previous }
+    )
     const page = currentPage({
-      authorityRuntimeId: 'runtime-old',
+      authorityRuntimeId: 'runtime-new',
       authorityEpoch: 'epoch-old',
       browserHostGeneration: 4,
       pageHostGeneration: 7
@@ -152,7 +156,7 @@ describe('browser host page reconciliation plan', () => {
 
   it('does not reclaim an old page onto a different client host', () => {
     const previous = {
-      authorityRuntimeId: 'runtime-old',
+      authorityRuntimeId: 'runtime-new',
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'client-a',
       browserHostGeneration: 4,
@@ -232,9 +236,9 @@ describe('browser host page reconciliation plan', () => {
     ).toEqual([{ intent, page }])
   })
 
-  it('rejects restart reclaim from a different authenticated paired device', () => {
+  it('rejects same-runtime reclaim from a different authenticated paired device', () => {
     const previous = {
-      authorityRuntimeId: 'runtime-old',
+      authorityRuntimeId: 'runtime-new',
       authorityEpoch: 'epoch-old',
       browserHostClientId: 'client-a',
       browserHostGeneration: 4,
@@ -251,27 +255,32 @@ describe('browser host page reconciliation plan', () => {
     ).toEqual([{ intent, page }])
   })
 
-  it('never retains or reclaims an outcome-unknown page', () => {
-    const intent = currentIntent({
-      reclaimFrom: {
+  it.each(['current', 'previous'] as const)(
+    'closes and restores an outcome-unknown page under %s authority',
+    (authority) => {
+      const previous = {
         authorityRuntimeId: 'runtime-new',
-        authorityEpoch: 'epoch-new',
+        authorityEpoch: 'epoch-old',
         browserHostClientId: 'client-a',
-        browserHostGeneration: 9,
-        pageHostGeneration: 12,
+        browserHostGeneration: 4,
+        pageHostGeneration: 7,
         pairedDeviceId: 'device-a'
       }
-    })
-    const page = currentPage({ state: 'outcomeUnknown' })
+      const intent = currentIntent({ reclaimFrom: previous })
+      const page = currentPage({
+        ...(authority === 'previous' ? inventoryPageAuthority(previous) : {}),
+        state: 'outcomeUnknown'
+      })
 
-    expect(planBrowserHostPageReconciliation([intent], [page], inventorySource)).toEqual({
-      retain: [],
-      reclaim: [],
-      close: [],
-      restore: [],
-      closeThenRestore: [{ intent, page }]
-    })
-  })
+      expect(planBrowserHostPageReconciliation([intent], [page], inventorySource)).toEqual({
+        retain: [],
+        reclaim: [],
+        close: [],
+        restore: [],
+        closeThenRestore: [{ intent, page }]
+      })
+    }
+  )
 
   it.each([
     ['runtime intent', [currentIntent(), currentIntent()], []],

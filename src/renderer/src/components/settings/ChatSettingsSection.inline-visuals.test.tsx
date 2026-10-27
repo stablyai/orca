@@ -16,6 +16,7 @@ const state = vi.hoisted((): { settingsSearchQuery: string; settings: GlobalSett
   settingsSearchQuery: '',
   settings: null
 }))
+vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
 vi.mock('../../store', () => ({
   useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
     getState: () => state

@@ -9,8 +9,7 @@ import {
   type NativeChatPaneDropClaim
 } from './native-chat-pane-file-drop'
 
-/** A mounted composer's live drop claim. The getter is what the surface reads at
- *  event time, so a guarded composer answers for the drag in front of it. */
+/** Read the mounted composer’s claim at event time so guard changes apply to the current drag. */
 export type NativeChatPaneDropRegistration = {
   getClaim: () => NativeChatPaneDropClaim
   destinationKey: string
@@ -20,10 +19,7 @@ type RegisterPaneDropClaim = (registration: NativeChatPaneDropRegistration) => (
 
 const NativeChatPaneFileDropContext = createContext<RegisterPaneDropClaim | null>(null)
 
-/**
- * Publishes the composer's drop claim to the pane around it, so the whole chat
- * pane — not just the input box — is the target a file can be dropped on.
- */
+/** Publish the composer’s claim so the whole pane accepts its file drops. */
 export function useNativeChatPaneFileDropClaim(claim: NativeChatPaneDropClaim): void {
   const register = useContext(NativeChatPaneFileDropContext)
   const claimRef = useRef(claim)
@@ -52,6 +48,8 @@ export function NativeChatPaneFileDropSurface({
   const [sequence] = useState(createOsFileDropSequence)
   const attachOwner = useOsFileDropOwner(ownerRef, {
     consumer: (destination) => destination?.preparationConsumer ?? 'agent',
+    // A paired server's chat uploads the bytes; any other owner refuses with a notice.
+    acceptsBrowserFiles: true,
     sequence,
     canAccept: () => Boolean(registration && !registration.getClaim().disabled),
     captureDestination: () => registration?.getClaim().captureExternalDrop(),

@@ -1,8 +1,7 @@
 import type { AgentSessionModelCatalogResult } from './agent-session-wire'
 
-// One waiting catalog read per chat, shared by every mount and effect run of that chat's picker:
-// a remote read cannot be withdrawn once sent, so a re-run joins the one in flight instead of
-// sending another. Bounded replies follow accepted work while a picker remains interested.
+// Coalesce picker reads per chat across mounts/effects: sent remote requests cannot be withdrawn.
+// Continue bounded reads while interested joiners remain.
 
 /** Null when the read failed or timed out. */
 export type HostModelListingJoiner = (catalog: AgentSessionModelCatalogResult | null) => void

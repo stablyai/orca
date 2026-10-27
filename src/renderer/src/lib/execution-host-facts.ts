@@ -1,3 +1,4 @@
+import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -17,10 +18,7 @@ import {
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from './worktree-runtime-owner'
 
-/**
- * The OS of the machine an agent runs on. `withheld` means no host has reported it; a launch must
- * stop there, because the client's or the endpoint's OS would quote the command for the wrong shell.
- */
+/** Withhold unreported execution OS; quoting with client/endpoint guesses would target the wrong shell and must stop launch. */
 export type ExecutionHostPlatformFact =
   | { kind: 'known'; platform: NodeJS.Platform; hostKind: ParsedExecutionHost['kind'] }
   | { kind: 'withheld'; reason: string }
@@ -38,11 +36,11 @@ type WorktreeHostFactsState = HostFactsState &
     | 'detectedWorktreesByRepo'
     | 'folderWorkspaces'
     | 'projectGroups'
-    | 'projects'
     | 'repos'
     | 'settings'
     | 'worktreesByRepo'
-  >
+  > &
+  ProjectCatalogReadState
 
 const SSH_PLATFORM_WITHHELD =
   'The SSH host has not reported its operating system yet. Connect to it and try again.'
@@ -115,10 +113,7 @@ function resolveHostPlatform(
   return { kind: 'known', platform, hostKind: 'runtime' }
 }
 
-/**
- * Platform of the host that runs agents for a repo's workspaces, read from the repo row's owner.
- * `workspacePath` names a workspace on that host (e.g. a WSL worktree); it defaults to the repo.
- */
+/** Read the repo owner’s execution platform; workspacePath refines it for host-local namespaces such as WSL, defaulting to repo path. */
 export function resolveRepoExecutionHostPlatform(
   state: HostFactsState,
   repo: { connectionId?: string | null; executionHostId?: string | null; path: string },
@@ -135,7 +130,6 @@ export function resolveRepoExecutionHostPlatform(
   })
 }
 
-/** Platform of the host that runs agents for a worktree or folder workspace. */
 export function resolveWorktreeExecutionHostPlatform(
   state: WorktreeHostFactsState,
   worktreeId: string,
@@ -164,11 +158,7 @@ export function refineLocalLaunchPlatform(
   return fact.hostKind === 'local' && callerPlatform ? { ...fact, platform: callerPlatform } : fact
 }
 
-/**
- * Preflight platform for a worktree's agent launch: the worktree's own host when its row names
- * one, else its repo's owner. `undefined` when withheld: the launch itself resolves the host and
- * tells the user why it stopped.
- */
+/** Preflight worktree-owner platform, then repo owner; undefined defers withheld-host errors to launch resolution. */
 export function resolveRepoWorktreeLaunchPlatform(
   state: WorktreeHostFactsState,
   repo: { connectionId?: string | null; executionHostId?: string | null; path: string },

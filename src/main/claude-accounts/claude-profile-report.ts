@@ -1,4 +1,4 @@
-/** A setup step: 'profile', 'hooks', or the name of what it shares (`skills`, `settings.json`). */
+/** A setup step or shared resource name, such as `hooks` or `settings.json`. */
 export type ClaudeProfileSurface = string
 
 export type ClaudeProfileSurfaceOutcome =
@@ -10,7 +10,6 @@ export type ClaudeProfileSurfaceOutcome =
   | 'absent'
   | 'failed'
 
-/** Closed so callers branch on a code, never on message text. */
 export type ClaudeProfileWarningCode =
   | 'invalid-profile'
   | 'unreadable'
@@ -57,7 +56,6 @@ export function warnClaudeProfile(
   })
 }
 
-/** One surface's failure is reported and never stops the surfaces after it. */
 export async function runClaudeProfileSurface(
   report: ClaudeProfileReport,
   surface: ClaudeProfileSurface,

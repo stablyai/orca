@@ -16,7 +16,6 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('comment-md-p')
     expect(markup).toContain('role="heading"')
     expect(markup).toContain('aria-level="2"')
-    // Weight-only styling stays the compact default; block flow is opt-in.
     expect(markup).toContain('font-bold')
   })
 
@@ -118,7 +117,6 @@ describe('CommentMarkdown', () => {
   })
 
   it('renders document markdown images with an expand control for the lightbox', () => {
-    // Why: document bodies need a large preview without a provider-specific renderer.
     const markup = renderToStaticMarkup(
       <CommentMarkdown
         variant="document"
@@ -332,6 +330,23 @@ describe('CommentMarkdown', () => {
 function renderComment(content: string, variant: 'compact' | 'document' = 'document'): string {
   return renderToStaticMarkup(<CommentMarkdown variant={variant} content={content} />)
 }
+
+describe('CJK emphasis', () => {
+  it('closes bold that ends in punctuation right before CJK text', () => {
+    expect(
+      renderComment('**单算 Runtime 执行引擎，平均每题 29.78 秒。**边界是开始执行到产出结果。')
+    ).toContain(
+      '<strong>单算 Runtime 执行引擎，平均每题 29.78 秒。</strong>边界是开始执行到产出结果。'
+    )
+  })
+
+  it('keeps CommonMark flanking rules between non-CJK characters', () => {
+    const markup = renderComment('**Note.**Next')
+
+    expect(markup).not.toContain('<strong>')
+    expect(markup).toContain('**Note.**Next')
+  })
+})
 
 describe('GitHub callouts', () => {
   it.each(['compact', 'document'] as const)(

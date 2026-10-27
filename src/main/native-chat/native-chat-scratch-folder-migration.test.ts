@@ -71,7 +71,6 @@ function seed(folder: string, files: Record<string, string>): string {
   return folder
 }
 
-/** A chat's folder as v1.4.227 wrote it, under the old root with the same hashed name. */
 function legacyFor(state: string, sessionId: string, files: Record<string, string>): string {
   return seed(
     join(legacyRootOf(state), basename(nativeChatScratchFolderFor(state, sessionId))),
@@ -106,7 +105,6 @@ describe('moving pre-rename chat visuals folders', () => {
       ok: true,
       html: '<p>saved</p>'
     })
-    // Only what this host minted moves; the old root stays while anything else is in it.
     expect(readdirSync(legacyRootOf(state))).toEqual(['notes.txt'])
     rmSync(join(legacyRootOf(state), 'notes.txt'))
     await migrateLegacyNativeChatVisualsFolders(state, logger())

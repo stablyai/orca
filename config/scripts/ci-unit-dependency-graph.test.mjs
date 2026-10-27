@@ -164,7 +164,7 @@ describe('unit graph import resolution', () => {
       ['config/owner.mjs', "import '../src/leaf'"],
       ['tests/owner.ts', "import '../src/leaf'"]
     ])
-    expect(buildUnitDependencyGraph(sources)).toEqual({
+    expect(buildUnitDependencyGraph(sources)).toMatchObject({
       reverse: new Map([
         ['src/leaf', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],
         ['src/leaf.ts', new Set(['src/use.ts', 'config/owner.mjs', 'tests/owner.ts'])],

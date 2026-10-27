@@ -83,7 +83,7 @@ it.each([true, false])(
       makeRuntimeStoreWithWorkspaceSession,
       makeWorkspaceSessionWithHeadlessTerminal
     } = await import('../../orca-runtime-test-fixtures.spec')
-    const { withChatTabChanges } = await import('../../agent-session-tab-layout')
+    const { withChatTabChanges } = await import('../../agent-session/agent-session-tab-layout')
     const source = 'source-chat',
       row = `agent-session:${source}`,
       canonical = 'custom-chat-tab'
@@ -206,7 +206,6 @@ it.each([true, false])(
         expect.arrayContaining([expect.objectContaining({ id: canonical, entityId: source })])
       )
     } else if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main placed the published chat's tab itself, so the fork opens beside it.
       expect(admit.mock.calls[0]?.[0]).toMatchObject({
         afterTabId: structuredAgentSessionTabId(source)
       })
@@ -236,6 +235,12 @@ it('keeps preparation and runtime failures from starting a terminal', async () =
   })
   const ensure = vi.spyOn(runtime, 'ensureStructuredAgentSessionHost')
   for (const [failure, expected] of [
+    [
+      new Error(
+        'Could not confirm this conversation was saved. Try again after the agent responds.'
+      ),
+      { message: 'chat_fork_source_unavailable' }
+    ],
     [
       new Error('This chat has no saved conversation to copy.'),
       { message: 'chat_fork_source_unavailable' }

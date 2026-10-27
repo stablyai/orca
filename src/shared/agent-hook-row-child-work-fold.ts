@@ -7,9 +7,7 @@ type RowChildWork = Pick<AgentHookEventPayload, 'claudeRunningNonAgentTask'> & {
   payload: { subagents?: readonly AgentSubagentSnapshot[] }
 }
 
-/** Fold a main agent state with the child work a row itself carries: its subagent snapshots and the
- *  shell/cron fact restated beside them. For a relayed pane that is all the desktop can see, because
- *  the provider records live on the relay. */
+/** Remote provider records stay on the relay; desktops can fold only the roster and shell/cron evidence carried by the row. */
 export function foldMainAgentWithRowChildWork(
   leadState: AgentStatusState,
   row: RowChildWork

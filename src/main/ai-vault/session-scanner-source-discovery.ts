@@ -23,12 +23,7 @@ export async function discoverAiVaultSessionSources(args: {
   }
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
 
-  // The Cursor chat-meta scan scope is owned by scanAiVaultSessions: it has to
-  // span parse as well, and finalize runs after this returns.
   return Promise.all([
-    // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
-    // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
-    // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
@@ -74,8 +69,7 @@ function agentDiscoveries(
     : rootDirs.map(discover)
 }
 
-// Alternate roots for one install: the limit spans them, so they collapse into
-// a single discovery rather than each claiming a full slice of it.
+// Alternate roots share one recency limit per install.
 async function mergedDiscovery(
   agent: AiVaultAgent,
   rootDirs: readonly string[],

@@ -1,27 +1,16 @@
-// Stopping a Codex sub-agent: its thread is an ordinary loaded thread on the same app-server, so
-// `turn/interrupt` names the child thread and the turn it runs. Codex answers when that turn ends,
-// aborted or not, and the child's own `turn/completed` then removes its row.
-
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import type { CodexSession } from './codex-structured-session-state'
 import { interruptCodexTurn } from './codex-structured-turn-cancellation'
 
-/** One child run a Stop names: the child's thread and the turn the host last saw it working on. */
 export type CodexSubagentTurn = { threadId: string; turnId: string }
 
-/**
- * Interrupts each named run. A refusal saying the turn is not running means the run is over:
- * nothing to stop. Any other refusal leaves the child running. Throws when a request got no answer
- * and no refusal said a child survived, since the effect is then unknown; every other child is
- * tried first.
- */
+/** Report surviving refusals; throw unknown transport failures only when no survivor is known. */
 export async function interruptCodexSubagents(
   session: CodexSession,
   turns: readonly CodexSubagentTurn[],
   options: {
     timeoutMs: number
     isCurrent: () => boolean
-    /** Whether the session has since seen this run end. */
     ended: (turn: CodexSubagentTurn) => boolean
   }
 ): Promise<{ stopped: number; survived: boolean }> {
@@ -44,14 +33,13 @@ export async function interruptCodexSubagents(
         survived = true
       }
     } catch (error) {
-      // Codex holds an interrupt that lands as the turn ends, answering it only when the child's
-      // next turn ends; that one runs on. A run seen ended had nothing left to stop.
+      // An interrupt racing turn end can await the next turn; observed completion resolves that timeout.
       const timedOut = error instanceof CodexAppServerTimeoutError
       if (timedOut && options.isCurrent() && options.ended(turn)) {
         continue
       }
       failure ??= { error }
-      // An app-server that is not answering would make every later request wait out its deadline.
+      // Avoid another full deadline for every child on an unresponsive server.
       if (timedOut) {
         break
       }

@@ -152,7 +152,7 @@ describe('hidden Chromium popup compatibility', () => {
     await closeChildren(page)
   })
 
-  it('opens opener-less OAuth links as local tabs without their discarded page loading', async () => {
+  it('opens opener-less OAuth links as tabs and preserves original modifier POSTs', async () => {
     const page = guest('local')
     const before = receipts.length
     const hostedBefore = status().childRequests.length
@@ -168,16 +168,26 @@ describe('hidden Chromium popup compatibility', () => {
       expect(status().tabOpens.at(-1)).toEqual({ url: oauthUrl, activate })
     }
     expect(status().childRequests.length).toBe(hostedBefore)
-    // A POST arrives without a page too, but reopening it by URL would drop its body.
+    expect(receipts.slice(before).some(({ path }) => path === '/authorize-link')).toBe(false)
+    const beforePost = receipts.length
     await page.locator('#post').click({ modifiers: ['ControlOrMeta', 'Shift'] })
+    await expect
+      .poll(() => receipts.slice(beforePost).find(({ path }) => path === '/post'))
+      .toMatchObject({
+        method: 'POST',
+        body: 'code=synthetic%2Bvalue',
+        cookie: 'synthetic_session=local',
+        referrer: `${origin}/local`,
+        origin,
+        proxied: false
+      })
     await new Promise((resolve) => setTimeout(resolve, 750))
-    expect(
-      receipts.slice(before).filter(({ path }) => path === '/authorize-link' || path === '/post')
-    ).toEqual([])
+    expect(receipts.slice(beforePost).filter(({ path }) => path === '/post')).toHaveLength(1)
+    await closeChildren(page)
     expect(status().windowsHidden).toBe(true)
   })
 
-  it('loads remote modifier-opened GETs itself and never replays their POSTs', async () => {
+  it('preserves remote modifier GETs and original POSTs without replay', async () => {
     const page = guest('route')
     const before = receipts.length
     await page.locator('#link').click({ modifiers: ['ControlOrMeta', 'Shift'] })
@@ -198,11 +208,23 @@ describe('hidden Chromium popup compatibility', () => {
     ).toBe(true)
     await closeChildren(page)
     const beforePost = receipts.length
-    const blockedBefore = status().blocked.length
     await page.locator('#post').click({ modifiers: ['ControlOrMeta', 'Shift'] })
-    await expect.poll(() => status().blocked.length).toBe(blockedBefore + 1)
+    await expect
+      .poll(() => receipts.slice(beforePost).find(({ path }) => path === '/post'))
+      .toMatchObject({
+        method: 'POST',
+        body: 'code=synthetic%2Bvalue',
+        cookie: 'synthetic_session=route',
+        referrer: `${origin}/route`,
+        origin,
+        proxied: true
+      })
     await new Promise((resolve) => setTimeout(resolve, 750))
-    expect(receipts.slice(beforePost).some((receipt) => receipt.path === '/post')).toBe(false)
+    expect(receipts.slice(beforePost).filter(({ path }) => path === '/post')).toHaveLength(1)
+    await page.evaluate('console.log("orca-popup-fixture:snapshot")')
+    expect(
+      status().routeContents.every(({ webRtcPolicy }) => webRtcPolicy === 'disable_non_proxied_udp')
+    ).toBe(true)
     expect(status().windowsHidden).toBe(true)
   })
 

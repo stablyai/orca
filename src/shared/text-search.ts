@@ -1,12 +1,5 @@
-/**
- * Shared, pure text-search helpers used by both the local main process and the
- * SSH relay. No Electron, child_process, or fs — the caller owns process
- * execution and transport-specific path translation (WSL).
- *
- * Centralizes rg/git-grep arg construction and parsing so the local and relay paths
- * can't re-diverge (notably the relay's old execFile maxBuffer that dropped matches).
- * Design doc: docs/design/share-text-search.md.
- */
+/** Share pure rg/git-grep construction and parsing across main/SSH relay so result handling cannot drift (docs/design/share-text-search.md).
+ * Callers own process execution and transport-specific path translation. */
 import { parseRipgrepMatchJson, type RipgrepMatchMessage } from './ripgrep-dense-match-json'
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
@@ -34,8 +27,6 @@ export function createAccumulator(): SearchAccumulator {
   return { fileMap: new Map(), totalMatches: 0, truncated: false }
 }
 
-// ─── Constants shared by both callers ────────────────────────────────
-
 export const DEFAULT_SEARCH_MAX_RESULTS = 2000
 export const SEARCH_TIMEOUT_MS = 15_000
 export const SEARCH_JSON_STRUCTURE_LIMITS = {
@@ -46,18 +37,12 @@ export const SEARCH_JSON_STRUCTURE_LIMITS = {
 // Why: keep search cheaper than opening a file; the editor read path has a larger cap (Monaco large-file handling).
 const SEARCH_MAX_FILE_SIZE = 5 * 1024 * 1024
 
-// ─── rg ─────────────────────────────────────────────────────────────
-
 export type SearchOptionsLike = Pick<
   SearchOptions,
   'caseSensitive' | 'wholeWord' | 'useRegex' | 'includePattern' | 'excludePattern'
 >
 
-/**
- * Build the complete rg argv (flags + `--` + query + target) for both callers to spawn as-is.
- *
- * Use target `.` with cwd set to the search root so anchored globs match root-relative paths.
- */
+/** Use target . with cwd at the search root so anchored globs match root-relative paths. */
 export function buildRgArgs(query: string, target: string, opts: SearchOptionsLike): string[] {
   const args: string[] = [
     '--no-config',
@@ -91,14 +76,8 @@ export function buildRgArgs(query: string, target: string, opts: SearchOptionsLi
   return args
 }
 
-/**
- * Ingest a single line of rg `--json` stdout, mutating `acc`. Returns 'stop' when
- * `maxResults` is reached (so the caller can kill the child), else 'continue'.
- * `transformAbsPath` lets the local caller apply WSL translation; the relay passes none.
- *
- * Invariant: sets `acc.truncated = true` synchronously in the same tick it returns
- * 'stop'; callers must not flip `truncated` or resolve before that tick (see design doc).
- */
+/** Return stop at maxResults and set truncated in the same tick before callers resolve/kill the process.
+ * Local callers may translate absolute paths for WSL; relays need no transform. */
 export function ingestRgJsonLine(
   line: string,
   rootPath: string,
@@ -163,10 +142,8 @@ export function ingestRgJsonLine(
   return 'continue'
 }
 
-// ─── git grep ───────────────────────────────────────────────────────
-
 export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string[] {
-  // Why: --no-recurse-submodules avoids failing when submodule.recurse=true conflicts with --untracked; --null disambiguates colon-containing filenames.
+  // Disable submodule recursion to avoid its conflict with --untracked; NUL delimiters disambiguate colons in filenames.
   const gitArgs: string[] = [
     '-c',
     'submodule.recurse=false',
@@ -220,13 +197,7 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   return gitArgs
 }
 
-/**
- * Build the JS regex to locate all submatch column positions in a matched line
- * (git grep reports only the first hit per line).
- *
- * @returns `null` when the query is valid git-grep ERE but not a valid JS RegExp
- * (POSIX classes, back-ref numbering, `\<`/`\>` anchors); callers then fall back to a whole-line highlight.
- */
+/** Locate all columns in git-grep’s line-level hits; incompatible ERE queries return null for whole-line highlighting. */
 export function buildSubmatchRegex(
   query: string,
   opts: { useRegex?: boolean; wholeWord?: boolean; caseSensitive?: boolean }
@@ -256,7 +227,7 @@ export function ingestGitGrepLine(
     return 'continue'
   }
 
-  // Why: modern git with --null -n emits filename\0linenum\0content; keep the colon parser too for hosts with older git output.
+  // Parse modern filename-NUL-line-NUL-content and retain colon output compatibility for older Git hosts.
   const nullIdx = line.indexOf('\0')
   if (nullIdx === -1) {
     return 'continue'
@@ -292,7 +263,7 @@ export function ingestGitGrepLine(
     return fileResult
   }
 
-  // Why: no JS-side submatch regex (git accepts patterns JS RegExp rejects); fall back to whole-line highlight so the hit still shows.
+  // Git-valid patterns can be invalid JS regexes; keep their hits with whole-line highlighting.
   if (submatchRegex === null) {
     const fileResult = getFileResult()
     return pushSearchMatch({
@@ -330,7 +301,7 @@ export function ingestGitGrepLine(
       submatchRegex.lastIndex++
     }
   }
-  // Why: git grep confirmed the line but JS regex found no occurrence; keep it navigable, don't drop a git-confirmed hit.
+  // JS regex disagreement must not discard a Git-confirmed, navigable hit.
   if (!acceptedLineMatch) {
     const fileResult = getFileResult()
     if (
@@ -349,8 +320,6 @@ export function ingestGitGrepLine(
   }
   return 'continue'
 }
-
-// ─── finalize ───────────────────────────────────────────────────────
 
 export function finalize(acc: SearchAccumulator): SearchResult {
   return normalizeSearchResult({

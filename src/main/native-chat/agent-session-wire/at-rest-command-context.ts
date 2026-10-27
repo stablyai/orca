@@ -6,6 +6,8 @@ const launchSettings = new Set([
   'agentCmdOverrides',
   'agentDefaultArgs',
   'agentDefaultEnv',
+  'agentPermissionDefault',
+  'agentPermissionOverrides',
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
   'terminalWindowsShell',

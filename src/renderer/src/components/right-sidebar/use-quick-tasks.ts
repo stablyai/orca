@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useTaskProviderConnections } from '@/components/feature-wall/use-integration-connection-status'
-import { getTaskPageRepoSourceContext } from '@/components/task-page-source-context'
+import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import {
   GITLAB_TASK_FETCH_CONCURRENCY,
   gitLabTaskRepoSelector

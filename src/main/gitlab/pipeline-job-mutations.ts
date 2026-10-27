@@ -19,7 +19,7 @@ import {
 import { encodedProject } from './project-path-encoding'
 import { withProjectRef } from './merge-request-project-resolution'
 
-// Why: a large or slow job log outlives the runner's 30s default; the renderer bounds the call.
+// Large traces need more than the runner default; the renderer also bounds the call.
 const JOB_TRACE_EXEC_TIMEOUT_MS = 60_000
 
 function mapRetriedPipelineJob(
@@ -75,8 +75,7 @@ export async function getJobTrace(
         return { ok: true, trace: stdout }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // A job with no log is an empty log, not a failure: surfacing the 404 would
-        // pin an error on the Checks row for a job canceled before it started.
+        // Jobs canceled before starting can 404 with no trace; present an empty log.
         if (isMissingJobLogError(msg)) {
           return { ok: true, trace: '' }
         }

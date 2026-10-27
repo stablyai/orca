@@ -1,7 +1,4 @@
-/**
- * E2E only (`ORCA_E2E_FAKE_WSL_HOSTS`): stands in for wsl.exe so CI on any OS drives the WSL host
- * UI against a headless Orca server. Each "distro" connects straight to that server's pairing.
- */
+/** ORCA_E2E_FAKE_WSL_HOSTS maps fake distros directly to a headless server pairing so any CI OS can test WSL host UI without wsl.exe. */
 import { appendFileSync, readFileSync } from 'node:fs'
 import { z } from 'zod'
 import { parsePairingCode } from '../../shared/pairing'
@@ -51,6 +48,32 @@ export function createFakeWslHostConnector(
   const port = offer ? Number(new URL(offer.endpoint).port) : 0
   const active = new Map<string, WslOrcadConnection>()
   const key = (distro: string): string => distro.toLowerCase()
+  const connect = async (distro: string): Promise<WslOrcadConnection> => {
+    // Same guard as the real connector: nothing starts for a host that is gone.
+    if (!options.isKnownDistro(distro)) {
+      throw new Error(`${distro} is no longer a WSL host; Orca will not start anything for it.`)
+    }
+    if (config.connectLogFile) {
+      appendFileSync(config.connectLogFile, `${distro}\n`)
+    }
+    onChange(distro, null, { state: 'connecting' })
+    const connection: WslOrcadConnection = {
+      distro,
+      environmentId: defaultWslOrcadEnvironmentId(distro),
+      localPort: port,
+      remotePort: port,
+      fullVersion: 'e2e',
+      pid: null,
+      pairingOffer: config.pairingCode,
+      deferredUpdate: null,
+      close: async () => {
+        active.delete(key(distro))
+      }
+    }
+    active.set(key(distro), connection)
+    onChange(distro, connection, { state: 'ready', census: null })
+    return connection
+  }
   return {
     listDistros: async () =>
       (config.distrosFile
@@ -61,44 +84,23 @@ export function createFakeWslHostConnector(
         id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
       })),
     readOrcadPublicKey: async () => null,
-    connect: async (distro) => {
-      // Same guard as the real connector: nothing starts for a host that is gone.
-      if (!options.isKnownDistro(distro)) {
-        throw new Error(`${distro} is no longer a WSL host; Orca will not start anything for it.`)
-      }
-      if (config.connectLogFile) {
-        appendFileSync(config.connectLogFile, `${distro}\n`)
-      }
-      onChange(distro, null, { state: 'connecting' })
-      const connection: WslOrcadConnection = {
-        distro,
-        environmentId: defaultWslOrcadEnvironmentId(distro),
-        localPort: port,
-        remotePort: port,
-        fullVersion: 'e2e',
-        pid: null,
-        pairingOffer: config.pairingCode,
-        deferredUpdate: null,
-        close: async () => {
-          active.delete(key(distro))
-        }
-      }
-      active.set(key(distro), connection)
-      onChange(distro, connection, { state: 'ready', census: null })
-      return connection
-    },
+    connect,
     get: (distro) => active.get(key(distro)) ?? null,
     isReachable: async (distro) => active.has(key(distro)),
+    isSettling: () => false,
+    // The fake distro always runs, so a missing server is reachable by a reconnect.
+    reachability: async (distro) => (active.has(key(distro)) ? 'available' : 'unreachable'),
     disconnect: async (distro) => {
       if (active.delete(key(distro))) {
         onChange(distro, null, { state: 'closed' })
       }
     },
-    // Why the real terminal steps: they run against the headless Orca server standing in for
-    // orcad, so e2e sends the same RPCs a real removal does. Only the decommission is faked.
+    // Use real terminal RPCs against the headless fixture server for removal proof; fake only decommission.
     stopServer: async (distro, environmentId) => {
+      // As the real connector: the fake distro always runs, so an unbridged server is reconnected
+      // to stop it, rather than read as stopped (a re-enable connects nothing since E9).
       if (!active.get(key(distro))) {
-        return { stopped: true }
+        await connect(distro)
       }
       return stopWslHostServer({
         ...wslHostRuntimeStopSteps(options.runtime, environmentId),
@@ -114,6 +116,7 @@ export function createFakeWslHostConnector(
         })
       })
     },
+    resolveDistroName: async (distro) => distro,
     releaseHolder: async () => {},
     adoptHolders: async () => {},
     dispose: async () => {

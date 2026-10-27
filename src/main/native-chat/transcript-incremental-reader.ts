@@ -17,7 +17,6 @@ export type IncrementalTranscriptState = {
   pendingStart: number
   pendingBytes: number
   droppingOversizedRecord: boolean
-  /** Newest row time read so far, so an append never sorts above earlier rows. */
   latestTimestamp: number
 }
 
@@ -50,7 +49,8 @@ export async function readIncrementalTranscriptMessages(
   onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
   const end = (await transcriptFileStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
@@ -87,8 +87,7 @@ export async function readIncrementalTranscriptMessages(
     }
     return messages
   } finally {
-    // Early exits (throw/oversized-record bail) must not leak the fd or, on
-    // UNC, the gated handle the generator's finally closes.
+    // Early exits must close both the fd and any UNC gate permit held by the generator.
     stream.destroy()
   }
 
@@ -113,7 +112,7 @@ export async function readIncrementalTranscriptMessages(
   }
 
   function decodeLine(): void {
-    // These owned bytes are decoded synchronously; a single part needs no copy.
+    // A single synchronously decoded chunk is already owned; avoid copying it.
     const bytes =
       state.pendingChunks.length === 1 ? state.pendingChunks[0] : Buffer.concat(state.pendingChunks)
     let line = bytes.toString('utf8')
@@ -132,7 +131,11 @@ export async function readIncrementalTranscriptMessages(
     if (!message) {
       return
     }
-    const ordered = inTranscriptFileOrder(message, state.latestTimestamp)
+    const ordered = inTranscriptFileOrder(
+      message,
+      state.latestTimestamp,
+      sourceOrder ? state.pendingStart : undefined
+    )
     state.latestTimestamp = ordered.latest
     messages.push(ordered.message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {

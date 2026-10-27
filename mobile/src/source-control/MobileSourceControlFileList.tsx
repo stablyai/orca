@@ -39,7 +39,7 @@ export type FileListState = Pick<
 export function MobileSourceControlFileList({ state }: { state: FileListState }) {
   const sections: FileSection[] = state.sections.map((section) => ({
     ...section,
-    key: section.area
+    key: section.id
   }))
   if (state.shouldShowBranchCompareSection) {
     sections.push({

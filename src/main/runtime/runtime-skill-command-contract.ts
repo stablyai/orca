@@ -86,11 +86,6 @@ export type RuntimeSkillCommandSurface = {
     shareId: string,
     options: SkillCloudOptions
   ): ReturnType<SkillCloudService['revokeShare']>
-  deleteSkillPackageVersion(
-    packageId: string,
-    versionId: string,
-    options: SkillCloudOptions
-  ): ReturnType<SkillCloudService['deleteVersion']>
   deleteSkillPackage(
     packageId: string,
     options: SkillCloudOptions

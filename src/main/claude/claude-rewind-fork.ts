@@ -26,11 +26,7 @@ function isPromptRow(value: unknown, promptUuid: string): value is TranscriptPro
   )
 }
 
-/**
- * Where a rewind to this prompt cuts: the prompt's parent, the last entry of the turn kept before
- * it, which is where Claude's truncating resume must fork. Null when the prompt opened the
- * conversation; undefined when the transcript holds no such prompt.
- */
+/** Rewind cuts at the prompt's parent: null for the first prompt, undefined if not found. */
 export async function readClaudePromptParentUuid(input: {
   providerSessionId: string
   promptUuid: string
@@ -59,11 +55,7 @@ export async function readClaudePromptParentUuid(input: {
   return undefined
 }
 
-/**
- * The fork that rewinds a chat to before `prompt`: a new session holding the conversation up to the
- * prompt's parent, read from the prompt's own session so a rewind past an earlier rewind still finds
- * it. Null when no searched home holds that prompt.
- */
+/** Search the prompt's source session so rewinds across earlier forks still find it. */
 export async function resolveClaudeRewindFork(input: {
   orcaSessionId: string
   rewindOperationId: string
@@ -97,8 +89,7 @@ export async function resolveClaudeRewindFork(input: {
   return null
 }
 
-/** The adapter's answer: the fork for a rewind of `record` to before `beforeMessage`, read from any
- *  Claude home Orca knows, since the chat's account may have changed since that message. */
+/** Search all known account homes because the chat's account may have changed. */
 export const claudeForkForRewind: NonNullable<
   StructuredAgentSessionAdapter['forkForRewind']
 > = async ({ record, beforeMessage, rewindOperationId }) => {

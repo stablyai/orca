@@ -1,5 +1,5 @@
 import type { JiraClientForSite } from './authenticated-request'
-import type { JiraSiteSelection } from '../../shared/jira-types'
+import type { JiraSiteSelection } from '../../shared/jira/jira-types'
 
 export type JiraIssueSearchFailure = {
   error: unknown
@@ -75,8 +75,7 @@ export function shouldSurfaceSiteFailure(
   selection: JiraSiteSelection | null | undefined,
   entryCount: number
 ): boolean {
-  // getClients can resolve an omitted selection to the persisted 'all' choice;
-  // multi-entry reads need the same resilient fan-out policy as explicit 'all'.
+  // Omitted selections can resolve to persisted all-sites; apply the same resilient fan-out policy.
   return selection !== 'all' && entryCount <= 1
 }
 

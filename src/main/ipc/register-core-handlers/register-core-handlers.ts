@@ -1,4 +1,6 @@
 import { app } from 'electron'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { sessionSearchScopeCatalogFromStore } from '../../ai-vault-search/session-search-store-scope-catalog'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerCliHandlers } from '../cli'
@@ -6,9 +8,9 @@ import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
-import { registerFilesystemHandlers } from '../filesystem'
+import { registerFilesystemHandlers } from '../filesystem/filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
-import { registerFilesystemWatcherHandlers } from '../filesystem-watcher-handlers'
+import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
 import { registerUsageProviderHandlers } from '../usage-provider-handlers'
 import { registerGitHubHandlers } from '../github'
 import { registerGitLabHandlers } from '../gitlab'
@@ -97,11 +99,16 @@ import type {
 } from '../../../shared/ai-vault-resume-preparation'
 import {
   getSavedRuntimeAiVaultHostInfos,
+  deleteRuntimeAiVaultSession,
   prepareRuntimeAiVaultSessionResume,
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
 } from '../../ai-vault/runtime-session-scanner'
-import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
+import {
+  callRuntimeSessionSearch,
+  bindRuntimeSessionSearch
+} from '../../ai-vault/runtime-session-search-call'
+import { configureRuntimeAiVaultSessionDelete } from '../ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
@@ -128,6 +135,7 @@ type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
+  onAfterOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -155,10 +163,7 @@ export function registerCoreHandlers(
   pluginService?: PluginService,
   marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
-  // Why: on macOS the app can stay alive after all windows close, then
-  // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
-  // if a channel is registered twice, so we guard to register only once and
-  // just update the per-window web-contents ID on subsequent calls.
+  // macOS activation can replace the window without ending the app; refresh trusted IDs but register IPC once.
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
@@ -170,7 +175,6 @@ export function registerCoreHandlers(
 
   registerAppHandlers(store, {
     quitResumeRecordsFor: (session) => runtime.quitResumeRecordsFor(session),
-    // Switch point: main derives what the next startup reconnects instead of taking the window's.
     ...(ORCA_LAYOUT_OWNER_IS_MAIN
       ? {
           reconnectFactsFor: (session, partition) =>
@@ -178,7 +182,7 @@ export function registerCoreHandlers(
         }
       : {}),
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
-    // Why here, not onBeforeRelaunch: restart and profile switches quit through will-quit, which closes it.
+    // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
     onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
   })
   registerCliHandlers()
@@ -215,10 +219,7 @@ export function registerCoreHandlers(
   registerWorkspaceSpaceWindowHandlers(store)
   registerTerminalPreviewHandlers(runtime)
   registerDeveloperPermissionHandlers()
-  // Why: diagnostics handlers are wired alongside telemetry but the two
-  // lanes never share a code path — `ipc/diagnostics.ts` imports only from
-  // `src/main/observability/`, never from `src/main/telemetry/`. Order is
-  // not load-bearing; both register independent ipcMain channels.
+  // Diagnostics and telemetry register independent channels and keep separate data paths.
   registerDiagnosticsHandlers()
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
@@ -240,7 +241,8 @@ export function registerCoreHandlers(
   registerOrcaProfileHandlers(store, {
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
     onAuthMutation: lifecycleOptions.onOrcaProfileAuthMutation,
-    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
+    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut,
+    onAfterSignOut: lifecycleOptions.onAfterOrcaProfileSignOut
   })
   registerBrowserHandlers()
   registerShellHandlers(store)
@@ -273,10 +275,15 @@ export function registerCoreHandlers(
   registerAiVaultSearchHandlers({
     callRuntimeSearch: (environmentId, method, params) =>
       callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params),
+    bindRuntimeSearch: (environmentId) =>
+      bindRuntimeSessionSearch(app.getPath('userData'), environmentId),
     ensureStructuredSessionOwnership
   })
   registerAiVaultHandlers({
+    getUserDataPath: () => app.getPath('userData'),
     ensureStructuredSessionOwnership,
+    getProjectOwnershipCatalog: () =>
+      sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
@@ -288,12 +295,13 @@ export function registerCoreHandlers(
     prepareRuntimeSessionResume: async (environmentId, args) =>
       prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
   })
+  configureRuntimeAiVaultSessionDelete((environmentId, args) =>
+    deleteRuntimeAiVaultSession(app.getPath('userData'), environmentId, args)
+  )
   registerNativeChatHandlers()
   registerClipboardHandlers(store, {
     localChatAttachmentStore: async () => {
-      await ensureStructuredAgentSessionHostUnlessRefused(() =>
-        runtime.ensureStructuredAgentSessionHost()
-      )
+      await ensureStructuredSessionOwnership()
       return getAgentSessionAttachmentStore()
     }
   })

@@ -98,8 +98,7 @@ export function AutomationListExternalRow({
           tabIndex={0}
           data-current={isSelected ? 'true' : undefined}
           onClick={(event) => {
-            // Why: Radix portals menus out of the row DOM, but React still
-            // bubbles those clicks here — ignore so menu actions don't open detail.
+            // React bubbles portaled menu clicks through this row; ignore them to avoid opening detail.
             if (isPortaledRowMenuClick(event)) {
               return
             }

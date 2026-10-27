@@ -76,8 +76,7 @@ describe('a launch that adopts a conversation is its own identity', () => {
   })
 
   it('does not hand a resume the blank launch already pending for the same worktree', async () => {
-    // A joining caller is handed the EXISTING intent and contributes only its prompt, so joining
-    // here would silently drop the adoption and open a blank chat instead.
+    // Joiners inherit existing intent and add prompt only; joining a blank launch would discard conversation adoption.
     const worktreeId = 'wt-resume-vs-blank'
     const blank = startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-1' })
     const resume = startStructuredAgentLaunch(worktreeId, 'codex', {

@@ -185,8 +185,7 @@ describe('resource session bindings', () => {
   })
 
   it('never offers a session whose ownership could not be established', () => {
-    // Why: a legacy daemon generation or an older SSH relay cannot serialize claims, so it reports
-    // no owners for a session that may well have one. Unknown must never read as absent (#8459).
+    // Older daemons/relays may omit ownership claims; unknown cannot establish owner absence.
     const inputs = {
       ptyIdsByTabId: {},
       tabsByWorktree: {},

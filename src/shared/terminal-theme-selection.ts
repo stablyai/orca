@@ -22,7 +22,6 @@ export type TerminalThemeSelection = {
   themeName: string
 }
 
-/** Which terminal theme the app's appearance settings select; one rule for the renderer and main. */
 export function selectTerminalTheme(
   settings: TerminalThemeSelectionSettings,
   systemPrefersDark: boolean
@@ -35,7 +34,6 @@ export function selectTerminalTheme(
   return { mode, useLightVariant, themeName }
 }
 
-/** A selection names a user-imported theme or a built-in one; one lookup for both. */
 export function lookupTerminalTheme(
   settings: Pick<GlobalSettings, 'terminalCustomThemes'> | undefined,
   selection: string
@@ -60,11 +58,7 @@ function themeColors(
   return theme ? { foreground: theme.foreground, background: theme.background } : null
 }
 
-/**
- * The foreground/background the host's saved settings paint a terminal with, for answering
- * OSC 10/11 before (or without) a renderer. Opacity is ignored: a colour query reports the
- * opaque theme colour.
- */
+/** Answer OSC 10/11 from saved settings without a renderer; queries report opaque theme colors, ignoring opacity. */
 export function resolveConfiguredTerminalColors(
   settings: TerminalThemeSelectionSettings &
     Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalColorOverrides'>,

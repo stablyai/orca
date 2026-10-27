@@ -1,14 +1,6 @@
 import type { BrowserScreencastFormat } from '../transport/browser-screencast-protocol'
 
-/**
- * Everything the pane asks a screencast for that is the same on every platform, and the assembly
- * both `browser-screencast-request.ts` and its `.web.ts` sibling call.
- *
- * Separate from them because a `.web.ts` cannot import a value from the file it shadows — the
- * bundler resolves the specifier back to the sibling itself — and the alternative is two copies of
- * these constants drifting apart. Only the mobile view's device scale factor differs by platform,
- * and it arrives as an argument.
- */
+// Common request assembly lives outside platform siblings so .web cannot self-resolve its native import; only mobile density is passed per platform.
 
 export type BrowserStreamLayout = {
   width: number
@@ -32,8 +24,7 @@ export type MobileBrowserViewMode = 'web' | 'mobile'
 
 export const BROWSER_FRAME_FORMAT: BrowserScreencastFormat = 'jpeg'
 export const BROWSER_FRAME_QUALITY = 72
-// Why: menus/popovers can be a single compositor update. Skipping CDP frames
-// can miss that final static state; time throttling below still caps throughput.
+// Do not skip compositor frames: menus can be final static update; time throttling still bounds throughput.
 const BROWSER_FRAME_EVERY_NTH_FRAME = 1
 export const MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS = 100
 const BROWSER_MIN_FRAME_WIDTH = 320
@@ -54,8 +45,7 @@ export function assembleMobileBrowserScreencastRequest(
   if (!layout || layout.width <= 0 || layout.height <= 0) {
     return null
   }
-  // Why: mobile should improve image density without changing the desktop
-  // browser viewport. Sending viewport params puts Chromium in phone emulation.
+  // Improve image density without desktop viewport params, which would switch Chromium into phone emulation.
   const streamScale = clamp(
     Math.min(Number.isFinite(pixelRatio) ? pixelRatio : 1, BROWSER_MAX_STREAM_SCALE),
     1,
@@ -78,8 +68,7 @@ export function assembleMobileBrowserScreencastRequest(
     minFrameIntervalMs: MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS,
     ...(viewMode === 'mobile'
       ? {
-          // Why: mobile view should trigger responsive CSS while matching the
-          // phone's measured browser area instead of a fixed device preset.
+          // Mobile view uses responsive CSS at measured pane size, not fixed device preset.
           viewportWidth: Math.round(layout.width),
           viewportHeight: Math.round(layout.height),
           deviceScaleFactor: mobileViewDeviceScaleFactor,

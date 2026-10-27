@@ -1,6 +1,3 @@
-// Which sends a Stop takes back, at its child's end or once Codex takes it: the same rule decides the withdrawal and whether the
-// Stop writes a row, so a send it must leave alone is left alone by both.
-
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalSubmission,
@@ -23,7 +20,6 @@ type Send = Pick<
   | 'acceptedSequence'
 >
 
-/** A send that started its own turn before a person's Stop at sequence 10, no turn having opened. */
 function sendBeforeStop(overrides: Partial<Send> = {}): Send {
   return {
     clientMessageId: 'send-1',
@@ -35,7 +31,6 @@ function sendBeforeStop(overrides: Partial<Send> = {}): Send {
   }
 }
 
-/** A turn that ended at sequence 4, before a handover at 5. */
 const turnEndedBeforeHandover = {
   itemId: 'turn-0',
   revision: 1,
@@ -80,14 +75,12 @@ describe('a send a Stop can take back', () => {
     expect(sendStopCanTakeBack(sendBeforeStop({ dispatchState: 'unknown' }))).toBe(true)
   })
 
-  // An earlier process's send: its child may have started it before the crash.
   it('is never one an earlier process left in doubt', () => {
     expect(sendStopCanTakeBack(sendBeforeStop({ dispatchState: 'unknown', recovered: true }))).toBe(
       false
     )
   })
 
-  // The card holds its text and returns paused; nothing was handed to the agent.
   it("is never a queued card's send that was not handed over", () => {
     expect(sendStopCanTakeBack(sendBeforeStop({ handedOverAt: undefined }))).toBe(false)
   })
@@ -100,7 +93,7 @@ describe("a Codex child's end, or a Stop Codex took, under a person's Stop", () 
     await withdrawCodexSendsNoTurnOpenedFor(journal, 1)
 
     expect(resolveDispatch).toHaveBeenCalledWith(
-      // Codex may have recorded it during turn setup: no proof it never reached Codex.
+      // A recorded setup is not proof Codex never received the send.
       expect.objectContaining({
         clientMessageId: 'send-1',
         state: 'rejected',
@@ -119,7 +112,7 @@ describe("a Codex child's end, or a Stop Codex took, under a person's Stop", () 
     expect(resolveDispatch).not.toHaveBeenCalled()
   })
 
-  // The send could start a turn only once handed over, so a turn that ended before then is not one.
+  // A turn predating handover cannot belong to that send.
   it('withdraws a send when a turn record was written between its acceptance and its handover', async () => {
     const { journal, resolveDispatch } = journalWith(
       sendBeforeStop({ acceptedSequence: 3 }),
@@ -134,7 +127,6 @@ describe("a Codex child's end, or a Stop Codex took, under a person's Stop", () 
     )
   })
 
-  // A send that joined a running turn may be in it.
   it('leaves a send steered into a running turn as it is', async () => {
     const { journal, resolveDispatch } = journalWith(sendBeforeStop(), {
       kind: 'turn',

@@ -1,6 +1,7 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeWithListManagedWorktrees } from './workspaces/managed-workspace-operations'
+import { SSH_PORT_SCAN_UNSUPPORTED_REASON } from '../ports/workspace-port-execution-host'
 
 const scanWorkspacePortsMock = vi.hoisted(() => vi.fn())
 
@@ -38,7 +39,7 @@ describe('host-scoped workspace port scans on the server', () => {
     expect(runtime.host.resolveRuntimeFileTarget).toHaveBeenCalledWith('folder:fw-1')
     expect(scanWorkspacePortsMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({ executionHostId: 'ssh:box', ports: [] })
-    expect(result.unavailableReason).toMatch(/Reconnect/)
+    expect(result.unavailableReason).toBe(SSH_PORT_SCAN_UNSUPPORTED_REASON)
   })
 
   it('refuses Stop when the workspace now resolves to a different host than the row', async () => {

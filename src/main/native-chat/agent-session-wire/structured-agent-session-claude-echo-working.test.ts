@@ -1,6 +1,4 @@
-// Claude's echo of a sent message both answers the send and opens its turn. Whatever order the
-// host publishes those in, a chat reading its frames one at a time must read working throughout:
-// Stop and every session list's Working come from that one rule.
+// Each intermediate echo/turn frame must preserve Working so Stop and session lists stay consistent.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -60,7 +58,6 @@ beforeEach(async () => {
         lifecycle.push(host.handleAdapterEvent(mapped))
       }
     },
-    // As the runtime wires it.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: claude.current.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -142,7 +139,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   await settled()
   const connection = claude.current.connections[0]!
   if (backlog) {
-    // The previous cycle's result in the same read, its write issued just ahead of the echo's.
+    // Queue the previous result immediately ahead of the new echo in the same read.
     connection.handlers.onMessage?.({
       type: 'result',
       subtype: 'success',
@@ -155,7 +152,6 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
       result: ''
     })
   }
-  // Claude echoes the written message back, which is what opens its turn.
   connection.handlers.onMessage?.({ ...connection.sent.at(-1)!, uuid: 'echo-uuid' })
   await settled()
 

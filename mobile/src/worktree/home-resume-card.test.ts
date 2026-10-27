@@ -46,7 +46,6 @@ describe('home resume card', () => {
     const before = selectHomeResumeCard(input({ hostStates: { 'host-1': 'connecting' } }))
     const after = selectHomeResumeCard(input({ hostStates: { 'host-1': 'connected' } }))
 
-    // Same host and worktree before and after: the footer's Tasks card cannot shift down.
     expect(after?.hostId).toBe(before?.hostId)
     expect(after?.worktree.worktreeId).toBe(before?.worktree.worktreeId)
     expect(after?.actionable).toBe(true)
@@ -108,7 +107,6 @@ describe('home resume card', () => {
       })
     )
 
-    // Reserving the slot must not cost the user a card they could actually open.
     expect(card).toEqual({
       hostId: 'host-2',
       worktree: worktree('repo::/tmp/two'),
@@ -117,8 +115,7 @@ describe('home resume card', () => {
   })
 })
 
-// Why (F7): the card is drawn from a snapshot that can name a workspace the desktop deleted
-// while the phone was away, and tapping it lands on a session screen whose every RPC fails.
+// A persisted Resume target may have been deleted while offline; require host evidence before confirming it missing (F7).
 describe('isResumeTargetConfirmedMissing', () => {
   const card = {
     hostId: 'host-1',
@@ -139,7 +136,7 @@ describe('isResumeTargetConfirmedMissing', () => {
     ).toBe(false)
   })
 
-  // An unproven catalog is silence, not evidence — the session screen bounces later instead.
+  // An unproven catalog cannot establish deletion.
   it('never confirms without a proven catalog', () => {
     expect(isResumeTargetConfirmedMissing(card, null)).toBe(false)
   })

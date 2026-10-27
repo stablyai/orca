@@ -41,7 +41,7 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
       if (isFolderRepo(repo)) {
         return { error: 'Folder mode does not support creating worktrees.' }
       }
-      // Why the resolver: a row may name its SSH host only as `executionHostId: 'ssh:<target>'`.
+      // SSH ownership may exist only in executionHostId.
       const connectionId = getRepoRoutingConnectionId(repo)
       const gitExec = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
         if (!connectionId) {
@@ -75,8 +75,7 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         gitExec,
         fetchRemoteTrackingRef,
         fetchPullRequestHeadRef,
-        // Why: one resolver keeps source preference and hosting identity aligned
-        // across local, WSL, and SSH worktree creation.
+        // Share source preference and hosting identity across local, WSL and SSH creation.
         resolveRemote: () =>
           resolveGitHubReviewHeadRemote({
             repoPath: repo.path,

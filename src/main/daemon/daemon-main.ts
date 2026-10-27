@@ -40,7 +40,7 @@ export type DaemonHandle = {
 }
 
 export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandle> {
-  // Why launched daemons only: a directly started test daemon must not join the real host count.
+  // Directly started test daemons must not join the real host count.
   const hostTerminalLedgerDir =
     opts.hostTerminalLedgerDir ?? (opts.pidPath ? defaultHostTerminalLedgerDir() : null)
   const server = new DaemonServer({
@@ -63,9 +63,9 @@ export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandl
       ? { onAuthenticatedClientPair: opts.onAuthenticatedClientPair }
       : {}),
     ...(opts.log ? { log: opts.log } : {}),
-    // Why argv: the launcher passes it on the daemon's own command line; tests pass it directly.
+    // Launchers pass argv; direct-construction tests pass the option.
     spawnAdmission: opts.spawnAdmission ?? readTerminalSpawnAdmissionArg(process.argv),
-    // Why beside the PID record: only a launched daemon owns a runtime dir worth remembering.
+    // Launched daemons keep their marker beside the PID record.
     ...(opts.automaticWorkMarkerPath || opts.pidPath
       ? {
           automaticWorkMarkerPath:

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-export const TAB_TOOLTIP_DELAY_MS = 800
+export const TAB_TOOLTIP_DELAY_MS = 500
 
 export function TabStripTooltipProvider({ children }: { children: ReactNode }): React.JSX.Element {
   return (

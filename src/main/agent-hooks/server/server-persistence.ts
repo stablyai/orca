@@ -35,24 +35,22 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         continue
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
-      // Why: the session journal is the durable truth for a structured row and the host republishes
-      // it on restore; a persisted copy would hydrate unconfirmed and fight that republish.
+      // Journal projections must not compete with unconfirmed copies hydrated from this cache.
       if (enrichedPayload.structuredHost) {
         continue
       }
       const {
         promptInteractionKey: _promptInteractionKey,
-        // Why: stitched on at publish only; guards a stitched copy that reached the map by mistake.
+        // Facets are stitched at publication; discard any copy that reached the map.
         programStatus: _programStatus,
         programStatusOnly: _programStatusOnly,
-        // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
+        // Hydration restamps restoredUnconfirmed.
         restoredUnconfirmed: _restoredUnconfirmed,
-        // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).
+        // Observation sequences belong to this runtime.
         observation: _observation,
         // Replay provenance is runtime-only and must not survive another restart.
         isReplay: _isReplay,
-        // A terminal handle belongs to the runtime that issued it; a hydrated one could only
-        // rejoin a row to somebody else's terminal.
+        // Terminal handles belong to this runtime and cannot safely rejoin a hydrated row.
         terminalHandle: _terminalHandle,
         hostTurnRevision: _hostTurnRevision,
         launchToken,
@@ -61,8 +59,6 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
-      // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
-      // replaced is read at hydrate and never written again.
       const { claudeTaskWakeupPending: _pendingWakeup, ...persistedStatus } =
         persistedPayload.payload
       entries[paneKey] = {
@@ -81,7 +77,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         }
       }
     }
-    // Why: only a successor claim forgets an exit, so a pane that never runs another agent would keep it.
+    // Panes without successor agents would otherwise retain exit evidence forever.
     pruneAgentExits(this.agentExitedAtByPaneKey, Date.now() - HYDRATE_MAX_AGE_MS, (paneKey) =>
       this.state.lastStatusByPaneKey.has(paneKey)
     )
@@ -95,16 +91,15 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     return JSON.stringify(file)
   }
 
-  // Why: leading-edge throttle — an isolated change is written on the next turn, while a stream of
-  // changes gets at most one write per window and cannot postpone it (#26720).
+  // Leading-edge throttling prevents event streams from postponing writes indefinitely (#26720).
   protected scheduleStatusPersist(): void {
     if (!this.lastStatusFilePath) {
       return
     }
     const now = Date.now()
-    // Why: authority loss after a crash weakens the spool token filter, so it skips the window.
+    // Persist authority changes immediately to preserve spool replay filtering after a crash.
     const urgent = this.currentAuthorityFingerprint() !== this.lastPersistedAuthorityFingerprint
-    // Why: clamp so a wall-clock rollback can't push the next write far into the future.
+    // A wall-clock rollback must not defer persistence indefinitely.
     const dueAt = urgent
       ? now
       : Math.min(
@@ -112,7 +107,6 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
           now + STATUS_PERSIST_MIN_INTERVAL_MS
         )
     if (this.statusPersistTimer) {
-      // Why: never push an armed write back; only pull it forward for urgent work.
       if (dueAt >= this.statusPersistDueAt) {
         return
       }
@@ -123,7 +117,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       this.statusPersistTimer = null
       this.startStatusPersist()
     }, this.statusPersistDueAt - now)
-    // Why: don't keep the event loop alive just for a status flush — quit already flushes sync.
+    // Quit flushes synchronously; this timer must not keep the runtime alive.
     if (typeof this.statusPersistTimer.unref === 'function') {
       this.statusPersistTimer.unref()
     }
@@ -137,7 +131,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     this.runStatusPersist()
   }
 
-  /** Synchronous write for quit, hook-disable and hydration repair; ordinary updates use the async path. */
+  /** Quit, hook-disable and hydration repair need synchronous writes; routine updates are async. */
   protected runStatusPersist(): void {
     const writer = this.getStatusSnapshotWriter()
     if (!writer) {
@@ -185,7 +179,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     return this.statusSnapshotWriter
   }
 
-  /** Cheap per-event check: revision counters plus live launch tokens, no hashing or serialization. */
+  /** Revision counters and live tokens avoid per-event hashing or serialization. */
   protected currentAuthorityFingerprint(): string {
     let fingerprint = `${this.hydratedLaunchTokenHashByPaneKey.revision}:${this.persistedAuthorityCommitmentsByPaneKey.revision}`
     for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
@@ -216,7 +210,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
             return
           }
           this.reportStatusPersistFailure(err)
-          // Why: the failed state may never be followed by another mutation; retry next window.
+          // Retry even if no later mutation arrives.
           this.scheduleStatusPersist()
         }
       )
@@ -230,7 +224,6 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
   }
 
   private reportStatusPersistFailure(err: unknown): void {
-    // Why: one warning per failure streak, not one per hook event.
     if (!this.statusPersistFailing) {
       console.warn('[agent-hooks] failed to write last-status file:', err)
     }

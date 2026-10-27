@@ -119,8 +119,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
       claimKeyEvent: vi.fn(() => imeHarness.claimResult),
       dispose: vi.fn(),
       sendInput: args.sendInput,
-      // Why captured: the bridge's whole job is handing the live mirror to the
-      // forwarder, so the test reads what a real commit would read.
+      // Read the same live keyboard-mode mirror the real commit forwarder receives.
       getKittyKeyboardFlags: args.getKittyKeyboardFlags ?? ((): number => 0)
     }
     imeHarness.forwarders.push(forwarder)
@@ -302,9 +301,7 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
   })
 
-  // The bridge omitted this dependency entirely, so every Preview
-  // commit was evaluated at flags 0. Ordering and provenance live in
-  // preview-terminal-snapshot-replay.test.ts; this pins the wiring.
+  // Assert the forwarder receives live snapshot-seeded flags; replay ordering is covered in preview-terminal-snapshot-replay.test.ts.
   it('hands the forwarder the live mirror seeded from the snapshot flags', async () => {
     platformState.value = 'darwin'
     connect.mockResolvedValue({
@@ -507,6 +504,25 @@ describe('AgentTerminalPreview', () => {
     expect(input).not.toHaveBeenCalled()
   })
 
+  it('dismisses the hosting dialog on the pane-close chord', async () => {
+    const onRequestClose = vi.fn()
+    render(<AgentTerminalPreview ptyId="pty-1" onRequestClose={onRequestClose} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      ctrlKey: true,
+      cancelable: true
+    })
+    expect(terminal.customKeyHandler!(keydown)).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(onRequestClose).toHaveBeenCalledOnce()
+    expect(input).not.toHaveBeenCalled()
+  })
+
   it('keeps a native input-source chord from inserting text into the preview', async () => {
     storeState.keybindings = { 'terminal.switchInputSource': ['Shift+Space'] }
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
@@ -577,10 +593,7 @@ describe('AgentTerminalPreview', () => {
     expect(terminal.input).not.toHaveBeenCalled()
   })
 
-  // Why: a snapshot carries the TUI's one-time kitty push and the post-snapshot
-  // replay redelivers it. Applying replays with stack semantics would leave the
-  // TUI's single pop on a stale frame, so a plain shell keeps getting
-  // kitty-encoded Option chords.
+  // Snapshot replay can redeliver a kitty push; it must not leave stale flags after the TUI’s single pop.
   it('does not let a redelivered kitty push outlive the TUI pop', async () => {
     connect.mockResolvedValueOnce({
       snapshot: { data: '\x1b[>1u', cols: 80, rows: 24, seq: 1 },
@@ -733,8 +746,7 @@ describe('AgentTerminalPreview', () => {
     expect(fit).toHaveBeenCalledTimes(1)
     expect(fit).toHaveBeenCalledWith('pty-1', 90, 30)
 
-    // A reconnect (e.g. the host reclaiming the grid) computes the same
-    // target — no repeat claim, so no resize tug-of-war with the host.
+    // Unchanged target geometry must not reclaim the grid on reconnect and fight the host.
     act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
     await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2))
     await vi.advanceTimersByTimeAsync(400)

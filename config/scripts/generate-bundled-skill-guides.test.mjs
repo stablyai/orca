@@ -195,8 +195,7 @@ describe('bundled skill guide generator', () => {
         expect(guide.references).toEqual([])
         continue
       }
-      // Why: the per-reference selector serves these verbatim, so an entry that
-      // drifts from the file on disk ships a stale reference to every agent.
+      // Per-reference selector serves these bytes verbatim; drift would ship stale guides.
       expect(guide.references.map((reference) => reference.name)).toEqual(
         references.map((reference) => reference.replace(/\.md$/u, ''))
       )
@@ -294,8 +293,7 @@ describe('bundled skill guide generator', () => {
     await expect(verifyArtifacts(artifacts, root)).rejects.toThrow('skills/computer-use/SKILL.md')
   })
 
-  // Why: the stale-artifact assertions above only hit the Windows separator when the host is
-  // Windows; injecting path.win32 makes the Linux/macOS shards catch the regression too.
+  // Inject path.win32 so non-Windows shards detect separator regressions too.
   it('formats contributor-facing paths with forward slashes on every platform', () => {
     expect(
       toPosixRelativePath('C:\\repo', 'C:\\repo\\src\\cli\\bundled-skill-guides.ts', path.win32)
@@ -330,8 +328,7 @@ describe('bundled skill guide generator', () => {
     ).toThrow('collides with canonical name')
   })
 
-  // G2: the resolver ladder is single-authored. Without this, a stub can re-inline it and
-  // drift again exactly as the guide copies already did (#7904 lost `/usr/bin/orca`).
+  // Single-author resolver ladder; re-inlined stubs can drift like the copies that lost /usr/bin/orca (#7904).
   it('projects one shared resolver fragment byte-for-byte into every stub', async () => {
     const blocks = await readSharedStubBlocks(projectDir)
 
@@ -372,9 +369,7 @@ describe('bundled skill guide generator', () => {
   })
 })
 
-// Why generalized: `orchestration-skill-guidance.test.mjs` pins this both-directions routing for
-// orchestration alone. Any guide that grows a `references/` directory needs the same contract, or a
-// reference can ship unroutable or a gate can route a file that does not exist.
+// Generalize orchestration’s bidirectional routing contract to every guide with references; catch unroutable and missing files.
 describe('guide reference routing', () => {
   async function guidesWithReferences() {
     const guideRoot = path.join(projectDir, 'skill-guides')

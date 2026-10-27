@@ -28,6 +28,7 @@ jobs:
               ['ssh-hostile-hosts', 'ssh-hostile-hosts.yml'],
               ['mobile', 'mobile.yml'],
               ['computer-e2e', 'computer-e2e.yml'],
+              ['computer-macos-native', 'computer-macos-native.yml'],
               ['wsl-orcad-e2e', 'wsl-orcad-e2e.yml'],
               ['performance-contracts', 'performance-contracts.yml'],
               ['pr-test-loc', 'pr-test-loc.yml'],

@@ -123,7 +123,6 @@ describe('Claude root-exit stop', () => {
       store,
       adapter,
       agents: NO_STRUCTURED_AGENTS,
-      // The one database the store and the journal share, as the runtime installs them.
       journalDatabase: openTestJournalHostDatabase(stateDirectory),
       claimKeyId: 'key-1',
       logger: createStructuredAgentSessionLogger()
@@ -166,11 +165,9 @@ describe('Claude root-exit stop', () => {
       ownerProcess: null,
       deathEvidence: { kind: 'exit-observed' }
     })
-    // The agent went to rest; the conversation stays open and listed.
     expect(sessions.get('session-1')?.child).toBeNull()
     expect(close).not.toHaveBeenCalled()
     expect(publishStatus).toHaveBeenCalledWith('session-1')
-    // The adapter agrees the session is over: nothing is left to refuse the next start.
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
   })
 })

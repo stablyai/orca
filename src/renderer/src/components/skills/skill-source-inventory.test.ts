@@ -122,9 +122,7 @@ describe('summarizeSkillSources', () => {
   })
 
   it('reports an unanswered root as unavailable even though it claims to exist', () => {
-    // Why: the host cannot prove a stalled root is gone, so it reports exists:true
-    // and carries the uncertainty in skippedReason. Reading exists first counted a
-    // root nobody walked as scanned, and its retained skills as its full contents.
+    // An unavailable root retains exists:true because absence is unproven; retained skills do not establish a full scan.
     const entries = summarizeSkillSources(
       result({
         sources: [source({ id: 'stalled', exists: true, skippedReason: 'unavailable' })],

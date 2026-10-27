@@ -28,6 +28,7 @@ let submissions: AgentJournalSubmission[] = []
 let queuedMessages: AgentSessionQueuedMessage[] | null = null
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
@@ -82,7 +83,6 @@ import {
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
-// This build's host settles an in-doubt rewind on the next send; an older one is tested below.
 beforeEach(() => {
   setLocalRuntimeCapabilitiesForTests([RECOVERY])
   mocks.remoteCapabilities = new Set([RECOVERY])

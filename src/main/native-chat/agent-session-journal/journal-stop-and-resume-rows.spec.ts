@@ -1,5 +1,4 @@
-// A Stop's event and a Resume ride tombstones, but are no history: an app never receives them,
-// and they never count as the content that makes a rebuilt or provider-backed epoch usable.
+// Stop/Resume tombstones are neither published history nor evidence that an epoch contains content.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -50,7 +49,6 @@ export function registerJournalStopAndResumeRowsTests(): void {
     await rm(root, { recursive: true, force: true })
   })
 
-  /** One epoch's rows, folded as an open folds them. */
   function fold(rows: readonly JournalRow[]) {
     const folding = startJournalRowFold({ sessionId: IDENTITY.sessionId, epoch: EPOCH })
     for (const row of rows) {
@@ -59,7 +57,6 @@ export function registerJournalStopAndResumeRowsTests(): void {
     return folding.finish()
   }
 
-  /** An epoch row, then `after` built at the next sequences. */
   function epochWith(
     reason: AgentJournalEpochReason,
     after: readonly ('stop' | 'resume' | 'item')[]
@@ -115,8 +112,6 @@ export function registerJournalStopAndResumeRowsTests(): void {
       expect(projected).toMatchObject({ ok: true, batch: { items: [], removedItemIds: [] } })
     })
 
-    // An older build founded `unreconcilable_prefix` epochs when it deleted history; this one opens
-    // such an epoch as it stands.
     it('fold as history in an epoch an older build founded after deleting rows', () => {
       expect(fold(epochWith('unreconcilable_prefix', ['stop', 'resume']))).toMatchObject({
         newer: null,

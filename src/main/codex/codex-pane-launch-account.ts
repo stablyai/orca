@@ -14,18 +14,7 @@ type CodexPaneLaunchAccountSettings = Pick<
   'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime' | 'codexManagedAccounts'
 >
 
-/**
- * Resolves which Codex account a PTY is actually launching under.
- *
- * Why: an automatic session resume deliberately pins CODEX_HOME to the home
- * that owns the session rather than to the current selection, so a cold-restored
- * pane can come back on an account the user already switched away from. Naming
- * that real account — instead of the selection Orca ignored — is what lets the
- * restart prompt tell the user which account the pane is stuck on.
- *
- * Returns null when the launch cannot be attributed, which keeps the pane out of
- * the stale-pane report entirely.
- */
+// Resumes pin CODEX_HOME independently of selection; restart prompts must name the actual account.
 export function resolveCodexPaneLaunchAccount(args: {
   pinnedByResume: boolean
   launchCodexHomePath: string | null
@@ -81,7 +70,7 @@ function resolveCodexHomeOwnerAccountId(args: {
   settings: CodexPaneLaunchAccountSettings
   target: CodexAccountSelectionTarget
 }): string | null | undefined {
-  // Why: no injected CODEX_HOME means Codex reads the user's own home.
+  // Without injected CODEX_HOME, Codex reads the user's own home.
   if (!args.launchCodexHomePath) {
     return null
   }
@@ -95,12 +84,7 @@ function resolveCodexHomeOwnerAccountId(args: {
   const owner = args.settings.codexManagedAccounts?.find((account) =>
     accountOwnsCodexHome(account, args.target, launchHomePath)
   )
-  // Why: an unowned home cannot be named, and naming the account a pane is stuck
-  // on is the prompt's whole job — so decline rather than guess. A wrong notice
-  // silently drops every keystroke in that terminal. Note the shared runtime
-  // mirror only hot-swaps to the current selection on the legacy flag-OFF lane;
-  // a pane resumed into it after the per-account rollout is genuinely stale but
-  // still unnameable, so that cohort stays unreported.
+  // Unknown owners cannot produce safe restart prompts; guessing could block terminal input.
   return owner ? owner.id : undefined
 }
 
@@ -109,8 +93,7 @@ function accountOwnsCodexHome(
   target: CodexAccountSelectionTarget,
   launchHomePath: string
 ): boolean {
-  // Why: a WSL pane resolves its account from its own per-distro lane, so a
-  // host account's home must never answer for it (and vice versa).
+  // Host and per-distro WSL selection lanes must not claim each other's homes.
   if (
     getCodexSelectionLaneKey(getCodexSelectionTargetForAccount(account)) !==
     getCodexSelectionLaneKey(target)

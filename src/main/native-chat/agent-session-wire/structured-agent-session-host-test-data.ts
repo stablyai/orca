@@ -65,8 +65,7 @@ export function hostTestAttachParams(
   }
 }
 
-/** The row ids a chat draws from `snapshot`, top to bottom, while its composer still holds `sent`
- *  as dispatched, as it does until the journal accepts them. */
+/** Render snapshot rows while sent composer items await journal acceptance. */
 export function hostTestDrawnRowIds(
   snapshot: AgentJournalSnapshot,
   sent: readonly { clientMessageId: string; text: string }[]
@@ -80,3 +79,37 @@ export function hostTestDrawnRowIds(
     projectStructuredAgentSessionMessages(snapshot.items, optimistic, snapshot.submissions)
   ).map(({ id }) => id)
 }
+
+export const CODEX_INPUT_FINALIZATION_ADMISSION_CASES = [
+  ['queue-stop', 0],
+  ['queue-close', 0],
+  ['queue-quit', 0],
+  ['pending-stop', 0],
+  ['pending-close', 0],
+  ['pending-close-cards', 0],
+  ['pending-quit', 0],
+  ['pending-exit', 0],
+  ['queue-sleep', 0],
+  ['pending-sleep', 0],
+  ['pending-close-then-quit', 0],
+  ['pending-quit-then-close', 0],
+  ['pending-close-cards', 10],
+  ['pending-close-cards', 100]
+] as const
+
+export const CODEX_INPUT_FINALIZATION_OWNER_OUTCOMES = [
+  'null',
+  'live',
+  'admitted',
+  'terminal',
+  'normal',
+  'fallback',
+  'failed',
+  'close-normal',
+  'close-failed',
+  'safe-close',
+  'new-session',
+  'new-live-child',
+  'new-ended-child',
+  'new-send'
+] as const

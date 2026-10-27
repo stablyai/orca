@@ -7,16 +7,7 @@ import {
 import { normalizeHookPayload } from './agent-hook-listener'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
-/**
- * omp is the inverse of Codex: it emits `tool_approval_requested` only after its own policy engine
- * resolved to "prompt", and then parks on a human Approve/Deny select. Auto-approved calls emit
- * nothing at all, so the event always means a human is blocked.
- *
- * The emitter forwards omp's `approval_mode`, which is the ambient mode (`always-ask` | `write` |
- * `yolo`) rather than the verdict. A per-tool `tools.approval.<tool>: prompt` prompts under every
- * mode, so a genuinely blocked human arrives carrying `yolo`. These pin that no value of that
- * field — recognised or not — can downgrade the wait to working (STA-7698).
- */
+/** OMP emits approval only after policy decides to prompt, so every request means a blocked human. Ambient approval_mode (even yolo) cannot override per-tool prompts or downgrade waiting (STA-7698). */
 describe('OMP approval ownership', () => {
   let state: HookListenerState
 
@@ -53,12 +44,6 @@ describe('OMP approval ownership', () => {
     }
   )
 
-  // `yolo` is the omp default and the one value that looks auto-approving, but omp only emits the
-  // event when something already forced a prompt, so downgrading on it would hide a live prompt.
-  it('keeps a yolo-mode approval request blocked even though yolo auto-approves by default', () => {
-    expect(approvalRequest({ approval_mode: 'yolo' })?.payload.state).toBe('blocked')
-  })
-
   it.each([
     ['missing', {}],
     ['unrecognised', { approval_mode: 'some-future-mode' }],
@@ -75,8 +60,16 @@ describe('OMP approval ownership', () => {
     ).toMatchObject({ state: 'blocked', toolInput: 'Critical pattern detected' })
   })
 
-  it('leaves the tool input unset when omp sends no reason', () => {
-    expect(approvalRequest({ approval_mode: 'always-ask' })?.payload.toolInput).toBeUndefined()
+  it('clears the previous tool input when omp sends no reason', () => {
+    expect(
+      approvalRequest({ reason: 'Critical pattern detected', approval_mode: 'always-ask' })?.payload
+    ).toMatchObject({ state: 'blocked', toolInput: 'Critical pattern detected' })
+
+    expect(approvalRequest({ approval_mode: 'always-ask' })?.payload).toMatchObject({
+      state: 'blocked',
+      toolName: 'bash',
+      toolInput: undefined
+    })
   })
 
   it('clears the wait on resolution regardless of the mode that requested it', () => {

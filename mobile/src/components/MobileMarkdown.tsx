@@ -6,7 +6,7 @@ import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-block
 import { MarkdownText } from './mobile-markdown-text'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
 import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
-import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 
 type Props = {
   content?: string
@@ -18,17 +18,12 @@ type Props = {
   /** Multiplier for every text size. Defaults to 1; the chat view passes >1 so its prose reads
    *  larger than the compact base. */
   textScale?: number
-  /** When provided, detected file paths and file-target hrefs render as tappable
-   *  and invoke this with the path text (worktree-relative or absolute, with an
-   *  optional :line(:col) suffix). Omitted on screens with no file viewer, where
-   *  paths render as plain text (no behavior change). */
+  // File targets call this with relative/absolute path and optional :line(:col); omit on screens without viewer to leave paths plain.
   onOpenFile?: (pathText: string) => void
-  /** Native-chat assistant prose only: renders `::orca-visual{...}` directive lines. Without it,
-   *  a directive line is ordinary text. Must be referentially stable (this component is memoized). */
+  // Enable ::orca-visual directives only in assistant native-chat prose; keep callback identity stable for memoization.
   renderImage?: (href: string, alt: string) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
-  /** The text is still being appended to: markup its end leaves open is closed, as on desktop,
-   *  and a diagram stays code until the text stops. */
+  // Close incomplete streaming markup like desktop; diagrams remain code until text stops.
   growing?: boolean
   /** The surface under the text: `onBright` for your own message's light fill. */
   tone?: keyof typeof MARKDOWN_TONES

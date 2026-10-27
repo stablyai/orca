@@ -28,11 +28,10 @@ const pwshAvailable = canRun('pwsh')
 const HELP_WITH_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-daemon  Run in-process\n'
 const HELP_WITHOUT_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-alt-screen\n'
 
-// Why argv as whole words: the rule is a whole-argument denylist (plan §4).
 const ADDED: string[][] = [
   [],
   ['fix the bug'],
-  // Why: Windows PowerShell and pwsh's .cmd passing drop embedded quotes unless the wrapper escapes them.
+  // PowerShell .cmd invocation needs embedded quotes escaped.
   ['say "hi" to "bob"'],
   ['exec the plan'],
   ['-m', 'gpt-5', '--yolo', 'x'],
@@ -99,7 +98,7 @@ function makeSandbox(help: string): Sandbox {
   writeFileSync(helpFile, help)
   writeFileSync(helpLog, '')
   if (isWindows) {
-    // Why a .cmd shim over node: the shape npm installs, and what Get-Command resolves.
+    // Match npm's .cmd entry point resolved by Get-Command.
     writeFileSync(
       join(bin, 'fake.js'),
       `const fs = require('fs')
@@ -165,14 +164,14 @@ function run(
       : isPowerShell(shell)
         ? getPowerShellAgentWrappers()
         : getPosixCodexShellLaunchPreflight()
-  // Why the guard: rows include `login`, which a real codex would run against the host's account.
+  // Cases include login; never let a fixture escape into the host's real Codex account.
   const guard = isPowerShell(shell)
     ? `if ((Get-Command codex -CommandType Application | Select-Object -First 1).Source -ne ${quote(shell, sandbox.codex)}) { exit 97 }`
     : shell === 'fish'
       ? `test (command -s codex) = ${quote(shell, sandbox.codex)}; or exit 97`
       : `[ "$(command -v codex)" = ${quote(shell, sandbox.codex)} ] || exit 97`
   const body = `${guard}\n${preamble}\n${template}\n${script}`
-  // Why a file for bash/zsh: it is read line by line like a startup file, so an alias it defines applies.
+  // Startup-file parsing lets aliases affect subsequent lines.
   const scriptFile = join(sandbox.bin, '..', 'script.sh')
   writeFileSync(scriptFile, body)
   const [command, args]: [string, string[]] =
@@ -189,7 +188,7 @@ function run(
       ...process.env,
       PATH: `${sandbox.bin}${delimiter}${process.env.PATH ?? ''}`,
       CODEX_HOME: join(sandbox.bin, '..', 'codex-home'),
-      // Why: a run inside an Orca terminal inherits its identity, which the wrapper forwards.
+      // Nested Orca tests must not forward the host pane's identity.
       ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, ''])),
       ...env
     }
@@ -210,7 +209,7 @@ const shells: [Shell, boolean][] = [
   ['zsh', !isWindows && existsSync('/bin/zsh')],
   ['fish', fishLookup.available],
   ['pwsh', pwshAvailable],
-  // Why: Windows PowerShell 5.1 turns redirected native stderr into errors, unlike pwsh.
+  // Windows PowerShell 5.1 promotes redirected native stderr to errors; pwsh does not.
   ['powershell', isWindows && canRun('powershell')]
 ]
 
@@ -230,7 +229,7 @@ describe('codex wrapper --no-daemon rule', () => {
           ...ADDED.map((argv) => expectedLine(argv, true)),
           ...UNCHANGED.map((argv) => expectedLine(argv, false))
         ])
-        // Why: a denylisted launch must not pay for, or depend on, the --help probe.
+        // Denylisted calls must not depend on or pay for capability probes.
         expect(helpProbes(sandbox)).toBe(ADDED.length)
       })
 
@@ -302,7 +301,6 @@ describe('codex wrapper --no-daemon rule', () => {
       "shell_environment_policy.set.ORCA_TERMINAL_HANDLE='term_abc'",
       `shell_environment_policy.set.ORCA_USER_DATA_PATH='${identity.ORCA_USER_DATA_PATH}'`
     ]
-    // Why unordered: the overrides set distinct keys, so only which ones arrive matters.
     const splitOverrides = (line: string): { overrides: string[]; rest: string[] } => {
       const [, ...words] = line.split('|')
       const overrides: string[] = []

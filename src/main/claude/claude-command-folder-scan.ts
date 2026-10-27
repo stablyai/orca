@@ -11,7 +11,6 @@ const MAX_COMMAND_FILE_BYTES = 256 * 1024
 
 type ScanBudget = { remainingEntries: number }
 
-/** A folder that cannot be read holds no commands we can offer, so it is skipped, not an error. */
 async function readEntries(path: string, budget: ScanBudget): Promise<Dirent[]> {
   try {
     const entries: Dirent[] = []
@@ -38,7 +37,7 @@ async function walkMarkdown(
     return
   }
   for (const entry of await readEntries(path, budget)) {
-    // Links are not followed: a command folder is the user's own files, not a way out of it.
+    // Do not follow links outside the command tree.
     if (entry.isSymbolicLink()) {
       continue
     }
@@ -62,11 +61,7 @@ async function describe(filePath: string): Promise<string | undefined> {
   }
 }
 
-/**
- * Claude's custom commands in `roots`: every `*.md` below each folder, named by its path from
- * the folder with `:` between segments (`frontend/test.md` is `/frontend:test`). The first root
- * to name a command wins, so list the closest folder first.
- */
+/** Map nested paths to colon-separated commands; earlier roots win name collisions. */
 export async function scanClaudeCommandFolders(
   roots: readonly string[]
 ): Promise<AgentSessionSlashCommand[]> {

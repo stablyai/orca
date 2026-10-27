@@ -101,5 +101,6 @@ describe('mobile diff review state', () => {
   it('builds stable content identities from ordered parts', () => {
     expect(buildMobileDiffIdentity(['a', 'b'])).toBe(buildMobileDiffIdentity(['a', 'b']))
     expect(buildMobileDiffIdentity(['a', 'b'])).not.toBe(buildMobileDiffIdentity(['ab']))
+    expect(buildMobileDiffIdentity(['a', 'b'])).not.toBe(buildMobileDiffIdentity(['b', 'a']))
   })
 })

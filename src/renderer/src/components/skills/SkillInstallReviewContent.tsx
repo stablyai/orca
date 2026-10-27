@@ -15,8 +15,7 @@ import { skillInstallResultLabel } from './skill-install-result-label'
 import type { ResolvedSkillShare } from './skill-share-version-summary'
 import { translate } from '@/i18n/i18n'
 
-/** Why: the submit lives in the dialog footer beside Close, so this is only the
- *  field; Enter still submits through the form. */
+/** Submit stays in the footer; Enter in this field still submits its form. */
 export function SkillShareLinkInputForm({
   link,
   onLinkChange,

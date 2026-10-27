@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { buildExecutionHostRegistry } from './execution-host-registry'
 import { RUNTIME_PROTOCOL_VERSION } from './protocol-version'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
-import type { RuntimeHostStatusSnapshot } from './runtime-host-status'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/control/remote-runtime-shared-control-types'
+import {
+  runtimeEnvironmentStatusFromSnapshot,
+  type RuntimeHostStatusSnapshot
+} from './runtime-host-status'
 import { RuntimeHostStatusOwner } from './runtime-host-status-owner'
 import type { RuntimeStatus } from './runtime-types'
 
@@ -31,30 +34,17 @@ function diagnostics(
   }
 }
 
-// Mirrors applyRuntimeHostStatusSnapshot: only a verified, unretired snapshot projects `status`.
 function healthFor(snapshot: RuntimeHostStatusSnapshot): string | undefined {
   return hostFor(snapshot)?.health
 }
 
 function hostFor(snapshot: RuntimeHostStatusSnapshot) {
-  const status =
-    snapshot.verification === 'verified' && !snapshot.retired && snapshot.status
-      ? { ...snapshot.status, remoteControl: snapshot.remoteControl ?? undefined }
-      : null
   return buildExecutionHostRegistry({
     repos: [],
     settings: null,
     runtimeEnvironments: [{ id: 'env-1', name: 'Server' }],
     runtimeStatusByEnvironmentId: new Map([
-      [
-        'env-1',
-        {
-          snapshot,
-          status,
-          remoteControl: snapshot.remoteControl,
-          checkedAt: snapshot.checkedAt
-        }
-      ]
+      ['env-1', runtimeEnvironmentStatusFromSnapshot(snapshot)]
     ])
   }).find((host) => host.id === 'runtime:env-1')
 }

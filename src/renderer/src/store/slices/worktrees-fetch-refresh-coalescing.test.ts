@@ -71,9 +71,7 @@ describe('fetchWorktrees', () => {
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
   })
 
-  // Why (#10562): the scan coalesces but each caller carries its own known-id
-  // snapshot, so a caller that joined an in-flight scan must still request
-  // teardown — otherwise it purges renderer state and strands live PTYs.
+  // Coalesced scans share IO, but each caller’s known-ID snapshot still needs teardown or it purges state while stranding live PTYs (#10562).
   it('stops terminals for a caller that coalesced onto an in-flight scan', async () => {
     const store = createTestStore()
     const deleted = makeWorktree({ id: 'repo1::/p/deleted', repoId: 'repo1', path: '/p/deleted' })
@@ -121,8 +119,7 @@ describe('fetchWorktrees', () => {
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
   })
 
-  // Why: teardown rides outside the scan coalescer, so identical fan-out requests
-  // must share one host sweep instead of re-scanning the host per caller.
+  // Teardown outside scan coalescing must still deduplicate identical host sweeps.
   it('shares one teardown sweep across identical concurrent refreshes', async () => {
     const store = createTestStore()
     const deleted = makeWorktree({ id: 'repo1::/p/deleted', repoId: 'repo1', path: '/p/deleted' })
@@ -149,9 +146,7 @@ describe('fetchWorktrees', () => {
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
   })
 
-  // Why (#10562): "I can't reach the host" must never be read as "the worktree is
-  // gone". A disconnected SSH target has no authoritative scan, so it must not
-  // purge and must not kill anything on the far side.
+  // Unreachable SSH cannot prove worktree deletion; neither purge nor kill without authoritative scan (#10562).
   it('never stops terminals for a disconnected SSH target', async () => {
     const store = createTestStore()
     const deleted = makeWorktree({ id: 'repo1::/p/deleted', repoId: 'repo1', path: '/p/deleted' })
@@ -352,8 +347,8 @@ describe('fetchWorktrees', () => {
     await refresh
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([
-      localWorktree,
-      { ...sshWorktree, hostId: 'ssh:ssh-1' }
+      { ...localWorktree, projectId: 'repo:repo1', projectHostSetupId: 'repo1' },
+      { ...sshWorktree, hostId: 'ssh:ssh-1', projectId: 'repo:repo1', projectHostSetupId: 'repo1' }
     ])
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
   })
@@ -402,7 +397,12 @@ describe('fetchWorktrees', () => {
 
     expect(visibleResult).toBe(true)
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
-      { ...sshWorktree, hostId: 'ssh:ssh-1' }
+      {
+        ...sshWorktree,
+        hostId: 'ssh:ssh-1',
+        projectId: 'repo:repo-ssh',
+        projectHostSetupId: 'repo-ssh'
+      }
     ])
     expect(store.getState().detectedWorktreesByRepo['repo-ssh']?.worktrees).toEqual([
       expect.objectContaining({ id: sshWorktree.id, hostId: 'ssh:ssh-1' })
@@ -454,7 +454,12 @@ describe('fetchWorktrees', () => {
 
     expect(visibleResult).toBe(true)
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
-      { ...sshWorktree, hostId: 'ssh:ssh-1' }
+      {
+        ...sshWorktree,
+        hostId: 'ssh:ssh-1',
+        projectId: 'repo:repo-ssh',
+        projectHostSetupId: 'repo-ssh'
+      }
     ])
     expect(store.getState().detectedWorktreesByRepo['repo-ssh']?.worktrees).toEqual([
       expect.objectContaining({ id: sshWorktree.id, hostId: 'ssh:ssh-1' })

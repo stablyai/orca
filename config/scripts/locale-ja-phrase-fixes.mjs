@@ -252,7 +252,6 @@ export const JA_PHRASE_FIXES = [
     replacement: 'レビュー依頼済み',
     whenEnIncludes: 'Review requested'
   },
-  // Round 5: inline/launch/action homographs, MR phrases, concise UI prompts.
   { pattern: /列をなして/g, replacement: 'インライン', whenEnIncludes: 'Inline' },
   { pattern: /列をなして/g, replacement: 'インライン', whenEnIncludes: 'inline' },
   { pattern: /打ち上げ/g, replacement: '起動', whenEnIncludes: 'Launch' },

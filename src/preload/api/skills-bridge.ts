@@ -98,11 +98,6 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:listOwnedShares'),
   revokeShare: (shareId: string): Promise<SkillCloudOperation<void>> =>
     ipcRenderer.invoke('skills:revokeShare', shareId),
-  deletePackageVersion: (input: {
-    packageId: string
-    versionId: string
-  }): Promise<SkillCloudOperation<void>> =>
-    ipcRenderer.invoke('skills:deletePackageVersion', input),
   deletePackage: (packageId: string): Promise<SkillCloudOperation<void>> =>
     ipcRenderer.invoke('skills:deletePackage', packageId),
   listWslDistros: (environmentId?: string): Promise<string[]> =>

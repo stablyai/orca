@@ -1,8 +1,5 @@
 // @vitest-environment happy-dom
 
-// A card edited in place inside the list: the editor replaces its text and actions, a host that
-// cannot edit offers no Edit, and focus leaves a closing editor for the question or the composer.
-
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -70,6 +67,27 @@ function controller(
 afterEach(() => cleanup())
 
 describe('NativeChatQueuedMessageList inline edit', () => {
+  it('reorders only user cards from the grip with arrow keys and retains focus', async () => {
+    const cards = [card({ messageId: 'a' }), card({ messageId: 'b', position: 2 })]
+    const owner = controller(cards, null, true, { editCapable: true, editor: undefined })
+    const move = vi.fn(async () => {})
+    owner.reorder = { scope: 'session', pending: false, move }
+    const view = renderList(owner)
+    const grip = screen.getAllByRole('button', { name: 'Reorder message' })[0]!
+    grip.focus()
+    fireEvent.keyDown(grip, { key: 'ArrowDown' })
+    expect(move).toHaveBeenCalledExactlyOnceWith('a', { afterMessageId: 'b' })
+    view.rerender(
+      <TooltipProvider>
+        <NativeChatQueuedMessageList
+          chatWorktreeId={null}
+          controller={{ ...owner, cards: [cards[1]!, cards[0]!] }}
+        />
+      </TooltipProvider>
+    )
+    expect(document.activeElement).toBe(grip)
+  })
+
   it('a host that cannot edit in place offers no Edit, and an empty menu is not shown', async () => {
     const owner = controller([card({ messageId: 'kept', hold: 'paused' })], null, false, {
       editCapable: false,
@@ -97,7 +115,9 @@ describe('NativeChatQueuedMessageList inline edit', () => {
       true,
       { editCapable: true, editor }
     )
+    owner.reorder = { scope: 'session', pending: false, move: vi.fn(async () => {}) }
     renderList(owner)
+    expect(screen.queryByRole('button', { name: 'Reorder message' })).toBeNull()
     const [edited, other] = screen.getAllByRole('listitem')
     expect(within(edited!).getByRole('textbox', { name: 'Edit message' })).toBeTruthy()
     expect(within(edited!).queryByRole('button', { name: 'Delete' })).toBeNull()

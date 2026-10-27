@@ -44,7 +44,7 @@ export type WindowLaunchProducer =
   | { kind: 'folder-composer'; agent: 'claude' | 'codex'; note: string }
 
 /** "+" entry points. Quick Launch items omit launchSource and get `menu`'s source by default. */
-export type PlusEntry = 'menu' | 'shortcut' | 'dashboard'
+export type PlusEntry = 'menu' | 'shortcut'
 const PRODUCER_LAUNCH_SOURCE = {
   'quick-command': 'quick_command',
   continuation: 'terminal_context_menu',
@@ -53,8 +53,7 @@ const PRODUCER_LAUNCH_SOURCE = {
 } as const
 const PLUS_LAUNCH_SOURCE: Record<PlusEntry, string> = {
   menu: 'tab_bar_quick_launch',
-  shortcut: 'shortcut',
-  dashboard: 'unknown'
+  shortcut: 'shortcut'
 }
 
 type ProjectRuntimeSent =
@@ -104,7 +103,7 @@ const AGENT_ARGS = {
 } as const
 
 function sentRuntime(runtime: ProjectRuntimeSent): Record<string, unknown> {
-  const base = { projectId: LAUNCH_REPO_ID, reason: runtime.reason }
+  const base = { projectId: `repo:${LAUNCH_REPO_ID}`, reason: runtime.reason }
   return {
     status: 'resolved',
     runtime:
@@ -114,13 +113,13 @@ function sentRuntime(runtime: ProjectRuntimeSent): Record<string, unknown> {
             kind: 'wsl',
             hostPlatform: 'wsl',
             distro: runtime.distro,
-            cacheKey: `${LAUNCH_REPO_ID}:wsl:${runtime.distro}`
+            cacheKey: `repo:${LAUNCH_REPO_ID}:wsl:${runtime.distro}`
           }
         : {
             ...base,
             kind: 'windows-host',
             hostPlatform: 'win32',
-            cacheKey: `${LAUNCH_REPO_ID}:windows-host`
+            cacheKey: `repo:${LAUNCH_REPO_ID}:windows-host`
           }
   }
 }

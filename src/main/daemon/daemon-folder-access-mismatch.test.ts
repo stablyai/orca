@@ -32,14 +32,12 @@ beforeEach(() => {
   vi.useRealTimers()
 })
 
-/** Where an unawaited probe's result lands. */
 async function settleProbe(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
   await Promise.resolve()
 }
 
-/** The spawn path records without probing, so every verdict here comes from a refresh. */
 async function recordAndProbe(
   identity: DaemonEndpointIdentity,
   cwd: string = DOCUMENTS
@@ -79,8 +77,6 @@ describe('daemon folder access mismatch evidence', () => {
     expect(getDaemonFolderAccessMismatch(DAEMON)).not.toBeNull()
   })
 
-  // This is the whole restart remedy: a new daemon has a new identity, so the poll goes quiet
-  // without anyone probing the folder again.
   it('returns null once the daemon that earned it has been replaced', () => {
     recordDaemonFolderAccessMismatch(DAEMON, DOCUMENTS)
     expect(getDaemonFolderAccessMismatch(RESTARTED)).toBeNull()
@@ -105,8 +101,6 @@ describe('daemon folder access mismatch evidence', () => {
     expect(getDaemonFolderAccessMismatch(RESTARTED)?.daemonScope).not.toBe(first)
   })
 
-  // The notice names a folder, so a second class under one daemon is a new notice, not the same
-  // one with a new word in it.
   it('mints a new scope when the same daemon is denied a second folder class', () => {
     recordDaemonFolderAccessMismatch(DAEMON, DOCUMENTS)
     const documents = getDaemonFolderAccessMismatch(DAEMON)?.daemonScope
@@ -271,8 +265,6 @@ describe('refreshDaemonFolderAccessProbe', () => {
     expect(getDaemonFolderAccessMismatch(DAEMON)?.freshDaemonAccess).toBe('allowed')
   })
 
-  // The reset's caller needs a verdict from after the reset, and the interval is what would
-  // otherwise hand it the pre-reset one.
   it('probes again inside the refresh interval when forced', async () => {
     probeMock.mockResolvedValue('denied')
     await recordAndProbe(DAEMON)
@@ -284,8 +276,7 @@ describe('refreshDaemonFolderAccessProbe', () => {
     expect(getDaemonFolderAccessMismatch(DAEMON)?.freshDaemonAccess).toBe('allowed')
   })
 
-  // A probe that started before the reset would otherwise win the race and discard the forced
-  // one's write, reporting the state the reset was meant to change.
+  // A pre-reset probe must not win over the forced probe that observes the remedy.
   it('waits for an older in-flight probe and still lands its own verdict', async () => {
     const releases: ((value: string) => void)[] = []
     probeMock.mockImplementation(
@@ -327,7 +318,6 @@ describe('getDaemonFolderAccessTarget', () => {
     expect(getDaemonFolderAccessTarget(null)).toBeNull()
   })
 
-  // Reading evidence is not showing it: the renderer owns the `shown` event.
   it('emits nothing, and neither does reading the notice', () => {
     recordDaemonFolderAccessMismatch(DAEMON, DOCUMENTS)
     trackMock.mockReset()
@@ -380,7 +370,6 @@ describe('restart outcome', () => {
     expect(outcomes).toHaveLength(1)
   })
 
-  // The same daemon reading back is a TCC grant landing mid-session, not a restart's verdict.
   it('says nothing when the daemon that was denied reads the folder itself', () => {
     recordDaemonFolderAccessMismatch(DAEMON, DOCUMENTS)
     trackMock.mockReset()
@@ -390,7 +379,6 @@ describe('restart outcome', () => {
     expect(trackMock).not.toHaveBeenCalled()
   })
 
-  // A readable ~/code after a Documents denial says nothing about Documents.
   it('says nothing for a spawn in another folder class', () => {
     recordDaemonFolderAccessMismatch(DAEMON, DOCUMENTS)
     trackMock.mockReset()
@@ -409,7 +397,6 @@ describe('restart outcome', () => {
     expect(trackMock).not.toHaveBeenCalled()
   })
 
-  // The denial resolved itself before any restart, so the next daemon's denial is its own story.
   it('says nothing about a denial the same daemon had already read back', () => {
     recordDaemonFolderAccessMismatch(DAEMON, DOCUMENTS)
     clearDaemonFolderAccessMismatch(DAEMON, DOCUMENTS)

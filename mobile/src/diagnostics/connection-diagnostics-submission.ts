@@ -15,7 +15,7 @@ export type ConnectionDiagnosticsSubmissionResult = { ok: true } | { ok: false; 
 /** Sends only the already-redacted, bounded report after an explicit user tap. */
 export async function submitConnectionDiagnostics(
   submission: ConnectionDiagnosticsSubmission,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: (url: string, init: RequestInit) => Promise<Response> = fetch
 ): Promise<ConnectionDiagnosticsSubmissionResult> {
   const report = boundConnectionDiagnosticsReport(submission.report)
   const controller = new AbortController()

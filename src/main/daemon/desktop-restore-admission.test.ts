@@ -15,8 +15,7 @@ import {
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
 
-// The desktop app's daemon after a restart: its renderer declares the visible pane
-// `user-resume` and every hidden agent pane `automatic-restore`, with no session claim.
+// Model desktop restores without claims: visible panes declare user-resume, hidden panes automatic-restore.
 describe('desktop restore admission', () => {
   let dir: string
   let host: TerminalHost
@@ -44,7 +43,6 @@ describe('desktop restore admission', () => {
     const markerPath = join(dir, 'daemon-v1.automatic-work-run.json')
     guard = new DaemonAutomaticWorkGuard({
       markerPath,
-      // What the desktop launcher passes with no rollback switch set.
       mode: resolveTerminalSpawnAdmissionMode({}),
       log: { log: vi.fn() },
       listSessions: () => [],
@@ -91,7 +89,7 @@ describe('desktop restore admission', () => {
       spawnAdmission: {
         clientId: 'desktop-main',
         declaredIntent,
-        // The daemon's cap for a desktop create (30 s request timeout, halved, capped at 12 s).
+        // Match the desktop create deadline: half the 30s timeout, capped at 12s.
         deadlineAt: Date.now() + 12_000
       },
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
@@ -128,12 +126,11 @@ describe('desktop restore admission', () => {
         (error: Error) => error.message
       )
     )
-    // Why sent last: the visible pane must not queue behind a storm already in progress.
+    // Enqueue visible work last to prove it can bypass an existing restore storm.
     const visible = restore('visible', 'user-resume')
     await vi.advanceTimersByTimeAsync(0)
     await expect(visible).resolves.toMatchObject({ isNew: true })
     expect(spawned).toContain('visible')
-    // Never more than the burst of 3 automatic forks before the first second passes.
     expect(spawned.filter((id) => id.startsWith('hidden-'))).toHaveLength(3)
 
     await vi.advanceTimersByTimeAsync(12_000)
@@ -155,7 +152,6 @@ describe('desktop restore admission', () => {
     expect(await hidden[8]).toBe('terminal_spawn_deferred:live_cap')
     expect(guard.gate.snapshot().liveAutomatic).toBe(8)
 
-    // Opening the sleeping pane retries it as the user's own resume; no timer runs before it forks.
     await expect(restore('hidden-8', 'user-resume')).resolves.toMatchObject({ isNew: true })
     expect(spawned.at(-1)).toBe('hidden-8')
   })
@@ -174,7 +170,7 @@ describe('desktop restore admission', () => {
     await Promise.all(storm)
   })
 
-  // Windows cannot tell a new boot from the same one (Fast Startup), so it never pauses.
+  // Windows Fast Startup cannot reliably distinguish boot identity, so crash-pause detection stays disabled.
   it.skipIf(process.platform === 'win32')(
     'keeps hidden agents sleeping after a same-boot crash, but restores the visible pane',
     async () => {
@@ -199,7 +195,7 @@ describe('desktop restore admission', () => {
       await expect(restore('visible', 'user-resume')).resolves.toMatchObject({ isNew: true })
       await expect(shell('manual')).resolves.toMatchObject({ isNew: true })
 
-      // A visible split of six agents spends the user allowance of 4; the rest are paced, not slept.
+      // The prior visible resume plus five splits exceed the user burst allowance of four.
       const split = Array.from({ length: 5 }, (_, i) => restore(`split-${i}`, 'user-resume'))
       await vi.advanceTimersByTimeAsync(12_000)
       await expect(Promise.all(split)).resolves.toHaveLength(5)

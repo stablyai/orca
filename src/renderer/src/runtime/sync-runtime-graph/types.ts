@@ -105,14 +105,7 @@ export type MobileSessionPublicationInputs = {
   generatedTitlesEnabled: boolean
   terminalTheme: RuntimeMobileTerminalTheme | undefined
 }
-/**
- * Live PaneManager/DOM reads for one mounted terminal tab, captured once per
- * publication.
- *
- * Why: builders read this instead of the registry, so live state the memo
- * cannot witness is unrepresentable — mounted worktrees memoize like the rest
- * instead of rebuilding on every publication.
- */
+/** Capture mounted PaneManager/DOM inputs once per publication; builders cannot consult untracked live state, so mounted snapshots memoize too. */
 export type MountedTerminalSurfaceCapture = {
   paneLeafIds: readonly string[]
   hasLiveActivePane: boolean
@@ -122,12 +115,7 @@ export type MountedTerminalSurfaceCapture = {
   ptyIdByNumericPaneId: ReadonlyMap<number, string | null>
   tabWideAgentHintLeafId: string | null
 }
-/**
- * One worktree's complete mobile-snapshot input set.
- *
- * Why: every builder below takes this instead of `AppState`, so the compiler —
- * not a reviewer — proves what a worktree's snapshot actually depends on.
- */
+/** Complete per-worktree inputs constrain builders at compile time rather than relying on review. */
 export type MobileSessionWorktreeInputs = {
   worktreeId: string
   worktreeInstanceId: string | undefined

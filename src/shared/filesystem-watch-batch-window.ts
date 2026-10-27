@@ -1,12 +1,7 @@
-// Why: the main-process watcher batcher and the runtime files.watch batcher
-// share one flush window so local and remote latency can't drift.
+// Share local/runtime flush timing to prevent latency drift.
 
-// Why: a trailing debounce never fires while agents write continuously, so a
-// busy worktree waited for the max-wait cap on every batch. Instead the first
-// change after a quiet period flushes after a short coalescing tick, and a
-// sustained stream flushes on a fixed cadence.
-// Why 75: the native watcher sends a burst's first event alone and the rest
-// ~50ms later; a shorter window splits atomic saves (tmp create + rename).
+// Trailing debounce stalls under continuous agent writes; use a leading coalescing tick then fixed cadence.
+// 75 ms joins the native watcher’s first event and ~50 ms tail so atomic saves remain one batch.
 export const WATCH_BATCH_LEADING_MS = 75
 export const WATCH_BATCH_INTERVAL_MS = 100
 

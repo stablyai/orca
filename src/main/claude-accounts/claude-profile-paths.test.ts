@@ -19,7 +19,6 @@ import {
   readUserClaudeConfigDirAsSet
 } from './claude-profile-paths'
 
-// Case-only aliases exist only on a case-insensitive filesystem (default APFS, NTFS).
 const caseInsensitive = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'claude-case-probe-'))
   try {
@@ -105,7 +104,7 @@ describe('Claude profile namespace', () => {
         runtime: 'wsl',
         distro: 'Ubuntu'
       })
-      // The host id is the caller's view of the host, so another caller's spelling is the same profile.
+      // Caller-relative host IDs must not affect profile ownership.
       prepareClaudeProfileDirectory(
         dir,
         { ...profile, target: { distro: 'Ubuntu', runtime: 'wsl', executionHostId: 'local' } },
@@ -118,7 +117,6 @@ describe('Claude profile namespace', () => {
           userHome
         )
       ).toThrow()
-      // One spelling everywhere: Claude names the profile's Keychain entry from the exact text.
       expect(describeClaudeProfile(`${dir}/./x/../`, 'account-a', target).home).toBe(profile.home)
       expect(() => describeClaudeProfile(dir, '../escape', target)).toThrow()
       expect(() => describeClaudeProfile('C:\\orca', 'a', target)).toThrow()
@@ -218,7 +216,6 @@ describe('Claude profile namespace', () => {
       writeFileSync(file, value)
       expect(readClaudeProfileObject(file).kind).toBe('unavailable')
     }
-    // ENOTDIR is a definitive absence, as everywhere else in Orca.
     expect(readClaudeProfileObject(join(file, 'child')).kind).toBe('absent')
     mkdirSync(join(file, '..', 'dir.json'))
     expect(readClaudeProfileObject(join(file, '..', 'dir.json')).kind).toBe('unavailable')

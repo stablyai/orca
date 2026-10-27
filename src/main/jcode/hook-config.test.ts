@@ -30,7 +30,6 @@ emoji = false
 turn_end = "~/bin/my-turn-notify"
 `
     const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
-    // Why: the user-owned turn_end is kept verbatim and reported partial.
     expect(result.userOwnedEvents).toEqual(['turn_end'])
     expect(result.content).toContain('turn_end = "~/bin/my-turn-notify"')
     for (const event of ['session_start', 'session_end', 'post_tool']) {
@@ -57,8 +56,7 @@ post_tool = ${tomlQuoteString(MANAGED_COMMAND)}
   })
 
   it('tolerates jcode-owned scalar non-string hook settings', () => {
-    // Why: jcode seeds `pre_tool_timeout_ms = 5000` into its own [hooks] table;
-    // it is config, not a command, so parsing must skip it instead of erroring.
+    // jcode seeds numeric pre_tool_timeout_ms; it is config, not a hook command.
     const table = parseJcodeHooksTable('[hooks]\npre_tool_timeout_ms = 5000\n')
     expect(table).toEqual({})
     const result = applyJcodeManagedHooks(
@@ -85,8 +83,7 @@ session_start = "~/bin/mine"
   })
 
   it('keeps every table declared after [hooks] when removing managed entries', () => {
-    // Why: `remote` rebuilds the file from the lines it keeps, so an early exit at
-    // the next table header silently truncated the rest of a user's config.
+    // Remote editing rebuilds the file; stopping at the next header would truncate user tables.
     const source = `[hooks]
 turn_end = ${tomlQuoteString(MANAGED_COMMAND)}
 pre_tool_timeout_ms = 5000
@@ -120,7 +117,7 @@ turn_end = ${tomlQuoteString(MANAGED_COMMAND)}
   })
 
   it('never deletes a user hook whose comment merely mentions the managed script', () => {
-    // Why: matching the raw line treated the comment as the value — real config loss.
+    // A managed-script mention in a trailing comment does not confer ownership.
     const source = `[hooks]
 turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
 `
@@ -144,7 +141,7 @@ turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
     const source = `['hooks']\npre_tool_timeout_ms = 5000 # ms\n`
     expect(parseJcodeHooksTable(source)).toEqual({})
     const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
-    // Why: a second [hooks] table makes jcode reject the whole config.
+    // A duplicate hooks table makes jcode reject the config.
     expect(result.content.match(/^\[?'?hooks/gm)?.length).toBe(1)
     expect(result.content).toContain('pre_tool_timeout_ms = 5000 # ms')
   })
@@ -154,7 +151,6 @@ turn_end = "~/bin/mine" # replaces agent-hooks/jcode-hook.sh
     const result = applyJcodeManagedHooks(source, EVENTS, MANAGED_COMMAND, 'jcode-hook.sh')
     expect(result.content).toContain('\r\n')
     expect(result.content).not.toContain('\n[hooks]')
-    // Why: preserved CRLF lines must not gain a second `\r` on every edit.
     expect(result.content).not.toContain('\r\r')
   })
 })

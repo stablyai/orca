@@ -10,7 +10,6 @@ import { openAcpAdapterRig, type AcpAdapterRig } from './acp-structured-adapter.
 afterEach(closeProviderTimelineRigs)
 
 const DATA = Buffer.from('89504e470d0a1a0a', 'hex').toString('base64')
-// What the chat's options report says, by the same rule as the send.
 function acceptsImages(rig: AcpAdapterRig) {
   return rig.adapter
     .readOptions({ sessionId: SESSION, fence: 1 })
@@ -43,7 +42,6 @@ describe('ACP image prompts', () => {
       ]
     })
     await expect(acceptsImages(rig)).resolves.toBe(true)
-    // The start's answer, not a second handshake.
     expect(rig.sent('initialize')).toHaveLength(1)
   })
 

@@ -1,24 +1,6 @@
 #!/usr/bin/env node
-// Benchmark: CLI process startup with the RuntimeClient module graph deferred.
-//
-// src/cli/index.ts used to value-import RuntimeClient at module scope, and five
-// modules that load on every invocation (args, flags, dispatch, format,
-// selectors) pulled RuntimeClientError from the ./runtime-client barrel. Either
-// edge alone drags in the whole client graph: zod (via shared/pairing ->
-// shared/mobile-relay-pairing-offer), ws + tweetnacl (via websocket-transport),
-// plus the environment store and secure-file stack.
-//
-// The fix repoints those five at ./runtime/types (zero children) and loads the
-// client through `await import()` after flag validation, so --help, `help
-// <cmd>` and every command/flag error return without ever touching it.
-//
-// Both arms are REAL tsc emits of real source: the baseline arm restores the
-// seven touched files from a git rev and compiles that. Each sample is a FRESH
-// process (module-graph cost is a once-per-process cost; timing it in-process
-// would measure a warm require cache).
-//
-// Arms alternate lead across an even number of rounds and report per-arm
-// medians. Byte-for-byte output equality is checked BEFORE timing.
+// Compare real CLI emits before/after deferring RuntimeClient’s Zod/ws/tweetnacl/store graph until after flag validation.
+// Restore seven baseline files; use fresh processes to measure cold graphs, alternate arm order, and verify output/exit equality before timing.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -53,10 +35,7 @@ const TOUCHED = [
   'src/cli/selectors.ts'
 ]
 
-// Why: if the deferral is reverted or reshaped, both arms would compile to the
-// same thing and this would quietly report 1.00x forever. Re-read the real call
-// forms out of the source. Matching the CALL form (not a bare identifier) so a
-// comment that merely names the function cannot satisfy the check.
+// Re-read production call forms so reverting deferral cannot make both arms identical; prose mentions must not satisfy the guard.
 function assertMarkersFresh() {
   const checks = [
     ['src/cli/index.ts', "await import('./runtime-client.js')"],
@@ -80,8 +59,7 @@ function assertMarkersFresh() {
 }
 
 function buildArm(label, baselineRev) {
-  // Why: a build under /tmp cannot resolve the repo's node_modules, so the
-  // output has to live inside the repo.
+  // Build inside repo so emitted modules resolve its node_modules.
   const outDir = join(REPO, `.bench-out-${label}`)
   rmSync(outDir, { recursive: true, force: true })
   const restore = []
@@ -138,8 +116,7 @@ function run(entry, argv, env) {
   }
 }
 
-// Counts the eager CommonJS module graph of a built entry point by hooking
-// Module._load in a child process. This is the quantity the change moves.
+// Count eager CJS graph in a child via Module._load, measuring the graph deferral actually moves.
 function countEagerModules(entry) {
   const probe = `
     const Module = require('module')
@@ -193,8 +170,7 @@ try {
     )
   }
 
-  // Each case is (label, argv, env). The runtime-dependent ones point at an
-  // empty user-data dir so both arms get the same deterministic answer.
+  // Use empty user-data dirs for deterministic runtime-dependent cases.
   const isolated = { ORCA_USER_DATA_PATH: userDataPath }
   /** @type {Array<[string, string[], Record<string, string>]>} */
   const cases = [
@@ -208,8 +184,7 @@ try {
     ['orca worktree list --json', ['worktree', 'list', '--json'], isolated]
   ]
 
-  // Why: a semantically broken arm that prints nothing would look fastest.
-  // Compare bytes and exit codes BEFORE timing anything.
+  // Compare output/exit before timing or a broken arm printing nothing appears fastest.
   for (const [label, argv, env] of cases) {
     const before = run(eagerEntry, argv, env)
     const after = run(deferredEntry, argv, env)

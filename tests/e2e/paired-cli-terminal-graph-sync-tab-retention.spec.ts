@@ -1,41 +1,7 @@
-/**
- * TOPOLOGY (a): real Orca DESKTOP app as the remote server, isolated profile,
- * window ATTACHED, paired to a separate real desktop client.
- *
- * A terminal created by `orca terminal create` (RPC `terminal.create` ->
- * OrcaRuntimeService.createTerminal) must survive the renderer graph syncs that
- * every later CLI dispatch drives. The renderer never owns that pane, so it is
- * absent from every renderer publication; the daemon ptyId form
- * `<worktreeId>@@<shortUuid>` is excluded from id-shape classification; and the
- * tab inherits the RENDERER's publicationEpoch, so epoch alone cannot save it.
- *
- * The window is causal: the old gate was `getAvailableAuthoritativeWindow() ===
- * null`, so a windowless host does NOT reproduce this (see the serve parity
- * arm). The renderer-first publication is equally load-bearing — on a workspace
- * only the host published, the snapshot carries a headless epoch, which is
- * preserved unconditionally. Both preconditions are asserted, not assumed.
- *
- * WHAT THIS ORACLE CAN AND CANNOT SEE. It reads the host inventory after ONE
- * renderer graph sync, and that made an earlier four-row matrix here read as if
- * a preceding host terminal or a `clientMutationId` "protected" the tab. Both
- * readings were false negatives. Main-process instrumentation showed the
- * renderer's stale session write deleted the host tab from persistence in EVERY
- * variant; the only difference was whether that delete landed before or after
- * the sync being measured. The apparently-protected tabs were already gone from
- * persistence — they would prune on the next sync and were lost across restart.
- * Read a single-sync retained verdict as "not yet pruned", never as "safe".
- *
- * The defect that produced those rows was in persistence, not in the graph-sync
- * reconciler: persistPtyBinding refused to raise the repo's terminal topology
- * fence for the first host-admitted tab, so the renderer's pre-create tab list
- * replayed over it (fixed in `let a host-admitted tab establish membership
- * authority`). Elapsed time never decided anything, and neither did whether a
- * paired client had mirrored the tab.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/paired-cli-terminal-graph-sync-tab-retention.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Use an attached desktop host and separate paired desktop; assert renderer-first publication so the host-created daemon @@ tab inherits its epoch.
+// Renderer snapshots omit that CLI pane; a headless epoch or windowless host would miss the original persistence-fence failure.
+// One retained inventory after sync means only not-yet-pruned: stale writes can delete persistence before later sync/restart.
+// The first host-admitted tab must raise the topology fence; neither clientMutationId nor preceding tabs independently protects it.
 import { rmSync } from 'node:fs'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
@@ -122,7 +88,6 @@ type RetentionFixture = {
   worktreeId: string
 }
 
-/** Everything both journeys need in place BEFORE the dispatch under test. */
 async function prepareRetentionFixture(
   orcaPage: Page,
   client: PairedElectronClient
@@ -155,8 +120,7 @@ async function prepareRetentionFixture(
     )
     .toBe(true)
 
-  // PRECONDITION: the RENDERER owns this workspace's publication, so the CLI tab
-  // created later inherits the renderer epoch instead of a headless one.
+  // Require renderer publication before CLI create so a headless epoch cannot protect the tab.
   const rendererTabId = await createHostRendererTerminalTab(orcaPage, worktreeId)
   const rendererOwned = await readHostInventoryWhenTabAppears(
     call,
@@ -177,15 +141,8 @@ async function prepareRetentionFixture(
   return { call, unrelatedWorktreeId, worktreeId }
 }
 
-/**
- * One `orca terminal create` in the measured workspace, one renderer graph sync,
- * both signals plus the negative-safety checks.
- *
- * `precedingHostTerminal` is the ONLY difference between the two tests: the
- * unrelated-workspace control terminal is created either before the target or
- * after it, so `false` makes the target the repo's first host-admitted tab —
- * the incident shape, and the one the topology fence used to miss.
- */
+// Measure one CLI create and renderer sync with inventory/process and unrelated-workspace checks.
+// Only precedingHostTerminal differs: false makes the target the repo’s first host-admitted tab, the original missing-fence case.
 async function runCliTerminalRetentionJourney(
   orcaPage: Page,
   testInfo: TestInfo,
@@ -230,11 +187,9 @@ async function runCliTerminalRetentionJourney(
     createdHandles.push(cli.handle)
     const unrelated = preceding ?? (await createUnrelated())
 
-    // The graph sync a following CLI dispatch drives.
     const secondRendererTabId = await createHostRendererTerminalTab(orcaPage, worktreeId)
 
-    // SIGNAL 1 — the frame carrying the new renderer tab is the same merge that
-    // would drop the CLI tab, so judge on that one inventory.
+    // Judge the same inventory frame that adds the renderer tab and could drop the CLI tab.
     const afterSync = await readHostInventoryWhenTabAppears(
       fixture.call,
       worktreeId,
@@ -250,11 +205,9 @@ async function runCliTerminalRetentionJourney(
       'the surviving tab must still name the original PTY, not a replacement'
     ).toBe(cli.ptyId)
 
-    // SIGNAL 2 — independent of the inventory: the original process answers.
     await proveSameLivePty(fixture.call, cli, 'after-sync')
 
-    // The paired client tracked that same sync. Presence alone would pass on a
-    // stranded mirror, which is exactly what the unfixed host produces.
+    // Require the paired client to track this sync; a stranded mirror alone still shows the old tab.
     const strip = await readClientStripWhenTabAppears(
       client.page,
       worktreeId,
@@ -264,7 +217,6 @@ async function runCliTerminalRetentionJourney(
     expect(strip, 'the paired client dropped the CLI-created terminal from its strip').toContain(
       toWebTerminalSurfaceTabId(cli.tabId)
     )
-    // No replacement or resume tab was appended for it either.
     expect([...strip].sort()).toEqual(
       [
         ...baselineStrip,
@@ -301,12 +253,8 @@ test('keeps a host-created CLI terminal when an earlier host-created terminal ex
   await runCliTerminalRetentionJourney(orcaPage, testInfo, 'cli-terminal-graph-sync', true)
 })
 
-// The reported incident, and the shape the real CLI takes: `orca terminal
-// create` sends no clientMutationId, so this is a user's FIRST host-created
-// terminal in the repo — the one case that raised no topology fence and whose
-// tab the renderer's pre-create tab list therefore replayed out of persistence.
-// Reverting store.ts/pty.ts alone turns this red with SIGNAL 1: the target is
-// absent from the host inventory.
+// The real CLI omits clientMutationId: its first host-admitted tab must establish persistence authority.
+// Reverting store.ts/pty.ts fails at host inventory retention.
 test('keeps a host-created CLI terminal that is the first one on the host', async ({
   orcaPage
 }, testInfo) => {

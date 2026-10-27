@@ -13,6 +13,7 @@ import {
   linkedReviewHintKey
 } from '@/store/slices/hosted-review-cache-identity'
 import { prChecksCacheSuffix } from '@/store/github/cache-identity'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
 import {
   PARENT_PR_CHECKS_GROUP_LABELS,
   PARENT_PR_CHECKS_GROUP_ORDER,
@@ -158,6 +159,7 @@ function getReviewSnapshot(
 ): { review: HostedReviewInfo | null | undefined; hasCacheEntry: boolean } {
   if (
     outcome?.kind === 'found' &&
+    !isStaleMergedGitHubReviewForHead({ data: outcome.review }, args.worktree.head) &&
     (outcome.review.provider !== 'github' ||
       !isGitHubPRSuppressed(args.worktree, outcome.review.number))
   ) {

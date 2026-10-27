@@ -1,19 +1,4 @@
-/**
- * Structured workers as group-address recipients.
- *
- * `@all` and its siblings resolve recipients from `listTerminals`, which enumerates leaves and
- * PTYs — so a structured worker was never a candidate. Worse, the exclusion happened BEFORE
- * per-recipient resolution, so the `SendRecipientWarning` machinery never ran and the caller got
- * exit 0 plus a receipt naming only the workers that did resolve. A broadcast "stop work" reached
- * the PTY workers and silently missed the structured ones.
- *
- * Deliberately NOT solved by teaching `listTerminals` about structured sessions: that result is
- * published to paired mobile and remote clients and to every consumer that assumes a summary has a
- * `ptyId` or is writable, so it is its own change under
- * `docs/reference/remote-wire-compatibility.md`. Group addressing needs three fields, and
- * `RuntimeTerminalSummary` already satisfies them structurally — so the group resolver widens to
- * the smaller shape instead, and nothing here has to invent a `worktreePath` or a `branch`.
- */
+/** Enumerate structured group recipients separately: terminal.list is a paired-client wire shape with PTY/writability assumptions. */
 
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
@@ -37,14 +22,7 @@ export type OrchestrationAddressableAgent = {
   agentIdentity?: TerminalAgent
 }
 
-/**
- * Structured workers this runtime owns, as group-address candidates.
- *
- * Read from the durable worker-terminal rows, which outlive a settled dispatch and a restart, and
- * gated on ownership and on the orchestration not having released it — the same answer direct mail
- * routes on — never on liveness: a worker at rest is a recipient, and the mail starts it. A retired
- * or released one is not.
- */
+/** Use durable ownership, not current process liveness; mail can restart an idle held worker, but not a retired one. */
 export function listAddressableStructuredWorkers(
   db: OrchestrationDb | null
 ): OrchestrationAddressableAgent[] {
@@ -68,10 +46,7 @@ export function listAddressableStructuredWorkers(
     }))
 }
 
-/**
- * `@idle` status for a handle, read off the session running the worker now; `undefined` when the
- * handle is not a structured worker this runtime holds, so the PTY probes answer instead.
- */
+/** Read a held structured worker's live session; undefined delegates non-structured handles to PTY probes. */
 export async function structuredWorkerHandleAgentStatus(
   handle: string,
   db: OrchestrationDb | null | undefined
@@ -80,13 +55,7 @@ export async function structuredWorkerHandleAgentStatus(
   return authority ? structuredWorkerAgentStatus(authority.running) : undefined
 }
 
-/**
- * A structured worker's agent status, in the vocabulary `@idle` already matches on.
- *
- * Null when the session cannot be read: unknown must not read as idle, or a broadcast to `@idle`
- * would wake a worker mid-turn — which Codex coalesces into the running turn and Claude folds
- * into it.
- */
+/** Unknown session status must not become idle and interrupt a busy worker through @idle. */
 export async function structuredWorkerAgentStatus(
   running: RunningStructuredSession
 ): Promise<string | null> {

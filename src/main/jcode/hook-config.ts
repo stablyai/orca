@@ -1,8 +1,4 @@
-// Why: byte-preserving edits of jcode's `~/.jcode/config.toml` [hooks] table,
-// following the codebase convention of hand-rolled TOML scanning (no TOML
-// dependency, see src/main/codex/config-toml-line-scan.ts). jcode hook values
-// are scalar commands; user-owned values are left untouched so Orca never
-// silently disables a user's own hook.
+// Reuse byte-preserving TOML scanning; scalar hook commands stay user-owned unless they target Orca.
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -42,11 +38,7 @@ export function parseJcodeHooksTable(content: string): JcodeHooksTable | null {
           line.trim().length > 0 &&
           !isTomlScalarValue(line, parsed.end + 1)
         ) {
-          // Why: a multiline string hook value is not a scalar command; treat
-          // the whole table as unmanaged so install reports `error` instead of
-          // clobbering it. Scalar non-string values (jcode's own
-          // `pre_tool_timeout_ms = 5000`) are legitimate config, just not
-          // commands, so they are skipped.
+          // Fail closed on multiline hook strings; non-string scalars such as pre_tool_timeout_ms are valid config.
           parseError = true
         }
       }
@@ -59,9 +51,7 @@ export function parseJcodeHooksTable(content: string): JcodeHooksTable | null {
   return hooks
 }
 
-// Why the comment tail: jcode ships `pre_tool_timeout_ms = 5000` and a user may
-// annotate it. Rejecting that set parseError, which made install() and getStatus()
-// report `error` and blocked the whole integration over one ordinary comment.
+// jcode seeds non-command scalars; inline comments must not make them parse errors.
 const TOML_SCALAR_VALUE_RE =
   /^\s*(?:true|false|[-+]?\d[\d_]*(?:\.[\d_]+)?(?:[eE][-+]?\d+)?)\s*(?:#.*)?\r?$/
 
@@ -69,9 +59,7 @@ function isTomlScalarValue(line: string, offset: number): boolean {
   return TOML_SCALAR_VALUE_RE.test(line.slice(offset))
 }
 
-// Why the shared parser: it already handles quoted (`['hooks']`) and dotted keys.
-// Rolling our own missed those spellings, so apply() appended a SECOND [hooks]
-// table and jcode then failed to parse the whole config.
+// Reuse quoted/dotted header parsing to avoid appending a duplicate hooks table.
 function isHooksTableHeader(header: string): boolean {
   return parseTomlTableHeaderPath(header)?.segments.join('.') === 'hooks'
 }
@@ -93,8 +81,7 @@ export function applyJcodeManagedHooks(
   scriptFileName: string
 ): JcodeHooksEdit {
   const isManaged = createManagedCommandMatcher(scriptFileName)
-  // Why: a CRLF config leaves a trailing `\r` on each split line; re-joining
-  // with the CRLF eol would double it into `\r\r\n` and grow the file per edit.
+  // Strip split CRLF tails before rejoining so repeated edits cannot grow carriage returns.
   const lines = content.split('\n').map((line) => line.replace(/\r$/, ''))
   const usesCrlf = content.includes('\r\n')
   const eol = usesCrlf ? '\r\n' : '\n'
@@ -127,19 +114,14 @@ export function applyJcodeManagedHooks(
       if (parsed && line[parsed.end] === '=' && parsed.segments.length === 1) {
         const key = parsed.segments[0]
         if (events.includes(key)) {
-          // Why the parsed value and not the raw line: a user-owned command whose
-          // trailing comment merely mentions the managed script would otherwise read
-          // as managed, and on Windows tomlQuoteString escapes `\` so the raw line
-          // never matched Orca's own value at all.
+          // Parse the string so trailing comments cannot confer ownership and escaped Windows paths still match.
           const value = parseTomlSingleLineStringValue(line, parsed.end + 1)?.value
           if (!isManaged(value)) {
             userOwnedEvents.push(key)
           } else if (value === managedCommand) {
             existingKeyIndexes.set(key, index)
           } else {
-            // A managed entry pointing at a script that no longer exists — a copied
-            // ~/.jcode, or a platform switch between .sh and .cmd. Rewrite it, or the
-            // hooks stay broken with no Orca action able to repair them.
+            // Repair stale managed paths after copied configs or platform switches.
             staleKeyIndexes.set(key, index)
           }
         }
@@ -165,8 +147,6 @@ export function applyJcodeManagedHooks(
   let result = staleKeyIndexes.size > 0 ? repointed.join(eol) : content
   if (insertions.length > 0) {
     if (hooksHeaderIndex === -1) {
-      // Why: append a new [hooks] table at the end; jcode re-reads config on
-      // reload, so placement at EOF is safe.
       result = `${result.endsWith('\n') || result.length === 0 ? result : `${result}\n`}[hooks]${eol}${insertions.join(eol)}${eol}`
     } else {
       const insertionLines = [...repointed]
@@ -182,7 +162,7 @@ export function removeJcodeManagedHooks(
   scriptFileName: string
 ): { content: string; changed: boolean } {
   const isManaged = createManagedCommandMatcher(scriptFileName)
-  // Why: same CRLF strip as applyJcodeManagedHooks so re-joining never doubles `\r`.
+  // Strip CRLF tails before rejoining.
   const lines = content.split('\n').map((line) => line.replace(/\r$/, ''))
   const usesCrlf = content.includes('\r\n')
   const eol = usesCrlf ? '\r\n' : '\n'
@@ -199,9 +179,7 @@ export function removeJcodeManagedHooks(
     }
     const header = getTomlTableHeader(line)
     if (header) {
-      // Why: leaving the table stops the removal, but the rest of the file must
-      // still be copied out — `kept` is the whole result, so breaking here once
-      // truncated every table declared after [hooks].
+      // Keep copying after the hooks table so removal cannot truncate later user tables.
       inHooksTable = isHooksTableHeader(header)
       kept.push(line)
       state = updateTomlLineScanState(state, line)

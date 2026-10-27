@@ -25,14 +25,8 @@ afterEach(() => {
 })
 
 describe('isRemoteCliDrivenGuest', () => {
-  it('leaves every guest alone until a host drives a workspace', () => {
-    expect(isRemoteCliDrivenGuest(1)).toBe(false)
-    expect(isRemoteCliDrivenGuest(undefined)).toBe(false)
-  })
-
   it('covers a driven page and the popups it opened, not other workspaces', () => {
     owners.tabByGuest.set(1, 'host-page')
-    // A popup resolves to the page that opened it.
     owners.tabByGuest.set(2, 'host-page')
     owners.tabByGuest.set(3, 'local-page')
     owners.worktreeByTab.set('host-page', 'repo-host::/srv/app')

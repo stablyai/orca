@@ -64,6 +64,8 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     retainedAgentsByPaneKey: {},
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [repo],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
@@ -94,7 +96,6 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
   }
 }
 
-// Why: describe title is shared across the split files so test full names stay stable.
 describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
     await loadWorktreeList()

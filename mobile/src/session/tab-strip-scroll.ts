@@ -9,10 +9,6 @@ export type TabStripScrollInput = {
   margin?: number
 }
 
-/**
- * Keep active-tab reveal deterministic across async RN layout events without
- * nudging the strip when the tab is already visible.
- */
 export function resolveTabStripScrollOffset({
   tabX,
   tabWidth,
@@ -43,7 +39,6 @@ export function resolveTabStripScrollOffset({
 
 type TabLayouts = ReadonlyMap<string, { x: number; width: number }>
 
-/** Reveal the neighbor on the tapped edge without waiting for host activation. */
 export function resolveTabStripTapOffset(args: {
   tabId: string
   tabs: readonly { id: string }[]
@@ -65,7 +60,6 @@ export function resolveTabStripTapOffset(args: {
     contentWidth,
     currentOffset
   })
-  // A comfortably visible tab leaves the strip where it is; only edge tabs pull a neighbor in.
   if (selectedOnly === currentOffset) {
     return currentOffset
   }
@@ -76,7 +70,7 @@ export function resolveTabStripTapOffset(args: {
   let end = selected.x + selected.width
   if (layout) {
     const gap = left ? selected.x - (layout.x + layout.width) : layout.x - end
-    // Keep the tapped tab whole; show as much of its neighbor as fits inside both margins.
+    // Keep the tapped tab whole while revealing as much of its neighbor as fits within both margins.
     const peek = Math.min(layout.width, Math.max(0, viewportWidth - 24 - selected.width - gap))
     if (left) {
       start -= gap + peek
@@ -95,7 +89,6 @@ export function resolveTabStripTapOffset(args: {
 
 export type TabStripHiddenTabs = { left: readonly string[]; right: readonly string[] }
 
-/** Tabs scrolled mostly out of view on each side. */
 export function resolveTabStripHiddenTabs(args: {
   layouts: TabLayouts
   viewportWidth: number
@@ -124,7 +117,6 @@ const EDGE_HINT_RANK: Partial<Record<AgentDotState, number>> = {
   monitoring: 1
 }
 
-/** The most urgent working or blocked state among the given hidden tabs. */
 export function resolveTabStripEdgeHint(
   tabIds: readonly string[],
   tabStates: ReadonlyMap<string, AgentDotState>
