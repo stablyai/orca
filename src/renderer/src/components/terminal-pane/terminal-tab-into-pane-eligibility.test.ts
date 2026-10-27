@@ -92,7 +92,7 @@ describe('resolveTerminalTabIntoPaneEligibility (spec 4.3)', () => {
     expect(refusal(state)).toBe('source_not_single_pane')
   })
 
-  it('refuses a chat source, a chat leaf and a chat target', () => {
+  it('refuses a chat source, a chat leaf, a chat target and a target chat leaf', () => {
     const chatTab = intoPaneState({
       tabsByWorktree: {
         [WT]: [terminalTab(SOURCE, P_A, { viewMode: 'chat' }), terminalTab(TARGET, 'pty-b')]
@@ -112,6 +112,14 @@ describe('resolveTerminalTabIntoPaneEligibility (spec 4.3)', () => {
       }
     })
     expect(refusal(chatTarget)).toBe('target_chat')
+    // A chat tab made by createTab has no viewMode on its row; its layout still names the chat leaf.
+    const chatTargetLeaf = intoPaneState({
+      terminalLayoutsByTabId: {
+        [SOURCE]: sourceLayout(),
+        [TARGET]: { ...targetLayout(), chatLeafId: C }
+      }
+    })
+    expect(refusal(chatTargetLeaf)).toBe('target_chat')
   })
 
   it('refuses a source with no PTY', () => {

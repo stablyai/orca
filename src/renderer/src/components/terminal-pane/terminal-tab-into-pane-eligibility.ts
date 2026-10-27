@@ -177,6 +177,10 @@ export function resolveTerminalTabIntoPaneEligibility(
   if (!targetLeafId || !targetLeafIds.includes(targetLeafId)) {
     return refuse('target_pane_missing')
   }
+  // Why: createTab puts a chat tab's viewMode only on its tab-bar entry, so its row can pass the check above.
+  if (targetLayout?.chatLeafId === targetLeafId) {
+    return refuse('target_chat')
+  }
   if (
     isTerminalLeafMoveInFlight(leafId) ||
     isTerminalTabMoveInFlight(sourceTabId) ||

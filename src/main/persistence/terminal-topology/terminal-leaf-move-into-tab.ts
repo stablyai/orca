@@ -66,7 +66,14 @@ function targetRefusal(
   if (!owners.some(({ session }) => holdsTargetLeaf(session))) {
     return 'target_leaf_missing'
   }
-  if (owners.some(({ session }) => rowOf(session)?.viewMode === 'chat')) {
+  // Why: createTab puts a chat tab's viewMode only on its tab-bar entry; its layout still names the chat leaf.
+  if (
+    owners.some(
+      ({ session }) =>
+        rowOf(session)?.viewMode === 'chat' ||
+        session.terminalLayoutsByTabId?.[targetTabId]?.chatLeafId === targetLeafId
+    )
+  ) {
     return 'target_is_chat'
   }
   // A holder without the target leaf would keep a copy; a non-holder that lists either tab would
