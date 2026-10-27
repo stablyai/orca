@@ -3,6 +3,12 @@ import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
+import {
+  buildProjectGroupingIndex,
+  getProjectGroupingForRepo,
+  type ProjectGroupingModel
+} from '../../../../shared/project-section-grouping'
+import type { Repo } from '../../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
   activityThreadStatusId,
@@ -32,6 +38,17 @@ const ACTIVITY_STATUS_GROUP_RANK: Record<ActivityThreadStatusId, number> = {
 
 function activityStatusRank(thread: AgentPaneThread): number {
   return ACTIVITY_STATUS_GROUP_RANK[activityThreadStatusId(thread)]
+}
+
+export function getActivityProjectLabelsByRepoId(
+  repos: readonly Repo[],
+  projectGrouping: ProjectGroupingModel
+): ReadonlyMap<string, string> {
+  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
+  const projectIndex = buildProjectGroupingIndex(projectGrouping)
+  return new Map(
+    repos.map((repo) => [repo.id, getProjectGroupingForRepo(repo.id, repoMap, projectIndex).label])
+  )
 }
 
 export function getActivityThreadGroup(
