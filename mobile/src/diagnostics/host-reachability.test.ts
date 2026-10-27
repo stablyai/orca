@@ -28,6 +28,39 @@ describe('unreachableHostDetail', () => {
 })
 
 describe('testHostReachability', () => {
+  it.each(['wss://orca.example', 'ws://192.168.1.10:6768'])(
+    'uses edge headers only for secure probes to %s',
+    async (endpoint) => {
+      const calls: unknown[][] = []
+      const sockets: ProbeSocket[] = []
+      class ProbeSocket {
+        onopen: (() => void) | null = null
+        onerror: (() => void) | null = null
+        close = vi.fn()
+        constructor(...args: unknown[]) {
+          calls.push(args)
+          sockets.push(this)
+        }
+      }
+      vi.stubGlobal('WebSocket', ProbeSocket)
+      try {
+        const headers = { 'X-Token': 'synthetic-secret' }
+        const result = testHostReachability(endpoint, headers)
+        expect(calls).toEqual([
+          endpoint.startsWith('wss://')
+            ? [endpoint, undefined, { headers, followRedirects: false }]
+            : [endpoint]
+        ])
+        const socket = sockets[0]
+        socket?.onopen?.()
+        await expect(result).resolves.toBe(true)
+        expect(socket?.close).toHaveBeenCalledOnce()
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    }
+  )
+
   it('returns false without leaving timers when WebSocket rejects a malformed endpoint', async () => {
     vi.useFakeTimers()
     vi.stubGlobal(

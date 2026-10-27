@@ -1,4 +1,5 @@
 import { deleteHostDeviceToken } from './host-device-token-store'
+import { deleteEndpointAuthHeaders } from './endpoint-auth-headers-store'
 import {
   clearHostCredentialWriteRevision,
   getHostCredentialWriteRevision
@@ -48,6 +49,11 @@ export function createUnpairedHostCredentialDeletion(dependencies: DeletionDepen
     }
     assertWriteRevisionUnchanged(hostId, writeRevision)
     await deleteMobileRelayDirectUpgradeJournal(hostId)
+    if (await shouldSkip(hostId, writeRevision)) {
+      return
+    }
+    assertWriteRevisionUnchanged(hostId, writeRevision)
+    await deleteEndpointAuthHeaders(hostId)
     if (await shouldSkip(hostId, writeRevision)) {
       return
     }

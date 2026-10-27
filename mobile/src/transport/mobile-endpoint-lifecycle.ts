@@ -2,6 +2,7 @@ import * as ExpoCrypto from 'expo-crypto'
 import type { ConnectionLogSink, ForegroundNudgeReason, HostProfile } from './types'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect } from './rpc-client'
+import { peekEndpointAuthHeaders } from './endpoint-auth-headers'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
@@ -89,7 +90,11 @@ function createSupervisor(
   onLog: ConnectionLogSink
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
-    openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    openDirect: () =>
+      connect(host.endpoint, host.deviceToken, host.publicKeyB64, {
+        onLog,
+        edgeAuthHeaders: peekEndpointAuthHeaders(host.id, host.endpoint)
+      }),
     directPath: directPathForEndpoint(host.endpoint),
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>
       connectMobileRelayRpcSession({
