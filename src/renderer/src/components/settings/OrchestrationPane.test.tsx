@@ -121,7 +121,7 @@ async function renderPane(
 
 describe('OrchestrationPane', () => {
   beforeEach(() => {
-    useAppStore.setState({ settingsSearchQuery: '' })
+    useAppStore.setState({ settingsSearchQuery: '', runtimeEnvironmentCatalogSettled: false })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -159,6 +159,15 @@ describe('OrchestrationPane', () => {
     mocks.skillInstalled = true
     mocks.updateSettings.mockReset()
     delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+  })
+
+  it('names the machine whose skills the agent coverage reflects', async () => {
+    useAppStore.setState({ runtimeEnvironmentCatalogSettled: true, runtimeEnvironments: [] })
+
+    const text = (await renderPane()).textContent ?? ''
+    const coverage = text.slice(text.indexOf('Agent coverage'), text.indexOf('Missing'))
+
+    expect(coverage).toContain('This machine')
   })
 
   it('keeps the nested depth row visible when settings search routes to Orchestration', () => {
