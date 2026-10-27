@@ -1,5 +1,5 @@
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
-import { removeOrcaCreatedProjectTrustEntries } from '../codex/config-toml-trust'
+import { removeOrcaCreatedProjectTrustEntries } from '../codex/trust/toml/config-toml-trust'
 
 /**
  * Drops the Codex pretrust entries Orca wrote for a removed worktree's path.

@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import {
   removeOrcaCreatedProjectTrustEntries,
   upsertOrcaCreatedProjectTrustLevel
-} from './config-toml-trust'
+} from './trust/toml/config-toml-trust'
 
 const PROJECT = '/tmp/worktrees/feature-r1'
 const OTHER = '/tmp/worktrees/other-r1'

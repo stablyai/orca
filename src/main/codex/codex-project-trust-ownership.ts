@@ -1,9 +1,9 @@
 import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { readAgentStateJsonFileSync } from '../agent-state-file-reader'
+import { readAgentStateJsonFileSync } from './configuration/agent-state-file-reader'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
-import { getOrcaUserDataPath } from './codex-home-paths'
-import { normalizeCodexTrustProjectPath } from './codex-trust-identity'
+import { getOrcaUserDataPath } from './configuration/homes/codex-home-paths'
+import { normalizeCodexTrustProjectPath } from './trust/identity/codex-trust-identity'
 
 /**
  * Ownership records for the `[projects."<path>"]` tables Orca's preflight trust

@@ -26,9 +26,10 @@ import {
   getOrcaCreatedProjectTrustTable,
   listOrcaCreatedProjectTrustConfigFiles,
   recordOrcaCreatedProjectTrust
-} from './codex-project-trust-ownership'
+} from '../../codex-project-trust-ownership'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
 import { observe } from '../../configuration/codex-path-observation'
+import { normalizeCodexHookTrustLookupKey } from '../../trust/identity/codex-trust-identity'
 import '../../configuration/toml/config-toml-syntax'
 import { escapeTomlBasicString, parseProjectTomlHeaderPath } from '../../configuration/toml/config-toml-syntax' 
 

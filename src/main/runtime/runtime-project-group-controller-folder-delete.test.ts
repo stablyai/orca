@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RuntimeProjectGroupController } from './runtime-project-group-controller'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import { RuntimeProjectGroupController } from './repositories/runtime-project-group-controller'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 
 const workspace = {
   id: 'ws-1',

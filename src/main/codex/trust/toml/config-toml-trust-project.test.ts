@@ -9,7 +9,6 @@ import {
 } from '../identity/codex-trust-identity'
 import { upsertProjectTrustContent as upsertProjectTrustLevelInContent } from './config-toml-project-trust'
 import { hasProjectTrustEntry, removeProjectTrustContent } from './config-toml-project-trust'
-import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax' 
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture

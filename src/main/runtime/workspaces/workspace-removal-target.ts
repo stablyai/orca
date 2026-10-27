@@ -8,8 +8,8 @@ import type {
 import { resolveRuntimeWorktreeRemovalTarget } from './removal/runtime-worktree-removal-target'
 import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { splitWorktreeId, splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../../shared/worktree/id'
-import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner' 
+import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
 import {
   dropRemovedWorktreeProcessState,
   pruneRemovedWorktreeSnapshots
@@ -34,41 +34,21 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
-import { removeOrcaCreatedProjectTrustEntries } from '../../codex/trust/toml/config-toml-trust'
-import { dropOrcaCreatedCodexPretrustForRemovedWorktree } from '../worktree-removal-codex-pretrust-cleanup' 
+import { dropOrcaCreatedCodexPretrustForRemovedWorktree } from '../worktree-removal-codex-pretrust-cleanup'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
   waitForPendingWorktreeRemoval
-<<<<<<< HEAD
 } from '../../workspaces/removal/worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from './removal/runtime-interrupted-local-worktree-removal'
-=======
-} from '../../worktree-background-removal'
-import { interruptedLocalWorktreeRemovalJob } from '../runtime-interrupted-local-worktree-removal'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/registered-worktree-roots-scoped-invalidation'
-import { dropOrcaCreatedCodexPretrustForRemovedWorktree } from '../worktree-removal-codex-pretrust-cleanup'
-import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
-import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
-import {
-  dropRemovedWorktreeProcessState,
-  pruneRemovedWorktreeSnapshots
-} from '../../worktree-removal-process-cleanup'
-import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
->>>>>>> 738ffaefdd3 (fix(codex): await the pretrust cleanup before reporting a worktree removed)
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import {
   resolveAgentTerminalCreateOptions,
-<<<<<<< HEAD
   prepareHostAgentTerminalLaunch
 } from '../terminal/launch/runtime-agent-terminal-startup'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
-=======
-  withHostAccountLaunchEnv
-} from '../runtime-agent-terminal-startup'
->>>>>>> 738ffaefdd3 (fix(codex): await the pretrust cleanup before reporting a worktree removed)
 
 export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected abstract resolveExplicitWorktreeIdScoped(
