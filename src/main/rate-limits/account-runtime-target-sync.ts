@@ -3,11 +3,18 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { getInitialClaudeRateLimitTarget } from './claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './codex-rate-limit-target'
-import { resolveLocalAccountUsageTarget } from '../../shared/local-account-runtime'
+import {
+  localAccountRuntimeTargetKey,
+  resolveLocalAccountUsageTarget
+} from '../../shared/local-account-runtime'
 
 type AccountRuntimeRateLimitService = Pick<
   RateLimitService,
-  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget' | 'refresh'
+  | 'getState'
+  | 'refreshClaudeForTarget'
+  | 'refreshCodexForTarget'
+  | 'setAntigravityFetchTarget'
+  | 'refresh'
 >
 
 type RuntimeTarget = {
@@ -30,12 +37,17 @@ export function createAccountRuntimeTargetSettingsSync(
     const nextSettingsTargets = getSettingsTargets(settings, platform)
     const claudePolicyChanged = !isSameTarget(settingsTargets.claude, nextSettingsTargets.claude)
     const codexPolicyChanged = !isSameTarget(settingsTargets.codex, nextSettingsTargets.codex)
-    const usageTargetChanged = !isSameTarget(settingsTargets.usage, nextSettingsTargets.usage)
+    const usageTargetChanged =
+      localAccountRuntimeTargetKey(settingsTargets.usage) !==
+      localAccountRuntimeTargetKey(nextSettingsTargets.usage)
     settingsTargets = nextSettingsTargets
     if (!claudePolicyChanged && !codexPolicyChanged && !usageTargetChanged) {
       return
     }
 
+    if (usageTargetChanged) {
+      rateLimits.setAntigravityFetchTarget(nextSettingsTargets.usage)
+    }
     const current = rateLimits.getState()
     const refreshes: Promise<RateLimitState>[] = []
     if (claudePolicyChanged && !isSameTarget(current.claudeTarget, nextSettingsTargets.claude)) {

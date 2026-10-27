@@ -1,3 +1,7 @@
+import {
+  localAccountRuntimeTargetKey,
+  type LocalAccountRuntimeTarget
+} from '../../../shared/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
@@ -12,7 +16,6 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
-  type AntigravityTargetResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
@@ -68,8 +71,17 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.antigravityUsageEnabledResolver = resolver
   }
 
-  setAntigravityTargetResolver(resolver: AntigravityTargetResolver): void {
-    this.antigravityTargetResolver = resolver
+  setAntigravityFetchTarget(target: LocalAccountRuntimeTarget): void {
+    if (
+      localAccountRuntimeTargetKey(target) ===
+      localAccountRuntimeTargetKey(this.antigravityFetchTarget)
+    ) {
+      return
+    }
+    this.antigravityFetchTarget = { ...target }
+    this.antigravityFetchGeneration += 1
+    this.activeFailureStreakByProvider.antigravity = 0
+    this.updateState({ ...this.state, antigravity: this.withFetchingStatus(null, 'antigravity') })
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {

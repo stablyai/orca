@@ -28,6 +28,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const {
       claudeTarget,
       claudeGeneration,
+      antigravityGeneration,
+      antigravityStateBeforeFetch,
       claudeProvenance,
       codexTarget,
       previousState,
@@ -241,7 +243,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
-    this.trackActiveFailureStreak('antigravity', antigravity)
+    const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
+    if (shouldApplyAntigravity) {
+      this.trackActiveFailureStreak('antigravity', antigravity)
+    }
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
@@ -254,9 +259,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
       // Another runtime's last reading must not stand in for this runtime's failure.
-      antigravity: hasKnownProvenanceChange(previousState.antigravity, antigravity)
-        ? antigravity
-        : this.applyStalePolicy(antigravity, previousState.antigravity)
+      antigravity: !shouldApplyAntigravity
+        ? this.state.antigravity
+        : hasKnownProvenanceChange(antigravityStateBeforeFetch, antigravity)
+          ? antigravity
+          : this.applyStalePolicy(antigravity, antigravityStateBeforeFetch)
     })
   }
 }

@@ -1,6 +1,10 @@
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
-import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
+import {
+  localAccountRuntimeTargetKey,
+  type LocalAccountRuntimeTarget
+} from '../../shared/local-account-runtime'
+import { listWslDistrosAsync } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { isWslDistroRunningForBackgroundWork } from '../wsl-background-distro-gate'
 import { hasReachedAppVersion, parseCliVersion } from '../../shared/app-version'
@@ -41,8 +45,7 @@ const FAILURE_REASONS: Partial<Record<UsageRateLimitFailureKind, string>> = {
 const UNSUPPORTED_USAGE_COMMAND_REASON =
   'Antigravity usage is not available. This version of the Antigravity CLI answers `/usage` as a prompt instead of a command, so Orca stopped asking rather than spend quota on it. Update `agy` and restart Orca.'
 
-// Latch unsupported after any model-turn response: discovering unsupported /usage spends quota, so never retry it for process lifetime.
-// Keyed by runtime: host and each WSL distro run their own agy.
+// Unsupported /usage spends quota; latch each runtime for the process lifetime.
 const unsupportedUsageRuntimes = new Set<string>()
 
 /** Clears the unsupported latch. Tests only — a live process has no way back. */
@@ -65,7 +68,10 @@ export type FetchAntigravityRateLimitsOptions = AntigravityUsageDependencies & {
   target?: LocalAccountRuntimeTarget
 }
 
-type AgyRun = (args: readonly string[], timeoutMs: number) => Promise<ProcessResult>
+type AgyResult = Pick<ProcessResult, 'code' | 'stdout' | 'stderr' | 'timedOut'> & {
+  signal?: ProcessResult['signal']
+}
+type AgyRun = (args: readonly string[], timeoutMs: number) => Promise<AgyResult>
 
 function unavailable(
   message: string,
@@ -109,18 +115,28 @@ function failed(
 export async function fetchAntigravityRateLimits(
   options: FetchAntigravityRateLimitsOptions = {}
 ): Promise<ProviderRateLimits> {
-  const wsl = options.target?.runtime === 'wsl' ? options.target : null
-  const runtimeKey = wsl ? `wsl:${wsl.wslDistro ?? ''}` : 'host'
-  const result = await readAntigravityUsage(options, wsl, runtimeKey)
-  // Lets the service drop the previous runtime's reading instead of keeping it as stale.
-  return { ...result, usageMetadata: { ...result.usageMetadata, authProvenance: runtimeKey } }
+  let target = options.target ?? { runtime: 'host', wslDistro: null }
+  let result: ProviderRateLimits
+  try {
+    if (target.runtime === 'wsl' && !target.wslDistro) {
+      target = { ...target, wslDistro: (await listWslDistrosAsync())[0] ?? null }
+    }
+    result = await readAntigravityUsage(options, target)
+  } catch (error) {
+    result = failed(spawnFailureMessage(error), 'cli-unavailable', (options.now ?? Date.now)())
+  }
+  return {
+    ...result,
+    usageMetadata: { ...result.usageMetadata, authProvenance: localAccountRuntimeTargetKey(target) }
+  }
 }
 
 async function readAntigravityUsage(
   options: FetchAntigravityRateLimitsOptions,
-  wsl: LocalAccountRuntimeTarget | null,
-  runtimeKey: string
+  target: LocalAccountRuntimeTarget
 ): Promise<ProviderRateLimits> {
+  const wsl = target.runtime === 'wsl' ? target : null
+  const runtimeKey = localAccountRuntimeTargetKey(target)
   const now = options.now ?? Date.now
   if (unsupportedUsageRuntimes.has(runtimeKey)) {
     return unavailable(UNSUPPORTED_USAGE_COMMAND_REASON, 'usage-unavailable', now())
@@ -145,8 +161,8 @@ async function readAntigravityUsage(
         now()
       )
     }
-    run = async (args, timeoutMs) => ({
-      ...(await runWslProcess({
+    run = (args, timeoutMs) =>
+      runWslProcess({
         distro: wsl.wslDistro ?? undefined,
         loginPath: 'preferred',
         program: command,
@@ -155,9 +171,7 @@ async function readAntigravityUsage(
         timeoutMs,
         maxOutputBytes: ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
         signal: options.signal
-      })),
-      signal: null
-    })
+      })
   } else {
     const resolve = options.resolveCommand ?? resolveCommandOnLocalPath
     const platform = options.platform ?? process.platform
@@ -181,18 +195,13 @@ async function readAntigravityUsage(
   }
 
   // Recheck each read: the CLI can be replaced while Orca runs; unsupported reads spend quota.
-  let versionRun: ProcessResult
-  try {
-    versionRun = await run(ANTIGRAVITY_VERSION_ARGS, ANTIGRAVITY_VERSION_TIMEOUT_MS)
-  } catch (error) {
-    return failed(spawnFailureMessage(error), 'cli-unavailable', now())
-  }
+  const versionRun = await run(ANTIGRAVITY_VERSION_ARGS, ANTIGRAVITY_VERSION_TIMEOUT_MS)
   // WSL skips the host PATH lookup; the guest reports a missing agy as exit 127.
   if (wsl && versionRun.code === 127) {
     return notFound()
   }
   const version =
-    versionRun.code === 0 && !versionRun.timedOut && versionRun.signal === null
+    versionRun.code === 0 && !versionRun.timedOut && !versionRun.signal
       ? parseCliVersion(versionRun.stdout.trim() ? versionRun.stdout : versionRun.stderr)
       : null
   if (!version || !hasReachedAppVersion(version, ANTIGRAVITY_MIN_USAGE_VERSION)) {
@@ -205,12 +214,7 @@ async function readAntigravityUsage(
     )
   }
 
-  let result: ProcessResult
-  try {
-    result = await run(ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_USAGE_TIMEOUT_MS)
-  } catch (error) {
-    return failed(spawnFailureMessage(error), 'cli-unavailable', now())
-  }
+  const result = await run(ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_USAGE_TIMEOUT_MS)
 
   const reading = parseAntigravityUsageStdout(result.stdout)
   // Why: a completed browser sign-in still yields a reading; only a failed read cools down.

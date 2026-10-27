@@ -58,7 +58,7 @@ export function createProviderAccountServices(
   rateLimits.setKimiHomeResolver(() =>
     resolveKimiHome(resolveLocalAccountUsageTarget(store.getSettings()))
   )
-  rateLimits.setAntigravityTargetResolver(() => resolveLocalAccountUsageTarget(store.getSettings()))
+  rateLimits.setAntigravityFetchTarget(resolveLocalAccountUsageTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,

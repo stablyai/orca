@@ -44,6 +44,10 @@ export function resolveLocalAccountUsageTarget(
     : { runtime: 'host', wslDistro: null }
 }
 
+export function localAccountRuntimeTargetKey(target: LocalAccountRuntimeTarget): string {
+  return target.runtime === 'wsl' ? `wsl:${target.wslDistro?.trim().toLowerCase() ?? ''}` : 'host'
+}
+
 function normalizeDistro(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null

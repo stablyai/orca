@@ -6,15 +6,19 @@ import {
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const { hostShellEnvironmentMock, runWslProcessMock, wslRunningMock } = vi.hoisted(() => ({
-  hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' })),
-  runWslProcessMock: vi.fn(),
-  wslRunningMock: vi.fn(async () => true)
-}))
+const { hostShellEnvironmentMock, runWslProcessMock, wslRunningMock, listDistrosMock } = vi.hoisted(
+  () => ({
+    hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' })),
+    runWslProcessMock: vi.fn(),
+    wslRunningMock: vi.fn(async () => true),
+    listDistrosMock: vi.fn(async () => ['Ubuntu'])
+  })
+)
 
 vi.mock('../runtime/structured-agent-shell-environment', () => ({
   hostShellEnvironment: hostShellEnvironmentMock
 }))
+vi.mock('../wsl', () => ({ listWslDistrosAsync: listDistrosMock }))
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 vi.mock('../wsl-background-distro-gate', () => ({
   isWslDistroRunningForBackgroundWork: wslRunningMock
@@ -169,6 +173,15 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.usageMetadata?.failureKind).toBe('cli-unavailable')
     expect(result.error).toContain('was not found on this machine')
     expect(h.runCommand).not.toHaveBeenCalled()
+  })
+
+  it('keeps runtime attribution when host command lookup fails', async () => {
+    const result = await fetchAntigravityRateLimits({
+      resolveCommand: vi.fn().mockRejectedValueOnce(new Error('ENOENT: cwd was removed'))
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.authProvenance).toBe('host')
   })
 
   it('reports a signed-out account as unavailable, not as a failed refresh', async () => {
@@ -382,7 +395,7 @@ describe('a WSL runtime target', () => {
     })
 
     expect(result.status).toBe('ok')
-    expect(result.usageMetadata?.authProvenance).toBe('wsl:Ubuntu')
+    expect(result.usageMetadata?.authProvenance).toBe('wsl:ubuntu')
     expect(h.runCommand).not.toHaveBeenCalled()
     expect(h.resolveCommand).not.toHaveBeenCalled()
     expect(runWslProcessMock).toHaveBeenLastCalledWith(
@@ -400,6 +413,23 @@ describe('a WSL runtime target', () => {
     wslRunningMock.mockResolvedValue(false)
 
     const result = await fetchAntigravityRateLimits({ target: ubuntu })
+
+    expect(result.status).toBe('unavailable')
+    expect(runWslProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('shares the unsupported latch between the default distro and its explicit name', async () => {
+    runWslProcessMock.mockImplementation(async (spec: { args: readonly string[] }) =>
+      spec.args[0] === '--version'
+        ? processResult({ stdout: 'agy version 1.2.11\n' })
+        : processResult({ stdout: MODEL_TURN_ENVELOPE })
+    )
+    await fetchAntigravityRateLimits({ target: { runtime: 'wsl', wslDistro: null } })
+    runWslProcessMock.mockClear()
+
+    const result = await fetchAntigravityRateLimits({
+      target: { runtime: 'wsl', wslDistro: 'ubuntu' }
+    })
 
     expect(result.status).toBe('unavailable')
     expect(runWslProcessMock).not.toHaveBeenCalled()

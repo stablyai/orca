@@ -24,6 +24,8 @@ import type {
 
 export type FetchAllCyclePrepared = {
   claudeTarget: NormalizedClaudeAccountSelectionTarget
+  antigravityGeneration: number
+  antigravityStateBeforeFetch: ProviderRateLimits | null
   claudeGeneration: number
   claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
   claudeProvenance: string
@@ -121,9 +123,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const antigravityGeneration = this.antigravityFetchGeneration
+    const antigravityTarget = this.antigravityFetchTarget
+    const antigravityStateBeforeFetch = this.state.antigravity
     const antigravityFetchAllowed =
       (this.antigravityUsageEnabledResolver?.() ?? true) &&
-      (options?.force || !this.shouldSkipAutomatedFetch('antigravity', previousState.antigravity))
+      (options?.force || !this.shouldSkipAutomatedFetch('antigravity', antigravityStateBeforeFetch))
 
     const zcodePlanConfigResult = this.resolveZcodePlanConfig()
     const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
@@ -157,8 +162,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
       antigravity: antigravityFetchAllowed
-        ? this.withFetchingStatus(previousState.antigravity, 'antigravity')
-        : (previousState.antigravity ?? antigravityUsageDisabledSnapshot()),
+        ? this.withFetchingStatus(antigravityStateBeforeFetch, 'antigravity')
+        : (antigravityStateBeforeFetch ?? antigravityUsageDisabledSnapshot()),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
@@ -192,8 +197,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
     const antigravityResultPromise = (
       antigravityFetchAllowed
-        ? fetchAntigravityRateLimits({ signal, target: this.antigravityTargetResolver?.() })
-        : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
+        ? fetchAntigravityRateLimits({ signal, target: antigravityTarget })
+        : Promise.resolve(antigravityStateBeforeFetch ?? antigravityUsageDisabledSnapshot())
     ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -282,6 +287,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     return {
       claudeTarget,
       claudeGeneration,
+      antigravityGeneration,
+      antigravityStateBeforeFetch,
       claudeAuthPreparation,
       claudeProvenance,
       codexTarget,
