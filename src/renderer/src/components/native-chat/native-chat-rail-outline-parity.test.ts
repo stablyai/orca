@@ -22,7 +22,7 @@ import {
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
-import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat-task-list-frames'
+import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'

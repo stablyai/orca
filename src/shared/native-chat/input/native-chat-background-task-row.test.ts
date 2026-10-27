@@ -6,7 +6,7 @@ import {
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskState
 } from './native-chat-background-task-row'
-import type { NativeChatBackgroundTaskBlock, NativeChatBlock } from './native-chat-types'
+import type { NativeChatBackgroundTaskBlock, NativeChatBlock } from '../../native-chat-types'
 
 function task(
   overrides: Partial<NativeChatBackgroundTaskBlock> = {}

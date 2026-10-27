@@ -1,11 +1,11 @@
 // Build durable task blocks and frozen plain-text twins together so clients without block support read the same report.
 
-import type { AgentJournalMessageItem } from './agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../agent-session-journal-types'
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock,
   type NativeChatBlock
-} from './native-chat-types'
+} from '../../native-chat-types'
 
 /** Only these states remain in flight. Unknown/newer states are settled to prevent endless spinners;
  * unverifiable records lost visibility, not task outcome (docs/reference/ssh-execution-boundary.md). */

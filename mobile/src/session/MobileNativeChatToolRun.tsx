@@ -39,7 +39,7 @@ import {
   type NativeChatBlock,
   type NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
-import { buildNativeChatTaskListRows } from '../../../src/shared/native-chat-task-list-history'
+import { buildNativeChatTaskListRows } from '../../../src/shared/native-chat/input/native-chat-task-list-history'
 import { colors } from '../theme/mobile-theme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'

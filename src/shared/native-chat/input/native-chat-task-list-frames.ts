@@ -1,5 +1,5 @@
 import { normalizeNativeChatTaskList } from './native-chat-task-list'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from '../../native-chat-types'
 
 const projectedFrames = new WeakMap<NativeChatMessage, NativeChatMessage>()
 

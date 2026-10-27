@@ -3,7 +3,7 @@ import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatToolCallBlock
-} from './native-chat-types'
+} from '../../native-chat-types'
 import {
   buildNativeChatTaskListRows,
   nativeChatTaskListPredecessors

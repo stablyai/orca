@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat-task-list-history'
+import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat/input/native-chat-task-list-history'
 import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
