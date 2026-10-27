@@ -70,6 +70,7 @@ export type FetchAntigravityRateLimitsOptions = AntigravityUsageDependencies & {
 
 type AgyResult = Pick<ProcessResult, 'code' | 'stdout' | 'stderr' | 'timedOut'> & {
   signal?: ProcessResult['signal']
+  environmentResolved?: boolean
 }
 type AgyRun = (args: readonly string[], timeoutMs: number) => Promise<AgyResult>
 
@@ -196,9 +197,15 @@ async function readAntigravityUsage(
 
   // Recheck each read: the CLI can be replaced while Orca runs; unsupported reads spend quota.
   const versionRun = await run(ANTIGRAVITY_VERSION_ARGS, ANTIGRAVITY_VERSION_TIMEOUT_MS)
-  // WSL skips the host PATH lookup; the guest reports a missing agy as exit 127.
+  // Exit 127 proves absence only after the guest login PATH was resolved.
   if (wsl && versionRun.code === 127) {
-    return notFound()
+    return versionRun.environmentResolved === false
+      ? failed(
+          `Antigravity usage is not available. The login environment in ${wslLabel} could not be read. Try refreshing again.`,
+          'cli-unavailable',
+          now()
+        )
+      : notFound()
   }
   const version =
     versionRun.code === 0 && !versionRun.timedOut && !versionRun.signal

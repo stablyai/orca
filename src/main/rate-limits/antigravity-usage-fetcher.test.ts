@@ -409,6 +409,41 @@ describe('a WSL runtime target', () => {
     )
   })
 
+  it.each([true, false])(
+    'distinguishes a missing CLI from an unresolved login environment: %s',
+    async (environmentResolved) => {
+      runWslProcessMock.mockResolvedValue({
+        ...processResult({ code: 127, stderr: 'agy: not found' }),
+        environmentResolved
+      })
+
+      const result = await fetchAntigravityRateLimits({ target: ubuntu })
+
+      expect(result.status).toBe(environmentResolved ? 'unavailable' : 'error')
+      expect(result.error).toContain(environmentResolved ? 'was not found' : 'login environment')
+      expect(result.usageMetadata?.failureKind).toBe('cli-unavailable')
+      expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('accepts a successful default-PATH CLI when the login environment is unresolved', async () => {
+    runWslProcessMock
+      .mockResolvedValueOnce({
+        ...processResult({ stdout: 'agy version 1.2.11\n' }),
+        environmentResolved: false
+      })
+      .mockResolvedValueOnce({
+        ...processResult({ stdout: USAGE_ENVELOPE }),
+        environmentResolved: false
+      })
+
+    const result = await fetchAntigravityRateLimits({ target: ubuntu })
+
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(60)
+    expect(runWslProcessMock).toHaveBeenCalledTimes(2)
+  })
+
   it('never starts a stopped distro to read quota', async () => {
     wslRunningMock.mockResolvedValue(false)
 
