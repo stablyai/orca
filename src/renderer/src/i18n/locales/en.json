@@ -20680,6 +20680,31 @@
       "stopped": "stopped",
       "failed": "failed",
       "finished": "finished"
+    },
+    "bell": {
+      "attentionRequested": "Attention requested",
+      "title": "Bell in {{worktree}}"
+    },
+    "test": {
+      "title": "Orca notifications are on",
+      "body": "This is a test notification from Orca."
+    },
+    "workspaceFallback": "workspace",
+    "agentTool": {
+      "usingWithInput": "Using {{tool}}: {{input}}",
+      "using": "Using {{tool}}",
+      "input": "Tool input: {{input}}"
+    },
+    "taskComplete": {
+      "title": "Task complete in {{worktree}}",
+      "body": "A coding agent finished working."
+    },
+    "permissionProbe": {
+      "body": "Orca will alert you when agents finish or terminals need attention."
+    },
+    "startupRegistration": {
+      "title": "Orca is ready to notify you",
+      "body": "Allow notifications so Orca can alert you when agents finish or terminals need attention."
     }
   },
   "sessionSearch": {

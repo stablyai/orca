@@ -20354,6 +20354,31 @@
       "stopped": "arrêté",
       "failed": "échoué",
       "finished": "terminé"
+    },
+    "bell": {
+      "attentionRequested": "Attention requise",
+      "title": "Sonnerie dans {{worktree}}"
+    },
+    "test": {
+      "title": "Les notifications d'Orca sont activées",
+      "body": "Ceci est une notification de test d'Orca."
+    },
+    "workspaceFallback": "espace de travail",
+    "agentTool": {
+      "usingWithInput": "Utilise {{tool}} : {{input}}",
+      "using": "Utilise {{tool}}",
+      "input": "Entrée de l'outil : {{input}}"
+    },
+    "taskComplete": {
+      "title": "Tâche terminée dans {{worktree}}",
+      "body": "Un agent de code a fini de travailler."
+    },
+    "permissionProbe": {
+      "body": "Orca vous préviendra quand les agents auront terminé ou que des terminaux demanderont votre attention."
+    },
+    "startupRegistration": {
+      "title": "Orca est prêt à vous envoyer des notifications",
+      "body": "Autorisez les notifications pour qu'Orca vous prévienne quand les agents ont terminé ou que des terminaux demandent votre attention."
     }
   },
   "sidebar": {

@@ -20291,6 +20291,31 @@
       "stopped": "중지됨",
       "failed": "실패함",
       "finished": "완료됨"
+    },
+    "bell": {
+      "attentionRequested": "확인이 필요합니다",
+      "title": "{{worktree}}에서 벨이 울림"
+    },
+    "test": {
+      "title": "Orca 알림이 켜져 있습니다",
+      "body": "Orca에서 보낸 테스트 알림입니다."
+    },
+    "workspaceFallback": "워크스페이스",
+    "agentTool": {
+      "usingWithInput": "{{tool}} 사용 중: {{input}}",
+      "using": "{{tool}} 사용 중",
+      "input": "도구 입력: {{input}}"
+    },
+    "taskComplete": {
+      "title": "{{worktree}}에서 작업 완료",
+      "body": "코딩 에이전트가 작업을 마쳤습니다."
+    },
+    "permissionProbe": {
+      "body": "에이전트가 작업을 마치거나 터미널에서 확인이 필요하면 Orca가 알려 드립니다."
+    },
+    "startupRegistration": {
+      "title": "Orca 알림을 받을 준비가 되었습니다",
+      "body": "알림을 허용하면 에이전트가 작업을 마치거나 터미널에서 확인이 필요할 때 Orca가 알려 드립니다."
     }
   },
   "sidebar": {

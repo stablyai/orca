@@ -239,11 +239,14 @@ async function launchDesktopMode(
   startDesktopPushService(runtimeRpc)
   // Request macOS notification permission after reveal or the maximized window can hide it.
   win.once('show', () => {
-    // Initialization failure can leave no Store; do not throw inside Electron listeners.
-    const store = state.store
-    if (store && store.getOnboarding().closedAt !== null) {
-      triggerStartupNotificationRegistration(store)
-    }
+    // Await i18n so the one-time prompt is not stuck in the English fallback.
+    void state.mainProcessI18nReady.then(() => {
+      // Initialization failure can leave no Store; do not throw inside Electron listeners.
+      const store = state.store
+      if (store && store.getOnboarding().closedAt !== null) {
+        triggerStartupNotificationRegistration(store)
+      }
+    })
   })
 }
 

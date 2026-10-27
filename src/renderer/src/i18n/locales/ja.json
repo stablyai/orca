@@ -20292,6 +20292,31 @@
       "stopped": "停止",
       "failed": "失敗",
       "finished": "完了"
+    },
+    "bell": {
+      "attentionRequested": "対応が必要です",
+      "title": "{{worktree}} でベルが鳴りました"
+    },
+    "test": {
+      "title": "Orca の通知はオンです",
+      "body": "これは Orca からのテスト通知です。"
+    },
+    "workspaceFallback": "ワークスペース",
+    "agentTool": {
+      "usingWithInput": "{{tool}} を使用中: {{input}}",
+      "using": "{{tool}} を使用中",
+      "input": "ツール入力: {{input}}"
+    },
+    "taskComplete": {
+      "title": "{{worktree}} のタスクが完了しました",
+      "body": "コーディング Agent が作業を終えました。"
+    },
+    "permissionProbe": {
+      "body": "Agent が完了したときや、ターミナルで対応が必要なときに Orca がお知らせします。"
+    },
+    "startupRegistration": {
+      "title": "Orca の通知の準備ができました",
+      "body": "通知を許可すると、Agent が完了したときや、ターミナルで対応が必要なときに Orca がお知らせします。"
     }
   },
   "sidebar": {

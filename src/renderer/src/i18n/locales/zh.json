@@ -20292,6 +20292,31 @@
       "stopped": "已停止",
       "failed": "已失败",
       "finished": "已完成"
+    },
+    "bell": {
+      "attentionRequested": "需要关注",
+      "title": "{{worktree}} 中的终端响铃"
+    },
+    "test": {
+      "title": "Orca 通知已开启",
+      "body": "这是一条来自 Orca 的测试通知。"
+    },
+    "workspaceFallback": "工作区",
+    "agentTool": {
+      "usingWithInput": "正在使用 {{tool}}：{{input}}",
+      "using": "正在使用 {{tool}}",
+      "input": "工具输入：{{input}}"
+    },
+    "taskComplete": {
+      "title": "{{worktree}} 中的任务已完成",
+      "body": "一个编程智能体已完成工作。"
+    },
+    "permissionProbe": {
+      "body": "当智能体完成工作或终端需要关注时，Orca 会提醒你。"
+    },
+    "startupRegistration": {
+      "title": "Orca 已准备好向你发送通知",
+      "body": "允许通知后，当智能体完成工作或终端需要关注时，Orca 会提醒你。"
     }
   },
   "sidebar": {

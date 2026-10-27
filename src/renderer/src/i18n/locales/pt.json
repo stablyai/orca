@@ -84,6 +84,31 @@
       "stopped": "parado",
       "finished": "concluído",
       "failed": "falhou"
+    },
+    "bell": {
+      "attentionRequested": "Atenção solicitada",
+      "title": "Sinal sonoro em {{worktree}}"
+    },
+    "test": {
+      "title": "As notificações do Orca estão ativadas",
+      "body": "Esta é uma notificação de teste do Orca."
+    },
+    "workspaceFallback": "espaço de trabalho",
+    "agentTool": {
+      "usingWithInput": "Usando {{tool}}: {{input}}",
+      "using": "Usando {{tool}}",
+      "input": "Entrada da ferramenta: {{input}}"
+    },
+    "taskComplete": {
+      "title": "Tarefa concluída em {{worktree}}",
+      "body": "Um agente de programação terminou o trabalho."
+    },
+    "permissionProbe": {
+      "body": "O Orca avisará você quando os agentes terminarem ou os terminais precisarem de atenção."
+    },
+    "startupRegistration": {
+      "title": "O Orca está pronto para enviar notificações",
+      "body": "Permita as notificações para que o Orca avise você quando os agentes terminarem ou os terminais precisarem de atenção."
     }
   },
   "app": {
