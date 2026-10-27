@@ -11,6 +11,7 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from './macos-tcc-login-shell'
 import { formatLocalPtyEnvironmentDiag } from './working-directory-validation'
+import { normalizeWindowsNativeShellEnvironment } from '../pty/windows-native-shell-environment'
 
 export {
   formatLocalPtyEnvironmentDiag,
@@ -154,6 +155,7 @@ function spawnWindowsFallbackChain(
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
     try {
+      normalizeWindowsNativeShellEnvironment(env, attempt.shellPath)
       const proc = ptySpawn(attempt.shellPath, attempt.shellArgs, {
         name: termName,
         cols,
@@ -216,6 +218,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
 
   if (!primaryError) {
     try {
+      normalizeWindowsNativeShellEnvironment(env, shellPath)
       const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
       return {
         process: spawnPtyExecutable({
