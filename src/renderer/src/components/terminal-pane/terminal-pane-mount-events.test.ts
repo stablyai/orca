@@ -7,7 +7,7 @@ import { SPLIT_TERMINAL_PANE_EVENT, type SplitTerminalPaneDetail } from '@/const
 import { installTerminalPaneMountEvents } from './terminal-pane-mount-events'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-terminal-actions', () => ({
   consumePendingWebRuntimeSplitMirrorTelemetry: () => false
 }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
