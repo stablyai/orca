@@ -27,10 +27,7 @@ import { deleteRequestedEnvKeys } from '../ipc/pty/host-env/path'
 import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
 import { reserveOpenCodeStartupPrompt } from './opencode-startup-prompt-owner'
 import { installOpenCodeStartupPromptForLaunch } from './opencode-startup-prompt-installer'
-import {
-  launchesManagedOpenCodeAccount,
-  withOpenCodeStandaloneServer
-} from './opencode-managed-account-standalone'
+import { needsOpenCodePrivateServer, withOpenCodeStandaloneServer } from './opencode-private-server'
 
 export async function prepareOpenCodePtyLaunch(options: {
   command: string | undefined
@@ -145,7 +142,7 @@ export async function prepareOpenCodePtyLaunch(options: {
     options.shell &&
     !options.wsl &&
     command &&
-    launchesManagedOpenCodeAccount(launchEnv)
+    needsOpenCodePrivateServer(probeEnv)
   ) {
     command = withOpenCodeStandaloneServer(command, options.shell)
   }
