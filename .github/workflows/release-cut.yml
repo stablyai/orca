@@ -3,6 +3,7 @@ name: Cut Release
 # Resolve ref/latest stable, compute next kind, reject stable version regression, commit/tag detached and build/publish from tag. Fast-forward main’s version only when source was its tip and policy permits; PR-only rules leave main unchanged. CI replaces local/scheduled release paths to avoid accidental working-tree releases.
 
 on:
+  # No schedule: GitHub cron is UTC, so PT 03:00/15:00 cannot hit both PST and PDT without rewriting the window script.
   workflow_dispatch:
     inputs:
       kind:
@@ -222,6 +223,7 @@ jobs:
           slot=$(TZ=America/Los_Angeles date '+%Y-%m-%d-%H')
           echo "value=$slot" >>"$GITHUB_OUTPUT"
 
+      # schedule cannot fire; still sets allowed=true for manual cuts.
       - name: Validate PT release window
         id: window
         env:
@@ -246,6 +248,7 @@ jobs:
           echo "allowed=false" >>"$GITHUB_OUTPUT"
           echo "reason=outside_target_hour:${pt_hour}:${pt_minute}" >>"$GITHUB_OUTPUT"
 
+      # Unused without schedule; kept for a future DST-safe cron.
       - name: Skip if this PT release window already ran
         id: existing
         if: github.event_name == 'schedule' && steps.window.outputs.allowed == 'true'
