@@ -52,6 +52,9 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'file open-changed': {
     focus: FILE_OPEN_FOCUS_HELP
   },
+  'tab create': {
+    focus: '--focus                Select the new browser tab (default: background)'
+  },
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'
   },
