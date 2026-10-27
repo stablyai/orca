@@ -59,6 +59,14 @@ async function isSlotInView(page: Page, tabId: string): Promise<boolean> {
   return span.left >= span.viewLeft - 1 && span.right <= span.viewRight + 1
 }
 
+async function enableFitTabsToTitles(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.__store!.setState((state) => ({
+      settings: { ...state.settings!, experimentalFitTabsToTitles: true }
+    }))
+  })
+}
+
 async function nextFrames(page: Page, count: number): Promise<void> {
   await page.evaluate(async (frames) => {
     for (let i = 0; i < frames; i++) {
@@ -172,6 +180,7 @@ test.describe('Tab strip active-tab dock', () => {
     orcaPage
   }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
+    await enableFitTabsToTitles(orcaPage)
     const tabIds = await orcaPage.evaluate((worktreeId) => {
       const state = window.__store!.getState()
       const short = state.createTab(worktreeId, undefined, undefined, { activate: false })
@@ -229,24 +238,57 @@ test.describe('Tab strip active-tab dock', () => {
       expect(await geometry()).toEqual(before)
     }
 
-    await orcaPage.evaluate(
-      ({ id }) => {
-        window.__store!.getState().setTabCustomTitle(id, 'Chat')
-      },
-      { id: tabIds.long }
-    )
-    await expect(long).toContainText('Chat')
-    await expect.poll(() => width(long)).toBeLessThanOrEqual(100)
+    const longTitle = 'A very long conversation title '.repeat(20).trim()
+    // Agents rename through the same store action as the CLI; neither may move any tab.
+    const renameFromAgent = (title: string): Promise<void> =>
+      orcaPage.evaluate(
+        ({ id, title }) => {
+          window.__store!.getState().setTabCustomTitle(id, title, { recordInteraction: false })
+        },
+        { id: tabIds.long, title }
+      )
+    const allGeometry = (): Promise<number[][]> =>
+      orcaPage.$$eval(`${STRIP} > [data-tab-strip-slot]`, (slots) =>
+        slots.map((slot) => {
+          const rect = slot.getBoundingClientRect()
+          return [rect.x, rect.width]
+        })
+      )
+    const settledGeometry = await allGeometry()
+    for (const title of ['Chat', longTitle]) {
+      await renameFromAgent(title)
+      await expect(long).toContainText(title.slice(0, 20))
+      for (let frame = 0; frame < 4; frame++) {
+        await nextFrames(orcaPage, 1)
+        expect(await allGeometry()).toEqual(settledGeometry)
+      }
+    }
+    // Menus remount the label; the held width must survive that.
+    await long.locator('[data-testid="sortable-tab"]').click({ button: 'right' })
+    await expect(orcaPage.getByRole('menu')).toBeVisible()
+    expect(await allGeometry()).toEqual(settledGeometry)
+    await orcaPage.keyboard.press('Escape')
+    await expect(orcaPage.getByRole('menu')).toHaveCount(0)
+    expect(await allGeometry()).toEqual(settledGeometry)
 
-    await orcaPage.evaluate(
-      ({ id }) => {
-        window
-          .__store!.getState()
-          .setTabCustomTitle(id, 'A very long conversation title '.repeat(20))
-      },
-      { id: tabIds.long }
-    )
-    await expect(long).toContainText('A very long conversation title')
+    // Opening a tab is a strip change the user can see, so stale widths settle with it.
+    const settleTrigger = await createBackgroundTerminalTab(orcaPage, worktreeId)
+    await expect(orcaPage.locator(slotSelector(settleTrigger))).toHaveCount(1)
+    await expect.poll(() => width(long)).toBeGreaterThan(384)
+    await orcaPage.locator(`${slotSelector(settleTrigger)} [data-tab-close-button]`).click()
+    await expect(orcaPage.locator(slotSelector(settleTrigger))).toHaveCount(0)
+
+    // A rename the user typed resizes immediately.
+    const renameFromUser = async (title: string): Promise<void> => {
+      await long.locator('[data-testid="sortable-tab"]').dblclick()
+      const input = long.locator('[data-tab-rename-input="true"]')
+      await input.fill(title)
+      await input.press('Enter')
+      await expect(input).toHaveCount(0)
+    }
+    await renameFromUser('Chat')
+    await expect.poll(() => width(long)).toBeLessThanOrEqual(100)
+    await renameFromUser(longTitle)
     await expect.poll(() => width(long)).toBeGreaterThan(384)
     const strip = orcaPage.locator(STRIP).first()
     expect(await strip.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
@@ -265,6 +307,7 @@ test.describe('Tab strip active-tab dock', () => {
     orcaPage
   }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
+    await enableFitTabsToTitles(orcaPage)
     const ids = await orcaPage.evaluate((worktreeId) => {
       const store = window.__store!
       const agent = store

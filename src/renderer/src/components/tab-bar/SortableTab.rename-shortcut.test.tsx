@@ -37,6 +37,8 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
+    // Only the tab title label reads context here; null is its fixed-width default.
+    useContext: () => null,
     useCallback<T>(callback: T) {
       return callback
     },

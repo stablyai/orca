@@ -130,6 +130,7 @@ export function renderFloatingTerminalPanelSurface({
                   }
                   groupId={activeGroup?.id}
                   worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                  stripShown={open}
                   expandedPaneByTabId={expandedPaneByTabId}
                   onActivate={model.commands.activateTerminal}
                   onClose={closeFloatingItemConfirmed}

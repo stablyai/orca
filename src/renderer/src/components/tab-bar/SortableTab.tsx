@@ -24,7 +24,7 @@ import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
 import { translate } from '@/i18n/i18n'
-import { TAB_LABEL_WIDTH_CLASSES, TAB_ROOT_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_ROOT_WIDTH_CLASSES, TabTitleLabel } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
@@ -150,7 +150,8 @@ export default function SortableTab({
     handleRenameOpen,
     commitRename,
     cancelRename,
-    setRenameInputElement
+    setRenameInputElement,
+    committedRename
   } = useSortableTabRename({
     tabId: tab.id,
     title: tab.title,
@@ -288,7 +289,7 @@ export default function SortableTab({
           spellCheck={false}
         />
       ) : (
-        <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
+        <TabTitleLabel tabId={tab.id} title={displayTitle} rename={committedRename} />
       )}
       {tab.color && !isEditing && (
         <span

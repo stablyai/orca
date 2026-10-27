@@ -464,6 +464,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalNewWorktreeCardStyle?: boolean
   /** Plugin frames as isolated guests (default on); main-only kill switch, see plugin-frame-isolation.ts. */
   experimentalPluginIsolatedFrames?: boolean
+  /** Experimental: size tabs to their titles; widths settle on strip changes, not on every live rename. */
+  experimentalFitTabsToTitles?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
