@@ -1,10 +1,9 @@
 import { spawnSync } from 'node:child_process'
-
-const SHARED_LIBRARY_LOAD_ERROR = /error while loading shared libraries: ([^\s:]+)/
+import { parseMissingSharedLibrary } from '../../src/shared/missing-shared-library.ts'
 
 // Enough for Electron to start on clean ubuntu:24.04 and debian:12 images; the loader names only
 // one missing library per run. Why t64: on Ubuntu 24.04+ plain `libasound2` is a virtual package.
-export const ELECTRON_LINUX_RUNTIME_PACKAGES = [
+const ELECTRON_LINUX_RUNTIME_PACKAGES = [
   'libgtk-3-0t64',
   'libatk1.0-0t64',
   'libatk-bridge2.0-0t64',
@@ -15,11 +14,6 @@ export const ELECTRON_LINUX_RUNTIME_PACKAGES = [
   'libnss3',
   'libgbm1'
 ]
-
-/** The library the dynamic loader could not find, or null when `output` names none. */
-export function parseMissingSharedLibrary(output) {
-  return SHARED_LIBRARY_LOAD_ERROR.exec(output)?.[1] ?? null
-}
 
 /**
  * The shared library that stops `executable` from starting at all, or null when it starts.
@@ -38,9 +32,9 @@ export function findMissingElectronLibrary(executable, { run = spawnSync } = {})
   return parseMissingSharedLibrary(`${result.stderr ?? ''}\n${result.stdout ?? ''}`)
 }
 
-export function describeMissingElectronLibrary(library) {
+function describeMissingElectronLibrary(library) {
   return (
-    `Electron can't start on this host: ${library} is missing, so native modules were not ` +
+    `Electron can't start on this host: ${library} is missing, so native modules can't be ` +
     'checked against it. On Debian/Ubuntu run `sudo apt-get install -y ' +
     `${ELECTRON_LINUX_RUNTIME_PACKAGES.join(' ')}\` (on Ubuntu 23.10 or Debian 12 and ` +
     'earlier, drop the `t64` suffixes), then `pnpm run rebuild:electron`.'
@@ -66,8 +60,8 @@ export function continuePostinstallWithoutElectron() {
 }
 
 /** A host without Electron's desktop libraries can't vouch for any addon, so none is blamed. */
-export function exitWhenElectronCannotStart(executable, { run } = {}) {
-  const library = findMissingElectronLibrary(executable, { run })
+export function exitWhenElectronCannotStart(executable) {
+  const library = findMissingElectronLibrary(executable)
   if (!library) {
     return
   }

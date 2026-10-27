@@ -206,7 +206,7 @@ exit 127
       }
     })
 
-    it('fails strict postinstall and direct rebuilds', () => {
+    it('fails strict postinstall and direct rebuilds, but not forced ones', () => {
       const projectDir = mkTempProject()
       try {
         writeElectronMissingLibrary(projectDir)
@@ -217,12 +217,16 @@ exit 127
           ORCA_STRICT_NATIVE_REBUILD: '1'
         })
         const direct = runRebuildScript(projectDir)
+        // Why: a forced build never asks Electron to load an addon, e.g. electron-builder's hook.
+        const forced = runRebuildScript(projectDir, {}, ['--force'])
 
         for (const result of [strict, direct]) {
           expect(result.status).toBe(1)
           expect(result.stderr).toContain('libatk-1.0.so.0 is missing')
           expect(result.stderr).not.toContain('Continuing postinstall')
         }
+        expect(forced.status, forced.stderr).toBe(0)
+        expect(forced.stderr).not.toContain('is missing')
       } finally {
         removeTreeSync(projectDir)
       }
