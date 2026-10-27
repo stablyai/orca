@@ -393,6 +393,7 @@ describe('terminal send RPC', () => {
         bytesWritten: 6
       }),
       isMobileTerminalQueryReplyAuthority: vi.fn().mockReturnValue(true),
+      shouldForwardTerminalQueryReply: () => true,
       mobileTookFloor: vi.fn()
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -423,6 +424,7 @@ describe('terminal send RPC', () => {
       isMobileTerminalQueryReplyAuthority: vi.fn(
         (_ptyId: string, clientId: string) => clientId === 'mobile-1'
       ),
+      shouldForwardTerminalQueryReply: () => true,
       sendTerminal: vi.fn().mockResolvedValue({
         handle: 'terminal-1',
         accepted: true,

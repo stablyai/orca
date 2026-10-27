@@ -39,6 +39,9 @@ export const AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY = 'agent.launch.tab-close
 
 export const AGENT_LAUNCH_SETTINGS_CAPABILITY = 'settings.agent-launch.v1' as const
 
+// Host applies `chatOptions` to whichever surface it opens: seeded on a chat, flags on a terminal.
+export const AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY = 'agent.launch.chat-options.v1' as const
+
 // Host accepts scoped terminal permission mutations, including Auto.
 export const AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY =
   'settings.agent-launch.auto-permissions.v1' as const
@@ -56,6 +59,7 @@ export const AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY = 'settings.agent-permiss
 export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1' as const
 
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
+  AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,

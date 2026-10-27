@@ -3,9 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatView } from './MobileNativeChatView'
-import { MobileNativeChatAsk } from './MobileNativeChatAsk'
-import { useMobileNativeChatPromptPresentation } from './use-mobile-native-chat-prompt-presentation'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
+import { MobileNativeChatAsk } from './native-chat/input/MobileNativeChatAsk'
+import { useMobileNativeChatPromptPresentation } from './native-chat/input/use-mobile-native-chat-prompt-presentation'
+import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
@@ -62,9 +62,11 @@ vi.mock('lucide-react-native', () =>
 )
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
-vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
-vi.mock('./MobileNativeChatSessionOptionPickers', () => ({
+vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
+vi.mock('./native-chat/input/MobileNativeChatQuestion', () => ({
+  MobileNativeChatQuestion: 'ChatQuestion'
+}))
+vi.mock('./native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
 vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({
@@ -98,22 +100,18 @@ type Overrides = Partial<ComponentProps<typeof MobileNativeChatView>> & {
 function Harness(overrides: Overrides) {
   const shown = useMobileNativeChatPromptPresentation({
     permission: overrides.permission ?? null,
-    question: overrides.question ?? null,
     waitStartedAt: overrides.waitStartedAt ?? 10,
     scopeKey: 'tab-1',
     sessionKey: overrides.sessionKey ?? 'session-1',
     observing: true,
-    respondPermission: overrides.onRespondPermission ?? (async () => false),
-    answerQuestion: overrides.onAnswerQuestion ?? (async () => false)
+    respondPermission: overrides.onRespondPermission ?? (async () => false)
   })
   return createElement(MobileNativeChatView, {
     ...props,
     ...overrides,
     permission: shown.permission,
-    question: shown.question,
     promptKey: shown.occurrenceKey,
-    onRespondPermission: shown.respondPermission,
-    onAnswerQuestion: shown.answerQuestion
+    onRespondPermission: shown.respondPermission
   })
 }
 const render = async (overrides: Overrides) => {

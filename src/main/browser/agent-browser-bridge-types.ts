@@ -2,10 +2,9 @@ import type { ChildProcess } from 'node:child_process'
 import type { CdpWsProxy } from './cdp-ws-proxy'
 import type { BrowserError } from './cdp-bridge'
 
-// Exceed agent-browser's internal navigation (30s) and wait (60s) timeouts.
+// Exceed agent-browser's internal navigation (30s) and default wait (25s) timeouts.
 export const EXEC_TIMEOUT_MS = 90_000
 export const CONSECUTIVE_TIMEOUT_LIMIT = 3
-export const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
 export const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
 export const AGENT_BROWSER_EXIT_DRAIN_MS = 500
 // Cleanup must finish within the 20s quit barrier.

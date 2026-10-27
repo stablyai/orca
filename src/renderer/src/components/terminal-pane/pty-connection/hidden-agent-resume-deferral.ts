@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { takeSleepingAgentWakeRequest } from '@/lib/sleeping-agent-wake-requests'
 import { holdPaneResumeUntilShown, releasePaneResumeHold } from '@/lib/pane-spawn-deferral-registry'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'

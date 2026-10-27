@@ -7,6 +7,7 @@ import {
 } from '../../shared/wsl-host-types'
 import type { Store } from '../persistence'
 import { createWslHostConnector } from '../wsl/wsl-host-connector'
+import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from '../wsl/wsl-orphan-holder-release'
 import {
   createFakeWslHostConnector,
   readFakeWslHostsConfig
@@ -14,6 +15,8 @@ import {
 import { hasOrcadTemplate } from '../orcad/orcad-artifact-materializer'
 import { WslHostService } from '../wsl/wsl-host-service'
 import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
+import type { WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
+import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
 import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
@@ -111,6 +114,7 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
   if (process.platform !== 'win32' && !fake) {
     return null
   }
+  let automationWake: WslHostAutomationWake | null = null
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
     isEnabled: () => args.store.getSettings().experimentalWslHosts === true,
@@ -125,14 +129,17 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
       if (distro) {
         pushHostAccounts(args.getUserDataPath, environmentId, distro)
       }
+      void automationWake?.learn(environmentId)
     },
-    removed: (environmentId) =>
-      retireRemovedRuntimeEnvironment(
+    removed: (environmentId) => {
+      automationWake?.forget(environmentId)
+      return retireRemovedRuntimeEnvironment(
         environmentId,
         args.invalidateTransport,
         args.store,
         args.getUserDataPath()
       )
+    }
   })
   const onChange = created.handleConnectionChange.bind(created)
   const isKnownDistro = (distro: string): boolean => created.isKnownDistro(distro)
@@ -148,6 +155,7 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
           runtime
         })
   )
+  automationWake = createWslHostAutomationWake(args.getUserDataPath, created)
   return created
 }
 
@@ -177,6 +185,26 @@ function startService(args: WslHostHandlerArgs): WslHostService | null {
   return created
 }
 
+let gatedOffHoldersReleased = false
+
+/**
+ * With the gate closed, a launch still releases orphans (no host record, or a pending Remove)
+ * but keeps every host's holder: a tester reopening Orca without the gate must not end a live
+ * host's sessions. With no holder recorded it touches nothing beyond one folder check.
+ */
+function releaseHoldersWhileGatedOff(userDataPath: string): void {
+  if (process.platform !== 'win32' || gatedOffHoldersReleased) {
+    return
+  }
+  gatedOffHoldersReleased = true
+  void releaseUnwantedWslHolders({
+    userDataPath,
+    isWanted: wslHolderKeepPolicy({ userDataPath, keepHostHolders: true })
+  }).catch((error: unknown) => {
+    console.warn('[wsl-hosts] Could not release orphaned WSL distro holders:', error)
+  })
+}
+
 export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   for (const channel of WSL_HOST_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
@@ -184,6 +212,7 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   // Install no API without a service, matching the preload gate.
   const wsl = getWslHostService() ?? startService(args)
   if (!wsl) {
+    releaseHoldersWhileGatedOff(args.getUserDataPath())
     return
   }
   ipcMain.handle('wslHosts:listDistros', () => wsl.listDistros())
@@ -203,10 +232,13 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   ipcMain.handle(
     'wslHosts:connect',
     (_event, request: { environmentId: string; intent?: unknown }) =>
-      wsl.connect(
-        request.environmentId,
-        request.intent === 'update' || request.intent === 'force' ? { intent: request.intent } : {}
-      )
+      // The Settings Connect is the user's own: it keeps a host whose Remove didn't finish.
+      wsl.connect(request.environmentId, {
+        withdrawPendingRemoval: true,
+        ...(request.intent === 'update' || request.intent === 'force'
+          ? { intent: request.intent }
+          : {})
+      })
   )
   ipcMain.handle('wslHosts:getCapability', (): WslHostCapability => ({
     serverFiles: wsl.hasServerFiles()

@@ -2,14 +2,14 @@
 
 import { capPaletteSection } from '../cmd-j/palette-section-render-cap'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
-import type { PaletteDocumentRank } from '@/lib/palette-match/palette-document'
+import type { PaletteDocumentRank } from '../../../../shared/palette-match/palette-document'
 import {
   comparePaletteEntityRanks,
   createPaletteSearchContext,
   encodePaletteIdentity,
   type PaletteActivityRank,
   type PaletteSearchContext
-} from '@/lib/palette-match/palette-ranking'
+} from '../../../../shared/palette-match/palette-ranking'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   searchBrowserPages,

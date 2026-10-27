@@ -41,6 +41,7 @@ export function terminalMountAdapters(
             connected: args.connected !== false,
             handle: String(args.handle ?? HANDLE),
             hostSupportsQueryReplyInput: args.supported !== false,
+            hostSupportsProgramStatus: true,
             subscribedTerminals: { has: (handle: string) => subscribed.has(handle) }
           }).then((value: unknown) => {
             accepted = value

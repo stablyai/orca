@@ -18,6 +18,7 @@ import {
   mediaNameResultSchema
 } from './bridge-media-verbs'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
+import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
 
 // Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
 // Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.
@@ -33,7 +34,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.start',
   'native.audio.read',
   'native.audio.stop',
-  'native.storage.read'
+  'native.storage.read',
+  'native.pdf.view'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -64,6 +66,24 @@ export const storageReadParamsSchema = z.strictObject({
   key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS)
 })
 export const storageReadResultSchema = z.strictObject({ value: z.string().nullable() })
+
+// The shell downloads the file itself; page bytes would need staging verbs and exceed the frame cap.
+// Bridge requests cannot be cancelled, so a preview the user left sends cancel; one verb keeps routes within the grant ceiling.
+export const pdfViewParamsSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('open'),
+    worktreeId: z.string().min(1),
+    relativePath: z.string().refine((path) => mobileFileMediaMime(path) === PDF_MIME_TYPE),
+    executionHost: z.templateLiteral(['runtime:', z.string().min(1)]).optional()
+  }),
+  z.strictObject({ action: z.literal('cancel') })
+])
+export const pdfViewResultSchema = z.strictObject({})
+
+export type BridgePdfOpenParams = Omit<
+  Extract<z.infer<typeof pdfViewParamsSchema>, { action: 'open' }>,
+  'action'
+>
 
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
@@ -105,6 +125,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.storage.read': {
     params: storageReadParamsSchema,
     result: storageReadResultSchema
+  },
+  'native.pdf.view': {
+    params: pdfViewParamsSchema,
+    result: pdfViewResultSchema
   }
 }
 

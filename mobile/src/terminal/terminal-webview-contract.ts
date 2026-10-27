@@ -1,3 +1,4 @@
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
@@ -12,6 +13,9 @@ export type TerminalModes = {
   mouseTrackingMode: TerminalMouseTrackingMode
   sgrMouseMode: boolean
   sgrMousePixelsMode: boolean
+  applicationCursorKeysMode: boolean
+  kittyKeyboardFlags: number
+  modifyOtherKeys: number
 }
 
 export type TerminalKeyboardAvoidanceMetrics = {
@@ -74,7 +78,8 @@ export type TerminalSelectionEvents = {
   onTerminalInput?: (bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply?: (bytes: string) => void
   onTerminalTap?: () => void
-  onFileTap?: (pathText: string, line: number | null, column: number | null) => void
+  // Every reading of the tapped text (hard wraps, overlapping detections); like desktop, the longest that exists opens.
+  onFileTap?: (candidates: readonly ParsedFileLinkLocation[]) => void
   onOpenUrl?: (url: string) => void
   // Persist snapped text-size presets so Settings and other panes follow terminal pinches.
   onTextScaleChange?: (scale: number) => void
@@ -98,6 +103,8 @@ export type TerminalInit = {
   initialData?: string
   preserveScroll?: boolean
   oscLinks?: TerminalOscLinkRange[]
+  // The host snapshot's proven Kitty keyboard flags, unvalidated.
+  kittyFlags?: unknown
   frame: TerminalFrame | null
 }
 

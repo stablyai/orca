@@ -35,8 +35,15 @@ describe('Antigravity source-control model selection', () => {
         if (!plan.ok) {
           throw new Error(plan.error)
         }
-        expect(plan.plan.args).toEqual(['--print=Write Git text', '--sandbox'])
-        expect(plan.plan.stdinPayload).toBeNull()
+        expect(plan.plan.args).toEqual([
+          '--print=',
+          '--input-format=stream-json',
+          '--output-format=stream-json',
+          '--sandbox'
+        ])
+        expect(JSON.parse(plan.plan.stdinPayload ?? '').message.content[0].text).toBe(
+          'Write Git text'
+        )
       })
     }
   }

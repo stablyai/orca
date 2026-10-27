@@ -17,6 +17,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { resolveGitHubPRMergeMethods } from '../../../../shared/github/pull-request-merge-methods'
 import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
+import {
+  isGitHubPRStackMergeQueueRequired,
+  resolveGitHubPRStackMergeDecision
+} from '../../../../shared/github/pull-request-stack-merge'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
@@ -33,11 +37,7 @@ import {
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
-import {
-  getGitHubPRStackMergeBlocker,
-  getGitHubPRStackMergeScope,
-  isGitHubPRStackMergeQueueRequired
-} from './github-pr-stack-merge'
+import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 export default function HostedReviewActions({
   review,
@@ -113,9 +113,12 @@ export default function HostedReviewActions({
               'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
               'GitHub will merge this pull request and every pull request below it in the stack.'
             )),
-      directMergeAvailable:
-        !stackBlocker &&
-        (stackMergeScope.complete || presentation.directMergeAvailable || stackUsesMergeQueue),
+      directMergeAvailable: resolveGitHubPRStackMergeDecision({
+        stack: githubPR.stack,
+        reviewMergeQueueRequired: review.mergeQueueRequired,
+        stackMergeQueueRequired: githubPR.mergeQueueRequired,
+        directMergeAvailable: presentation.directMergeAvailable
+      }).directMergeAvailable,
       autoMergeAction: null
     }
   }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])

@@ -3,7 +3,7 @@ import {
   normalizeSubagentState
 } from '../../../../shared/native-chat-subagent-summary'
 import { fitInteractivePrompt } from '../../../../shared/agent-status-field-normalization'
-import { parseAskFromToolInput } from '../../../../shared/native-chat-ask'
+import { parseAskFromToolInput } from '../../../../shared/native-chat/input/native-chat-ask'
 import type { NativeChatBlock, NativeChatSubagentState } from '../../../../shared/native-chat-types'
 import { boundSubagentEntryId } from '../../../native-chat/subagent-entry-id-bounds'
 import type { RpcContext } from '../core'

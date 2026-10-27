@@ -6,7 +6,7 @@ import {
   normalizeCmdJPaletteQuery,
   uniqueNormalizedCmdJPaletteKeywords
 } from './palette-query-tokens'
-import type { PaletteResultQualityClass } from '@/lib/palette-match/match-quality'
+import type { PaletteResultQualityClass } from '../../../../shared/palette-match/match-quality'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'

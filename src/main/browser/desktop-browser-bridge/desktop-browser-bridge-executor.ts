@@ -12,7 +12,7 @@ import {
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { parseCdpKeyEvent } from '../cdp-keyboard-us-layout'
-import { iterateBrowserTextInsertionChunks } from '../browser-text-insertion'
+import { iterateBrowserTextInsertionChunks } from '../../../shared/browser-text-insertion-chunks'
 import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from '../agent-browser-bridge-types'
 
 export type DesktopBrowserBridgeOutcome =

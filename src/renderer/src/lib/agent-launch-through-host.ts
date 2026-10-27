@@ -21,7 +21,7 @@ export type HostAgentLaunchArgs = {
   /** Absent uses the settings default; `null` means no arguments. */
   agentArgs?: string | null
   cwd?: string
-  /** The launch's session options; only string values reach the host, which reads no others. */
+  /** The launch's session options; the host decodes booleans sent as strings by catalog kind. */
   sessionOptions?: Record<string, SessionOptionValue>
   launchSource?: LaunchSource
   quickCommandLabel?: string | null
@@ -34,9 +34,8 @@ export type HostAgentLaunchArgs = {
 function stringSessionOptions(options: Record<string, SessionOptionValue> | undefined): {
   sessionOptions?: Record<string, string>
 } {
-  const strings = Object.entries(options ?? {}).filter(
-    (entry): entry is [string, string] => typeof entry[1] === 'string'
-  )
+  // Why: the launch wire carries strings, so a boolean (Cursor Thinking off) rides as 'false'.
+  const strings = Object.entries(options ?? {}).map(([id, value]) => [id, String(value)])
   return strings.length > 0 ? { sessionOptions: Object.fromEntries(strings) } : {}
 }
 

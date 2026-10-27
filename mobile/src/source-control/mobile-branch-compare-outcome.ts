@@ -1,7 +1,10 @@
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RequestCurrency } from '../transport/generation-scoped-request-owner'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
-import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
+import {
+  resolveMobileBranchCompareBaseRef,
+  type MobileBranchCompareTarget
+} from './mobile-branch-base-ref'
 import { gitBranchCompareRead } from './mobile-git-read-operations'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
 import type { MobileGitBranchCompareReply } from './git-compare-reply-schema'
@@ -16,10 +19,11 @@ export type BranchCompareOutcome =
 export async function readBranchCompareOutcome(
   client: RpcOperationSender,
   worktreeId: string,
-  currency: RequestCurrency
+  currency: RequestCurrency,
+  compare?: MobileBranchCompareTarget
 ): Promise<BranchCompareOutcome | null> {
   try {
-    const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+    const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId, compare)
     // Base resolution can outlive its scope; stop before sending a superseded compare request.
     if (!currency.isCurrent()) {
       return null

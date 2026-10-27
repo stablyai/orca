@@ -11,6 +11,7 @@ import {
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
+import { normalizeSourceControlGroupOrder } from '../../shared/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
@@ -94,6 +95,10 @@ export class RuntimeClientSettingsController {
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
       zcodePlanSite: settings.zcodePlanSite ?? 'zai',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
+      // Paired clients order their Source Control lists the way this desktop does.
+      sourceControlGroupOrder: normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder),
+      sourceControlCompareAgainstUpstream: settings.sourceControlCompareAgainstUpstream === true,
+      diffShowWhitespace: settings.diffShowWhitespace === true,
       // Omitted without a service: clients treat absence as "ask the host", which names the real cause.
       ...(this.sharingServices?.artifacts() === false
         ? {}

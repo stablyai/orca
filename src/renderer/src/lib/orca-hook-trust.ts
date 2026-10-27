@@ -1,6 +1,7 @@
 import { sha256 } from './sha256'
+import type { OrcaHookTrustKind } from '../../../shared/orca-hook-trust-entries'
 
-export type OrcaHookScriptKind = 'setup' | 'archive' | 'issueCommand' | 'vmRecipe'
+export type OrcaHookScriptKind = OrcaHookTrustKind
 
 export async function hashOrcaHookScript(content: string): Promise<string> {
   const normalized = content.trim()

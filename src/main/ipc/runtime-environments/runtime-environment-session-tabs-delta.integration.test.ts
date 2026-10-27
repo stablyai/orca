@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   addEnvironmentFromPairingCode,

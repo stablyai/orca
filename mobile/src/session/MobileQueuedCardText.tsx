@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
-import { queuedMessageStyles } from './mobile-native-chat-queued-message-styles'
+import { queuedMessageStyles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 
 // Expand clipped queued text before Steer/Delete; use the queue’s capped scroller rather than nesting another scroll box.
 export function MobileQueuedCardText({

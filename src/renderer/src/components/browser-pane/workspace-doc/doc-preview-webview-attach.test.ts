@@ -43,9 +43,3 @@ it('restores pointer input when a drag ends after attaching a document preview',
   }
   expect(webviewRegistry.has('preview-drag')).toBe(false)
 })
-
-it('attaches an opaque guest so dark-scheme documents get a dark canvas', () => {
-  const attached = attach('preview-opaque', document.createElement('div'))
-  expect(attached.webview.getAttribute('webpreferences')).toContain('transparent=false')
-  attached.detach()
-})

@@ -1422,7 +1422,10 @@
         },
         "OrchestrationPane": {
           "chatErrorEscalationKeywordChat": "chat",
-          "chatErrorEscalationKeywordError": "error"
+          "chatErrorEscalationKeywordError": "error",
+          "heartbeatKeywordHeartbeat": "heartbeat",
+          "heartbeatKeywordInterval": "interval",
+          "heartbeatKeywordStalled": "stalled"
         },
         "OrchestrationSkillAgentCoverage": {
           "fullCoverage_one": "All 1 detected agent has the skill.",
@@ -1613,7 +1616,8 @@
           "fac59213fc": "Search builtin themes"
         },
         "SourceControlAiActionRecipeDefaults": {
-          "a9359c8aa9": "Unknown error"
+          "a9359c8aa9": "Unknown error",
+          "2cb4bb7e5d": "CLI arguments"
         },
         "SparsePresetSettingsSection": {
           "2d7d45e991": "Cancel",
@@ -1983,6 +1987,8 @@
           }
         },
         "sshHostServer": {
+          "automationsLeftDisabled_one": "This host’s Orca server took over {{count}} automation but couldn’t turn it back on. Turn it on in Automations.",
+          "automationsLeftDisabled_other": "This host’s Orca server took over {{count}} automations but couldn’t turn them back on. Turn them on in Automations.",
           "linkedProjects_one": "This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automation there were not moved, and worktrees it created there show as external worktrees.",
           "linkedProjects_other": "This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automations there were not moved, and worktrees it created there show as external worktrees.",
           "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.",
@@ -2059,6 +2065,9 @@
         },
         "wslHosts": {
           "remove": "Remove"
+        },
+        "RepositorySourceControlAiActionRows": {
+          "7a3a8e431d": "CLI arguments"
         }
       },
       "shared": {
@@ -2913,6 +2922,9 @@
     "hooks": {
       "ipc": {
         "events": {
+          "browserStateIpcBridge": {
+            "docPreviewLinkFailed": "Could not open this link in Orca Browser."
+          },
           "os": {
             "markdown": {
               "file": {
@@ -3056,6 +3068,15 @@
   },
   "components": {
     "native-chat": {
+      "approval": {
+        "allow": "Allow",
+        "deny": "Deny",
+        "plan": {
+          "refineHint": "Refine plan closes the review so you can send what to change.",
+          "reviewTitle": "Review proposed plan"
+        },
+        "title": "Allow {{value0}}?"
+      },
       "ask": {
         "asked": "Asked:",
         "awaiting": "Awaiting user input:",
@@ -3537,6 +3558,14 @@
         "probeAgain": "Check again",
         "probeSkippedHosts": "Hosts routed without the connection check (Try anyway):",
         "title": "Browse through SSH workspace hosts"
+      }
+    },
+    "sourceControl": {
+      "actionModel": {
+        "permissionsDefaultHint": "Terminals use Agent Permissions unless this action sets its own CLI arguments."
+      },
+      "actionPermissions": {
+        "sameAsAgent": "Same as {{agent}}"
       }
     }
   },

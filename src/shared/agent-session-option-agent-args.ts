@@ -77,12 +77,13 @@ export function removeAgentArgOption(
   agent: AgentType,
   tokens: readonly string[],
   aliases: readonly string[],
-  matchesValue: (value: string | undefined) => boolean = () => true
+  matchesValue: (value: string | undefined) => boolean = () => true,
+  takesValue = true
 ): string[] {
   const kept: string[] = []
   const required = agentRequiredValueOptions(agent)
   let cursor = 0
-  let found = findOptionOccurrence(tokens, aliases, true, required, cursor)
+  let found = findOptionOccurrence(tokens, aliases, true, required, cursor, takesValue)
   while (found) {
     const end = found.index + found.consumed
     const keptEnd = matchesValue(found.value) ? found.index : end
@@ -90,7 +91,7 @@ export function removeAgentArgOption(
       kept.push(tokens[index])
     }
     cursor = end
-    found = findOptionOccurrence(tokens, aliases, true, required, cursor)
+    found = findOptionOccurrence(tokens, aliases, true, required, cursor, takesValue)
   }
   for (let index = cursor; index < tokens.length; index += 1) {
     kept.push(tokens[index])

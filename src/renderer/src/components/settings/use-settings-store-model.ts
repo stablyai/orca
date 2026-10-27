@@ -1,9 +1,12 @@
+import {
+  selectCanonicalProjects,
+  selectCanonicalProjectHostSetups
+} from '@/store/project-host-setup-selector'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
-import { useProjectHostSetupProjection } from '@/store/selectors'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -21,6 +24,7 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { useProjectHostSetupProjection } from '@/store/selectors'
 import { getFallbackTerminalFonts, mergeFontSuggestions } from './SettingsConstants'
 import { useGhosttyImport } from './useGhosttyImport'
 import { useWarpThemeImport } from './useWarpThemeImport'
@@ -51,8 +55,8 @@ export function useSettingsStoreModel() {
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
-  const projects = useAppStore((s) => s.projects)
-  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
+  const projects = useAppStore((s) => selectCanonicalProjects(s))
+  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
   const updateProject = useAppStore((s) => s.updateProject)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const removeProject = useAppStore((s) => s.removeProject)
@@ -68,15 +72,15 @@ export function useSettingsStoreModel() {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
 
-  const projectHostSetupProjection = useProjectHostSetupProjection()
-  // Use navigation’s grouping inputs so pane and navigation lists agree.
+  // Why: same inputs as nav metadata so both lists agree — the source of truth for the pane list.
+  const projection = useProjectHostSetupProjection()
   const settingsProjectList = useMemo(
     () =>
       buildSettingsProjectList(repos, {
-        projects: projectHostSetupProjection.projects,
-        projectHostSetups: projectHostSetupProjection.setups
+        projects: projection.projects,
+        projectHostSetups: projection.setups
       }),
-    [repos, projectHostSetupProjection]
+    [repos, projection]
   )
   const repoIdToRepresentative = useMemo(
     () => buildRepoIdToRepresentative(settingsProjectList),

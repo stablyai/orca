@@ -28,11 +28,14 @@ function makeTerminal(
         cursorY: 0,
         type: 'normal' as const,
         getLine(row: number) {
-          const text = row === 0 ? lineRef.current : undefined
+          // Rows after the first are xterm soft-wrap continuations.
+          const text = lineRef.current.split('\n')[row]
           if (text === undefined) {
             return null
           }
           return {
+            length: 80,
+            isWrapped: row > 0,
             // Honor xterm’s translateToString slice arguments so wide-cell offset conversion is realistic.
             translateToString: (_trim?: boolean, start?: number, end?: number) =>
               text.slice(start ?? 0, end ?? text.length),
@@ -242,11 +245,25 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchend', [])
 
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
-    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
       type: 'terminal-file-tap',
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: 3
+      candidates: [{ pathText: '/tmp/result.json', line: 12, column: 3 }]
+    })
+  })
+
+  it('keeps the UNC host of an OSC file link for a Windows share workspace', async () => {
+    const oscLinks = [
+      { row: 0, startCol: 5, endCol: 15, uri: 'file://server/share/repo/app.ts#L12' }
+    ]
+    const { posted } = boot('open artifact here', oscLinks)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(7), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
+      type: 'terminal-file-tap',
+      candidates: [{ pathText: '//server/share/repo/app.ts', line: 12, column: null }]
     })
   })
 
@@ -258,12 +275,22 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('result')), y: tapY }])
     fireTouch('touchend', [])
 
-    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toEqual({
       type: 'terminal-file-tap',
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: 3
+      candidates: [{ pathText: '/tmp/result.json', line: 12, column: 3 }]
     })
+  })
+
+  it('opens the whole URL when the tap lands on its soft-wrapped second row', async () => {
+    const url = `https://example.com/${'a'.repeat(70)}/end`
+    const text = `see ${url} now`
+    const { posted } = boot(`${text.slice(0, 80)}\n${text.slice(80)}`)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(2), y: tapY + 15 * 0.3125 }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'open-url')?.url).toBe(url)
   })
 
   it('does not open snapshot OSC links from adjacent terminal cells', async () => {

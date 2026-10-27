@@ -175,6 +175,9 @@ pnpm test
 pnpm build
 ```
 
+`pnpm lint` runs independent checks in a bounded pool. Use
+`pnpm lint --maxWorkers=2 --timings` to limit concurrent checks and print their durations.
+
 For repeated local typechecks, use `pnpm tc` (or `pnpm tc:node`, `pnpm tc:web`,
 and `pnpm tc:cli`). On Apple Silicon macOS and x64/arm64 Linux, these use the pinned
 `tsrs` compiler with incremental caches. Keep `.cache/typecheck/` between checks;

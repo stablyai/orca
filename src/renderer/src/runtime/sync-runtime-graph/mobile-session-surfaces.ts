@@ -4,7 +4,7 @@ import { isClaudeManagementTitle } from '../../../../shared/agent-detection'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { Tab } from '../../../../shared/tab-types'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf,

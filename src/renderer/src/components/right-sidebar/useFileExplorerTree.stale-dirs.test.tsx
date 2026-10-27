@@ -127,7 +127,10 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
     })
 
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
-    expect(readDirectoryMock).toHaveBeenCalledWith('wt-1', '/repo', '/repo')
+    // A background refresh never starts a stopped WSL distro.
+    expect(readDirectoryMock).toHaveBeenCalledWith('wt-1', '/repo', '/repo', {
+      wakeWslDistro: undefined
+    })
   })
 
   it('drops stale marks when the tree is reset for a new worktree', async () => {

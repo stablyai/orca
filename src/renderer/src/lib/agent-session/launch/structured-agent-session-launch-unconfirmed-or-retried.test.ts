@@ -230,9 +230,7 @@ describe('a new start beside an unconfirmed or retried chat', () => {
     const started = await runSourceControlAgentActionStart({
       selectedAgent: 'codex',
       trimmedCommandInput: 'Fix the failing check',
-      agentArgs: '',
-      agentArgsApply: false,
-      commandTemplate: '{basePrompt}',
+      recipe: { commandInputTemplate: '{basePrompt}' },
       saveTargetValue: 'none',
       actionId: 'resolveComments',
       settings: null,

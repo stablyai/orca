@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
@@ -40,7 +40,7 @@ vi.mock('../../store', () => {
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   sendRuntimePtyInput: vi.fn()
 }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))

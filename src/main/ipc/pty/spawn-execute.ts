@@ -1,7 +1,7 @@
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
-import { noteWslDistrosRunning } from '../../wsl-background-distro-gate'
+import { noteWslDistroWoken, noteWslDistrosRunning } from '../../wsl-background-distro-gate'
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,
@@ -246,6 +246,7 @@ export async function executePtySpawn(
       ctx.result.wslDistro === undefined ? ctx.expectedWslDistro : ctx.result.wslDistro
     if (spawnedWslDistro && !args.connectionId) {
       // A local WSL terminal is user-initiated, so background work held for this distro may run.
+      noteWslDistroWoken(spawnedWslDistro)
       noteWslDistrosRunning([spawnedWslDistro])
     }
     ctx.deps.runtime?.preparePtyExecutionContext?.(ctx.result.id, spawnedWslDistro)

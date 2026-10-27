@@ -89,21 +89,23 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       parsePaneKey(source.paneKey)?.tabId ??
       parseLegacyNumericPaneKey(source.paneKey)?.tabId
     const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
+    const hasLivePty =
+      // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.
+      source.ptyId !== undefined ||
+      args.connectedPtyEvidence.paneKeys.has(source.paneKey) ||
+      (tabId !== undefined && args.connectedPtyEvidence.tabIds.has(tabId))
     // Structured rows have no PTY; their host removes them on close, so roster membership proves liveness.
     if (
       source.structuredHost === undefined &&
       tabId !== undefined &&
       mirroredWorktreeId === undefined &&
       isLocalHookConnectionId(source.connectionId) &&
-      !args.connectedPtyEvidence.tabIds.has(tabId) &&
-      !args.connectedPtyEvidence.paneKeys.has(source.paneKey) &&
-      // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.
-      source.ptyId === undefined
+      !hasLivePty
     ) {
       continue
     }
     const worktreeId = mirroredWorktreeId ?? source.worktreeId
-    sources.push({ ...source, tabId, worktreeId })
+    sources.push({ ...source, tabId, worktreeId, ...(hasLivePty ? { hasLivePty: true } : {}) })
   }
   return sources
 }

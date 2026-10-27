@@ -2,7 +2,7 @@ import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import {
   getProjectIdentityKey,
-  projectHostSetupProjectionFromRepos,
+  projectHostSetupCompatibilityFromRepos,
   type ProjectHostSetupProjection
 } from './project-host-setup-projection'
 
@@ -103,7 +103,7 @@ export function resolveProjectHostSetupProjection(
   repos: readonly Repo[],
   projects: readonly Project[],
   setups: readonly ProjectHostSetup[],
-  derived: ProjectHostSetupProjection = projectHostSetupProjectionFromRepos(repos)
+  derived: ProjectHostSetupProjection = projectHostSetupCompatibilityFromRepos(repos)
 ): ProjectHostSetupProjection {
   const normalized = normalizeHydratedProjectHostSetupProjection(repos, projects, setups, derived)
   // Older runtimes/profiles may provide partial/empty project rows beside repos; keep repo-backed fallbacks visible.

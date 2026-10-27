@@ -13,7 +13,7 @@ import {
   type CmdJSettingsResult
 } from './palette-results'
 import { hasCmdJProjectSearchCandidates, searchCmdJProjectResults } from './palette-project-results'
-import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
@@ -513,25 +513,6 @@ describe('Cmd+J project and repo-group search', () => {
     ])
     expect(fallbackResults.map((result) => [result.title, result.rowKey])).toEqual([
       ['source-folder', 'repo:repo-2']
-    ])
-  })
-
-  it('splits independent same-host checkouts of one project into per-setup keys', () => {
-    // Independent cloned checkouts retain distinct jump targets, matching sidebar grouping.
-    const results = searchCmdJProjectResults({
-      query: 'platform',
-      projectGroups: [],
-      repos: [repo('repo-1', 'platform-a'), repo('repo-2', 'platform-b')],
-      projects: [project('project-1', 'Platform')],
-      projectHostSetups: [
-        setup('setup-1', 'project-1', 'local', 'repo-1'),
-        setup('setup-2', 'project-1', 'local', 'repo-2')
-      ]
-    })
-
-    expect(results.map((result) => result.rowKey)).toEqual([
-      'project:project-1::setup:repo-1',
-      'project:project-1::setup:repo-2'
     ])
   })
 

@@ -139,7 +139,7 @@ describe('remaining dispatch metadata statement compilation', () => {
         ).toBeUndefined()
       }
       const warnings: string[] = []
-      warnStaleDispatches(reader, (warning) => warnings.push(warning))
+      warnStaleDispatches(reader, (warning) => warnings.push(warning), 5)
       expect(warnings).toEqual([
         `Warning: worker worker_0 on task ${dispatch.task_id} has not sent a heartbeat in ~10 min (dispatch ${dispatch.id})`
       ])

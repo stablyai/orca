@@ -42,7 +42,15 @@ it('preserves the host directory classification with default Quick Open preferen
   ])
   const { entries } = await readFileExplorerDirectory('wt-1', '/w', '/w')
   expect(entries).toEqual([{ name: 'linked', isDirectory: true, isSymlink: true }])
-  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', undefined)
+  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', {})
+})
+
+it('forwards the WSL wake flag of a user act to the directory read', async () => {
+  readRuntimeDirectory.mockResolvedValueOnce([])
+  await readFileExplorerDirectory('wt-1', '/w', '/w', { wakeWslDistro: true })
+  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', {
+    wakeWslDistro: true
+  })
 })
 
 describe('keepOpenedDirectoryLinks', () => {

@@ -7,11 +7,10 @@ import {
 import type { ConnectorMachine } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
 
-// `reply` is advertised once `orca slack reply` ships.
-const FEATURES = ['answer', 'cancel']
+const FEATURES = ['answer', 'cancel', 'reply']
 const PROMPT_KINDS = ['approval', 'question']
-// Only Slack conversations reach this machine's seam so far.
-const SOURCES = ['slack']
+// Listed by hand: a source joins only once this build's seam handles its conversations.
+const SOURCES = ['slack', 'discord', 'linear']
 
 export type ConnectorHelloSaid = { agents: string[]; projects: ConnectorProject[] }
 

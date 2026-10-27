@@ -27,7 +27,7 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 import {
   encodePaletteIdentity,
   type PaletteSearchContext
-} from '@/lib/palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 import {
   buildBrowserPaletteItems,
   buildOpenTabPaletteItems,

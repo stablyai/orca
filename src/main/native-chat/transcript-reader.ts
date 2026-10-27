@@ -29,6 +29,7 @@ export type ReadTranscriptResult =
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   filePath?: string
+  sourceOrder?: boolean
 }
 
 /** Read the full transcript with no message cap; skip malformed/unknown records using the tailer’s decoders. */
@@ -58,16 +59,24 @@ export async function readNativeChatTranscript(
   try {
     const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
     if (transcriptAgent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeClaudeTranscriptLine, options.sourceOrder)
+      }
     }
     if (transcriptAgent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeCodexTranscriptLine, options.sourceOrder)
+      }
     }
     if (transcriptAgent === 'grok') {
-      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeGrokTranscriptLine, options.sourceOrder)
+      }
     }
     if (transcriptAgent === 'omp') {
-      return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeOmpTranscriptLine, options.sourceOrder)
+      }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
@@ -81,9 +90,18 @@ export async function readNativeChatTranscript(
 
 async function readTranscript(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
   const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
-  const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
+  const { messages } = await decodeTranscriptStream(
+    stream,
+    filePath,
+    0,
+    decode,
+    true,
+    Infinity,
+    sourceOrder
+  )
   return messages
 }

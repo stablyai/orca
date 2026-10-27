@@ -1,5 +1,5 @@
-import { useContext } from 'react'
-import { Image, Pressable, Text } from 'react-native'
+import { useContext, useEffect, useState } from 'react'
+import { Image, Pressable, Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
@@ -12,8 +12,10 @@ import {
   isAgentSessionHostStatusPresentation
 } from '../../../src/shared/agent-session-host-status-rows'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../src/shared/native-chat-visual-directive'
+import { isAgentSessionAttachmentStorePath } from '../../../src/shared/agent-session-attachments'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
-import { isRenderableImageUri } from './mobile-native-chat-image-preview'
+import { isRenderableImageUri, readStoredChatImage } from './mobile-native-chat-image-preview'
+import type { RpcClient } from '../transport/rpc-client'
 import {
   CHAT_PROSE_SCALE,
   scaledType,
@@ -91,7 +93,7 @@ export function Prose({
   return null
 }
 
-// Host paths cannot load on the phone; show a placeholder unless a preview or real URL exists.
+// Host paths cannot load on the phone; the chat's host reads its attachment store, anything else stays a placeholder.
 function ImageAttachment({
   block,
   fontScale,
@@ -101,10 +103,38 @@ function ImageAttachment({
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
-  const { openImage } = useContext(MobileNativeChatRowOverlaysContext)
-  const uri = block.url ?? block.path
+  const { openImage, imageClient } = useContext(MobileNativeChatRowOverlaysContext)
+  const direct = block.url ?? block.path
+  const renderable = isRenderableImageUri(direct) ? direct : null
+  const storedPath =
+    !renderable && imageClient && block.path && isAgentSessionAttachmentStorePath(block.path)
+      ? block.path
+      : null
+  const [stored, setStored] = useState<{
+    client: RpcClient
+    path: string
+    uri: string | null
+  } | null>(null)
+  useEffect(() => {
+    if (!imageClient || !storedPath) {
+      return
+    }
+    const unmounted = new AbortController()
+    void readStoredChatImage(imageClient, storedPath, unmounted.signal).then((uri) => {
+      if (!unmounted.signal.aborted) {
+        setStored({ client: imageClient, path: storedPath, uri })
+      }
+    })
+    return () => unmounted.abort()
+  }, [imageClient, storedPath])
+  const read =
+    storedPath && stored?.path === storedPath && stored.client === imageClient ? stored : null
+  const uri = renderable ?? read?.uri
   const label = block.alt ?? 'Attached image'
-  if (!isRenderableImageUri(uri)) {
+  if (storedPath && !read) {
+    return <View style={styles.imageThumb} accessibilityLabel={label} />
+  }
+  if (!uri) {
     return (
       <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
         🖼 {block.alt ?? block.path ?? block.url ?? 'image'}

@@ -74,6 +74,10 @@ export type RuntimeNativeChatFileContext = {
 export const TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY =
   'files.resolve-terminal-path.cross-workspace.v1' as const
 
+// Why: older hosts grant a path outside their workspaces only to the terminal that printed it.
+export const TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY =
+  'files.resolve-terminal-path.absolute-files.v1' as const
+
 export type RuntimeTerminalPathResolution = {
   worktree: string
   relativePath: string | null

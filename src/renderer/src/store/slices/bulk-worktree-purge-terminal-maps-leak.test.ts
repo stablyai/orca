@@ -1,7 +1,7 @@
 /** Bulk purge runs no terminal teardown; evict tab maps and PTY maps from live/durable bindings like single removal. External scans/project removal/hydration otherwise leak ephemeral terminal/agent keys for renderer lifetime. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -17,7 +17,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => {
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => {
   const actual = await importOriginal<typeof RemoteRuntimePtyIdModule>()
   return { ...actual, parseRemoteRuntimePtyId: vi.fn(actual.parseRemoteRuntimePtyId) }
 })
@@ -31,7 +31,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'

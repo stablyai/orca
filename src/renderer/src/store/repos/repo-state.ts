@@ -157,8 +157,8 @@ export type RuntimeCatalogFetchOptions = {
 
 export type RepoSlice = {
   repos: readonly Repo[]
-  projects: readonly Project[]
-  projectHostSetups: readonly ProjectHostSetup[]
+  endpointProjects: readonly Project[]
+  endpointProjectHostSetups: readonly ProjectHostSetup[]
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>

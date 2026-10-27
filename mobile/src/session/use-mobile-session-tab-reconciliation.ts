@@ -6,6 +6,7 @@ import {
 } from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../src/shared/program-status/protocol'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
 import type { SessionTabsStreamSource } from './mobile-session-tabs-stream-health'
@@ -160,6 +161,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   }, [connState, sessionTabsRef, setSessionTabs])
 
   const hostQueryReplyInputSupportedRef = useRef(false)
+  const hostProgramStatusSupportedRef = useRef(false)
 
   useEffect(() => {
     if (!client || connState !== 'connected') {
@@ -170,6 +172,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setQuickCommandAgentPromptMaxLength(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
+      hostProgramStatusSupportedRef.current = false
       return
     }
     // A client swap may reach an older host without disconnecting the route; clear capabilities before showing host-specific actions.
@@ -180,6 +183,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setQuickCommandAgentPromptMaxLength(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
+    hostProgramStatusSupportedRef.current = false
     // Retry status after cutover/timeouts even when connection state never changes or features can remain hidden forever.
     return startRuntimeCapabilityProbe(client, (capabilities) => {
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
@@ -190,6 +194,9 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       // Older hosts discard inputKind, turning forwarded xterm replies into floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(
         TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+      )
+      hostProgramStatusSupportedRef.current = capabilities.includes(
+        PROGRAM_STATUS_RUNTIME_CAPABILITY
       )
     })
   }, [client, connState])
@@ -205,7 +212,8 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     requestTerminalInventoryRecovery,
     pendingTerminalRecoveryContextKey,
     parkedPendingTerminalContext,
-    hostQueryReplyInputSupportedRef
+    hostQueryReplyInputSupportedRef,
+    hostProgramStatusSupportedRef
   }
 }
 

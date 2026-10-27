@@ -1,6 +1,7 @@
 import { hasRemoteRuntimeOwner } from '@/runtime/runtime-file-routing'
 import type { FileLinkTarget } from './terminal-file-link-target'
-import { HostFileRefusal, resolveHostWorkspaceFile } from './terminal-host-workspace-file'
+import { HostFileRefusal } from './host-file-refusal'
+import { resolveHostWorkspaceFile } from './terminal-host-workspace-file'
 import {
   readTerminalPathExistence,
   writeTerminalPathExistence,

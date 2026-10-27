@@ -22,7 +22,8 @@ import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/exe
 import {
   assertEnvironmentPairing,
   callRuntimeEnvelope,
-  callRuntimeResult
+  callRuntimeResult,
+  callEnvironmentEnvelope
 } from './web-runtime-calls'
 import {
   readRuntimeAiVaultDeleteSessionResponse,
@@ -33,19 +34,42 @@ import { noopUnsubscribe } from './web-storage'
 import { translate } from '@/i18n/i18n'
 
 export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
-  const search = createSessionSearchClient(
-    (method, params) => callRuntimeResult(method, params),
-    'relay'
-  )
   return {
     // A browser searches only its selected paired runtime.
-    searchSessions: (request, executionHostScope) =>
-      addressesOwnRuntime(executionHostScope)
-        ? search.searchSessions(request)
-        : Promise.resolve({ kind: 'unavailable', reason: 'no-service' }),
+    searchSessions: (request, executionHostScope, isActive = () => true) => {
+      if (!addressesOwnRuntime(executionHostScope)) {
+        return Promise.resolve({ kind: 'unavailable', reason: 'no-service' })
+      }
+      const environment = requireActiveEnvironment()
+      const pairingRevision = environment.pairingRevision ?? environment.createdAt
+      const runtimeId = environment.runtimeId ?? undefined
+      const active = () => isActive() && requireActiveEnvironment().id === environment.id
+      const search = createSessionSearchClient(async (method, params) => {
+        if (!active()) {
+          throw new Error('Session search retired')
+        }
+        const response = await callEnvironmentEnvelope(
+          environment.id,
+          method,
+          params,
+          undefined,
+          pairingRevision,
+          runtimeId,
+          active
+        )
+        if (!response.ok) {
+          throw Object.assign(new Error(response.error.message), { code: response.error.code })
+        }
+        return response.result
+      }, 'relay')
+      return search.searchSessions(request, active)
+    },
     searchStatus: (executionHostScope) =>
       addressesOwnRuntime(executionHostScope)
-        ? search.searchStatus()
+        ? createSessionSearchClient(
+            (method, params) => callRuntimeResult(method, params),
+            'relay'
+          ).searchStatus()
         : Promise.resolve(unavailableSessionSearchStatus()),
     // Host-index consent requires the desktop operator’s settings surface.
     setSearchEnabled: () => Promise.reject(new Error('unsupported')),
@@ -69,6 +93,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
         ...(requestedScope === executionHostId && args?.afterFingerprint !== undefined
           ? { afterFingerprint: args.afterFingerprint }
           : {}),
+        historyOwnership: args?.historyOwnership,
         scopePaths: args?.scopePaths,
         executionHostId
       }).then((result) =>

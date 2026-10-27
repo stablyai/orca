@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
-import type { NativeChatTaskListPredecessors } from '../../../src/shared/native-chat-task-list-history'
+import type { NativeChatTaskListPredecessors } from '../../../src/shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { MobileNativeChatRow } from './MobileNativeChatRowItemSource'
 import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'

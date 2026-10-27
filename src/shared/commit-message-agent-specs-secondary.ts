@@ -240,10 +240,12 @@ export function buildSecondaryCommitMessageAgentSpecs({
       id: 'antigravity',
       label: 'Antigravity',
       binary: 'agy',
-      // agy --print takes text on argv (#19539/#14059); glue the value so leading dashes cannot become options and sandbox/model remain separate.
-      promptDelivery: 'argv',
-      buildArgs: ({ prompt, model, thinkingLevel }) => [
-        `--print=${prompt}`,
+      // Empty --print selects stream input without consuming the next flag (agy >= 1.1.15).
+      promptDelivery: 'stdin',
+      buildArgs: ({ model, thinkingLevel }) => [
+        '--print=',
+        '--input-format=stream-json',
+        '--output-format=stream-json',
         '--sandbox',
         ...(model && model !== 'default' ? ['--model', model] : []),
         ...(thinkingLevel ? ['--effort', thinkingLevel] : [])

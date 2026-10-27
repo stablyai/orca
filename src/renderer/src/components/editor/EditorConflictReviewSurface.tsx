@@ -12,6 +12,9 @@ import type { FileContent } from './editor-panel-content-types'
 import { translate } from '@/i18n/i18n'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 
+// Retry is a user act: it may start a stopped WSL distro.
+const USER_RETRY = { wakeWslDistro: true }
+
 export function EditorConflictReviewSurface({
   activeFile,
   viewStateScopeId,
@@ -35,7 +38,7 @@ export function EditorConflictReviewSurface({
   getConflictNavigation: (file: OpenFile, content: string) => EditorConflictNavigation | undefined
   handleContentChangeForFile: (file: OpenFile, content: string) => void
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
@@ -149,7 +152,7 @@ export function EditorConflictReviewSurface({
             message={fileContent.loadError}
             code={fileContent.loadErrorCode}
             // Borrowed views reload through their owning workspace.
-            onRetry={() => reloadContent(recordView ?? contentFile)}
+            onRetry={() => reloadContent(recordView ?? contentFile, USER_RETRY)}
           />
         </div>
       )

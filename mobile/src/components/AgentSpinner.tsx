@@ -1,16 +1,20 @@
 import { Activity } from 'lucide-react-native'
 import { Animated, StyleSheet, View } from 'react-native'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
+import { colors } from '../theme/mobile-theme'
 import { useWorkingRingRotation } from './use-working-ring-rotation'
 
-type WorktreeStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
-
-// Match desktop sidebar StatusIndicator colors/sizes for five-state worktree rollup; palette distinguishes moving/alive/completed states.
+// Match desktop sidebar StatusIndicator colors/sizes for the worktree rollup; palette distinguishes moving/alive/completed states.
 const STATUS_COLORS: Record<WorktreeStatus, string> = {
   working: '#eab308',
+  monitoring: '#eab308',
   active: '#10b981',
   done: '#10b981',
   permission: '#ef4444',
+  failed: '#ef4444',
+  interrupted: colors.textMuted,
+  unconfirmed: colors.statusAmber,
   inactive: 'rgba(115,115,115,0.4)'
 }
 
@@ -21,7 +25,8 @@ export function AgentSpinner({
   status: WorktreeStatus
   workingMode?: AgentWorkingMode
 }) {
-  const monitoring = status === 'working' && workingMode === 'monitoring'
+  const monitoring =
+    status === 'monitoring' || (status === 'working' && workingMode === 'monitoring')
   const rotate = useWorkingRingRotation(status === 'working' && !monitoring)
 
   const color = STATUS_COLORS[status] ?? STATUS_COLORS.inactive
@@ -30,6 +35,14 @@ export function AgentSpinner({
     return (
       <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
         <Activity size={12} color={STATUS_COLORS.working} />
+      </View>
+    )
+  }
+
+  if (status === 'unconfirmed') {
+    return (
+      <View style={styles.wrapper} accessibilityLabel="Couldn’t confirm">
+        <View style={styles.dashedRing} />
       </View>
     )
   }
@@ -61,6 +74,14 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4
+  },
+  dashedRing: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: STATUS_COLORS.unconfirmed
   },
   spinner: {
     width: 8,

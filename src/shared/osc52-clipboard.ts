@@ -81,7 +81,8 @@ export function createOsc52OscHandler(deps: {
   getReplaying: () => boolean
   writeClipboardText: (text: string) => Promise<void>
   showBlockedWriteToast?: () => void
-  showWriteFailedToast?: () => void
+  /** Receives the refused text so a web client can retry it from a fresh click. */
+  showWriteFailedToast?: (text: string) => void
 }): (data: string) => boolean {
   // Hostile chunks can issue millions of writes. Coalesce to the last per microtask, roughly one native write per xterm parse yield.
   let pendingText: string | null = null
@@ -98,10 +99,10 @@ export function createOsc52OscHandler(deps: {
           // Microtasks run outside the parser guard; catch synchronous missing/broken bridges as well as rejected writes and surface failures.
           try {
             void deps.writeClipboardText(next)?.catch(() => {
-              reportOsc52ClipboardWriteFailure(deps.showWriteFailedToast)
+              reportOsc52ClipboardWriteFailure(() => deps.showWriteFailedToast?.(next))
             })
           } catch {
-            reportOsc52ClipboardWriteFailure(deps.showWriteFailedToast)
+            reportOsc52ClipboardWriteFailure(() => deps.showWriteFailedToast?.(next))
           }
         }
       })

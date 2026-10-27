@@ -320,7 +320,7 @@ describe('launchAgentBackgroundSession', () => {
   })
 
   it('uses WSL launch quoting for Windows-path projects forced to WSL', async () => {
-    state.projects = [
+    state.endpointProjects = [
       {
         id: 'repo-1',
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }

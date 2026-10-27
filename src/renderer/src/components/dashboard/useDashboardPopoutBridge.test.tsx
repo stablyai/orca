@@ -95,7 +95,8 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     activeWorktreeId: null,
     activeWorkspaceExecutionHostId: null,
     activeRepoId: null,
-    projects: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     removedRuntimeEnvironmentIds: new Set()
   }
 }
@@ -286,6 +287,8 @@ describe('useDashboardPopoutBridge', () => {
       // A folder workspace is not a git worktree; its host resolves through these.
       { folderWorkspaces: [] },
       { projectGroups: [] },
+      { endpointProjects: [] },
+      { endpointProjectHostSetups: [] },
       { restoredRuntimeHostIdByWorkspaceSessionKey: {} },
       { runtimeEnvironments: [] },
       { runtimeEnvironmentCatalogHydrated: true },

@@ -75,7 +75,7 @@ describe('new workspace project targets', () => {
     })
   })
 
-  it('shows one target per host when the project has multiple local worktrees', () => {
+  it('keeps each same-host clone selectable with its concrete target', () => {
     const upstream = { owner: 'stablyai', repo: 'orca' }
     const repos = [
       { id: 'local-a', displayName: 'orca-a', path: '/src/orca-a', upstream },
@@ -88,7 +88,10 @@ describe('new workspace project targets', () => {
         upstream
       }
     ]
-    const projectId = buildNewWorkspaceProjectOptions(repos)[0]?.id ?? null
+    const projects = buildNewWorkspaceProjectOptions(repos)
+    expect(projects.map((project) => project.id)).toEqual(['github:stablyai/orca', 'repo:local-b'])
+    expect(buildNewWorkspaceRunTargetOptions(repos, 'repo:local-b')[0]?.repo).toBe(repos[1])
+    const projectId = projects[0]?.id ?? null
 
     expect(buildNewWorkspaceRunTargetOptions(repos, projectId, 'darwin')).toEqual([
       expect.objectContaining({ id: 'local', label: LOCAL_HOST_LABEL, detail: '/src/orca-a' }),
@@ -98,5 +101,14 @@ describe('new workspace project targets', () => {
         detail: '/home/dev/orca'
       })
     ])
+  })
+  it('uses the complete claim catalog before hiding ineligible create targets', () => {
+    const upstream = { owner: 'acme', repo: 'app' }
+    const repos = [
+      { id: 'a', displayName: 'A', path: '', addedAt: 1, upstream },
+      { id: 'b', displayName: 'B', path: '/b', addedAt: 2, upstream }
+    ]
+    expect(buildNewWorkspaceProjectOptions(repos).map((project) => project.id)).toEqual(['repo:b'])
+    expect(buildNewWorkspaceRunTargetOptions(repos, 'repo:b')[0]?.repo).toBe(repos[1])
   })
 })

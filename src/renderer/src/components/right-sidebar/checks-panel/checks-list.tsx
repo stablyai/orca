@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from './check-details-model'
+import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {

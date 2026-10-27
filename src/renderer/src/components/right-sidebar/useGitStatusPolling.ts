@@ -109,6 +109,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     worktreePath
   })
 
+  // The first status after a workspace becomes active is a user act; later polls stay gated.
+  const wokenWorkspaceRef = useRef<string | null>(null)
   const runFetchStatus = useCallback(
     async (request: {
       reason: GitStatusRefreshReason
@@ -131,6 +133,9 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         if (!copy) {
           return
         }
+        const workspaceKey = `${activeWorktreeId}\0${worktreePath}`
+        const wakeWslDistro = wokenWorkspaceRef.current !== workspaceKey
+        wokenWorkspaceRef.current = workspaceKey
         await refreshGitStatusForWorktree({
           target: copy.transport,
           ownerHostId: copy.hostId,
@@ -144,7 +149,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
             ...(request.reason === 'safety' ? { reuseLineStats: true } : {}),
             signal: request.signal,
             shouldApply: request.shouldApply,
-            onStatusAccepted: publishUpstreamRefWatch
+            onStatusAccepted: publishUpstreamRefWatch,
+            ...(wakeWslDistro ? { wakeWslDistro: true } : {})
           }
         })
       } catch {}

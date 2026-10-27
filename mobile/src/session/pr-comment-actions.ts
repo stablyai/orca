@@ -1,4 +1,5 @@
 import type { PRComment } from '../../../src/shared/github/comment-types'
+import { isMutablePRConversationComment } from '../../../src/shared/github/pr-comment-mutability'
 import type { GitHubOwnerRepo, PRState } from '../../../src/shared/github/pull-request-types'
 
 // Only inline review threads have resolvable node ids; conversation comments cannot resolve.
@@ -51,19 +52,6 @@ export type AddRootCommentParams = { prNumber: number; body: string }
 
 export function buildAddRootCommentParams(prNumber: number, body: string): AddRootCommentParams {
   return { prNumber, body }
-}
-
-// Host edit/delete supports only conversation comments; review comments/replies are immutable here, and GitHub enforces authorship.
-export function isMutablePRConversationComment(
-  comment: Pick<PRComment, 'id' | 'threadId' | 'path' | 'url'>
-): boolean {
-  if (comment.threadId || comment.path) {
-    return false
-  }
-  if (comment.url && comment.url.includes('pullrequestreview')) {
-    return false
-  }
-  return Number.isSafeInteger(comment.id) && comment.id > 0
 }
 
 // Hide mutation controls without a repo slug or mutable comment; these RPCs are slug-addressed.

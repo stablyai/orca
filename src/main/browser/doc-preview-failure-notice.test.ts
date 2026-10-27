@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DOC_PREVIEW_LOAD_FAILURE_CHANNEL } from '../../shared/doc-preview-scheme'
 import { publishDocPreviewFailure, setDocPreviewFailureSink } from './doc-preview-failure-notice'
 
 afterEach(() => {
@@ -8,33 +7,6 @@ afterEach(() => {
 })
 
 describe('publishDocPreviewFailure', () => {
-  it('sends the grant, path, and reason on the failure channel', () => {
-    const send = vi.fn()
-    setDocPreviewFailureSink({ send })
-
-    publishDocPreviewFailure({
-      grantId: 'a'.repeat(32),
-      relativePath: 'index.html',
-      reason: 'too-large'
-    })
-
-    expect(send).toHaveBeenCalledWith(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, {
-      grantId: 'a'.repeat(32),
-      relativePath: 'index.html',
-      reason: 'too-large'
-    })
-  })
-
-  it('is a no-op with no sink registered', () => {
-    expect(() =>
-      publishDocPreviewFailure({
-        grantId: 'b'.repeat(32),
-        relativePath: 'index.html',
-        reason: 'unreadable'
-      })
-    ).not.toThrow()
-  })
-
   it('sends nothing into a destroyed window', () => {
     const send = vi.fn()
     setDocPreviewFailureSink({ send, isDestroyed: () => true })

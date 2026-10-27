@@ -6,10 +6,8 @@ import type {
 import {
   hasPositiveHostedReviewNumberLink,
   hasResolvableHostedReviewPushTargetLink,
-  hasUsableHostedReviewPushTarget,
-  resolveHostedReviewActionUpstreamStatus,
-  resolveHostedReviewStateForActions
-} from './hosted-review-push-target'
+  resolveHostedReviewPushTargetForActions
+} from '../../../../../../shared/hosted-review-push-target'
 import { buildSourceControlManualReviewUrlFromContext } from './manual-review-url'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 
@@ -91,31 +89,27 @@ export function useSourceControlLinkedReviews({
     fallbackGitHubPR: fallbackGitHubPRNumber,
     linkedGitLabMR
   })
-  const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
-    pushTarget: activeWorktree?.pushTarget,
-    upstreamStatus: remoteStatus,
-    hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink,
-    branchName
-  })
-  const hostedReviewStateForActions = resolveHostedReviewStateForActions({
-    hostedReviewState: hostedReview?.state ?? null,
-    hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink
-  })
-  const remoteStatusForActions: SourceControlWorktreeContext['remoteStatus'] = useMemo(
+  const {
+    canUseHostedReviewPushTarget,
+    hostedReviewStateForActions,
+    upstreamStatusForActions: remoteStatusForActions
+  } = useMemo(
     () =>
-      resolveHostedReviewActionUpstreamStatus({
+      resolveHostedReviewPushTargetForActions({
         hasHostedReviewLink,
         hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink,
-        hostedReviewState: hostedReviewStateForActions,
+        hostedReviewState: hostedReview?.state ?? null,
         isHostedReviewStateLoading,
-        canUseHostedReviewPushTarget,
-        upstreamStatus: remoteStatus
+        pushTarget: activeWorktree?.pushTarget,
+        upstreamStatus: remoteStatus,
+        branchName
       }),
     [
-      canUseHostedReviewPushTarget,
+      activeWorktree?.pushTarget,
+      branchName,
       hasHostedReviewLink,
       hasResolvableReviewPushTargetLink,
-      hostedReviewStateForActions,
+      hostedReview?.state,
       isHostedReviewStateLoading,
       remoteStatus
     ]

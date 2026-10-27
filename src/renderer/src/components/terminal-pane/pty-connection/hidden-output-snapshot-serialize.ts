@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isHostAnsweredSnapshotRetryCause } from '@/runtime/remote-runtime-terminal-multiplexer-types'
 import { onTerminalScrollIntentFollowOutput } from '@/lib/pane-manager/terminal-scroll-intent'
 

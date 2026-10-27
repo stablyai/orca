@@ -14,6 +14,7 @@ import {
 } from '../wsl-process-group-termination'
 import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
 import { resolveWslInteropSpawnCwd } from '../../wsl-interop-spawn-directory'
+import { noteWslDistroLaunched } from '../../wsl-background-distro-gate'
 
 // Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
@@ -95,6 +96,8 @@ export function resolveCommand(
   if (!wsl) {
     return { binary: command, args, cwd, wsl: null, wslMode: null }
   }
+  // Every WSL Git/CLI run is about to start the distro; gated polls stop trusting a 'stopped' read.
+  noteWslDistroLaunched(wsl.distro)
 
   const translatedArgs = translateArgsForWsl(args)
   // WSL does not inherit unlisted Windows env vars; carry locale pins in the command.

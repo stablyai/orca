@@ -28,6 +28,8 @@ export type WslHostStatus = {
   detail: string | null
   /** An app update the running server waits to take (e.g. live terminals); Update/Force retry it. */
   deferredUpdate?: WslHostDeferredUpdate | null
+  /** A Remove that could not prove the server stopped; `detail` says why. Remove retries it. */
+  removalPending?: boolean
 }
 
 /** An explicit Update retries a skipped build behind the terminal census; Force also passes it. */
@@ -50,8 +52,14 @@ export type WslHostCapability = {
   serverFiles: boolean
 }
 
-/** What removing a host left behind in its distro. */
-export type WslHostServerStop = { stopped: true } | { stopped: false; reason: string }
+/**
+ * What removing a host left behind in its distro, in the census vocabulary: `live` when something
+ * is proven still running, `unverifiable` when Orca could not tell. `kept` (E11): the host stays
+ * listed with its stop pending, so Remove can retry; older mains removed it anyway.
+ */
+export type WslHostServerStop =
+  | { stopped: true }
+  | { stopped: false; reason: string; verdict?: 'live' | 'unverifiable'; kept?: boolean }
 
 export type WslHostAddFailureKind =
   | 'unsupported-wsl1'

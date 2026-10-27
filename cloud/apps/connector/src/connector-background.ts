@@ -1,3 +1,4 @@
+import type { ConnectorCore } from './connector-core.js'
 import type { ConnectorInbox } from './connector-inbox.js'
 import type { SlackEdge } from './slack-edge.js'
 
@@ -41,18 +42,22 @@ export function startConnectorBackground(runtime: {
     expireDue: ConnectorInbox['expireDue']
     pruneSettled(retentionMs: number): Promise<number>
   }
-  slack?: Pick<SlackEdge, 'onExpired' | 'startBackground'>
+  core: Pick<ConnectorCore, 'onExpired' | 'startBackground'>
+  slack?: Pick<SlackEdge, 'startBackground'>
 }): () => void {
   const stops = [
     every('inbox_expiry', EXPIRY_SWEEP_INTERVAL_MS, async () => {
-      const threads = await runtime.inbox.expireDue(runtime.slack?.onExpired)
+      const threads = await runtime.inbox.expireDue(runtime.core.onExpired)
       if (threads.length > 0) {
-        console.log(JSON.stringify({ event: 'orca_connector_deliveries_expired', threads: threads.length }))
+        console.log(
+          JSON.stringify({ event: 'orca_connector_deliveries_expired', threads: threads.length })
+        )
       }
     }),
     every('inbox_retention', INBOX_PRUNE_INTERVAL_MS, () =>
       runtime.inbox.pruneSettled(INBOX_RETENTION_MS)
     ),
+    runtime.core.startBackground(),
     runtime.slack?.startBackground() ?? (() => {})
   ]
   return () => {

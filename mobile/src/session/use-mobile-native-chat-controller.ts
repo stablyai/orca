@@ -3,21 +3,21 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
-import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
+import { useMobileNativeChatAskDismiss } from './native-chat/input/use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './native-chat/composer/use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatStreamPreview } from './native-chat/mobile-native-chat-streaming-gate'
-import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
+import { useMobileNativeChatSessionOptionController } from './native-chat/input/use-mobile-native-chat-session-option-controller'
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
-import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
+import { useMobileNativeChatPrompts } from './native-chat/input/use-mobile-native-chat-prompts'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
-import { useMobileNativeChatPromptCards } from './use-mobile-native-chat-prompt-cards'
+import { useMobileNativeChatPromptCards } from './native-chat/input/use-mobile-native-chat-prompt-cards'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -131,9 +131,8 @@ export function useMobileNativeChatController(args: {
   )
   const {
     permission: legacyNativeChatPermission,
-    question: legacyQuestion,
-    detectedAsk: nativeChatDetectedAsk,
     ask: nativeChatAskPrompt,
+    waitStartedAt: nativeChatPromptStartedAt,
     structuredAnswer
   } = useMobileNativeChatPrompts({
     enabled: activeChatStructured || activeChatResolution != null,
@@ -149,10 +148,10 @@ export function useMobileNativeChatController(args: {
   const promptScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
   const askDismissal = useMobileNativeChatAskDismiss({
     ask: nativeChatAskPrompt,
-    detectedAsk: nativeChatDetectedAsk,
+    startedAt: nativeChatPromptStartedAt,
     scopeKey: promptScopeKey,
     sessionKey: activeChatSessionId,
-    observing: showNativeChat && (nativeChatDetectedAsk != null || nativeChatTranscriptSettled)
+    observing: showNativeChat && (nativeChatAskPrompt != null || nativeChatTranscriptSettled)
   })
 
   // Require both input lease and live connection; remembered-only agents may now be shells and must never receive chat writes.
@@ -184,7 +183,6 @@ export function useMobileNativeChatController(args: {
   const {
     send: handleNativeChatSend,
     sendWithOutcome: handleNativeChatSendWithOutcome,
-    answerQuestion: legacyHandleNativeChatQuestionAnswer,
     dispatchCommand: handleNativeChatDispatchCommand
   } = useMobileNativeChatMessageSend({
     client,
@@ -245,13 +243,11 @@ export function useMobileNativeChatController(args: {
   const promptCards = useMobileNativeChatPromptCards({
     terminal: {
       permission: legacyNativeChatPermission,
-      question: legacyQuestion,
-      waitStartedAt: nativeChatStatus?.stateStartedAt ?? null,
+      waitStartedAt: nativeChatPromptStartedAt,
       scopeKey: promptScopeKey,
       sessionKey: streamIdentity,
       observing: showNativeChat && !activeChatStructured && nativeChatStatus != null,
-      respondPermission: legacyHandleNativeChatRespondPermission,
-      answerQuestion: legacyHandleNativeChatQuestionAnswer
+      respondPermission: legacyHandleNativeChatRespondPermission
     },
     structured: activeChatStructured ? structuredNativeChat : null,
     onSendResolved

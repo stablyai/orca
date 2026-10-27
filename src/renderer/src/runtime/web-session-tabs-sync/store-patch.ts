@@ -22,6 +22,7 @@ import {
   hostWorkingClientBoundaryByPaneKey,
   type WebSessionTabsSyncState
 } from './state'
+import { reportVisibleTabPickToHost } from '../web-session-visible-tab-pick-report'
 import {
   createHostSessionMirrorSettle,
   type HostSessionMirrorPatchVerdict,
@@ -195,6 +196,7 @@ export function applyWebSessionTabsStorePatch(
         toRuntimeExecutionHostId(environmentId),
         publishedStructuredSessions([source])
       )
+      reportVisibleTabPickToHost(environmentId, source)
     }
   }
   const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)

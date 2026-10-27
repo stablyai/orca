@@ -3,7 +3,7 @@ import { LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
-import type { GitHubPRReviewerRow } from '@/components/github-pr-reviewer-display'
+import type { GitHubPRReviewerRow } from '../../../../../shared/github/pr-reviewer-display'
 import { translate } from '@/i18n/i18n'
 
 export function PRReviewersRequestedList({

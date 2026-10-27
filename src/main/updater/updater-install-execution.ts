@@ -40,7 +40,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         version: pendingVersion || null
       })
       // The preload prepares renderer state before invoking; explicitly release it when main refuses.
-      this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+      this.sendToMainWindow('updater:quitAndInstallAborted')
       return
     }
     if (linuxPackageType === 'unusable') {
@@ -50,7 +50,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         { level: 'warn', message: 'Linux package marker is unusable; native install blocked' }
       )
       // The preload prepares renderer state before invoking; release it when the marker is unknown.
-      this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+      this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
         message: LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE,

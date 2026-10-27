@@ -22,6 +22,8 @@ type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewM
 export type EditorPanelContentLoadOptions = {
   force?: boolean
   externalEventGeneration?: number
+  /** The active tab's load or its Retry: a user act that may start a stopped WSL distro. */
+  wakeWslDistro?: boolean
 }
 
 type UseEditorPanelExternalContentEventsParams = {

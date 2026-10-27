@@ -8,3 +8,6 @@ export function orcadAgentBrowserNativeName(
     platformName === 'linux' && linuxLibc === 'musl' ? 'linux-musl' : platformName
   return `agent-browser-${platformToken}-${architecture}${ext}`
 }
+
+/** Set by `orca serve` for orcad: the app's bundled driver, since desktop orcad slots omit it. */
+export const ORCAD_AGENT_BROWSER_DRIVER_ENV = 'ORCA_AGENT_BROWSER_DRIVER'

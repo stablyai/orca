@@ -83,7 +83,8 @@ describe('browserManager', () => {
       on: guestOnMock,
       prependListener: vi.fn(),
       off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com')
     }
     webContentsFromIdMock.mockReturnValue(guest)
 
@@ -689,7 +690,8 @@ describe('browserManager', () => {
       on: guestOnMock,
       prependListener: vi.fn(),
       off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com')
     }
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {

@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import {
-  agentMainAgentVerdict,
-  agentVerdictDisplayMark
-} from '../../../src/shared/agent-main-agent-verdict'
 import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
 import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 import {
   agentDisplayLabel,
   agentDotState,
-  agentIdentityLabel,
   agentRowTimeAt,
-  agentRowVerdict,
-  agentRowVerdictMark,
   formatTimeAgo
 } from './agent-row-display'
 
@@ -53,85 +46,18 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'unknown-state' as never }), 0)).toBe('idle')
   })
 
-  it("reports the verdict of a done row: failed, or a user's Stop (also an old host's flag) as interrupted", () => {
-    expect(agentDotState(row({ state: 'done', interrupted: true }), 0)).toBe('interrupted')
-    expect(agentDotState(row({ state: 'done', ...mainAgentDone('failure') }), 0)).toBe('failed')
-    expect(
-      agentDotState(row({ state: 'done', ...mainAgentDone('cancellation'), interrupted: true }), 0)
-    ).toBe('interrupted')
-    expect(agentDotState(row({ state: 'done', ...mainAgentDone('success') }), 0)).toBe('done')
-    expect(agentDotState(row({ state: 'done', ...mainAgentDone('superseded') }), 0)).toBe(
-      'interrupted'
-    )
-  })
-
-  it('reads a crash-cut turn as failed and an unproven end as unconfirmed', () => {
-    expect(agentDotState(row({ state: 'done', ...mainAgentDone('interruption') }), 0)).toBe(
-      'failed'
-    )
-    expect(agentDisplayLabel(row({ state: 'done', ...mainAgentDone('interruption') }), 0)).toBe(
-      'Failed'
-    )
-    expect(agentDotState(row({ state: 'done', ...mainAgentDone('unconfirmed') }), 0)).toBe(
-      'unconfirmed'
-    )
+  it('lets the shared verdict mark win over the row state, label included', () => {
+    expect(agentDotState(row({ state: 'working', ...mainAgentDone('failure') }), 0)).toBe('failed')
     expect(agentDisplayLabel(row({ state: 'done', ...mainAgentDone('unconfirmed') }), 0)).toBe(
       'Couldn’t confirm'
     )
   })
 
-  // Unparsed rows may carry a future outcome; keep the done fallback.
-  it('reads a done row carrying an outcome it cannot name as done', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an arm from a newer host, which the unparsed wire row can carry.
-    const future = mainAgentDone('from-a-newer-host' as Outcome)
-    expect(agentDotState(row({ state: 'done', ...future }), 0)).toBe('done')
-  })
-
-  it('shows a main agent that failed while its subagents still run as failed', () => {
-    expect(agentDotState(row({ state: 'working', ...mainAgentDone('failure') }), 0)).toBe('failed')
-    expect(agentDotState(row({ state: 'waiting', ...mainAgentDone('failure') }), 0)).toBe('failed')
-    expect(agentDotState(row({ state: 'working', ...mainAgentDone('interruption') }), 0)).toBe(
-      'failed'
-    )
-    expect(agentDotState(row({ state: 'working', ...mainAgentDone('success') }), 0)).toBe('working')
-    expect(
-      agentDotState(
-        row({ state: 'working', ...mainAgentDone('cancellation'), interrupted: true }),
-        0
-      )
-    ).toBe('working')
-  })
-
-  // App code cannot import the desktop accessor; pin the mirror against it.
-  it('agrees with the desktop verdict accessor on every row', () => {
-    const states = ['working', 'blocked', 'waiting', 'done'] as const
-    const mainAgents = [
-      undefined,
-      ...states.flatMap((state) =>
-        [undefined, ...AGENT_TURN_OUTCOMES].map((outcome) => ({
-          state,
-          ...(outcome ? { outcome } : {}),
-          stateStartedAt: 0
-        }))
-      )
-    ]
-    for (const state of states) {
-      for (const mainAgent of mainAgents) {
-        for (const interrupted of [false, true]) {
-          const agentRow = { state, interrupted, ...(mainAgent ? { mainAgent } : {}) }
-          expect(agentRowVerdict(agentRow), JSON.stringify(agentRow)).toBe(
-            agentMainAgentVerdict(agentRow)
-          )
-          expect(agentRowVerdictMark(agentRow), JSON.stringify(agentRow)).toBe(
-            agentVerdictDisplayMark(agentRow)
-          )
-        }
-      }
-    }
-  })
-
   it('decays a stale active state to idle, matching desktop', () => {
     const stale = 1_800_001
+    expect(agentDotState(row({ state: 'working', updatedAt: 0, hasLivePty: true }), stale)).toBe(
+      'unverifiable'
+    )
     expect(agentDotState(row({ state: 'working', updatedAt: 0 }), stale)).toBe('idle')
     expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), stale)).toBe('idle')
     expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), stale)).toBe('idle')
@@ -208,14 +134,11 @@ describe('agentDisplayLabel', () => {
       'Idle'
     )
   })
-})
 
-describe('agentIdentityLabel', () => {
-  it('maps known agent types and falls back to initials', () => {
-    expect(agentIdentityLabel('claude')).toBe('CL')
-    expect(agentIdentityLabel('codex')).toBe('CX')
-    expect(agentIdentityLabel('mystery')).toBe('MY')
-    expect(agentIdentityLabel(null)).toBe('')
+  it('keeps the task text on a silent row and names the silence when there is none', () => {
+    const silent = row({ state: 'working', updatedAt: 0, hasLivePty: true })
+    expect(agentDisplayLabel({ ...silent, prompt: 'build' }, 40 * 60_000)).toBe('build')
+    expect(agentDisplayLabel(silent, 40 * 60_000)).toBe('No recent update')
   })
 })
 

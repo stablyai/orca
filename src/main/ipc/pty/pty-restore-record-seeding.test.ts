@@ -20,6 +20,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { getPtyIdForPaneKey } from './pane/key-state'
 import { setLocalPtyProvider } from './provider/registry'
+import { buildFreshShellViewportBlankingSequence } from '../../../shared/terminal-fresh-shell-viewport'
 
 vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -110,10 +111,11 @@ describe('registerPtyHandlers', () => {
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
+    // Restored history, then the fresh shell's viewport below it (verify-15b `$ $`).
     expect(runtime.seedHeadlessTerminal).toHaveBeenNthCalledWith(
       1,
       'pty-cold-restore',
-      'restored history\r\n',
+      `restored history\r\n${buildFreshShellViewportBlankingSequence(43)}`,
       { cols: 132, rows: 43 },
       { cwd: '/projects/restored', oscLinks, preferProviderIfExisting: true }
     )
@@ -123,7 +125,7 @@ describe('registerPtyHandlers', () => {
     expect(runtime.seedHeadlessTerminal).toHaveBeenNthCalledWith(
       2,
       'pty-legacy-cold-restore',
-      'legacy history\r\n',
+      `legacy history\r\n${buildFreshShellViewportBlankingSequence(24)}`,
       undefined,
       { cwd: '/projects/legacy', oscLinks: undefined, preferProviderIfExisting: true }
     )

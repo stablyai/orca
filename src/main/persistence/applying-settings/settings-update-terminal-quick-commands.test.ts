@@ -7,7 +7,7 @@ import {
   MAX_TERMINAL_QUICK_COMMANDS_SERIALIZED_BYTES
 } from '../../../shared/terminal-quick-command-prompt-limit'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-rpc-content-budget'
-import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { updateSettings, type SettingsMutationOperations } from './settings-update'
 import {
   CreateAgentSessionParams,

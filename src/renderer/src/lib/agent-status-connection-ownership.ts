@@ -1,7 +1,7 @@
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
-} from '../../../shared/remote-runtime-pty-id'
+} from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 

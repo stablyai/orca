@@ -6,7 +6,7 @@ import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-i
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
-import { getPRReviewerRows } from './pr-checks-presentation'
+import { getGitHubPRReviewerRows } from '../../../../src/shared/github/pr-reviewer-display'
 import { ReviewerPickerDrawer } from './ReviewerPickerDrawer'
 import { PRSection } from './PRSection'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
@@ -26,7 +26,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
   const authoritativeRows = useMemo(
     () =>
       details?.item && !isPrSidebarDetailsPlaceholder(details)
-        ? getPRReviewerRows(details.item)
+        ? getGitHubPRReviewerRows(details.item)
         : [],
     [details]
   )

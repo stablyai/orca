@@ -26,13 +26,6 @@ import type { CodexAccountSelectionTarget } from '../../../shared/codex-selectio
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
-// Wait for shell readiness beyond the daemon fast-path timeout; launchAgent:codex also gates managed-auth handoff and correct account recording.
-export const CODEX_ACCOUNT_RESTART_STARTUP = {
-  command: 'codex',
-  startupCommandDelivery: 'shell-ready',
-  launchAgent: 'codex'
-} as const
-
 export type CodexPaneScanResult = {
   ptyId: string
   /** The pane may be shown a restart prompt (see isCodexRestartEligiblePane). */

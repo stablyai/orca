@@ -10,6 +10,7 @@ import { acquireElectronDebugger } from './electron-debugger-lease'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
+import { agentBrowserSetMediaArguments } from './agent-browser-set-media-arguments'
 
 export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
   async mouseClick(
@@ -38,6 +39,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         const lease = acquireElectronDebugger(wc)
         let releaseFocusGuard = (): void => {}
         try {
+          await this.waitForPagePaint(wc, target.webContentsId)
           await this.browserManager.showAgentPointer(wc, { type: 'mouseMoved', x, y })
           releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
           // Hit testing can activate an element; recheck access after awaiting focus.
@@ -151,14 +153,8 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
+    const args = agentBrowserSetMediaArguments(colorScheme, reducedMotion)
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['set', 'media']
-      if (colorScheme) {
-        args.push(colorScheme)
-      }
-      if (reducedMotion) {
-        args.push(reducedMotion)
-      }
       return await this.execAgentBrowser(sessionName, args)
     })
   }

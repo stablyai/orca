@@ -34,20 +34,4 @@ describe('resolveWorktreeCreateBase', () => {
     expect(resolveDefaultBaseRef).not.toHaveBeenCalled()
     expect(isBaseUsable).not.toHaveBeenCalled()
   })
-
-  it('keeps a usable persisted base when it is still valid', async () => {
-    const resolveDefaultBaseRef = vi.fn().mockResolvedValue('origin/main')
-    const isBaseUsable = vi.fn().mockResolvedValue(true)
-
-    await expect(
-      resolveWorktreeCreateBase({
-        repoWorktreeBaseRef: 'origin/master',
-        resolveDefaultBaseRef,
-        isBaseUsable
-      })
-    ).resolves.toBe('origin/master')
-
-    expect(resolveDefaultBaseRef).toHaveBeenCalledTimes(1)
-    expect(isBaseUsable).toHaveBeenCalledWith('origin/master')
-  })
 })

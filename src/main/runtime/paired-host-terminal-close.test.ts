@@ -1,6 +1,6 @@
 // CLI close must route to the paired runtime that owns the process, not claim a local stop of its remote id (STA-7826).
 import { describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 

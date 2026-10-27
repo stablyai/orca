@@ -59,6 +59,8 @@ export function useAiVaultSearch(
     }
     let cancelled = false
     let pending = false
+    const search = (query: AiVaultSearchRequest, host: ExecutionHostScope) =>
+      window.api.aiVault.searchSessions(query, host, () => !cancelled)
     let followUp = false
     let started = false
     async function run(cursor?: string, revalidate = false) {
@@ -77,14 +79,14 @@ export function useAiVaultSearch(
         loading: true
       }))
       try {
-        let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
+        let response = await search({ ...request, cursor }, scope)
         let append = Boolean(cursor)
         if (!isCurrent()) {
           return
         }
         if (response.kind === 'stale-cursor') {
           append = false
-          response = await window.api.aiVault.searchSessions(request, scope)
+          response = await search(request, scope)
         }
         if (!isCurrent()) {
           return
@@ -170,7 +172,8 @@ export function useAiVaultPanelSearch(
   /** Which scope the host resolves; undefined searches everything it has. */
   within: AiVaultSearchScopeIdentity | undefined,
   executionHostScope: ExecutionHostScope,
-  sort: AiVaultSearchSort
+  sort: AiVaultSearchSort,
+  canonicalProjectKey?: string
 ) {
   const settings = useAppStore((state) => state.settings?.aiVaultSearch)
   const policy = resolveAiVaultSearchSettings({ aiVaultSearch: settings })
@@ -193,10 +196,17 @@ export function useAiVaultPanelSearch(
         ? {
             query: trimmed,
             filters: { agents: [...agents], ...(sort === 'relevance' ? {} : { sort }) },
-            ...(within ? { within } : {})
+            ...(within
+              ? {
+                  within:
+                    within.kind === 'project' && canonicalProjectKey
+                      ? { ...within, canonicalProjectKey }
+                      : within
+                }
+              : {})
           }
         : null,
-    [searching, scope, agents, trimmed, within, sort]
+    [searching, scope, agents, trimmed, within, sort, canonicalProjectKey]
   )
   const search = useAiVaultSearch(request, scope, JSON.stringify(policy))
   const hostSearchOff =

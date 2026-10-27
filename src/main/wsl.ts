@@ -11,7 +11,8 @@ import {
 import { wslExeProcessSpec, wslExeStdout } from './wsl-exe-process'
 import {
   _resetRunningWslDistroCacheForTests,
-  resolveRunningWslDistros
+  resolveRunningWslDistros,
+  type RunningWslDistroReadOptions
 } from './wsl-running-distro-cache'
 import {
   getWslDirectoryProbeArgs,
@@ -184,7 +185,7 @@ export async function listWslDistrosAsync(): Promise<string[]> {
 }
 
 export async function listRunningWslDistrosAsync(
-  options: { requireConfirmed?: boolean } = {}
+  options: RunningWslDistroReadOptions = {}
 ): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []

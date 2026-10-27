@@ -275,6 +275,8 @@ describe('createWorktree base status merge', () => {
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
       ...created,
+      projectId: 'repo:repo-remote',
+      projectHostSetupId: 'repo-remote',
       hostId: 'runtime:env-1',
       runtimeOwnerEnvironmentId: 'env-1'
     })

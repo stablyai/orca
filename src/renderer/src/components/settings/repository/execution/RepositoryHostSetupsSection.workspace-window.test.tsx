@@ -68,8 +68,8 @@ function makeStatus(overrides: Partial<RuntimeStatus>): RuntimeStatus {
 function renderWithOwnerStatus(status: RuntimeStatus | null): void {
   useAppStore.setState({
     repos: [repo],
-    projects: [project],
-    projectHostSetups: [setup],
+    endpointProjects: [project],
+    endpointProjectHostSetups: [setup],
     runtimeStatusByEnvironmentId: new Map([['hub', { checkedAt: 1, appVersion: '1.8.0', status }]])
   })
   act(() => {
@@ -137,8 +137,8 @@ describe('RepositoryHostSetupsSection workspace window availability', () => {
   it('does not mark a transport-connected but unavailable runtime setup Ready', () => {
     useAppStore.setState({
       repos: [repo],
-      projects: [project],
-      projectHostSetups: [setup],
+      endpointProjects: [project],
+      endpointProjectHostSetups: [setup],
       runtimeStatusByEnvironmentId: new Map([
         [
           'hub',

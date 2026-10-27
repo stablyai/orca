@@ -6,7 +6,10 @@ import {
   formatFileLinkLocation,
   parseFileLinkLocation
 } from '../../../../shared/file-link-location'
-import { extractTerminalFileLinks, type ParsedTerminalFileLink } from '@/lib/terminal-links'
+import {
+  extractTerminalFileLinks,
+  type ParsedTerminalFileLink
+} from '../../../../shared/terminal-links'
 import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 
 type MarkdownNode = {

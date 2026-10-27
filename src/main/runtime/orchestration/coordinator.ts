@@ -14,6 +14,7 @@ import {
   warnStaleDispatches
 } from './coordinator-task-dispatch'
 import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../../../shared/nested-worker-depth'
+import { ORCHESTRATION_HEARTBEAT_INTERVAL_MINUTES } from '../../../shared/orchestration-heartbeat'
 
 export type CoordinatorOptions = {
   spec: string
@@ -156,11 +157,18 @@ export class Coordinator {
     this.state.phase = 'dispatching'
   }
 
+  // Null means heartbeats are off, so `??` cannot supply the fake runtime's default.
+  private heartbeatIntervalMinutes(): number | null {
+    return this.runtime.getOrchestrationHeartbeatMinutes
+      ? this.runtime.getOrchestrationHeartbeatMinutes()
+      : ORCHESTRATION_HEARTBEAT_INTERVAL_MINUTES
+  }
+
   private async tick(): Promise<boolean> {
     this.processMessages()
     this.processEscalations()
     reblockTasksWithPendingGates(this.db)
-    warnStaleDispatches(this.db, this.opts.onLog)
+    warnStaleDispatches(this.db, this.opts.onLog, this.heartbeatIntervalMinutes())
     await this.dispatchReadyTasks()
     return this.checkConvergence()
   }
@@ -287,6 +295,7 @@ export class Coordinator {
           worktree: this.opts.worktree,
           nestedWorkerMaxDepth:
             this.runtime.getNestedWorkerMaxDepth?.() ?? NESTED_WORKER_MAX_DEPTH_DEFAULT,
+          heartbeatIntervalMinutes: this.heartbeatIntervalMinutes(),
           onLog: this.opts.onLog,
           onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId)
         })

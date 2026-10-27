@@ -38,7 +38,7 @@ import { MobileNativeChatResolutionReceipt } from './MobileNativeChatResolutionR
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
-} from '../../../src/shared/native-chat-ask-row'
+} from '../../../src/shared/native-chat/input/native-chat-ask-row'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { ToolRun } from './MobileNativeChatToolRun'

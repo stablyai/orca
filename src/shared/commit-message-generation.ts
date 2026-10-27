@@ -27,11 +27,12 @@ function limitSection(value: string, maxChars: number): string {
 
 export function buildCommitMessagePrompt(
   context: CommitMessageDraftContext,
-  customPrompt: string
+  customPrompt: string,
+  diffBudget?: number
 ): string {
   // Oversized patches are omitted; use the file summary and tell the agent why.
   const patch = context.stagedPatch.trim()
-    ? truncateDiffForPrompt(context.stagedPatch)
+    ? truncateDiffForPrompt(context.stagedPatch, diffBudget)
     : '(diff omitted — too large to read; infer the change from the staged file list above)'
   const base = [
     'You are generating a single git commit message.',

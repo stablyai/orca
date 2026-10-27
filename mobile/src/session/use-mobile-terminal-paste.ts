@@ -1,4 +1,8 @@
 import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
+import {
+  normalizeTerminalPasteLineEndings,
+  wrapTerminalBracketedPasteText
+} from '../../../src/shared/terminal-bracketed-paste-text'
 import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback, type RefObject } from 'react'
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'
@@ -13,16 +17,14 @@ import {
 } from './mobile-clipboard-image'
 import { resizeMobileClipboardImage } from './mobile-clipboard-image-resize'
 
+// Match xterm's paste(): newlines become CR, and DECSET 2004 frames the text with ESC made inert.
 function buildMobileTerminalClipboardTextPayload(
   text: string,
   modes: TerminalModes | undefined
 ): string {
-  const wrap = modes?.bracketedPasteMode === true && !modes.altScreen
-  // Why: strip embedded bracketed-paste markers so copied text cannot terminate
-  // paste mode early and turn trailing bytes into shell commands.
-  // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
-  const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
-  return wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
+  return modes?.bracketedPasteMode === true
+    ? wrapTerminalBracketedPasteText(text)
+    : normalizeTerminalPasteLineEndings(text)
 }
 
 type UseMobileTerminalPasteOptions = {
