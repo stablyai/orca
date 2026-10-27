@@ -1,18 +1,17 @@
 import { useMemo } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
+import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import { getRuntimeTargetHostId } from '@/runtime/runtime-client-target'
 import { useSkillDiscoveryHostLabel } from '../skills/use-skill-discovery-host-label'
 
 export type AgentSkillHostScope = { hostId: ExecutionHostId; label: string }
 
 /** Names the machine whose skill folders were read; null while that host is unresolved. */
-export function useAgentSkillHostScope(
-  runtime: Pick<
-    ReturnType<typeof useActiveProjectSkillRuntime>,
-    'agentRuntime' | 'bundledSkillTarget'
-  >
-): AgentSkillHostScope | null {
+export function useAgentSkillHostScope(runtime: {
+  agentRuntime?: ProjectAgentSkillRuntime
+  bundledSkillTarget: BundledSkillTarget | null
+}): AgentSkillHostScope | null {
   const target = runtime.bundledSkillTarget?.kind === 'ssh' ? null : runtime.bundledSkillTarget
   const targetLabel = useSkillDiscoveryHostLabel(target)
   // COMPAT(wsl-bridge): this machine reads the distro's home, so name the distro.
