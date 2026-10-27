@@ -1,17 +1,27 @@
 import { useCallback } from 'react'
 import type { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { unnestWorktrees } from './worktree-unnest'
-import { shouldSuppressContextMenuFollowUpClick } from './worktree-context-menu-policy'
+import {
+  getBulkDetachTargets,
+  shouldSuppressContextMenuFollowUpClick
+} from './worktree-context-menu-policy'
 
 export function useWorktreeContextMenuSecondaryActions(args: {
   activeContextWorktrees: readonly Worktree[]
   contextMenuOpenedAtRef: React.MutableRefObject<number | null>
   updateWorktreeLineage: ReturnType<typeof useAppStore.getState>['updateWorktreeLineage']
+  worktreeLineageById: AppState['worktreeLineageById']
+  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
 }) {
   const handleRemoveParentLink = useCallback(() => {
     void unnestWorktrees(
-      args.activeContextWorktrees.map((item) => item.id),
+      getBulkDetachTargets(
+        args.activeContextWorktrees,
+        args.worktreeLineageById,
+        args.workspaceLineageByChildKey
+      ).map((item) => item.id),
       args.updateWorktreeLineage
     )
   }, [args])
