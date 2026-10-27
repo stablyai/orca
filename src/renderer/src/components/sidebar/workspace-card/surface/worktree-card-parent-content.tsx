@@ -2,6 +2,7 @@ import React from 'react'
 
 import { cn } from '@/lib/class-names'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { WorktreeCardChangesStripe } from '../changes/WorktreeCardChangesStripe'
 import { WorktreeCardHeader } from './worktree-card-header'
 import { WorktreeCardMetaRow } from '../metadata/worktree-card-meta-row'
 import { WorktreeCardIdentityHover } from '../details/worktree-card-details-items'
@@ -59,6 +60,7 @@ export function WorktreeCardParentContent({
       }
       data-worktree-card-parent-content=""
     >
+      <WorktreeCardChangesStripe worktree={worktree} />
       {showCombinedStatusSlot ? (
         <WorktreeCardStatusLane card={card} showUnreadAction={showUnreadQuickAction} />
       ) : null}

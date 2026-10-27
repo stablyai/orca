@@ -8047,6 +8047,11 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "WorktreeCardChangesStripe": {
+          "changeCount_capped": "{{count}}+ uncommitted or untracked changes",
+          "changeCount_one": "{{count}} uncommitted or untracked change",
+          "changeCount_other": "{{count}} uncommitted or untracked changes"
         }
       },
       "shared": {
@@ -10609,7 +10614,16 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "showWorktreeUncommittedChanges": {
+              "title": "Mark workspaces with uncommitted changes",
+              "description": "Show a stripe on workspace cards whose checkout has uncommitted or untracked changes.",
+              "uncommitted": "uncommitted",
+              "changes": "changes",
+              "dirty": "dirty",
+              "git": "git",
+              "workspace": "workspace"
+            }
           }
         },
         "auto": {
