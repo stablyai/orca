@@ -34,6 +34,8 @@ export type BuildPtyHostEnvOptions = {
   routeBrowserOpensToClient?: boolean
   /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
   deferGitConfigGuardToDaemon?: boolean
+  /** Session restart keeps a recorded OpenCode or Devin home instead of the active profile. */
+  preserveRecordedManagedAccount?: boolean
 }
 
 export type CodexHomeLaunchContext = {

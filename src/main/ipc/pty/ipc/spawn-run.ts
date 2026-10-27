@@ -17,6 +17,12 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
+import { sessionRestartRefusalError } from '../../../../shared/session-restart-refusal'
+import { antigravitySessionRestartRefusal } from '../../../antigravity/native-account-launch'
+import {
+  prepareStrictClaudeRestart,
+  strictCodexSessionRestartRefusal
+} from './spawn-recorded-account'
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpcArgs) {
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
@@ -97,6 +103,17 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
     ...(args.replacesPtyId !== undefined
       ? {
           replace: async () => {
+            const claudeRefusal = prepareStrictClaudeRestart(args)
+            const refusal =
+              claudeRefusal ??
+              (await strictCodexSessionRestartRefusal(
+                deps.options?.prepareCodexSessionResume,
+                args
+              )) ??
+              antigravitySessionRestartRefusal(args)
+            if (refusal) {
+              throw sessionRestartRefusalError(refusal)
+            }
             ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
               replacesPtyId: args.replacesPtyId!,
               paneKey: resolveEarlyPaneKey(args),

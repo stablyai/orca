@@ -18,7 +18,11 @@ import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   // Daemon providers bypass LocalPtyProvider environment assembly; inject the same host-local state here.
-  const baseEnvWithAuth = ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env
+  // A strict session restart already kept the recorded Claude home in preflight.
+  const baseEnvWithAuth =
+    ctx.claudeAuth && args.resumeOnSelectedAccount !== false
+      ? { ...args.env, ...ctx.claudeAuth.envPatch }
+      : args.env
   const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
   const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
   const verifiedPaneKey =
@@ -125,6 +129,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     connectionId: args.connectionId,
     isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
     env: ctx.spawnEnv ?? ctx.baseEnv,
-    envToDelete: args.envToDelete
+    envToDelete: args.envToDelete,
+    resumeOnSelectedAccount: args.resumeOnSelectedAccount
   })
 }

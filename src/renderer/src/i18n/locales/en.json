@@ -587,6 +587,30 @@
       "actionPermissions": {
         "sameAsAgent": "Same as {{agent}}"
       }
+    },
+    "manageSessions": {
+      "commandRestartDescription": "Exit the current process and run your command in the same pane. Include the original flags and any account settings. This command is not modified automatically.",
+      "commandResumeHint": "To keep this conversation, include your CLI’s resume option with",
+      "commandNoSessionHint": "No conversation ID was recorded. Use an explicit resume command to restore a chat; a normal launch command starts a new chat.",
+      "commandLabel": "Launch command",
+      "commandPlaceholder": "Paste the full CLI command",
+      "commandStarted": "Command launched in the existing pane. Check the terminal for conversation restoration.",
+      "commandClose": "Close",
+      "commandCancel": "Cancel",
+      "commandRunning": "Restarting…",
+      "commandRun": "Exit and run command",
+      "commandTitle": "Restart {{agent}} in this terminal",
+      "commandMenu": "Restart {{agent}} with command…",
+      "restartAgents": "Restart agents",
+      "restartDetails": "Details",
+      "dismissRestartResults": "Dismiss",
+      "restartAvailability": "Restart availability",
+      "restartOtherHost": "This computer cannot replace agents on another host, so those sessions were left running.",
+      "queuedLabel": "Queued",
+      "pendingLabel": "Pending",
+      "restartedLabel": "Restarted",
+      "failedLabel": "Failed",
+      "skippedLabel": "Skipped"
     }
   },
   "menu": {
@@ -11601,7 +11625,8 @@
             "454df22a5e": "fish",
             "ddd5efe113": "shell",
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
-            "1733ccd3e9": "Terminal shell"
+            "1733ccd3e9": "Terminal shell",
+            "restartAgents": "restart agents"
           },
           "windows": {
             "search": {

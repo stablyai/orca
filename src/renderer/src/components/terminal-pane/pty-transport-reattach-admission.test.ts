@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeTerminalTab } from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   flushPtySideEffects,
   installIpcPtyWindow,
@@ -21,6 +22,91 @@ describe('createIpcPtyTransport', () => {
 
   afterEach(() => {
     restorePtySpecWindow(originalWindow)
+  })
+
+  it('delivers resumed output and old-pty output through the transport callbacks', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { reattachRefusedSessionRestart } =
+      await import('./pty-connection/session-restart-refusal-reattach')
+    const { useAppStore } = await import('@/store')
+    const { SESSION_RESTART_REFUSED_BEFORE_STOP } =
+      await import('../../../../shared/session-restart-refusal')
+    useAppStore.setState({
+      tabsByWorktree: { wt: [makeTerminalTab({ id: 'tab', worktreeId: 'wt', generation: 1 })] },
+      terminalLayoutsByTabId: {}
+    })
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'pty-new' })
+    const resumed: string[] = []
+    const transport = createIpcPtyTransport({ resumeOnSelectedAccount: false })
+    const connecting = transport.connect({
+      url: '',
+      resumeOnSelectedAccount: false,
+      claimReplacedPtyId: () => 'pty-old',
+      callbacks: { onData: (data) => resumed.push(data) }
+    })
+    onData?.({ id: 'pty-new', data: 'resumed' })
+    await connecting
+    expect(resumed).toEqual(['resumed'])
+
+    const kept: string[] = []
+    const callbacks = { onData: (data: string) => kept.push(data) }
+    const reattached = createIpcPtyTransport({})
+    await reattachRefusedSessionRestart(
+      {
+        disposed: false,
+        transportStreamGeneration: 1,
+        tabGeneration: 1,
+        cols: 80,
+        rows: 24,
+        pane: { leafId: 'leaf' },
+        deps: { tabId: 'tab', worktreeId: 'wt' },
+        transport: reattached,
+        bindActivePanePty: () => true
+      },
+      new Error(
+        `Error invoking remote method 'pty:spawn': Error: ${SESSION_RESTART_REFUSED_BEFORE_STOP}: prove`
+      ),
+      callbacks,
+      1,
+      'pty-old'
+    )
+    onData?.({ id: 'pty-old', data: 'still-live' })
+    expect(kept).toEqual(['still-live'])
+    expect(reattached.getPtyId()).toBe('pty-old')
+  })
+
+  it('sends resumeOnSelectedAccount false when a mounted session restart connects', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'pty-new' })
+
+    await createIpcPtyTransport({ resumeOnSelectedAccount: false }).connect({
+      url: '',
+      callbacks: {},
+      claimReplacedPtyId: () => 'pty-old'
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ resumeOnSelectedAccount: false, replacesPtyId: 'pty-old' })
+    )
+  })
+
+  it('omits resumeOnSelectedAccount when an account-switch restart connects', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'pty-new' })
+
+    await createIpcPtyTransport({}).connect({
+      url: '',
+      callbacks: {},
+      claimReplacedPtyId: () => 'pty-old'
+    })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ replacesPtyId: 'pty-old' }))
+    expect(spawn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ resumeOnSelectedAccount: false })
+    )
   })
 
   it('retires an adopted PTY when recovery disconnects before a replacement spawn', async () => {

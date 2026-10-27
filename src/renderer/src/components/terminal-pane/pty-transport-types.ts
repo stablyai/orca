@@ -190,6 +190,8 @@ export type PtyTransport = {
     startupCommandDelivery?: StartupCommandDelivery
     /** Consume only at fresh spawn dispatch; main stops the returned predecessor before resolving ownership. Reattach leaves retirement with the caller. */
     claimReplacedPtyId?: () => string | null
+    /** Session restart sets false so the recorded account is not replaced. Account switch omits it. */
+    resumeOnSelectedAccount?: boolean
     /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
     shouldContinue?: () => boolean
     callbacks: PtyCallbacks
@@ -291,6 +293,8 @@ export type IpcPtyTransportOptions = {
   agentLaunchPreferences?: AgentLaunchPreferences
   launchToken?: string
   launchAgent?: TuiAgent
+  /** Session restart sets false so the recorded account is not replaced. Account switch omits it. */
+  resumeOnSelectedAccount?: boolean
   agentLaunch?: AgentPaneLaunchRequest
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null

@@ -55,7 +55,9 @@ export function seedSession(ptyId: string): FakeSession {
 export function registerWithFakes(
   mainWindow: PtyIpcSuiteFixtures['mainWindow'],
   runtime: RestartHarness['runtime'],
-  store: RestartHarness['store']
+  store: RestartHarness['store'],
+  options?: Parameters<typeof registerPtyHandlers>[6],
+  prepareClaudeAuth?: Parameters<typeof registerPtyHandlers>[4]
 ): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spawn and kill read only the window, runtime and store members these fakes define.
   const args = [
@@ -63,8 +65,9 @@ export function registerWithFakes(
     runtime,
     undefined,
     undefined,
-    undefined,
-    store
+    prepareClaudeAuth,
+    store,
+    options
   ] as unknown as Parameters<typeof registerPtyHandlers>
   registerPtyHandlers(...args)
 }
@@ -84,21 +87,23 @@ export function installRestartHarness(
   const writeListeners = new Set<(hostId: null) => void>()
   const control = { shutdownFails: options.shutdownFails ?? false, failNextWrite: false }
   const boundAtFreshLaunch: (string | undefined)[] = []
-  const providerSpawn = vi.fn(async (spawnOptions: { attachOnly?: boolean }) => {
-    if (!spawnOptions.attachOnly) {
-      boundAtFreshLaunch.push(leafBinding())
-      const incarnationId =
-        options.freshIncarnationId === undefined ? 'inc-new' : options.freshIncarnationId
-      return { id: options.freshId ?? 'pty-new', ...(incarnationId ? { incarnationId } : {}) }
+  const providerSpawn = vi.fn(
+    async (spawnOptions: { attachOnly?: boolean; env?: Record<string, string> }) => {
+      if (!spawnOptions.attachOnly) {
+        boundAtFreshLaunch.push(leafBinding())
+        const incarnationId =
+          options.freshIncarnationId === undefined ? 'inc-new' : options.freshIncarnationId
+        return { id: options.freshId ?? 'pty-new', ...(incarnationId ? { incarnationId } : {}) }
+      }
+      if (options.oldSessionAbsent) {
+        throw new SessionNotFoundError('pty-old')
+      }
+      if (!oldSessionAlive) {
+        throw new TerminalKilledError('pty-old')
+      }
+      return { id: 'pty-old', incarnationId: 'inc-old', isReattach: true }
     }
-    if (options.oldSessionAbsent) {
-      throw new SessionNotFoundError('pty-old')
-    }
-    if (!oldSessionAlive) {
-      throw new TerminalKilledError('pty-old')
-    }
-    return { id: 'pty-old', incarnationId: 'inc-old', isReattach: true }
-  })
+  )
   const shutdown = vi.fn(async () => {
     await options.shutdownGate
     if (control.shutdownFails) {
@@ -244,7 +249,7 @@ export function installRestartHarness(
   }
 }
 
-export function restartSpawnArgs(extra: { replacesPtyId?: string } = {}) {
+export function restartSpawnArgs(extra: Record<string, unknown> = {}) {
   return {
     cols: 80,
     rows: 24,

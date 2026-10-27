@@ -58,6 +58,11 @@ export type PtySpawnIpcArgs = {
   leafId?: string
   // Explicit restart must replace a live owner that ordinary spawn would reattach.
   replacesPtyId?: string
+  /**
+   * Account-switch restarts omit this and keep the selected account.
+   * Session restart sets false so a recorded home is not replaced.
+   */
+  resumeOnSelectedAccount?: boolean
   // Validate untyped placement only through parseTerminalPanePlacement.
   placement?: unknown
   // Accept declared restore intent only through isRestoreSpawnIntent.

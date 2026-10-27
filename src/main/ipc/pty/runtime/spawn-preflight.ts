@@ -1,4 +1,5 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
+import { preserveRecordedClaudeLaunchEnv } from '../ipc/spawn-recorded-account'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -80,11 +81,16 @@ export async function prepareRuntimePtySpawn(
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
+  if (args.resumeOnSelectedAccount === false) {
+    args.env = preserveRecordedClaudeLaunchEnv(args.env)
+    ctx.claudeAuth = null
+  } else {
+    args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+    ctx.claudeAuth =
+      ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
+        ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+        : null
+  }
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
   if (ctx.shouldPersistHostSessionBinding) {
@@ -107,7 +113,10 @@ export async function prepareRuntimePtySpawn(
       ...(args.placement ? { placement: args.placement } : {})
     }
   }
-  ctx.env = ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env
+  ctx.env =
+    ctx.claudeAuth && args.resumeOnSelectedAccount !== false
+      ? { ...args.env, ...ctx.claudeAuth.envPatch }
+      : args.env
   ctx.requestedAgentTeamsPath = ctx.env?.ORCA_AGENT_TEAMS_TEAM_ID
     ? ctx.env[resolvePathEnvKey(ctx.env, process.platform)]
     : undefined
@@ -139,6 +148,7 @@ export async function prepareRuntimePtySpawn(
     callerNamedSession: ctx.callerRequestedSessionId !== undefined,
     mintedSessionId: ctx.requestedSessionId === undefined,
     resumeOnSelectedAccount: false,
+    preserveRecordedManagedAccount: args.resumeOnSelectedAccount === false,
     emptySessionIdSkipsHostEnv: true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,

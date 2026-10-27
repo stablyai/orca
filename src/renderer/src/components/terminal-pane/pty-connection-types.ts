@@ -19,6 +19,7 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentSessionRestartSpawnResult } from '@/lib/agent-session-restart-verdict'
 
 export type PtyPaneStartup = {
   command: string
@@ -30,6 +31,8 @@ export type PtyPaneStartup = {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** False keeps a recorded account. Omitted restarts still use the selected account. */
+  resumeOnSelectedAccount?: boolean
   /** `saved`: a resume built from saved facts, which the host refuses for a chat's conversation. */
   resumeOrigin?: 'saved'
   resumeSource?: SavedResumeStartupSource
@@ -47,6 +50,11 @@ export type PtyPaneStartup = {
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   /** Show the restored-session banner when this startup command mounts. */
   showSessionRestoredBanner?: boolean
+  /**
+   * Renderer-only. Spawn IPC copies fields explicitly, so this function never crosses to main.
+   * Called once the spawn result is known, not when a launch is only deferred.
+   */
+  onSessionRestartSettled?: (result: AgentSessionRestartSpawnResult | null) => void
 } | null
 
 export type PaneProcessExit = {

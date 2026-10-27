@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
-import { prepareAntigravityAccountForLaunch } from './native-account-launch'
+import {
+  antigravitySessionRestartRefusal,
+  prepareAntigravityAccountForLaunch
+} from './native-account-launch'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService } from './native-account-host'
 
@@ -41,6 +44,40 @@ describe('native account verification before agy launch', () => {
     vi.mocked(existsSync).mockReturnValue(false)
     await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity' })
     expect(getAntigravityAccountService).not.toHaveBeenCalled()
+  })
+
+  it('prepares the selected account for an ordinary launch on this host', async () => {
+    await prepareAntigravityAccountForLaunch({
+      launchAgent: 'antigravity',
+      env: { HOME: '/task/home' }
+    })
+    expect(prepareForLaunch).toHaveBeenCalledOnce()
+  })
+
+  it('does not prepare the selected account for a strict session restart on the same host', async () => {
+    await prepareAntigravityAccountForLaunch({
+      launchAgent: 'antigravity',
+      resumeOnSelectedAccount: false,
+      env: { HOME: '/task/home' }
+    })
+    expect(prepareForLaunch).not.toHaveBeenCalled()
+    expect(
+      antigravitySessionRestartRefusal({
+        launchAgent: 'antigravity',
+        resumeOnSelectedAccount: false,
+        env: { HOME: '/task/home' }
+      })
+    ).toBeNull()
+  })
+
+  it('refuses a strict restart whose home is a different credential authority', () => {
+    expect(
+      antigravitySessionRestartRefusal({
+        launchAgent: 'antigravity',
+        resumeOnSelectedAccount: false,
+        env: { HOME: '/other/authority' }
+      })
+    ).toMatch(/different credential authority/)
   })
 
   it('blocks a launch using an overridden credential home without silently replacing its account', async () => {

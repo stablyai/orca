@@ -1,5 +1,6 @@
 import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
+import { isSessionRestartRefusedBeforeStop } from '../../../../shared/session-restart-refusal'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
@@ -179,6 +180,10 @@ function handleConnectError(
   // Unclamped: host diagnoses put the remedy on later lines, and the pane toast renders them all.
   const message =
     readIpcErrorDetail(error) ?? (error instanceof Error ? error.message : String(error))
+  // Fresh spawn must see this refusal. Other connect errors stay swallowed here.
+  if (isSessionRestartRefusedBeforeStop(error) || isSessionRestartRefusedBeforeStop(message)) {
+    throw error instanceof Error ? error : new Error(message)
+  }
   if (connectionId && options.sessionId && isSshSessionGoneError(message)) {
     return { id: options.sessionId, sessionExpired: true }
   }

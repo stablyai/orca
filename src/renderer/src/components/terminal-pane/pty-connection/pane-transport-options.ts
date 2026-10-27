@@ -129,6 +129,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.paneStartup?.resumeProviderSession
       ? { resumeProviderSession: session.paneStartup.resumeProviderSession }
       : {}),
+    ...(session.paneStartup?.resumeOnSelectedAccount === false
+      ? { resumeOnSelectedAccount: false as const }
+      : {}),
     ...(session.paneStartup?.resumeOrigin
       ? { resumeOrigin: session.paneStartup.resumeOrigin }
       : {}),

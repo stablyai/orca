@@ -82,6 +82,8 @@ type PtySpawnHostEnvArgs = {
   mintedSessionId: boolean
   /** An account-switch restart resumes onto the selected account; only the window has one. */
   resumeOnSelectedAccount: boolean
+  /** Explicit session restart must not replace a recorded managed account with the active one. */
+  preserveRecordedManagedAccount?: boolean
   /** Host accepts empty IDs without host env; window rejects them. */
   emptySessionIdSkipsHostEnv: boolean
   requestedAgentTeamsPath: string | undefined
@@ -233,7 +235,8 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       networkProxySettings: ptySettings,
       routeBrowserOpensToClient: deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
       deferGitConfigGuardToDaemon:
-        args.provider.supportsGitCredentialGuardHost?.(sessionId) === true
+        args.provider.supportsGitCredentialGuardHost?.(sessionId) === true,
+      preserveRecordedManagedAccount: args.preserveRecordedManagedAccount
     })
     stampWslOrchestrationCompatibilityHost(
       env,

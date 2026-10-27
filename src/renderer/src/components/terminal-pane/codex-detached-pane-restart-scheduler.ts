@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { installAgentSessionRestartPromoter } from '@/lib/agent-session-restart-service'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
@@ -23,6 +24,8 @@ export function hasAddedPendingCodexPaneRestart(
 export function installCodexDetachedPaneRestartExecutor(): () => void {
   executorInstalled = true
   const generation = ++executorGeneration
+  // Session restart promotes from this same startup install. Hydration is already at the line limit.
+  const stopSessionRestart = installAgentSessionRestartPromoter()
   const unsubscribe = useAppStore.subscribe((state, previousState) => {
     if (
       hasAddedPendingCodexPaneRestart(
@@ -38,6 +41,7 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
   })
   scheduleClaimSweep()
   return () => {
+    stopSessionRestart()
     unsubscribe()
     if (executorGeneration === generation) {
       executorInstalled = false

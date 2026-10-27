@@ -126,6 +126,8 @@ export type RuntimePtySpawnArgs = {
   env?: Record<string, string>
   envToDelete?: string[]
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** Session restart sets false so a recorded account is not replaced by the selected one. */
+  resumeOnSelectedAccount?: boolean
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
   resumeOrigin?: 'saved'
   connectionId?: string | null

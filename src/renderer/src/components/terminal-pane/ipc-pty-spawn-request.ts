@@ -78,6 +78,7 @@ export async function spawnIpcPty(
     resumeOrigin,
     launchToken,
     launchAgent,
+    resumeOnSelectedAccount,
     startupCommandDelivery,
     connectionId,
     worktreeId,
@@ -138,6 +139,9 @@ export async function spawnIpcPty(
     ...(placement && !admittedSessionId ? { placement } : {}),
     ...(spawnIntent ? { spawnIntent } : {}),
     ...(replacesPtyId ? { replacesPtyId } : {}),
+    ...((connectOptions.resumeOnSelectedAccount ?? resumeOnSelectedAccount) === false
+      ? { resumeOnSelectedAccount: false as const }
+      : {}),
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),

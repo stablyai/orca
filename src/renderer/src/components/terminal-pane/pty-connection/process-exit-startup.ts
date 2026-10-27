@@ -15,5 +15,15 @@ export function toProcessExitStartup(
         launchAgent: startup.agent,
         showSessionRestoredBanner: true
       }
-    : startup
+    : stripSessionRestartCallback(startup)
+}
+
+function stripSessionRestartCallback(
+  startup: PendingStartupCommand | ColdRestoreAgentResumeStartup | null
+): PtyPaneStartup {
+  if (!startup || !('onSessionRestartSettled' in startup) || !startup.onSessionRestartSettled) {
+    return startup
+  }
+  const { onSessionRestartSettled: _settled, ...rest } = startup
+  return rest
 }

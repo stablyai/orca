@@ -23,6 +23,10 @@ export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
         'scrollback'
       ),
       ...translateSearchKeyword('auto.components.settings.terminal.search.6892fb1019', 'restart'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.restartAgents',
+        'restart agents'
+      ),
       ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.0a05629060', 'recover'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.88561b3499', 'frozen'),

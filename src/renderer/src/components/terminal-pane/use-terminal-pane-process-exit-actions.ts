@@ -15,6 +15,7 @@ import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exi
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
+import { useMountedAgentSessionRestarters } from './use-mounted-agent-session-restarters'
 
 export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseController) {
   const {
@@ -201,6 +202,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     },
     [clearPaneProcessExit, executeClosePane]
   )
+
+  useMountedAgentSessionRestarters(controller, handleRestartPane)
 
   const panePtyLayoutBindings = savedLayout.ptyIdsByLeafId
   useLayoutEffect(() => {

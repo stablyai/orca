@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+import type { ClaudeProfileRouter } from '../../claude-accounts/claude-profile-router'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import {
   installRestartHarness,
@@ -71,6 +73,156 @@ describe('pty:spawn replacing a pane owner', () => {
 
     expect(spawned).toMatchObject({ id: 'pty-old', isReattach: true })
     expect(providerSpawn).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not stop the old process when a recorded Codex restart would start a fresh chat', async () => {
+    const { providerSpawn, shutdown, store, runtime } = installRestartHarness()
+    registerWithFakes(mainWindow, runtime, store, {
+      prepareCodexSessionResume: async () => ({ outcome: 'fresh', claimedCodexProvenance: true })
+    })
+
+    await expect(
+      handlers.get('pty:spawn')!(
+        null,
+        restartSpawnArgs({
+          replacesPtyId: 'pty-old',
+          resumeOnSelectedAccount: false,
+          command: "codex resume 'sess-1'",
+          resumeProviderSession: { key: 'session_id', id: 'sess-1' },
+          env: {
+            ORCA_PANE_KEY: paneKey,
+            ORCA_TAB_ID: tabId,
+            ORCA_WORKTREE_ID: worktreeId,
+            CODEX_HOME: '/accounts/work'
+          }
+        })
+      )
+    ).rejects.toThrow(/new Codex chat|could not verify the originating Codex session/)
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(providerSpawn).not.toHaveBeenCalled()
+  })
+
+  it('keeps the recorded Claude home when the selected profile is different', async () => {
+    const { providerSpawn, store, runtime } = installRestartHarness()
+    const prepareClaudeAuth = vi.fn(async () => ({
+      configDir: '/accounts/B',
+      envPatch: {
+        CLAUDE_CONFIG_DIR: '/accounts/B',
+        ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/accounts/B',
+        ORCA_CLAUDE_PROFILE_POINTER: '/pointer/B'
+      },
+      provenance: 'profile:B'
+    }))
+    installClaudeProfileRouter(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this restart reads only terminalEnv, which would overlay account B.
+      {
+        terminalEnv: () => ({
+          CLAUDE_CONFIG_DIR: '/accounts/B',
+          ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/accounts/B',
+          ORCA_CLAUDE_PROFILE_POINTER: '/pointer/B'
+        })
+      } as unknown as ClaudeProfileRouter
+    )
+    registerWithFakes(mainWindow, runtime, store, undefined, prepareClaudeAuth)
+
+    try {
+      const spawned = await handlers.get('pty:spawn')!(
+        null,
+        restartSpawnArgs({
+          replacesPtyId: 'pty-old',
+          resumeOnSelectedAccount: false,
+          launchAgent: 'claude',
+          command: "claude '--resume' 'sess-1'",
+          env: {
+            ORCA_PANE_KEY: paneKey,
+            ORCA_TAB_ID: tabId,
+            ORCA_WORKTREE_ID: worktreeId,
+            CLAUDE_CONFIG_DIR: '/accounts/A',
+            ORCA_CLAUDE_PROFILE_POINTER: '/pointer/old',
+            ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/accounts/A'
+          }
+        })
+      )
+      expect(spawned).toMatchObject({ id: 'pty-new' })
+      expect(prepareClaudeAuth).not.toHaveBeenCalled()
+      const freshLaunch = providerSpawn.mock.calls.find((call) => !call[0].attachOnly)?.[0]
+      expect(freshLaunch?.env?.CLAUDE_CONFIG_DIR).toBe('/accounts/A')
+      expect(freshLaunch?.env?.ORCA_CLAUDE_PROFILE_POINTER).toBeUndefined()
+      expect(freshLaunch?.env?.ORCA_CLAUDE_INJECTED_CONFIG_DIR).toBeUndefined()
+      expect(JSON.stringify(freshLaunch?.env)).not.toContain('/accounts/B')
+    } finally {
+      installClaudeProfileRouter(undefined)
+    }
+  })
+
+  it('pins transcript account A when the recorded env is empty and the selected profile is B', async () => {
+    const { providerSpawn, shutdown, store, runtime } = installRestartHarness()
+    const prepareClaudeAuth = vi.fn(async () => ({
+      configDir: '/accounts/B',
+      envPatch: { CLAUDE_CONFIG_DIR: '/accounts/B' },
+      provenance: 'profile:B'
+    }))
+    installClaudeProfileRouter(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this restart reads only terminalEnv, which would overlay account B.
+      {
+        terminalEnv: () => ({ CLAUDE_CONFIG_DIR: '/accounts/B' })
+      } as unknown as ClaudeProfileRouter
+    )
+    registerWithFakes(mainWindow, runtime, store, undefined, prepareClaudeAuth)
+    try {
+      const spawned = await handlers.get('pty:spawn')!(
+        null,
+        restartSpawnArgs({
+          replacesPtyId: 'pty-old',
+          resumeOnSelectedAccount: false,
+          launchAgent: 'claude',
+          command: "claude '--resume' 'sess-1'",
+          resumeProviderSession: {
+            key: 'session_id',
+            id: 'sess-1',
+            transcriptPath: '/accounts/A/projects/-repo/sess-1.jsonl'
+          },
+          env: {
+            ORCA_PANE_KEY: paneKey,
+            ORCA_TAB_ID: tabId,
+            ORCA_WORKTREE_ID: worktreeId
+          }
+        })
+      )
+      expect(spawned).toMatchObject({ id: 'pty-new' })
+      expect(prepareClaudeAuth).not.toHaveBeenCalled()
+      expect(shutdown).toHaveBeenCalled()
+      const freshLaunch = providerSpawn.mock.calls.find((call) => !call[0].attachOnly)?.[0]
+      expect(freshLaunch?.env?.CLAUDE_CONFIG_DIR).toBe('/accounts/A')
+      expect(JSON.stringify(freshLaunch?.env)).not.toContain('/accounts/B')
+    } finally {
+      installClaudeProfileRouter(undefined)
+    }
+  })
+
+  it('does not stop the old process when an empty Claude env has no transcript proof', async () => {
+    const { providerSpawn, shutdown, store, runtime } = installRestartHarness()
+    registerWithFakes(mainWindow, runtime, store)
+
+    await expect(
+      handlers.get('pty:spawn')!(
+        null,
+        restartSpawnArgs({
+          replacesPtyId: 'pty-old',
+          resumeOnSelectedAccount: false,
+          launchAgent: 'claude',
+          command: "claude '--resume' 'sess-1'",
+          resumeProviderSession: { key: 'session_id', id: 'sess-1' },
+          env: {
+            ORCA_PANE_KEY: paneKey,
+            ORCA_TAB_ID: tabId,
+            ORCA_WORKTREE_ID: worktreeId
+          }
+        })
+      )
+    ).rejects.toThrow(/could not prove the original Claude account/)
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(providerSpawn).not.toHaveBeenCalled()
   })
 
   it('stops the replaced owner and launches fresh instead of reattaching it', async () => {

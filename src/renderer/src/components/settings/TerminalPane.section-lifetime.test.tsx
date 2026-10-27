@@ -33,19 +33,33 @@ vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      settingsSearchQuery: fake.query,
-      tabsByWorktree: fake.tabs,
-      ptyIdsByTabId: fake.ptys,
-      setActiveView: fake.action,
-      closeSettingsPage: fake.action,
-      openSettingsTarget: fake.action,
-      openSettingsPage: fake.action,
-      setSettingsSearchQuery: fake.action
-    })
-}))
+vi.mock('@/store', () => {
+  const state = {
+    get settingsSearchQuery() {
+      return fake.query
+    },
+    tabsByWorktree: fake.tabs,
+    ptyIdsByTabId: fake.ptys,
+    terminalLayoutsByTabId: {},
+    agentStatusByPaneKey: {},
+    paneForegroundAgentByPaneKey: {},
+    settings: { disabledTuiAgents: [] },
+    repos: [],
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
+    getKnownWorktreeById: () => undefined,
+    getAgentLaunchConfigForStatusEntry: () => undefined,
+    setActiveView: fake.action,
+    closeSettingsPage: fake.action,
+    openSettingsTarget: fake.action,
+    openSettingsPage: fake.action,
+    setSettingsSearchQuery: fake.action
+  }
+  const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
+  useAppStore.getState = () => state
+  useAppStore.subscribe = () => () => {}
+  return { useAppStore }
+})
 vi.mock('@/components/terminal-pane/pane-helpers', () => ({
   isMacUserAgent: () => fake.isMac,
   isWindowsUserAgent: () => fake.isWindows

@@ -57,7 +57,11 @@ export function buildPtyHostEnv(
 
   const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
-  applyManagedDataAccountEnvironment(baseEnv, { ...opts, launchCommand: launchCommandHint })
+  applyManagedDataAccountEnvironment(baseEnv, {
+    ...opts,
+    launchCommand: launchCommandHint,
+    strict: opts.preserveRecordedManagedAccount === true
+  })
   applyClaudeAgentViewEnv(baseEnv, opts)
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
     ? opts.launchAgent

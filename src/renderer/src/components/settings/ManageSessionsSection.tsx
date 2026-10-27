@@ -9,6 +9,7 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 import { ManageSessionKillDialog } from './ManageSessionKillDialog'
 import { ManageSessionsTable } from './ManageSessionsTable'
+import { AgentSessionRestartMenu } from './AgentSessionRestartMenu'
 import {
   notifyDaemonSessionInventoryInvalidated,
   subscribeDaemonSessionInventoryInvalidated
@@ -243,6 +244,7 @@ export function ManageSessionsSection(): React.JSX.Element {
           showManageSessionsButton={false}
           refreshRevision={attributionRefreshRevision}
         />
+        <AgentSessionRestartMenu />
         <ManageSessionsTable
           sessions={sessions}
           hasLoadedOnce={hasLoadedOnce}

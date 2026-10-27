@@ -71,6 +71,8 @@ export type PtyApi = {
     leafId?: string
     // Stop this PTY before restarting; otherwise a live pane owner is reattached.
     replacesPtyId?: string
+    /** False keeps the recorded account. Omitted restarts still follow the selected account. */
+    resumeOnSelectedAccount?: boolean
     // Which tab and leaf a fresh PTY joins; older mains ignore it.
     placement?: TerminalPanePlacement
     // Visible restores are `user-resume`, hidden ones `automatic-restore`; the fork gate validates.
