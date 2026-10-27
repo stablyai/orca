@@ -38,8 +38,8 @@ export type TerminalLinkStoreState = {
   >
   folderWorkspaces: []
   repos?: { id: string; displayName: string }[]
-  layoutByWorktree: Record<string, TabGroupLayoutNode | undefined>
-  activeGroupIdByWorktree: Record<string, string | undefined>
+  layoutByWorktree: Record<string, TabGroupLayoutNode>
+  activeGroupIdByWorktree: Record<string, string>
   createEmptySplitGroup: Mock
 }
 
