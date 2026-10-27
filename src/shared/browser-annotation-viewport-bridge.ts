@@ -146,13 +146,15 @@ ${SHADOW_ROOTS_ABOVE_SCRIPT}
     if (emitViewportMessages && selectionId) {
       let found = findMarked(document);
       if (found.length === 0) {
-        // Reuse a still-marked shadow target and never re-search a lost one, so scroll frames don't walk the page.
+        // The marker is set before the selection reaches this bridge, so one shadow walk per selection suffices.
         const keep = current && current.isConnected && current.getAttribute(selectedAttribute) === selectionId;
         if (keep) found = [current];
-        else if (state.foundSelectionId !== selectionId) found = findMarkedInShadowRoots(document);
+        else if (state.searchedSelectionId !== selectionId) {
+          state.searchedSelectionId = selectionId;
+          found = findMarkedInShadowRoots(document);
+        }
       }
       next = found.length === 1 ? found[0] : null;
-      if (next) state.foundSelectionId = selectionId;
     }
     if (next !== current) {
       state.target = next;
@@ -292,7 +294,7 @@ ${SHADOW_ROOTS_ABOVE_SCRIPT}
     target: null,
     targetObserver: null,
     targetShadowRoots: [],
-    foundSelectionId: null
+    searchedSelectionId: null
   };
 
   state.requestUpdate = () => {
