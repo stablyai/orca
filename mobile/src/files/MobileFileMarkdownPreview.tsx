@@ -1,11 +1,9 @@
 import { MobileMarkdownPreviewImage } from './MobileMarkdownPreviewImage'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { useState } from 'react'
-import { Pressable, ScrollView, View } from 'react-native'
-import { Code, Pencil } from 'lucide-react-native'
+import { ScrollView, View } from 'react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
-import { colors } from '../theme/mobile-theme'
+import { MobileFileAddressToolbar } from '../components/MobileFileAddressToolbar'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
@@ -20,6 +18,8 @@ type Props = {
   client?: MobileFilePreviewRpcSender | null
   worktreeId?: string
   initialLine?: number
+  showLineNumbers?: boolean
+  onToggleLineNumbers?: () => void
   onOpenFile?: (pathText: string) => void
 }
 
@@ -29,6 +29,8 @@ export function MobileFileMarkdownPreview({
   truncated,
   byteLength,
   initialLine,
+  showLineNumbers,
+  onToggleLineNumbers,
   client,
   worktreeId,
   onOpenFile
@@ -42,45 +44,19 @@ export function MobileFileMarkdownPreview({
     setPreviousInitialLine(initialLine)
     setMode(initialLine ? 'source' : 'preview')
   }
-  const previewSelected = mode === 'preview'
-  const sourceSelected = mode === 'source'
 
   return (
     <View style={styles.modeContainer}>
-      <View style={styles.modeToolbar}>
-        <Pressable
-          style={[styles.modeToggle, sourceSelected && styles.modeToggleActive]}
-          onPress={() => setMode('source')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: sourceSelected }}
-          accessibilityLabel="View Markdown source"
-        >
-          <Code
-            size={15}
-            color={sourceSelected ? colors.textPrimary : colors.textSecondary}
-            strokeWidth={2.2}
-          />
-        </Pressable>
-        <Pressable
-          style={[styles.modeToggle, previewSelected && styles.modeToggleActive]}
-          onPress={() => setMode('preview')}
-          accessibilityRole="button"
-          accessibilityState={{ selected: previewSelected }}
-          accessibilityLabel="View rendered Markdown preview"
-        >
-          <Pencil
-            size={15}
-            color={previewSelected ? colors.textPrimary : colors.textSecondary}
-            strokeWidth={2.2}
-          />
-        </Pressable>
-        <MobileSourceCopyButton
-          key={relativePath}
-          text={content}
-          partial={truncated}
-          accessibilityLabel={truncated ? 'Copy loaded Markdown source' : 'Copy Markdown source'}
-        />
-      </View>
+      <MobileFileAddressToolbar
+        path={relativePath}
+        viewMode={mode}
+        onViewModeChange={setMode}
+        showLineNumbers={showLineNumbers}
+        onToggleLineNumbers={onToggleLineNumbers}
+        content={content}
+        truncated={truncated}
+        copyAccessibilityLabel={truncated ? 'Copy loaded Markdown source' : 'Copy Markdown source'}
+      />
       {mode === 'preview' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
           {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
@@ -110,6 +86,7 @@ export function MobileFileMarkdownPreview({
           truncated={truncated}
           byteLength={byteLength}
           initialLine={initialLine}
+          showLineNumbers={showLineNumbers}
         />
       )}
     </View>

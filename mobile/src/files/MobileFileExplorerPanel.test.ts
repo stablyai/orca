@@ -106,7 +106,9 @@ function createMockClient(entriesByPath: Record<string, MobileDirEntry[]>): Mock
   }
 }
 
-async function renderExplorer(): Promise<ReactTestRenderer> {
+async function renderExplorer(
+  props?: Partial<Parameters<typeof MobileFileExplorerPanel>[0]>
+): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
     renderer = create(
@@ -114,7 +116,8 @@ async function renderExplorer(): Promise<ReactTestRenderer> {
         hostId: 'host-a',
         worktreeId: 'worktree-a',
         name: 'Example Worktree',
-        embedded: true
+        embedded: true,
+        ...props
       })
     )
   })
@@ -217,6 +220,19 @@ describe('MobileFileExplorerPanel', () => {
     expect(renderedText(renderer)).toContain('src')
     expect(renderedText(renderer)).toContain('README.md')
     expect(renderedText(renderer)).not.toContain('Waiting for desktop...')
+  })
+
+  it('opens files in-session using onOpenFile when provided', async () => {
+    const client = createMockClient({
+      '': [entry('README.md')]
+    })
+    mockTransport.client = client
+    const onOpenFile = vi.fn()
+    const renderer = await renderExplorer({ onOpenFile })
+
+    await pressByLabel(renderer, 'Preview file README.md')
+
+    expect(onOpenFile).toHaveBeenCalledWith('README.md')
   })
 
   it('refreshes the root in the background after reconnect without blanking the tree', async () => {

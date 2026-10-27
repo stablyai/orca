@@ -23,7 +23,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Keyboard: { dismiss: vi.fn() }
 }))
-vi.mock('lucide-react-native', () => ({ RefreshCw: 'RefreshCw' }))
+vi.mock('lucide-react-native', () => ({ RefreshCw: 'RefreshCw', ListOrdered: 'ListOrdered' }))
 vi.mock('../components/MobileRichMarkdownEditor', () => ({
   MobileRichMarkdownEditor: 'MobileRichMarkdownEditor'
 }))
