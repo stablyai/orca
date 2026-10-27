@@ -52,6 +52,7 @@ import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-h
 import { createStructuredSessionLaunchDirectorySlice } from './structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from './structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './workspace-attention/workspace-attention-slice'
+import { createWorkspaceGridViewSlice } from './workspace-grid-view'
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../editor-buffer-record-lifecycle'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
@@ -117,7 +118,8 @@ export function createTestStore() {
         ...createTerminalQuickCommandHostsSlice(...a),
         ...createStructuredSessionLaunchDirectorySlice(...a),
         ...createStructuredChatSleptAtSlice(...a),
-        ...createWorkspaceAttentionSlice(...a)
+        ...createWorkspaceAttentionSlice(...a),
+        ...createWorkspaceGridViewSlice(...a)
       }),
       true
     )
