@@ -20,6 +20,7 @@ import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
+import { installHiddenWindowFrameKeepalive } from './hidden-window-frame-keepalive'
 import {
   forceRepaint,
   installMacosVisibilityRepaint,
@@ -183,6 +184,7 @@ export function createMainWindow(
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  installHiddenWindowFrameKeepalive(mainWindow)
   const focus = installMainWindowFocusLifecycle({
     isWindowClosing: state.isWindowClosing,
     mainWindow,
