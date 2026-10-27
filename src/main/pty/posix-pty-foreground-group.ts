@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { notifySpawnObserver } from '../../shared/child-process/spawn-observer'
+import { notifySpawnObserver } from '@orca/process-host/spawn-observer'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
 const PROCESS_TABLE_QUERY_TIMEOUT_MS = PROCESS_TABLE_LOOKUP_TIMEOUT_MS / 2
@@ -43,33 +43,20 @@ function runPs(pid: number): string {
 
 let ownRowCache: { pid: number; row: string } | null = null
 
-/**
- * Orca's own row, read once per process. It feeds exactly one guard — the
- * "does this process share the PTY" check below — and the only field that guard
- * reads is the controlling tty, which cannot change for a process's lifetime.
- * Re-forking `ps` for it on every SIGWINCH doubled a ~3ms synchronous stall that
- * the renderer fires twice per revealed pane.
- */
+/** Cache the own-TTY guard row to avoid a second synchronous ps fork on every SIGWINCH. */
 function readOwnProcessRow(currentPid: number): string {
   if (ownRowCache?.pid !== currentPid) {
-    // A throw is not cached: the caller already treats a failed read as "no group".
+    // Failed reads remain retryable and yield no group.
     ownRowCache = { pid: currentPid, row: runPs(currentPid) }
   }
   return ownRowCache.row
 }
 
-/** Test seam: the cache is keyed by pid, but tests reuse one pid across cases. */
 export function resetPosixPtyForegroundGroupOwnRowCache(): void {
   ownRowCache = null
 }
 
-/**
- * Why two rows instead of `-p a,b`: macOS `ps` only takes the KERN_PROC_PID fast
- * path for a single pid. ANY pid list — even a duplicate of one pid — walks the
- * whole process table, measured at ~3.6s on a busy machine versus ~3ms here. That
- * blew the timeout below, so the group lookup silently fell back to the very
- * root-pid delivery this module exists to replace.
- */
+/** macOS PID lists scan the whole table (~3.6s vs ~3ms for one PID), timing out into root-only delivery. */
 function readForegroundGroupTable(rootPid: number, currentPid: number): string {
   return `${runPs(rootPid)}\n${readOwnProcessRow(currentPid)}`
 }
@@ -89,15 +76,7 @@ function parseProcessRows(output: string): ProcessRow[] {
   return rows
 }
 
-/**
- * Resolves the foreground process group of one PTY, which is who the kernel
- * signals on a real window-size change.
- *
- * Why not the root pid: the shell calls `setpgid` for job control, so it leaves
- * the root's group immediately, and on macOS the root is `login(1)` — which
- * neither handles nor forwards SIGWINCH. A foreground TUI is a third group
- * again, so only the tty's `tpgid` reproduces a kernel resize.
- */
+/** Use tty tpgid to match kernel resize delivery; login(1), shells and foreground TUIs can occupy different groups. */
 export function getPosixPtyForegroundGroup(
   output: string,
   rootPid: number,
@@ -109,13 +88,11 @@ export function getPosixPtyForegroundGroup(
   if (!root || !hasUsableTty(root.tty)) {
     return null
   }
-  // Why: `ps -p` answers for whatever owns the pid now. Without pinning the tty we
-  // captured at spawn, a recycled pid could aim a group signal at a real terminal.
+  // Pin the captured TTY so PID reuse cannot redirect a group signal.
   if (normalizeTty(root.tty) !== normalizeTty(ptsName)) {
     return null
   }
-  // Why: a development daemon can inherit its launch TTY. Never group-signal when
-  // this process shares the PTY; fall back to the already-scoped root signal.
+  // A dev daemon may share the PTY; never group-signal Orca itself.
   if (rows.some((row) => row.pid === currentPid && row.tty === root.tty)) {
     return null
   }
@@ -123,13 +100,8 @@ export function getPosixPtyForegroundGroup(
   return root.tpgid > 1 ? root.tpgid : null
 }
 
-/**
- * Sends `signal` to the PTY's foreground process group, falling back to the
- * supplied root-pid delivery when the group cannot be established safely.
- *
- * Scoped to SIGWINCH by callers on purpose: a destructive signal must keep the
- * narrower root-pid target plus the descendant-sweep identity machinery.
- */
+/** Fall back to scoped root delivery if group proof is unavailable.
+ * Callers limit this to SIGWINCH; destructive signals require descendant identity checks. */
 export function signalPosixPtyForegroundGroup(
   rootPid: number,
   ptsName: string | undefined,
@@ -160,8 +132,7 @@ export function signalPosixPtyForegroundGroup(
   try {
     process.kill(-pgid, signal as NodeJS.Signals)
   } catch (error) {
-    // Why: the group can exit between `ps` and `kill`. The fallback would be just
-    // as stale, so a vanished foreground group is success, not a reason to retry.
+    // The group can exit after ps; ESRCH is success because root fallback would be stale too.
     if ((error as NodeJS.ErrnoException | undefined)?.code !== 'ESRCH') {
       fallback()
     }

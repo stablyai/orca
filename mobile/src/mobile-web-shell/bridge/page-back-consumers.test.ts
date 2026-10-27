@@ -57,11 +57,7 @@ describe('who in the page is holding the device Back key', () => {
     expect(unclaimed).not.toHaveBeenCalled()
   })
 
-  /**
-   * The claim and the press cross on separate frames, so a sheet that closed between the two leaves
-   * the shell holding a claim this page cannot spend. Dropping the press there is the failure this
-   * whole lane exists to remove: the key would do nothing at all.
-   */
+  // A claim can become stale while the press crosses; return unclaimed presses to native navigation instead of swallowing them.
   it('hands a press nothing took back to the shell rather than dropping it', () => {
     const { stack, unclaimed } = consumers()
     stack.press()
@@ -85,8 +81,7 @@ describe('who in the page is holding the device Back key', () => {
       return false
     })
     stack.press()
-    // The one beneath it still hears the press: the walk is over a copy, so the splice inside the
-    // top consumer cannot skip it.
+    // A copied stack must still visit the lower consumer after the upper one disposes itself.
     expect(order).toEqual(['top', 'bottom'])
   })
 
@@ -101,11 +96,7 @@ describe('who in the page is holding the device Back key', () => {
     expect(claims).toEqual([true, false, true, false])
   })
 
-  /**
-   * The shell drops the claim on every `ready` and when its host is torn down, so an edge this
-   * document posted before that shell arrived is one it never heard. `init` is the shell saying it
-   * is here now, and this is the page answering with the state rather than with a transition.
-   */
+  // Every ready/init clears the host claim; reassert current page state even without a new consumer edge.
   it('says again what it is holding when the shell asks, without a second edge', () => {
     const { claims, stack } = consumers()
     stack.claim(() => true)
@@ -113,13 +104,7 @@ describe('who in the page is holding the device Back key', () => {
     expect(claims).toEqual([true, true])
   })
 
-  /**
-   * Nothing to say. Every `init` that answers a `ready` is sent by a host that dropped the claim
-   * first, so it already holds false; the only other one carries a rewritten route, where a stale
-   * true needs a `false` the page posted to have never left — and a port that refused that one
-   * refuses this too. A `false` here would be a frame per document boot asserting what the shell
-   * already holds.
-   */
+  // Reassert only a held claim: ready already cleared it at the shell, so unclaimed documents need no redundant false frame.
   it('says nothing when it is holding nothing, because the shell already holds that', () => {
     const { claims, stack } = consumers()
     stack.reassert()
@@ -135,7 +120,6 @@ describe('who in the page is holding the device Back key', () => {
     stack.claim(() => true)
     stack.clear()
     expect(claims).toEqual([true, false])
-    // And says nothing a second time: there is nothing left to give back.
     stack.clear()
     expect(claims).toEqual([true, false])
   })

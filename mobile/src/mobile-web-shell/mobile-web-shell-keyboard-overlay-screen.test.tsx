@@ -20,7 +20,7 @@ vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'
 vi.mock('expo-router', mocks['expo-router'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
-vi.mock('../transport/client-context', mocks['../transport/client-context'])
+vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
 
@@ -47,10 +47,7 @@ beforeEach(() => {
 
 const WINDOW = { top: 44, right: 0, bottom: 8, left: 0 }
 
-/**
- * The page is covered by the keyboard like a native screen: the view keeps its size, and the page
- * is told the height on every keyboard event.
- */
+// Keep page size under the keyboard and send height updates like native screens.
 describe('a page the keyboard covers', () => {
   async function openPage(sessionId: string) {
     dependencies.client = createFakeRpcClient()
@@ -89,15 +86,12 @@ describe('a page the keyboard covers', () => {
     it(`never shortens the view, and publishes show, a height change and hide (${platform})`, async () => {
       dependencies.platform = platform
       const page = await openPage(`session-overlay-${platform}`)
-      // Pixel_API_37: 312 up, 346 with the suggestion strip, then closed. The inset tracks each, so
-      // a keyboard that changes height while open leaves no gap above it.
+      // Use observed Pixel_API_37 heights, including suggestion-strip changes while the keyboard stays open.
       for (const height of [312, 346, 0]) {
         await page.keyboard(height)
         expect(page.root().props.style[1]).toEqual({ paddingTop: 0 })
       }
-      // The keyboard's own height as native screens read it on this OS, home indicator included on
-      // iOS; the page's arithmetic branches on the shell's OS, as native does. The bottom inset
-      // stays the window's.
+      // Send native keyboard height, including iOS home indicator; leave bottom safe-area inset unchanged for page-side OS arithmetic.
       expect(page.inits()).toEqual([
         { keyboard: 0, insets: WINDOW },
         { keyboard: 312, insets: WINDOW },

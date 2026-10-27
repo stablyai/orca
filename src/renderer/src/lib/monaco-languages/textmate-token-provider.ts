@@ -1,70 +1,85 @@
 import type * as Monaco from 'monaco-editor'
-import { INITIAL, Registry } from 'vscode-textmate'
-import type { IGrammar, IOnigLib, IRawGrammar, StateStack } from 'vscode-textmate'
-import onigurumaWasmUrl from 'vscode-oniguruma/release/onig.wasm?url'
+import type { Grammar, LanguageRegistration } from 'shiki/core'
+import type { StateStack } from 'shiki/textmate'
+import {
+  createTextMateCore,
+  tokenizeLineWithinLimits,
+  type TextMateCore
+} from '../syntax-highlighting/textmate-core'
 
 type TextMateTokensProvider = Monaco.languages.TokensProvider
 
-export type TextMateGrammarLoader = (scopeName: string) => Promise<IRawGrammar | null | undefined>
+/** A vendored grammar, named by its Monaco language id. */
+export type TextMateGrammarLoader = () => Promise<LanguageRegistration>
 
 export type TextMateTokensProviderOptions = {
-  scopeName: string
   loadGrammar: TextMateGrammarLoader
-  loadOniguruma?: () => Promise<IOnigLib>
+  mapTokenScopes?: (scopes: readonly string[]) => string
 }
 
-let browserOnigurumaPromise: Promise<IOnigLib> | undefined
+let editorCorePromise: Promise<TextMateCore> | undefined
 
-async function loadBrowserOniguruma(): Promise<IOnigLib> {
-  browserOnigurumaPromise ??= (async () => {
-    const oniguruma = await import('vscode-oniguruma')
-    const response = await fetch(onigurumaWasmUrl)
-    if (!response.ok) {
-      throw new Error(`Failed to load TextMate regex engine from ${onigurumaWasmUrl}`)
-    }
-
-    await oniguruma.loadWASM(response)
-    return {
-      createOnigScanner: oniguruma.createOnigScanner,
-      createOnigString: oniguruma.createOnigString
-    }
-  })()
-
-  return browserOnigurumaPromise
+// Why: chat's registry holds the catalogue's Nim and Typst under the same scope names as these vendored grammars.
+function loadEditorCore(): Promise<TextMateCore> {
+  editorCorePromise ??= createTextMateCore([]).catch((error: unknown) => {
+    editorCorePromise = undefined
+    throw error
+  })
+  return editorCorePromise
 }
 
 class TextMateTokenizerState implements Monaco.languages.IState {
-  constructor(readonly ruleStack: StateStack) {}
+  /** `ruleStack` is null once a line was skipped; the lines after it stay plain. */
+  constructor(readonly ruleStack: StateStack | null) {}
 
   clone(): TextMateTokenizerState {
-    return new TextMateTokenizerState(this.ruleStack.clone())
+    return new TextMateTokenizerState(this.ruleStack?.clone() ?? null)
   }
 
   equals(other: Monaco.languages.IState): boolean {
-    return other instanceof TextMateTokenizerState && this.ruleStack.equals(other.ruleStack)
+    if (!(other instanceof TextMateTokenizerState)) {
+      return false
+    }
+    // Why: structural equality is what lets Monaco stop re-tokenizing once an edit's states converge.
+    return this.ruleStack && other.ruleStack
+      ? this.ruleStack.equals(other.ruleStack)
+      : this.ruleStack === other.ruleStack
   }
 }
 
 function createTokensProvider(
-  grammar: IGrammar,
-  fallbackScopeName: string
+  { textmate }: TextMateCore,
+  grammar: Grammar,
+  fallbackScopeName: string,
+  mapTokenScopes?: (scopes: readonly string[]) => string
 ): TextMateTokensProvider {
+  const plain = (state: TextMateTokenizerState): Monaco.languages.ILineTokens => ({
+    endState: state,
+    tokens: [{ startIndex: 0, scopes: fallbackScopeName }]
+  })
+  const skipped = new TextMateTokenizerState(null)
   return {
     getInitialState() {
-      return new TextMateTokenizerState(INITIAL)
+      return new TextMateTokenizerState(textmate.INITIAL)
     },
     tokenize(line, state) {
-      const textMateState =
-        state instanceof TextMateTokenizerState ? state : new TextMateTokenizerState(INITIAL)
-      const result = grammar.tokenizeLine(line, textMateState.ruleStack)
-
+      const ruleStack = state instanceof TextMateTokenizerState ? state.ruleStack : textmate.INITIAL
+      if (!ruleStack) {
+        return plain(skipped)
+      }
+      const result = tokenizeLineWithinLimits(line, (text, timeLimitMs) =>
+        grammar.tokenizeLine(text, ruleStack, timeLimitMs)
+      )
+      if (!result) {
+        // Why: the line's end state is unknown, so continuing would color later lines from a guess.
+        return plain(skipped)
+      }
       return {
         endState: new TextMateTokenizerState(result.ruleStack),
         tokens: result.tokens.map((token) => ({
           startIndex: token.startIndex,
-          // Why: Monaco themes match a single token scope; TextMate returns a
-          // scope stack, and the final entry is the most specific reusable one.
-          scopes: token.scopes.at(-1) ?? fallbackScopeName
+          // Use final TextMate scope: Monaco accepts one scope, while TextMate’s final stack entry is most specific.
+          scopes: mapTokenScopes?.(token.scopes) ?? token.scopes.at(-1) ?? fallbackScopeName
         }))
       }
     }
@@ -74,25 +89,12 @@ function createTokensProvider(
 export async function createTextMateTokensProvider(
   options: TextMateTokensProviderOptions
 ): Promise<TextMateTokensProvider> {
-  const registry = new Registry({
-    onigLib: (options.loadOniguruma ?? loadBrowserOniguruma)(),
-    loadGrammar: options.loadGrammar
-  })
-  let grammar: IGrammar | null
-  try {
-    grammar = await registry.loadGrammar(options.scopeName)
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes(`No grammar provided for <${options.scopeName}>`)
-    ) {
-      throw new Error(`No TextMate grammar registered for scope ${options.scopeName}`)
-    }
-    throw error
-  }
-  if (!grammar) {
-    throw new Error(`No TextMate grammar registered for scope ${options.scopeName}`)
-  }
-
-  return createTokensProvider(grammar, options.scopeName)
+  const [editorCore, registration] = await Promise.all([loadEditorCore(), options.loadGrammar()])
+  await editorCore.core.loadLanguage(registration)
+  return createTokensProvider(
+    editorCore,
+    editorCore.core.getLanguage(registration.name),
+    registration.scopeName,
+    options.mapTokenScopes
+  )
 }

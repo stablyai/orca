@@ -30,8 +30,7 @@ function historicalTurn(index: number): Record<string, unknown> {
   }
 }
 
-/** What the journal hands a reader after a restore: rows in append order. With `statesScope`, each
- *  row carries the turn scope the journal gives a row the translator writes without one. */
+/** Model hosts that include derived turn scopes and older hosts that omit them. */
 function restoredJournal(turnCount: number, statesScope: boolean): AgentJournalRenderItem[] {
   const items: AgentJournalRenderItem[] = []
   const derived = new JournalDerivedTurnScope()
@@ -95,9 +94,10 @@ describe('grouping a Codex thread restored from full history', () => {
           turnKey: turnKeys[index],
           role: message.role,
           rendersProse: true,
+          draws: true,
           outlivesTurn: false,
           reportsFailure: false,
-          reportsCompaction: false
+          explainsTurn: false
         })),
         settledTurnKeys: new Set(bars.settledTurns.keys()),
         expandedTurnKeys: new Set()

@@ -1,4 +1,4 @@
-import type { IPtyProvider } from './types'
+import type { IPtyProvider } from './pty-provider-contract'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import {
   classifyTerminalProcessInspectionFailure,
@@ -15,16 +15,13 @@ type CompletionSensitivePtyProvider = IPtyProvider & {
   ) => Promise<PtyProcessInspection>
 }
 
-/**
- * `scanChildProcesses` marks a read whose answer decides something once, rather than a poll that
- * self-corrects on its next tick. Only hosts where the child answer costs a process-table read
- * act on it; everywhere else the answer was already captured.
- */
+/** scanChildProcesses requests decision-time evidence; steady polls may rely on the next tick to correct stale reads. */
 export type PtyProcessInspectionOptions = {
   expectedIncarnationId?: PtyIncarnationId
   scanChildProcesses?: boolean
-  /** A self-correcting cadence poll that reads only the process name: licenses a host to answer
-   *  from a cheap capture and OMIT evidence. Never set by a caller that consumes evidence. */
+  /** Adoption only: ignore members outside both shell ancestry and console; close still reaches the whole job. */
+  ignoreDetached?: boolean
+  /** Name-only cadence polls may use cheap captures and omit evidence; evidence consumers must never set this. */
   steadyState?: boolean
 }
 

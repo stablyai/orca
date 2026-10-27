@@ -12,21 +12,14 @@ import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
-/**
- * The whole chain `worktree ps` walks: journal -> status feed -> agent-status store -> agent rows
- * -> worktree status.
- *
- * The feed's `published` map never retracts, so it cannot be the roster. A closed chat that was
- * waiting on an approval is the sharp edge: deliberate close does not settle a pending prompt, so
- * the retained summary stays `attention`, which maps to a `blocked` row and would merge the
- * worktree to `permission`. The store is the roster: the host drops the row on close.
- */
+/** Exercise journal to worktree-status liveness: feed summaries never retract, but the store drops closed chats, including unanswered approvals whose retained status stays attention. */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const SUBJECT = makeStructuredAgentStatusSubject(
@@ -66,7 +59,7 @@ async function awaitingApproval() {
       workspaceId: WORKTREE_ID,
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: join(root, SESSION)
   })
@@ -109,7 +102,7 @@ async function awaitingApproval() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => Date.now(),
     statusSink: () => ({
       publish: (summary, subject) => {
@@ -129,11 +122,10 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
     status: 'inactive',
     agents: []
   } as unknown as RuntimeWorktreePsSummary
+  const summaries = new Map([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
-    summaries: new Map([[WORKTREE_ID, row]]),
-    pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
-    missingWorktreeIds: new Set(),
-    workingTerminalEvidenceByWorktreeId: new Map(),
+    summaries,
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {
@@ -144,7 +136,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
       hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map, _paths, _missing, id) => map.get(id) ?? null
+    getSummary: (id) => summaries.get(id) ?? null
   })
   return row
 }

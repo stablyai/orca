@@ -1,9 +1,12 @@
+import {
+  selectCanonicalProjects,
+  selectCanonicalProjectHostSetups
+} from '@/store/project-host-setup-selector'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
-import { useProjectHostSetupProjection } from '@/store/selectors'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -12,7 +15,7 @@ import {
   COMPUTER_USE_SKILL_NAME,
   LINEAR_AGENT_SKILL_NAMES,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+} from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill,
@@ -21,6 +24,7 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { useProjectHostSetupProjection } from '@/store/selectors'
 import { getFallbackTerminalFonts, mergeFontSuggestions } from './SettingsConstants'
 import { useGhosttyImport } from './useGhosttyImport'
 import { useWarpThemeImport } from './useWarpThemeImport'
@@ -31,6 +35,13 @@ import {
   buildSettingsProjectList,
   removeSettingsProjectFromAllHosts
 } from './settings-project-list'
+import { resolveSettingsHostScope } from './settings-host-scope'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { defaultScopeHost } from '@/lib/default-creation-host'
+import {
+  blockRemovalForUnsavedFiles,
+  projectRemovalTargets
+} from '@/components/sidebar/removal-unsaved-files'
 
 export function useSettingsStoreModel() {
   const settings = useAppStore((s) => s.settings)
@@ -44,8 +55,8 @@ export function useSettingsStoreModel() {
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
-  const projects = useAppStore((s) => s.projects)
-  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
+  const projects = useAppStore((s) => selectCanonicalProjects(s))
+  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
   const updateProject = useAppStore((s) => s.updateProject)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const removeProject = useAppStore((s) => s.removeProject)
@@ -58,30 +69,41 @@ export function useSettingsStoreModel() {
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const modelStates = useAppStore((s) => s.modelStates)
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
 
-  const projectHostSetupProjection = useProjectHostSetupProjection()
   // Why: same inputs as nav metadata so both lists agree — the source of truth for the pane list.
+  const projection = useProjectHostSetupProjection()
   const settingsProjectList = useMemo(
     () =>
       buildSettingsProjectList(repos, {
-        projects: projectHostSetupProjection.projects,
-        projectHostSetups: projectHostSetupProjection.setups
+        projects: projection.projects,
+        projectHostSetups: projection.setups
       }),
-    [repos, projectHostSetupProjection]
+    [repos, projection]
   )
   const repoIdToRepresentative = useMemo(
     () => buildRepoIdToRepresentative(settingsProjectList),
     [settingsProjectList]
   )
-  // Why: lets a deep-link's repoId select the owning project's host so host-specific subsection anchors exist.
+  // Deep links must choose the repo’s host before host-specific anchors render.
   const repoIdToHostSelection = useMemo(
     () => buildRepoIdToHostSelection(settingsProjectList),
     [settingsProjectList]
   )
-  // Why: removes the entry on every host, not just the selected one; an entry of a split project holds only its own part (clones keep their own entries).
+  // Remove the entry’s setups on every host; split clones own separate entries.
   const removeProjectAllHosts = useCallback(
-    (setups: readonly ProjectHostSetup[]): Promise<void> =>
-      removeSettingsProjectFromAllHosts(setups, removeProject),
+    async (setups: readonly ProjectHostSetup[]): Promise<void> => {
+      // Block dirty removals because this confirmation cannot list files and leaves folders on disk.
+      const targets = projectRemovalTargets(
+        useAppStore.getState(),
+        setups.map((setup) => ({ repoId: setup.repoId, hostId: setup.hostId }))
+      )
+      const name = setups[0]?.displayName ?? ''
+      if (!blockRemovalForUnsavedFiles(useAppStore.getState, targets, name)) {
+        await removeSettingsProjectFromAllHosts(setups, removeProject)
+      }
+    },
     [removeProject]
   )
 
@@ -93,7 +115,7 @@ export function useSettingsStoreModel() {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
-  // Why: mirror the nav registry's gate so the Linear sidebar entry and section appear/disappear together.
+  // Match navigation’s gate so the Linear entry and pane appear together.
   const linearConnected = useLinearProviderConnected()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
@@ -110,13 +132,12 @@ export function useSettingsStoreModel() {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const skillFreshnessApplies = activeSkillRuntime.canUseLocalSkillFreshness
-  const { inventory: skillFreshnessInventory } = useSkillFreshness(skillFreshnessApplies)
+  const skillFreshnessApplies = activeSkillRuntime.bundledSkillTarget !== null
+  const { plan: skillPlan } = useSkillFreshness(activeSkillRuntime.bundledSkillTarget)
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
-  // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(settings?.terminalScrollbackRows)
-  // Why: keep Ghostty import state at Settings level so the modal survives section remounts.
+  // Keep import state above sections so remounts cannot close the modal.
   const ghostty = useGhosttyImport(updateSettings, settings)
   const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
@@ -139,10 +160,34 @@ export function useSettingsStoreModel() {
   const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
+  const [hasUnsavedChatPromptChanges, setHasUnsavedChatPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
-  // Why: session-only (deliberately not persisted) unlock — Option-click the Experimental page title reveals the hidden group.
+  // Option-click unlocks hidden experiments for this session only.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
+  const [settingsHostChoice, setSettingsHostChoice] = useState<RuntimeClientTarget | null>(null)
+  const defaultScope = defaultScopeHost(settings)
+  const defaultRuntimeEnvironmentId =
+    defaultScope.kind === 'environment' ? defaultScope.environmentId : null
+  // Key by IDs so status-only catalog changes cannot restart host-scoped loads.
+  const savedEnvironmentIdsKey = runtimeEnvironments.map((environment) => environment.id).join('\n')
+  // Web clients use their serving host and cannot offer host selection.
+  const settingsHostScope = useMemo(
+    () =>
+      resolveSettingsHostScope({
+        choice: isWebClient ? null : settingsHostChoice,
+        defaultEnvironmentId: defaultRuntimeEnvironmentId,
+        savedEnvironmentIds: savedEnvironmentIdsKey ? savedEnvironmentIdsKey.split('\n') : [],
+        catalogHydrated: runtimeEnvironmentCatalogHydrated
+      }),
+    [
+      defaultRuntimeEnvironmentId,
+      isWebClient,
+      runtimeEnvironmentCatalogHydrated,
+      savedEnvironmentIdsKey,
+      settingsHostChoice
+    ]
+  )
 
   return {
     settings,
@@ -183,7 +228,7 @@ export function useSettingsStoreModel() {
     linearSkill,
     computerUseSkill,
     skillFreshnessApplies,
-    skillFreshnessInventory,
+    skillPlan,
     voiceModelStatesLoading,
     setVoiceModelStatesLoading,
     scrollbackMode,
@@ -213,11 +258,16 @@ export function useSettingsStoreModel() {
     setHasUnsavedCommitPromptChanges,
     hasUnsavedBranchPromptChanges,
     setHasUnsavedBranchPromptChanges,
+    hasUnsavedChatPromptChanges,
+    setHasUnsavedChatPromptChanges,
     sourceControlAiPromptDiscardSignal,
     setSourceControlAiPromptDiscardSignal,
     confirm,
     hiddenExperimentalUnlocked,
-    setHiddenExperimentalUnlocked
+    setHiddenExperimentalUnlocked,
+    runtimeEnvironments,
+    settingsHostScope,
+    setSettingsHostChoice
   }
 }
 

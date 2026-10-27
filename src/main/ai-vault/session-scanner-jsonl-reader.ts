@@ -1,4 +1,5 @@
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
   type SkippedTranscriptRecord
@@ -11,24 +12,19 @@ type JsonlReadResult = {
   consumedThrough: number
   trailingPartialLine: string | null
   bytesRead: number
-  /** Records dropped for exceeding the per-record byte budget. */
   skippedRecords: SkippedTranscriptRecord[]
 }
 
-// Byte-accurate JSONL fold: offsets count bytes rather than decoded UTF-8
-// characters, so an incremental read resumes at an exact line boundary.
-//
-// A record that outgrows the budget is discarded up to its newline rather than
-// failing the fold, so one oversized record costs one record, not the session.
-// The in-progress record always starts at `consumedThrough`, which is what makes
-// both its running size and the resume offset past a discarded span exact.
+// Track byte offsets across whole records; oversized records are skipped without dropping the session.
 export async function consumeCompleteJsonlLines(args: {
   path: string
   start: number
   onLine: (line: string) => void
   onLineBytes?: (line: Buffer) => void
   shouldStop?: () => boolean
+  signal?: AbortSignal
 }): Promise<JsonlReadResult> {
+  throwIfAiVaultScanCancelled(args.signal)
   if (args.shouldStop?.()) {
     return {
       consumedThrough: args.start,
@@ -43,14 +39,15 @@ export async function consumeCompleteJsonlLines(args: {
   let remainderParts: Buffer[] = []
   let remainderLength = 0
   let stopped = false
-  // Set once the record starting at `consumedThrough` blew the budget: its
-  // bytes are dropped on sight until the newline that ends it.
+  // Discard an oversized record through its newline while retaining its exact start offset.
   let discarding = false
   const skippedRecords: SkippedTranscriptRecord[] = []
 
-  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan')
+  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan', args.signal)
   let chunkStart = args.start
   for await (const chunk of stream as AsyncIterable<Buffer>) {
+    // Check per chunk so cancellation also interrupts giant records and releases the stream.
+    throwIfAiVaultScanCancelled(args.signal)
     bytesRead += chunk.length
     const chunkEnd = chunkStart + chunk.length
     let lineStart = 0
@@ -65,8 +62,7 @@ export async function consumeCompleteJsonlLines(args: {
         discarding = false
       } else {
         let line = chunk.subarray(lineStart, newlineIndex)
-        // Only the first line of a chunk can carry a prefix; resetting inside the
-        // branch keeps the common per-line path allocation-free.
+        // Only the first line carries a prefix; reset here to avoid allocations for complete lines.
         if (remainderLength > 0) {
           line = Buffer.concat([...remainderParts, line], recordLength)
           remainderParts = []
@@ -93,7 +89,7 @@ export async function consumeCompleteJsonlLines(args: {
       break
     }
     if (lineStart < chunk.length && !discarding) {
-      // The unterminated tail is the whole in-progress record, prefix included.
+      // Include carried prefixes when budgeting an unterminated record.
       if (chunkEnd - consumedThrough > MAX_SESSION_TRANSCRIPT_RECORD_BYTES) {
         remainderParts = []
         remainderLength = 0
@@ -108,8 +104,7 @@ export async function consumeCompleteJsonlLines(args: {
   }
 
   if (discarding) {
-    // No terminator yet, so the record may still be growing: leave the cursor at
-    // its start and let the next read re-skip it from the same offset.
+    // An unterminated oversized record can still grow; retain its start as the next resume offset.
     skippedRecords.push({
       byteOffset: consumedThrough,
       approximateBytes: chunkStart - consumedThrough

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   OrcaRuntimeService,
   addGitHubIssueCommentMock,
@@ -15,12 +15,9 @@ import {
   listGitHubIssuesMock,
   listGitHubLabelsMock,
   listGitHubWorkItemsMock,
-  parseOrcaYaml,
-  registerSshFilesystemProvider,
   removeGitHubPRReviewersMock,
   requestGitHubPRReviewersMock,
   setPlatform,
-  unregisterSshFilesystemProvider,
   updateGitHubIssueMock
 } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
@@ -52,26 +49,13 @@ describe('OrcaRuntimeService', () => {
       })
     })
 
-    it('reports ok for a missing remote orca.yaml and error for any other read failure', async () => {
-      const readFile = vi.fn()
-      registerSshFilesystemProvider('ssh-1', { readFile } as never)
+    it('reports an SSH orca.yaml as an error without reading any filesystem', async () => {
       const runtime = new OrcaRuntimeService(remoteStore as never)
 
-      try {
-        readFile.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-        await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
-          status: 'ok',
-          hasHooks: false
-        })
-
-        readFile.mockRejectedValueOnce(Object.assign(new Error('down'), { code: 'ECONNRESET' }))
-        await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
-          status: 'error',
-          hasHooks: false
-        })
-      } finally {
-        unregisterSshFilesystemProvider('ssh-1')
-      }
+      await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
+        status: 'error',
+        hasHooks: false
+      })
     })
 
     it('reports ok for a local repo hook check', async () => {
@@ -81,7 +65,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('resolves SSH issue commands from shared orca.yaml and deletes empty overrides', async () => {
+  it('reads SSH issue commands as absent and drops writes without touching any filesystem', async () => {
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -95,48 +79,18 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
-    vi.mocked(parseOrcaYaml).mockReturnValue({
-      scripts: {},
-      issueCommand: 'claude -p "Fix #{{issue}}"'
-    })
-    const fsProvider = {
-      readFile: vi.fn(async (filePath: string) => {
-        if (filePath.endsWith('.orca/issue-command')) {
-          throw Object.assign(new Error('missing'), { code: 'ENOENT' })
-        }
-        if (filePath.endsWith('orca.yaml')) {
-          return { content: 'issueCommand: claude -p "Fix #{{issue}}"', isBinary: false }
-        }
-        return { content: '', isBinary: false }
-      }),
-      writeFile: vi.fn().mockResolvedValue(undefined),
-      createDir: vi.fn().mockResolvedValue(undefined),
-      deletePath: vi.fn().mockResolvedValue(undefined)
-    }
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
-    try {
-      await expect(runtime.readRepoIssueCommand('id:repo-1')).resolves.toMatchObject({
-        localContent: null,
-        sharedContent: 'claude -p "Fix #{{issue}}"',
-        effectiveContent: 'claude -p "Fix #{{issue}}"',
-        localFilePath: '/remote/repo/.orca/issue-command',
-        source: 'shared'
-      })
-      await expect(runtime.writeRepoIssueCommand('id:repo-1', '   ')).resolves.toEqual({
-        ok: true
-      })
-    } finally {
-      unregisterSshFilesystemProvider('ssh-1')
-    }
-
-    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
-    expect(fsProvider.deletePath).toHaveBeenCalledWith('/remote/repo/.orca/issue-command', false)
-    expect(fsProvider.writeFile).not.toHaveBeenCalledWith(
-      '/remote/repo/.orca/issue-command',
-      expect.anything()
-    )
+    await expect(runtime.readRepoIssueCommand('id:repo-1')).resolves.toMatchObject({
+      localContent: null,
+      sharedContent: null,
+      effectiveContent: null,
+      localFilePath: '/remote/repo/.orca/issue-command',
+      source: 'none'
+    })
+    await expect(runtime.writeRepoIssueCommand('id:repo-1', '   ')).resolves.toEqual({
+      ok: true
+    })
   })
 
   it('allows host integration slug helpers for SSH repos through provider-aware GitHub clients', async () => {
@@ -319,7 +273,8 @@ describe('OrcaRuntimeService', () => {
       12,
       issueUpdates,
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(addGitHubIssueCommentMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -327,7 +282,8 @@ describe('OrcaRuntimeService', () => {
       'Comment',
       null,
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(listGitHubLabelsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -372,7 +328,6 @@ describe('OrcaRuntimeService', () => {
       {},
       'origin'
     )
-    // Why: explicit owner/repo already pins identity, so it stays preference-free.
     expect(getGitHubWorkItemByOwnerRepoMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       prRepo,

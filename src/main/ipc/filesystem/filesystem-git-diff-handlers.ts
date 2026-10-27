@@ -1,17 +1,12 @@
 import { ipcMain } from 'electron'
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
 import { getBranchDiff, getCommitDiff } from '../../git/status'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import {
-  validateFullGitObjectId,
-  validateGitRelativeFilePath
-} from '../filesystem-path-containment'
+import { validateFullGitObjectId, validateGitRelativeFilePath } from './filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 
 export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -32,27 +27,7 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
         connectionId?: string
       }
     ): Promise<GitDiffResult> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        const results = await provider.getBranchDiff(args.worktreePath, args.compare.mergeBase, {
-          includePatch: true,
-          headOid: args.compare.headOid,
-          filePath: args.filePath,
-          oldPath: args.oldPath
-        })
-        return (
-          results[0] ?? {
-            kind: 'text',
-            originalContent: '',
-            modifiedContent: '',
-            originalIsBinary: false,
-            modifiedIsBinary: false
-          }
-        )
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const oldPath = args.oldPath
@@ -91,18 +66,7 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
     ): Promise<GitDiffResult> => {
       const commitOid = validateFullGitObjectId(args.commitOid, 'commitOid')
       const parentOid = args.parentOid ? validateFullGitObjectId(args.parentOid, 'parentOid') : null
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getCommitDiff(args.worktreePath, {
-          commitOid,
-          parentOid,
-          filePath: args.filePath,
-          oldPath: args.oldPath
-        })
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const oldPath = args.oldPath

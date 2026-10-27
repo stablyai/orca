@@ -1,10 +1,7 @@
 import type { PtyManagementDaemonCwdClass } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 
-/**
- * The folder phrase the toast and the fix dialog both drop into "your {{folder}}", so the two read
- * as one notice. Only the three protected classes have a name macOS itself uses.
- */
+/** Use the same macOS folder phrase in toast and remedy so they read as one notice. */
 export function macFolderAccessFolderName(cwdClass: PtyManagementDaemonCwdClass): string {
   switch (cwdClass) {
     case 'documents':

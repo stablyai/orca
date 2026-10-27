@@ -1,0 +1,13 @@
+{
+  "capturedAt": "2026-10-13T08:29:43.977Z",
+  "platform": "darwin",
+  "command": [
+    "bash",
+    "-c",
+    "echo /home/alice/dev/notes/README.md; echo /home/alice/dev/renderer/package.json"
+  ],
+  "cols": 80,
+  "rows": 10,
+  "note": "Synthetic public paths from issue #28139. Captured via a real PTY at 80 columns; replayed through the terminal parser for physical rows and wrap metadata.",
+  "exitCode": 0
+}

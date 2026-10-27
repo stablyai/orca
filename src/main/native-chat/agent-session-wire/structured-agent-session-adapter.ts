@@ -1,21 +1,17 @@
+import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
+import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type {
+  AgentSessionRewindFork,
   AgentSessionRewindReason,
   AgentSessionRewindSupport
 } from '../../../shared/agent-session-rewind'
-// What the wire needs from a provider adapter.
-//
-// Phase 2 implements this over the Codex app-server and the Claude Agent SDK;
-// nothing here starts, resumes, or talks to a process. The wire owns the
-// journal and the lease, so an adapter only has to answer "did the provider
-// take this?" — and it answers `unknown` rather than guessing, because the
-// journal renders that as delivery unconfirmed instead of as failure.
+// The host owns journal/lease authority; adapters report delivery uncertainty without guessing.
 
-import type { AgentSessionBackgroundTaskStops } from '../../../shared/agent-child-work-stop-targets'
 import type {
+  AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
-  AgentJournalItemBody,
   AgentJournalMessageItem,
-  AgentJournalDispatchState,
   AgentJournalTurnItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
@@ -23,18 +19,15 @@ import type { AgentSessionProviderHandleLink } from '../../../shared/agent-sessi
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
-  AgentSessionProcessIdentity
+  AgentSessionProcessIdentity,
+  AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionSlashCommand,
-  AgentSessionThreadGoalChange
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
+import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type {
-  AgentSessionCancelOutcome,
+  AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
 } from './structured-agent-session-adapter-stop'
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
@@ -43,306 +36,234 @@ export type {
   StructuredAgentSessionStopCause
 } from './structured-agent-session-stop-cause'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
-import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type {
+  StructuredAgentSessionStartupAttempt,
+  StructuredAgentSessionAcquisitionReceipt
+} from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
+import type {
+  StructuredAgentSessionProviderOpen,
+  StructuredAgentSessionProviderOpenResult
+} from './structured-agent-session-provider-open-contract'
 
-export class AgentSessionAcquisitionRefusal extends Error {
-  readonly code = 'agent_session_operation_invalid'
+import type {
+  StructuredAgentSessionLiveOptions,
+  StructuredAgentSessionOptionProjection
+} from './structured-agent-session-option-models'
+export type { StructuredAgentSessionLiveOptions } from './structured-agent-session-option-models'
 
-  constructor(
-    message: string,
-    /** The situation, so the chat can say what to do; the message is Orca's log wording. Absent,
-     *  the provider refused its own start. */
-    readonly reason: AgentSessionRefusalReason<'agent_session_operation_invalid'> = 'providerStartFailed'
-  ) {
-    super(message)
-    this.name = 'AgentSessionAcquisitionRefusal'
-  }
+export {
+  AgentSessionAcquisitionRefusal,
+  AgentSessionPreSpawnError,
+  AgentSessionPromptAnswerRejectedError,
+  AgentSessionPromptUnavailableError,
+  isAgentSessionPreSpawnError
+} from './structured-agent-session-adapter-errors'
+export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
 
-  /** The conversation's history is more than this host can restore. */
-  static historyTooLarge(message: string): AgentSessionAcquisitionRefusal {
-    return new AgentSessionAcquisitionRefusal(message, 'historyTooLarge')
-  }
-}
+export {
+  AgentSessionAcquisitionExitProvenError,
+  AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError
+} from './structured-agent-session-acquisition-errors'
 
-export class AgentSessionPromptUnavailableError extends Error {
-  constructor(itemId: string) {
-    super(`The provider is no longer waiting on ${itemId}.`)
-    this.name = 'AgentSessionPromptUnavailableError'
-  }
-}
-
-/** The provider cannot take this answer. Thrown before the journal commit, so nothing is recorded. */
-export class AgentSessionPromptAnswerRejectedError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'AgentSessionPromptAnswerRejectedError'
-  }
-}
-
-/**
- * The provider's own root process was observed to exit, but its descendant tree
- * was not proven gone. The lease keys on the root's pid and start time, so its
- * observed death releases the reservation; nothing is claimed about descendants,
- * including one seen still alive.
- */
-export class AgentSessionAcquisitionRootExitObservedError extends Error {
-  constructor(cause: unknown) {
-    // The provider's own diagnostic is the only thing the user can act on.
-    super(cause instanceof Error ? cause.message : String(cause), { cause })
-    this.name = 'AgentSessionAcquisitionRootExitObservedError'
-  }
-}
-
-/** The provider child failed and cleanup proved its whole tree gone. As with a root exit, the
- *  provider's own diagnostic is the message. */
-export class AgentSessionAcquisitionExitProvenError extends Error {
-  constructor(cause: unknown) {
-    super(cause instanceof Error ? cause.message : String(cause), { cause })
-    this.name = 'AgentSessionAcquisitionExitProvenError'
-  }
-}
-
-export class AgentSessionAcquisitionExitUnprovenError extends Error {
-  constructor(cause: unknown) {
-    super('agent_session_acquisition_exit_unproven', { cause })
-    this.name = 'AgentSessionAcquisitionExitUnprovenError'
-  }
-}
-
-/** What a reservation turns into once something is actually running under it:
- *  the process the host can probe, and the provider handle it was minted with. */
 export type AgentSessionAcquisition = {
   process: AgentSessionProcessIdentity
-  link: AgentSessionProviderHandleLink
-  /** Host-local identity for this exact provider child, distinct even when the durable fence is
-   *  reused by a superseding acquisition. */
-  acquisitionGeneration?: string
-  /** Absent means `ready`: the adapter proved startup before answering. */
-  providerChildPhase?: StructuredAgentSessionProviderChildPhase
+  /** Spawn-time handles only; protocol handles come from open. */
+  link?: AgentSessionProviderHandleLink
+  /** Exact host-local child identity, even when acquisitions reuse a durable fence. */
+  acquisitionGeneration: string
 }
 
-/** A refusal before spawn that a person can act on; the site that refused names it. */
-export type AgentSessionPreSpawnReason = Extract<
-  AgentSessionRefusalReason<'agent_session_operation_invalid'>,
-  'managedAccountEnvOverride' | 'accountSwitchInProgress' | 'managedAccountUnsupported'
->
-
-/** Acquisition failed with first-hand proof that no provider process existed. */
-export class AgentSessionPreSpawnError extends Error {
-  /** Absent: Orca's own reason, which only the log reads. A wrapped pre-spawn error keeps its. */
-  readonly reason: AgentSessionPreSpawnReason | undefined
-
-  constructor(
-    cause: unknown,
-    options: { reason?: AgentSessionPreSpawnReason; message?: string } = {}
-  ) {
-    super(options.message ?? (cause instanceof Error ? cause.message : String(cause)), { cause })
-    this.name = 'AgentSessionPreSpawnError'
-    this.reason = options.reason ?? (isAgentSessionPreSpawnError(cause) ? cause.reason : undefined)
-  }
-}
-
-export function isAgentSessionPreSpawnError(error: unknown): error is AgentSessionPreSpawnError {
-  return error instanceof Error && error.name === 'AgentSessionPreSpawnError'
-}
-
-/** A conversation command the host handed to a provider child: the running turn it opened for it,
- *  which the child's translator ends, and where the command's own result row goes. */
+/** The host creates the command’s running turn; the child translator ends it and writes its result. */
 export type StructuredAgentSessionCommandRun = {
   clientMessageId: string
-  /** What a Stop names. */
   turnId: string
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
-  /** The turn record as the host wrote it; the translator's end revises it. */
   running: AgentJournalTurnItem
 }
 
-/** A command the provider took answers it in place and echoes no item of its own. */
+/** Commands may answer in place without echoing provider items. */
 export type AgentSessionCommandAdmission =
   | AgentSessionDispatchOutcome
   | { state: 'accepted'; providerIdentity: null }
 
+/** Execution evidence only, never picker defaults; steers report their running turn’s choices. */
+export type AgentSessionRanOptionsEvidence = { ranOptions?: Readonly<Record<string, string>> }
+
 export type AgentSessionDispatchOutcome =
-  /** The provider owns the turn now, under this identity. */
-  | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
-  /**
-   * The provider transport took the message; identity settles later, out of band.
-   * The submission stays `pending`: a message queued behind a running turn is
-   * acknowledged only when that turn starts, so elapsed time is not evidence of
-   * anything and never promotes this to `unknown`.
-   */
-  | { state: 'admitted' }
-  /** Words from `agentSessionFailureWords`, never written by hand. */
-  | ({ state: 'rejected' } & AgentJournalDispatchRejection)
-  /** The call did not settle. Never re-send on the user's behalf. */
+  | ({
+      state: 'accepted'
+      providerIdentity: AgentJournalItemIdentity
+    } & AgentSessionRanOptionsEvidence)
+  /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery. */
+  | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
+  /** Generate rejection words with agentSessionFailureWords; answeredInTurn identifies an already-ended answering turn. */
+  | ({
+      state: 'rejected'
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
+    } & AgentJournalDispatchRejection)
+  /** Unsettled calls never authorize automatic resend. */
   | { state: 'unknown'; reason: string }
 
 export type StructuredAgentSessionEndedEvent = {
   type: 'ended'
   sessionId: string
-  /** Log text only; the chat's words come from `failure`. */
+  /** Log only; failure supplies user-facing wording. */
   reason: string
-  /** Why it ended, as the adapter knows it: the provider's exit with its own diagnostic, or an
-   *  Orca fault. Absent reads as a provider exit with nothing to add. */
+  /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  /** Execution-host observations from a requested provider close, when available. */
+  processExit?: {
+    root: 'live' | 'unverifiable' | 'exited'
+    workload: 'live' | 'unverifiable' | 'exited'
+  }
   fence: number
   acquisitionGeneration: string
-  /** Host receipt of the child exit: the end time of a turn it interrupted. */
+  /** Observed child exit supplies interrupted-turn end time. */
   observedAt?: number
-  /** The provider ended before it finished starting, so resuming it would repeat the failure. */
-  startupUnproven?: true
+  /** Failed startup proves none of its handed-over work ran. */
+  startupUnanswered?: true
 }
 
-/** The child a publish-first acquire handed over has now proven its start: startup facts applied
- *  and saved options restored. What it reports from here on is fact, not a catalog guess. */
-export type StructuredAgentSessionStartedEvent = {
-  type: 'started'
-  sessionId: string
-  fence: number
-  acquisitionGeneration: string
-  /** What the child proved, snapshotted by the adapter from what startup already read. The host
-   *  handles this inside the session's serialized step, so it must not ask the CLI. */
-  reportedOptions: AgentSessionOptionsResult['current']
-  /** Saved options the restore could not apply; the host drops them rather than persist them. */
-  restoreSkippedOptions: readonly string[]
-}
+/** Readiness never waits for optional option reports. */
+export type StructuredAgentSessionOptionsReportedEvent =
+  StructuredAgentSessionProviderOpenResult & {
+    type: 'options-reported'
+    sessionId: string
+    fence: number
+    acquisitionGeneration: string
+  }
 
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
-  | StructuredAgentSessionStartedEvent
+  | StructuredAgentSessionOptionsReportedEvent
 
-/** Whether the provider child behind an acquisition has proven its start. A publish-first
- *  acquire hands over a `starting` child and the `started` lifecycle event flips it. */
 export type StructuredAgentSessionProviderChildPhase = 'starting' | 'ready'
 
-export type StructuredAgentSessionAcquireInput = {
-  identity: AgentSessionJournalIdentity
-  fence: number
-  spawnToken: string
-  options?: Readonly<Record<string, string>>
-  /** Provider events may begin before acquisition returns. */
-  events?: StructuredAgentSessionEventSink
-  recordPhase?: AgentSessionCreatePhaseRecorder
-  /** Durably records the child's identity the moment it exists, before any handshake, so a crash
-   *  mid-start leaves an owner recovery can stop. The acquisition's `process` must match it. */
-  onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
-}
+/** Host passes the whole startup attempt; optional fields permit minimal adapter test inputs. */
+export type StructuredAgentSessionAcquireInput = Pick<
+  StructuredAgentSessionStartupAttempt,
+  'identity' | 'fence' | 'spawnToken'
+> &
+  Partial<Omit<StructuredAgentSessionStartupAttempt, 'identity' | 'fence' | 'spawnToken'>> & {
+    recordPhase?: AgentSessionCreatePhaseRecorder
+    /** Persist process identity before handshake so mid-start crashes leave a recoverable owner; returned process must match. */
+    onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
+  }
 
 export type StructuredAgentSessionSetOptionInput = {
   sessionId: string
   key: string
   value: string
   fence: number
+  /** Stop/close/quit aborts cannot wait for hung option writes; self-bounded adapters may ignore the signal. */
+  signal?: AbortSignal
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
-  /** Provider-aware capability check for hosts that route more than one adapter. */
+  open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
-  /** Provider/runtime support, kept here so remote enablement changes adapter data, not UI logic. */
+  /** Keep runtime/location support in adapter data for remote enablement. */
   supportsLocation?(location: AgentSessionExecutionLocation): boolean
-  /** Makes the reservation real. Called once per reservation, with the spawn
-   *  token the lease was reserved under and the fence the handle must be minted
-   *  at — the store rejects a link minted at any other fence. */
+  /** Spawn once per reservation; use its token/fence because the store rejects mismatched handles. */
   acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition>
-  /** Reaps an acquired provider when the host cannot commit or prove its lease.
-   *  Returns true only after provider child exit is proven. Throws
-   *  `AgentSessionAcquisitionRootExitObservedError` when the provider root's own
-   *  exit was observed first-hand but its descendants were not proven gone. */
+  /** Reap failed acquisitions; true proves child exit, root-only proof throws AgentSessionAcquisitionRootExitObservedError. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
+  hasOwnedAcquisition?(sessionId: string): boolean
+  stoppedAcquisition?(sessionId: string): StructuredAgentSessionAcquisitionReceipt | undefined
+  permissionModeRequiresAcquisition?(
+    sessionId: string,
+    mode: AgentChatPermissionChoice
+  ): boolean | undefined
   dispatch(input: {
     sessionId: string
     clientMessageId: string
     body: AgentJournalMessageItem
+    /** Apply immutable submission choices only to this dispatch. */
+    executionOptions?: AgentSessionExecutionOptions
+    /** Abort only before provider write, preserving the original signal reason so the host knows it was unwritten. */
+    signal?: AbortSignal
     fence: number
-    /** Host clock on the submission row this send came from; the origin the turn
-     *  it opens records as `requestedAt`. */
+    /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
-    /** Revalidate after preparation, immediately before writing to the provider. */
     beforeDispatch?: () => Promise<void>
+    /** Whether the host still owns this exact child after asynchronous preparation. */
+    isCurrent?: () => boolean
+    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
+    /** Mark preparation before choices mutate the provider. */
+    onInputPreparation?: () => void
+    /** Checkpoint between choice application and execution-evidence capture. */
+    onExecutionSnapshot?: () => void
   }): Promise<AgentSessionDispatchOutcome>
-  /** `agent` answers for a session with no child running, from the provider alone. */
+  /** Narrow declared rewind per session; agent supplies the resting-session answer. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
+  /** Observe lost-reply rewind effects without repeating; keptTurnId null means no turns retained. */
   recoverRewind?(input: {
     sessionId: string
     fence: number
+    signal?: AbortSignal
     beforeTurnId: string
-  }): Promise<
-    | { ok: true; items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
-    | { ok: false; reason: AgentSessionRewindReason }
-  >
+    keptTurnId: string | null
+  }): Promise<{ ok: true } | { ok: false; reason: AgentSessionRewindReason }>
   rewind?(input: {
     sessionId: string
     fence: number
     beforeTurnId: string
-    onPrepared?: (
-      items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]
-    ) => Promise<void>
+  }): Promise<{ ok: true } | { ok: false; reason: AgentSessionRewindReason }>
+  /** Save the rewind fork before changing journal/record; refusals preserve the conversation, even at rest. */
+  forkForRewind?(input: {
+    record: AgentSessionRecord
+    beforeMessage: { sessionId: string; uuid: string }
+    rewindOperationId: string
   }): Promise<
-    | { ok: true; items?: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
-    | { ok: false; reason: AgentSessionRewindReason }
+    { ok: true; fork: AgentSessionRewindFork } | { ok: false; reason: AgentSessionRewindReason }
   >
-  /** Sends a conversation compaction and answers with the provider's receipt of it, as a dispatch
-   *  does. The command's turn is the child's journal translator's to end, from the provider's own
-   *  frames; a child that ends first leaves it to the host's settlement of that child. */
+  /** Return provider compaction admission; translator ends the command turn unless child-exit recovery does first. */
   compact?(input: {
     sessionId: string
     fence: number
     command: StructuredAgentSessionCommandRun
   }): Promise<AgentSessionCommandAdmission>
-  /** Cancels one turn, not the session: a session-wide interrupt would also kill
-   *  a turn the client never asked to stop. With no `turnId` the conversation asked to stop
-   *  everything it has in flight — a running turn, or a dispatch whose turn has not opened yet. */
-  cancelTurn(input: {
-    sessionId: string
-    turnId?: string
-    fence: number
-    prompt?: { itemId: string }
-    /** Latest journal submission for this fence, when the host has one. */
-    dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
-    /** Re-reads the turn the published journal says is running — the only turn a client
-     *  could have named. A function, not a value, because the guard reads it when the
-     *  interrupt is issued. Absent for direct callers with no journal. */
-    resolveLiveTurnId?: () => string | null
-  }): Promise<AgentSessionCancelOutcome>
-  /** Changes the provider thread's goal. `rejected` is the provider refusing the
-   *  change; a throw leaves its effect unknown. Absent where no goal exists. */
+  /** Rejection proves refusal; thrown changes have unknown effects. */
   changeThreadGoal?(input: {
     sessionId: string
     fence: number
     change: AgentSessionThreadGoalChange
-    /** True when the journal records a goal, whatever its status: a `set` must
-     *  start a new goal rather than rewrite that one's objective in place. */
+    /** Existing recorded goals require set to create a new objective, never rewrite the old one. */
     replacesGoal: boolean
+    executionOptions?: AgentSessionExecutionOptions
+    signal?: AbortSignal
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Whether this session can change its goal; `agent` answers one at rest. */
-  supportsThreadGoal?(sessionId: string, agent?: string): boolean
-  /** Whether this session writes context facts to its turn rows; `agent` answers one at rest. */
-  recordsContextUsage?(sessionId: string, agent?: string): boolean
-  /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records. */
-  stopBackgroundTasks?(input: {
+  /** Derive unanswered retained work from the live child; false without one. */
+  holdsDispatch?(sessionId: string): boolean
+  /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
+  liveTurnId?(sessionId: string): string | null | undefined
+  /** The live child opened in another approval mode than requested and this input picks another model. */
+  requiresModelTransitionRestart?(input: {
     sessionId: string
     fence: number
-    taskIds: readonly string[]
-  }): Promise<{ cancelled: boolean }>
-  /** The stops this provider honours for a live session's background work; undefined when the
-   *  adapter holds no live session for it. */
-  backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
-  /** The provider reported taking a send it has neither answered nor ended, as a queued follow-up
-   *  or a silent retry does. Derived from the live child; false with none. */
-  holdsDispatch?(sessionId: string): boolean
-  /** The `/` surface the running provider reports for itself. Undefined when the
-   *  provider never reports one, which is what keeps the client on its catalog. */
+    executionOptions?: AgentSessionExecutionOptions
+  }): boolean
+  /** Captures only this input's pending answer/output in the supplied live acquisition. */
+  capturePendingOutput?(input: {
+    sessionId: string
+    clientMessageId: string
+    fence: number
+    generation: string
+  }): (() => boolean) | undefined
+  /** Undefined without a live child; then the host conservatively treats unanswered sends as held. */
+  heldSends?(sessionId: string): ReadonlySet<string> | undefined
+  /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
+  holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
+  /** Undefined preserves the client catalog when the provider reports none. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
-  /** The `/` surface of a chat whose agent is not running; absent when the provider has none. */
   atRestCommands?: StructuredAgentSessionAtRestCommands
-  /** Claims the live callback, builds the provider reply, commits the journal CAS while that claim is
-   *  held, then answers it. A reply that cannot be built throws `AgentSessionPromptAnswerRejectedError`
-   *  before the commit. A prompt cancel claims the same callback, so only one operation can commit. */
+  /** Claim the live callback, build reply, commit journal CAS, then answer; reject unbuildable replies before commit. */
   answerPrompt(input: {
     sessionId: string
     itemId: string
@@ -354,35 +275,36 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
-  /** Resolves once a live session can take an option write, or after a bound; never rejects. */
-  awaitOptionWritable?(sessionId: string): Promise<void>
-  /** Resolves once a session published before it proved its start has proven it, failed, or been
-   *  closed; at once for any other. A start that did not land resolves with the chat's words for
-   *  why. Never rejects. */
-  awaitStarted?(sessionId: string): Promise<void | SubmissionRejectionFact>
-  readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
-  /** Option keys skipped after a provider rejected their persisted restore value. */
+  /** Synchronous capability projection; never acquires inventory or changes saved intent. */
+  projectOptions?(
+    sessionId: string,
+    options: Readonly<Record<string, string>>
+  ): StructuredAgentSessionOptionProjection | undefined
+  /** Fetch outside the lane; apply under the same child’s fence. */
+  prepareReadOptions?(input: {
+    sessionId: string
+    fence: number
+  }): Promise<() => StructuredAgentSessionLiveOptions> | undefined
+  readOptions?(input: {
+    sessionId: string
+    fence: number
+  }): Promise<StructuredAgentSessionLiveOptions>
   readOptionRestoreFailures?(sessionId: string): readonly string[]
-  /** Transcript path for journal recovery. Omit to let the existing session-file
-   *  resolver discover it from the provider session id. */
-  historyFilePath?(input: { identity: AgentSessionJournalIdentity }): Promise<string | null>
-  /** Provider history for restart reconciliation, bounded to what the provider
-   *  recorded after the journal's last committed item. Only the adapter can say
-   *  whether the read has a proven start and whether a turn is still running, so
-   *  it owns both flags. Omit where the provider records no boundary-consistent
-   *  history; an omitted window leaves every unsettled submission `unknown`. */
-  providerHistoryWindow?(input: {
+  /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
+  copyConversation?(input: {
     identity: AgentSessionJournalIdentity
+    providerSessionId: string
     accountHome: AgentSessionAccountHome
-  }): Promise<ProviderHistoryWindow | null>
-  /** Gracefully stops the structured owner after its event stream is drained. */
-  /** Returns true only after the provider child exit is proven. A root-exit or processless verdict
-   *  is thrown only once the session is finalized; read it through `stopAgentSessionProviderRoot`. */
-  closeSession?(sessionId: string): Promise<boolean>
-  /** Stops a provider after a sink failure; the resulting exit is recovered as unexpected. */
+  }): Promise<AiVaultConversationCopy>
+  /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
+  closeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
+  /** Sink-failure shutdown leaves exit recovery unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>
-  /** Stops a provider child for teardown without requiring a future-resume cursor. */
-  disposeSession?(sessionId: string): Promise<boolean>
-  /** Host acknowledgement that the proven-dead child, lease and journal owner are released. */
-  acknowledgeSessionRelease?(sessionId: string): void
+  /** Teardown without requiring a future-resume cursor. */
+  disposeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
+  /** Acknowledge only after dead-child, lease and journal ownership release. */
+  acknowledgeSessionRelease?(
+    sessionId: string,
+    acquisition?: StructuredAgentSessionAcquisitionReceipt
+  ): void
 }

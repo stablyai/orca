@@ -1,23 +1,8 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { readlink } from 'node:fs/promises'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
 
-/**
- * Resolve the current working directory of a local process by pid.
- *
- * Why duplicated from `src/relay/pty-shell-utils.ts`: the relay and Electron
- * main process have separate build graphs, and cross-importing across them
- * is not a pattern used in this repo. The function is short and pure, and
- * the duplication is cheaper than reshaping both bundle graphs.
- *
- * Tries `/proc/<pid>/cwd` on Linux, falls back to `lsof -d cwd` on macOS.
- * Returns `''` when neither works (including Windows, where `/proc` is
- * absent and `lsof` is not native).
- *
- * Results are coalesced and briefly cached per-pid: rapid repeat calls
- * (e.g. chained Cmd+D on macOS) reuse a single `lsof` child rather than
- * stacking concurrent subprocesses whose results the caller may discard
- * after its own timeout.
- */
+// Coalesce/cache per-PID cwd reads briefly so rapid pane actions cannot accumulate lsof subprocesses.
 const CACHE_TTL_MS = 1500
 const CACHE_MAX_ENTRIES = 256
 const LSOF_TIMEOUT_MS = 1500
@@ -27,10 +12,7 @@ const resultCache = new Map<number, CacheEntry>()
 const inflight = new Map<number, Promise<string>>()
 
 export async function resolveProcessCwd(pid: number): Promise<string> {
-  // Assumes the caller holds a live reference to `pid` for the TTL window.
-  // If a pid is recycled within 1.5s of a prior query, the cache would
-  // return the previous process's cwd — acceptable because our callers
-  // (getCwd on an active pty/session) can't outlive their pid.
+  // Callers must own a live PID through the 1.5s TTL; reuse could otherwise return another process cwd.
   const now = Date.now()
   sweepExpiredResultCache(now)
   const cached = resultCache.get(pid)
@@ -41,9 +23,7 @@ export async function resolveProcessCwd(pid: number): Promise<string> {
   if (existing) {
     return existing
   }
-  // Populate the cache inside the shared promise chain so every awaiter
-  // (including any second caller that joined via `inflight`) observes the
-  // result through the same write, rather than racing on a post-await set.
+  // Cache within the shared promise so all waiters observe the same write.
   const promise = doResolve(pid).then((value) => {
     rememberResult(pid, value, Date.now())
     inflight.delete(pid)
@@ -63,8 +43,7 @@ function sweepExpiredResultCache(now: number): void {
 
 function rememberResult(pid: number, value: string, now: number): void {
   resultCache.set(pid, { value, at: now })
-  // Why: terminals can churn through many OS PIDs in one app session. A short
-  // TTL only helps if the old PID is queried again, so also bound unique keys.
+  // TTL alone cannot evict PIDs never queried again; bound distinct entries too.
   while (resultCache.size > CACHE_MAX_ENTRIES) {
     const oldest = resultCache.keys().next().value
     if (oldest === undefined) {
@@ -75,9 +54,7 @@ function rememberResult(pid: number, value: string, now: number): void {
 }
 
 async function doResolve(pid: number): Promise<string> {
-  // Why: skip an existsSync gate and just try the readlink. The check+read
-  // pair races a concurrent process exit the same way the lsof+existsSync
-  // pair did, and the catch already falls through to lsof.
+  // Try readlink directly; a prior existence check adds an exit race without preventing read failure.
   try {
     return await readlink(`/proc/${pid}/cwd`)
   } catch {
@@ -85,17 +62,11 @@ async function doResolve(pid: number): Promise<string> {
   }
 
   try {
-    // Why: `-a` ANDs the -p and -d filters. Without it, macOS lsof ORs them
-    // and emits cwd records for every process on the system, so the n-line
-    // scan below picks up the first unrelated process (often pid ~391 with
-    // cwd `/`) and returns `/` regardless of the target pid's real cwd.
+    // lsof needs -a to AND PID/cwd filters; OR would return unrelated process cwd records.
     const stdout = await readCwdWithLsof(pid)
     for (const line of stdout.split('\n')) {
       if (line.startsWith('n') && line.includes('/')) {
-        // Why: lsof -d cwd is authoritative — don't second-guess it with
-        // existsSync. A concurrent rmdir would race the check and cause us
-        // to drop the correct answer; node-pty handles a missing cwd on
-        // spawn anyway.
+        // A later rmdir can race existence checks; preserve the authoritative lsof result for spawn.
         return line.slice(1)
       }
     }
@@ -128,12 +99,11 @@ function readCwdWithLsof(pid: number): Promise<string> {
       callback()
     }
 
-    // Why: execFile's timeout only signals lsof; a missing callback would
-    // otherwise leave the shared per-pid cwd lookup promise cached forever.
+    // execFile timeout only sends a signal; bound a missing callback so shared lookup cannot remain cached forever.
     try {
       child = execFileCb(
         'lsof',
-        ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
+        [...LSOF_NONBLOCKING_ARGS, '-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
         {
           encoding: 'utf-8',
           timeout: LSOF_TIMEOUT_MS

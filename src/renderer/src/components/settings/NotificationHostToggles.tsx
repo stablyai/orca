@@ -4,12 +4,17 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { Separator } from '../ui/separator'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { useNotificationSourceOptions } from './use-notification-source-options'
+import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
 import { translate } from '@/i18n/i18n'
+import { useBoundedHostRows } from '../host-picker/use-bounded-host-rows'
+import { HostListSearchField } from '../host-picker/HostListSearchField'
+import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
 
 type NotificationHostTogglesProps = {
   mutedNotificationSourceIds: readonly NotificationSourceId[]
   disabled: boolean
-  onChange: (hostId: NotificationSourceId, muted: boolean) => void
+  /** Every id the toggled machine stands for: an SSH host and its managed server mute together. */
+  onChange: (hostIds: readonly NotificationSourceId[], muted: boolean) => void
 }
 
 export function NotificationHostToggles({
@@ -17,9 +22,14 @@ export function NotificationHostToggles({
   disabled,
   onChange
 }: NotificationHostTogglesProps): React.JSX.Element | null {
-  const hostOptions = useNotificationSourceOptions()
+  const hostOptions = pickerExecutionHosts(useNotificationSourceOptions())
   const mutedSourceIds = new Set(mutedNotificationSourceIds)
-  const mutedCount = hostOptions.filter((host) => mutedSourceIds.has(host.id)).length
+  const isMuted = (host: (typeof hostOptions)[number]): boolean =>
+    [host.id, ...(host.aliasHostIds ?? [])].some((id) => mutedSourceIds.has(id))
+  const mutedHosts = hostOptions.filter(isMuted)
+  const mutedCount = mutedHosts.length
+  // Pin muted hosts so row limits cannot hide the switch needed to unmute.
+  const rows = useBoundedHostRows(hostOptions, new Set(mutedHosts.map((host) => host.id)))
   // Keep an effective mute reachable after the last remote machine is removed.
   if (hostOptions.length <= 1 && mutedCount === 0) {
     return null
@@ -58,16 +68,20 @@ export function NotificationHostToggles({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="ml-4">
-            {hostOptions.map((host) => (
+            {rows.searchable ? (
+              <HostListSearchField value={rows.query} onChange={rows.setQuery} />
+            ) : null}
+            {rows.shown.map((host) => (
               <NotificationSettingToggle
                 key={host.id}
                 label={host.label}
                 description={host.detail}
-                checked={!mutedSourceIds.has(host.id)}
+                checked={!isMuted(host)}
                 disabled={disabled}
-                onToggle={() => onChange(host.id, !mutedSourceIds.has(host.id))}
+                onToggle={() => onChange([host.id, ...(host.aliasHostIds ?? [])], !isMuted(host))}
               />
             ))}
+            <HostListOverflowNote hiddenCount={rows.hiddenCount} />
           </div>
         </CollapsibleContent>
       </Collapsible>

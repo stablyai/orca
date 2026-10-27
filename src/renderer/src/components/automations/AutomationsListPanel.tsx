@@ -102,11 +102,6 @@ export type AutomationsListPanelProps = {
     action: ExternalAutomationAction,
     scope: ExternalAutomationScope
   ) => void
-  openEditExternalDialog: (
-    manager: ExternalAutomationManager,
-    job: ExternalAutomationJob,
-    scope: ExternalAutomationScope
-  ) => void
   openCreateDialog: (template?: AutomationTemplate) => void
   canCreateAutomation: boolean
   onOpenDetail: () => void
@@ -155,7 +150,6 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     toggleAutomation,
     requestDeleteAutomation,
     requestExternalAction,
-    openEditExternalDialog,
     openCreateDialog,
     canCreateAutomation,
     onOpenDetail,
@@ -164,7 +158,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     onOpenRuns
   } = props
   const listRef = useRef<HTMLDivElement>(null)
-  // Hosts moved into the Filters menu, so its toolbar row is the focus fallback now.
+  // Use the Filters toolbar as focus fallback now that it owns host controls.
   const toolbarRef = useRef<HTMLDivElement>(null)
   const pendingKeyboardScrollRef = useRef(false)
   // Why: keyboard traversal and focus recovery read render order, which the sort owns.
@@ -359,7 +353,6 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
                       onOpenDetail()
                     }}
                     onRequestAction={requestExternalAction}
-                    onEdit={openEditExternalDialog}
                   />
                 )
               )}

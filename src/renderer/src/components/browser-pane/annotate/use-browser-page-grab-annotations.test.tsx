@@ -63,7 +63,6 @@ function mount(invalidateBeforePendingEffect = false) {
   const containerRef = { current: null }
   const webviewRef = { current: null }
   const setBrowserOverlayViewport = vi.fn()
-  const setBrowserAnnotationTrayOpen = vi.fn()
   const hook = renderHook(() => {
     const grab = useGrabMode('page-1')
     const annotations = useBrowserPageGrabAnnotations({
@@ -73,7 +72,6 @@ function mount(invalidateBeforePendingEffect = false) {
       containerRef,
       webviewRef,
       setBrowserOverlayViewport,
-      setBrowserAnnotationTrayOpen,
       browserAnnotationsLength: 0
     })
     const { cancelPendingBrowserCapture } = annotations

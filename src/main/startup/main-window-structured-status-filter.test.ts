@@ -1,8 +1,4 @@
-// The renderer half of the half-migration seam.
-//
-// Until PR 2 retires `StructuredAgentSessionStatusBridge`, the renderer writes structured rows
-// itself. Main forwarding them too would give one pane key two writers, so the window listener
-// drops them — a filter nothing else asserts, which makes deleting it green everywhere.
+// Until StructuredAgentSessionStatusBridge retires, renderer owns structured rows; forwarding them from main creates duplicate pane writers.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server'
@@ -29,8 +25,7 @@ vi.mock('../window/dashboard-popout-window', () => ({
   getDashboardPopoutWindow: () => null
 }))
 vi.mock('./synthetic-title-runtime', () => ({
-  driveSyntheticTitleFromHook: vi.fn(),
-  stopAllSyntheticTitleSpinners: vi.fn()
+  stopSyntheticTitleSpinnerTimer: vi.fn()
 }))
 
 import { installMainWindowAgentStatusListeners } from './main-window-agent-status'
@@ -65,7 +60,6 @@ beforeEach(() => {
   } as unknown as typeof mainProcessState.mainWindow
   installMainWindowAgentStatusListeners({
     window: mainProcessState.mainWindow!,
-    maybeAutoRenameBranchOnFirstWork: vi.fn(),
     onRecordAgentState: vi.fn()
   })
 })
@@ -95,10 +89,18 @@ it('forwards retirement acknowledgement only on live status delivery', () => {
   expect(sent[1].event).not.toHaveProperty('authorityRestartId')
 })
 
-// The live push picks fields one by one; the host's turn start must be one of them.
+// The field-by-field push must retain host turn start.
 it("forwards the host's turn start, and nothing when the host stamped none", () => {
   hooks.listener!(statusPayload({ turnStartedAt: 1 }))
   hooks.listener!(statusPayload({}))
   expect(sent[0].event).toHaveProperty('turnStartedAt', 1)
   expect(sent[1].event).not.toHaveProperty('turnStartedAt')
+})
+
+// Reconnect replays must not trigger fresh completion notifications.
+it('marks replayed rows so the renderer can skip their completion notification', () => {
+  hooks.listener!(statusPayload({ payload: { state: 'done', prompt: 'ship it' } }))
+  hooks.listener!(statusPayload({ payload: { state: 'done', prompt: 'ship it' }, isReplay: true }))
+  expect(sent[0].event).not.toHaveProperty('isReplay')
+  expect(sent[1].event).toHaveProperty('isReplay', true)
 })

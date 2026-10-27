@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { getAiVaultWslHomeDirs } from '../ai-vault/cached-session-list'
@@ -13,9 +15,15 @@ import {
   listOpenCodeDatabasesInDirectory
 } from '../opencode-usage/opencode-database-discovery'
 
+// ZCode sessions belong only to its own store.
+function zcodeTranscriptDatabasePaths(wslHomeDirs: readonly string[]): string[] {
+  return [homedir(), ...wslHomeDirs].map((home) => join(home, '.zcode', 'cli', 'db', 'db.sqlite'))
+}
+
 export async function discoverOpenCodeTranscriptDatabase(
   sessionId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  agent?: 'zcode'
 ): Promise<string | null> {
   signal?.throwIfAborted()
   const deadline = new AbortController()
@@ -41,13 +49,25 @@ export async function discoverOpenCodeTranscriptDatabase(
       }
       boundedSignal.throwIfAborted()
       probed.add(dbPath)
-      if (!sessionId) {
-        return dbPath
-      }
       try {
         if (
+          agent === 'zcode' &&
+          !(await waitForPromiseWithSignal(
+            wslGatedAccess(dbPath, 'exact', boundedSignal),
+            boundedSignal
+          ))
+        ) {
+          continue
+        }
+        if (!sessionId) {
+          return dbPath
+        }
+        if (
           await waitForPromiseWithSignal(
-            readOpenCodeTranscriptSignalViaWorker({ dbPath, sessionId }, boundedSignal),
+            readOpenCodeTranscriptSignalViaWorker(
+              { dbPath, sessionId, ...(agent ? { agent } : {}) },
+              boundedSignal
+            ),
             boundedSignal
           )
         ) {
@@ -55,12 +75,46 @@ export async function discoverOpenCodeTranscriptDatabase(
         }
       } catch (error) {
         boundedSignal.throwIfAborted()
+        if (
+          agent === 'zcode' &&
+          error instanceof Error &&
+          'code' in error &&
+          error.code === 'ENOENT'
+        ) {
+          continue
+        }
         refusals.push(error instanceof Error ? error : new Error(String(error)))
       }
     }
     return null
   }
   try {
+    if (agent === 'zcode') {
+      const native = await findSession(zcodeTranscriptDatabasePaths([]))
+      if (native) {
+        return native
+      }
+      const homes = (await waitForPromiseWithSignal(getAiVaultWslHomeDirs(), boundedSignal)).slice(
+        0,
+        32
+      )
+      if (homes.length > 0) {
+        const readers = await waitForPromiseWithSignal(
+          prepareOpenCodeWslReaders(homes),
+          boundedSignal
+        )
+        boundedSignal.throwIfAborted()
+        configureOpenCodeWslReaders(readers)
+      }
+      const wsl = await findSession(zcodeTranscriptDatabasePaths(homes))
+      if (wsl) {
+        return wsl
+      }
+      if (refusals[0]) {
+        throw refusals[0]
+      }
+      return null
+    }
     const primary = await waitForPromiseWithSignal(
       listOpenCodeDatabases(onRefusal, undefined, boundedSignal),
       boundedSignal

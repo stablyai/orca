@@ -206,7 +206,7 @@ describe('HeroFlow height', () => {
     expect(screen.getByText('Sign in to create a Relay pairing code')).toBeInTheDocument()
   })
 
-  it('disables Relay recovery immediately and delays visible retry feedback', async () => {
+  it('disables Relay recovery while busy and eventually shows retry feedback', async () => {
     renderFlow(1, {
       pairLoading: true,
       relayMintFailure: {
@@ -220,7 +220,7 @@ describe('HeroFlow height', () => {
     await waitFor(() => expect(screen.getByText(/Creating a new pairing code/)).toBeVisible())
   })
 
-  it('does not offer a futile retry when Relay is unavailable on the desktop', () => {
+  it('offers Retry Relay when the desktop provider is missing', () => {
     renderFlow(1, {
       relayMintFailure: {
         code: 'relay_provider_unavailable',
@@ -231,16 +231,38 @@ describe('HeroFlow height', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Orca Relay isn’t available on this desktop'
     )
-    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Retry Relay' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Use LAN' })).toBeEnabled()
   })
 
-  it('hides the mint-failure notice when a Relay QR is shown', () => {
+  it('names a signed-out or unentitled desktop instead of offering a futile retry', () => {
+    renderFlow(1, {
+      relayMintFailure: {
+        code: 'relay_signed_out',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('Sign in again to use Orca Relay')
+    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+    cleanup()
+    renderFlow(1, {
+      relayMintFailure: {
+        code: 'relay_not_entitled',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('isn’t included with this Orca account')
+    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+  })
+
+  it('shows a Relay QR without a failure notice when no failure is supplied', () => {
     renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr' })
     expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
   })
 
-  it('renders a pairing QR at its natural integer-scaled bitmap size', () => {
+  it('uses the supplied QR bitmap size and adds frame padding', () => {
     renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr', pairQrSize: 218 })
 
     const image = screen.getByRole('img', { name: 'Pairing QR' })
@@ -346,7 +368,7 @@ describe('HeroFlow height', () => {
     expect(refresh).toHaveFocus()
   })
 
-  it('lets the user name this computer in the pairing step, ahead of the code', () => {
+  it('places the machine-name field slot ahead of the pairing code', () => {
     const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
       pairQrDataUrl: 'data:image/png;base64,AAAA',
       pairingUrl: 'orca://pair?code=abc',
@@ -378,8 +400,6 @@ describe('HeroFlow height', () => {
     expect(field).toHaveAttribute('data-id', 'mobile-hero-machine-name')
     const qr = screen.getByRole('img', { name: 'Pairing QR' })
     expect(field.compareDocumentPosition(qr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // Why: the field lives inside the copy cell, so the web client, where it renders nothing,
-    // leaves no empty grid track behind.
     expect(field.parentElement).toHaveClass('mp-pairing-copy')
     expect(field).toHaveClass('mp-pairing-machine')
   })
@@ -456,8 +476,6 @@ describe('HeroFlow height', () => {
     }
     render(<MobileHeroPairingStep {...props} />)
     expect(screen.getByText('Network')).toBeVisible()
-    // Why: a trigger here could not collapse the pinned-open row, so it would be
-    // a dead control advertising aria-expanded it does not own.
     expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
   })
 })

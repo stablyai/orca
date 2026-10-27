@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,12 +8,19 @@ import { PANE } from './server.test-fixtures'
 const line = (payload: unknown): string => `${JSON.stringify({ type: 'event_msg', payload })}\n`
 
 describe('Codex recorded turn interruption', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+    })
+  })
+
   const dirs: string[] = []
   afterEach(() => {
     for (const dir of dirs) {
       rmSync(dir, { recursive: true, force: true })
     }
     dirs.length = 0
+    vi.useRealTimers()
   })
 
   it.each([false, true])('settles the lead and preserves child work: %s', async (withChild) => {
@@ -43,6 +50,7 @@ describe('Codex recorded turn interruption', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Connection: 'close',
           'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
@@ -66,6 +74,7 @@ describe('Codex recorded turn interruption', () => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              Connection: 'close',
               'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
             },
             body: JSON.stringify({
@@ -85,43 +94,42 @@ describe('Codex recorded turn interruption', () => {
         expect(server.getStatusSnapshot()[0]).toEqual(beforeSide)
       }
       const baseline = server.getStatusSnapshot()[0]
-      expect(
-        server.inferInterrupt({
-          paneKey: PANE,
-          baselineUpdatedAt: baseline.receivedAt,
-          baselineStateStartedAt: baseline.stateStartedAt,
-          baselinePrompt: baseline.prompt,
-          baselineAgentType: 'codex',
-          intent: 'ctrl-c'
-        })
-      ).toBe(false)
-      await new Promise((resolve) => setTimeout(resolve, 600))
+      for (const intent of ['ctrl-c', 'plain-escape'] as const) {
+        for (const inputCount of [1, 2]) {
+          expect(
+            server.inferInterrupt({
+              paneKey: PANE,
+              baselineUpdatedAt: baseline.receivedAt,
+              baselineStateStartedAt: baseline.stateStartedAt,
+              baselinePrompt: baseline.prompt,
+              baselineAgentType: 'codex',
+              intent,
+              inputCount
+            })
+          ).toBe(false)
+          expect(server.getStatusSnapshot()[0]).toEqual(baseline)
+        }
+      }
+      await vi.advanceTimersByTimeAsync(5_000)
       expect(server.getStatusSnapshot()[0].state).toBe('working')
       appendFileSync(
         transcriptPath,
         line({ type: 'turn_aborted', turn_id: 'turn-1', reason: 'interrupted' })
       )
-      await vi.waitFor(
-        () => {
-          expect(server.getStatusSnapshot()[0]).toMatchObject({
-            state: withChild ? 'working' : 'done',
-            mainAgent: { state: 'done', outcome: 'cancellation' }
-          })
-        },
-        { timeout: 2_000 }
-      )
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: withChild ? 'working' : 'done',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
       if (withChild) {
         expect(server.getStatusSnapshot()[0].interrupted).toBeUndefined()
         appendFileSync(childPath, line({ type: 'task_complete' }))
-        await vi.waitFor(
-          () =>
-            expect(server.getStatusSnapshot()[0]).toMatchObject({
-              state: 'done',
-              interrupted: true,
-              mainAgent: { state: 'done', outcome: 'cancellation' }
-            }),
-          { timeout: 2_000 }
-        )
+        await vi.advanceTimersByTimeAsync(5_000)
+        expect(server.getStatusSnapshot()[0]).toMatchObject({
+          state: 'done',
+          interrupted: true,
+          mainAgent: { state: 'done', outcome: 'cancellation' }
+        })
       } else {
         expect(server.getStatusSnapshot()[0].interrupted).toBe(true)
       }

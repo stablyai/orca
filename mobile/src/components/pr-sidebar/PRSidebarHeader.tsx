@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
@@ -23,8 +24,7 @@ type Props = {
   bare?: boolean
 }
 
-// Compact identity: state + # + author on one meta row, title, head→base.
-// # lives only in the meta row (not also after the title) to avoid repetition.
+// Keep state/#/author on one meta row, then title and head→base; print number only once.
 export function PRSidebarHeader({
   pr,
   details,
@@ -32,6 +32,7 @@ export function PRSidebarHeader({
   showOpenOnWeb = true,
   bare = false
 }: Props) {
+  useMobileColorScheme()
   const item = details?.item
   const badge = prStateBadge(pr.state)
   const badgeColor = statusColor(badge.token)
@@ -115,6 +116,7 @@ function PRTitle({
   editable: boolean
   titleAction: MobilePrTitleAction
 }) {
+  useMobileColorScheme()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 
@@ -128,8 +130,7 @@ function PRTitle({
     setEditing(false)
   }
   const save = async () => {
-    // setTitle trims + short-circuits empty/unchanged to a successful no-op; on a
-    // real edit it refetches, so on success we just collapse the editor.
+    // setTitle handles trim/empty/unchanged/refetch; collapse editor on successful result.
     const ok = await titleAction.setTitle(draft, title)
     if (ok) {
       setEditing(false)

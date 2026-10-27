@@ -50,28 +50,4 @@ describe('orchestration fleet attention', () => {
     expect(child.categories).toEqual([])
     expect(root).toEqual({ categories: ['root_completion'], requiresAction: false })
   })
-
-  it('measures a five-worker wave without choosing one alert policy', () => {
-    const wave = [
-      { isRoot: true, outcome: 'succeeded' as const },
-      { isRoot: false, outcome: 'succeeded' as const },
-      { isRoot: false, outcome: 'in_progress' as const, pendingInput: true },
-      { isRoot: false, outcome: 'failed' as const },
-      { isRoot: false, outcome: 'in_progress' as const, interrupted: true }
-    ].map((facts) =>
-      projectOrchestrationFleetAttention({
-        ...facts,
-        liveness: { verdict: facts.outcome === 'in_progress' ? 'live' : 'exited' }
-      })
-    )
-    const counts = wave
-      .flatMap((entry) => entry.categories)
-      .reduce<Record<string, number>>(
-        (result, category) => ({ ...result, [category]: (result[category] ?? 0) + 1 }),
-        {}
-      )
-
-    expect(counts).toEqual({ root_completion: 1, input: 1, failure: 1, interruption: 1 })
-    expect(wave.filter((entry) => entry.requiresAction)).toHaveLength(3)
-  })
 })

@@ -1,6 +1,3 @@
-// Which status-summary changes reach every session list. The summary is broadcast to remote
-// subscribers too, so only a change a session list shows may re-send it.
-
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import {
   agentSessionBackgroundTasksEqual,
@@ -20,27 +17,35 @@ export function structuredStatusSummariesEqual(
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&
     a.hostExecutionPhase === b.hostExecutionPhase &&
+    a.restartResume?.phase === b.restartResume?.phase &&
     a.rewindBlockedReason === b.rewindBlockedReason &&
-    // A moved state clock changes ranking; row activity alone, including a subagent's, does not.
-    // An idle state the journal cannot date still republishes, since readers date it by `updatedAt`,
-    // and so does one live child work holds open: readers take each publish as its evidence.
+    // State clocks affect ranking; undated idle/live-child rows also use publication time as evidence.
     a.statusStartedAt === b.statusStartedAt &&
     (a.status !== 'idle' ||
       a.updatedAt === b.updatedAt ||
       (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
+    a.permissionMode === b.permissionMode &&
+    a.runtimePermission?.fence === b.runtimePermission?.fence &&
+    a.runtimePermission?.mode === b.runtimePermission?.mode &&
+    (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
+    a.launchDirectory === b.launchDirectory &&
+    a.conversationName === b.conversationName &&
+    a.sleptAt === b.sleptAt &&
+    a.namingError?.message === b.namingError?.message &&
+    a.namingError?.failedAt === b.namingError?.failedAt &&
     a.turnOutcome === b.turnOutcome &&
+    a.stopping === b.stopping &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     structuredStatusChildrenEqual(a.children, b.children) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)
   )
 }
 
-/** Held open by the host's child records, read the way every row reads them. */
 function isIdleHeldOpenByChildWork(summary: AgentSessionStatusSummary): boolean {
   return (
     summary.status === 'idle' &&
@@ -50,6 +55,19 @@ function isIdleHeldOpenByChildWork(summary: AgentSessionStatusSummary): boolean 
         childWork: summary.children ?? summary.backgroundTasks,
         turnOutcome: summary.turnOutcome
       })
+    )
+  )
+}
+
+export function permissionReportOnly(
+  previous: AgentSessionStatusSummary | undefined,
+  summary: AgentSessionStatusSummary
+): boolean {
+  return Boolean(
+    previous &&
+    structuredStatusSummariesEqual(
+      { ...previous, runtimePermission: summary.runtimePermission },
+      summary
     )
   )
 }

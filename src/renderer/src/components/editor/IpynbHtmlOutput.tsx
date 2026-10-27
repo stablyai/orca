@@ -3,8 +3,7 @@ import DOMPurify from 'dompurify'
 import { translate } from '@/i18n/i18n'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
-// Why: an opaque-origin, script-free frame with a no-network CSP keeps output markup inert;
-// its links aim at popups the sandbox blocks.
+// Keep untrusted markup inert with an opaque-origin, script-free frame and no-network CSP; sandboxing blocks link popups.
 const OUTPUT_DOCUMENT_HEAD = `<!doctype html><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">
 <base target="_blank">
@@ -38,7 +37,6 @@ export function IpynbHtmlOutput({ html }: { html: string }): React.JSX.Element {
       sandbox=""
       referrerPolicy="no-referrer"
       srcDoc={srcDoc}
-      // Fits a pandas head() or describe() table; larger output scrolls inside the frame.
       className="block h-72 w-full border-0"
       // Why: a color-scheme mismatch with the frame document paints an opaque canvas.
       style={{ colorScheme }}

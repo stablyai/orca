@@ -1,3 +1,4 @@
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError,
@@ -7,6 +8,10 @@ import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 import {
+  claudeStructuredSpawnOptions,
+  type ClaudeStructuredSpawnOptions
+} from './claude-structured-spawn-options'
+import {
   cancelClaudeAcquisitionAttempt,
   type ClaudeAcquisitionAttempt,
   type ClaudeAcquisitionRegistry,
@@ -14,11 +19,15 @@ import {
   type ClaudeSession,
   type ClaudeSessionExit,
   type ClaudeStructuredSessionAdapterDeps
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 import {
   claudeAcquisitionCleanupError,
   closeClaudePublishedSessionForDeps
 } from './claude-structured-session-close'
+
+export type ClaudeAcquisitionLaunch = ClaudeStructuredLaunch & {
+  savedOptions: Omit<ClaudeStructuredSpawnOptions, 'sdkOptions'>
+}
 
 export async function resolveClaudeAcquisitionLaunch(args: {
   input: StructuredAgentSessionAcquireInput
@@ -29,7 +38,7 @@ export async function resolveClaudeAcquisitionLaunch(args: {
   callbacks: ClaudeAcquireCallbacks
   previous: ClaudeAcquisitionAttempt | undefined
   attempt: ClaudeAcquisitionAttempt
-}): Promise<ClaudeStructuredLaunch> {
+}): Promise<ClaudeAcquisitionLaunch> {
   const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt } = args
   const sessionId = input.identity.sessionId
   return withAgentSessionCreatePhase('auth_settle', input.recordPhase, async () => {
@@ -58,13 +67,12 @@ export async function resolveClaudeAcquisitionLaunch(args: {
           retainedExit.connection,
           retainedExit.error
         )
-        // A proven root exit is what released the lease, so it cannot also refuse the next root;
-        // only an exit this host cannot vouch for still blocks the start.
+        // A proven root exit releases the lease even when descendant cleanup remains unverified.
         if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
           throw cleanupError
         }
       }
-      // The superseded child must settle before its durable resume identity is reused.
+      // Settle the old child before reusing its durable resume identity.
       await callbacks.settleExit(sessionId, retainedExit)
       resumeSession ??= retainedExit.session
     }
@@ -72,21 +80,32 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     const launchIdentity = resumeSession
       ? {
           ...input.identity,
-          providerHandle: {
-            kind: 'claude' as const,
-            sessionId: resumeSession.providerSessionId,
-            leafUuid: resumeSession.turnEndLeafUuid
-          }
+          providerHandle: claudeProviderHandle(
+            resumeSession.providerSessionId,
+            resumeSession.turnEndLeafUuid
+          )
         }
       : input.identity
     const launch = await deps
-      .resolveLaunch({ identity: launchIdentity })
+      .resolveLaunch({
+        identity: launchIdentity,
+        spawnToken: input.spawnToken,
+        ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
+      })
       .catch((error: unknown) => {
         throw error instanceof AgentSessionPreSpawnError
           ? error
           : new AgentSessionPreSpawnError(error)
       })
     acquisitions.assertCurrent(sessionId, attempt)
-    return launch
+    const spawn = claudeStructuredSpawnOptions({ launch, saved: input.options })
+    return {
+      ...launch,
+      options: spawn.sdkOptions,
+      savedOptions: {
+        options: spawn.options,
+        fastModeAtStart: spawn.fastModeAtStart
+      }
+    }
   })
 }

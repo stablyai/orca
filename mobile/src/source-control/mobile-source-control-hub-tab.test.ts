@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { parseSourceControlHubTab, SOURCE_CONTROL_HUB_TABS } from './mobile-source-control-hub-tab'
+import { parseSourceControlHubTab } from './mobile-source-control-hub-tab'
 
 describe('parseSourceControlHubTab', () => {
   it('accepts each known tab', () => {
-    for (const tab of SOURCE_CONTROL_HUB_TABS) {
+    for (const tab of ['changes', 'pr', 'history']) {
       expect(parseSourceControlHubTab(tab)).toBe(tab)
     }
   })

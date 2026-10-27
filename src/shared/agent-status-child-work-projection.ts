@@ -1,5 +1,5 @@
 import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
-import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-status-types'
+import type { AgentSubagentSnapshot } from './agent-status-types'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
 import type { AgentChildWorkOutcome, AgentChildWorkState } from './agent-status-child-work'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
@@ -7,9 +7,7 @@ import type { AgentChildWorkView } from './agent-status-child-work-view'
 const LEGACY_PROVIDER_ID_MAX_LENGTH = 64
 const BACKGROUND_PROVIDER_ID_MAX_LENGTH = 512
 
-/** Anything a legacy wire shape can be derived from. Every `AgentChildWorkView` is one, so the
- *  old and new shapes cannot disagree; so is a published background task (its state optional,
- *  because an old host sends none). */
+/** Project views and legacy background tasks through one shape; legacy task state remains optional for older hosts. */
 export type AgentChildWorkLegacyProjectionCandidate = Pick<
   AgentChildWorkView,
   'kind' | 'membership' | 'firstObservedAt' | 'stoppable'
@@ -28,8 +26,7 @@ export type AgentChildWorkLegacyProjectionCandidate = Pick<
     >
   >
 
-// The run state today's hosts publish for a settled task, so an old strip reads a settled view
-// exactly as it reads a settled task now (an unreadable terminal status settles as `done`).
+// Use today's settled-task run vocabulary for old strips; unrecognized terminal statuses settle as done.
 const LEGACY_SETTLED_RUN_STATE: Record<AgentChildWorkOutcome, AgentChildWorkState> = {
   succeeded: 'done',
   failed: 'blocked',
@@ -79,8 +76,7 @@ export function agentChildWorkProjectionCandidateFromBackgroundTask(
     ...(task.state !== undefined ? { state: task.state } : {}),
     membership: 'live',
     firstObservedAt: task.startedAt ?? 0,
-    // Truthy, not present: an empty label carries no identity and would beat the
-    // `description ?? agentType ?? 'unknown'` fallbacks every child-row reader relies on.
+    // Require truthy labels: an empty one would suppress description/agentType/unknown fallbacks.
     ...(task.name ? { name: task.name, agentType: task.name } : {}),
     ...(task.description ? { description: task.description } : {}),
     ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {}),
@@ -115,9 +111,6 @@ export function projectAgentChildWorkLegacySubagents(
       ...(candidate.model !== undefined ? { model: candidate.model } : {}),
       ...(candidate.description !== undefined ? { description: candidate.description } : {})
     })
-    if (projected.length === AGENT_STATUS_MAX_SUBAGENTS) {
-      break
-    }
   }
   return projected.length > 0 ? projected : undefined
 }

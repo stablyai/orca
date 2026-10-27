@@ -10,11 +10,7 @@ export type WorkspaceCleanupScanLifecycle = {
   startWorkspaceCleanupScan: (options?: { notifyWhenReady?: boolean }) => void
 }
 
-/**
- * Owns the dialog's scan cadence: seed the list from the persisted snapshot,
- * kick one background rescan per open, and adopt — never duplicate — a scan
- * already streaming into the store when the dialog reopens mid-flight.
- */
+/** Seed persisted rows before one rescan per open; reopening mid-stream adopts the existing scan. */
 export function useWorkspaceCleanupScanLifecycle({
   open,
   loading,
@@ -89,8 +85,7 @@ export function useWorkspaceCleanupScanLifecycle({
   )
 
   const hydrateThenScan = useCallback(() => {
-    // Why: the cached snapshot must seed the list before the rescan starts so
-    // progress reconciles into full rows instead of a cold rebuild.
+    // Seed cache before rescan so streamed progress merges into complete rows.
     void Promise.allSettled([hydrateCleanupFromCache(), hydrateSpaceFromCache()]).then(() => {
       startWorkspaceCleanupScan({ notifyWhenReady: true })
     })
@@ -107,9 +102,7 @@ export function useWorkspaceCleanupScanLifecycle({
       autoScanAttemptedForOpenRef.current = false
       onFreshOpen()
     }
-    // Why: reopening mid-batch keeps the deletion progress view; a broad scan
-    // started here would be discarded by the removal's scan invalidation, so
-    // skip it while a removal batch is running.
+    // Reopening an active removal keeps progress; a broad scan would be immediately invalidated.
     if (removalInFlight || removalInFlightRef.current) {
       return
     }
@@ -118,8 +111,7 @@ export function useWorkspaceCleanupScanLifecycle({
     }
     autoScanAttemptedForOpenRef.current = true
     if (loading) {
-      // Why: reopening mid-scan adopts the stream already feeding the store;
-      // starting another broad scan here would duplicate it once it settles.
+      // Adopt an existing stream on reopen instead of queuing a duplicate broad scan.
       return
     }
     hydrateThenScan()

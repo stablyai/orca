@@ -2,8 +2,13 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
+// The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
-vi.mock('../cache/worktree-cache', () => ({ setCachedWorktrees: () => {} }))
+vi.mock('../cache/worktree-cache', () => ({
+  getCachedWorktrees: () => null,
+  setCachedWorktrees: () => {}
+}))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
 vi.mock('../worktree/host-worktree-refresh', () => ({ startHostWorktreeRefresh: () => () => {} }))
 vi.mock('../transport/use-worktree-resync', () => ({
@@ -12,85 +17,75 @@ vi.mock('../transport/use-worktree-resync', () => ({
 
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 
-type Worktree = { worktreeId: string; repo: string; isPinned: boolean }
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import type { RpcResponse } from '../transport/types'
+import { useHostScreenState } from './use-host-screen-state'
 
-const CONFIRMED: Worktree[] = [{ worktreeId: 'wt-1', repo: 'orca', isPinned: false }]
-
-/**
- * The clear the list depends on to stop showing a failure the host has since disproved.
- *
- * A confirmed catalog is the host answering, which is the evidence that a transient action failure
- * was about a moment that has passed. Nothing else clears it but the user's own dismiss.
- */
-function catalogHook(fetched: unknown, actionErrors: string[], catalogErrors: (string | null)[]) {
-  const state = {
-    clientRef: { current: {} },
-    fetchWorktreesInFlightRef: { current: false },
-    newWorktreeModalVisibleRef: { current: false },
-    setActionError: (value: string) => actionErrors.push(value),
-    setCatalogError: (value: string | null) => catalogErrors.push(value),
-    setLastKnownWorktrees: () => {},
-    setOptimisticActiveWorktreeIdentity: () => {},
-    setPinnedIds: (apply: (previous: Set<string>) => Set<string>) => apply(new Set()),
-    setSleptIds: (apply: (previous: Set<string>) => Set<string>) => apply(new Set()),
-    setWorktrees: () => {},
-    setWorktreesLoaded: () => {},
-    worktreeCatalogRef: {
-      current: { fetch: async () => fetched, admit: () => (fetched === null ? null : CONFIRMED) }
+async function fetchWith(fail: boolean) {
+  const client = new FakeSession('connected')
+  const response: RpcResponse = {
+    id: 'r',
+    ok: true,
+    result: { worktrees: [], snapshotId: 's1' },
+    _meta: { runtimeId: 'runtime' }
+  }
+  client.sendRequest.mockImplementation(async () => {
+    if (fail) {
+      throw new Error('network disconnected')
     }
-  }
-  return {
-    client: state.clientRef.current,
-    connState: 'connected',
-    embedded: true,
-    fetchRepoMetadata: async () => {},
-    hostId: 'host-1',
-    state,
-    syncViewSettingsFromDesktop: async () => {}
-  }
-}
-
-async function fetchWith(fetched: unknown): Promise<{
-  actionErrors: string[]
-  catalogErrors: (string | null)[]
-}> {
-  const actionErrors: string[] = []
-  const catalogErrors: (string | null)[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads the members named above off `state` and the rest of its arguments only to decide whether to fetch; every module that would reach further is mocked in this file.
-  const args = catalogHook(fetched, actionErrors, catalogErrors) as unknown as Parameters<
-    typeof useHostWorktreeCatalog
-  >[0]
-  const held: { fetchWorktrees: (() => Promise<void>) | null } = { fetchWorktrees: null }
+    return response
+  })
+  let current: { state: ReturnType<typeof useHostScreenState>; fetch: () => Promise<void> } | null =
+    null
   function Probe(): null {
-    held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+    const state = useHostScreenState('host-1')
+    state.clientRef.current = client
+    const catalog = useHostWorktreeCatalog({
+      client,
+      connState: 'connected',
+      embedded: true,
+      fetchRepoMetadata: async () => {},
+      hostCapabilities: [],
+      hostId: 'host-1',
+      sidebarFeed: null,
+      state,
+      syncViewSettingsFromDesktop: async () => {}
+    })
+    current = { state, fetch: catalog.fetchWorktrees }
     return null
   }
-  await act(async () => {
-    create(createElement(Probe))
-  })
-  if (held.fetchWorktrees === null) {
-    throw new Error('the catalog hook did not mount')
+  let renderer: ReturnType<typeof create> | null = null
+  try {
+    await act(async () => {
+      renderer = create(createElement(Probe))
+    })
+    const get = (): NonNullable<typeof current> => {
+      if (current === null) {
+        throw new Error('catalog hook did not mount')
+      }
+      return current
+    }
+    act(() => get().state.setActionError('Could not delete workspace.'))
+    await act(async () => get().fetch())
+    expect(client.sendRequest).toHaveBeenCalledWith('worktree.ps', expect.anything())
+    return {
+      actionError: get().state.actionError,
+      catalogError: get().state.catalogError,
+      loaded: get().state.worktreesLoaded
+    }
+  } finally {
+    act(() => renderer?.unmount())
   }
-  await act(held.fetchWorktrees)
-  return { actionErrors, catalogErrors }
 }
 
 describe('a catalog the host confirmed', () => {
   it('clears the action failure the list is still showing', async () => {
-    const { actionErrors, catalogErrors } = await fetchWith({
-      kind: 'response',
-      pending: { admission: { kind: 'valid' } }
-    })
-    expect(actionErrors).toEqual([''])
-    expect(catalogErrors).toEqual([null])
+    expect(await fetchWith(false)).toEqual({ actionError: '', catalogError: null, loaded: true })
   })
-
-  it('leaves it standing when the request itself failed, which proves nothing', async () => {
-    const { actionErrors, catalogErrors } = await fetchWith({
-      kind: 'request_failed',
-      code: 'network_error'
+  it('retains the action failure when the catalog transport fails', async () => {
+    expect(await fetchWith(true)).toMatchObject({
+      actionError: 'Could not delete workspace.',
+      catalogError: 'network_error'
     })
-    expect(actionErrors).toEqual([])
-    expect(catalogErrors).toEqual(['network_error'])
   })
 })

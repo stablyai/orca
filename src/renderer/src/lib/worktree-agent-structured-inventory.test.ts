@@ -39,6 +39,17 @@ describe('structured activation inventory scope', () => {
     expect(call).toHaveBeenCalledOnce()
   })
 
+  it('retains a live launch with no chat row for the activation gate', async () => {
+    const call = install({
+      worktree,
+      tabs: [],
+      initialSurfaceLaunch: { launchId: 'launch-1', agent: 'claude' }
+    })
+    const result = await readWorktreeStructuredActivationInventory(worktree)
+    expect(result && result.snapshot.initialSurfaceLaunch?.launchId).toBe('launch-1')
+    expect(call).toHaveBeenCalledOnce()
+  })
+
   it.each([null, {}, { worktree: 'other::/workspace', tabs: [] }, { worktree }])(
     'rejects unreadable or wrong-workspace replies',
     async (result) => {

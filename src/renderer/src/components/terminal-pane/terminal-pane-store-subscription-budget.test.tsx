@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
-/**
- * TerminalPane mounts once per retained tab, and zustand visits every listener
- * synchronously on every publication, so the per-pane subscription count is a
- * direct multiplier on agent-status burn (docs/reference/renderer-agent-status-performance.md).
- *
- * On `main` one mounted pane opened 49 listeners; 33 of them earned nothing — 28
- * store actions and 4 duplicate reads of one unified tab, all of which can never
- * change, plus a dispatch-status read left behind by the notice that consumed it.
- */
-import { act, createRef, type ReactNode } from 'react'
+// Every retained tab multiplies synchronous Zustand listener visits; cap subscriptions and fold stable actions/duplicate reads (renderer-agent-status-performance.md).
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
@@ -21,15 +13,10 @@ import {
 } from './use-terminal-pane-store-actions'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-/**
- * Pinned budget for one mounted TerminalPane. Raising it costs one extra listener
- * visit per store publication for every retained tab in the app — read the doc
- * above before you do.
- */
-const TERMINAL_PANE_LISTENER_BUDGET = 16
-/** What the same mount cost before the stable-action and unified-tab folds: one listener per
- *  bound action (each new stable action raises this by one, never the budget) plus the folded reads. */
-const PRE_FOLD_LISTENERS_PER_PANE = 50
+/** One extra listener costs a visit per publication for every retained tab; consult the performance doc before raising. */
+const TERMINAL_PANE_LISTENER_BUDGET = 15
+/** Compare with pre-fold mount cost: one listener per stable action plus folded duplicate reads. */
+const PRE_FOLD_LISTENERS_PER_PANE = 44
 
 const originalState = useAppStore.getState()
 
@@ -66,14 +53,14 @@ function listenerCount(): number {
 
 function PaneProbe({ tabId }: { tabId: string }): null {
   useTerminalPaneController(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the subscription budget reads only these props; every other pane prop is optional or unused while hidden.
     {
       tabId,
       worktreeId: 'repo-1::/repo/worktrees/budget',
       cwd: '/repo/worktrees/budget',
       isActive: false,
       isVisible: false
-    } as never,
-    createRef()
+    } as never
   )
   return null
 }
@@ -93,8 +80,7 @@ describe('TerminalPane store subscription budget', () => {
     )
     const withOnePane = listenerCount()
 
-    // The provider itself subscribes, so the marginal cost of a pane is measured
-    // by adding a second one to the already-mounted tree.
+    // Measure a second pane so the shared provider’s subscriptions are excluded from marginal cost.
     rerender(
       <LinkRoutingPreferenceDialogProvider>
         <PaneProbe tabId="tab-1" />
@@ -105,8 +91,9 @@ describe('TerminalPane store subscription budget', () => {
 
     expect(perPane).toBe(TERMINAL_PANE_LISTENER_BUDGET)
     expect(perPane).toBeLessThan(PRE_FOLD_LISTENERS_PER_PANE)
-    // 29 stable actions, four duplicate unified-tab reads, one dead dispatch-status read.
-    expect(PRE_FOLD_LISTENERS_PER_PANE - perPane).toBe(TERMINAL_PANE_STORE_ACTION_KEYS.length + 5)
+    // Stable actions, four duplicate unified-tab reads, one dead dispatch-status read,
+    // one retired per-pane Chat UI setting read.
+    expect(PRE_FOLD_LISTENERS_PER_PANE - perPane).toBe(TERMINAL_PANE_STORE_ACTION_KEYS.length + 6)
 
     unmount()
     expect(listenerCount()).toBe(baseline)
@@ -159,8 +146,11 @@ describe('TerminalPane store subscription budget', () => {
     const snapshot = new Map(TERMINAL_PANE_STORE_ACTION_KEYS.map((key) => [key, before[key]]))
 
     act(() => {
-      useAppStore.getState().markWorktreeUnread('repo-1::/repo/worktrees/budget')
-      useAppStore.getState().clearWorktreeUnread('repo-1::/repo/worktrees/budget')
+      useAppStore.getState().markTerminalBell({
+        worktreeId: 'repo-1::/repo/worktrees/budget',
+        tabId: 'tab-1',
+        paneKey: 'tab-1:1'
+      })
       useAppStore.getState().setRuntimePaneTitle('tab-1', 1, 'title')
       useAppStore.getState().clearRuntimePaneTitle('tab-1', 1)
       useAppStore.getState().suppressPtyExit('pty-1')

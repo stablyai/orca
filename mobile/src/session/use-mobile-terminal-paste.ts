@@ -1,4 +1,8 @@
 import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
+import {
+  normalizeTerminalPasteLineEndings,
+  wrapTerminalBracketedPasteText
+} from '../../../src/shared/terminal-bracketed-paste-text'
 import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback, type RefObject } from 'react'
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'
@@ -7,22 +11,20 @@ import type { TerminalModes } from '../terminal/terminal-webview-contract'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
-  buildMobileImagePastePayload,
+  buildMobileTerminalImagePastePayload,
   prepareMobileClipboardImageBase64,
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import { resizeMobileClipboardImage } from './mobile-clipboard-image-resize'
 
+// Match xterm's paste(): newlines become CR, and DECSET 2004 frames the text with ESC made inert.
 function buildMobileTerminalClipboardTextPayload(
   text: string,
   modes: TerminalModes | undefined
 ): string {
-  const wrap = modes?.bracketedPasteMode === true && !modes.altScreen
-  // Why: strip embedded bracketed-paste markers so copied text cannot terminate
-  // paste mode early and turn trailing bytes into shell commands.
-  // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
-  const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
-  return wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
+  return modes?.bracketedPasteMode === true
+    ? wrapTerminalBracketedPasteText(text)
+    : normalizeTerminalPasteLineEndings(text)
 }
 
 type UseMobileTerminalPasteOptions = {
@@ -64,9 +66,7 @@ export function useMobileTerminalPaste({
   refreshCanPaste,
   showToast
 }: UseMobileTerminalPasteOptions): () => Promise<void> {
-  // The pasteboard through the seam, both halves: text is `native.clipboard.read` on the page and
-  // an image is `native.media.pick { source: 'clipboard' }`, never an inline value, because a
-  // clipboard image reaches 24 MiB of base64 against an 8 MiB reply ceiling.
+  // Read images through native media handles: inline clipboard base64 can exceed the bridge reply cap.
   const clipboard = useClipboardReader()
   return useCallback(async () => {
     if (!client || !activeHandle || !canSend) {
@@ -84,6 +84,9 @@ export function useMobileTerminalPaste({
       } else {
         const image = await clipboard.readImage()
         if (!image) {
+          // Null also covers iOS paste denial and undecodable images.
+          onError()
+          showToast("Couldn't read the clipboard", 1500)
           refreshCanPaste()
           return
         }
@@ -93,7 +96,7 @@ export function useMobileTerminalPaste({
           connectionId
         })
         payload = separateImagePasteFromFollowingText(
-          buildMobileImagePastePayload(imagePath, agent),
+          buildMobileTerminalImagePastePayload(imagePath, agent),
           true
         )
       }
@@ -101,23 +104,29 @@ export function useMobileTerminalPaste({
       const wrappedBytes = new TextEncoder().encode(payload).byteLength
       if (wrappedBytes > 256 * 1024) {
         onError()
-        // eslint-disable-next-line no-console
         console.warn('[mobile-clip] paste oversized', { wrappedBytes })
         showToast('Paste too large (max 256 KiB)', 1500)
         return
       }
-      // Why: paste lives in the accessory row and must not overtake pending IME text.
+      // Accessory paste must follow pending IME text.
       const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
-      if (!flushedPendingInput) {
+      const currentClient = clientRef.current
+      if (!currentClient || connStateRef.current !== 'connected') {
+        onError()
+        showToast('Paste failed (disconnected)', 1500)
         return
       }
-      const currentClient = clientRef.current
       if (
-        !currentClient ||
-        connStateRef.current !== 'connected' ||
         targetHandle !== activeHandleRef.current ||
         activeSessionTabTypeRef.current !== 'terminal'
       ) {
+        onError()
+        showToast('Paste canceled (terminal changed)', 1500)
+        return
+      }
+      if (!flushedPendingInput) {
+        onError()
+        showToast('Paste failed', 1500)
         return
       }
       const response = await terminalInputSend.request(currentClient, {
@@ -137,7 +146,6 @@ export function useMobileTerminalPaste({
       onError()
       const err = e as { name?: string; message?: string }
       const isDisconnected = connState !== 'connected'
-      // eslint-disable-next-line no-console
       console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
       if (isDisconnected) {
         showToast('Paste failed (disconnected)', 1500)

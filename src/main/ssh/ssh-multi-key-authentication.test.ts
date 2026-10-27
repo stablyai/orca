@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import {
   utils,
   type AnyAuthMethod,
@@ -17,15 +18,24 @@ const mockExistsSync = vi.fn().mockReturnValue(false)
 const mockReadFileSync = vi.fn()
 
 vi.mock('fs', () => ({
-  existsSync: (...args: unknown[]) => mockExistsSync(...args),
-  readFileSync: (...args: unknown[]) => mockReadFileSync(...args)
+  existsSync: (...args: unknown[]) => mockExistsSync(...args)
+}))
+vi.mock('./ssh-identity-file-read', () => ({
+  readSshIdentityFileSync: (path: string) => {
+    try {
+      return { contents: mockReadFileSync(path) ?? null, problem: null }
+    } catch (error) {
+      return { contents: null, problem: String(error) }
+    }
+  }
 }))
 
-import { buildConnectConfig } from './ssh-connection-utils'
+import { buildConnectConfig } from './connection/ssh-connect-config'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
-import { buildSshArgs } from './system-ssh-args'
+import { buildSshArgs } from './system-transport/system-ssh-args'
+import { walkInitialAuthLadder } from './connection/ssh-connection-test-fixtures'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { SshResolvedConfig } from './ssh-config-parser'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
 
 function makeTarget(overrides: Partial<SshTarget> = {}): SshTarget {
   return {
@@ -128,7 +138,9 @@ describe('ordered SSH private-key authentication', () => {
     const config = buildConnectConfig(makeTarget({ identityFile: undefined }), null)
 
     expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
-    expect(nextAuth(config, false)).toMatchObject({ type: 'agent', agent: '/tmp/agent.sock' })
+    // The queued agent observes signing for the challenge deferral; ssh2 still reads the socket.
+    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(nextAuth(config, false)).toMatchObject({ type: 'agent' })
     expect(nextAuth(config, false)).toBe('keyboard-interactive')
   })
 
@@ -150,8 +162,7 @@ describe('ordered SSH private-key authentication', () => {
 
     expect(manual.privateKey).toEqual(Buffer.from('/keys/manual'))
     expect(unresolvedImport.privateKey).toEqual(Buffer.from('/keys/stale-imported'))
-    // Single-key targets are still ordered by Orca's handler so an MFA host reaches
-    // keyboard-interactive once per stage rather than once per connection.
+    // Single-key targets also need per-stage keyboard-interactive restart for MFA.
     expect(nextAuth(manual, true)).toMatchObject({ type: 'none' })
     expect(nextAuth(manual, false)).toMatchObject({
       type: 'publickey',
@@ -172,6 +183,27 @@ describe('ordered SSH private-key authentication', () => {
     // Partial success: the host accepted the password and now offers only the challenge.
     expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe('keyboard-interactive')
     expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe('keyboard-interactive')
+  })
+
+  it('keeps the password challenge on an agent attempt that carries a key, because no key retry follows it', () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    // Real key bytes, so '/keys/explicit' counts as unencrypted and IdentitiesOnly builds its agent.
+    const keyBytes = Buffer.from(utils.generateKeyPairSync('ecdsa', { bits: 256 }).private)
+    mockReadFileSync.mockReturnValue(keyBytes)
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({
+        identityFile: [join('/home/testuser', '.ssh', 'id_ed25519'), '/keys/explicit']
+      })
+    )
+
+    // The password retry reuses config; it must offer keyboard-interactive instead of deferring forever.
+    expect(walkInitialAuthLadder(config, ['publickey', 'keyboard-interactive'])).toEqual([
+      'none',
+      'publickey',
+      'agent',
+      'keyboard-interactive'
+    ])
   })
 
   it('stops re-offering methods the host no longer accepts after a partial success', () => {

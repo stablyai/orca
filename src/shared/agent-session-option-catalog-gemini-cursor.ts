@@ -5,9 +5,6 @@ import type {
 } from './agent-session-option-catalog-types'
 import { removeAgentArgOption } from './agent-session-option-agent-args'
 
-const removeModelFlag = (tokens: readonly string[]): string[] =>
-  removeAgentArgOption(tokens, ['-m', '--model'])
-
 export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [
     { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview', options: [] },
@@ -17,7 +14,7 @@ export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['-m', String(value)],
-    removeAgentArgs: removeModelFlag,
+    removeAgentArgs: (tokens) => removeAgentArgOption('gemini', tokens, ['-m', '--model']),
     midSession: { kind: 'agent-picker', command: '/model' }
   }
 }
@@ -86,7 +83,7 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: removeModelFlag,
+    removeAgentArgs: (tokens) => removeAgentArgOption('cursor', tokens, ['-m', '--model']),
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
   composeModelValue: (modelId, values) => {

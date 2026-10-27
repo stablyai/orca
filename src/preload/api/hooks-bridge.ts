@@ -1,5 +1,4 @@
 import { ipcRenderer } from 'electron'
-import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PreloadApi } from '../api-types'
 
@@ -9,12 +8,6 @@ export const hooksApi = {
 
   inspectSetupScriptImports: (args: { repoId: string; hostId?: ExecutionHostId }) =>
     ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
-
-  createIssueCommandRunner: (args: {
-    repoId: string
-    worktreePath: string
-    command: string
-  }): Promise<WorktreeSetupLaunch> => ipcRenderer.invoke('hooks:createIssueCommandRunner', args),
 
   readIssueCommand: (args: {
     repoId: string

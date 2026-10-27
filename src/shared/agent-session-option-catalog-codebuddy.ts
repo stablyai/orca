@@ -19,7 +19,7 @@ const CODEBUDDY_EFFORT: CatalogOption = {
   },
   apply: {
     launchArgs: (value) => ['--effort', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort'])
+    removeAgentArgs: (tokens) => removeAgentArgOption('codebuddy', tokens, ['--effort'])
   }
 }
 
@@ -35,7 +35,7 @@ export const CODEBUDDY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ].map((model) => ({ ...model, options: [CODEBUDDY_EFFORT] })),
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model'])
+    removeAgentArgs: (tokens) => removeAgentArgOption('codebuddy', tokens, ['--model'])
   },
   unknownModelOptions: [CODEBUDDY_EFFORT]
 }

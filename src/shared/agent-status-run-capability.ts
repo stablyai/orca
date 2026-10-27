@@ -2,8 +2,6 @@ export const AGENT_STATUS_RUNS_RUNTIME_CAPABILITY = 'agent-status.runs.v1' as co
 
 export const AGENT_STATUS_CAPABILITIES = [AGENT_STATUS_RUNS_RUNTIME_CAPABILITY] as const
 export type AgentStatusCapability = (typeof AGENT_STATUS_CAPABILITIES)[number]
-
-const AGENT_STATUS_CAPABILITY_SET: ReadonlySet<string> = new Set(AGENT_STATUS_CAPABILITIES)
 const MAX_CAPABILITIES = 256
 const MAX_CAPABILITY_LENGTH = 128
 
@@ -43,8 +41,4 @@ export function hasAgentStatusRunCapability(value: unknown): boolean {
   return (
     deserializeAgentStatusCapabilities(value)?.has(AGENT_STATUS_RUNS_RUNTIME_CAPABILITY) === true
   )
-}
-
-export function isAgentStatusCapability(value: unknown): value is AgentStatusCapability {
-  return typeof value === 'string' && AGENT_STATUS_CAPABILITY_SET.has(value)
 }

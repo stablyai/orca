@@ -17,10 +17,12 @@ import {
   normalizeLinearFilter,
   repositoryCount,
   getRepoBadgeColor,
+  getTaskRepoDetail,
   issueSourceSlug,
   GITHUB_KIND_OPTIONS
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { normalizeJiraFilter } from './mobile-jira-issue-filters'
 
 export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {
   const {
@@ -34,6 +36,7 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
     setGithubPreset,
     setItems,
     setLinearFilter,
+    setJiraFilter,
     setProvider,
     setQuery,
     setShowProviderPicker,
@@ -78,6 +81,11 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
           setLinearFilter(normalizeLinearFilter(resume.linearPreset))
           setQuery(nextQuery)
           setAppliedQuery(nextQuery.trim())
+        } else if (next === 'jira') {
+          const nextQuery = resume.jiraQuery ?? ''
+          setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
+          setQuery(nextQuery)
+          setAppliedQuery(nextQuery.trim())
         } else {
           setQuery('')
           setAppliedQuery('')
@@ -92,7 +100,8 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
   const {
     hostedRepos,
     persistRepoSelection,
-    selectedRepoIds,
+    effectiveRepoIds,
+    repoHostLabels,
     setSelectedRepoIds,
     setShowRepoPicker,
     showRepoPicker,
@@ -119,27 +128,24 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
             <Text style={styles.repoPickerTitle}>All repositories</Text>
             <Text style={styles.repoPickerSubtitle}>{repositoryCount(hostedRepos.length)}</Text>
           </View>
-          {selectedRepoIds.size === 0 ? <Check size={15} color={colors.textPrimary} /> : null}
+          {effectiveRepoIds.size === 0 ? <Check size={15} color={colors.textPrimary} /> : null}
         </Pressable>
 
         {hostedRepos.map((repo) => {
-          const selected = selectedRepoIds.has(repo.id)
+          const selected = effectiveRepoIds.has(repo.id)
           return (
             <View key={repo.id}>
               <View style={styles.actionSeparator} />
               <Pressable style={styles.repoPickerRow} onPress={() => toggleRepoSelection(repo.id)}>
                 <View
-                  style={[
-                    styles.pickerRepoDot,
-                    { backgroundColor: getRepoBadgeColor(repo, repo.displayName) }
-                  ]}
+                  style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]}
                 />
                 <View style={styles.repoPickerTextWrap}>
                   <Text style={styles.repoPickerTitle} numberOfLines={1}>
                     {repo.displayName}
                   </Text>
                   <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                    {repo.path}
+                    {getTaskRepoDetail(repo, repoHostLabels)}
                   </Text>
                 </View>
                 {selected ? <Check size={15} color={colors.textPrimary} /> : null}

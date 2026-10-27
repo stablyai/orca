@@ -1,19 +1,8 @@
-/**
- * STA-3500: a direct-SSH workspace's tab rows only reach the renderer after connect, via
- * remoteWorkspace.get → merge — a network round trip. The startup resume sweep fires before that
- * lands, sees no pane owning a sleeping record, and cold-resumes a session the host is still
- * running. STA-3498 counted five concurrent `claude` processes on one transcript that way.
- *
- * The paired-runtime flavor already parks per pane (host-mirrored-pane-liveness.ts), but that guard
- * only recognises `web-terminal-*` surface ids, so direct SSH fell straight through it.
- *
- * Both halves matter: the sweep must decline while the host is unanswered, and it must still wake a
- * genuinely sleeping agent once the host answers.
- */
+/** Direct SSH wake must wait for connection before declaring panes absent (STA-3500/3498 once forked five Claude writers). Paired-runtime web-terminal guards did not cover this path; retain records while unreachable and wake genuine sleepers after reconnect. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
@@ -93,7 +82,7 @@ function resumedTabCount(worktreeId: string): number {
 }
 
 describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
-  it('does not resume a remote session before the host has answered', () => {
+  it('does not resume a remote session before its SSH target connects', () => {
     const record = seedColdDirectSshStart()
 
     const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
@@ -104,14 +93,19 @@ describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  it('wakes the same session once the host answers and holds no pane for it', () => {
+  it('wakes the same session once its SSH target connects', () => {
     const record = seedColdDirectSshStart()
     resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
 
-    useAppStore.getState().markRemoteWorkspaceHydrated(TARGET_ID)
+    useAppStore.getState().setSshConnectionState(TARGET_ID, {
+      targetId: TARGET_ID,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
     const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
 
-    expect(launched, 'the deferred agent never woke after the host answered').toBe(1)
+    expect(launched, 'the deferred agent never woke after the target connected').toBe(1)
     const state = useAppStore.getState()
     expect(state.tabsByWorktree[WORKTREE_ID]?.[0]?.launchAgent).toBe('claude')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()

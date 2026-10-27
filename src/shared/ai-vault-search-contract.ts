@@ -30,9 +30,7 @@ export const AiVaultSearchRequestSchema = z
     within: AiVaultSearchScopeIdentitySchema.optional(),
     debug: z.boolean().optional()
   })
-  // Two scopes in one request have no defined intersection, and guessing one
-  // would be the silent widening this field exists to remove. Neither is still
-  // legal and still means every session.
+  // Refuse intersecting scopes instead of guessing and widening; neither scope still means all sessions.
   .refine(
     (request) => request.within === undefined || (request.filters?.scopePaths ?? []).length === 0,
     { message: 'A search carries either a scope identity or explicit scope paths, not both' }
@@ -64,7 +62,11 @@ export const AiVaultSearchHitSchema = z
     score: z.number(),
     source: AiVaultSearchSourceSchema,
     evidence: AiVaultSearchEvidenceSchema.nullable(),
-    resumeCommand: z.string().optional()
+    resumeCommand: z.string().optional(),
+    /** The native chat owning this transcript, from the indexing host; older hosts omit it. */
+    structuredSession: z
+      .object({ sessionId: z.string().min(1).max(512), workspaceId: z.string().min(1).max(512) })
+      .optional()
   })
   .refine((hit) => hit.source.presence === 'present' || hit.resumeCommand === undefined, {
     message: 'Only present sources may have a resume command'
@@ -79,10 +81,7 @@ export const AiVaultSearchTruncationSchema = z.object({
   query: z.boolean(),
   freshness: z.boolean()
 })
-/**
- * Per-host outcomes of an all-computers merge. Additive and desktop-only: no
- * host publishes this, and a reader that does not know it simply drops it.
- */
+/** Desktop-only additive per-host results for all-computers merges; hosts never publish this and older readers drop it. */
 export const AiVaultSearchHostOutcomeSchema = z.object({
   executionHostId: executionHostIdSchema,
   outcome: z.enum([
@@ -127,8 +126,7 @@ export const AiVaultSearchResponseSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('malformed-cursor') }),
   z.object({
     kind: z.literal('unavailable'),
-    // `scope-unknown` only ever answers a request that carried `within`, so a
-    // client too old to send one can never receive a reason it cannot parse.
+    // scope-unknown answers only within requests, which older clients cannot send, so they never receive an unknown reason.
     reason: z.enum(['disabled', 'not-ready', 'no-service', 'scope-unknown', 'unsupported-agent'])
   })
 ])
@@ -151,8 +149,7 @@ export const AiVaultSearchStatusSchema = z.object({
   degradedRoots: z.array(z.object({ root: z.string().optional(), reason: z.string() })),
   lastReconcileAt: z.number().nullable(),
   lastSweepCompletedAt: z.number().nullable(),
-  // Optional: an older host answers without it, and a reader that has none
-  // should show no breakdown rather than a breakdown of zeroes.
+  // Older hosts omit breakdowns; missing means no breakdown, never zero counts.
   sessionsByAgent: z.record(z.string(), z.number().int().nonnegative()).optional(),
   generation: z.number().int().nonnegative()
 })

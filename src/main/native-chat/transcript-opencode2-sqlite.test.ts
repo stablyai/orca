@@ -25,12 +25,13 @@ function fixture() {
   db.exec(`CREATE TABLE session_v2 (id TEXT PRIMARY KEY);
     CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, type TEXT,
       seq INTEGER, data TEXT, time_created INTEGER, time_updated INTEGER);
-    INSERT INTO session_v2 VALUES ('session');`)
+    INSERT INTO session_v2 VALUES ('session');
+    ALTER TABLE session_v2 ADD COLUMN directory TEXT;
+    UPDATE session_v2 SET directory = '/folder';`)
+  const insertMessage = db.prepare('INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)')
   let sequence = 0
   const insert = (id: string, type: string, data: unknown, time = 1) =>
-    db
-      .prepare('INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(id, 'session', type, ++sequence, JSON.stringify(data), time, time)
+    insertMessage.run(id, 'session', type, ++sequence, JSON.stringify(data), time, time)
   return { db, path, insert }
 }
 
@@ -42,6 +43,7 @@ describe('OpenCode 2 native transcript', () => {
     insert('two', 'assistant', { content: [{ type: 'text', text: 'first reply' }] })
     insert('three', 'user', { text: 'second prompt' })
     insert('last-empty', 'idle', { outcome: 'succeeded' })
+    expect(readOpenCodeTranscriptSignal(path, 'session')?.cwd).toBe('/folder')
     const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'session', limit: 2 })
     expect(page?.items.map((item) => item.message.id)).toEqual(['opencode:two', 'opencode:three'])
     expect(page?.hasMore).toBe(true)
@@ -159,6 +161,8 @@ describe('OpenCode 2 native transcript', () => {
 
   it('refuses excessive sparse scans instead of returning a partial transcript', () => {
     const { db, path, insert } = fixture()
+    // The regression is the scan cap; avoid quadratic fixture scans between batches.
+    db.exec('CREATE INDEX session_message_sequence ON session_message (session_id, seq)')
     db.exec('BEGIN')
     for (let index = 0; index < 10001; index++) {
       insert(String(index), 'idle', {})

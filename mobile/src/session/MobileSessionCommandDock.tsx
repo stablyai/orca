@@ -20,11 +20,13 @@ import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
+  useMobileColorScheme()
   const {
     insets,
     bufferedTerminalDraftState,
@@ -38,6 +40,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     terminalModes,
     canPaste,
     dictationMode,
+    dictationEnabled,
     bindCommandField,
     handleLiveInputChange,
     handleLiveInputKeyPress,
@@ -80,7 +83,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        {/* Accessory keys */}
+        {}
         <View ref={accessoryBarKeepsKeyboard} style={styles.accessoryBar}>
           {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
           {keyboardLift > 0 && (
@@ -256,7 +259,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           </ScrollView>
         </View>
 
-        {/* Input bar */}
+        {}
         {liveInputEnabled ? (
           <View style={[styles.inputBar, styles.liveInputBar]}>
             <Pressable
@@ -283,6 +286,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               isAttaching={isAttaching}
               dictation={dictation}
               dictationMode={dictationMode}
+              dictationEnabled={dictationEnabled}
               buttonStyle={styles.dictationButton}
               activeButtonStyle={styles.dictationButtonActive}
               disabledButtonStyle={styles.sendButtonDisabled}
@@ -351,6 +355,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               isAttaching={isAttaching}
               dictation={dictation}
               dictationMode={dictationMode}
+              dictationEnabled={dictationEnabled}
               buttonStyle={styles.dictationButton}
               activeButtonStyle={styles.dictationButtonActive}
               disabledButtonStyle={styles.sendButtonDisabled}

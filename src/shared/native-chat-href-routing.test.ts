@@ -89,6 +89,30 @@ describe('routeNativeChatHref', () => {
     })
   })
 
+  it.each([
+    '/repo/report:12',
+    '/repo/report:0',
+    '/repo/report:12:4',
+    ' leading and trailing ',
+    '/repo/ leading ',
+    'notes%23?#.md',
+    'https:notes.md',
+    'file:notes.md',
+    '#orca-native-chat-file=notes.md'
+  ])('preserves the exact literal path %j without URL or location interpretation', (pathText) => {
+    expect(routeNativeChatHref(createNativeChatFileHref(pathText, 'literal'))).toEqual({
+      kind: 'file',
+      pathText,
+      line: null,
+      pathKind: 'literal'
+    })
+  })
+
+  it('rejects an empty or malformed literal-path wrapper', () => {
+    expect(routeNativeChatHref(createNativeChatFileHref('', 'literal'))).toEqual({ kind: 'none' })
+    expect(routeNativeChatHref('#orca-native-chat-file-path=%ZZ')).toEqual({ kind: 'none' })
+  })
+
   it('reads a bare file name with a line suffix as a file, not a scheme', () => {
     expect(routeNativeChatHref('README.md:5')).toEqual({
       kind: 'file',

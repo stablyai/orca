@@ -1,6 +1,4 @@
-// The context every client mutation of a session runs with, and the one path each takes: admit the
-// envelope against the lease, then run its plan inside the session's serialize.
-
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
@@ -13,6 +11,13 @@ import {
 } from './structured-agent-session-mutation-admission'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-lifetime'
+import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
+import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
+import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
+import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
+import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
@@ -23,31 +28,39 @@ export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
-  /** The host's accessor, for a caller outside the session's serialize. */
+  publishConversationName?: (sessionId: string) => void
+  /** For callers outside session serialization. */
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
-  /** The session's child records, as the strip reads them; what command admission decides on. */
+  /** Display-admitted child records used by command admission. */
   readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined
+  publishChildWork: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
+  /** Republish held-work changes without journal rows. */
+  publishWorkChanged: (sessionId: string) => void
+  captureChildWorkStops: (sessionId: string, handleIds: readonly string[]) => CapturedChildWorkStops
+  /** Includes running child work without records. */
+  childWorkOpen: (sessionId: string) => boolean
+  childWorkIncomplete: (sessionId: string) => boolean
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-  /** The session's conversation, opened when closed; inside the caller's serialize. */
+  /** Open within the caller’s existing serialization. */
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
-  /** Gives the session a provider child; inside the caller's serialize. */
-  ensureAgent: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
-  /** Finishes a stop an earlier attempt left owed, for an operation that starts no child; inside
-   *  the caller's serialize. */
-  finishOwedStop: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
-  /** A message was accepted: the session's delivery loop hands it over. */
+  /** Claim inside serialization; await the result outside. */
+  claimAgent: (sessionId: string) => StructuredAgentSessionStartClaim
+  startFlights: Pick<StructuredAgentSessionStartFlights, 'get'>
+  startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'readiness'>
+  deliveryOrder: StructuredAgentSessionDeliveryOrder
+  /** Join without starting a child, inside existing serialization. */
+  joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   wakeDelivery: (sessionId: string) => void
-  /** Stops the session's provider child, keeping its conversation; inside the caller's serialize.
-   *  Each caller names why (`ending`). */
+  /** Stop the provider child inside serialization, retaining the conversation. */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>
-  /** Only for gate inputs living in the RECORD store, which can settle with no
-   *  journal commit (a conversation command). Draft-table changes need no call:
-   *  the draft store notifies through the journal's own commit listener. */
+  /** Wake for row-free record-store gates; draft writes already notify through journal commits. */
   wakeQueuedDrain?: (sessionId: string) => void
+  /** Abort provider waits from outside the serialization they block. */
+  acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'abort' | 'begin' | 'captureOperations'>
+  /** Advance on accepted child picks so earlier reports cannot persist stale values. */
   now: () => number
 }
 
-/** Admits the envelope and runs the plan inside the session's serialize. */
 export function mutateStructuredAgentSession<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -56,18 +69,35 @@ export function mutateStructuredAgentSession<TValue>(
   prepareSession?: AgentSessionMutationRequest<TValue>['prepareSession']
 ): Promise<AgentSessionMutationResult<TValue>> {
   return context.serialize(envelope.sessionId, () =>
-    admitAndRunAgentSessionMutation({
-      store: context.deps.store,
-      adapter: context.deps.adapter,
-      logger: context.deps.logger,
-      callerKey: caller.callerKey,
-      envelope,
-      plan,
-      journal: () => context.sessions.get(envelope.sessionId)?.journal,
-      prepareSession,
-      publish: (journal) => context.publish(envelope.sessionId, journal),
-      providerChildPhase: () => context.sessions.get(envelope.sessionId)?.child?.phase,
-      now: () => context.now()
-    })
+    runStructuredAgentSessionMutation(context, caller, envelope, plan, prepareSession)
   )
+}
+
+/** Caller already holds session serialization. */
+export function runStructuredAgentSessionMutation<TValue>(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  envelope: AgentSessionMutationEnvelope,
+  plan: MutationPlan<TValue>,
+  prepareSession?: AgentSessionMutationRequest<TValue>['prepareSession']
+): Promise<AgentSessionMutationResult<TValue>> {
+  return admitAndRunAgentSessionMutation({
+    store: context.deps.store,
+    adapter: context.deps.adapter,
+    agents: context.deps.agents,
+    logger: context.deps.logger,
+    callerKey: caller.callerKey,
+    envelope,
+    plan,
+    journal: () => context.sessions.get(envelope.sessionId)?.journal,
+    currentWork: () =>
+      hostStructuredAgentSessionCurrentWork(
+        { store: context.deps.store, sessions: context.sessions },
+        envelope.sessionId
+      ),
+    prepareSession,
+    publish: (journal) => context.publish(envelope.sessionId, journal),
+    wakeDelivery: (sessionId) => context.wakeDelivery(sessionId),
+    now: () => context.now()
+  })
 }

@@ -37,8 +37,7 @@ function DetailRow({
   )
 }
 
-/** Agent names come from the roots that reached the file, so a skill shared by
- *  several agents lists all of them rather than the coarse provider tag. */
+/** Root provenance identifies every consuming agent, unlike the coarse provider tag. */
 function agentNames(
   skill: DiscoveredSkill,
   agentByRootPath: ReadonlyMap<string, string>
@@ -59,18 +58,19 @@ export function SkillDetailDialog({
   deleteDisabledReason,
   onOpenChange,
   onShare,
-  onDelete
+  onDelete,
+  onReveal
 }: {
   skill: DiscoveredSkill | null
   agentByRootPath: ReadonlyMap<string, string>
   shareable: boolean
   deletable: boolean
-  /** Why a reason string rather than share's bare boolean: delete is valid on a
-   *  remote host, so "can't" always has a specific cause worth showing. */
+  /** Remote deletion is supported, so disabled actions need a specific cause. */
   deleteDisabledReason: string | null
   onOpenChange: (open: boolean) => void
   onShare: () => void
   onDelete: () => void
+  onReveal: () => void
 }): React.JSX.Element | null {
   if (!skill) {
     return null
@@ -79,15 +79,6 @@ export function SkillDetailDialog({
   const copyPath = async (): Promise<void> => {
     await window.api.ui.writeClipboardText(skill.skillFilePath)
     toast.success(translate('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
-  }
-
-  const revealSkill = async (): Promise<void> => {
-    const result = await window.api.shell.openInFileManager(skill.skillFilePath)
-    if (!result.ok) {
-      toast.error(
-        translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')
-      )
-    }
   }
 
   const agents = agentNames(skill, agentByRootPath)
@@ -133,8 +124,7 @@ export function SkillDetailDialog({
                 : translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')}
             </DetailRow>
             <DetailRow label={translate('auto.components.skills.SkillRow.detailPath', 'Path')}>
-              {/* Why: a labelled button beats an icon + tooltip here — the
-                  tooltip would cover the very path it names. */}
+              {/* Use a labelled button so its tooltip cannot cover the path itself. */}
               <span className="flex min-w-0 items-start gap-2">
                 <span className="min-w-0 flex-1 break-all font-mono">{skill.skillFilePath}</span>
                 <Button
@@ -153,7 +143,7 @@ export function SkillDetailDialog({
         </div>
 
         <DialogFooter className="border-t border-border px-5 py-3">
-          <Button type="button" variant="ghost" size="sm" onClick={() => void revealSkill()}>
+          <Button type="button" variant="ghost" size="sm" onClick={onReveal}>
             <FolderOpen className="size-3.5" />
             {translate('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file')}
           </Button>

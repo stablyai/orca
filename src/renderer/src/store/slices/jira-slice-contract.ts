@@ -6,9 +6,10 @@ import type {
   JiraConnectionStatus,
   JiraIssue,
   JiraIssueFilter,
+  JiraIssueListFilters,
   JiraSiteSelection,
   JiraViewer
-} from '../../../../shared/jira-types'
+} from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export type JiraReadOptions = {
@@ -16,9 +17,16 @@ export type JiraReadOptions = {
   siteId?: JiraSiteSelection | null
 }
 
-export type JiraCollectionReadOptions = JiraReadOptions & { force?: boolean }
+export type JiraCollectionReadOptions = JiraReadOptions & {
+  force?: boolean
+  filters?: JiraIssueListFilters
+}
 export type JiraSearchOptions = JiraCollectionReadOptions & { signal?: AbortSignal }
-export type JiraPatchOptions = { sourceContext?: TaskSourceContext | null }
+export type JiraPatchOptions = {
+  sourceContext?: TaskSourceContext | null
+  siteId?: string | null
+  contextKey?: string
+}
 export type JiraIssueSummaryLookupOptions = { force?: boolean; signal?: AbortSignal }
 
 export type JiraSlice = {

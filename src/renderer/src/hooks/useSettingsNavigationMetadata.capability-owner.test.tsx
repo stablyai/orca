@@ -7,8 +7,10 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 const testState = vi.hoisted(() => ({
   settings: null as GlobalSettings | null,
@@ -16,10 +18,11 @@ const testState = vi.hoisted(() => ({
   runtimeEnvironments: [] as { id: string; createdAt: number; pairingRevision?: number }[]
 }))
 
-/** Only the store fields this screen's selectors read; the mock supplies nothing else. */
 type MockedSettingsNavState = {
   settings: GlobalSettings | null
   repos: Repo[]
+  endpointProjects: Project[]
+  endpointProjectHostSetups: ProjectHostSetup[]
   runtimeEnvironments: typeof testState.runtimeEnvironments
   runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
 }
@@ -29,6 +32,8 @@ vi.mock('@/store', () => ({
     selector({
       settings: testState.settings,
       repos: [],
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
       runtimeEnvironments: testState.runtimeEnvironments,
       runtimeStatusByEnvironmentId: new Map()
     })
@@ -61,6 +66,7 @@ describe('settings navigation capability ownership', () => {
   let root: Root
 
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([])
     testState.settings = {
       ...getDefaultSettings('/tmp'),
       activeRuntimeEnvironmentId: null
@@ -74,6 +80,7 @@ describe('settings navigation capability ownership', () => {
 
   afterEach(() => {
     act(() => root.unmount())
+    setLocalRuntimeCapabilitiesForTests(null)
     resetWindowsTerminalCapabilitiesForTests()
     document.body.replaceChildren()
     vi.unstubAllGlobals()

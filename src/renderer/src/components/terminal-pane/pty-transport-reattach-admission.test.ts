@@ -8,20 +8,13 @@ import {
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
-  let onExit:
-    | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
-    | null = null
 
   beforeEach(() => {
     vi.resetModules()
     onData = null
-    onExit = null
     installIpcPtyWindow(originalWindow, {
       data: (callback) => {
         onData = callback
-      },
-      exit: (callback) => {
-        onExit = callback
       }
     })
   })
@@ -107,112 +100,6 @@ describe('createIpcPtyTransport', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it('rejects a stale reattach before it can replace newer PTY handlers', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    let resolveStale!: (value: { id: string; isReattach: boolean }) => void
-    spawn.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveStale = resolve
-      })
-    )
-    const staleData = vi.fn()
-    const staleExit = vi.fn()
-    const stalePane = createIpcPtyTransport({})
-    const staleConnect = stalePane.connect({
-      url: '',
-      sessionId: 'pty-1',
-      admitPtyId: () => false,
-      callbacks: { onData: staleData, onExit: staleExit }
-    })
-    const currentData = vi.fn()
-    const currentExit = vi.fn()
-    const currentPane = createIpcPtyTransport({})
-    currentPane.attach({
-      existingPtyId: 'pty-1',
-      callbacks: { onData: currentData, onExit: currentExit }
-    })
-
-    resolveStale({ id: 'pty-1', isReattach: true })
-    await staleConnect
-    onData?.({ id: 'pty-1', data: 'current output' })
-    onExit?.({ id: 'pty-1', code: 0 })
-
-    expect(currentData).toHaveBeenCalledWith('current output')
-    expect(currentExit).toHaveBeenCalledWith(0)
-    expect(staleData).not.toHaveBeenCalled()
-    expect(staleExit).not.toHaveBeenCalled()
-    expect(window.api.pty.kill).not.toHaveBeenCalled()
-  })
-
-  it('retires a rejected fresh fallback before it can publish PTY handlers', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
-    const onPtySpawn = vi.fn()
-    const onDataCallback = vi.fn()
-    const onExitCallback = vi.fn()
-    spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
-    // Built the way installPtyInputRecovery builds it: every real pane supplies
-    // retainDisposedSpawn, and for a live pane refusing its own id it answers "retain". The refusal
-    // must kill anyway — this transport is the pane's only one, so nothing else owns the PTY.
-    const transport = createIpcPtyTransport({ onPtySpawn, retainDisposedSpawn: () => true })
-
-    const result = await transport.connect({
-      url: '',
-      sessionId: 'pty-missing',
-      admitPtyId: () => false,
-      callbacks: { onData: onDataCallback, onExit: onExitCallback }
-    })
-    onData?.({ id: 'pty-fresh-fallback', data: 'orphaned output' })
-    onExit?.({ id: 'pty-fresh-fallback', code: 0 })
-
-    expect(result).toEqual({ id: 'pty-fresh-fallback', sessionExpired: true })
-    expect(kill).toHaveBeenCalledExactlyOnceWith('pty-fresh-fallback')
-    expect(onPtySpawn).not.toHaveBeenCalled()
-    expect(onDataCallback).not.toHaveBeenCalled()
-    expect(onExitCallback).not.toHaveBeenCalled()
-    expect(transport.getPtyId()).toBeNull()
-    expect(transport.isConnected()).toBe(false)
-  })
-
-  it('surfaces rejected fresh fallback retirement without publishing PTY handlers', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
-    const onPtySpawn = vi.fn()
-    const onDataCallback = vi.fn()
-    const onExitCallback = vi.fn()
-    const onErrorCallback = vi.fn()
-    const retirementError = new Error('provider shutdown refused')
-    spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
-    kill.mockRejectedValueOnce(retirementError)
-    const transport = createIpcPtyTransport({ onPtySpawn, retainDisposedSpawn: () => true })
-
-    await expect(
-      transport.connect({
-        url: '',
-        sessionId: 'pty-missing',
-        admitPtyId: () => false,
-        callbacks: {
-          onData: onDataCallback,
-          onExit: onExitCallback,
-          onError: onErrorCallback
-        }
-      })
-    ).resolves.toBeUndefined()
-    onData?.({ id: 'pty-fresh-fallback', data: 'orphaned output' })
-    onExit?.({ id: 'pty-fresh-fallback', code: 0 })
-
-    expect(kill).toHaveBeenCalledExactlyOnceWith('pty-fresh-fallback')
-    expect(onPtySpawn).not.toHaveBeenCalled()
-    expect(onDataCallback).not.toHaveBeenCalled()
-    expect(onExitCallback).not.toHaveBeenCalled()
-    expect(onErrorCallback).toHaveBeenCalledExactlyOnceWith(retirementError.message)
-    expect(transport.getPtyId()).toBeNull()
-    expect(transport.isConnected()).toBe(false)
-  })
-
   it('mints a fresh id instead of reopening a discarded same-id session', async () => {
     const { discardPreHandlerPtyState, clearPreHandlerPtyState } =
       await import('./pty-pre-handler-buffer')
@@ -221,13 +108,12 @@ describe('createIpcPtyTransport', () => {
     const discardedId = 'removed-worktree@@discarded-session'
     discardPreHandlerPtyState(discardedId)
 
-    await createIpcPtyTransport({ cwdFallback: 'worktree' }).connect({
+    await createIpcPtyTransport({}).connect({
       url: '',
       sessionId: discardedId,
       callbacks: {}
     })
 
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ cwdFallback: 'worktree' }))
     expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ sessionId: discardedId }))
     clearPreHandlerPtyState(discardedId)
   })
@@ -269,10 +155,7 @@ describe('createIpcPtyTransport', () => {
     spawn.mockResolvedValueOnce({ id: 'reveal-pty' })
     const onExitCallback = vi.fn()
     const sessionId = 'sole-newborn-dead-session'
-    // The parked sidecar's sole-newborn guard consumed the buffered exit
-    // (pre-fix primary parity), so reveal must take the readmission/spawn path.
-    // exitedBeforeAttach here would drain the exit into the reattached session
-    // — where spawnedFreshPtyId is null — and close the kept tab on reveal.
+    // Consumed newborn-diagnostic exits need readmission; replaying one into reattach would close the preserved tab because it is no longer fresh-spawned.
     bufferPreHandlerPtyExit(sessionId, 1)
     consumePreHandlerPtyState(sessionId)
 
@@ -285,38 +168,6 @@ describe('createIpcPtyTransport', () => {
     expect(result).not.toEqual(expect.objectContaining({ exitedBeforeAttach: true }))
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ sessionId }))
     expect(onExitCallback).not.toHaveBeenCalled()
-    clearPreHandlerPtyState(sessionId)
-  })
-
-  it('rejects a buffered dead-session exit before publishing its final frame', async () => {
-    const { bufferPreHandlerPtyData, bufferPreHandlerPtyExit, clearPreHandlerPtyState } =
-      await import('./pty-pre-handler-buffer')
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    const onDataCallback = vi.fn()
-    const onExitCallback = vi.fn()
-    const onDisconnect = vi.fn()
-    const onPtyExit = vi.fn()
-    const sessionId = 'stale-dead-parked-session'
-    bufferPreHandlerPtyData(sessionId, 'stale final output')
-    bufferPreHandlerPtyExit(sessionId, 17)
-
-    const transport = createIpcPtyTransport({ onPtyExit })
-    const result = await transport.connect({
-      url: '',
-      sessionId,
-      admitPtyId: () => false,
-      callbacks: { onData: onDataCallback, onExit: onExitCallback, onDisconnect }
-    })
-
-    expect(result).toEqual({ id: sessionId })
-    expect(spawn).not.toHaveBeenCalled()
-    expect(onDataCallback).not.toHaveBeenCalled()
-    expect(onExitCallback).not.toHaveBeenCalled()
-    expect(onDisconnect).not.toHaveBeenCalled()
-    expect(onPtyExit).not.toHaveBeenCalled()
-    expect(window.api.pty.kill).not.toHaveBeenCalled()
-    expect(transport.isConnected()).toBe(false)
     clearPreHandlerPtyState(sessionId)
   })
 
@@ -349,10 +200,7 @@ describe('createIpcPtyTransport', () => {
             return () => {}
           }),
           onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
-            onExit = callback
-            return () => {}
-          })
+          onExit: vi.fn(() => () => {})
         }
       }
     } as unknown as typeof window
@@ -533,6 +381,7 @@ describe('createIpcPtyTransport', () => {
     const killMock = vi.fn()
     const onPtySpawn = vi.fn()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test swaps in a window whose pty API is the spawn/kill mocks above.
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -548,10 +397,7 @@ describe('createIpcPtyTransport', () => {
             return () => {}
           }),
           onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
-            onExit = callback
-            return () => {}
-          })
+          onExit: vi.fn(() => () => {})
         }
       }
     } as unknown as typeof window

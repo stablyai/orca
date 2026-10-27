@@ -18,13 +18,11 @@ import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { jcodeHookService } from '../jcode/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { kiroHookService } from '../kiro/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 
-// Why (#16441): Codex's installer awaits a codex app-server trust-grant session
-// instead of blocking the main thread on spawnSync. Widening the tuple keeps the
-// other thirteen agent services synchronous — the shared loop already awaits.
 export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
 export type ManagedAgentHookInstaller = readonly [
   HookInstallAgent,
@@ -46,7 +44,7 @@ export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => Age
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
   ['claude', (options) => claudeHookService.install({ claudeVersion: options?.cliVersion })],
   ['openclaude', () => openClaudeHookService.install()],
-  ['codex', () => codexHookService.install()],
+  ['codex', () => codexHookService.reconcileHooks()],
   ['gemini', () => geminiHookService.install()],
   ['qoder', () => qoderHookService.install()],
   ['qoder-cn', () => qoderCnHookService.install()],
@@ -65,15 +63,11 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['muse', () => museHookService.install()],
   ['zcode', () => zcodeHookService.install()],
   ['dsh', () => dshHookService.install()],
-  ['jcode', () => jcodeHookService.install()]
+  ['jcode', () => jcodeHookService.install()],
+  ['kiro', () => kiroHookService.install()]
 ]
 
-// Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
-// user-wide agent config keeps invoking after the CLI falls off PATH. Amp and Hermes write
-// provider-native plugin code into their own config dirs with their own install lifecycles,
-// not shared launchers, so they are deliberately absent. Enforced by the coverage test in
-// managed-hook-script-refresh.test.ts: a new installer that writes a launcher without adding
-// a refresher here fails that test.
+// Refresh shared launchers even after CLI removal; Amp/Hermes manage provider-native plugins separately.
 export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScriptRefresher[] = [
   ['claude', () => claudeHookService.refreshManagedScripts()],
   ['openclaude', () => openClaudeHookService.refreshManagedScripts()],
@@ -94,7 +88,8 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['muse', () => museHookService.refreshManagedScripts()],
   ['zcode', () => zcodeHookService.refreshManagedScripts()],
   ['dsh', () => dshHookService.refreshManagedScripts()],
-  ['jcode', () => jcodeHookService.refreshManagedScripts()]
+  ['jcode', () => jcodeHookService.refreshManagedScripts()],
+  ['kiro', () => kiroHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -119,7 +114,8 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['muse', () => museHookService.remove()],
   ['zcode', () => zcodeHookService.remove()],
   ['dsh', () => dshHookService.remove()],
-  ['jcode', () => jcodeHookService.remove()]
+  ['jcode', () => jcodeHookService.remove()],
+  ['kiro', () => kiroHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
@@ -148,5 +144,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['muse', () => museHookService.getStatus()],
   ['zcode', () => zcodeHookService.getStatus()],
   ['dsh', () => dshHookService.getStatus()],
-  ['jcode', () => jcodeHookService.getStatus()]
+  ['jcode', () => jcodeHookService.getStatus()],
+  ['kiro', () => kiroHookService.getStatus()]
 ]

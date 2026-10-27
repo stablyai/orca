@@ -1,0 +1,20 @@
+{
+  "capturedAt": "2026-10-24T19:27:00.000Z",
+  "platform": "linux",
+  "command": ["hermes", "--tui"],
+  "cols": 120,
+  "rows": 31,
+  "note": "Hermes Agent v0.22.5; real PTY startup, typed draft, busy/streaming reply, completed turn and an unsubmitted Try-shaped draft against a local canned model endpoint, with the default profile and display.tui_statusbar: bottom (composer row, then the status row). Working directory replaced at the same byte length; raw capture retained outside the repository.",
+  "exitCode": 0,
+  "stages": {
+    "starting": 2437,
+    "forging": 2520,
+    "initial": 8865,
+    "promptDraft": 9163,
+    "busy": 18536,
+    "streaming": 22788,
+    "completed": 26434,
+    "tryDraft": 26882,
+    "end": 26882
+  }
+}

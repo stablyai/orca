@@ -1,7 +1,14 @@
+import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
+import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
+import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
 import {
   readNativeChatDraftDocument,
   writeNativeChatDraftDocument
 } from './native-chat-draft-cache'
+import {
+  subscribeToNativeChatComposerDraft,
+  hasUnsavedNativeChatComposerDraftChange
+} from './native-chat-composer-draft-store'
 import { closeHistory } from '@tiptap/pm/history'
 import { Slice } from '@tiptap/pm/model'
 import {
@@ -16,15 +23,23 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
+  fileReferenceContent,
+  NativeChatFileReference,
+  NativeChatImageReference,
   NativeChatSkill,
+  promptLeafText,
+  promptText,
   promptTextContent,
-  promptTextMap,
-  promptTextOffset
+  promptTextOffset,
+  promptTextPosition
 } from './native-chat-prompt-document'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   scopeKey?: string
+  /** The composer's thumbnail ids, in order, which number its image chips. */
+  imageRow?: readonly string[]
   inputRef: RefObject<NativeChatComposerInput | null>
   initialValue: string
   disabled: boolean
@@ -33,8 +48,11 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   onSelect: (input: NativeChatComposerInput) => void
 }
 
+const NO_IMAGES: readonly string[] = []
+
 export function NativeChatPromptEditor({
   scopeKey,
+  imageRow = NO_IMAGES,
   inputRef,
   initialValue,
   disabled,
@@ -44,6 +62,7 @@ export function NativeChatPromptEditor({
   className,
   ...events
 }: Props): React.JSX.Element {
+  const historyPaths = useMemo(() => createNativeChatPastedTextHistory(scopeKey ?? ''), [scopeKey])
   const placeholderRef = useRef(placeholder)
   placeholderRef.current = placeholder
   const editor = useEditor(
@@ -68,7 +87,13 @@ export function NativeChatPromptEditor({
           trailingNode: false
         }),
         NativeChatSkill,
-        Placeholder.configure({ placeholder: () => placeholderRef.current })
+        NativeChatFileReference,
+        NativeChatImageReference,
+        // A disabled box still says why it is disabled, as the plain text box's placeholder does.
+        Placeholder.configure({
+          placeholder: () => placeholderRef.current,
+          showOnlyWhenEditable: false
+        })
       ],
       content:
         (scopeKey && readNativeChatDraftDocument(scopeKey, initialValue)) ||
@@ -79,10 +104,10 @@ export function NativeChatPromptEditor({
           role: 'textbox',
           'aria-multiline': 'true',
           'aria-label': placeholder,
-          class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:first-child]:before:text-muted-foreground/60 [&_p.is-editor-empty:first-child]:before:float-left [&_p.is-editor-empty:first-child]:before:h-0 [&_p.is-editor-empty:first-child]:before:pointer-events-none`,
+          class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:first-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:first-child]:before:float-left [&_p.is-editor-empty:first-child]:before:h-0 [&_p.is-editor-empty:first-child]:before:pointer-events-none`,
           ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))
         },
-        // Clipboard input is always literal text; only the picker creates skill nodes.
+        // Clipboard input is always literal text; only the picker and attachments create pills.
         handlePaste: (view, event) => {
           if (event.defaultPrevented) {
             return true
@@ -99,16 +124,28 @@ export function NativeChatPromptEditor({
           return true
         },
         clipboardTextSerializer: (slice) =>
-          slice.content.textBetween(0, slice.content.size, '\n', (node) =>
-            node.type.name === 'hardBreak' ? '\n' : String(node.attrs.token ?? '')
+          resolveNativeChatPastedText(
+            scopeKey ?? '',
+            slice.content.textBetween(0, slice.content.size, '\n', promptLeafText),
+            true
           )
       },
       onTransaction: ({ editor: current, transaction }) => {
-        if (scopeKey && transaction.docChanged) {
+        const pastedTextFiles = transaction.docChanged
+          ? historyPaths(current.state.doc, transaction.docs)
+          : undefined
+        // Remote/late draft adoption is already saved; only this window’s edits should persist their document and skill chips.
+        if (
+          scopeKey &&
+          transaction.docChanged &&
+          (!transaction.getMeta('preventUpdate') ||
+            hasUnsavedNativeChatComposerDraftChange(scopeKey))
+        ) {
           writeNativeChatDraftDocument(
             scopeKey,
-            promptTextMap(current.state.doc).text,
-            current.getJSON()
+            promptText(current.state.doc),
+            current.getJSON(),
+            pastedTextFiles
           )
         }
       },
@@ -127,6 +164,15 @@ export function NativeChatPromptEditor({
   )
 
   useLayoutEffect(() => {
+    if (!editor || !scopeKey) {
+      return
+    }
+    const capture = () => historyPaths(editor.state.doc)
+    capture()
+    return subscribeToNativeChatComposerDraft(scopeKey, capture)
+  }, [editor, scopeKey, historyPaths])
+
+  useLayoutEffect(() => {
     editor?.setEditable(!disabled, false)
   }, [disabled, editor])
 
@@ -141,11 +187,18 @@ export function NativeChatPromptEditor({
               )
             },
             get value() {
-              return promptTextMap(editor.state.doc).text
+              return promptText(editor.state.doc)
             },
             set value(value: string) {
-              const old = promptTextMap(editor.state.doc)
-              if (old.text === value) {
+              const { doc } = editor.state
+              const old = promptText(doc)
+              if (old === value) {
+                return
+              }
+              // A draft loaded or adopted whole keeps its skill chips: its stored document wins.
+              const stored = scopeKey ? readNativeChatDraftDocument(scopeKey, value) : undefined
+              if (stored) {
+                editor.commands.setContent(stored, { emitUpdate: false })
                 return
               }
               if (!value) {
@@ -153,40 +206,27 @@ export function NativeChatPromptEditor({
                 return
               }
               let start = 0
-              while (
-                start < old.text.length &&
-                start < value.length &&
-                old.text[start] === value[start]
-              ) {
+              while (start < old.length && start < value.length && old[start] === value[start]) {
                 start++
               }
               let end = 0
               while (
-                end < old.text.length - start &&
+                end < old.length - start &&
                 end < value.length - start &&
-                old.text[old.text.length - 1 - end] === value[value.length - 1 - end]
+                old[old.length - 1 - end] === value[value.length - 1 - end]
               ) {
                 end++
               }
               // A text replacement intersecting an atom replaces its entire serialized token.
-              while (start > 0 && old.positions[start - 1] === old.positions[start]) {
-                start--
-              }
-              while (
-                end > 0 &&
-                old.positions[old.text.length - end] === old.positions[old.text.length - end - 1]
-              ) {
-                end--
-              }
+              const from = promptTextPosition(doc, start, 'before')
+              const to = promptTextPosition(doc, old.length - end, 'after')
+              start = promptTextOffset(doc, from)
+              end = old.length - promptTextOffset(doc, to)
               const content = editor.schema.nodeFromJSON(
                 promptTextContent(value.slice(start, value.length - end))
               )
               editor.commands.command(({ tr }) => {
-                tr.replaceRange(
-                  old.positions[start],
-                  old.positions[old.text.length - end],
-                  new Slice(content.content, 1, 1)
-                )
+                tr.replaceRange(from, to, new Slice(content.content, 1, 1))
                 tr.setMeta('preventUpdate', true)
                 return true
               })
@@ -204,36 +244,102 @@ export function NativeChatPromptEditor({
               return promptTextOffset(editor.state.doc, editor.state.selection.to)
             },
             focus: () => {
-              editor.view.dom.focus()
+              // Focus the editor view so an inserted caret replaces the stale DOM selection.
+              editor.view.focus()
+              if (!editor.isEditable) {
+                editor.view.dom.focus()
+              }
             },
             contains: (node) => editor.view.dom.contains(node),
+            isCaretOnVisualEdge: (edge) => {
+              const { selection, doc } = editor.state
+              if (!selection.empty) {
+                return false
+              }
+              const before = promptText(doc, 0, selection.from)
+              const after = promptText(doc, selection.from)
+              // An empty composer has one line: no layout read on the path every recall starts from.
+              if (before === '' && after === '') {
+                return true
+              }
+              const beyond = edge === 'start' ? before : after
+              // Why both: the text check covers other paragraphs, the view covers soft wraps.
+              return (
+                !beyond.includes('\n') &&
+                editor.view.endOfTextblock(edge === 'start' ? 'up' : 'down')
+              )
+            },
             select: () => {
               editor.commands.selectAll()
             },
             setSelectionRange: (from, to) => {
-              const { positions } = promptTextMap(editor.state.doc)
+              const { doc } = editor.state
               editor.commands.setTextSelection({
-                from: positions[Math.min(from ?? 0, positions.length - 1)],
-                to: positions[Math.min(to ?? 0, positions.length - 1)]
+                from: promptTextPosition(doc, from ?? 0),
+                to: promptTextPosition(doc, to ?? 0)
               })
             },
-            insertSkill: (from, to, token) => {
-              const { positions } = promptTextMap(editor.state.doc)
+            insertSkill: (from, to, token, path) => {
+              const { doc } = editor.state
+              const range = { from: promptTextPosition(doc, from), to: promptTextPosition(doc, to) }
               editor.view.dispatch(closeHistory(editor.state.tr))
               editor
                 .chain()
-                .insertContentAt({ from: positions[from], to: positions[to] }, [
-                  { type: 'nativeChatSkill', attrs: { token } },
+                .insertContentAt(range, [
+                  { type: 'nativeChatSkill', attrs: { token, path: path ?? '' } },
                   { type: 'text', text: ' ' }
                 ])
                 .run()
               editor.view.dispatch(closeHistory(editor.state.tr))
+            },
+            removeImageReferences: (attachmentId) => {
+              const { tr } = editor.state
+              editor.state.doc.descendants((node, position) => {
+                if (
+                  node.type.name === NativeChatImageReference.name &&
+                  node.attrs.attachmentId === attachmentId
+                ) {
+                  // With the space inserted after it, so no gap is left where it sat.
+                  const from = tr.mapping.map(position)
+                  const to = from + node.nodeSize
+                  tr.delete(from, tr.doc.textBetween(to, to + 1) === ' ' ? to + 1 : to)
+                }
+              })
+              // Undo must not bring back a chip whose image is gone.
+              if (tr.docChanged) {
+                editor.view.dispatch(tr.setMeta('addToHistory', false))
+              }
+            },
+            stagePastedText: (token) => {
+              const pill = { type: NativeChatFileReference.name, attrs: { token } }
+              editor.view.dispatch(closeHistory(editor.state.tr))
+              editor.view.dispatch(
+                editor.state.tr.replaceSelectionWith(editor.schema.nodeFromJSON(pill), false)
+              )
+              editor.view.dispatch(closeHistory(editor.state.tr))
+            },
+            insertFileReferences: (paths) => {
+              editor.commands.insertContentAt(
+                editor.state.selection.from,
+                paths.flatMap((path) => [fileReferenceContent(path), { type: 'text', text: ' ' }])
+              )
             }
           }
         : null,
-    [editor]
+    [editor, scopeKey]
   )
   useImperativeHandle(inputRef, () => input!, [input])
 
-  return <EditorContent editor={editor} {...events} />
+  return (
+    <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>
+      <NativeChatImageRowProvider value={imageRow}>
+        <EditorContent
+          editor={editor}
+          {...events}
+          data-disabled={disabled || undefined}
+          className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+        />
+      </NativeChatImageRowProvider>
+    </NativeChatPastedTextScopeProvider>
+  )
 }

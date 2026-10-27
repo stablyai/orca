@@ -20,43 +20,9 @@ import {
 } from './agent-state-rules/agent-state-rules-engine'
 import { evaluateHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 
-/**
- * Ranking the evidence that a `tui-idle` wait may settle on.
- *
- * Why a ranking: a thinking TUI and a finished TUI are both silent, so the absence
- * of a working marker can never prove completion. `detectAgentStatusFromTitle`
- * DEFAULTS a name-only agent title to `idle` — the sidebar needs that to clear a
- * stale spinner (#1437) — so a busy Codex/Devin pane is routinely titled idle, and
- * accepting it satisfied a wait in ~0s mid-turn (#6011).
- *
- *   0. HOOKS — for an agent whose hooks are authoritative (agent-state-rules/ profile), a fresh
- *      hook row for the main agent's turn: done, working, or a permission wait, with the tail's
- *      blocked text judged by the permission arbiter against it (tui-idle-hook-lane.ts).
- *   0b. BLOCKED — otherwise, the tail shows a prompt waiting on the user.
- *   1. STRONG READY — the agent states it is ready: an explicit idle marker in its own
- *      title, or a known ready-prompt body.
- *   1b. QUIET READY SCREEN — Muse titles no rest signal, and agents whose rules
- *      (agent-state-rules/) read a ready screen or text they also paint mid-turn (Codex's
- *      header and composer), so that body is believed only once quiet. OMP's own idle title is
- *      believed once it has stood that long, because it paints that title before its setup
- *      wizard opens.
- *   2. WORKING — a fresh first-party agent status (OSC 9999) saying working/blocked/
- *      waiting, or a working title. The agent's own account of itself outranks anything
- *      inferred.
- *   3. WEAK READY — a name-only title, or a quiet non-shell foreground process. A last
- *      resort, and only once sustained.
- *
- * Why weak ready is a verdict class rather than a per-evidence flag: none of it can see a
- * start-up dialog the line tail lost (Claude's workspace trust), so ONLY the poll may settle
- * on it, after the rendered screen shows no blocker. Synchronous sites settle on tiers 0-1b.
- *
- * Over every ready tier: a screen veto (OMP's setup wizard) refuses input whichever lane settled.
- *
- * Why derived here rather than stamped onto the record at write time: `syncWindowGraph`
- * rebuilds every leaf from an explicit field list, so a bespoke provenance field is
- * silently dropped on any renderer publish and the verdict silently flips. `lastOscTitle`
- * is copied, so reading the rank back off it cannot decay.
- */
+/** Rank authoritative hooks, blocked tail, strong/quiet readiness, first-party working, then sustained weak readiness.
+ * Name-only idle is also emitted mid-turn (#6011); weak verdicts need a rendered-screen poll, and screen vetoes override every ready tier.
+ * Derive from retained evidence: graph sync rebuilds leaves and would drop separate provenance fields. */
 
 export type TuiIdleEvidenceRecord = {
   lastAgentStatus: AgentStatus | null
@@ -68,6 +34,7 @@ export type FirstPartyAgentStatus = {
   state: AgentStatusState
   updatedAt: number
   sessionBoundary?: boolean
+  programAtRest?: boolean
 } | null
 
 /** Tier 1: an idle marker the agent put in a title itself. */
@@ -80,34 +47,15 @@ export function hasExplicitIdleTitle(
   return Boolean(title && detectExplicitIdleStatusFromTitle(title) === 'idle')
 }
 
-/**
- * Tier 1, first-party: the agent's own hook says the turn ENDED.
- *
- * Why DSH needs its own lane: the other tiers all read the title, and DSH cannot carry idle
- * there. Its rest prefix is `✦`, which is Gemini's WORKING glyph, so the title detector
- * deliberately reports no status for a DSH pane at all (see agent-title-status.ts) — which
- * left `tui-idle` with nothing to settle on, and a supervised worker waiting on a ready
- * composer until its timeout.
- *
- * Why a hook `done` is trustworthy here where a title would not be: it is the agent's own
- * account of its own turn, and `normalizeDshEvent` drops SubagentStart/SubagentStop, so a
- * `done` row for a DSH pane is the LEAD's, never a child's finishing early.
- *
- * Scoped rather than general: for agents whose hooks do report child turns, a `done` row
- * can arrive mid-turn, and settling on it is exactly the #6011 class this file exists to
- * prevent.
- *
- * The second lane is narrower and agent-agnostic: a `sessionBoundary` row does not claim a
- * turn ended, it claims a NEW SESSION owns the pane and is waiting for its first input. That
- * cannot arrive mid-turn by construction — the producers only set it for a startup/resume/
- * reset boundary — so it carries no #6011 risk for any agent that emits it.
- */
+/** Session boundaries prove a new session awaits input; program OSC 7501 done also proves rest. Ordinary hook done belongs only to the authoritative hook lane. */
 export function hasFreshDoneFirstPartyStatus(
-  agent: TuiAgent | null | undefined,
   status: FirstPartyAgentStatus,
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  if (status?.state !== 'done' || (agent !== 'dsh' && status.sessionBoundary !== true)) {
+  if (
+    status?.state !== 'done' ||
+    (status.sessionBoundary !== true && status.programAtRest !== true)
+  ) {
     return false
   }
   return Date.now() - status.updatedAt <= staleAfterMs
@@ -118,17 +66,7 @@ export function hasFreshWorkingFirstPartyStatus(status: FirstPartyAgentStatus): 
   return isFreshNonDoneAgentStatus(status ?? undefined)
 }
 
-/**
- * Whether a name-only title from `agent` must be corroborated by a quiet stream.
- *
- * An agent's own idle-title rule (agent-state-rules/) answers. Without one, only agents whose
- * hooks drive an explicit `<Agent> ready` title are held to it: for them the bare name is not a
- * rest signal, since a shell auto-title names the agent from the moment it starts, over a
- * start-up dialog or a busy turn alike. Grok, Copilot, Aider, Mimo and agy emit their NAME and
- * nothing more at rest, so holding them to it leaves no settle signal at all: a real idle Grok
- * pane repaints its banner about four times a second forever, so the stream never quiesces and
- * the wait runs to timeout.
- */
+/** Rules decide whether name-only titles need quiet corroboration. Agents with explicit hook-ready titles do; name-only rest reporters such as Grok may repaint forever and cannot require quiet. */
 export function nameOnlyIdleNeedsCorroboration(
   agent: TuiAgent | null | undefined,
   title?: string | null
@@ -148,19 +86,18 @@ export function nameOnlyIdleNeedsCorroboration(
 export function hasSustainedTitleIdle(
   record: TuiIdleEvidenceRecord,
   agent: TuiAgent | null | undefined,
-  quiescenceMs: number
+  quiescenceMs: number,
+  launchReadiness = false
 ): boolean {
   if (record.lastAgentStatus !== 'idle') {
     return false
   }
-  if (!nameOnlyIdleNeedsCorroboration(agent, record.lastOscTitle)) {
+  // Launch readiness always needs corroboration: shell auto-titles name agents before their TUI can accept input.
+  if (!launchReadiness && !nameOnlyIdleNeedsCorroboration(agent, record.lastOscTitle)) {
     // The title is the only rest signal this agent emits, so there is nothing to wait for.
     return true
   }
-  // Why not "no timestamp means nothing to debounce": an adopted or daemon-backed pane has
-  // no local output clock, so for an agent that WILL announce rest explicitly there is no
-  // corroboration available at all. Settling here let a busy Codex/Devin satisfy the wait
-  // from a name-only title (#6011); hold out for tier 1/2 or the caller's timeout instead.
+  // No output clock means no corroboration for name-only titles; await stronger evidence or timeout (#6011).
   return hasQuietOutput(record, quiescenceMs)
 }
 
@@ -169,16 +106,7 @@ function hasQuietOutput(record: TuiIdleEvidenceRecord, quiescenceMs: number): bo
   return record.lastOutputAt !== null && Date.now() - record.lastOutputAt >= quiescenceMs
 }
 
-/**
- * When a quiet non-shell foreground process may settle a pending wait.
- * - `closed`: the agent has a stronger rest signal, so its silence is boot, not rest.
- *   Resolving on it let `dispatch --inject` write into a TUI that had not yet attached
- *   its reader and silently lose the prompt (#9976).
- * - `after-paint`: Orca knows an agent runs here but it has no other rest signal, so this
- *   lane is its only one. A TUI that has painted nothing yet is still booting.
- * - `open`: nothing is known about the pane, so a missing output clock also counts as quiet
- *   (see isQuietForQuiescence).
- */
+/** Closed lanes require stronger rest evidence; after-paint lanes require agent output beyond shell echo; open unknown panes may settle without an output clock. */
 export type QuietForegroundLane = 'closed' | 'after-paint' | 'open'
 
 export function quietForegroundLaneForTerminalAgent(
@@ -196,10 +124,7 @@ export type TuiIdleEvaluationInput = {
   readTailBlockedReason: () => RuntimeTerminalWaitBlockedReason | null
   /** Renderer-synced pane/tab title, when one exists. */
   rendererTitle?: string | null
-  /** Tier 1 body evidence: a known ready prompt, or an adopted pane's explicit title.
-   *  A thunk because producing it means building the pane's wait text and lowercasing it
-   *  (~11us and a multi-KB string on a full tail); the title check below usually answers
-   *  first, and then none of that has to happen at all. */
+  /** Defer multi-KB body scans until the cheaper memoized title check fails. */
   readPositiveBodyEvidence: () => boolean
   /** Tier 1b body evidence: a Muse ready screen, or a rule-file one held to quiet. Thunk, as above. */
   readQuietReadyBodyEvidence: () => boolean
@@ -214,6 +139,9 @@ export type TuiIdleEvaluationInput = {
   /** Tier 0: the hook server's fresh row for the pane, read only for an authoritative agent. */
   readHookTurn?: () => TuiIdleHookTurn | null
   quiescenceMs: number
+  /** Waiting for a just-launched agent to open its composer, where a name-only title proves
+   *  nothing until the stream goes quiet. */
+  launchReadiness?: boolean
 }
 
 export type TuiIdleVerdict =
@@ -223,23 +151,14 @@ export type TuiIdleVerdict =
   | { kind: 'ready-weak' }
   /** The agent says it is mid-turn: nothing may settle, and its screen is not read. */
   | { kind: 'working' }
-  | { kind: 'pending'; quietForeground: QuietForegroundLane }
+  /** `recheckAt`: when time alone may settle it, sooner than the next poll sweep. */
+  | { kind: 'pending'; quietForeground: QuietForegroundLane; recheckAt?: number }
 
 const READY_STRONG: TuiIdleVerdict = { kind: 'ready-strong' }
 const READY_WEAK: TuiIdleVerdict = { kind: 'ready-weak' }
 const WORKING: TuiIdleVerdict = { kind: 'working' }
 
-/**
- * Tier 1b: a ready screen in the body, believed only once the stream has gone quiet.
- *
- * Muse's OSC title is the bare cwd and never changes, and an idle Codex titles its pane with
- * the cwd (plus a thread name) and no agent name, so neither the explicit-idle nor the
- * sustained-title lane can fire. The ready screen proves the TUI is up; the quiescence
- * demand keeps a mid-turn streaming pane from satisfying, mirroring the tier-3 lane's
- * positive-evidence-plus-quiet shape. Scoped to Muse, agents with quiet ready rules, and
- * agent-unknown panes (which read only Muse's screen here): another agent's scrollback quoting
- * them must not settle its wait.
- */
+/** Require quiet plus body evidence when titles do not announce rest (Muse/Codex). Scope reads so quoted screens from unrelated agents cannot settle the wait. */
 export function hasQuietReadyScreen(
   record: TuiIdleEvidenceRecord,
   agent: TuiAgent | null | undefined,
@@ -277,26 +196,33 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   if (blockedReason) {
     return { kind: 'blocked', reason: blockedReason }
   }
-  // Qoder publishes "Ready" before its trust dialog is dismissed; only its composer proves input is live.
-  if (input.agent === 'qoder' || input.agent === 'qoder-cn') {
+  // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
+  if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {
     if (
       hasFreshWorkingFirstPartyStatus(input.firstPartyStatus) ||
       input.record.lastAgentStatus === 'working'
     ) {
+      // Hermes' blocked/waiting hooks leave the decision to the screen.
+      if (
+        input.agent === 'hermes' &&
+        input.firstPartyStatus?.state !== 'working' &&
+        input.record.lastAgentStatus !== 'working'
+      ) {
+        return { kind: 'pending', quietForeground: 'closed' }
+      }
       return WORKING
     }
     return input.readPositiveBodyEvidence()
       ? READY_STRONG
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  // Why the title before the body: both are tier 1, so either settles, but the title is a
-  // memoized lookup and the body is a fresh multi-KB scan. Same verdict, cheaper order.
+  // Both settle at tier 1; prefer memoized title lookup over a multi-KB body scan.
   if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
     return READY_STRONG
   }
   // Why beside the title lane, not after the veto: both are tier 1, and a first-party `done`
   // and a fresh `working` cannot both hold — the same row carries one state.
-  if (hasFreshDoneFirstPartyStatus(input.agent, input.firstPartyStatus)) {
+  if (hasFreshDoneFirstPartyStatus(input.firstPartyStatus)) {
     return READY_STRONG
   }
   if (hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {
@@ -306,10 +232,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       ? WORKING
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  // OMP paints `π >` before the rest of its startup runs and its setup wizard opens, so the title
-  // counts only once it has stood a quiescence window on a screen read clear of the wizard. Why
-  // title age, not output quiet: OMP re-asserts bracketed paste every second once a terminal
-  // answers its probe. Unreadable, the screen cannot rule setup out, and no lane may settle.
+  // OMP titles idle before setup opens; require title age and a readable screen clear of the wizard. Output quiet cannot work because paste-mode keepalives repeat each second.
   if (input.agent === 'omp' && isOmpIdleStateTitle(input.record.lastOscTitle)) {
     return input.titleObservedAtEpochMs !== null &&
       Date.now() - input.titleObservedAtEpochMs >= input.quiescenceMs &&
@@ -317,9 +240,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       ? READY_STRONG
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  // Why after the veto: a first-party working account outranks inferred body evidence.
-  // Why before the working title: Codex can leave a stale spinner title after a turn, and a
-  // live spinner emits output every ~100 ms, so a spinning pane is never quiet here.
+  // First-party working outranks body inference; quiet body can outrank a stale spinner title because live spinners keep emitting output.
   if (
     hasQuietReadyScreen(
       input.record,
@@ -333,15 +254,14 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   if (input.record.lastAgentStatus === 'working') {
     return WORKING
   }
-  // Why here: a name-only title and a quiet process cannot see the picker or prompt the screen
-  // refused, and an agent's own idle-title rule replaces the sustained-title lane below.
+  // Screen rules veto weak name/process guesses and replace sustained-title inference.
   const ruled = input.readAgentRuleVerdict()
   if (ruled !== null) {
-    return isSettledWeakIdle(ruled, input.record, input.quiescenceMs)
+    return isSettledWeakIdle(ruled, input.record, input.quiescenceMs, input.launchReadiness)
       ? READY_WEAK
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs)) {
+  if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs, input.launchReadiness)) {
     return READY_WEAK
   }
   return {
@@ -353,15 +273,18 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   }
 }
 
+// Why launch readiness asks quiet of every weak idle: those rules read a name-only title, which a
+// shell auto-title writes before the TUI mounts, as in the sustained-title lane.
 function isSettledWeakIdle(
   verdict: AgentStateVerdict,
   record: TuiIdleEvidenceRecord,
-  quiescenceMs: number
+  quiescenceMs: number,
+  launchReadiness = false
 ): boolean {
   return (
     verdict.state === 'idle' &&
     verdict.strength === 'weak' &&
-    (!verdict.requiresQuiet || hasQuietOutput(record, quiescenceMs))
+    ((!verdict.requiresQuiet && !launchReadiness) || hasQuietOutput(record, quiescenceMs))
   )
 }
 

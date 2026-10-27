@@ -9,7 +9,6 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -26,7 +25,9 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getRepoSlug, getRepoUpstream, getWorkItem, getPullRequestPushTarget } from './client'
+import { getRepoSlug, getRepoUpstream } from './client/fetch/repo-slug-upstream'
+import { getWorkItem } from './client/fetch/get-work-item'
+import { getPullRequestPushTarget } from './client/lookup/pull-request-push-target'
 import { resetPRForBranchMocks } from './client-test-harness'
 
 const {
@@ -172,15 +173,12 @@ describe('getPRForBranch', () => {
   })
 
   it('keeps getRepoSlug origin-based on a fork checkout (#7331)', async () => {
-    // The slug is the checkout's own identity (renderer display, icon
-    // autodetect); it must not flip to the upstream parent.
     getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
       remoteName === 'origin'
         ? { owner: 'fsdwen', repo: 'orca' }
         : { owner: 'stablyai', repo: 'orca' }
     )
-    // Why: getRepoSlug imports getOriginGitHubApiRepository; the suite bridge
-    // prefers getOwnerRepoForRemote for origin, so set both seams.
+    // Set both fixture seams because the bridge prefers the explicit origin probe.
     getOwnerRepoMock.mockResolvedValue({ owner: 'fsdwen', repo: 'orca' })
 
     await expect(getRepoSlug('/repo-root')).resolves.toEqual({
@@ -191,7 +189,6 @@ describe('getPRForBranch', () => {
   })
 
   it('resolves a distinct upstream remote as the repo upstream', async () => {
-    // getRepoUpstream probes origin then upstream via getOwnerRepoForRemote (#7331).
     getOwnerRepoMock.mockResolvedValue({ owner: 'tmchow', repo: 'orca' })
     getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
       remoteName === 'origin'
@@ -199,7 +196,6 @@ describe('getPRForBranch', () => {
         : { owner: 'stablyai', repo: 'orca' }
     )
 
-    // Why: the suite bridge returns getOwnerRepoForRemote fixtures as-is (no host pin).
     await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
       owner: 'stablyai',
       repo: 'orca'
@@ -222,15 +218,13 @@ describe('getPRForBranch', () => {
     await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      // Why: positional slugs are explicit about github.com too, so GH_HOST
-      // cannot redirect them.
+      // Explicit positional host prevents ambient GH_HOST redirection.
       ['repo', 'view', 'github.com/StablyAI/Orca', '--json', 'isFork,parent'],
       { cwd: '/repo-root', host: 'github.com', timeout: 10_000 }
     )
   })
 
   it('does not mark an upstream-only GitHub remote as a fork', async () => {
-    // Missing origin short-circuits before the upstream probe.
     getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
 
     await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
@@ -254,7 +248,6 @@ describe('getPRForBranch', () => {
     await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
       owner: 'stablyai',
       repo: 'orca',
-      // Why: fork parents live on the same server as the fork's origin.
       host: 'github.com'
     })
   })
@@ -284,8 +277,6 @@ describe('getPRForBranch', () => {
     await expect(getPullRequestPushTarget('/repo-root', 7)).resolves.toEqual({
       pushTarget: { remoteName: 'origin', branchName: 'feature' }
     })
-    // Why: the candidate probe must pin options.host so the runner targets the
-    // Enterprise server instead of gh's default host.
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', 'repos/team/orca/pulls/7'],
       expect.objectContaining({ host: 'github.acme-corp.com' })

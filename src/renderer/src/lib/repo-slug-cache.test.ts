@@ -8,7 +8,7 @@ import {
   readRepoSlugCache,
   rememberRepoSlug,
   lookupReposBySlugFromCache,
-  settingsForRepoOwner,
+  repoSlugCacheKey,
   slugByRepoId,
   slugCacheKey
 } from './repo-slug-cache'
@@ -35,31 +35,45 @@ describe('repo slug cache host identity', () => {
       [enterprise, 'ghe.example:8443']
     ] as const) {
       slugByRepoId.set(
-        slugCacheKey(candidate.id, settingsForRepoOwner(candidate, null)),
+        slugCacheKey(candidate.id, { kind: 'local' }),
         githubRepoIdentityKey({ owner: 'acme', repo: 'widgets', host })
       )
     }
 
-    expect(lookupReposBySlugFromCache([dotCom, enterprise], null, 'acme/widgets')).toEqual([dotCom])
+    expect(lookupReposBySlugFromCache([dotCom, enterprise], 'acme/widgets')).toEqual([dotCom])
     expect(
-      lookupReposBySlugFromCache([dotCom, enterprise], null, 'acme/widgets', 'ghe.example:8443')
+      lookupReposBySlugFromCache([dotCom, enterprise], 'acme/widgets', 'ghe.example:8443')
     ).toEqual([enterprise])
   })
 
   it('drops the fork alias while its own origin is unresolved', () => {
     const fork = { ...repo('fork'), upstream: { owner: 'acme', repo: 'widgets' } }
 
-    expect(lookupReposBySlugFromCache([fork], null, 'acme/widgets')).toEqual([])
-    slugByRepoId.set(slugCacheKey(fork.id, settingsForRepoOwner(fork, null)), null)
-    expect(lookupReposBySlugFromCache([fork], null, 'acme/widgets')).toEqual([])
+    expect(lookupReposBySlugFromCache([fork], 'acme/widgets')).toEqual([])
+    slugByRepoId.set(slugCacheKey(fork.id, { kind: 'local' }), null)
+    expect(lookupReposBySlugFromCache([fork], 'acme/widgets')).toEqual([])
   })
 
   it('expires negative slug resolutions so an external GHES login can recover', () => {
-    const key = slugCacheKey('enterprise', null)
+    const key = slugCacheKey('enterprise', { kind: 'local' })
     rememberRepoSlug(key, null, 1_000)
 
     expect(readRepoSlugCache(key, 1_000)).toEqual({ hit: true, value: null })
     expect(nextRepoSlugFailureRetryDelay(new Set([key]), 1_000)).toBe(REPO_SLUG_FAILURE_TTL_MS)
     expect(readRepoSlugCache(key, 1_000 + REPO_SLUG_FAILURE_TTL_MS)).toEqual({ hit: false })
+  })
+})
+
+describe('repo slug cache owner', () => {
+  beforeEach(() => clearRepoSlugCacheValues())
+
+  it('keys a repo by the host that owns it, never by a focused server', () => {
+    expect(repoSlugCacheKey(repo('local-repo'))).toBe('local:local-repo')
+    expect(repoSlugCacheKey({ ...repo('server-repo'), executionHostId: 'runtime:env-a' })).toBe(
+      'runtime:env-a:server-repo'
+    )
+    expect(
+      repoSlugCacheKey({ ...repo('ssh-repo'), executionHostId: undefined, connectionId: 'box' })
+    ).toBe('local:ssh-repo')
   })
 })

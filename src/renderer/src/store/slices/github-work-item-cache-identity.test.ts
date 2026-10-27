@@ -111,6 +111,43 @@ describe('createGitHubSlice.patchWorkItem', () => {
     })
     expect(secondPatched).toBe(secondItem)
   })
+
+  it('scopes a canonical repository patch within its existing host and account scope', () => {
+    const store = createTestStore()
+    const source = githubSourceContext('local', 'repo-1')
+    const otherAccount = { ...source, projectHostSetupId: 'another-account-setup' }
+    const canonical: GitHubWorkItem = {
+      id: 'issue:42',
+      repoId: 'repo-1',
+      type: 'issue',
+      number: 42,
+      title: 'Fork issue',
+      state: 'open',
+      labels: [],
+      updatedAt: '',
+      author: null,
+      url: 'https://github.com/fork/widgets/issues/42'
+    }
+    const upstream = { ...canonical, url: 'https://github.com/upstream/widgets/issues/42' }
+    const enterprise = { ...canonical, url: 'https://ghe.example:8443/fork/widgets/issues/42' }
+    const sourceKey = workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(source))
+    const otherKey = workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(otherAccount))
+    store.setState({
+      workItemsCache: {
+        [sourceKey]: { data: [upstream, enterprise, canonical], fetchedAt: 1 },
+        [otherKey]: { data: [canonical], fetchedAt: 1 }
+      }
+    })
+    store.getState().patchWorkItem(canonical.id, { labels: ['bug'] }, canonical.repoId, {
+      sourceContext: source,
+      ownerRepo: { owner: 'FORK', repo: 'Widgets', host: ' GitHub.com ' }
+    })
+    const rows = store.getState().workItemsCache[sourceKey]?.data
+    expect(rows?.[0]).toBe(upstream)
+    expect(rows?.[1]).toBe(enterprise)
+    expect(rows?.[2].labels).toEqual(['bug'])
+    expect(store.getState().workItemsCache[otherKey]?.data?.[0]).toBe(canonical)
+  })
 })
 
 describe('createGitHubSlice.fetchWorkItems cache identity', () => {

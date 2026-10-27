@@ -11,13 +11,8 @@ import {
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
 import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
-import { isHiddenPtyDeliveryGateEnabled } from '../../pty-hidden-delivery-gate'
-import {
-  appendPendingProjectionAdmission,
-  compactPendingProjectionAdmissions,
-  type PendingProjectionAdmissions
-} from '../../pty-pending-projection-admissions'
-import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
+import { isHiddenPtyDeliveryGateEnabled } from './pty-hidden-delivery-gate'
+import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import type { PtyIpcSession } from '../session'
 
@@ -56,45 +51,9 @@ export function getDroppedMode2031RendererData(pending: PendingPtyData): string 
   return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
 }
 
-/** Releases xterm's DEC 2026 render hold when the dropped span left a frame open.
- *  Without it the pane freezes on its last painted frame until xterm's 1000ms
- *  forced flush. */
+/** Release DEC 2026 left open by dropped bytes so xterm need not wait for its forced-flush timeout. */
 export function getDroppedSynchronizedOutputRendererData(pending: PendingPtyData): string {
   return pending.droppedSynchronizedOutputState?.active === true ? '\x1b[?2026l' : ''
-}
-
-export function pendingProjectionAdmissionOptions(session: PtyIpcSession) {
-  return {
-    isPending: (id: string) => session.sshOutputIntake?.hasUnpublishedProjection(id) ?? false,
-    transfer: (ids: readonly string[], reason: string) =>
-      session.sshOutputIntake?.transferProjections(ids, reason)
-  }
-}
-
-export function updatePendingProjectionAdmissions(
-  pending: PendingPtyData,
-  state: PendingProjectionAdmissions
-): void {
-  delete pending.projectionAdmissionIds
-  delete pending.projectionAdmissionsTransferred
-  if (state.projectionAdmissionIds) {
-    pending.projectionAdmissionIds = state.projectionAdmissionIds
-  }
-  if (state.projectionAdmissionsTransferred) {
-    pending.projectionAdmissionsTransferred = true
-  }
-}
-
-export function compactPendingProjectionState(
-  session: PtyIpcSession,
-  pending: PendingProjectionAdmissions,
-  projectionSemanticsId?: string
-): PendingProjectionAdmissions {
-  const options = pendingProjectionAdmissionOptions(session)
-  const compacted = compactPendingProjectionAdmissions(pending, options)
-  return projectionSemanticsId
-    ? appendPendingProjectionAdmission(compacted, projectionSemanticsId, options)
-    : compacted
 }
 
 export function dropOversizedPendingPtyData(
@@ -111,7 +70,7 @@ export function dropOversizedPendingPtyData(
     console.error(
       `[pty] dropped ${pending.data.length} buffered chars for ${redactPtyIdForDiagnostics(id)}: renderer not receiving and per-PTY pending cap exceeded; pane will restore from the main-owned snapshot`
     )
-    // Why: field visibility for cap tuning (issue #2836 / #7017); no pty id since session ids can embed workspace paths.
+    // Report cap pressure without session IDs, which can contain workspace paths (#2836, #7017).
     recordCrashBreadcrumb('terminal_pending_output_dropped', {
       droppedChars: pending.data.length,
       capChars
@@ -124,15 +83,12 @@ export function dropOversizedPendingPtyData(
     session.pendingOverflowMarkedPtys.add(id)
   }
   session.pendingDroppedChars += pending.data.length
-  if (pending.projectionAdmissionIds) {
-    session.sshOutputIntake?.transferProjections(pending.projectionAdmissionIds, 'pending-cap')
-  }
   const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
   const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
     pending.data,
     INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
   )
-  // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
+  // A trimmed tail would retain a corrupting gap; restore from snapshot and salvage only bounded query bytes.
   return {
     data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
     droppedOutput: true,
@@ -152,13 +108,10 @@ export function appendPendingPtyData(
   containsBackgroundOutput: boolean,
   rawLength = data.length,
   transformed = false,
-  projectionSemanticsId?: string
+  gapEscapeState?: string
 ): PendingPtyData {
-  // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
+  // Once dropped, keep bounded query/mode state while the restore sentinel supersedes ordinary output.
   if (existing?.droppedOutput === true) {
-    if (projectionSemanticsId) {
-      session.sshOutputIntake?.transferProjections([projectionSemanticsId], 'pending-cap')
-    }
     const mode2031 = scanDroppedMode2031Data(
       data,
       existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
@@ -180,11 +133,6 @@ export function appendPendingPtyData(
       droppedSynchronizedOutputState: synchronizedOutput.state
     }
   }
-  const projectionState = compactPendingProjectionState(
-    session,
-    existing ?? {},
-    projectionSemanticsId
-  )
   const nextContainsBackgroundOutput =
     existing?.containsBackgroundOutput === true || containsBackgroundOutput
   if (!existing) {
@@ -193,9 +141,9 @@ export function appendPendingPtyData(
       ...(typeof startSeq === 'number' ? { startSeq } : {}),
       ...(rawLength !== data.length ? { rawLength } : {}),
       ...(transformed ? { transformed: true } : {}),
-      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
+      ...(gapEscapeState ? { gapEscapeState } : {})
     }
-    updatePendingProjectionAdmissions(pending, projectionState)
     return dropOversizedPendingPtyData(session, id, pending)
   }
   const existingRawLength = existing.rawLength ?? existing.data.length
@@ -204,9 +152,10 @@ export function appendPendingPtyData(
     ...(!preservesSeq || existing.transformed || transformed
       ? { rawLength: existingRawLength + rawLength, transformed: true as const }
       : {}),
-    ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+    ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {}),
+    // Describes the batch start; a gap inside an existing batch has no start to label.
+    ...(existing.gapEscapeState ? { gapEscapeState: existing.gapEscapeState } : {})
   }
-  updatePendingProjectionAdmissions(next, projectionState)
   if (typeof existing.startSeq === 'number') {
     next.startSeq = existing.startSeq
   }

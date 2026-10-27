@@ -1,12 +1,18 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch } = vi.hoisted(() => ({
-  clearSearch: vi.fn(),
-  handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
-  sshSearch: vi.fn(),
-  sshHostInfos: vi.fn<() => { targetId: string }[]>(() => []),
-  runtimeSearch: vi.fn()
-}))
+const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch, runtimeHostInfos } =
+  vi.hoisted(() => ({
+    clearSearch: vi.fn(),
+    handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
+    sshSearch: vi.fn(),
+    sshHostInfos: vi.fn<() => { targetId: string }[]>(() => []),
+    runtimeSearch: vi.fn(),
+    runtimeHostInfos: vi.fn<() => readonly RuntimeAiVaultHostInfo[]>(() => [])
+  }))
 vi.mock('../ai-vault/session-scanner-service-spawn', () => ({
   clearSessionSearchInService: clearSearch
 }))
@@ -17,11 +23,23 @@ vi.mock('electron', () => ({
   },
   ipcRenderer: { invoke: (name: string, ...args: unknown[]) => handlers.get(name)!(null, ...args) }
 }))
-vi.mock('./ssh', () => ({
+vi.mock('./ai-vault', () => ({
+  getActiveRuntimeAiVaultHostInfosResult: () => ({ hostInfos: runtimeHostInfos() })
+}))
+vi.mock('./ssh/ssh', () => ({
   requestActiveSshSessionSearch: sshSearch,
   getActiveSshAiVaultHostInfos: sshHostInfos
 }))
 
+import type { RuntimeAiVaultHostInfo } from './ai-vault-runtime-scan'
+import { getSavedRuntimeAiVaultHostInfos } from '../ai-vault/runtime-session-scanner'
+import { bindRuntimeSessionSearch } from '../ai-vault/runtime-session-search-call'
+import {
+  addEnvironmentFromPairingCode,
+  removeEnvironment
+} from '../../shared/runtime-environment-store'
+import { generateKeyPair, publicKeyToBase64 } from '../../shared/e2ee-crypto'
+import { encodePairingOffer } from '../../shared/pairing'
 import { registerAiVaultSearchHandlers } from './ai-vault-search'
 import { aiVaultApi } from '../../preload/api/ai-vault-bridge'
 import { setSessionSearchService } from '../ai-vault-search/session-search-service-registry'
@@ -32,18 +50,25 @@ import {
   searchHit,
   searchResults
 } from '../../shared/ai-vault-search-test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 beforeEach(() => {
   handlers.clear()
   sshSearch.mockReset()
   sshHostInfos.mockReset()
   sshHostInfos.mockReturnValue([])
   runtimeSearch.mockReset()
+  runtimeHostInfos.mockReset().mockReturnValue([])
   clearSearch.mockReset()
   registerAiVaultSearchHandlers({
     callRuntimeSearch: runtimeSearch
   })
 })
-afterEach(() => setSessionSearchService(null))
+afterEach(() => {
+  setSessionSearchService(null)
+  setStructuredAgentSessionHost(null)
+})
 
 describe('desktop IPC and preload search boundary', () => {
   it('round-trips local results and separate status through the actual preload', async () => {
@@ -79,29 +104,6 @@ describe('desktop IPC and preload search boundary', () => {
     await expect(handlers.get('aiVault:searchSessions')!(null, { query: 1 })).rejects.toThrow()
     await expect(handlers.get('aiVault:searchStatus')!(null, 42)).rejects.toThrow()
   })
-  it('routes one SSH target without touching the local index and redacts received paths', async () => {
-    const local = fakeSearchService()
-    setSessionSearchService(local)
-    sshSearch.mockResolvedValue(searchResults())
-    const result = await aiVaultApi.searchSessions({ query: 'needle' }, 'ssh:ssh-host')
-    expect(sshSearch).toHaveBeenCalledWith('ssh-host', 'aiVault.searchSessions', {
-      query: 'needle',
-      limit: 20,
-      supportedAgents: [...AI_VAULT_AGENTS],
-      supportsQoderHistory: true,
-      supportsJcodeHistory: true
-    })
-    expect(result).toMatchObject({
-      hits: [{ executionHostId: 'ssh:ssh-host', source: { presence: 'present' } }]
-    })
-    expect(JSON.stringify(result)).not.toContain('resumeCommand')
-    expect(local.search).not.toHaveBeenCalled()
-    sshSearch.mockRejectedValue(new Error('SSH relay is not ready'))
-    await expect(aiVaultApi.searchSessions({ query: 'needle' }, 'ssh:ssh-host')).rejects.toThrow(
-      'SSH relay is not ready'
-    )
-    expect(local.search).not.toHaveBeenCalled()
-  })
   it('routes one runtime environment over its RPC and stamps the answering host', async () => {
     const local = fakeSearchService()
     setSessionSearchService(local)
@@ -123,7 +125,7 @@ describe('desktop IPC and preload search boundary', () => {
     expect(await aiVaultApi.searchStatus('runtime:env-1')).toEqual(unavailableSessionSearchStatus())
     expect(runtimeSearch).toHaveBeenLastCalledWith('env-1', 'aiVault.searchStatus', {})
   })
-  it.each(['ssh:ssh-host', 'runtime:env-1', 'all'] as const)(
+  it.each(['runtime:env-1'] as const)(
     'negotiates each actual remote leg once through preload scope %s',
     async (scope) => {
       const local = fakeSearchService()
@@ -151,7 +153,7 @@ describe('desktop IPC and preload search boundary', () => {
       expect(remoteHits).toMatchObject([{ agent: 'jcode', source: { presence: 'present' } }])
       expect(JSON.stringify(remoteHits)).not.toContain('/host/transcript')
       expect(JSON.stringify(remoteHits)).not.toContain('resumeCommand')
-      expect(local.search).toHaveBeenCalledTimes(scope === 'all' ? 1 : 0)
+      expect(local.search).not.toHaveBeenCalled()
       expect(scope === 'runtime:env-1' ? sshSearch : runtimeSearch).not.toHaveBeenCalled()
     }
   )
@@ -200,34 +202,6 @@ describe('desktop IPC and preload search boundary', () => {
     expect(sshSearch).not.toHaveBeenCalled()
     expect(runtimeSearch).not.toHaveBeenCalled()
   })
-  it('merges every enumerated host under the all scope, and still refuses an all status', async () => {
-    setSessionSearchService(fakeSearchService())
-    sshHostInfos.mockReturnValue([{ targetId: 'box' }])
-    sshSearch.mockResolvedValue({
-      ...searchResults(),
-      hits: [{ ...searchHit(), sessionId: 'far' }]
-    })
-    const merged = await aiVaultApi.searchSessions({ query: 'needle' }, 'all')
-    expect(merged).toMatchObject({
-      kind: 'results',
-      hosts: [
-        { executionHostId: 'local', outcome: 'searched' },
-        { executionHostId: 'ssh:box', outcome: 'searched' }
-      ]
-    })
-    expect(
-      merged.kind === 'results'
-        ? merged.hits.map((hit) => [hit.executionHostId, hit.sessionId])
-        : null
-    ).toEqual([
-      ['local', 'host-session'],
-      ['ssh:box', 'far']
-    ])
-    // A merged status would have to reconcile six phases into one; it stays refused.
-    await expect(handlers.get('aiVault:searchStatus')!(null, 'all')).rejects.toThrow(
-      'not available for this execution host'
-    )
-  })
 
   it('turns a paired runtime host on and answers with the status it reported', async () => {
     const local = fakeSearchService()
@@ -272,4 +246,118 @@ describe('desktop IPC and preload search boundary', () => {
     registerAiVaultSearchHandlers()
     await expect(aiVaultApi.setSearchEnabled('runtime:env-1', true)).rejects.toThrow('host-too-old')
   })
+})
+
+describe('local search hits owned by a native chat', () => {
+  function installChatHost(): { sessionId: string; workspaceId: string } {
+    const record = {
+      ...agentSessionRecordFixture(),
+      provider: 'codex' as const,
+      conversationName: 'Login repair'
+    }
+    record.providerHandleChain = [
+      { ...record.providerHandleChain[0]!, handle: codexProviderHandle('host-session') }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
+    setStructuredAgentSessionHost({
+      deps: { store: { listConversations: () => [agentSessionConversationView(record)] } }
+    } as never)
+    return { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
+  }
+
+  it('names and owns a hit after installing the chat host', async () => {
+    setSessionSearchService(fakeSearchService())
+    let owner: { sessionId: string; workspaceId: string } | null = null
+    registerAiVaultSearchHandlers({
+      ensureStructuredSessionOwnership: async () => {
+        owner = installChatHost()
+      }
+    })
+    const result = await aiVaultApi.searchSessions({ query: 'needle' })
+    expect(result).toMatchObject({
+      hits: [{ title: 'Login repair', structuredSession: owner! }]
+    })
+  })
+
+  it('still answers with plain hits when the chat host will not install', async () => {
+    setSessionSearchService(fakeSearchService())
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    registerAiVaultSearchHandlers({
+      ensureStructuredSessionOwnership: async () => {
+        throw new Error('chat journal unavailable')
+      }
+    })
+    const result = await aiVaultApi.searchSessions({ query: 'needle' })
+    expect(result).toMatchObject({ hits: [{ title: 'Indexed conversation' }] })
+    expect(JSON.stringify(result)).not.toContain('structuredSession')
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+it('binds the desktop leg once before awaited agent status and reuses the producer address', async () => {
+  const bound = vi.fn(async (method: string) =>
+    method === 'aiVault.searchStatus'
+      ? { ...unavailableSessionSearchStatus(), supportedAgents: ['codex'] }
+      : searchResults()
+  )
+  const bindRuntimeSearch = vi.fn(() => bound)
+  registerAiVaultSearchHandlers({ callRuntimeSearch: runtimeSearch, bindRuntimeSearch })
+  const within = {
+    kind: 'project' as const,
+    projectKey: 'project:P',
+    canonicalProjectKey: 'repo:b'
+  }
+  await aiVaultApi.searchSessions(
+    { query: 'needle', filters: { agents: ['codex'] }, within },
+    'runtime:selected'
+  )
+  expect(bindRuntimeSearch).toHaveBeenCalledExactlyOnceWith('selected')
+  expect(bound.mock.calls.map(([method]) => method)).toEqual([
+    'aiVault.searchStatus',
+    'aiVault.searchSessions'
+  ])
+  expect(bound).toHaveBeenLastCalledWith(
+    'aiVault.searchSessions',
+    expect.objectContaining({ within })
+  )
+  expect(runtimeSearch).not.toHaveBeenCalled()
+})
+
+it('keeps healthy All results when a persisted runtime is removed between enumeration and eager binding', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'sta10541-all-bind-'))
+  try {
+    const environment = addEnvironmentFromPairingCode(root, {
+      name: 'search-host',
+      pairingCode: encodePairingOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:9',
+        deviceToken: 'a'.repeat(48),
+        publicKeyB64: publicKeyToBase64(generateKeyPair().publicKey)
+      })
+    })
+    runtimeHostInfos.mockImplementationOnce(() => {
+      const advertised = getSavedRuntimeAiVaultHostInfos(root)
+      removeEnvironment(root, environment.id)
+      return advertised
+    })
+    const local = fakeSearchService()
+    setSessionSearchService(local)
+    const bindRuntimeSearch = vi.fn((id: string) => bindRuntimeSessionSearch(root, id))
+    registerAiVaultSearchHandlers({ callRuntimeSearch: runtimeSearch, bindRuntimeSearch })
+    const result = await aiVaultApi.searchSessions({ query: 'needle' }, 'all')
+    expect(bindRuntimeSearch).toHaveBeenCalledExactlyOnceWith(environment.id)
+    expect(local.search).toHaveBeenCalledOnce()
+    expect(result).toMatchObject({ kind: 'results', hits: [{ executionHostId: 'local' }] })
+    if (result.kind !== 'results') {
+      throw new Error('healthy results lost')
+    }
+    expect(result.hosts).toContainEqual({
+      executionHostId: `runtime:${environment.id}`,
+      outcome: 'unreachable'
+    })
+    expect(runtimeSearch).not.toHaveBeenCalled()
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })

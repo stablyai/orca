@@ -1,8 +1,4 @@
-// Canonical English copy for the native-chat empty/loading/error states, shared
-// by the desktop renderer (as its i18n fallback strings) and the mobile app
-// (used directly — mobile ships English only) so the two surfaces never drift.
-// `{{value0}}` is the agent label; each caller substitutes it (i18n on desktop,
-// `formatNativeChatEmptyStateCopy` on mobile).
+// Shared English fallback copy for desktop i18n/mobile. Callers substitute {{value0}} with the agent label.
 
 export type NativeChatEmptyStateCopy = { title: string; subtitle: string }
 
@@ -15,6 +11,12 @@ export const NATIVE_CHAT_EMPTY_STATE_COPY = {
     title: 'Start a chat with {{value0}}',
     subtitle: 'Ask {{value0}} to inspect code, explain output, or make a change.'
   },
+  /** A chat whose conversation the host has not found: new, or not reported by the agent. */
+  notFound: {
+    title: "Can't find this conversation yet",
+    subtitle:
+      'Send a message to start one, or open the terminal view to see what {{value0}} is doing.'
+  },
   error: {
     title: 'Could not load conversation',
     subtitle: 'The transcript could not be read. Toggle back to the terminal to keep working.'
@@ -25,8 +27,7 @@ export const NATIVE_CHAT_EMPTY_STATE_COPY = {
   }
 } as const satisfies Record<string, NativeChatEmptyStateCopy>
 
-/** Resolve the empty-state copy with the agent label substituted for `{{value0}}`.
- *  For platforms without an i18n layer (mobile). */
+/** Substitute the agent label on platforms without i18n (mobile). */
 export function formatNativeChatEmptyStateCopy(
   kind: keyof typeof NATIVE_CHAT_EMPTY_STATE_COPY,
   agentLabel: string

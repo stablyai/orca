@@ -9,7 +9,6 @@ vi.mock('@/store', () => {
     memorySnapshot: null,
     memorySnapshotError: null,
     workspaceSessionReady: true,
-    fetchMemorySnapshot: vi.fn(async () => {}),
     setActiveView: vi.fn(),
     openModal: vi.fn(),
     openSpacePage: vi.fn(),
@@ -31,7 +30,8 @@ vi.mock('@/store', () => {
   }
   return {
     useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
-      getState: () => state
+      getState: () => state,
+      setState: (patch: Partial<typeof state>) => Object.assign(state, patch)
     })
   }
 })
@@ -54,12 +54,13 @@ vi.mock('@/i18n/i18n', () => ({
       : fallback
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
-import { useAppStore } from '@/store'
 import { useResourceUsageStatusController } from '@/components/status-bar/use-resource-usage-status-controller'
 import { renderResourceUsageStatusTrigger } from '@/components/status-bar/resource-usage-status-trigger'
 
-let spawned: (data: { id: string }) => void
-let exited: (data: { id: string; code: number }) => void
+const spawned = new Set<(data: { id: string; hostId?: string }) => void>()
+const exited = new Set<(data: { id: string; code: number; hostId?: string }) => void>()
+let nativeVisibility: (visible: boolean) => void
+const memoryReads = vi.fn(async () => null)
 const rows: DaemonSession[] = [
   { id: 'native-local', title: 'Local shell', cwd: '/notes', agentOwnership: 'absent' },
   { id: 'ssh-remote', title: 'Remote shell', cwd: 'C:\\notes', agentOwnership: 'present' }
@@ -68,16 +69,27 @@ const list = vi.fn<() => Promise<DaemonSession[]>>()
 beforeEach(() => {
   vi.useFakeTimers()
   list.mockReset().mockResolvedValue(rows)
+  memoryReads.mockReset().mockResolvedValue(null)
+  spawned.clear()
+  exited.clear()
   vi.stubGlobal('api', {
+    memory: {
+      getSnapshot: memoryReads,
+      resourceWindowVisible: async () => true,
+      onResourceWindowVisibility: (callback: typeof nativeVisibility) => {
+        nativeVisibility = callback
+        return vi.fn()
+      }
+    },
     pty: {
       listSessions: list,
-      onSpawned: (callback: typeof spawned) => {
-        spawned = callback
-        return vi.fn()
+      onSpawned: (callback: (data: { id: string; hostId?: string }) => void) => {
+        spawned.add(callback)
+        return () => spawned.delete(callback)
       },
-      onExit: (callback: typeof exited) => {
-        exited = callback
-        return vi.fn()
+      onExit: (callback: (data: { id: string; code: number; hostId?: string }) => void) => {
+        exited.add(callback)
+        return () => exited.delete(callback)
       }
     }
   })
@@ -115,21 +127,25 @@ it('preserves actual badge DOM/controller outputs and no extra reads while avoid
   if (!current) {
     throw new Error('actual controller not mounted')
   }
-  expect(current.triggerSessionCount).toBe(2)
-  expect(current.resourceManagerAriaLabel).toContain('2')
+  expect(current.triggerSessionCount).toBeNull()
+  expect(current.resourceManagerAriaLabel).toContain('unavailable')
+  expect(list).not.toHaveBeenCalled()
+  expect(memoryReads).not.toHaveBeenCalled()
   const initialMarkup = view.container.innerHTML
   const before = renders,
     committed = commits,
     requests = list.mock.calls.length
   for (let index = 0; index < 64; index += 1) {
     act(() => {
-      spawned({ id: `short-lived-${index}` })
-      exited({ id: `short-lived-${index}`, code: 0 })
+      spawned.forEach((callback) => callback({ id: `short-lived-${index}`, hostId: 'local' }))
+      exited.forEach((callback) =>
+        callback({ id: `short-lived-${index}`, code: 0, hostId: 'local' })
+      )
     })
     if (!current) {
       throw new Error('actual controller disappeared')
     }
-    expect(current.triggerSessionCount).toBe(2)
+    expect(current.triggerSessionCount).toBeNull()
     expect(current.daemonUnreachable).toBe(false)
     expect(current.unifiedRepos).toEqual([])
     expect(view.container.innerHTML).toBe(initialMarkup)
@@ -148,7 +164,7 @@ it('preserves actual badge DOM/controller outputs and no extra reads while avoid
   }
   expect(current.open).toBe(true)
   expect(list).toHaveBeenCalledTimes(requests + 1)
-  const snapshotReads = useAppStore.getState().fetchMemorySnapshot
+  const snapshotReads = memoryReads
   const readsAtOpen = vi.mocked(snapshotReads).mock.calls.length
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1_999)
@@ -167,7 +183,9 @@ it('preserves actual badge DOM/controller outputs and no extra reads while avoid
       .map((session) => session.sessionId)
   ).toEqual(rows.map((row) => row.id))
   const beforeExit = list.mock.calls.length
-  act(() => exited({ id: 'ssh-remote', code: 0 }))
+  act(() =>
+    exited.forEach((callback) => callback({ id: 'ssh-remote', code: 0, hostId: 'ssh:host' }))
+  )
   expect(current.triggerSessionCount).toBe(1)
   expect(
     current.unifiedRepos
@@ -176,10 +194,27 @@ it('preserves actual badge DOM/controller outputs and no extra reads while avoid
       .map((session) => session.sessionId)
   ).toEqual(['native-local'])
   expect(list.mock.calls.length).toBe(beforeExit)
+  act(() => current?.setSelectedTab('ptys'))
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100)
+  })
+  expect(list).toHaveBeenLastCalledWith(
+    { connectionId: null, includeUnrouted: true },
+    { resourceManagerView: true }
+  )
+  const readsBeforeHide = list.mock.calls.length
+  const metricsBeforeHide = memoryReads.mock.calls.length
+  act(() => nativeVisibility(false))
+  await act(async () => {
+    spawned.forEach((callback) => callback({ id: 'hidden-spawn', hostId: 'local' }))
+    await vi.advanceTimersByTimeAsync(60_000)
+  })
+  expect(list).toHaveBeenCalledTimes(readsBeforeHide)
+  expect(memoryReads).toHaveBeenCalledTimes(metricsBeforeHide)
   act(() => current?.setOpen(false))
   expect(vi.getTimerCount()).toBe(0)
   view.unmount()
   expect(vi.getTimerCount()).toBe(0)
 
-  expect(counts).toEqual({ renders: 1, commits: 1, reads: 0, pendingTimers: 0 })
+  expect(counts).toEqual({ renders: 0, commits: 0, reads: 0, pendingTimers: 0 })
 })

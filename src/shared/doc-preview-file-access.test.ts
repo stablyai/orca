@@ -116,7 +116,7 @@ describe('readAuthorizedDocPreviewFile', () => {
     ).rejects.toThrow(DOC_PREVIEW_PATH_AUTHORIZATION_ERROR)
   })
 
-  // Why the skip: FIFOs are a POSIX shape; Windows has no mkfifo and no equivalent hazard here.
+  // FIFO hazards are POSIX-only; Windows has no mkfifo.
   it.skipIf(process.platform === 'win32')(
     'refuses a writer-less FIFO instead of blocking the open forever',
     async () => {
@@ -162,4 +162,40 @@ describe('readAuthorizedDocPreviewFile', () => {
       'file_too_large'
     )
   })
+
+  it.each([
+    { extension: '.woff', mimeType: 'font/woff' },
+    { extension: '.WOFF2', mimeType: 'font/woff2' },
+    { extension: '.ttf', mimeType: 'font/ttf' },
+    { extension: '.otf', mimeType: 'font/otf' }
+  ])(
+    'serves authorized $extension fonts within the binary read cap',
+    async ({ extension, mimeType }) => {
+      const fixture = await createFixture()
+      const font = join(fixture.assets, `typeface${extension}`)
+      const bytes = Buffer.from([0x77, 0x4f, 0x46, 0x32, 0x00, 0x01, 0x00, 0x00])
+      await writeFile(font, bytes)
+      const request = {
+        boundaryPath: fixture.workspace,
+        entryPath: fixture.entry,
+        implicitRootPath: fixture.docs,
+        authorizedRootPaths: [fixture.assets],
+        targetPath: font,
+        maxTextBytes: 1,
+        maxBinaryBytes: bytes.length
+      }
+
+      await expect(readAuthorizedDocPreviewFile(request)).resolves.toEqual({
+        content: bytes.toString('base64'),
+        isBinary: true,
+        mimeType
+      })
+      await expect(
+        readAuthorizedDocPreviewFile({ ...request, authorizedRootPaths: [] })
+      ).rejects.toThrow(DOC_PREVIEW_PATH_AUTHORIZATION_ERROR)
+      await expect(
+        readAuthorizedDocPreviewFile({ ...request, maxBinaryBytes: bytes.length - 1 })
+      ).rejects.toThrow('file_too_large')
+    }
+  )
 })

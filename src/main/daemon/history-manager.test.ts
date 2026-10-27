@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -12,6 +12,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { HistoryManager } from './history-manager'
+import * as hostTreeRemoval from '../host-tree-removal'
 import { flushPendingSessionTreeRemovals } from './terminal-history-session-tombstone'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import { getHistorySessionDirName } from './history-paths'
@@ -244,6 +245,31 @@ describe('HistoryManager', () => {
       expect(data.cols).toBe(80)
       expect(data.rows).toBe(24)
       expect(data.checkpointedAt).toBeDefined()
+    })
+
+    it("stamps the hosting daemon's resize model on open and restamps it at each checkpoint", async () => {
+      let hosting: string | null = null
+      let unknown = false
+      const stamping = new HistoryManager(dir, {
+        resizeModel: () => (unknown ? undefined : hosting)
+      })
+      const metaPath = sessionPath(dir, 'sess-r', 'meta.json')
+      const stamp = (): unknown => JSON.parse(readFileSync(metaPath, 'utf-8')).resizeModel
+      await stamping.openSession('sess-r', { cwd: '/tmp', cols: 80, rows: 24 })
+      expect(stamp()).toBeUndefined()
+      // A newer daemon now hosts the session: the fresh log after the checkpoint is its.
+      hosting = 'conpty-viewport-v1'
+      await stamping.checkpoint('sess-r', makeSnapshot())
+      expect(stamp()).toBe('conpty-viewport-v1')
+      // Unknown (no daemon has answered) keeps the stamp rather than reading as an older daemon.
+      unknown = true
+      await stamping.checkpoint('sess-r', makeSnapshot())
+      expect(stamp()).toBe('conpty-viewport-v1')
+      unknown = false
+      hosting = null
+      await stamping.checkpoint('sess-r', makeSnapshot())
+      expect(stamp()).toBeUndefined()
+      await stamping.dispose()
     })
 
     it('overwrites previous checkpoint atomically', async () => {
@@ -501,17 +527,33 @@ describe('HistoryManager', () => {
         writeFileSync(join(sessionDir, `chunk-${i}.log`), `payload-${i}`)
       }
 
-      // Why structural and not a turn count: worktree teardown awaits removeSession once per terminal,
-      // so the contract is that the awaited half only renames. The tree surviving under .pending-delete
-      // right after the await can only happen if the reclaim was detached.
-      await mgr.removeSession(sessionId)
-
-      expect(existsSync(sessionDir)).toBe(false)
-      const tombstones = readdirSync(join(dir, '.pending-delete'))
-      expect(tombstones).toHaveLength(1)
-      expect(readdirSync(join(dir, '.pending-delete', tombstones[0])).length).toBeGreaterThan(0)
-
-      await flushPendingSessionTreeRemovals()
+      // Hold reclamation so the worker cannot delete the tombstone between assertions.
+      const reclaim = Promise.withResolvers<void>()
+      const removeHostTree = hostTreeRemoval.removeHostTree
+      const removalSpy = vi
+        .spyOn(hostTreeRemoval, 'removeHostTree')
+        .mockImplementationOnce(async (tombstonePath) => {
+          await reclaim.promise
+          await removeHostTree(tombstonePath)
+        })
+      let removalReturned = false
+      const removal = mgr.removeSession(sessionId).then(() => {
+        removalReturned = true
+      })
+      try {
+        await vi.waitFor(() => expect(removalReturned).toBe(true))
+        expect(existsSync(sessionDir)).toBe(false)
+        const tombstones = readdirSync(join(dir, '.pending-delete'))
+        expect(tombstones).toHaveLength(1)
+        const tombstonePath = join(dir, '.pending-delete', tombstones[0])
+        expect(removalSpy).toHaveBeenCalledExactlyOnceWith(tombstonePath)
+        expect(readdirSync(tombstonePath).length).toBeGreaterThan(0)
+      } finally {
+        reclaim.resolve()
+        removalSpy.mockRestore()
+        await removal
+        await flushPendingSessionTreeRemovals()
+      }
       expect(readdirSync(join(dir, '.pending-delete'))).toHaveLength(0)
     })
 

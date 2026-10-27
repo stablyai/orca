@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
+import type { BrowserCookieImportSummary } from '../../../../shared/browser-workspace-types'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import {
   createBrowserMockApi,
   createTestStore,
@@ -9,10 +11,18 @@ import {
 } from './browser-slice-test-harness'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
+const { successToastMock, warningToastMock } = vi.hoisted(() => ({
+  successToastMock: vi.fn(),
+  warningToastMock: vi.fn()
+}))
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('sonner', () => ({
+  toast: { success: successToastMock, warning: warningToastMock }
+}))
+
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
 }))
 
@@ -86,6 +96,21 @@ describe('createBrowserSlice runtime guard', () => {
     ])
   })
 
+  it('keeps the default profile pick when a server profile fetch fails', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('timed out'))
+    store.setState({
+      settings: settingsWithRuntime('env-1'),
+      defaultBrowserSessionProfileId: 'work',
+      defaultBrowserSessionProfileIdByHostId: { 'runtime:env-1': 'work' }
+    })
+
+    await store.getState().fetchBrowserSessionProfiles()
+
+    expect(store.getState().defaultBrowserSessionProfileId).toBe('work')
+    expect(store.getState().defaultBrowserSessionProfileIdByHostId['runtime:env-1']).toBe('work')
+  })
+
   it('creates a profile in the active runtime environment', async () => {
     const store = createTestStore()
     const profile = {
@@ -112,6 +137,21 @@ describe('createBrowserSlice runtime guard', () => {
       params: { scope: 'isolated', label: 'Google' },
       timeoutMs: 15_000
     })
+  })
+
+  it("loads this computer's profiles on request while a server is selected", async () => {
+    const store = createTestStore()
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      { id: 'work', scope: 'isolated', partition: 'persist:work', label: 'Work', source: null }
+    ])
+    store.setState({ settings: settingsWithRuntime('env-1'), browserSessionProfiles: [] })
+
+    await store.getState().fetchBrowserSessionProfiles('local')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().browserSessionProfilesByHostId.local?.[0]?.id).toBe('work')
+    // The server's list, which Browser settings is showing, stays as it was.
+    expect(store.getState().browserSessionProfiles).toEqual([])
   })
 
   it('keeps browser profile lists separate per host', async () => {
@@ -210,8 +250,81 @@ describe('createBrowserSlice runtime guard', () => {
     })
   })
 
-  // Why: the picker must offer the machine the import will read from, or a headless remote leaves
-  // it empty (feature unreachable) or offers profile names that only exist on the remote.
+  it.each(['local IPC', 'client-hosted IPC', 'remote RPC'] as const)(
+    'preserves the missing-tool summary from %s through the store to the warning toast',
+    async (route) => {
+      const summary: BrowserCookieImportSummary = {
+        totalCookies: 5,
+        importedCookies: 0,
+        skippedCookies: 5,
+        domains: [],
+        warning: {
+          code: 'cookies-undecryptable',
+          reason: 'linux-keyring-unavailable',
+          failedCookies: 3,
+          otherFailedCookies: 2,
+          keyringFailure: { cause: 'secret-tool-missing', browser: 'Google Chrome' }
+        }
+      }
+      const importResult = { ok: true as const, profileId: 'default', summary }
+      const store = createTestStore()
+      if (route === 'local IPC') {
+        mockApi.browser.sessionImportFromBrowser.mockResolvedValueOnce(importResult)
+      } else {
+        store.setState({ settings: settingsWithRuntime('env-1') })
+        mockApi.browser.sessionImportFromBrowserForClientHost.mockResolvedValueOnce(
+          route === 'client-hosted IPC' ? importResult : null
+        )
+        if (route === 'remote RPC') {
+          runtimeEnvironmentCall.mockResolvedValueOnce({
+            id: 'rpc-import',
+            ok: true,
+            result: importResult,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+      }
+
+      const result = await store.getState().importCookiesFromBrowser('default', 'chrome', 'Default')
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) {
+        throw new Error(result.reason)
+      }
+      expect(result.summary).toEqual(summary)
+      expect(store.getState().browserSessionImportState).toEqual({
+        profileId: 'default',
+        status: 'success',
+        summary,
+        error: null
+      })
+      expect(result).toMatchObject({
+        executionHostId: route === 'local IPC' ? 'local' : 'runtime:env-1',
+        executionMachine: route === 'remote RPC' ? 'remote' : 'client',
+        executionRemoteEnvironment: route !== 'local IPC'
+      })
+      expect(mockApi.browser.sessionImportFromBrowser).toHaveBeenCalledTimes(
+        route === 'local IPC' ? 1 : 0
+      )
+      expect(mockApi.browser.sessionImportFromBrowserForClientHost).toHaveBeenCalledTimes(
+        route === 'local IPC' ? 0 : 1
+      )
+      const rpcImportCalls = runtimeEnvironmentCall.mock.calls.filter(
+        ([request]) => request.method === 'browser.profileImportFromBrowser'
+      )
+      expect(rpcImportCalls).toHaveLength(route === 'remote RPC' ? 1 : 0)
+
+      emitBrowserCookieImportToast(result.summary, 'Imported 0 cookies.', result)
+
+      expect(warningToastMock).toHaveBeenCalledTimes(1)
+      expect(warningToastMock).toHaveBeenCalledWith(
+        "Orca couldn't read 3 of Google Chrome's encrypted cookies because secret-tool isn't installed. Install libsecret-tools (or your distribution's equivalent) and import again. 2 more cookies could not be decrypted for another reason."
+      )
+      expect(successToastMock).not.toHaveBeenCalled()
+    }
+  )
+
+  // Offer browsers on the machine import reads: headless remotes otherwise produce empty or wrong-host choices.
   it('lists this desktop’s browsers when the environment’s pages are client-hosted', async () => {
     const store = createTestStore()
     store.setState({ settings: settingsWithRuntime('env-1') })
@@ -332,6 +445,53 @@ describe('createBrowserSlice runtime guard', () => {
         source: null
       }
     ])
+  })
+
+  it('drops the default profile pick once a refreshed list no longer has it', async () => {
+    const store = createTestStore()
+    const listed = (id: string) => ({
+      id,
+      scope: id === 'default' ? ('default' as const) : ('isolated' as const),
+      partition: `persist:${id}`,
+      label: id,
+      source: null
+    })
+    store.setState({
+      defaultBrowserSessionProfileId: 'work',
+      defaultBrowserSessionProfileIdByHostId: { local: 'work' }
+    })
+    mockApi.browser.sessionListProfiles
+      .mockResolvedValueOnce([listed('default'), listed('work')])
+      .mockResolvedValueOnce([listed('default')])
+
+    await store.getState().fetchBrowserSessionProfiles('local')
+    expect(store.getState().defaultBrowserSessionProfileIdByHostId.local).toBe('work')
+
+    await store.getState().fetchBrowserSessionProfiles('local')
+    expect(store.getState().defaultBrowserSessionProfileId).toBeNull()
+    expect(store.getState().defaultBrowserSessionProfileIdByHostId.local).toBeNull()
+  })
+
+  it('keeps the newest listing when an older one answers last', async () => {
+    const store = createTestStore()
+    const listed = (id: string) => ({
+      id,
+      scope: id === 'default' ? ('default' as const) : ('isolated' as const),
+      partition: `persist:${id}`,
+      label: id,
+      source: null
+    })
+    const older = Promise.withResolvers<ReturnType<typeof listed>[]>()
+    mockApi.browser.sessionListProfiles
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce([listed('default')])
+
+    const olderFetch = store.getState().fetchBrowserSessionProfiles('local')
+    await store.getState().fetchBrowserSessionProfiles('local')
+    older.resolve([listed('default'), listed('deleted')])
+    await olderFetch
+
+    expect(store.getState().browserSessionProfilesByHostId.local).toEqual([listed('default')])
   })
 
   it('creates a profile through local browser IPC', async () => {

@@ -1,16 +1,27 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import { toast } from 'sonner'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LoaderCircle } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
+import { jiraListGridStyle } from '../../jira-list-columns'
+import { JiraListColumnsMenu } from '../../jira-list-columns-menu'
 import { TaskPageJiraSortControls } from '../../task-page-jira-sort-controls'
-import { TaskPageJiraErrorBanner } from '../../task-page-linear-jira-list-model'
+import { TaskPageJiraErrorBanner } from '../linear/task-page-linear-jira-list-model'
 import { TaskPageJiraTextFallbackNotice } from '../../task-page-jira-text-fallback-notice'
 import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
-import { formatRelativeTime } from '../../task-page-source-context'
+import { TaskPageJiraBoardView } from '@/components/task-page-jira-board-view'
+import { TaskPageJiraViewControls } from '@/components/task-page-jira-view-controls'
+import { formatRelativeTime } from '../task-page-source-context'
 import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'
+import {
+  ipcOrRuntimeTargetForHostId,
+  runtimeTargetEnvironmentId
+} from '@/runtime/runtime-client-target'
+import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 export function TaskPageJiraContent({
   model
 }: {
@@ -18,6 +29,8 @@ export function TaskPageJiraContent({
 }): React.JSX.Element | null {
   const {
     jiraStatus,
+    jiraHasWorkspace,
+    getJiraIssueWorkspaces,
     jiraStatusReady,
     jiraConnected,
     selectedJiraSiteId,
@@ -37,12 +50,30 @@ export function TaskPageJiraContent({
     jiraOrderBy,
     jiraOrderDirection,
     handleJiraSort,
+    jiraColumnIds,
+    jiraColumns,
+    toggleJiraColumn,
     displayedJiraIssues,
     displayedJiraStatusOrder,
     sortedJiraIssues,
     setJiraConnectOpen,
-    handleUseJiraItem
+    handleUseJiraItem,
+    jiraViewMode,
+    setJiraViewMode,
+    jiraCurrentSprint,
+    setJiraCurrentSprint,
+    jiraTaskSourceContext,
+    jiraTaskSourceScopeKey,
+    accountBackedTaskSourceHostId,
+    setJiraRefreshNonce
   } = model
+  const boardTarget = ipcOrRuntimeTargetForHostId(
+    jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
+  )
+  const boardScopeKey = JSON.stringify([
+    jiraTaskSourceScopeKey,
+    boardTarget ? getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(boardTarget)) : null
+  ])
   return taskSource === 'jira' ? (
     !jiraStatusReady ? (
       <div className="mt-4 flex items-center justify-center py-14">
@@ -70,28 +101,47 @@ export function TaskPageJiraContent({
         </div>
       </div>
     ) : (
-      <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
-        <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
+      <div
+        style={jiraListGridStyle(jiraColumns)}
+        className="@container flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm"
+      >
+        <div className="flex min-h-10 flex-none flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3 py-1">
           <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
             {translate('auto.components.TaskPage.63b2abd3aa', 'Jira issues')}
           </div>
-          <div className="shrink-0 text-[11px] text-muted-foreground">
-            {displayedJiraIssues.length} {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+          <TaskPageJiraViewControls
+            mode={jiraViewMode}
+            onModeChange={setJiraViewMode}
+            currentSprint={jiraCurrentSprint}
+            onCurrentSprintChange={setJiraCurrentSprint}
+            sprintDisabled={jiraHasWorkspace}
+          />
+          <div className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
+            <span>
+              {displayedJiraIssues.length}{' '}
+              {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+            </span>
+            {jiraViewMode === 'list' ? (
+              <JiraListColumnsMenu ids={jiraColumnIds} onToggle={toggleJiraColumn} />
+            ) : null}
           </div>
         </div>
 
-        <TaskPageJiraSortControls
-          direction={jiraOrderDirection}
-          onSort={handleJiraSort}
-          orderBy={jiraOrderBy}
-        />
-
         <div
-          className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
+          className="min-h-0 flex-1 overflow-auto scrollbar-sleek"
           style={{
             scrollbarGutter: 'stable'
           }}
         >
+          {jiraViewMode === 'list' ? (
+            <TaskPageJiraSortControls
+              columns={jiraColumns}
+              direction={jiraOrderDirection}
+              onSort={handleJiraSort}
+              orderBy={jiraOrderBy}
+            />
+          ) : null}
+
           {jiraStatus.credentialError ? (
             <div className="border-b border-border px-4 py-4 text-sm text-destructive">
               {jiraStatus.credentialError}
@@ -121,36 +171,76 @@ export function TaskPageJiraContent({
             </div>
           ) : null}
 
-          {!jiraLoading && jiraIssues.length === 0 && !jiraError && !jiraStatus.credentialError ? (
+          {!jiraLoading &&
+          displayedJiraIssues.length === 0 &&
+          !jiraError &&
+          !jiraStatus.credentialError ? (
             <div className="px-4 py-10 text-center">
               <p className="text-sm font-medium text-foreground">
                 {translate('auto.components.TaskPage.eba87f2edb', 'No Jira issues found')}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                {jiraSearchInput
+                {jiraHasWorkspace
                   ? translate(
-                      'auto.components.TaskPage.f51e254d35',
-                      'Try different search terms or JQL.'
+                      'jira.workspace.empty',
+                      'Link a Jira issue to a workspace, or choose another view.'
                     )
-                  : translate(
-                      'auto.components.TaskPage.94d900518d',
-                      'No issues match the selected preset.'
-                    )}
+                  : jiraSearchInput
+                    ? translate(
+                        'auto.components.TaskPage.f51e254d35',
+                        'Try different search terms or JQL.'
+                      )
+                    : translate(
+                        'auto.components.TaskPage.94d900518d',
+                        'No issues match the selected preset.'
+                      )}
               </p>
             </div>
           ) : null}
 
-          <TaskPageJiraIssueList
-            formatUpdatedAt={formatRelativeTime}
-            getStatusTone={getJiraStatusTone}
-            issues={sortedJiraIssues}
-            onOpenIssue={openJiraDetailPage}
-            onStartWorkspace={handleUseJiraItem}
-            selectedIssue={selectedJiraIssue}
-            showSiteContext={selectedJiraSiteId === 'all'}
-            statusDirection={jiraOrderBy === 'status' ? jiraOrderDirection : 'asc'}
-            statusOrder={displayedJiraStatusOrder}
-          />
+          {jiraViewMode === 'board' ? (
+            <TaskPageJiraBoardView
+              key={`${boardScopeKey}:${selectedJiraSiteId}`}
+              issues={sortedJiraIssues}
+              statusOrder={displayedJiraStatusOrder}
+              selectedIssue={selectedJiraIssue}
+              sourceContext={jiraTaskSourceContext}
+              target={boardTarget}
+              scopeKey={boardScopeKey}
+              onOpenIssue={openJiraDetailPage}
+              onStartWorkspace={handleUseJiraItem}
+              showSiteContext={selectedJiraSiteId === 'all'}
+              loading={jiraLoading}
+              onRefresh={() => setJiraRefreshNonce((value) => value + 1)}
+            />
+          ) : (
+            <TaskPageJiraIssueList
+              getIssueWorkspaces={getJiraIssueWorkspaces}
+              onOpenWorkspace={(workspace) => {
+                if (
+                  activateAndRevealWorktree(workspace.id, { navigationIntent: 'user-open' }) ===
+                  false
+                ) {
+                  toast.error(
+                    translate(
+                      'jira.workspace.openFailed',
+                      'Unable to open the workspace linked to this Jira issue.'
+                    )
+                  )
+                }
+              }}
+              columns={jiraColumns}
+              formatUpdatedAt={formatRelativeTime}
+              getStatusTone={getJiraStatusTone}
+              issues={sortedJiraIssues}
+              onOpenIssue={openJiraDetailPage}
+              onStartWorkspace={handleUseJiraItem}
+              selectedIssue={selectedJiraIssue}
+              showSiteContext={selectedJiraSiteId === 'all'}
+              statusDirection={jiraOrderBy === 'status' ? jiraOrderDirection : 'asc'}
+              statusOrder={displayedJiraStatusOrder}
+            />
+          )}
         </div>
         <JiraIssueWorkspace
           issue={selectedJiraIssue}

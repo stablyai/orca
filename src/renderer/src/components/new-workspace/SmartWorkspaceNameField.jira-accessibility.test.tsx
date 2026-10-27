@@ -3,10 +3,9 @@
 import React, { act } from 'react'
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../../shared/jira-types'
-import SmartWorkspaceNameField, {
-  type SmartWorkspaceNameSelection
-} from './SmartWorkspaceNameField'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
 
 const jiraMock = vi.hoisted(() => ({
   retry: vi.fn(),
@@ -44,6 +43,8 @@ const jiraConnectionMock = vi.hoisted(() => ({
   }
 }))
 const originalWindowApi = window.api
+
+vi.mock('../jira-project-picker', () => ({ JiraProjectPicker: () => null }))
 
 vi.mock('./use-jira-url-source', () => ({
   useJiraUrlSource: () => ({

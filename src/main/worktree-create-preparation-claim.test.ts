@@ -47,7 +47,6 @@ describe('selectPreparationForCreate', () => {
         request({ baseBranch: 'main', canonicalBase: null })
       )
     ).toEqual({ kind: 'needs-canonical-base' })
-    // Nothing armed for this repo, so the create must not pay a probe to learn that.
     expect(
       selectPreparationForCreate([], request({ baseBranch: 'main', canonicalBase: null }))
     ).toEqual({ kind: 'miss', reason: 'none_armed' })
@@ -114,7 +113,6 @@ describe('selectPreparationForCreate', () => {
       kind: 'miss',
       reason: 'none_armed'
     })
-    // Something is warm, just not for this repo — the shape of a size-cap eviction.
     expect(
       selectPreparationForCreate([candidate()], request({ repoPathKey: '/other-repo' }))
     ).toEqual({ kind: 'miss', reason: 'repo_mismatch' })

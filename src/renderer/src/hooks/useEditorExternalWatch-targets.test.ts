@@ -75,6 +75,10 @@ describe('getEditorExternalWatchTargets', () => {
     sshConnectionStates: args.sshConnectionStates ?? new Map(),
     folderWorkspaces: [],
     projectGroups: [],
+    // Why: these cases cover target resolution; a recent visit keeps the workspace inside the watch scope.
+    lastVisitedAtByWorktreeId: Object.fromEntries(
+      (args.openFiles ?? []).map((file) => [file.worktreeId, 1])
+    ),
     settings:
       args.runtimeEnvironmentId === undefined
         ? null
@@ -103,6 +107,20 @@ describe('getEditorExternalWatchTargets', () => {
       }
     ])
   })
+
+  it.each(['check-details'] as const)(
+    'starts no watcher for a %s tab, which has no workspace file',
+    (mode) => {
+      const repo = makeRepo('repo-virtual')
+      const worktree = makeWorktree(repo.id, 'wt-virtual')
+      const virtualFile = { ...makeOpenFile(worktree.id), mode }
+
+      expect(
+        getEditorExternalWatchTargets(makeState({ repo, worktree, openFiles: [virtualFile] }))
+          .targets
+      ).toEqual([])
+    }
+  )
 
   it('enables WSL aliases for a proven-local Windows drive watcher', () => {
     const repo = makeRepo('repo-local-drive', null, 'local')

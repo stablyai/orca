@@ -1,4 +1,5 @@
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { useMemo } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -14,66 +15,106 @@ import {
   NativeChatToolName
 } from './NativeChatToolAnnotations'
 import { NativeChatToolIcon } from './NativeChatToolIcon'
+import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
 import { NativeChatDiffView } from './NativeChatDiffView'
-import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
+import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
+import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
+import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
+import { nativeChatToolLineView } from '../../../../shared/native-chat/tools/native-chat-tool-line-view'
+import type { NativeChatWebSearchResult } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
+import {
+  diffFromText,
+  diffFromToolCall
+} from '../../../../shared/native-chat/tools/native-chat-diff'
+import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
-import { createToolInputDisplay, truncateToolDetail } from './native-chat-tool-summary'
+import { NativeChatToolOutput } from './NativeChatToolOutput'
 
-/** A single inline tool line — `▸ ToolName  preview` — that expands in place to
- *  show the call's diff/input or the result's body. Tool calls read as flat
- *  lines in the conversation rather than boxed blocks (mobile parity). Lines only
- *  mount while the parent run is open and are individually collapsible. */
+const TARGET_CLASS =
+  'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
+
+/** Mount detail separately so collapsed rows do no diff work. */
+function ToolLineDetail({
+  block,
+  body,
+  fullCommand,
+  commandLanguage,
+  results,
+  onLinkClick
+}: {
+  block: NativeChatBlock
+  body: NativeChatToolResultBlock | undefined
+  fullCommand: string | null
+  commandLanguage: string | null
+  results: NativeChatWebSearchResult[]
+  onLinkClick?: CommentMarkdownLinkClickHandler
+}): React.JSX.Element {
+  const diff = isToolCallBlock(block)
+    ? diffFromToolCall(block.name, block.input)
+    : isToolResultBlock(block)
+      ? diffFromText(block.output)
+      : null
+  return (
+    <div className="ml-6 space-y-1.5 py-1">
+      {results.length > 0 ? (
+        <NativeChatSearchResults results={results} onLinkClick={onLinkClick} />
+      ) : null}
+      {diff ? <NativeChatDiffView lines={diff} /> : null}
+      {!diff && fullCommand ? (
+        <pre
+          data-native-chat-code-content
+          className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-chat-code text-chat-foreground scrollbar-sleek"
+        >
+          {commandLanguage ? (
+            <NativeChatHighlightedCode code={fullCommand} language={commandLanguage} />
+          ) : (
+            fullCommand
+          )}
+        </pre>
+      ) : null}
+      {body ? <NativeChatToolOutput body={body} /> : null}
+    </div>
+  )
+}
+
+/** A tool sentence with its output behind its own remembered disclosure. */
 export function NativeChatToolLine({
   block,
   result,
-  initiallyExpanded = true,
   disclosureKey,
   onLinkClick
 }: {
   block: NativeChatBlock
-  /** This call's output, when the run paired one to it. Drawn here rather than
-   *  as a `Result` row of its own, so an opened run lists the work, not twice
-   *  as many rows half of which say `Result`. */
+  /** Pair output with its call instead of adding a separate Result row. */
   result?: NativeChatToolResultBlock
-  initiallyExpanded?: boolean
   /** Identity this line's open state is remembered under while it is unmounted. */
   disclosureKey?: string
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
-  const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(
-    disclosureKey,
-    initiallyExpanded
+  const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(disclosureKey, false)
+
+  const view = useMemo(
+    () =>
+      isToolCallBlock(block) || isToolResultBlock(block)
+        ? nativeChatToolLineView(block, result)
+        : null,
+    [block, result]
   )
-
-  let name: string
-  let preview: string
-  let diff: DiffLine[] | null = null
-  let body: { output: string; isError?: boolean } | null = null
-  let detail: string | null = null
-  let inputHasDetail = false
   const isCall = isToolCallBlock(block)
-
-  if (isCall) {
-    name = block.name
-    const inputDisplay = createToolInputDisplay(block.input)
-    preview = inputDisplay.label
-    inputHasDetail = inputDisplay.hasDetail
-    diff = expanded ? diffFromToolCall(block.name, block.input) : null
-    detail = expanded && !diff ? inputDisplay.formatDetail() : null
-    if (result) {
-      body = { output: result.output, isError: result.isError }
-    }
-  } else if (isToolResultBlock(block)) {
-    name = translate('components.native-chat.tool.result', 'Result')
-    preview = block.output.split('\n')[0]?.slice(0, 80) ?? ''
-    diff = expanded ? diffFromText(block.output) : null
-    body = { output: block.output, isError: block.isError }
-  } else {
+  if (!view) {
     return null
   }
-
-  const hasResults = isCall && (block.webSearchResults?.length ?? 0) > 0
-  const hasDetail = diff !== null || body !== null || inputHasDetail || hasResults
+  const name = isCall
+    ? block.name
+    : translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
+  const { label: sharedLabel, body, resultPreview, failed, results, hasDetail } = view
+  const label = sharedLabel && {
+    ...sharedLabel,
+    verb: sharedLabel.verb === null ? null : nativeChatToolRowVerb(sharedLabel.verb)
+  }
+  // A call opens to its output; its arguments are the row's own words, bar a shortened command.
+  const fullCommand = label?.commandDetail ?? null
+  const commandAlone = label?.command === true && label.verb !== null && label.target.length > 0
 
   return (
     <div>
@@ -81,68 +122,72 @@ export function NativeChatToolLine({
         type="button"
         onClick={() => hasDetail && setExpanded(!expanded)}
         className={cn(
-          'group/tool-line flex w-full items-center gap-1.5 py-0.5 text-left',
+          'group/tool-line flex min-h-6.5 w-full items-center gap-2 rounded-md text-left font-sans text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
           hasDetail ? 'cursor-pointer' : 'cursor-default'
         )}
         aria-expanded={hasDetail ? expanded : undefined}
       >
         {isCall ? (
-          /* Decorative category glyph; the word beside it is the row's name. */
           <NativeChatToolIcon
             mcpIdentity={block.mcpIdentity}
             rowWord={name}
-            className="text-muted-foreground"
+            input={block.input}
+            className={failed ? 'text-destructive/70' : 'text-chat-foreground-faint'}
           />
         ) : (
-          /* A result's word is translated copy, not a tool name, so there is no
-             category to read from it. The empty slot keeps rows aligned. */
+          /* Translated result labels identify no tool category; reserve an empty slot for alignment. */
           <span aria-hidden className="size-4 shrink-0" />
         )}
-        <code className="min-w-0 truncate font-mono text-xs font-semibold text-foreground/90 transition-colors group-hover/tool-line:text-foreground">
-          {isCall ? <NativeChatToolName name={name} mcpIdentity={block.mcpIdentity} /> : name}
-        </code>
-        {preview ? (
+        {label?.verb && label.verb !== name ? <span className="sr-only">{name} </span> : null}
+        {commandAlone ? (
+          // The run's header already says these ran; the row is the command itself.
+          <span className="sr-only">{label?.verb} </span>
+        ) : (
           <span
-            className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover/tool-line:text-foreground/70"
-            title={preview}
+            className={cn(
+              'text-chat-foreground-faint transition-colors group-hover/tool-line:text-chat-foreground',
+              label?.verb ? 'shrink-0' : 'min-w-0 truncate'
+            )}
           >
-            {preview}
+            {label?.verb ??
+              (isCall ? <NativeChatToolName name={name} mcpIdentity={block.mcpIdentity} /> : name)}
+          </span>
+        )}
+        {label?.filePath ? (
+          <NativeChatToolFileTarget
+            path={label.filePath}
+            label={label.target}
+            className={TARGET_CLASS}
+            onLinkClick={onLinkClick}
+          />
+        ) : (label?.target ?? resultPreview) ? (
+          <span className={TARGET_CLASS} title={label?.title ?? resultPreview}>
+            {label?.target ?? resultPreview}
           </span>
         ) : null}
-        {isCall ? <NativeChatCommandMetadata block={block} /> : null}
-        {hasDetail ? (
-          // Hover reveal is keyed to this row's own named group: a bare `group`
-          // also answers to the message row's, lighting every chevron at once.
-          <ChevronRight
-            className={cn(
-              'size-3.5 shrink-0 text-muted-foreground transition-all',
-              expanded ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/tool-line:opacity-100'
-            )}
-          />
-        ) : null}
-      </button>
-      {hasDetail && expanded ? (
-        <div className="space-y-1.5 py-1">
-          {isCall && hasResults ? (
-            <NativeChatSearchResults results={block.webSearchResults} onLinkClick={onLinkClick} />
-          ) : null}
-          {diff ? <NativeChatDiffView lines={diff} /> : null}
-          {!diff && detail ? (
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] text-foreground/80 scrollbar-sleek">
-              {detail}
-            </pre>
-          ) : null}
-          {body ? (
-            <pre
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
+          {isCall ? <NativeChatCommandMetadata block={block} /> : null}
+          {hasDetail ? (
+            <ChevronRight
               className={cn(
-                'max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] scrollbar-sleek',
-                body.isError ? 'text-destructive' : 'text-foreground/80'
+                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform motion-reduce:transition-none',
+                expanded && 'rotate-90'
               )}
-            >
-              {truncateToolDetail(body.output)}
-            </pre>
+            />
           ) : null}
-        </div>
+        </span>
+      </button>
+      {hasDetail ? (
+        <NativeChatExpandable open={expanded}>
+          <ToolLineDetail
+            block={block}
+            body={body}
+            fullCommand={fullCommand}
+            commandLanguage={label?.commandLanguage ?? null}
+            results={results}
+            onLinkClick={onLinkClick}
+          />
+        </NativeChatExpandable>
       ) : null}
     </div>
   )

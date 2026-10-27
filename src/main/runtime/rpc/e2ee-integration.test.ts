@@ -1,13 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from './e2ee-crypto'
+import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from '../../../shared/e2ee-crypto'
 
-// Why: this test simulates the full mobile → desktop E2EE flow without a real
-// WebSocket. The "mobile" side generates an ephemeral keypair, sends e2ee_hello,
-// the E2EEChannel (desktop) derives the shared key, and then both sides can
-// exchange encrypted RPC messages. This validates that the handshake protocol
-// and crypto are end-to-end compatible.
+// Exercise mobile/desktop ephemeral key exchange and encrypted RPC compatibility without a real WebSocket.
 
 function publicKeyToBase64(key: Uint8Array): string {
   return Buffer.from(key).toString('base64')
@@ -46,7 +42,14 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
       serverSecretKey: serverKeys.secretKey,
       resolveAuthenticatedDevice: (token) =>
         token === 'device-abc'
-          ? { deviceId: 'device-abc', deviceToken: token, scope: 'mobile' }
+          ? {
+              deviceId: 'device-abc',
+              deviceToken: token,
+              scope: 'mobile',
+              clientId: token,
+              callerFingerprint: 'test-fingerprint',
+              credentialRevision: 0
+            }
           : null,
       onReady,
       onError
@@ -75,7 +78,7 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
   it('full handshake → encrypted RPC round-trip', () => {
     const mobileShared = completeHandshake()
 
-    // Desktop should respond with plaintext ready, then encrypted auth ack.
+    // Handshake returns plaintext ready followed by an encrypted auth acknowledgement.
     expect(onReady).toHaveBeenCalled()
     expect(wsSent).toHaveLength(2)
     expect(JSON.parse(wsSent[0]!)).toEqual({ type: 'e2ee_ready' })
@@ -83,21 +86,17 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
       type: 'e2ee_authenticated'
     })
 
-    // Set up the desktop message handler
     const desktopReceived: string[] = []
     channel.onMessage((plaintext, encryptedReply) => {
       desktopReceived.push(plaintext)
       encryptedReply(JSON.stringify({ id: 'rpc-1', ok: true, result: { status: 'ready' } }))
     })
 
-    // Mobile sends encrypted RPC request
     const request = JSON.stringify({ id: 'rpc-1', method: 'status.get' })
     channel.handleRawMessage(encrypt(request, mobileShared))
 
-    // Desktop received the plaintext
     expect(desktopReceived).toEqual([request])
 
-    // Desktop's encrypted reply (wsSent[2]) is decryptable by mobile
     expect(wsSent).toHaveLength(3)
     const replyPlain = decrypt(wsSent[2]!, mobileShared)
     expect(JSON.parse(replyPlain!)).toEqual({
@@ -108,13 +107,11 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
   })
 
   it('mobile reconnects with fresh ephemeral key', () => {
-    // First connection
     completeHandshake()
     expect(onReady).toHaveBeenCalledTimes(1)
 
     const firstShared = deriveSharedKey(mobileEphemeralKeys.secretKey, serverKeys.publicKey)
 
-    // Simulate disconnect + reconnect with new ephemeral key
     channel.destroy()
     wsSent.length = 0
 
@@ -123,7 +120,14 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
       serverSecretKey: serverKeys.secretKey,
       resolveAuthenticatedDevice: (token) =>
         token === 'device-abc'
-          ? { deviceId: 'device-abc', deviceToken: token, scope: 'mobile' }
+          ? {
+              deviceId: 'device-abc',
+              deviceToken: token,
+              scope: 'mobile',
+              clientId: token,
+              callerFingerprint: 'test-fingerprint',
+              credentialRevision: 0
+            }
           : null,
       onReady,
       onError
@@ -135,12 +139,10 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
 
     const secondShared = deriveSharedKey(newMobileKeys.secretKey, serverKeys.publicKey)
 
-    // Keys from different sessions must not be interchangeable
     expect(Buffer.from(firstShared).toString('hex')).not.toBe(
       Buffer.from(secondShared).toString('hex')
     )
 
-    // Verify new session works
     const received: string[] = []
     newChannel.onMessage((plaintext) => received.push(plaintext))
     newChannel.handleRawMessage(encrypt('{"id":"2","method":"test"}', secondShared))
@@ -155,7 +157,6 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
 
     channel.onMessage((plaintext, encryptedReply) => {
       received.push(plaintext)
-      // Simulate streaming: send multiple encrypted responses
       for (let i = 0; i < 3; i++) {
         encryptedReply(
           JSON.stringify({
@@ -172,7 +173,6 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
       encrypt(JSON.stringify({ id: 'stream-1', method: 'terminal.subscribe' }), mobileShared)
     )
 
-    // 1 plaintext ready + 1 encrypted auth ack + 3 streaming responses
     expect(wsSent).toHaveLength(5)
 
     for (let i = 2; i < 5; i++) {

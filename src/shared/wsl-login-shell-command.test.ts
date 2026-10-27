@@ -7,9 +7,9 @@ import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
-  buildWslLoginShellCommand,
-  quotePosixShell
+  buildWslLoginShellCommand
 } from './wsl-login-shell-command'
+import { quotePosixShell } from './shell-argument-quoting'
 
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
 let wslShAvailable: boolean | null = null
@@ -153,9 +153,7 @@ describe('wsl login shell command helpers', () => {
       return
     }
 
-    // Why the captured form: an interactive login shell also prints the distro's
-    // rc/motd to stdout (stock Ubuntu ships a sudo hint), so a raw login-shell
-    // read cannot be compared byte-for-byte on a real distro.
+    // Fence interactive rc/motd stdout before comparing command output byte-for-byte.
     const captured = buildWslCapturedLoginShellCommand('orca_value=ok; printf "<%s>" "$orca_value"')
 
     expect(
@@ -168,17 +166,12 @@ describe('wsl login shell command helpers', () => {
     ).toBe('<ok>')
   }, 30_000)
 
-  // Why: `--` expands $name in argv against the guest env before the guest runs,
-  // so these scripts reached the shell already rewritten. Each case below was
-  // measured to return DIFFERENT bytes under `--` than under `--exec`; cases
-  // that merely look risky but are unaffected (a sed backreference has no `$`)
-  // are deliberately not here, because they would pass either way.
+  // These measured cases distinguish --exec from --, which expands guest $name references before execution.
   it.each([
     ['awk field reference', ['sh', '-c', `echo 'a b' | awk '{print $2}'`], 'b\n'],
     ['literal escaped dollar', ['sh', '-c', `printf '[%s]' "\\$HOME"`], '[$HOME]'],
     ['single-quoted dollar', ['sh', '-c', `printf '[%s]' '$PATH'`], '[$PATH]'],
-    // The shape wslUncDirectoryExists uses: `--` blanked $1, so every existing
-    // directory probed as missing.
+    // The old preprocessor erased $1 in wslUncDirectoryExistsAsync and made existing directories appear missing.
     ['positional argument', ['sh', '-c', 'printf "[%s]" "$1"', 'sh', 'ARG'], '[ARG]'],
     ['shell local', ['sh', '-c', 'x=hi; printf "[%s]" "$x"'], '[hi]']
   ])(
@@ -213,9 +206,7 @@ describe('wsl login shell command helpers', () => {
     it.skipIf(!canRunWslSh())(
       'propagates the payload exit status to the caller',
       () => {
-        // Why a real shell: asserting the script merely *contains* `exit $?` passes
-        // for any input. statPath maps this exit 2 to ENOENT, so it has to survive
-        // the fence for real.
+        // Run the shell to prove exit 2 survives the fence; statPath maps it to ENOENT.
         const captured = buildWslCapturedLoginShellCommand('printf partial; exit 2')
 
         let status: number | undefined
@@ -242,8 +233,7 @@ describe('wsl login shell command helpers', () => {
     })
 
     it('keeps payload bytes that themselves contain a fence', () => {
-      // Why a per-call nonce: `cat` of a file quoting a fixed marker would
-      // otherwise be truncated at the quote.
+      // A per-call nonce prevents payloads quoting an older marker from truncating capture.
       const captured = buildWslCapturedLoginShellCommand('cat -- /f', 'nonce2')
       const payload = 'see __ORCA_WSL_CAPTURE_BEGIN_nonce1__ and __ORCA_WSL_CAPTURE_END_nonce1__\n'
 
@@ -309,23 +299,17 @@ describe('wsl login shell command helpers', () => {
 })
 
 describe('in-guest wrapper root resolution', () => {
-  // Why this test exists: the wrapper tree is content-addressed, so its path
-  // carries a hash the guest cannot derive. A previous revision of this script
-  // rebuilt the root as `${ORCA_USER_DATA_PATH}/shell-ready`, which stopped
-  // matching -- every WSL pane then fell through to an unwrapped `exec $shell -l`
-  // and silently lost the ready marker, OSC 133, and the launch preflight.
+  // Content-addressed wrappers include a host-chosen hash. Guessing from userData lost shell-ready/OSC 133/preflight for every WSL pane.
   it('prefers the host-published root over the legacy user-data guess', () => {
     const script = buildWslInteractiveLoginShellCommand()
     expect(script).toContain('if [ -n "${ORCA_SHELL_READY_ROOT:-}" ]; then')
     expect(script).toContain('_orca_shell_ready_root="${ORCA_SHELL_READY_ROOT%/}"')
-    // The legacy branch must remain reachable only as a fallback, so an older
-    // host that exports just ORCA_USER_DATA_PATH still wraps its shells.
+    // Retain the userData fallback for older hosts.
     expect(script).toContain('elif [ -n "${ORCA_USER_DATA_PATH:-}" ]; then')
   })
 
   it('resolves the published root ahead of the legacy path under a real shell', () => {
     const script = buildWslInteractiveLoginShellCommand()
-    // Run only the root-resolution prologue, then report what it picked.
     const prologue = script.split('_orca_wsl_shell_name=')[0] as string
     const probe = [
       'ORCA_SHELL_READY_ROOT=/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready',

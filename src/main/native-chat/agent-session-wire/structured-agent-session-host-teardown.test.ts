@@ -5,7 +5,7 @@ import {
   SUPERVISED_GRACEFUL_EXIT_MS
 } from '../../claude/claude-child-exit-proof-ladder'
 import { GRACEFUL_EXIT_MS as CODEX_WINDOWS_GRACEFUL_EXIT_MS } from '../../codex/codex-app-server-connection'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../codex/codex-app-server-posix-supervisor'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'
 import {
   CHILD_EVICTION_TIMEOUT_MS,
@@ -23,7 +23,11 @@ describe('structured agent-session host teardown', () => {
     const phases = structuredAgentSessionHostTeardownPhases({
       logger: createStructuredAgentSessionLogger(),
       idleSweep: { dispose: noop },
-      runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
+      runtimeState: {
+        stopLeaseRenewal: () => undefined,
+        flushAllEventSinks: noop,
+        acquireAborts: { abortAll: () => {} }
+      },
       tasks: { drainAttaches: noop },
       evictOwnedSessions: noop,
       beginResumeMarkers: () => {},
@@ -33,6 +37,7 @@ describe('structured agent-session host teardown', () => {
       'begin-resume-markers',
       'dispose-idle-sweep',
       'stop-lease-renewal',
+      'abort-acquires',
       'drain-attaches',
       'evict-owned-sessions',
       'record-resume-markers',
@@ -41,13 +46,11 @@ describe('structured agent-session host teardown', () => {
   })
 
   it("derives quit's child-eviction bound from every provider's supervised close", () => {
-    // Eviction drains the sink for the resume offer before it stops the child, inside one bound.
-    // Each close's tree-kill fallback is deliberately outside it: once main exits the supervisor
-    // stops its group itself, and next launch's recovery settles the lease.
+    // Bound drain/graceful close; supervisors finish tree cleanup after main exits, with leases recovered on launch.
     const closes = {
       claude: SUPERVISED_GRACEFUL_EXIT_MS,
       codex: PROVIDER_SUPERVISOR_MAX_STOP_MS,
-      // No supervisor on Windows, so its closes wait less than any supervised one.
+      // Windows lacks supervisors and uses shorter close bounds.
       claudeWindows: CLAUDE_WINDOWS_GRACEFUL_EXIT_MS,
       codexWindows: CODEX_WINDOWS_GRACEFUL_EXIT_MS
     }
@@ -56,7 +59,6 @@ describe('structured agent-session host teardown', () => {
         CHILD_EVICTION_TIMEOUT_MS
       )
     }
-    // The resume markers recorded after eviction still fit under quit's global deadline.
     expect(CHILD_EVICTION_TIMEOUT_MS + RESUME_MARKER_RECORD_TIMEOUT_MS).toBeLessThan(
       WILL_QUIT_TEARDOWN_DEADLINE_MS
     )
@@ -67,7 +69,11 @@ describe('structured agent-session host teardown', () => {
     const evict = structuredAgentSessionHostTeardownPhases({
       logger: createStructuredAgentSessionLogger(),
       idleSweep: { dispose: noop },
-      runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
+      runtimeState: {
+        stopLeaseRenewal: () => undefined,
+        flushAllEventSinks: noop,
+        acquireAborts: { abortAll: () => {} }
+      },
       tasks: { drainAttaches: noop },
       evictOwnedSessions: noop,
       beginResumeMarkers: () => {},
@@ -78,7 +84,6 @@ describe('structured agent-session host teardown', () => {
       const run = Promise.resolve(evict?.run()).then(() => {
         finished = true
       })
-      // No timer advances: the phase settles with the eviction, not at CHILD_EVICTION_TIMEOUT_MS.
       await vi.advanceTimersByTimeAsync(0)
       expect(finished).toBe(true)
       await run
@@ -97,7 +102,11 @@ describe('structured agent-session host teardown', () => {
     const phases = structuredAgentSessionHostTeardownPhases({
       logger: log.logger,
       idleSweep: { dispose: cleaned },
-      runtimeState: { stopLeaseRenewal: () => {}, flushAllEventSinks: flush },
+      runtimeState: {
+        stopLeaseRenewal: () => {},
+        flushAllEventSinks: flush,
+        acquireAborts: { abortAll: () => {} }
+      },
       tasks: { drainAttaches: cleaned },
       evictOwnedSessions: cleaned,
       beginResumeMarkers: () => {},

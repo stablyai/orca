@@ -6,8 +6,7 @@ export type MainProcessLifecycleIdentity = Readonly<{
   mainProcessStartedAt: string
 }>
 
-// Why: renderer reloads reuse the Electron main process, while true app
-// relaunches must receive a new ID even when the OS later recycles its PID.
+// Reloads share this identity; relaunches need a new ID even if the OS recycles the PID.
 const mainProcessLifecycleIdentity: MainProcessLifecycleIdentity = Object.freeze({
   mainProcessPid: process.pid,
   mainProcessLaunchId: randomUUID(),

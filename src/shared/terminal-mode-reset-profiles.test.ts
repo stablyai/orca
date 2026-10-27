@@ -18,8 +18,7 @@ import {
 } from './terminal-mode-reset-profiles'
 import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
 
-// Why literal expectations: consumers import these constants, so only a byte-level
-// assertion here can catch a profile silently losing a mode it is meant to clear.
+// Consumers import these bytes; literal expectations catch modes silently disappearing.
 describe('terminal mode reset profiles', () => {
   it('clears every mouse protocol and encoding a snapshot can re-arm', () => {
     expect(RESET_MOUSE_REPORTING).toBe(
@@ -29,7 +28,7 @@ describe('terminal mode reset profiles', () => {
 
   it('pins the fresh-shell profile', () => {
     expect(POST_REPLAY_MODE_RESET).toBe(
-      '\x1b[0m\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l\x1b7'
+      '\x1b[0m\x1b[0 q\x1b[<99u\x1b[=0u\x1b[>4m\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l\x1b7'
     )
   })
 
@@ -41,19 +40,16 @@ describe('terminal mode reset profiles', () => {
     expect(POST_REPLAY_REATTACH_RESET).not.toContain('\x1b[?2004l')
   })
 
-  // Why ?1004l stays: #944 — a hard-killed TUI leaves the daemon emulator on the alternate buffer,
-  // so this profile can reach a plain shell, where armed focus reporting rings BEL on every pane
-  // switch. Dropping it would also make this byte-identical to the live-agent profile.
+  // A hard-killed alt-screen TUI can return to a shell; retain ?1004l or pane switches ring BEL (#944).
   it('pins the live alternate-screen profile, which keeps mouse reporting but not focus', () => {
     expect(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE).toBe('\x1b[0 q\x1b[?25h\x1b[?1004l')
     expect(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE).not.toContain(RESET_MOUSE_REPORTING)
     expect(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE).not.toBe(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
   })
 
-  // Why: the one reset for a process boundary (cold-restore seed, proven crash).
   it('pins the process boundary ground', () => {
     expect(PROCESS_BOUNDARY_GROUND).toBe(
-      '\x1b[?2026l\x1b[<99u\x1b[=0u\x1b7\x1b[?1049l\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1005l\x1b[?1015l\x1b[?1004l\x1b[?2004l\x1b[?1l\x1b[?66l\x1b[?25h\x1b[0 q\x1b[<99u\x1b[=0u\x1b[0m\x1b7'
+      '\x1b[?2026l\x1b[<99u\x1b[=0u\x1b7\x1b[?1049l\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1005l\x1b[?1015l\x1b[?1004l\x1b[?2004l\x1b[?1l\x1b[?66l\x1b[?25h\x1b[0 q\x1b[<99u\x1b[=0u\x1b[>4m\x1b[0m\x1b7'
     )
   })
 
@@ -76,7 +72,12 @@ describe('terminal mode reset profiles', () => {
     const enabled = privateModes.filter((mode) => /^[0-9;]*h/.test(mode))
     expect(enabled.map((mode) => mode.slice(0, mode.indexOf('h')))).toEqual(['25'])
     expect(PROCESS_BOUNDARY_GROUND).not.toContain('\x1b]133;')
-    expect(PROCESS_BOUNDARY_GROUND).not.toContain('\x1b[>')
+    // The one `CSI >` allowed is the modifyOtherKeys reset; any other would be a kitty push.
+    expect(
+      PROCESS_BOUNDARY_GROUND.split('\x1b[>')
+        .slice(1)
+        .map((seq) => seq.slice(0, 2))
+    ).toEqual(['4m'])
     expect(
       PROCESS_BOUNDARY_GROUND.split('\x1b[=')
         .slice(1)
@@ -84,9 +85,7 @@ describe('terminal mode reset profiles', () => {
     ).toEqual(['0u', '0u'])
   })
 
-  // Why byte equality and not just `not.toContain`: a profile that lost every mode
-  // would satisfy an absence assertion perfectly, so these two — whose only other
-  // coverage asserts they were passed through unchanged — need a literal here.
+  // Absence alone also passes for an empty profile; pin the remaining bytes.
   it('pins the live-snapshot and live-agent profiles', () => {
     expect(POST_REPLAY_LIVE_SNAPSHOT_RESET).toBe('\x1b[0 q\x1b[?25h\x1b[?1004l')
     expect(POST_REPLAY_LIVE_AGENT_REATTACH_RESET).toBe('\x1b[0 q\x1b[?25h')
@@ -133,7 +132,9 @@ describe('terminal mode reset profiles', () => {
       // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
       expect(profile).not.toMatch(/\x1b\[[<=>][0-9;]*u/)
     }
-    expect(CONFIRMED_SHELL_MODE_RESET).toBe(`${POST_REPLAY_REATTACH_RESET}\x1b[<99u\x1b[=0u`)
+    expect(CONFIRMED_SHELL_MODE_RESET).toBe(
+      `${POST_REPLAY_REATTACH_RESET}\x1b[<99u\x1b[=0u\x1b[>4m`
+    )
   })
 
   it('restores proven Kitty flags and only pops unproven ones', () => {
@@ -141,8 +142,7 @@ describe('terminal mode reset profiles', () => {
     expect(buildKittyKeyboardRestore(undefined)).toBe('\x1b[<99u')
   })
 
-  // Why: xterm pushes a relay-redelivered push again while the mirror applies it as a set, so
-  // without the pop-all the app's single pop would leave xterm on the stale frame.
+  // A replayed push grows xterm’s stack but acts as a mirror set; pop-all prevents the app’s single pop restoring stale flags.
   it("brings xterm and the mirror to 0 on the app's pop after a redelivered push", async () => {
     const term = new Terminal({ allowProposedApi: true, vtExtensions: { kittyKeyboard: true } })
     const mirror = new TerminalKittyKeyboardModeTracker()

@@ -11,45 +11,11 @@ import {
 } from './native-module-traps'
 import { reactNativeScreenMembers, screenNativeSubstitutes } from './screen-native-substitutes'
 
-/**
- * The native modules a mounted operation may import, and what it gets instead.
- *
- * The loader's default is a proxy that refuses any member of a non-relative import, which is what
- * keeps an adapter from silently mounting a device API. That default is too strict for the relay
- * pairing modules: each builds a `defaultDependencies` object at module scope, so merely
- * *referencing* `Platform.OS` or a storage-backed loader throws before an adapter can override it.
- *
- * So the table separates reference from use. `react`, `zod` and `lowlight` are the real libraries —
- * pure, and
- * React additionally has to be the one instance the test renderer drives, which is also why
- * `react/jsx-runtime` is the real module: the automatic runtime a screen compiles to must build
- * elements for that instance. `@noble/hashes` is the same pure-JS digest the product would run on a
- * device, and `expo-crypto` is routed through the Web Crypto the recording scheduler already pins,
- * which is both deterministic and what the library itself does off-device.
- *
- * Every substitute keeps one of the two trap shapes in `native-module-traps.ts`, which is where the
- * rule about unlisted members and `__esModule` lives. The view packages a mounted screen needs are
- * in `screen-native-substitutes.ts`, and the two entries a scenario can declare for itself — the
- * device store and the notification tray — are in `declared-device-state.ts`, absent here until a
- * recording declares them.
- *
- * `AppState`, `useWindowDimensions`, the two-way audio module and `expo-keep-awake` are the same
- * kind of boundary as the scripted socket: a screen-lock tag, a window size and a microphone are
- * inputs the recording pins rather than reads. Each is inert — no listener is ever fired and no
- * audio is produced — because every send the dictation and terminal hooks make is driven through
- * the operation's own API instead. A recording that needed a native event would have to say so by
- * adding an emitter here.
- *
- * `expo-haptics` is the only one whose real members are already fire-and-forget: every caller in
- * `platform/haptics.ts` is `void …catch(() => {})`, so resolving is what the device does with the
- * reply too. Only the iOS members are listed because `Platform.OS` above is pinned to `ios` and
- * the Android branch is never evaluated; adding a second platform would have to add them.
- *
- * `expo-clipboard` is a pasteboard the session screens read and write, so it is a fixture rather
- * than a no-op: it starts empty and remembers what a recorded action put there. It is per-recording,
- * so nothing leaks between scenarios. Unlike the declared entries it needs no declaration, because
- * every byte it can return was written inside the same recording.
- */
+// Substitute native boundaries while retaining real pure libraries and the renderer’s React instance.
+// Keep default-dependency references loadable, but trap undeclared native use (native-module-traps.ts).
+// Inputs are pinned and listeners/audio inert; new native events need explicit emitters.
+// Haptics list only iOS members; platform coverage is pinned to iOS.
+// Clipboard is per-recording state; its reads return only bytes written by that recording.
 /** The system pasteboard as a per-recording cell: empty at mount, readable after a write. */
 function pasteboardNativeStore(): unknown {
   let text: string | null = null
@@ -69,20 +35,21 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
     ['react', React],
     ['react/jsx-runtime', ReactJsxRuntime],
     ['zod', zod],
-    // Real, because a stand-in would fabricate the tokens the diff preview publishes; the branch
-    // diff's success arm highlights before it ever reaches state.
+    // Use real highlighting so preview tokens come from product behavior.
     ['lowlight', lowlight],
     ['@noble/hashes/sha256', partialNativeModule('@noble/hashes/sha256', { sha256 })],
     [
       'expo-crypto',
       partialNativeModule('expo-crypto', {
         getRandomBytes: (length: number) =>
-          globalThis.crypto.getRandomValues(new Uint8Array(length))
+          globalThis.crypto.getRandomValues(new Uint8Array(length)),
+        // Hashed before it resolves, as the native module's synchronous digest is.
+        CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+        digest: async (_algorithm: string, data: Uint8Array) => sha256(data).buffer
       })
     ],
     // The RN polyfill mobile bundles is this same pure implementation of the same encoding.
     ['buffer', partialNativeModule('buffer', { Buffer })],
-    // One pinned platform per recording; `platform` is golden provenance, not a compared field.
     [
       'react-native',
       partialNativeModule('react-native', {

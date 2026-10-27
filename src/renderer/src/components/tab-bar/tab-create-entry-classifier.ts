@@ -16,6 +16,7 @@ import {
   validateNewTabEntryRelativePath
 } from './tab-create-entry-path-validation'
 import { classifyExplicitUrl, classifyHostUrl } from './tab-create-entry-url-classification'
+import { htmlFilePathFromUrl } from '../../../../shared/html-file-url'
 
 export {
   isTabEntryAbsolutePathLike,
@@ -40,6 +41,7 @@ export type TabEntryClassification =
   | { kind: 'search'; engine: SearchEngine; query: string }
   | { kind: 'new-file'; relativePath: string }
   | { kind: 'absolute-file'; filePath: string }
+  | { kind: 'html-file-url'; filePath: string }
   | { kind: 'blocked'; message: string }
 
 export type TabEntryActionClassification = Exclude<
@@ -58,6 +60,7 @@ function tabEntryActionOptionId(classification: TabEntryActionClassification): s
     case 'new-file':
       return `${classification.kind}:${classification.relativePath}`
     case 'absolute-file':
+    case 'html-file-url':
       return `${classification.kind}:${classification.filePath}`
     case 'explicit-url':
     case 'host-url':
@@ -70,8 +73,7 @@ function tabEntryActionOptionId(classification: TabEntryActionClassification): s
 function emptyOption(): TabEntryOption {
   return {
     id: 'empty',
-    // Why shared: the empty status row and the input placeholder describe the
-    // same list, and drifting copy makes the omnibox look like two surfaces.
+    // Share placeholder guidance so the empty row and input describe the same search.
     classification: { kind: 'empty', message: getTabEntryOmniboxPlaceholder() }
   }
 }
@@ -162,6 +164,11 @@ export function getTabEntryOptions(
     return [emptyOption()]
   }
 
+  const htmlFilePath = htmlFilePathFromUrl(trimmed)
+  if (htmlFilePath) {
+    return toOptions([{ kind: 'html-file-url', filePath: htmlFilePath }], limit)
+  }
+
   if (isTabEntryAbsolutePathLike(trimmed)) {
     if (!context.allowAbsolutePaths) {
       return [
@@ -206,8 +213,7 @@ export function getTabEntryOptions(
     if (hostUrl?.kind === 'host-url') {
       return toOptions([hostUrl], limit, fileStatus)
     }
-    // Why: path-shaped text waits on the scan whether or not it is creatable, so
-    // "src/" reports the scan instead of flashing a path error it will not keep.
+    // Wait for path-shaped scans before reporting errors that a completed listing may replace.
     if (isLikelyNewFileIntent(trimmed)) {
       return [fileStatus]
     }
@@ -244,9 +250,7 @@ export function getTabEntryOptions(
     return toOptions([hostUrl, ...existingFiles], actionLimit)
   }
   if (pathError || !newFile) {
-    // Why: an unusable path is still a live quick-open prefix — "src/" cannot be
-    // created, but it matches real files, and dropping them turns every typed
-    // separator into an error row mid-keystroke.
+    // Incomplete paths such as src/ still match files; preserve those rows through validation errors.
     return existingFiles.length > 0
       ? toOptions(existingFiles, actionLimit)
       : [invalidPathOption(pathError)]
@@ -254,9 +258,7 @@ export function getTabEntryOptions(
   if (isLikelyNewFileIntent(trimmed)) {
     return toOptions([newFile, search, ...existingFiles], actionLimit)
   }
-  // Why no create row: a spaced, extension-less phrase is a web query, and a
-  // stray arrow/click on "Create file" leaves an empty `release notes` on disk
-  // that then outranks search as an exact match forever after.
+  // Treat extensionless phrases as search so accidental creation cannot leave an empty file that permanently outranks it.
   if (/\s/.test(trimmed)) {
     return toOptions([search, ...existingFiles], actionLimit)
   }

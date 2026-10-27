@@ -155,12 +155,12 @@ function getHostModelCapabilityLabel(capability: string): string {
 export function getActiveServerModeDescription(allowLocalRuntime: boolean): string {
   return allowLocalRuntime
     ? translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.3f67e8078a',
-        'Use this computer by default. Choose a saved server only when you want supported projects, files, terminals, provider checks, and browser/mobile handoff to run through that server.'
+        'auto.components.settings.serverList.defaultHostHelp',
+        'Existing projects stay where they are.'
       )
     : translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.2c85efb3e8',
-        'Selecting a saved server makes this browser use that paired Orca runtime as its default Host.'
+        'auto.components.settings.serverList.defaultHostWebHelp',
+        'This browser opens new projects on the chosen server.'
       )
 }
 
@@ -182,8 +182,7 @@ export function getRuntimeServerConnectionState(
   if (details.compatibility?.kind === 'blocked') {
     return 'disconnected'
   }
-  // A compatibility verdict is positive runtime evidence even when an older
-  // client omitted the full status payload.
+  // Compatibility verdicts prove runtime availability even when older clients omit full status.
   if (
     details.status === 'ready' &&
     details.runtimeStatus === null &&
@@ -195,9 +194,7 @@ export function getRuntimeServerConnectionState(
     hasStatusEntry: true,
     status: details.runtimeStatus,
     remoteControl: details.remoteControl,
-    // A ready details phase is transport evidence only; status.get may still
-    // have failed or been omitted by an older peer. Error details need
-    // diagnostics to prove transport reachability.
+    // Ready details prove only transport; older/failed probes can omit runtime status, and errors need reachability diagnostics.
     transportStatus: details.status === 'ready' ? 'connected' : 'disconnected'
   })
 }
@@ -238,19 +235,5 @@ export function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionSt
         'auto.components.settings.RuntimeEnvironmentsPane.serverDisconnected',
         'Disconnected'
       )
-  }
-}
-
-export function getRuntimeServerDotClass(state: RuntimeServerConnectionState): string {
-  switch (state) {
-    case 'connected':
-      return 'bg-emerald-500'
-    case 'runtime-unavailable':
-    case 'checking':
-    case 'workspace-window-closed':
-    case 'reconnecting':
-      return 'bg-yellow-500'
-    case 'disconnected':
-      return 'bg-muted-foreground/40'
   }
 }

@@ -1,16 +1,13 @@
-/**
- * Gives a plain fish pane Orca's `codex` function without changing how fish
- * starts: the spawn env prepends an Orca data dir to XDG_DATA_DIRS, fish sources
- * that dir's fish/vendor_conf.d, and the snippet's first act is to undo it.
- */
+/** Use vendor_conf.d to restore XDG_DATA_DIRS and defer agent hooks until after user config. */
 import { getFishCodexShellLaunchPreflight } from '../shared/codex-shell-function'
+import { getFishClaudeShellFunction } from '../shared/claude-shell-function'
 import { MANAGED_DATA_ACCOUNT_FISH_RESTORE } from '../shared/managed-data-account-shell'
 import type { ShellWrapperFile } from './shell-wrapper-file-writer'
 
 /** Exactly what Orca prepended, so the snippet can remove that and nothing else. */
 export const FISH_XDG_DATA_DIRS_PREFIX_ENV = 'ORCA_FISH_XDG_DATA_DIRS_PREFIX'
 
-// Why: the XDG spec default, which fish 4.7+ also scans when XDG_DATA_DIRS is unset or empty.
+// XDG defaults also apply when fish 4.7+ sees an unset or empty XDG_DATA_DIRS.
 const XDG_DATA_DIRS_DEFAULT = '/usr/local/share:/usr/share'
 
 export function getFishXdgDataDir(wrapperRoot: string): string {
@@ -21,8 +18,7 @@ export function getFishVendorConfSnippetPath(wrapperRoot: string): string {
   return `${getFishXdgDataDir(wrapperRoot)}/fish/vendor_conf.d/orca-shell-integration.fish`
 }
 
-// Why: -N/--no-config (also abbreviated or in a flag cluster) skips vendor_conf.d,
-// so the snippet could never undo the env. Over-matching only costs the codex hook.
+// No-config flags prevent vendor_conf.d from restoring the handoff environment.
 export function fishArgsSkipConfig(fishArgs: readonly string[]): boolean {
   return fishArgs.some(
     (arg) => /^-[^-]*N/.test(arg) || (arg.length > 5 && '--no-config'.startsWith(arg))
@@ -39,7 +35,7 @@ export function getFishXdgDataDirsLaunchEnv(
   if (dataDir.includes(':') || fishArgsSkipConfig(fishArgs)) {
     return {}
   }
-  // Why empty counts as unset: the XDG spec and fish 4.7+ read both as the default; older fish only gains the two default vendor dirs.
+  // Empty means XDG defaults in fish 4.7+; older fish gains only those two vendor dirs.
   const prefix = inheritedXdgDataDirs ? dataDir : `${dataDir}:${XDG_DATA_DIRS_DEFAULT}`
   return {
     XDG_DATA_DIRS: inheritedXdgDataDirs ? `${prefix}:${inheritedXdgDataDirs}` : prefix,
@@ -47,10 +43,8 @@ export function getFishXdgDataDirsLaunchEnv(
   }
 }
 
-// Why a function: its variables stay function-scoped, so nothing but the
-// restored XDG_DATA_DIRS and the codex hook outlives this file.
-// Why codex waits for fish_prompt: config.fish has not run yet, and the user's
-// own codex function or PATH entry must be seen first, as in wrapped panes.
+// Scope temporary variables to the function; only the restored env and hooks should survive.
+// Wait for fish_prompt so user-defined functions and PATH changes take precedence.
 export function getFishVendorConfSnippet(): string {
   return `# Orca-generated. Loaded only because Orca put this directory on
 # XDG_DATA_DIRS for one fish launch; the first thing it does is take it off.
@@ -71,7 +65,7 @@ function __orca_fish_xdg_handoff
     function __orca_define_codex --on-event fish_prompt
         functions -e __orca_define_codex
 ${MANAGED_DATA_ACCOUNT_FISH_RESTORE}
-${getFishCodexShellLaunchPreflight()}
+${getFishCodexShellLaunchPreflight()}${getFishClaudeShellFunction()}
     end
 end
 __orca_fish_xdg_handoff

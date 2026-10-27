@@ -4,6 +4,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Switch } from '../ui/switch'
+import { SettingsDisabledControlTooltip } from './SettingsDisabledControlTooltip'
 import { normalizeColor } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -42,13 +43,10 @@ type SettingsRowProps = {
   description?: React.ReactNode
   control: React.ReactNode
   className?: string
-  /** Optional id applied to the label so the control can reference it via aria-labelledby. */
   labelId?: string
-  /** When true, top-align label/description and control. Useful for tall control columns. */
   alignTop?: boolean
 }
 
-/** Two-column row grammar: left min-w-0 label+description, right shrink-0 control. */
 export function SettingsRow({
   label,
   description,
@@ -120,7 +118,6 @@ type SegmentedOption<T extends string | number> = {
   label: React.ReactNode
   disabled?: boolean
   ariaLabel?: string
-  /** Optional hover label describing what the option does. */
   tooltip?: React.ReactNode
 }
 
@@ -131,16 +128,17 @@ type SettingsSegmentedControlProps<T extends string | number> = {
   ariaLabel?: string
   size?: 'sm' | 'md'
   equalWidth?: boolean
+  wrap?: boolean
 }
 
-/** Canonical segmented control for theme/ligatures/cursor/shell/etc. */
 export function SettingsSegmentedControl<T extends string | number>({
   value,
   onChange,
   options,
   ariaLabel,
   size = 'md',
-  equalWidth = false
+  equalWidth = false,
+  wrap = false
 }: SettingsSegmentedControlProps<T>): React.JSX.Element {
   return (
     <div
@@ -148,7 +146,8 @@ export function SettingsSegmentedControl<T extends string | number>({
       aria-label={ariaLabel}
       className={cn(
         'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
-        equalWidth && 'w-full'
+        equalWidth && 'w-full',
+        wrap && 'flex-wrap'
       )}
     >
       {options.map((opt) => {
@@ -160,9 +159,7 @@ export function SettingsSegmentedControl<T extends string | number>({
             role="radio"
             aria-checked={active}
             aria-label={opt.ariaLabel}
-            // Why aria-disabled, not disabled: a native disabled button leaves the tab
-            // order, so keyboard users can never focus it to open the tooltip explaining
-            // why the option is unavailable. The click guard below keeps it inert.
+            // Keep unavailable options focusable for explanatory tooltips; the click guard enforces aria-disabled.
             aria-disabled={opt.disabled}
             onClick={() => {
               if (!opt.disabled) {
@@ -203,7 +200,6 @@ type SettingsBadgeProps = {
   className?: string
 }
 
-/** Tokenized badge for status pills inside settings (e.g. Detected, Not installed). */
 export function SettingsBadge({
   tone = 'neutral',
   children,
@@ -212,7 +208,7 @@ export function SettingsBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium',
+        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-3xs font-medium',
         tone === 'accent'
           ? 'border-foreground/20 bg-foreground/10 text-foreground'
           : tone === 'muted'
@@ -233,7 +229,6 @@ type SettingsSubsectionHeaderProps = {
   className?: string
 }
 
-/** Consistent subsection header: h3 text-sm font-semibold + optional muted description. */
 export function SettingsSubsectionHeader({
   title,
   description,
@@ -275,6 +270,8 @@ type NumberFieldProps = {
   placeholder?: string
   suffix?: string
   className?: string
+  disabled?: boolean
+  disabledReason?: string
 }
 
 export function ColorField({
@@ -323,26 +320,29 @@ export function NumberField({
   onClear,
   placeholder,
   suffix,
-  className
+  className,
+  disabled = false,
+  disabledReason
 }: NumberFieldProps): React.JSX.Element {
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
 
-  // Sync draft when the external value changes (e.g. from another source)
   if (value !== prevValue) {
     setPrevValue(value)
     setDraft(Number.isFinite(value) ? String(value) : '')
   }
 
   const commit = (): void => {
+    if (disabled) {
+      return
+    }
     const trimmed = draft.trim()
     if (trimmed === '') {
       if (onClear) {
-        // Clearable fields treat empty as "unset" so the caller can fall back to its automatic value.
         onClear()
         return
       }
-      // Empty input — reset to current value rather than committing 0
+      // Empty input resets rather than committing zero.
       setDraft(Number.isFinite(value) ? String(value) : '')
       return
     }
@@ -352,7 +352,6 @@ export function NumberField({
       onChange(clamped)
       setDraft(String(clamped))
     } else {
-      // Reset to current value if input is invalid
       setDraft(Number.isFinite(value) ? String(value) : '')
     }
   }
@@ -374,23 +373,26 @@ export function NumberField({
       }
       control={
         <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min={min}
-            max={max}
-            step={step}
-            aria-label={label}
-            placeholder={placeholder}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                commit()
-              }
-            }}
-            className="number-input-clean w-24 tabular-nums"
-          />
+          <SettingsDisabledControlTooltip reason={disabled ? disabledReason : undefined}>
+            <Input
+              type="number"
+              disabled={disabled}
+              min={min}
+              max={max}
+              step={step}
+              aria-label={label}
+              placeholder={placeholder}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commit()
+                }
+              }}
+              className="number-input-clean w-24 tabular-nums"
+            />
+          </SettingsDisabledControlTooltip>
           {suffix ? <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span> : null}
         </div>
       }

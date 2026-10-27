@@ -74,6 +74,8 @@ function renderPane(
             onJumpToWorkspace={vi.fn()}
             onMarkThreadRead={vi.fn()}
             onMarkThreadUnread={vi.fn()}
+            onMarkThreadsRead={vi.fn()}
+            onMarkThreadsUnread={vi.fn()}
             canJumpToWorkspace={() => true}
             showFilterControls={false}
             showOptionsMenu={false}
@@ -215,7 +217,7 @@ describe('ActivityThreadListPane virtualization', () => {
     }
   })
 
-  it('restores the Agents scroll position without storing it in React state', () => {
+  it('restores the caller-held Agents scroll position across remounts', () => {
     const scrollTopRef = { current: 240 }
     renderPane(root, { threads: makeManyThreads(), scrollTopRef })
     const scrollContainer = container.querySelector<HTMLElement>('.overflow-y-auto')

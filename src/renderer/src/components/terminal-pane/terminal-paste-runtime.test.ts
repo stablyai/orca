@@ -1,113 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { isRemoteRuntimePastePtyId, resolveTerminalPasteRuntime } from './terminal-paste-runtime'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import {
+  resolveTerminalPasteRuntime,
+  resolveTerminalPasteRuntimeEnvironmentId
+} from './terminal-paste-runtime'
 
 describe('terminal paste runtime', () => {
-  it('uses the platform-local runtime when no SSH identity is available', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'win32',
-        ptyId: 'pty-1',
-        connectionId: null
-      })
-    ).toEqual({
+  it('uses the platform-local runtime when the transport carries no session metadata', () => {
+    expect(resolveTerminalPasteRuntime({ platform: 'win32', ptyId: 'pty-1' })).toEqual({
       platform: 'win32',
       runtimeKey: 'local:win32',
-      kind: 'local'
-    })
-  })
-
-  it('uses the current connection when the transport has no captured identity', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'linux',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current'
-      })
-    ).toMatchObject({
-      platform: 'linux',
-      runtimeKey: 'ssh:ssh-current',
-      kind: 'ssh'
-    })
-  })
-
-  it('prefers the transport connection captured when the terminal session was created', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'linux',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        transport: { getConnectionId: () => 'ssh-original' }
-      })
-    ).toMatchObject({
-      platform: 'linux',
-      runtimeKey: 'ssh:ssh-original',
-      kind: 'ssh'
-    })
-  })
-
-  it('uses the transport remote platform for SSH paste instead of the local renderer platform', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'win32',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        transport: {
-          getConnectionId: () => 'ssh-original',
-          getRemotePlatform: () => 'linux'
-        }
-      })
-    ).toEqual({
-      platform: 'linux',
-      runtimeKey: 'ssh:ssh-original',
-      kind: 'ssh'
-    })
-  })
-
-  it('uses current SSH remote platform metadata when the transport has no platform capture', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'linux',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        remotePlatform: 'win32'
-      })
-    ).toEqual({
-      platform: 'win32',
-      runtimeKey: 'ssh:ssh-current',
-      kind: 'ssh'
-    })
-  })
-
-  it('ignores remote platform metadata for captured local sessions', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'darwin',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        remotePlatform: 'win32',
-        transport: {
-          getConnectionId: () => null,
-          getRemotePlatform: () => 'linux'
-        }
-      })
-    ).toMatchObject({
-      platform: 'darwin',
-      runtimeKey: 'local:darwin',
-      kind: 'local'
-    })
-  })
-
-  it('keeps transport-captured local sessions local when the worktree later becomes SSH', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'darwin',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        transport: { getConnectionId: () => null }
-      })
-    ).toMatchObject({
-      platform: 'darwin',
-      runtimeKey: 'local:darwin',
       kind: 'local'
     })
   })
@@ -117,9 +19,7 @@ describe('terminal paste runtime', () => {
       resolveTerminalPasteRuntime({
         platform: 'win32',
         ptyId: 'pty-1',
-        connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({
             cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
           })
@@ -139,9 +39,7 @@ describe('terminal paste runtime', () => {
       resolveTerminalPasteRuntime({
         platform: 'win32',
         ptyId: 'pty-1',
-        connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({ shellOverride: 'C:\\Windows\\System32\\wsl.exe' })
         }
       })
@@ -157,9 +55,7 @@ describe('terminal paste runtime', () => {
       resolveTerminalPasteRuntime({
         platform: 'win32',
         ptyId: 'pty-1',
-        connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({
             shellOverride: '  "C:\\Windows\\System32\\wsl.exe" -d Ubuntu-24.04'
           })
@@ -176,9 +72,7 @@ describe('terminal paste runtime', () => {
       resolveTerminalPasteRuntime({
         platform: 'win32',
         ptyId: 'pty-1',
-        connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({
             shellOverride: 'powershell.exe -NoProfile wsl.exe'
           })
@@ -190,32 +84,11 @@ describe('terminal paste runtime', () => {
     })
   })
 
-  it('keeps SSH runtime precedence over local WSL metadata', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'win32',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        transport: {
-          getConnectionId: () => 'ssh-original',
-          getLocalSessionMetadata: () => ({
-            cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
-          })
-        }
-      })
-    ).toMatchObject({
-      runtimeKey: 'ssh:ssh-original',
-      kind: 'ssh'
-    })
-  })
-
-  it('treats remote runtime PTY ids as remote even when an SSH identity is present', () => {
+  it('treats remote runtime PTY ids as remote', () => {
     expect(
       resolveTerminalPasteRuntime({
         platform: 'linux',
         ptyId: 'remote:terminal-1',
-        connectionId: 'ssh-current',
-        transport: { getConnectionId: () => 'ssh-original' },
         isWindowsConpty: true
       })
     ).toEqual({
@@ -231,9 +104,7 @@ describe('terminal paste runtime', () => {
       resolveTerminalPasteRuntime({
         platform: 'win32',
         ptyId: 'remote:env-1@@terminal-1',
-        connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({
             cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
           })
@@ -245,9 +116,27 @@ describe('terminal paste runtime', () => {
     })
   })
 
-  it('recognizes remote runtime PTY ids', () => {
-    expect(isRemoteRuntimePastePtyId('remote:terminal-1')).toBe(true)
-    expect(isRemoteRuntimePastePtyId('pty-1')).toBe(false)
-    expect(isRemoteRuntimePastePtyId(null)).toBe(false)
+  it('uploads to the server a PTY id names, even when two hosts publish the workspace', () => {
+    const twin: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [
+        { id: 'twin', connectionId: null, executionHostId: 'local' },
+        { id: 'twin', connectionId: null, executionHostId: 'runtime:env-b' }
+      ],
+      worktreesByRepo: {
+        twin: [
+          { id: 'twin::/w', repoId: 'twin', hostId: 'local' },
+          { id: 'twin::/w', repoId: 'twin', hostId: 'runtime:env-b' }
+        ]
+      }
+    }
+    expect(
+      resolveTerminalPasteRuntimeEnvironmentId(twin, 'twin::/w', {
+        getPtyId: () => 'remote:env-b@@pty-1'
+      })
+    ).toBe('env-b')
+    expect(
+      resolveTerminalPasteRuntimeEnvironmentId(twin, 'twin::/w', { getPtyId: () => 'pty-1' })
+    ).toBeNull()
   })
 })

@@ -1,37 +1,45 @@
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { extendTranscriptBoundary } from './transcript-file-version'
+import { inTranscriptFileOrder } from './transcript-file-order'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
-import { openTranscriptReadStream, wslGatedStat } from './wsl-transcript-fs-access'
+import { openTranscriptReadStream, transcriptFileStat } from './wsl-transcript-fs-access'
 
 const APPEND_BATCH_MESSAGE_LIMIT = 40
 
 export type IncrementalTranscriptState = {
   offset: number
+  boundary: Buffer
   pendingChunks: Buffer[]
   pendingStart: number
   pendingBytes: number
   droppingOversizedRecord: boolean
+  latestTimestamp: number
 }
 
 export function createIncrementalTranscriptState(): IncrementalTranscriptState {
   return {
     offset: 0,
+    boundary: Buffer.alloc(0),
     pendingChunks: [],
     pendingStart: 0,
     pendingBytes: 0,
-    droppingOversizedRecord: false
+    droppingOversizedRecord: false,
+    latestTimestamp: Number.NEGATIVE_INFINITY
   }
 }
 
 export function resetIncrementalTranscriptState(state: IncrementalTranscriptState): void {
   state.offset = 0
+  state.boundary = Buffer.alloc(0)
   state.pendingChunks.length = 0
   state.pendingStart = 0
   state.pendingBytes = 0
   state.droppingOversizedRecord = false
+  state.latestTimestamp = Number.NEGATIVE_INFINITY
 }
 
 export async function readIncrementalTranscriptMessages(
@@ -41,9 +49,10 @@ export async function readIncrementalTranscriptMessages(
   onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
-  const end = (await wslGatedStat(filePath, 'exact', signal)).size
+  const end = (await transcriptFileStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
     return []
   }
@@ -74,11 +83,11 @@ export async function readIncrementalTranscriptMessages(
       }
       absoluteOffset += chunk.length
       state.offset = absoluteOffset
+      state.boundary = extendTranscriptBoundary(state.boundary, chunk)
     }
     return messages
   } finally {
-    // Early exits (throw/oversized-record bail) must not leak the fd or, on
-    // UNC, the gated handle the generator's finally closes.
+    // Early exits must close both the fd and any UNC gate permit held by the generator.
     stream.destroy()
   }
 
@@ -103,7 +112,7 @@ export async function readIncrementalTranscriptMessages(
   }
 
   function decodeLine(): void {
-    // These owned bytes are decoded synchronously; a single part needs no copy.
+    // A single synchronously decoded chunk is already owned; avoid copying it.
     const bytes =
       state.pendingChunks.length === 1 ? state.pendingChunks[0] : Buffer.concat(state.pendingChunks)
     let line = bytes.toString('utf8')
@@ -122,7 +131,13 @@ export async function readIncrementalTranscriptMessages(
     if (!message) {
       return
     }
-    messages.push(message)
+    const ordered = inTranscriptFileOrder(
+      message,
+      state.latestTimestamp,
+      sourceOrder ? state.pendingStart : undefined
+    )
+    state.latestTimestamp = ordered.latest
+    messages.push(ordered.message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
       onBatch(messages.splice(0))
     }

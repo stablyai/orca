@@ -152,6 +152,24 @@ describe('SkillShareDialog', () => {
     )
   })
 
+  it('explains a skill name that is already in use', async () => {
+    setup(
+      [],
+      false,
+      [skill],
+      {},
+      Promise.reject(
+        new Error(
+          "Error invoking remote method 'skills:prepareShare': Error: skill-share-name-taken"
+        )
+      )
+    )
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'The skill name “private-skill” is already in use. Rename your skill to share it.'
+    )
+  })
+
   it('releases a prepared archive when the dialog unmounts', async () => {
     const { skills, unmount } = setup([])
     await screen.findByRole('heading', { name: 'Share skill' })
@@ -187,8 +205,6 @@ describe('SkillShareDialog', () => {
     expect(notes.value).toBe(value)
   })
 
-  // Why: "what changed in this version?" has no answer on a first publish, so
-  // the field only opens itself when there is a previous version to compare to.
   it('opens release notes only when publishing a new version', async () => {
     const { skills } = setup([managedInstall('global:local')])
     await screen.findByRole('heading', { name: 'Publish new skill version' })

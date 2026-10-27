@@ -1,40 +1,39 @@
-// The agent-session store's rows in the host's chat journal database: every row loaded once at open,
-// exactly the rows a transaction changed written back, and the one-time copy of the records file.
-//
-// A record row this build cannot read is derived as unreadable at each load and never rewritten: a
-// write only touches changed rows, and every mutation of an unreadable id is refused.
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+// Load session/ledger rows once and persist only changed rows inside the journal transaction.
+// Unreadable records remain present and immutable; every mutation of their ids is refused.
 
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   isPersistedAgentSessionRecord,
+  isPersistedAgentSessionObservationRecord,
   type AgentSessionLease
 } from '../../shared/agent-session-record'
-import { normalizeLegacyHandoffRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import { decodePersistedAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import type Database from '../sqlite/sync-database'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
-import {
-  AGENT_SESSION_STORE_SCHEMA_VERSION,
-  type AgentSessionStoreState
-} from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreRowWrites } from './agent-session-store-draft'
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
-import { AgentSessionTabTable, type PersistedAgentSessionTab } from './agent-session-tab-table'
+import {
+  AgentSessionTabTable,
+  type PersistedAgentSessionTab
+} from './agent-session/agent-session-tab-table'
 
-/** "Never recorded" and "recorded, now empty" differ, and #17439's legacy fallback needs the first;
- *  no row count can say which. */
+/** Never-recorded differs from recorded-empty; legacy fallback cannot infer this from row count (#17439). */
 const SESSION_TABS_RECORDED = 'session_tabs_recorded'
 
-/** Latch fields older builds wrote. Nothing reads them, and dropping them keeps a lease this build
- *  writes back from carrying a stale latch to an older build after a downgrade. */
+/** Drop retired lease fields during load so later writes cannot carry them forward. */
 type RetiredAgentSessionLeaseFields = {
   processlessAt?: unknown
   settlementRetryRequired?: unknown
   settlementRetryId?: unknown
+  journalCheckpoint?: unknown
 }
 
 export function withoutRetiredLeaseLatches(lease: AgentSessionLease): AgentSessionLease {
@@ -42,6 +41,7 @@ export function withoutRetiredLeaseLatches(lease: AgentSessionLease): AgentSessi
     processlessAt: _processlessAt,
     settlementRetryRequired: _settlementRetryRequired,
     settlementRetryId: _settlementRetryId,
+    journalCheckpoint: _journalCheckpoint,
     ...current
   }: AgentSessionLease & RetiredAgentSessionLeaseFields = lease
   return current
@@ -76,25 +76,17 @@ function unreadableRecordReason(value: unknown): string {
     : 'unsupported_schema'
 }
 
-/**
- * The whole store, read once. Every lease loads unreconciled: the process that wrote it may still
- * be alive, so nothing persisted grants a writer until this host adjudicates it. Operation, key and
- * tab rows this build cannot read are skipped, as a record row it cannot read is set aside.
- */
-export function loadAgentSessionStoreRows(
-  db: Database.Database,
-  hostId: string
-): AgentSessionStoreState {
+/** Loaded leases are unreconciled until this host proves ownership; persisted state alone grants no writer.
+ * Unreadable operation/key/tab rows are skipped; unreadable records are set aside intact. */
+export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
   const state: AgentSessionStoreState = {
-    schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
-    hostId,
     records: new Map(),
     operations: new Map(),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),
     sessionTabs: null
   }
-  // Only a read-only database a newer build wrote can lack them; its chats then list as none here.
+  // Read-only newer databases may lack tables; report no chats without creating them.
   if (
     !db
       .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?")
@@ -112,13 +104,27 @@ export function loadAgentSessionStoreRows(
     const parsed = parseJson(text(row, 'record_json'))
     const value = parsed.ok ? parsed.value : text(row, 'record_json')
     if (parsed.ok && isReadableAgentSessionStoreRecord(sessionId, value)) {
-      const { record } = normalizeLegacyHandoffRecord(value)
+      const { record } = decodePersistedAgentSessionRecord(value)
       state.records.set(sessionId, {
         ...record,
         lease: { ...withoutRetiredLeaseLatches(record.lease), unreconciled: true }
       })
     } else {
-      state.unreadableRecords.set(sessionId, { reason: unreadableRecordReason(value), raw: value })
+      const decoded =
+        isPersistedAgentSessionObservationRecord(value) && value.sessionId === sessionId
+          ? decodePersistedAgentSessionRecord(structuredClone(value)).record
+          : undefined
+      const conversation = decoded
+        ? agentSessionConversationView({
+            ...decoded,
+            lease: { ...decoded.lease, unreconciled: true }
+          })
+        : undefined
+      state.unreadableRecords.set(sessionId, {
+        reason: unreadableRecordReason(value),
+        raw: value,
+        ...(conversation ? { conversation: Object.freeze(conversation) } : {})
+      })
     }
   }
   for (const row of db
@@ -160,8 +166,6 @@ export function loadAgentSessionStoreRows(
   }
   if (recorded) {
     state.sessionTabs = table
-  } else if (table.sessionIds().length > 0) {
-    state.unrecordedSessionTabs = table
   }
   return state
 }
@@ -182,6 +186,23 @@ function writeTabIndex(
     )
   } else {
     db.prepare('DELETE FROM agent_session_store_meta WHERE key = ?').run(SESSION_TABS_RECORDED)
+  }
+}
+
+// TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
+export function insertAgentSessionOperationRowsIfAbsent(
+  db: Database.Database,
+  rows: AgentSessionStoreRowWrites['operations']['upsert']
+): void {
+  const insert = db.prepare(
+    'INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?) ON CONFLICT(operation_key) DO NOTHING'
+  )
+  for (const [key, json] of rows) {
+    if (insert.run(key, json).changes === 0) {
+      throw agentSessionRefusalError('agent_session_operation_unknown', {
+        reason: 'outcomeUnknown'
+      })
+    }
   }
 }
 
@@ -219,58 +240,5 @@ export function writeAgentSessionStoreRows(
   }
   if (writes.sessionTabs) {
     writeTabIndex(db, writes.sessionTabs)
-  }
-}
-
-/** What the one-time import copies in, each row already serialized. */
-export type AgentSessionStoreImportRows = {
-  records: [sessionId: string, json: string][]
-  operations: [key: string, json: string][]
-  retiredClaimKeys: { keyId: string; retiredAt: number }[]
-  /** Null when the file never recorded a tab index. */
-  sessionTabs: PersistedAgentSessionTab[] | null
-}
-
-/** Inserts each row whose key the database does not hold yet: a chat created while the import was
- *  owed keeps its own rows, and ids never collide with the file's. */
-export function insertAgentSessionStoreRowsIfAbsent(
-  db: Database.Database,
-  rows: AgentSessionStoreImportRows
-): void {
-  const insertRecord = db.prepare(
-    'INSERT OR IGNORE INTO agent_session_records (session_id, record_json) VALUES (?, ?)'
-  )
-  for (const [sessionId, json] of rows.records) {
-    insertRecord.run(sessionId, json)
-  }
-  const insertOperation = db.prepare(
-    'INSERT OR IGNORE INTO agent_session_operations (operation_key, row_json) VALUES (?, ?)'
-  )
-  for (const [key, json] of rows.operations) {
-    insertOperation.run(key, json)
-  }
-  const insertKey = db.prepare(
-    'INSERT OR IGNORE INTO agent_session_retired_claim_keys (key_id, retired_at) VALUES (?, ?)'
-  )
-  for (const { keyId, retiredAt } of rows.retiredClaimKeys) {
-    insertKey.run(keyId, retiredAt)
-  }
-  const tabs = rows.sessionTabs
-  if (tabs) {
-    const insertTab = db.prepare(
-      'INSERT OR IGNORE INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, ?)'
-    )
-    // Ahead of any tab a chat created while the import was owed recorded: these were open first.
-    tabs.forEach(({ tabId, sessionId }, position) =>
-      insertTab.run(tabId, sessionId, position - tabs.length)
-    )
-    db.prepare('INSERT OR IGNORE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-      SESSION_TABS_RECORDED,
-      '1'
-    )
-  } else {
-    // An index a chat created while the import was owed recorded holds none of the file's chats:
-    // "never recorded" sends restore to the profile's tabs, with that chat's tab row beside them.
-    db.prepare('DELETE FROM agent_session_store_meta WHERE key = ?').run(SESSION_TABS_RECORDED)
   }
 }

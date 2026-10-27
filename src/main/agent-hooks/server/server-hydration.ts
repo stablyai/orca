@@ -11,7 +11,7 @@ import {
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
-import type { LastStatusFile } from './server-types'
+import type { EnrichedAgentHookEventPayload, LastStatusFile } from './server-types'
 import {
   authorityCommitmentsMatch,
   dropHydratedIdleClaudeSubagents,
@@ -19,15 +19,15 @@ import {
   sanitizeHydratedEntry,
   sanitizePersistedAuthorityCommitment
 } from './server-persistence-validation'
-import { AgentHookServerReaping } from './server-reaping'
+import { AgentHookServerTabCleanup } from './server-tab-cleanup'
+import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
 
-export abstract class AgentHookServerHydration extends AgentHookServerReaping {
-  /** Hydrate the durable cache, validating every row before it reaches the live listener state. */
+export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup {
   protected hydrateLastStatusFromDisk(): void {
     if (!this.lastStatusFilePath) {
       return
     }
-    // Why: keep hydrate idempotent so a future re-start path can't merge prior-session state.
+    // Repeated hydration must not merge state from an earlier runtime.
     clearLegacyAgentStatuses(this.state)
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
@@ -70,7 +70,6 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
     let dropped = 0
     let prunedLegacyClaudeSubagents = 0
     let scrubbedLegacyLaunchTokens = 0
-    // Why: drop entries older than HYDRATE_MAX_AGE_MS to bound disk growth (one Date.now() for a consistent cutoff).
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
     for (const [paneKey, rawEntry] of Object.entries(entries)) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -102,7 +101,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           entry.payload = hydratedPayload
         }
         if (entry.payload.state !== 'done') {
-          // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.
+          // Completion may have occurred offline; restored work needs confirmation.
           entry.restoredUnconfirmed = true
         }
         admitLegacyAgentStatus(
@@ -112,14 +111,14 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           AGENT_STATUS_PERSISTED_HYDRATION_MODE
         )
         if (entry.connectionId) {
-          // Why: a restart can see an earlier wall clock; seed ordering so new events stay after disk state.
+          // Seed ordering from disk even if the wall clock moved backward.
           const previousWatermark = this.connectionTimestampWatermarkById.get(entry.connectionId)
           this.connectionTimestampWatermarkById.set(
             entry.connectionId,
             Math.max(previousWatermark ?? -1, entry.receivedAt)
           )
         }
-        // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
+        // Seed child hierarchy now; provider reconciliation removes stale entries.
         if (entry.payload.agentType === 'codex') {
           seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
         } else if (entry.payload.agentType === 'claude') {
@@ -136,6 +135,9 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
       } else {
         dropped += 1
       }
+    }
+    for (const exit of readPersistedAgentExits(file.agentExits, ttlCutoff)) {
+      recordAgentExit(this.agentExitedAtByPaneKey, exit.paneKeys, exit, exit.at)
     }
     for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -160,11 +162,27 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
       )
     }
     if (dropped > 0 || prunedLegacyClaudeSubagents > 0 || scrubbedLegacyLaunchTokens > 0) {
-      // Why: persist load-time pruning and bearer scrubbing once.
       this.runStatusPersist()
     } else if (hydrated > 0) {
-      // Why: prime dedup from raw bytes (not re-serialized) only when hydration was lossless.
-      this.lastWrittenJson = raw
+      // Reuse raw bytes for dedup only after lossless hydration.
+      this.primeStatusPersistBaseline(raw)
     }
+  }
+
+  listUnconfirmedRestoredStatuses(): EnrichedAgentHookEventPayload[] {
+    const rows: EnrichedAgentHookEventPayload[] = []
+    for (const [paneKey, row] of this.state.lastStatusByPaneKey) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+      const enriched = row as EnrichedAgentHookEventPayload
+      // Resume identity alone makes no work claim.
+      if (
+        enriched.restoredUnconfirmed &&
+        !enriched.providerSessionOnly &&
+        !this.runtimeObservedStatusPaneKeys.has(paneKey)
+      ) {
+        rows.push(enriched)
+      }
+    }
+    return rows
   }
 }

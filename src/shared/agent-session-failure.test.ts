@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
+  agentSessionFailureDetailText,
   providerDiagnostic,
   providerDiagnosticOf,
   agentSessionFailureFact,
@@ -9,6 +10,7 @@ import {
   readWholeAgentSessionFailureFact,
   withProviderDiagnostic
 } from './agent-session-failure'
+import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
 import { AGENT_SESSION_REFUSAL_REASONS } from './agent-session-refusal-details'
 
 describe('provider diagnostics', () => {
@@ -45,6 +47,16 @@ describe('provider diagnostics', () => {
     ).toBe(undefined)
     expect(providerDiagnosticOf('a string')).toBeUndefined()
   })
+
+  it("puts a start's log tail behind Details, but not the raw frame a retry row already shows", () => {
+    const tail = { text: '(code 1)\nclaude: unknown option', audience: 'log' as const }
+    expect(agentSessionFailureDetailText({ kind: 'providerStartFailed', detail: tail })).toBe(
+      tail.text
+    )
+    expect(agentSessionFailureDetailText({ kind: 'providerRetrying', detail: tail })).toBe(
+      undefined
+    )
+  })
 })
 
 describe('reading a failure fact', () => {
@@ -62,11 +74,58 @@ describe('reading a failure fact', () => {
     })
   })
 
+  it('retains safe argument details through schema admission and falls back for unknown details', () => {
+    const fact = {
+      kind: 'startFailed',
+      argumentProblem: { agent: 'Codex', option: '--remote', problem: 'unsupportedOption' }
+    }
+    expect(readWholeAgentSessionFailureFact(AgentSessionFailureFactSchema.parse(fact))).toEqual(
+      fact
+    )
+    expect(readWholeAgentSessionFailureFact({ kind: 'startFailed' })).toEqual({
+      kind: 'startFailed'
+    })
+    for (const argumentProblem of [
+      { agent: 'Future', option: '--remote', problem: 'unsupportedOption' },
+      { agent: 'Codex', option: '--remote', problem: 'futureProblem' },
+      { agent: 'Codex', option: '--remote=private', problem: 'unsupportedOption' }
+    ]) {
+      expect(
+        readWholeAgentSessionFailureFact({ kind: 'startFailed', argumentProblem })
+      ).toBeUndefined()
+      expect(readAgentSessionFailureFact({ kind: 'startFailed', argumentProblem })).toEqual({
+        kind: 'startFailed'
+      })
+    }
+  })
+
+  it('keeps a timed-out request through schema admission and drops one it cannot show', () => {
+    const fact = {
+      kind: 'startFailed',
+      requestTimeout: { method: 'thread/start', timeoutMs: 30_000 }
+    }
+    expect(readWholeAgentSessionFailureFact(AgentSessionFailureFactSchema.parse(fact))).toEqual(
+      fact
+    )
+    for (const requestTimeout of [
+      { method: 'thread/start because of <b>', timeoutMs: 30_000 },
+      { method: 'thread/start', timeoutMs: -1 },
+      { method: 'thread/start' }
+    ]) {
+      expect(
+        readWholeAgentSessionFailureFact({ kind: 'startFailed', requestTimeout })
+      ).toBeUndefined()
+      expect(readAgentSessionFailureFact({ kind: 'startFailed', requestTimeout })).toEqual({
+        kind: 'startFailed'
+      })
+    }
+  })
+
   it('keeps what a provider said it is retrying, and only that', () => {
     expect(
       readAgentSessionFailureFact({
         kind: 'providerRetrying',
-        retry: { error: 'rate_limit', status: 429, attempt: 3 }
+        retry: { error: 'rate_limit', status: 429, retryDelayMs: 600 }
       })
     ).toEqual({ kind: 'providerRetrying', retry: { error: 'rate_limit', status: 429 } })
     expect(
@@ -104,25 +163,72 @@ describe('reading a failure fact', () => {
       })
     ).toEqual({ kind: 'restartFailed', refusal: { code: 'agent_session_conflict' } })
   })
+
+  it('keeps which retry it is, and its maximum only where it bounds that retry', () => {
+    expect(readProviderRetry({ attempt: 3, maxRetries: 10 })).toEqual({
+      attempt: 3,
+      maxRetries: 10
+    })
+    expect(readProviderRetry({ status: 502, maxRetries: 10 })).toEqual({ status: 502 })
+    expect(readProviderRetry({ attempt: 12, maxRetries: 10 })).toEqual({ attempt: 12 })
+    expect(readProviderRetry({ attempt: 0, maxRetries: 10 })).toBeUndefined()
+    expect(readProviderRetry({ attempt: 2.5, status: 502 })).toEqual({ status: 502 })
+  })
 })
 
 describe('reading all of a failure fact', () => {
   it('reads every part of a fact the host built, as it arrives off the wire', () => {
-    for (const fact of [
-      agentSessionFailureFact('startFailed', {
-        refusal: { code: 'agent_session_conflict', details: { reason: 'claimConflicted' } }
-      }),
-      agentSessionFailureFact('providerRejected', {
-        detail: providerDiagnostic('Image type .bmp', 'person')
-      }),
-      agentSessionFailureFact('attachmentInvalid', {
-        attachment: { reason: 'tooLarge', limit: 5 * 1024 * 1024 }
-      }),
-      agentSessionFailureFact('providerRetrying', {
-        retry: readProviderRetry({ error: 'rate_limit', status: 429 })
-      })
+    for (const { fact, expected } of [
+      {
+        fact: agentSessionFailureFact('startFailed', {
+          refusal: { code: 'agent_session_conflict', details: { reason: 'claimConflicted' } }
+        }),
+        expected: {
+          kind: 'startFailed',
+          refusal: { code: 'agent_session_conflict', details: { reason: 'claimConflicted' } }
+        }
+      },
+      {
+        fact: agentSessionFailureFact('providerRejected', {
+          detail: providerDiagnostic('Image type .bmp', 'person')
+        }),
+        expected: {
+          kind: 'providerRejected',
+          detail: { text: 'Image type .bmp', audience: 'person' }
+        }
+      },
+      {
+        fact: agentSessionFailureFact('attachmentInvalid', {
+          attachment: { reason: 'tooLarge', limit: 5 * 1024 * 1024 }
+        }),
+        expected: {
+          kind: 'attachmentInvalid',
+          attachment: { reason: 'tooLarge', limit: 5 * 1024 * 1024 }
+        }
+      },
+      {
+        fact: agentSessionFailureFact('providerRetrying', {
+          retry: readProviderRetry({ error: 'rate_limit', status: 429 })
+        }),
+        expected: { kind: 'providerRetrying', retry: { error: 'rate_limit', status: 429 } }
+      },
+      {
+        fact: agentSessionFailureFact('providerRetrying', {
+          retry: readProviderRetry({
+            error: 'server_error',
+            status: 502,
+            attempt: 3,
+            maxRetries: 10
+          })
+        }),
+        expected: {
+          kind: 'providerRetrying',
+          retry: { error: 'server_error', status: 502, attempt: 3, maxRetries: 10 }
+        }
+      }
     ]) {
-      expect(readWholeAgentSessionFailureFact(JSON.parse(JSON.stringify(fact)))).toEqual(fact)
+      expect(fact).toEqual(expected)
+      expect(readWholeAgentSessionFailureFact(JSON.parse(JSON.stringify(fact)))).toEqual(expected)
     }
     // Every reason a refusal can name, on the code that names it.
     for (const [code, reasons] of Object.entries(AGENT_SESSION_REFUSAL_REASONS)) {

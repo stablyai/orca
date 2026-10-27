@@ -12,8 +12,7 @@ import { MobileRelayBetaNotice } from './MobileRelayBetaNotice'
 export { getMobileSettingsPaneSearchEntries }
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_APK_URL =
-  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.48/app-release.apk'
+const ORCA_ANDROID_APK_URL = 'https://www.onorca.dev/download/android'
 
 export function MobileSettingsPane(): React.JSX.Element {
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
@@ -46,8 +45,7 @@ export function MobileSettingsPane(): React.JSX.Element {
             {' · '}
             <button
               type="button"
-              // Why: Android is moving to Google Play soon, but until then
-              // link directly to the pinned APK asset for the current mobile release.
+              // Link the pinned release APK until Android distribution moves to Google Play.
               onClick={() => void window.api.shell.openUrl(ORCA_ANDROID_APK_URL)}
               className="cursor-pointer underline underline-offset-2 hover:text-foreground"
             >

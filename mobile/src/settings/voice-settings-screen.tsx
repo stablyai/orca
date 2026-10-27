@@ -5,7 +5,9 @@ import type { VoiceSettingsOperations } from './voice-settings-operations'
 import { voiceSettingsStyles as styles } from './voice-settings-styles'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../components/BottomDrawer'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { VoiceModelList } from '../components/VoiceModelList'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
@@ -32,6 +34,7 @@ export default function VoiceSettingsScreen({
   focused: boolean
   onBack: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const insets = useSafeAreaInsets()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,9 +47,7 @@ export default function VoiceSettingsScreen({
       return false
     }
     const epoch = requestEpoch.current
-    // Own the spinner from the read that clears it, so a retry after a failed load shows
-    // the spinner again instead of the stale error card. Reads are serialised by
-    // DictationSetupPollController, so no in-flight read can clear another's flag.
+    // The serialized read owns its spinner so retries hide stale errors and no competing read clears it.
     setLoading(true)
     try {
       const next = await operations.load()
@@ -79,7 +80,6 @@ export default function VoiceSettingsScreen({
       }
       requestEpoch.current += 1
       setError(null)
-      // Optimistic flip so the control responds instantly; reconcile below.
       const { enabled, dictationMode } = params
       setSetup((prev) =>
         prev
@@ -229,25 +229,12 @@ export default function VoiceSettingsScreen({
                   Toggle: press once to start, again to stop. Hold: dictate while held.
                 </Text>
               </View>
-              <View style={styles.segmented}>
-                {DICTATION_MODES.map((mode) => {
-                  const active = setup.dictationMode === mode.value
-                  return (
-                    <Pressable
-                      key={mode.value}
-                      accessibilityRole="radio"
-                      aria-checked={active}
-                      testID={`voice-mode-${mode.value}`}
-                      onPress={() => void configure({ dictationMode: mode.value })}
-                      style={[styles.segment, active && styles.segmentActive]}
-                    >
-                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                        {mode.label}
-                      </Text>
-                    </Pressable>
-                  )
-                })}
-              </View>
+              <MobileSegmentedControl
+                segments={DICTATION_MODES}
+                selected={setup.dictationMode}
+                onSelect={(dictationMode) => void configure({ dictationMode })}
+                testIDPrefix="voice-mode-"
+              />
             </View>
           </View>
 

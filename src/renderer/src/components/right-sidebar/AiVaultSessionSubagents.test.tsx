@@ -79,8 +79,7 @@ describe('SessionSubagentsSection', () => {
     await act(async () => {})
     expect(queryByText('First pass')).not.toBeNull()
 
-    // Second fetch stays pending: the previous rows must remain visible
-    // instead of flickering back to the hidden loading state.
+    // Hold the replacement read pending to verify retained rows do not flicker away.
     let resolveSecond: (result: AiVaultSubagentListResult) => void = () => {}
     listSubagentSessions.mockImplementationOnce(
       () => new Promise((resolve) => (resolveSecond = resolve))
@@ -149,7 +148,7 @@ describe('independent child resume', () => {
       <SessionSubagentsSection session={makeSession({ agent: 'omp' })} resume={resume} />
     )
     await act(async () => {})
-    fireEvent.click(getByRole('button', { name: 'Resume in Worktree' }))
+    fireEvent.click(getByRole('button', { name: 'Resume in Folder' }))
     expect(resume.getState).toHaveBeenCalledWith(child)
     expect(resume.onResume).toHaveBeenCalledExactlyOnceWith(child, 'folder:repo')
   })
@@ -220,7 +219,7 @@ describe('nested OMP history', () => {
       parentFilePath: child.filePath
     })
     expect(view.queryByText('Research')).not.toBeNull()
-    fireEvent.click(view.getAllByRole('button', { name: 'Resume in Worktree' })[1])
+    fireEvent.click(view.getAllByRole('button', { name: 'Resume in Folder' })[1])
     expect(resume.onResume).toHaveBeenCalledExactlyOnceWith(grandchild, 'folder:repo')
   })
 

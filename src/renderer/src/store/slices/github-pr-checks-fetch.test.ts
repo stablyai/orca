@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import { prChecksCacheSuffix, prCommentsCacheSuffix } from '../github/cache-identity'
 import {
   createTestStore,
@@ -227,6 +228,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     mockApi.gh.prChecks.mockResolvedValue([
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
+    persistGitHubCacheChanges(store)
 
     await store
       .getState()
@@ -266,6 +268,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       }
     })
 
+    persistGitHubCacheChanges(store)
     await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
     await vi.advanceTimersByTimeAsync(1000)
 
@@ -571,7 +574,10 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
     )
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      subscriptionId: expect.any(String),
       selector: 'env-1',
+      expectedEnvironmentPairingRevision: undefined,
+      expectedEnvironmentRuntimeId: undefined,
       method: 'github.prCheckDetails',
       params: {
         repo: repoId,
@@ -582,6 +588,9 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
         prRepo: { owner: 'Acme', repo: 'Widgets' }
       },
       timeoutMs: 30_000
+    })
+    expect(mockApi.runtimeEnvironments.cancelSubscription).toHaveBeenCalledWith({
+      subscriptionId: expect.any(String)
     })
     expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
   })
@@ -665,7 +674,10 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
 
       await vi.advanceTimersByTimeAsync(20_000)
       expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        subscriptionId: expect.any(String),
         selector: 'env-1',
+        expectedEnvironmentPairingRevision: undefined,
+        expectedEnvironmentRuntimeId: undefined,
         method: 'github.prCheckDetails',
         params: {
           repo: repoId,

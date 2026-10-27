@@ -30,8 +30,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-router', () => ({
   router: { replace: vi.fn() },
-  // `ProtocolBlockScreen` reaches the router through the navigation handoff now, and the handoff's
-  // native form is this hook. Its web form is what posts the target to the shell.
+  // Mock native handoff’s router hook; web sibling posts target to shell.
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() })
 }))
 
@@ -101,13 +100,22 @@ describe('ProtocolBlockScreen', () => {
     expect(desktop).toContain('Open GitHub Releases')
   })
 
-  it('sends a host without a bundle to the desktop update', () => {
-    const output = render({ kind: 'blocked', reason: 'bundle-unavailable' })
-    expect(output).toContain('Update Orca on your computer')
-    expect(output).toContain(
-      'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
-    )
-    expect(primaryActionUrl()).toBe(RELEASES_URL)
+  it('tells a host without a bundle, or without this screen, the desktop is too old', () => {
+    for (const reason of ['bundle-unavailable', 'page-route-unlisted'] as const) {
+      const output = render({ kind: 'blocked', reason })
+      expect(output).toContain('Update Orca on your computer')
+      expect(output).toContain(
+        'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+      )
+      expect(output).not.toContain('does not include the mobile workspace')
+      expect(primaryActionUrl()).toBe(RELEASES_URL)
+    }
+  })
+
+  it('sends a screen that needs a grant this app lacks to the mobile update', () => {
+    const output = render({ kind: 'blocked', reason: 'page-route-grant-missing' })
+    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain("This desktop's mobile workspace needs a newer Orca Mobile app.")
   })
 
   it('sends an unknown manifest schema to the mobile update', () => {

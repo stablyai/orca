@@ -42,10 +42,13 @@ async function inspect(rawName: string, command: string | null) {
   readSnapshot.mockResolvedValue({ rows: table(command), capturedAgeMs: 0 })
   return inspectTerminalHostProcess({
     sessionId: 'busy-tab',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unmarked-foreground fixture supplies the members inspection exercises; daemon lifecycle is outside this test.
     session: {
       pid: 100,
       incarnationId: 'incarnation-1',
       isAlive: true,
+      confirmForegroundProcess: async () => rawName,
+      inspectChildProcesses: () => 'unverifiable' as const,
       getForegroundProcess: () => rawName
     } as unknown as Session,
     authorityGeneration: 'generation-1',
@@ -88,5 +91,20 @@ describe.each(['linux', 'darwin'] as const)('daemon ordinary foreground on %s', 
       hasChildProcesses: false,
       foregroundProcessEvidence: { verdict: 'live', processName: null }
     })
+  })
+})
+
+describe('daemon ordinary foreground on win32', () => {
+  it('keeps the running name without starting a ps process-table read', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    expect(await inspect('vim', null)).toMatchObject({
+      foregroundProcess: 'vim',
+      hasChildProcesses: true,
+      foregroundProcessEvidence: {
+        verdict: 'unverifiable',
+        reason: 'windows_ssh_foreground_unavailable'
+      }
+    })
+    expect(readSnapshot).not.toHaveBeenCalled()
   })
 })

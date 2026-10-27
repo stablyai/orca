@@ -3,7 +3,34 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
+import { useNativeChatNamingFailure } from '../tab-bar/use-native-chat-naming-failure'
+import { NameGenerationFailedDialog, AutoRenameFailedDialog } from './AutoRenameFailedDialog'
+
+vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+  useStructuredAgentSessionHostCapabilityState: () => 'unsupported'
+}))
+vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+  getStructuredAgentSessionStatusFeed: () => null
+}))
+function ChatFailure({ failedAt }: { failedAt: number }) {
+  const controls = useNativeChatNamingFailure({
+    executionHostId: 'local',
+    sessionId: 'chat',
+    error: { message: 'No name', failedAt }
+  })
+  return (
+    controls && (
+      <NameGenerationFailedDialog
+        open
+        onOpenChange={() => {}}
+        title="Chat name"
+        description="Failure"
+        error={controls.message}
+        readFullOutput={controls.readFullOutput}
+      />
+    )
+  )
+}
 
 const getBranchRenameFailureOutput =
   vi.fn<(args: { worktreeId: string }) => Promise<string | null>>()
@@ -16,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   ;(window as unknown as { api: unknown }).api = {
     worktrees: { getBranchRenameFailureOutput },
+    nativeChat: { getConversationNameFailureOutput: getBranchRenameFailureOutput },
     ui: { writeClipboardText }
   }
   container = document.createElement('div')
@@ -58,6 +86,20 @@ describe('AutoRenameFailedDialog full output', () => {
     expect(document.body.textContent).toContain('Use /login to log in.')
   })
 
+  it('refreshes and copies a new chat diagnostic while its identical-message dialog stays open', async () => {
+    getBranchRenameFailureOutput.mockResolvedValueOnce('run A output')
+    await act(async () => root.render(<ChatFailure failedAt={1} />))
+    expect(document.body.textContent).toContain('run A output')
+    getBranchRenameFailureOutput.mockResolvedValueOnce('run B output')
+    await act(async () => root.render(<ChatFailure failedAt={2} />))
+    expect(document.body.textContent).not.toContain('run A output')
+    expect(document.body.textContent).toContain('run B output')
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('button[aria-label="Copy error"]')?.click()
+    )
+    expect(writeClipboardText).toHaveBeenCalledWith('run B output')
+  })
+
   it('falls back to the persisted excerpt when main holds no capture', async () => {
     getBranchRenameFailureOutput.mockResolvedValueOnce(null)
     await renderDialog()
@@ -84,8 +126,7 @@ describe('AutoRenameFailedDialog full output', () => {
   })
 })
 
-// Why: happy-dom does no intrinsic sizing, so assert the two declarations that
-// keep an unbroken token from widening DialogContent's grid column instead.
+// happy-dom has no intrinsic sizing; verify the declarations that contain unbroken output.
 describe('AutoRenameFailedDialog unbroken output containment', () => {
   it('keeps the output surface shrinkable and breakable mid-token', async () => {
     getBranchRenameFailureOutput.mockResolvedValueOnce(`{"error":"${'A'.repeat(1000)}"}`)
@@ -96,12 +137,11 @@ describe('AutoRenameFailedDialog unbroken output containment', () => {
     expect(output).toBeTruthy()
     expect(output?.textContent).toContain('A'.repeat(1000))
 
-    // `break-words` (overflow-wrap: break-word) wraps painted text but leaves
-    // min-content at the full token width; only `anywhere` shrinks it.
+    // break-word preserves token min-content width; anywhere shrinks it.
     expect(output?.className).toContain('[overflow-wrap:anywhere]')
     expect(output?.className).not.toContain('break-words')
 
-    // DialogContent is a grid, so its child needs min-w-0 to shrink below min-content.
+    // Grid children need min-w-0 to shrink below min-content.
     const gridChild = Array.from(dialog?.children ?? []).find((child) =>
       child.contains(output ?? null)
     )

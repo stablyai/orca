@@ -6,22 +6,22 @@ import { agentSessionSendSubmission } from '../../../../shared/agent-session-wir
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import type { RpcContext } from '../core'
-import { requireStructuredHost, structuredCallerFor } from './structured-agent-session-gate'
+import { requireStructuredSessionHost, structuredCallerFor } from './structured-agent-session-gate'
+import { readsQueuedImageCards } from './structured-agent-session-queued-image-capability'
 
-/**
- * A send answers once the host accepts it. A client that predates that answer cannot show a
- * message rejected after it, so its reply is held until the message is handed over or rejected —
- * or queued behind a running command such as `/compact`, which could outlast the client's own
- * request timeout; one that predates pending replies at all waits, as before, for the provider's
- * answer.
- */
+/** Older clients wait past acceptance until handoff/rejection because they cannot show later failure.
+ * Command-queued replies avoid request timeout; clients predating pending replies still wait for provider response. */
 export async function sendStructuredAgentSessionForClient(
   params: Parameters<StructuredAgentSessionHost['send']>[1],
   context: RpcContext
 ) {
-  const host = requireStructuredHost(context)
-  // Only a client's own send lifts a Stop's queue pause; host-internal senders never do.
-  const result = await host.send(structuredCallerFor(context), { ...params, userSend: true })
+  const host = requireStructuredSessionHost(context, params.envelope.sessionId)
+  // Person provenance lets undelivered text recover as an ordinary queued card.
+  const result = await host.send(structuredCallerFor(context), {
+    ...params,
+    userSend: true,
+    queuedImageCards: readsQueuedImageCards(context)
+  })
   const capabilities = context.clientCapabilities ?? []
   if (
     !result.ok ||

@@ -223,4 +223,67 @@ describe('mobile file preview lifetime', () => {
       }
     }
   )
+
+  it('keeps a ready preview mounted across a revisit and a failed refresh', async () => {
+    const session = previewSession()
+    const tab = fileTab('revisit')
+    const ready: FileDocState = {
+      status: 'ready',
+      kind: 'file',
+      content: 'Same',
+      truncated: false,
+      byteLength: 4
+    }
+    try {
+      session.open(tab, ready)
+      const unchanged = session.read(tab)
+      expect(session.docs().get(tab.id)).toBe(ready)
+      session.reply(0, textReply('Same'))
+      await unchanged
+      expect(session.docs().get(tab.id)).toBe(ready)
+
+      const failed = session.read(tab)
+      session.reply(1, refusedReply())
+      await failed
+      expect(session.docs().get(tab.id)).toBe(ready)
+
+      const changed = session.read(tab)
+      session.reply(2, textReply('Changed'))
+      await changed
+      expect(session.docs().get(tab.id)).toMatchObject({
+        status: 'ready',
+        kind: 'file',
+        content: 'Changed'
+      })
+    } finally {
+      session.dispose()
+    }
+  })
+
+  it('keeps the newer file reread when an older one finishes later', async () => {
+    const session = previewSession()
+    const tab = fileTab('raced')
+    const ready: FileDocState = {
+      status: 'ready',
+      kind: 'file',
+      content: 'Cached',
+      truncated: false,
+      byteLength: 6
+    }
+    try {
+      session.open(tab, ready)
+      const older = session.read(tab)
+      const newer = session.read(tab)
+      expect(session.docs().get(tab.id)).toBe(ready)
+      session.reply(1, textReply('New content'))
+      await newer
+      const current = session.docs().get(tab.id)
+      session.reply(0, textReply('Old content'))
+      await older
+      expect(session.docs().get(tab.id)).toBe(current)
+      expect(current).toMatchObject({ content: 'New content' })
+    } finally {
+      session.dispose()
+    }
+  })
 })

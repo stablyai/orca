@@ -14,12 +14,13 @@ import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  /** Account `projects` folders the System default does not link; resolved by the host process. */
+  claudeProfileProjectsDirs?: readonly string[]
   codebuddyProjectsDir?: string
   qoderProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
-  // Why: tests inject a sandbox "real ~/.codex" so real-home attribution
-  // (codexHome null → unprefixed resume) is testable without the user's home.
+  // Override the default Codex home to test unprefixed resume commands without reading user data.
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
   wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
@@ -30,10 +31,9 @@ export type AiVaultScanOptions = {
   copilotSessionsDir?: string
   cursorProjectsDir?: string
   opencodeStorageDir?: string
-  // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
-  // here so they don't depend on the real ~/.local/share/opencode.
   opencodeDbPaths?: readonly string[]
-  /** Test override for the ZCode CLI's OpenCode-shaped SQLite database. */
+  /** Managed account OpenCode data directories; resolved by the host process. */
+  opencodeAccountDataDirs?: readonly string[]
   zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
@@ -50,16 +50,14 @@ export type AiVaultScanOptions = {
   kimiSessionsDir?: string
   museSessionsDir?: string
   jcodeSessionsDir?: string
+  kiroSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
-  // Active workspace/project paths whose sessions must be included regardless of
-  // the recency cap (see discoverInScopeCwdBucketFiles).
+  // Include sessions for these workspace paths beyond the recency cap (AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
-  // Superseded/cancelled scans stop between parse batches instead of parsing
-  // every remaining transcript for a caller that already left.
   signal?: AbortSignal
 }
 
@@ -69,16 +67,10 @@ export type FileWithMtime = {
   path: string
   mtimeMs: number
   modifiedAt: string
-  // Present when discovery statted the file; lets the parse cache detect
-  // unchanged/truncated files without a second stat. Synthetic candidates
-  // such as OpenCode SQLite rows omit it. The transcript's own length: a byte
-  // offset into it may be compared against this directly.
+  // Discovery’s transcript byte length avoids restats; synthetic database rows omit it.
   sizeBytes?: number
-  // What discovery saw of the agent's sibling file, tracked apart from the
-  // transcript's own stat (see session-sidecar-stat.ts).
   sidecar?: SessionSidecarObservation
-  // Present when discovery can prove filesystem identity. Codex dual-root
-  // scans use a multi-link inode to collapse only actual hardlink aliases.
+  // Codex dual-root scans use filesystem identity to deduplicate hardlink aliases.
   dev?: number
   ino?: number
   nlink?: number
@@ -95,6 +87,8 @@ export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
+  scopeFiles?: FileWithMtime[]
 }
 
 export type SessionParseResult = {
@@ -107,22 +101,15 @@ export type ResumableParseFinalizeOptions = {
   executionHostPlatform?: NodeJS.Platform | null
 }
 
-// One in-progress parse of an append-only transcript, resumable across scans.
-// The parse cache stores a state per file and feeds it only newly appended
-// lines; `clone` must deep-copy anything `consumeLine` mutates so a failed
-// read or a display-only trailing line can never corrupt the cached fold.
+// clone() must isolate mutable fold state so failed or display-only reads cannot corrupt the cache.
 export type ResumableSessionParseState = {
   consumeLine(line: string): void
-  // Optional zero-copy path for parsers that can reject irrelevant records
-  // from a bounded byte prefix before decoding a potentially huge JSONL line.
+  // Reject irrelevant records by bounded byte prefix before decoding large JSONL lines.
   consumeLineBytes?(line: Buffer): void
-  // Lets a parser terminate an excluded transcript without draining the file.
   shouldStop?(): boolean
-  // What the fold knows about the session right now, for a consumer that has to
-  // commit before the read ends (see TranscriptSessionIdentity).
+  // Expose identity to consumers that commit before the transcript read ends.
   identity?(): TranscriptSessionIdentity | null
   clone(): ResumableSessionParseState
-  // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void
   finalize(
     platform: NodeJS.Platform,
@@ -132,8 +119,7 @@ export type ResumableSessionParseState = {
 
 export type SessionAccumulator = {
   agent: AiVaultAgent
-  // Every decoded message this fold sees also goes here, for the reader's
-  // consumers. Shared by clones on purpose: one read, one message stream.
+  // Clones share the sink so one transcript read produces one message stream.
   messages: TranscriptMessageSink
   sessionId: string
   title: string | null
@@ -148,8 +134,7 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
-  // True once an older message fell out of the newest-N preview window, so the
-  // earliest preview turn is no longer the session's opening ask.
+  // The earliest retained preview is no longer the opening turn.
   previewMessagesTruncated: boolean
   antigravityOpeningPrompt?: AiVaultSession['antigravityOpeningPrompt'] | null
   firstUserPrompt: string | null

@@ -1,5 +1,5 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
-import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
+import { spawnProcess } from '@orca/process-host'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { reportComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { isReplayableTool } from './desktop-script-action'
 import type { BridgeRequest, BridgeResponse } from './desktop-script-provider-types'
@@ -23,7 +23,7 @@ import {
 const REQUEST_TIMEOUT_MS = 30_000
 const IDLE_SHUTDOWN_MS = 120_000
 
-/** Code the client keys on to serve this one operation from the one-shot bridge. */
+/** Signals that this operation may fall back to the one-shot bridge. */
 export const RUNTIME_HOST_UNAVAILABLE = 'runtime_host_unavailable'
 
 export type DesktopScriptRuntimeHostOptions = {
@@ -47,34 +47,14 @@ export function isRuntimeHostUnavailable(error: unknown): boolean {
   return error instanceof RuntimeClientError && error.code === RUNTIME_HOST_UNAVAILABLE
 }
 
-/**
- * One long-lived `runtime.ps1 -Serve` process serving every computer-use
- * operation over NDJSON on stdin/stdout.
- *
- * Why persistent: the one-shot bridge started a powershell.exe per click, and
- * each one re-emitted the script's inline `Add-Type` P/Invoke assembly, which
- * Defender for Endpoint reports as suspicious MSIL emission alongside the
- * screen capture. Compiling once per session collapses a burst of short-lived
- * PIDs into a single process.
- *
- * Requests are strictly serialized, and each carries an id the helper echoes.
- * Serialization alone would leave a single stray line answering every later
- * request with the previous response — silently acting on stale element
- * indexes, with no error raised — so the id is checked and a mismatch is fatal
- * to the child rather than merely logged.
- */
+/** Reuse one PowerShell process to avoid repeated Add-Type compilation and EDR process bursts. */
 export class DesktopScriptRuntimeHost {
   private channel: DesktopScriptServeChannel | null = null
   private pending: PendingRequest | null = null
   private idleTimer: NodeJS.Timeout | null = null
   private childReady = false
   private childAnswered = false
-  /**
-   * Set once any helper has announced itself, which proves the script on disk
-   * speaks the ready protocol. Until then a mutating request is not replayed
-   * even on a clean start failure, because ORCA_COMPUTER_DESKTOP_SCRIPT_PROVIDER_PATH
-   * can point at an older runtime.ps1 that simply never announces.
-   */
+  /** Legacy override scripts may omit readiness; require protocol proof before replaying mutations. */
   private readyProtocolConfirmed = false
   private disposed = false
   private nextRequestId = 1
@@ -101,7 +81,6 @@ export class DesktopScriptRuntimeHost {
     return this.queue.enqueue(() => this.send(request))
   }
 
-  /** Permanently stop this host. Callers build a new one for a new session. */
   dispose(): void {
     this.disposed = true
     this.clearIdleTimer()
@@ -114,8 +93,7 @@ export class DesktopScriptRuntimeHost {
 
   private async send(request: BridgeRequest): Promise<BridgeResponse> {
     this.clearIdleTimer()
-    // Why checked here and not only on entry: requests queue, and dispose can
-    // land while one waits its turn. Without this a teardown respawns a helper.
+    // Disposal can occur while a request queues; never respawn a helper after teardown.
     if (this.disposed) {
       throw this.unavailableError('runtime host was disposed')
     }
@@ -135,14 +113,11 @@ export class DesktopScriptRuntimeHost {
           this.availability.escalateExecutionPolicy()
           continue
         }
-        // Only this error proves no helper started, which is what disproves the
-        // escalation; a helper that started and then died proves the opposite.
+        // A start failure leaves the fallback unproven; a later crash does not.
         if (isRuntimeHostUnavailable(error)) {
           this.availability.abandonUnprovenFallback()
         }
-        // A helper that answered and then died is a crash, not a bad start: the
-        // caller sees it and the next operation gets a fresh process — unless it
-        // keeps happening, which is thrash the one-shot bridge should absorb.
+        // Never replay an operation after the helper could have delivered input.
         if (!isRuntimeHostUnavailable(error) || !this.mayReplay(request)) {
           if (this.availability.exhausted) {
             this.availability.enterCooldown()
@@ -168,8 +143,7 @@ export class DesktopScriptRuntimeHost {
     }
     const id = this.nextRequestId++
     return new Promise((resolve, reject) => {
-      // Why kill rather than wait: a hung UI Automation call cannot be
-      // cancelled, so the process itself is the only thing left to reclaim.
+      // A hung native UI Automation call can only be interrupted by stopping its process.
       const timer = setTimeout(() => {
         this.abortChannel(
           new RuntimeClientError(
@@ -181,15 +155,7 @@ export class DesktopScriptRuntimeHost {
       timer.unref?.()
       this.pending = { id, resolve, reject, timer }
       channel.write(`${JSON.stringify({ ...request, requestId: id })}\n`, (error) => {
-        // Bind the report to what it was written for: a late callback must not
-        // charge a second failure for this operation, nor stop a replacement
-        // helper and reject a later request with this one's error. Deliberately
-        // redundant with the channel's own closed guard — keep both. This one
-        // also covers a live channel whose request has already been answered,
-        // which the channel cannot see; that case is what pins it.
-        //
-        // Redundant does not mean untested: removing either guard alone fails a
-        // test, so neither can be deleted as "the one the other covers".
+        // A late write callback may belong to a replaced channel or an already-answered request.
         if (this.channel !== channel || this.pending?.id !== id) {
           return
         }
@@ -234,15 +200,7 @@ export class DesktopScriptRuntimeHost {
     return channel
   }
 
-  /**
-   * Whether the helper that just died can be proved not to have run the request.
-   *
-   * Why proof and not inference: "no reply came back" is not "nothing happened".
-   * runtime.ps1 synthesizes the input and only then builds the snapshot, which
-   * allocates a full-window bitmap and walks the UIA tree — a native fault there
-   * is uncatchable and would leave a click already delivered. Retrying on that
-   * inference turns one requested click into four.
-   */
+  /** Replay mutations only after a protocol-confirmed helper fails before announcing readiness. */
   private mayReplay(request: BridgeRequest): boolean {
     if (this.childReady || this.childAnswered) {
       return false
@@ -255,12 +213,9 @@ export class DesktopScriptRuntimeHost {
     try {
       parsed = JSON.parse(line) as Record<string, unknown>
     } catch {
-      // Not a response at all — a PowerShell banner, a stray write. Dropping it
-      // is safe now that the id below is what decides which request is answered,
-      // and it keeps a chatty console from making the helper unusable.
+      // Ignore console noise; request IDs correlate actual responses.
       return
     }
-    // The readiness announcement carries no request id and answers nothing.
     if (parsed.ready === true && parsed.requestId === undefined) {
       this.childReady = true
       this.readyProtocolConfirmed = true
@@ -269,10 +224,7 @@ export class DesktopScriptRuntimeHost {
     }
     const pending = this.pending
     if (!pending || parsed.requestId !== pending.id) {
-      // One unmatched reply would otherwise shift every later response by one.
-      // Carry the helper's own message when it sent one: a line it could not tag
-      // with an id is usually the only account of what went wrong, and reporting
-      // a bare desync in its place loses the cause for good.
+      // Stop desynchronized replies, retaining the helper's error so the original cause remains visible.
       const reported = typeof parsed.error === 'string' ? `: ${parsed.error}` : ''
       this.abortChannel(
         new RuntimeClientError(
@@ -282,7 +234,6 @@ export class DesktopScriptRuntimeHost {
       )
       return
     }
-    // Only a reply this host can prove is its own counts as the helper working.
     this.childAnswered = true
     this.pending = null
     clearTimeout(pending.timer)
@@ -296,11 +247,7 @@ export class DesktopScriptRuntimeHost {
     this.availability.recordFailure()
     if (!started && this.availability.atPreferredPolicy && isExecutionPolicyBlocked(detail)) {
       this.availability.requestPolicyRetry()
-      // Unavailable rather than a generic error, because this can now be the
-      // final attempt: reverting an unproven escalation puts the host back on
-      // the preferred policy, so a later attempt can land here again. Only this
-      // code routes the operation to the one-shot bridge, which carries its own
-      // policy fallback; anything else fails the operation outright.
+      // Preserve one-shot fallback, including its policy retry, when host attempts run out.
       this.rejectPending(this.unavailableError(detail))
       return
     }
@@ -316,16 +263,7 @@ export class DesktopScriptRuntimeHost {
     )
   }
 
-  /**
-   * Stop a helper this host has judged unusable — a timeout, a desynchronised
-   * reply, an oversized line.
-   *
-   * Why it counts as a failure: stopping the channel suppresses the exit
-   * handler, so without this these paths bypassed the accounting entirely and a
-   * helper that failed this way on every operation was respawned once per
-   * operation forever — the burst this host exists to remove, restored through
-   * its own recovery path.
-   */
+  /** Count host-detected aborts too: stopping the channel suppresses its exit handler. */
   private abortChannel(error: Error): void {
     this.stopChannel()
     this.availability.recordFailure()

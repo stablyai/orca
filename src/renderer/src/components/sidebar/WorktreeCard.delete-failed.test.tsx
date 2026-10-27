@@ -23,33 +23,38 @@ let worktreesByRepo: Record<string, Worktree[]> = {}
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let deleteStateByWorktreeId: Record<string, { isDeleting: boolean; error: string | null }> = {}
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      deleteStateByWorktreeId,
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      fetchLinearIssue,
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache: {},
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      projectGroups: [],
-      remoteBranchConflictByWorktreeId: {},
-      runtimeEnvironments,
-      runtimeStatusByEnvironmentId,
-      removedSshTargetLabels,
-      settings: null,
-      sshConnectionStates,
-      sshStateByEnvironment,
-      sshTargetLabels,
-      sshTargetsHydrated: true,
-      updateWorktreeMeta,
-      worktreesByRepo,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    deleteStateByWorktreeId,
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue,
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    openModal,
+    projectGroups: [],
+    remoteBranchConflictByWorktreeId: {},
+    runtimeEnvironments,
+    runtimeStatusByEnvironmentId,
+    removedSshTargetLabels,
+    settings: null,
+    sshConnectionStates,
+    sshStateByEnvironment,
+    sshTargetLabels,
+    sshTargetsHydrated: true,
+    updateWorktreeMeta,
+    worktreesByRepo,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -80,7 +85,6 @@ vi.mock('./use-worktree-sleep-state', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -115,7 +119,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 function renderCard(worktree: Worktree): string {
-  // Static markup escapes the quotes in Git's message.
   return renderToStaticMarkup(
     <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
   ).replaceAll('&#x27;', "'")
@@ -138,7 +141,6 @@ describe('WorktreeCard for a delete that failed partway', () => {
 
     expect(markup).toContain('data-worktree-card-delete-failed')
     expect(markup).toContain('Delete failed')
-    // The tooltip primitive is rendered inline by this harness.
     expect(markup).toContain(FAILURE)
   })
 

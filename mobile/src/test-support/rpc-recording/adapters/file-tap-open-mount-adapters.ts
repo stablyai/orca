@@ -6,14 +6,7 @@ const HOST = 'host-1'
 const WORKSPACE = 'workspace-1'
 const TERMINAL = 'terminal-1'
 
-/**
- * Tapping a path a terminal printed: the host resolve, then the worktree open it may lead to.
- *
- * The entry point is fire-and-forget (`void ... .catch`), so the recording observes the two sends,
- * the route it pushed and the miss callback rather than a returned value. Its three delayed
- * activation attempts run on the scenario's own clock, which is what makes the tab-switch order
- * observable at all.
- */
+// Observe sends/routes/misses from the fire-and-forget opener; use scenario time to expose delayed tab-activation ordering.
 export function fileTapOpenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -44,10 +37,14 @@ export function fileTapOpenMountAdapters(
               worktreeId: WORKSPACE,
               worktreeName: 'workspace',
               terminalHandle: TERMINAL,
-              pathText: String(args.pathText ?? 'src/app.ts'),
               cwd: '/repo',
-              line: args.line === undefined ? null : Number(args.line),
-              column: null,
+              candidates: [
+                {
+                  pathText: String(args.pathText ?? 'src/app.ts'),
+                  line: args.line === undefined ? null : Number(args.line),
+                  column: null
+                }
+              ],
               pushPreviewRoute: (href) => effect('push-preview-route', href),
               openBrowser: (url: string) => effect('open-browser', { url }),
               triggerOpenFeedback: () => effect('open-feedback', {}),

@@ -6,14 +6,23 @@ import type { Store } from '../persistence'
 import type { AutomationRunWriter } from './automation-run-writer'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import type { HeadlessAutomationDispatchContext } from './headless-dispatch-runner'
-import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
+import {
+  AutomationDispatchRefusedError,
+  runHeadlessAutomationDispatch
+} from './headless-dispatch-runner'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import { createAutomationDispatchToken } from './dispatch-tokens'
-import { NO_DISPATCH_HOST, sendRendererDispatch } from './dispatch-refusal'
+import {
+  NO_DISPATCH_HOST,
+  describeScheduledRefusal,
+  sendRendererDispatch
+} from './dispatch-refusal'
+import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
+import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 
 export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
 
-export class AutomationDispatchCancelledError extends Error {}
+export { AutomationDispatchCancelledError }
 
 type DispatchContext = Pick<
   HeadlessAutomationDispatchContext,
@@ -63,6 +72,10 @@ export async function requestAutomationDispatch(
         'The automation was removed before it could launch.'
       )
     }
+    // A refusal row would change the fenced export; restart strands the run instead.
+    if (isOrcadFencedAutomation(ctx.store, automation)) {
+      throw new AutomationDispatchCancelledError(ORCAD_FENCED_AUTOMATION)
+    }
     return current
   }
   const resolveCurrentTarget = (): AutomationRunTargetResult => {
@@ -100,8 +113,12 @@ export async function requestAutomationDispatch(
     return returnDurable(run)
   }
   let target = resolveCurrentTarget()
-  if (!target.ok || (!ctx.getRenderer() && !ctx.headlessDispatcher)) {
-    return refuse(target.ok ? NO_DISPATCH_HOST : target.error)
+  const refusal = describeScheduledRefusal({
+    target,
+    canDispatch: Boolean(ctx.getRenderer() || ctx.headlessDispatcher)
+  })
+  if (refusal || !target.ok) {
+    return refuse(refusal ?? NO_DISPATCH_HOST)
   }
   await ctx.runs.updateRun({
     runId: run.id,
@@ -115,8 +132,10 @@ export async function requestAutomationDispatch(
     return returnDurable(run)
   }
   target = resolveCurrentTarget()
-  if (!target.ok) {
-    return refuse(target.error)
+  // A WSL move can start while the durable claim is pending.
+  const lateRefusal = describeScheduledRefusal({ target, canDispatch: true })
+  if (lateRefusal || !target.ok) {
+    return refuse(lateRefusal ?? NO_DISPATCH_HOST)
   }
   const renderer = ctx.getRenderer()
   if (renderer) {
@@ -147,6 +166,14 @@ export async function requestAutomationDispatch(
       const latestTarget = resolveCurrentTarget()
       if (!latestTarget.ok) {
         throw new AutomationDispatchCancelledError(latestTarget.error)
+      }
+      // Recheck WSL moves after a potentially long precheck so refusal remains a skip.
+      const latestRefusal = describeScheduledRefusal({
+        target: latestTarget,
+        canDispatch: true
+      })
+      if (latestRefusal) {
+        throw new AutomationDispatchRefusedError(latestRefusal)
       }
       return dispatcher({ ...request, target: latestTarget })
     }

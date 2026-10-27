@@ -2,6 +2,8 @@ const { createHash } = require('node:crypto')
 const { readFileSync, readdirSync, statSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 
+const { darkBuildMarkerFileNames } = require('../dark-build-switches.cjs')
+
 const projectDir = resolve(__dirname, '..', '..')
 const MOBILE_WEB_BUNDLE_DIR = join(projectDir, 'out', 'mobile-web')
 const REMEDY = 'Run pnpm build:mobile-web (build:desktop and build:release already do).'
@@ -33,11 +35,7 @@ function assertInteger(value, field) {
   }
 }
 
-/**
- * Canonical serialization of the asset list. Must stay byte-identical to
- * serializeMobileWebBundleAssets in config/scripts/mobile-web-bundle-manifest.mjs; a divergence here
- * would reject every honest bundle, so the two move together.
- */
+// Keep canonical asset bytes identical to mobile-web-bundle-manifest.mjs serializer or packaging rejects valid bundles.
 function serializeAssets(assets) {
   return JSON.stringify(
     [...assets]
@@ -121,7 +119,6 @@ function parseManifest(bundleDir) {
   return manifest
 }
 
-/** Every file under the bundle directory, as a manifest-shaped relative path. */
 function listBundleFiles(directory, prefix = '') {
   const found = []
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -135,13 +132,14 @@ function listBundleFiles(directory, prefix = '') {
   return found
 }
 
-/**
- * Nothing in the bundle directory may be unaccounted for. An asset dropped from the manifest but
- * left on disk by an interrupted build ships inside asar, unreachable and unverified, and grows
- * the installer; content-addressed names mean stale copies never get overwritten.
- */
+// Reject unlisted on-disk assets: content-addressed stale files survive interrupted builds and would ship unreachable/unverified in asar.
 function assertNoUnlistedFiles(bundleDir, manifest) {
-  const listed = new Set(['manifest.json', ...manifest.assets.map((asset) => asset.path)])
+  // A dark build's marker is accounted for here; packaging refuses it through assertNotDarkBuild.
+  const listed = new Set([
+    'manifest.json',
+    ...darkBuildMarkerFileNames(),
+    ...manifest.assets.map((asset) => asset.path)
+  ])
   const strays = listBundleFiles(bundleDir).filter((path) => !listed.has(path))
   if (strays.length > 0) {
     throw failure(
@@ -151,11 +149,7 @@ function assertNoUnlistedFiles(bundleDir, manifest) {
   }
 }
 
-/**
- * Packaging guard: electron-builder only warns about a missing input, so without this a release
- * would ship an app that advertises the bundle capability and then errors on every request. The
- * hash check, not the existence check, is what catches a half-written or stale out/.
- */
+// Fail missing/stale bundle (electron-builder only warns); hash check catches half-written output before advertised capability fails every request.
 function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
   const manifest = parseManifest(bundleDir)
   assertNoUnlistedFiles(bundleDir, manifest)
@@ -188,6 +182,5 @@ function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
   return manifest
 }
 
-// serializeAssets is exported for the parity test that pins it against the builder's and the
-// contract's serializers; nothing in packaging calls it from outside this module.
+// Export serializer solely for three-way parity proof; packaging consumes it internally.
 module.exports = { MOBILE_WEB_BUNDLE_DIR, assertMobileWebBundleBuilt, serializeAssets }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
 import { dispatchPreambleSendOptions } from './preamble'
 import {
@@ -52,11 +53,33 @@ function structuredHost(answer: HostSendAnswer, settled?: AgentJournalSubmission
   return { host, send, waitForSendSettlement }
 }
 
+const MAIL_SOURCE: AgentMessageSource = {
+  kind: 'agent',
+  senders: [
+    {
+      party: { address: 'term_peer', terminalHandle: 'term_peer', orcaSessionId: null },
+      name: 'Claude'
+    }
+  ],
+  orchestration: {
+    message: 'mail-notice',
+    mailbox: 'dispatch:d1',
+    dispatchId: 'd1',
+    messages: [{ messageId: 'm1', runId: 'r1', from: 'term_peer' }]
+  }
+}
+
 const turn: StructuredSessionTurn = {
   body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
   delivery: 'now',
   operationId: 'op-1',
   expectedRuntimeFence: 7
+}
+
+const mailTurn: StructuredSessionTurn = {
+  ...turn,
+  body: { ...turn.body, from: MAIL_SOURCE },
+  delivery: 'queue'
 }
 
 const structured = (host: StructuredAgentTurnHost, sent: StructuredSessionTurn = turn) =>
@@ -82,7 +105,6 @@ describe('sendAgentTurn to a structured session', () => {
       clientMessageId: 'op-1',
       submission: submissionOf('accepted')
     })
-    // The body-only digest every orchestration send carried before it was derived here.
     expect(fake.send).toHaveBeenCalledWith(
       { callerKey: 'trusted-local:k' },
       {
@@ -134,16 +156,14 @@ describe('sendAgentTurn to a structured session', () => {
     })
   })
 
-  it('asks the host queue to hold a `queue` send, fingerprinted as the host digests it', async () => {
+  it('asks the host queue to hold a `queue` send, fingerprinted without its sender', async () => {
     const fake = structuredHost(
       accepted({
         clientMessageId: 'op-1',
         queued: { messageId: 'op-1', position: 0, state: 'waiting' }
       })
     )
-    await expect(
-      sendAgentTurn(structured(fake.host, { ...turn, delivery: 'queue' }))
-    ).resolves.toEqual({
+    await expect(sendAgentTurn(structured(fake.host, mailTurn))).resolves.toEqual({
       kind: 'queued',
       clientMessageId: 'op-1',
       queued: { messageId: 'op-1', position: 0, state: 'waiting' }
@@ -155,9 +175,10 @@ describe('sendAgentTurn to a structured session', () => {
           sessionId: 's1',
           clientOperationId: 'op-1',
           expectedRuntimeFence: 7,
+          // Sender provenance stays outside the fingerprint so retries still replay.
           payloadFingerprint: hostFingerprint({ body: turn.body, delivery: 'queue-if-active' })
         },
-        body: turn.body,
+        body: mailTurn.body,
         delivery: 'queue-if-active'
       }
     )
@@ -171,9 +192,10 @@ describe('sendAgentTurn to a structured session', () => {
         queued: { messageId: 'op-1', position: 0, state: 'returned' }
       })
     )
-    await expect(
-      sendAgentTurn(structured(fake.host, { ...turn, delivery: 'queue' }))
-    ).resolves.toMatchObject({ kind: 'queued', queued: { state: 'returned' } })
+    await expect(sendAgentTurn(structured(fake.host, mailTurn))).resolves.toMatchObject({
+      kind: 'queued',
+      queued: { state: 'returned' }
+    })
   })
 })
 
@@ -188,7 +210,6 @@ describe('sendAgentTurn to a terminal', () => {
       handle: 'term_1',
       turn: { purpose: 'dispatch-preamble', body: 'hello', operationId: 'req-1' }
     })
-    // The same promise, so a caller's await takes no extra tick.
     expect(sent).toBe(written)
     await expect(sent).resolves.toBe(receipt)
     expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
@@ -196,6 +217,27 @@ describe('sendAgentTurn to a terminal', () => {
       'hello',
       dispatchPreambleSendOptions('req-1')
     )
+  })
+
+  it('forwards the opt-in hold, binding and signal only when given', async () => {
+    const runtime = { sendTerminalAgentPrompt: vi.fn(async () => 'receipt') }
+    const signal = new AbortController().signal
+    const expectedBinding = { ptyId: 'pty-1', processIncarnation: 'inc-1' }
+    await sendAgentTurn({
+      kind: 'terminal',
+      runtime,
+      handle: 'term_1',
+      turn: { purpose: 'dispatch-preamble', body: 'hello', operationId: 'req-1' },
+      onPermission: 'wait',
+      expectedBinding,
+      signal
+    })
+    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith('term_1', 'hello', {
+      ...dispatchPreambleSendOptions('req-1'),
+      onPermission: 'wait',
+      expectedBinding,
+      signal
+    })
   })
 
   it('propagates a failed write as the primitive threw it', async () => {

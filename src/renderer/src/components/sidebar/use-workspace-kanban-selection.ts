@@ -2,12 +2,12 @@ import React, { useCallback, useMemo, useState } from 'react'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
-  areWorktreeSelectionsEqual,
-  getWorktreeSelectionIntent,
-  pruneWorktreeSelection,
-  updateWorktreeAreaSelection,
-  updateWorktreeSelection
-} from './worktree-multi-selection'
+  areSelectionsEqual,
+  getSelectionIntent,
+  pruneSelection,
+  updateAreaSelection,
+  updateSelection
+} from '@/lib/list-multi-selection'
 
 /** Returns the first still-rendered selected id, or `null` if the anchor is fine. */
 function resolveRenderedAnchorId(
@@ -21,10 +21,7 @@ function resolveRenderedAnchorId(
   return renderedWorktreeIds.find((id) => selectedWorktreeIds.has(id)) ?? null
 }
 
-// Why: board search hides cards without dropping them from the board, so range
-// and area gestures index the rendered subset while pruning still spans the
-// whole board — a card hidden by a query keeps its selection until a gesture
-// replaces it, and every action path narrows to the rendered cards anyway.
+// Search preserves hidden selections until replacement; gestures and actions use only rendered cards.
 export function useWorkspaceKanbanSelection(
   open: boolean,
   boardWorktrees: readonly Worktree[],
@@ -56,10 +53,9 @@ export function useWorkspaceKanbanSelection(
       setSelectionAnchorId(null)
     }
   } else if (selectedWorktreeIds.size > 0 || selectionAnchorId !== null) {
-    const pruned = pruneWorktreeSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
-    // Why: the drawer can keep rendering while rows are filtered/reordered.
-    // Prune stale local selection before children see ids that no longer exist.
-    if (!areWorktreeSelectionsEqual(selectedWorktreeIds, pruned.selectedIds)) {
+    const pruned = pruneSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
+    // Prune missing IDs before children render a filtered or reordered board.
+    if (!areSelectionsEqual(selectedWorktreeIds, pruned.selectedIds)) {
       setSelectedWorktreeIds(pruned.selectedIds)
     }
     if (selectionAnchorId !== pruned.anchorId) {
@@ -69,26 +65,21 @@ export function useWorkspaceKanbanSelection(
 
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
-      const intent = getWorktreeSelectionIntent(event, navigator.userAgent.includes('Mac'))
-      // Why: a search can hide the anchor while leaving the rest of the
-      // selection on screen. updateWorktreeSelection reads an anchor missing
-      // from visibleIds as "no anchor" and collapses the range to the click,
-      // so re-anchor onto the first still-rendered selected card instead.
+      const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
+      // Reanchor ranges to a rendered selected card when search hides the original anchor.
       const anchorId =
         intent === 'range' && selectionAnchorId !== null
           ? (resolveRenderedAnchorId(renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId) ??
             selectionAnchorId)
           : selectionAnchorId
-      const result = updateWorktreeSelection({
+      const result = updateSelection({
         visibleIds: renderedWorktreeIds,
         previousSelectedIds: selectedWorktreeIds,
         previousAnchorId: anchorId,
         targetId: worktreeId,
         intent
       })
-      // Why: a range replaces the selection, exactly like a plain click and a
-      // non-additive marquee. Carrying hidden cards through it would leave the
-      // user with a selection they cannot see, count, or narrow.
+      // Range gestures replace hidden selections just like plain clicks and non-additive marquees.
       setSelectedWorktreeIds(result.selectedIds)
       setSelectionAnchorId(result.anchorId)
       return intent !== 'replace'
@@ -116,7 +107,7 @@ export function useWorkspaceKanbanSelection(
       baseSelectedIds: ReadonlySet<string> = selectedWorktreeIds,
       baseAnchorId: string | null = selectionAnchorId
     ): void => {
-      const result = updateWorktreeAreaSelection({
+      const result = updateAreaSelection({
         visibleIds: renderedWorktreeIds,
         previousSelectedIds: baseSelectedIds,
         previousAnchorId: baseAnchorId,
@@ -124,7 +115,7 @@ export function useWorkspaceKanbanSelection(
         additive
       })
       setSelectedWorktreeIds((previous) =>
-        areWorktreeSelectionsEqual(previous, result.selectedIds) ? previous : result.selectedIds
+        areSelectionsEqual(previous, result.selectedIds) ? previous : result.selectedIds
       )
       setSelectionAnchorId((previous) =>
         previous === result.anchorId ? previous : result.anchorId

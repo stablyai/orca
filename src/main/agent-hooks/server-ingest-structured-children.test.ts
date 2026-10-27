@@ -77,7 +77,6 @@ describe('structured child-work ingest', () => {
         membership: 'live'
       })
     ])
-    // Nothing reads the records yet: every published row is exactly what it was.
     expect(server.getStatusSnapshot()).toEqual(rows)
     expect(changed).not.toHaveBeenCalled()
   })
@@ -114,6 +113,19 @@ describe('structured child-work ingest', () => {
       expect.objectContaining({ childWorkId: second.childWorkId, outcome: 'unknown' })
     ])
     expect(server.getStructuredChildWork(SUBJECT)).toEqual([first])
+  })
+
+  // Quit reads child records after hook ingress stops to decide which chats to offer for resume.
+  it('keeps the children readable through a quit stop', () => {
+    const server = new AgentHookServer()
+    server.ingestStructuredStatus(summary(), SUBJECT)
+    server.ingestStructuredChildWork(SUBJECT, started, 'claude')
+    server.stop({ keepStatus: true })
+    expect(server.getStructuredChildWorkViews(SUBJECT)).toEqual([
+      expect.objectContaining({ description: 'Audit the build', state: 'working' })
+    ])
+    server.stop()
+    expect(server.getStructuredChildWorkViews(SUBJECT)).toEqual([])
   })
 
   it('rejects an address that names no session', () => {

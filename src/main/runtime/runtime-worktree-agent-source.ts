@@ -1,11 +1,19 @@
 import type { StructuredHostStatus } from '../../shared/agent-hook-listener/listener-event'
-import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import type {
+  AgentStatusIpcPayload,
+  ParsedAgentStatusPayload
+} from '../../shared/agent-status-types'
+import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
 import type { AgentMainAgentStatus } from '../../shared/main-agent-status'
+import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 
-export type RuntimeWorktreeAgentSource = {
+export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'> & {
+  children?: AgentChildWorkView[]
   paneKey: string
   ptyId?: string
   tabId?: string
+  /** A connected PTY on this host backs the row. */
+  hasLivePty?: true
   worktreeId?: string
   connectionId: string | null
   state: ParsedAgentStatusPayload['state']
@@ -21,4 +29,5 @@ export type RuntimeWorktreeAgentSource = {
   updatedAt: number
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */
   structuredHost?: StructuredHostStatus
+  programStatus?: ProgramStatusFacet
 }

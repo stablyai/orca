@@ -22,6 +22,19 @@ type NotificationSourceCatalog = {
   runtimeEnvironments?: readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'source'>[]
 }
 
+function ownerRuntimeEnvironmentId(owner: NotificationWorkspaceOwner): string | null {
+  const host = parseExecutionHostId(owner.executionHostId)
+  return owner.runtimeEnvironmentId ?? (host?.kind === 'runtime' ? host.environmentId : null)
+}
+
+/** The server a paired phone must open this work on; absent for work this desktop reaches itself. */
+export function notificationExecutionHostForOwner(
+  owner: NotificationWorkspaceOwner | null
+): `runtime:${string}` | undefined {
+  const environmentId = owner ? ownerRuntimeEnvironmentId(owner) : null
+  return environmentId ? toRuntimeExecutionHostId(environmentId) : undefined
+}
+
 export function notificationSourceForOwner(
   owner: NotificationWorkspaceOwner | null,
   catalog: NotificationSourceCatalog
@@ -30,8 +43,7 @@ export function notificationSourceForOwner(
     return undefined
   }
   const host = parseExecutionHostId(owner.executionHostId)
-  const environmentId =
-    owner.runtimeEnvironmentId ?? (host?.kind === 'runtime' ? host.environmentId : null)
+  const environmentId = ownerRuntimeEnvironmentId(owner)
   if (environmentId) {
     const environment = catalog.runtimeEnvironments?.find((entry) => entry.id === environmentId)
     if (!environment) {

@@ -65,7 +65,6 @@ describe('buildTitleDerivedAgentRows', () => {
       now: 2000
     })
 
-    // Why: a task mention does not establish the pane's owner.
     expect(rows.map((row) => [row.agentType, row.state])).toEqual([['dsb', 'working']])
   })
 
@@ -318,7 +317,6 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows).toHaveLength(0)
   })
 
-  // #10258: Cursor's native title is deliberately status-less, which used to hide the pane.
   it('adds an idle Cursor row for the bare native cursor-agent title', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'cursor', title: 'Cursor Agent' })],
@@ -377,8 +375,7 @@ describe('buildTitleDerivedAgentRows', () => {
     }
   })
 
-  // Why: the native marker is the only signal a hookless OpenCode pane emits, so
-  // without it the sidebar showed no row for a running session.
+  // Hookless OpenCode exposes only its native marker, which must still produce a row.
   it('rows an OpenCode pane from its undecorated native session title', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
@@ -413,8 +410,7 @@ describe('buildTitleDerivedAgentRows', () => {
       })
 
     expect(rowsFor('⠋ Claude Code').map((row) => row.agentType)).toEqual(['claude'])
-    // Pane reuse: the user exited OpenCode and ran claude in the same pane. The launch record is
-    // a latch with no run id, so the title outranks it even before any process read.
+    // A reused pane’s new title outranks its run-ID-free launch latch before process reads catch up.
     expect(rowsFor('✳ Claude Code', 'opencode').map((row) => row.agentType)).toEqual(['claude'])
     expect(
       rowsFor('✳ Claude Code', 'opencode', processRead('claude')).map((row) => row.agentType)
@@ -439,8 +435,7 @@ describe('buildTitleDerivedAgentRows', () => {
   })
 })
 
-// #23767: Codex retitles its pane to the project name, so a title-gated row vanished while
-// Codex kept running. A live process read now identifies the pane; the title sets activity.
+// A live process read identifies Codex even after its title changes to the project name; the title sets activity.
 describe('hook-less agent rows identified by the foreground process', () => {
   const PANE_KEY = makePaneKey('tab-1', LEAF_ID_1)
 
@@ -482,8 +477,7 @@ describe('hook-less agent rows identified by the foreground process', () => {
   })
 
   it('never keeps a plain-title row on the launch record alone', () => {
-    // No process read (WSL, a launch that never started), or a read that found no agent (after an
-    // SSH exit, or a parked pane's boundary retiring its unconfirmable read): no row, as before.
+    // A launch record without confirmed process evidence cannot identify a plain-title pane.
     expect(rowsFor({ title: 'demo-repo', launchAgent: 'codex' })).toHaveLength(0)
     expect(
       rowsFor({
@@ -495,8 +489,7 @@ describe('hook-less agent rows identified by the foreground process', () => {
   })
 
   it("does not trust a reattach's launch record as a process read", () => {
-    // Reattach seeds the daemon's launch agent, which can outlive the process while Orca is
-    // closed; a background pane is not re-read until it is shown.
+    // Daemon launch records can outlive exited agents; background panes are not reread until shown.
     const launchSeed: TitleDerivedPaneForeground = {
       agent: 'codex',
       agentEvidence: 'launch-record',
@@ -560,7 +553,6 @@ describe('hook-less agent rows identified by the foreground process', () => {
   })
 
   it('drops the row once the agent is really gone', () => {
-    // The process tracker proved the shell is back.
     expect(
       rowsFor({
         title: 'demo-repo',
@@ -589,7 +581,6 @@ describe('hook-less agent rows identified by the foreground process', () => {
     expect(
       rowsFor({ title: '  ', launchAgent: 'codex', foreground: processRead('codex') })
     ).toHaveLength(0)
-    // The PTY exited.
     expect(
       rowsFor({
         title: 'demo-repo',
@@ -608,16 +599,12 @@ describe('hook-less agent rows identified by the foreground process', () => {
   })
 })
 
-// Why: `runtimePaneTitlesByTabId` mixes two disjoint id spaces — live PaneManager
-// ids (>= 1) and the `-(leafIndex + 1)` slots a parked tab mints — so attributing a
-// title by its position in the numerically sorted slot list puts one split pane's
-// lifecycle on its sibling's row (STA-3264).
+// Live creation-order pane IDs and parked negative leaf slots must not assign one split’s title to its sibling.
 describe('split-pane runtime title attribution', () => {
   const LEAF_ID_3 = '99999999-9999-4999-8999-999999999999'
 
   function makeNestedSplitLayout(): TerminalLayoutSnapshot {
-    // Split once (leaf 1 | leaf 2), then split the FIRST pane again (leaf 3).
-    // Layout traversal order is [1, 3, 2]; pane-creation order is [1, 2, 3].
+    // Split the first pane twice: traversal is [1,3,2], while creation order is [1,2,3].
     return {
       root: {
         type: 'split',
@@ -652,8 +639,7 @@ describe('split-pane runtime title attribution', () => {
   }
 
   it('keeps a finished split pane out of Running while its sibling keeps working', () => {
-    // A parked split tab reports its panes through synthetic slots numbered off the
-    // in-order leaf list: -1 is the first leaf, -2 the second.
+    // Parked slots follow leaf traversal: -1 is the first leaf and -2 the second.
     const rows = rowsFor({ '-1': 'Codex', '-2': '⠋ Codex' }, makeSplitLayout(), ['pty-a', 'pty-b'])
 
     expect(rows.map((row) => [row.paneKey, row.state, row.entry.lastAssistantMessage])).toEqual([
@@ -663,9 +649,7 @@ describe('split-pane runtime title attribution', () => {
   })
 
   it('lets a revealed tab’s live slots outrank the parked slots it left behind', () => {
-    // Revealing a parked tab mounts live slots without clearing the parked ones, so
-    // both id spaces describe the same two leaves at once. The live pair is current:
-    // leaf 1 has finished, leaf 2 is still working.
+    // Revealing leaves stale parked slots beside current live slots; prefer the live pair’s state.
     const rows = rowsFor(
       { '-1': '⠋ Codex', '-2': '⠋ Codex', 1: 'Codex', 2: '⠋ Codex' },
       makeSplitLayout(),
@@ -697,8 +681,7 @@ describe('split-pane runtime title attribution', () => {
   })
 
   it('does not recycle a closed split pane’s row onto a surviving sibling', () => {
-    // Panes 1|2|3 were open; closing pane 1 promotes the surviving pair and clears
-    // only that pane's slot, leaving the survivors' live ids sparse (2, 3).
+    // Closing pane 1 leaves live IDs 2 and 3; layout promotion must preserve their ownership.
     const survivingLayout: TerminalLayoutSnapshot = {
       root: {
         type: 'split',
@@ -719,9 +702,7 @@ describe('split-pane runtime title attribution', () => {
   })
 
   it('uses live PTY bindings when sparse pane ids no longer match layout order', () => {
-    // Closing the first pane and splitting the second leaves ids 2 and 4 while
-    // the surviving layout is ordered [new pane, old pane]. The PTY bindings
-    // are the only authoritative bridge from those sparse runtime slots to leaves.
+    // After close/split, sparse IDs 2 and 4 differ from layout order; PTY bindings supply the authoritative leaf mapping.
     const survivingLayout: TerminalLayoutSnapshot = {
       root: {
         type: 'split',

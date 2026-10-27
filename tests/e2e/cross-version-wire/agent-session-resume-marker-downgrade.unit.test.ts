@@ -23,9 +23,13 @@ test('an older build reads the restart offer this build records at quit', async 
     // This build: the offer teardown takes for a chat whose turn was running.
     const marker = structuredAgentSessionWorkingAtStop({
       sessionId: SESSION,
-      session: { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } },
+      session: {
+        journal: journal([turnItem('turn-1', 'running')]),
+        child: { fence: 1, phase: 'ready' }
+      },
       getRecord: () => record(),
       childWork: () => undefined,
+      childWorkOpen: () => false,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW

@@ -11,14 +11,21 @@ const {
   readDaemonPidRecordMock,
   daemonOwnsFreshPersistentPtysMock
 } = vi.hoisted(() => ({
-  checkDaemonHealthMock: vi.fn<() => Promise<DaemonHealth>>(),
+  checkDaemonHealthMock: vi.fn<(socketPath: string, tokenPath: string) => Promise<DaemonHealth>>(),
   getDaemonEndpointFactsMock: vi.fn<() => unknown>(),
   readDaemonPidRecordMock: vi.fn<() => ParsedDaemonPid | null>(),
   daemonOwnsFreshPersistentPtysMock: vi.fn<() => boolean>()
 }))
 
-vi.mock('../daemon/daemon-health', () => ({ checkDaemonHealth: checkDaemonHealthMock }))
-vi.mock('../daemon/daemon-init', () => ({
+const reportedCoverage = vi.hoisted(() => ({ value: new Array<'pty-spawn' | 'handshake'>() }))
+vi.mock('../daemon/daemon-health', () => ({
+  checkDaemonHealthWithCoverage: async (socketPath: string, tokenPath: string) => ({
+    verdict: await checkDaemonHealthMock(socketPath, tokenPath),
+    coverage:
+      reportedCoverage.value.shift() ?? (process.platform === 'win32' ? 'handshake' : 'pty-spawn')
+  })
+}))
+vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonEndpointFacts: getDaemonEndpointFactsMock,
   readDaemonPidRecord: readDaemonPidRecordMock,
   daemonOwnsFreshPersistentPtys: daemonOwnsFreshPersistentPtysMock
@@ -67,15 +74,11 @@ describe('collectTerminalDaemonHealth', () => {
     expect(health.state).toBe('live')
     expect(health.selfTest).toMatchObject({ ok: true, verdict: 'healthy', coverage: 'pty-spawn' })
     expect(health.pid).toBe(4242)
-    // The build the LIVE daemon came from, which can legitimately predate this orcad.
     expect(health.buildVersion).toBe('1.2.2')
     expect(health.entryPath).toBe('/opt/orcad/daemon-entry.js')
     expect(health.protocolVersion).toBe(36)
-    // The daemon's self-detected cgroup scope round-trips through the pid record as-is —
-    // collectTerminalDaemonHealth must not reinterpret or drop it.
     expect(health.cgroupUnit).toBe('orca-daemon-n.scope')
-    // Why assert the coordinates: a self-test that probed some other endpoint would prove
-    // nothing about the daemon this process installed.
+    // Probe the installed daemon’s exact endpoint, not a different responding process.
     expect(checkDaemonHealthMock).toHaveBeenCalledWith(LIVE_FACTS.socketPath, LIVE_FACTS.tokenPath)
   })
 
@@ -84,8 +87,6 @@ describe('collectTerminalDaemonHealth', () => {
     const health = await collectTerminalDaemonHealth()
     expect(health.selfTest.ok).toBe(false)
     expect(health.selfTest.verdict).toBe('pty-spawn-unhealthy')
-    // Degraded, not absent: it still owns live sessions, and calling those exited would be
-    // the verdict the execution-boundary vocabulary forbids guessing.
     expect(health.state).toBe('degraded')
   })
 
@@ -99,8 +100,6 @@ describe('collectTerminalDaemonHealth', () => {
   it('is not green when fresh terminals fall back to the local provider', async () => {
     daemonOwnsFreshPersistentPtysMock.mockReturnValue(false)
     const health = await collectTerminalDaemonHealth()
-    // The socket answers and the probe passes, but new terminals would die with this
-    // process — reporting live here is precisely the looks-healthy-but-useless shape.
     expect(health.selfTest.ok).toBe(true)
     expect(health.ownsFreshSessions).toBe(false)
     expect(health.state).toBe('degraded')
@@ -119,9 +118,14 @@ describe('collectTerminalDaemonHealth', () => {
   it('declares handshake-only coverage on win32, where the spawn probe is a no-op', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const health = await collectTerminalDaemonHealth()
-    // `checkPtySpawnHealth` returns immediately on win32 without spawning anything, so a
-    // green verdict there must not be reported as a PTY round trip.
+    // Windows may prove only handshake: its fallback spawn probe performs no PTY round trip.
     expect(health.selfTest.coverage).toBe('handshake')
+  })
+
+  it('reports the coverage the daemon says its probe achieved', async () => {
+    reportedCoverage.value.push('handshake')
+    const health = await collectTerminalDaemonHealth()
+    expect(health.selfTest).toMatchObject({ ok: true, coverage: 'handshake' })
   })
 })
 
@@ -161,14 +165,11 @@ describe('computeOrcadBuildHash', () => {
     writeFileSync(entry, 'build-a')
     const first = computeOrcadBuildHash(entry)
     writeFileSync(entry, 'build-b')
-    // A rollback that did not actually replace the file is what this has to catch, and a
-    // version string cannot.
     expect(computeOrcadBuildHash(entry)).not.toBe(first)
   })
 
   it('answers unknown rather than throwing when the entry cannot be read', () => {
     expect(computeOrcadBuildHash(join(tmpdir(), 'definitely-absent-orcad.js'))).toBe('unknown')
-    // A process with no argv[1] (an embedded host) still has to publish a readiness payload.
     expect(computeOrcadBuildHash('')).toBe('unknown')
   })
 })

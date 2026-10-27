@@ -7,6 +7,7 @@ import * as ownerIdentity from '../agent-hooks/managed-hook-owner-identity'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import {
   _internals,
+  hasCodexStateDbBackfillRecoveryGivenUp,
   resolveCodexBackfillSupervisorLockRoot,
   runCodexStateDbBackfillRecovery,
   startCodexStateDbBackfillRecoveryInBackground,
@@ -50,6 +51,7 @@ afterEach(async () => {
 describe('Codex state DB backfill recovery', () => {
   it('does not restart an exhausted supervisor when later triggers arrive', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     const run = vi.fn(async () => ({ outcome: 'gave-up' as const, spawnCount: 5 }))
     const withLock = vi.fn(
       async (_home: string, _signal: AbortSignal | undefined, claim: () => Promise<unknown>) =>
@@ -70,6 +72,7 @@ describe('Codex state DB backfill recovery', () => {
     expect(dependencies.isPending).toHaveBeenCalledTimes(1)
     expect(withLock).toHaveBeenCalledTimes(1)
     expect(run).toHaveBeenCalledTimes(1)
+    expect(hasCodexStateDbBackfillRecoveryGivenUp('/managed-home')).toBe(true)
   })
 
   it('does not start a supervisor for an unreadable index', async () => {
@@ -357,7 +360,7 @@ describe('Codex state DB backfill recovery', () => {
     expect(spawnProcess).toHaveBeenCalledTimes(2)
     expect(timerDurations).toEqual([5_000, 2_000, 5_000])
     expect(terminate).toHaveBeenCalledTimes(1)
-    expect(terminate).toHaveBeenCalledWith(children[1])
+    expect(terminate).toHaveBeenCalledWith(children[1], process.platform !== 'win32')
   })
 
   it('keeps the successful app-server claimant alive until Codex marks its DB complete', async () => {
@@ -377,7 +380,7 @@ describe('Codex state DB backfill recovery', () => {
         now: vi.fn(() => 1_000)
       })
     ).resolves.toEqual({ outcome: 'completed', spawnCount: 1 })
-    expect(terminate).toHaveBeenCalledWith(child)
+    expect(terminate).toHaveBeenCalledWith(child, process.platform !== 'win32')
   })
 
   it('hands the Codex shim itself to the spawn chokepoint for native Windows recovery', async () => {
@@ -389,6 +392,7 @@ describe('Codex state DB backfill recovery', () => {
       .fn()
       .mockReturnValueOnce({ kind: 'incomplete', stateDbPath: 'state.sqlite', status: 'running' })
       .mockReturnValue({ kind: 'complete', stateDbPath: 'state.sqlite' })
+    const terminate = vi.fn(async () => {})
 
     await runCodexStateDbBackfillRecovery(
       'C:\\Users\\alice\\.codex',
@@ -397,7 +401,7 @@ describe('Codex state DB backfill recovery', () => {
         spawnProcess: spawnProcess as never,
         resolveCommand: () => codexCommand,
         readStatus,
-        terminate: vi.fn(async () => {}),
+        terminate,
         sleep: vi.fn(async () => {}),
         now: vi.fn(() => 1_000)
       }
@@ -408,7 +412,7 @@ describe('Codex state DB backfill recovery', () => {
       string[],
       { cwd?: string; env?: NodeJS.ProcessEnv }
     ]
-    // Why: spawnProcess resolves a recognised npm shim past cmd.exe; pre-wrapping hides the shim.
+    // Pre-wrapping hides the npm shim from spawnProcess resolution.
     expect(spawnFile).toBe(codexCommand)
     expect(spawnArgs).toEqual([
       '-c',
@@ -421,6 +425,8 @@ describe('Codex state DB backfill recovery', () => {
     ])
     expect(spawnOptions.cwd).toBe('C:\\Users\\alice\\.codex')
     expect(spawnOptions.env?.CODEX_HOME).toBe('C:\\Users\\alice\\.codex')
+    expect(spawnOptions).not.toHaveProperty('detached')
+    expect(terminate).toHaveBeenCalledWith(child, false)
   })
 
   it('retries a live foreign lease until one durable claimant can recover it', async () => {

@@ -1,15 +1,4 @@
-/**
- * Which partition owns an SSH workspace's session, on both sides of the round trip.
- *
- * The sibling round-trip suite pins the repair of a repo-backed worktree whose rows the runtime
- * left in `ssh:<targetId>`. This one pins the three places that repair could not reach:
- *  - a FOLDER workspace, which the renderer routed to 'local' while main's
- *    `RuntimeWorkspaceSessionController` routed the same key to `ssh:<targetId>` — #12723 unfixed,
- *    plus a new erasure once the renderer began writing `ssh:*` at all;
- *  - an SSH partition no repo names, which boot never enumerated and therefore never read;
- *  - a bare `repoId::path` two partitions both hold, which is the one case where "one workspace
- *    written twice" is false and adoption must gap-fill rather than replace.
- */
+/** Cover SSH persistence beyond repo-backed repair: folder rows split between renderer local/main SSH, stored partitions absent from repos, and same bare IDs across rival hosts requiring gap-fill-only adoption (#12723). */
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -90,15 +79,13 @@ describe('ssh folder workspace partition ownership', () => {
         get: async () => getDefaultWorkspaceSession(),
         patch: async (patch, hostId) => {
           patches.push({ hostId, patch })
-        },
-        setSync: () => {}
+        }
       },
       { tabsByWorktree: { [FOLDER_KEY]: [tab('tab-desktop', FOLDER_KEY)] } },
       state
-    )
+    ).written
 
-    // Main applies a patch field-wise ({ ...current, ...patch }), so a `tabsByWorktree` written to
-    // `ssh:<targetId>` WITHOUT the folder row replaces the row main put there.
+    // Partition patches replace each supplied field; sending only the sibling folder row would erase main’s original row.
     const sshPatch = patches.find((entry) => entry.hostId === SSH_HOST_ID)?.patch
     expect(Object.keys(sshPatch?.tabsByWorktree ?? {})).toEqual([FOLDER_KEY])
     const localPatch = patches.find((entry) => entry.hostId === undefined)?.patch
@@ -142,8 +129,7 @@ describe('ssh partition read source drives the write back', () => {
       worktreesByRepo: {},
       contestedPrimaryHostBySessionKey: read.contestedPrimaryHostBySessionKey
     })
-    // Without this the write re-derives an owner from a catalog that cannot name the host, answers
-    // 'local', and re-strands the rows it just reunited.
+    // Preserve read-source routing without catalog owners or reunited rows get stranded local again.
     expect(routing.hostIdByWorktreeId(WORKTREE_ID)).toBe(SSH_HOST_ID)
   })
 })
@@ -184,8 +170,7 @@ describe('a bare workspace id two partitions both hold', () => {
   it('gap-fills instead of replacing, so the local workspace keeps its unsaved draft', async () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(collidingPartitions(SSH_HOST_ID)),
-      // The catalog registering one repo id on two hosts is the positive evidence that this bare
-      // id names two workspaces; co-presence in 'local' and `ssh:*` alone is the repair's own input.
+      // Multi-host catalog repo IDs prove rivalry; local/SSH co-presence alone is the legacy split to repair.
       [
         { id: REPO_ID, connectionId: null, executionHostId: 'local' },
         { id: REPO_ID, connectionId: TARGET_ID, executionHostId: SSH_HOST_ID }
@@ -204,9 +189,7 @@ describe('a bare workspace id two partitions both hold', () => {
       ]
     )
 
-    // The #12721 shape - empty list here, the real one in the partition - does not stop being a gap
-    // because the id is contested. Reading the empty row as "the base has tabs" is what let the
-    // empty list win and then published it back to the host as a deletion.
+    // Empty terminal lists remain adoptable gaps even for contested IDs; treating them as content would publish deletion over live host tabs (#12721).
     expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
       'tab-rival'
     ])
@@ -215,36 +198,31 @@ describe('a bare workspace id two partitions both hold', () => {
   it('never names the rival partition as the write target for a contested id', async () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(collidingPartitions(SSH_HOST_ID)),
-      // The catalog registering one repo id on two hosts is the positive evidence that this bare
-      // id names two workspaces; co-presence in 'local' and `ssh:*` alone is the repair's own input.
+      // Multi-host catalog repo IDs prove rivalry; local/SSH co-presence alone is the legacy split to repair.
       [
         { id: REPO_ID, connectionId: null, executionHostId: 'local' },
         { id: REPO_ID, connectionId: TARGET_ID, executionHostId: SSH_HOST_ID }
       ]
     )
 
-    // Routing the whole bare id to the rival would carry the local workspace's rows into that
-    // host's partition — the loss the gap-fill above exists to prevent.
+    // Whole-ID routing to the rival would move the local workspace’s rows; gap-fill must preserve its owner.
     expect(read.contestedPrimaryHostBySessionKey?.[WORKTREE_ID]).not.toBe(SSH_HOST_ID)
   })
 
   it('gap-fills a contested id from the same partition on every boot', async () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi({
-        // Listed with the higher host id first so insertion order and sort order disagree: without
-        // the sort the winner would follow whichever order the census happened to return.
+        // Reverse census insertion order versus host sorting to prove deterministic winners.
         [OTHER_SSH_HOST_ID]: session({
           tabsByWorktree: { [WORKTREE_ID]: [tab('tab-two', WORKTREE_ID)] }
         }),
-        // The assembled session names the id through its editor row, so the id is not adrift - but
-        // it holds no terminal row, which is the gap the two partitions both offer to fill.
+        // Editor presence gives this contested key a read source while leaving terminal gaps both partitions can fill.
         local: session({ openFilesByWorktree: { [WORKTREE_ID]: [openFile('/checkout/a.ts')] } }),
         [SSH_HOST_ID]: session({
           tabsByWorktree: { [WORKTREE_ID]: [tab('tab-one', WORKTREE_ID)] }
         })
       }),
-      // Deliberately no repo row: the catalog says nothing, so the only thing that can mark this id
-      // contested is the two partitions both naming it.
+      // No repo evidence: only duplicate partition membership can prove this contest.
       []
     )
 
@@ -269,9 +247,7 @@ describe('a bare workspace id two partitions both hold', () => {
       []
     )
 
-    // A contested id is withheld from the read-source override, so the write re-derives an owner -
-    // and with no catalog that answer is 'local'. Adopting the row would move it out of the
-    // partition that owns it and into the blob, which is the two-store split this change removes.
+    // Unknown contested IDs lack source overrides; adopting would default write ownership local and re-split storage.
     expect(read.session.tabsByWorktree[WORKTREE_ID]).toBeUndefined()
     expect(read.contestedPrimaryHostBySessionKey?.[WORKTREE_ID]).toBeUndefined()
   })
@@ -282,9 +258,7 @@ describe('a bare workspace id two partitions both hold', () => {
       local: session({}),
       [SSH_HOST_ID]: session({
         tabsByWorktree: {
-          // Contested and held by no other partition, so the read declines it...
           [WORKTREE_ID]: [tab('tab-declined', WORKTREE_ID)],
-          // ...while this sibling is adopted and routes back to the same partition.
           [SIBLING_ID]: [tab('tab-sibling', SIBLING_ID)]
         }
       }),
@@ -303,8 +277,7 @@ describe('a bare workspace id two partitions both hold', () => {
         get: async () => getDefaultWorkspaceSession(),
         patch: async (patch, hostId) => {
           patches.push({ hostId, patch })
-        },
-        setSync: () => {}
+        }
       },
       { tabsByWorktree: read.session.tabsByWorktree },
       {
@@ -313,11 +286,9 @@ describe('a bare workspace id two partitions both hold', () => {
         contestedHostWorkspaceSessions: read.contestedHostWorkspaceSessions,
         contestedPrimaryHostBySessionKey: read.contestedPrimaryHostBySessionKey
       }
-    )
+    ).written
 
-    // Main applies a patch field-wise, so an `ssh:<targetId>` write carrying only the sibling would
-    // erase the declined row from the one partition that still holds it. Declining to show a row
-    // must never mean deleting it.
+    // Field-wise SSH patches must retain declined siblings; not displaying rows must never delete their sole stored copy.
     const sshTabs = patches.find((entry) => entry.hostId === SSH_HOST_ID)?.patch.tabsByWorktree
     expect(Object.keys(sshTabs ?? {}).sort()).toEqual([SIBLING_ID, WORKTREE_ID].sort())
     expect(sshTabs?.[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-declined'])
@@ -327,7 +298,6 @@ describe('a bare workspace id two partitions both hold', () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi({
         local: session({}),
-        // Residue: the repo lived here before it moved targets.
         [SSH_HOST_ID]: session({
           tabsByWorktree: { [WORKTREE_ID]: [tab('tab-stale', WORKTREE_ID)] }
         }),
@@ -338,9 +308,33 @@ describe('a bare workspace id two partitions both hold', () => {
       [{ id: REPO_ID, connectionId: OTHER_TARGET_ID, executionHostId: OTHER_SSH_HOST_ID }]
     )
 
-    // `ssh:target-1` sorts first, so without the catalog check its stale row would win the read and
-    // then be written into `ssh:target-2`, overwriting the live one.
+    // Catalog ownership must defeat earlier-sorting stale partitions or old rows overwrite the live host’s data.
     expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-live'])
     expect(read.contestedPrimaryHostBySessionKey?.[WORKTREE_ID]).toBe(OTHER_SSH_HOST_ID)
+  })
+})
+
+describe('a stray local copy beside a leftover in another ssh partition', () => {
+  const REPO_ID = 'repo-remote'
+  const WORKTREE_ID = `${REPO_ID}::/remote/checkout/feature`
+
+  it.each([
+    [TARGET_ID, OTHER_SSH_HOST_ID],
+    [OTHER_TARGET_ID, SSH_HOST_ID]
+  ])('keeps the rows of the partition the catalog names (owner %s)', async (owner, leftover) => {
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi({
+        local: session({ tabsByWorktree: { [WORKTREE_ID]: [tab('tab-local', WORKTREE_ID)] } }),
+        [`ssh:${owner}`]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [tab('tab-live', WORKTREE_ID)] }
+        }),
+        [leftover]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [tab('tab-leftover', WORKTREE_ID)] }
+        })
+      }),
+      [{ id: REPO_ID, connectionId: owner, executionHostId: null }]
+    )
+
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-live'])
   })
 })

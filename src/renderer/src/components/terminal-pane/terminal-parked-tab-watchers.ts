@@ -1,13 +1,7 @@
-/**
- * Parked terminal tab watcher lifecycle.
- *
- * Why: parking unmounts a tab's TerminalPane, so its PTYs lose the renderer byte
- * parsers. This module runs a pane-less byte watcher per PTY while parked and
- * disposes them on reveal, tab close, PTY exit, or worktree teardown.
- */
+/** Parking removes pane byte parsers; run pane-less watchers until reveal, exit or teardown. */
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
-import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
@@ -52,9 +46,7 @@ export type ParkedTerminalPtyEligibility = (ptyId: string) => boolean
 const allowOrdinaryParkRestore = (ptyId: string): boolean =>
   isRemoteExecutionHostPtyId(ptyId) || terminalProviderHasAuthoritativeSnapshot(ptyId)
 
-// Why: fact-mode watchers work for any pty whose bytes transit local main —
-// SSH included — so watcher coverage follows the park-restore policy, not the
-// stricter daemon-snapshot predicate.
+// SSH fact watchers use local main too; coverage follows restore policy, not daemon-only snapshots.
 function parkRestorePolicyFromState(state: {
   settings: { terminalSshViewParking?: boolean } | null
   runtimeStatusByEnvironmentId: ReadonlyMap<
@@ -70,16 +62,11 @@ function parkRestorePolicyFromState(state: {
   }
 }
 
-/**
- * Whether parked byte watchers can fully cover this tab's PTYs (every candidate
- * has a park-restorable PTY on a valid leaf). Hosts must refuse to park a tab
- * that fails this check, or bell/title/completion side effects silently drop.
- */
+/** Refuse parking unless every valid-leaf PTY is restorable and watcher-covered, or bell/title/completion effects disappear. */
 export function canWatcherCoverParkedTerminalTab(
   worktreeId: string,
   tab: ParkableTerminalTabModel,
-  // Why: paired and SSH restore through their own policy; local parking must not
-  // unmount a pane whose preserved daemon can only return a lossy snapshot.
+  // Local parking requires authoritative daemon snapshots; paired/SSH use their own restore policy.
   isPtyEligible: ParkedTerminalPtyEligibility = allowOrdinaryParkRestore
 ): boolean {
   const state = useAppStore.getState()
@@ -197,13 +184,7 @@ function watchablePanes(
   )
 }
 
-/**
- * Called from hosts' onPtyExit before closing the tab; returns true to defer.
- * A parked tab has no PaneManager to promote split siblings, so the live exit
- * path would close the whole tab and kill surviving siblings — reveal remount
- * handles dead PTYs per leaf instead. Single-leaf tabs return false to keep
- * exit→closeTab parity. Also clears the dead leaf's runtime-title slot.
- */
+/** Defer whole-tab close while parked split siblings survive; no PaneManager can promote them. Collapse per leaf and clear dead titles; single-leaf exits retain normal close parity. */
 export function shouldDeferParkedPtyExitTabClose(tabId: string, ptyId: string): boolean {
   const entry = parkedWatchersByTabId.get(tabId)
   if (!entry) {
@@ -270,27 +251,14 @@ function startOrReconcileParkedTabWatchers(
   }
 }
 
-/**
- * Reconciles watchers for every rendered workspace in one pass.
- *
- * Why batched: the per-worktree entry point scans both registries in full, so
- * the terminal host calling it once per workspace made a single effect fire
- * cost surfaces x registry map iterations. Walking each registry once and then
- * doing the per-tab start/reconcile pass is O(registry + tabs) instead.
- *
- * The dispose/start decisions are identical: registry entries are keyed by tab
- * id and every tab belongs to exactly one worktree, so hoisting the dispose and
- * capture-cleanup sweeps ahead of every start only reorders work across
- * disjoint tab sets.
- */
+/** Batch registry sweeps once per rendered workspace set for O(registry + tabs) work. Hoisting disposal/start crosses only disjoint tab sets because each tab has one workspace owner. */
 export function syncParkedTerminalTabWatchersForWorkspaces(
   entriesByWorktreeId: ReadonlyMap<string, ParkedTerminalTabWatcherSyncEntry>
 ): void {
   if (entriesByWorktreeId.size === 0) {
     return
   }
-  // Why lazy: only worktrees that actually own a registry row need the id set,
-  // so an idle profile allocates none of them.
+  // Allocate live-tab sets only for worktrees with registry rows.
   const liveTabIdsByWorktreeId = new Map<string, ReadonlySet<string>>()
   const liveTabIdsFor = (worktreeId: string): ReadonlySet<string> | null => {
     const cached = liveTabIdsByWorktreeId.get(worktreeId)
@@ -331,11 +299,7 @@ export function syncParkedTerminalTabWatchersForWorkspaces(
   }
 }
 
-/**
- * Reconciles watchers for one worktree against its rendered parked set.
- * Run from an effect keyed on committed render state so disposal shares the
- * reveal remount's flush (before PTY data IPC) and start follows the park unmount.
- */
+/** Sync from committed render effects so disposal shares reveal’s flush before PTY data, and start follows park unmount. */
 export function syncParkedTerminalTabWatchers(args: {
   worktreeId: string
   tabs: readonly ParkableTerminalTabModel[]

@@ -57,9 +57,7 @@ describe('buildHydratedTabState – unified format', () => {
     expect(result.activeGroupIdByWorktree.w1).toBe('g1')
   })
 
-  // Why this shape exists at all: a preview used to be an editor tab whose id encoded the document,
-  // and its document was never persisted — so sessions written before previews became browser tabs
-  // carry chrome for a surface no restore can produce. The reader's other tabs must be untouched.
+  // Legacy previews persisted editor chrome without documents; drop unrestorable preview tabs while retaining normal editors.
   it('drops the chrome of a preview tab from before previews were browser tabs', () => {
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),
@@ -115,8 +113,7 @@ describe('buildHydratedTabState – unified format', () => {
 
     const result = buildHydratedTabState(session, new Set(['w1']))
 
-    // The presence half: the ordinary editor tab for the very same document survives, so a filter
-    // that dropped editor chrome wholesale would fail here rather than pass on an empty strip.
+    // Same-document normal editor must survive; dropping all editor chrome would pass an empty-strip check.
     expect(result.unifiedTabsByWorktree.w1?.map((tab) => tab.id)).toEqual(['editor-1'])
   })
 
@@ -284,135 +281,9 @@ describe('buildHydratedTabState – unified format', () => {
       ratio: 0.5
     })
   })
-})
 
-describe('buildHydratedTabState – legacy format', () => {
-  it('converts TerminalTab[] to unified Tab[]', () => {
-    const session: WorkspaceSessionState = {
-      ...makeBaseSession(),
-      tabsByWorktree: {
-        w1: [
-          {
-            id: 'tt1',
-            ptyId: null,
-            worktreeId: 'w1',
-            title: 'bash',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 100
-          }
-        ]
-      }
-    }
-
-    const result = buildHydratedTabState(session, new Set(['w1']))
-    expect(result.unifiedTabsByWorktree.w1).toHaveLength(1)
-    expect(result.unifiedTabsByWorktree.w1[0].contentType).toBe('terminal')
-    expect(result.unifiedTabsByWorktree.w1[0].label).toBe('bash')
-  })
-
-  it('converts PersistedOpenFile[] to editor tabs', () => {
-    const session: WorkspaceSessionState = {
-      ...makeBaseSession(),
-      tabsByWorktree: { w1: [] },
-      openFilesByWorktree: {
-        w1: [
-          {
-            filePath: '/src/index.ts',
-            relativePath: 'src/index.ts',
-            worktreeId: 'w1',
-            language: 'typescript'
-          }
-        ]
-      }
-    }
-
-    const result = buildHydratedTabState(session, new Set(['w1']))
-    expect(result.unifiedTabsByWorktree.w1).toHaveLength(1)
-    expect(result.unifiedTabsByWorktree.w1[0].contentType).toBe('editor')
-    expect(result.unifiedTabsByWorktree.w1[0].id).toBe('/src/index.ts')
-  })
-
-  it('resolves activeTabId from legacy activeTabType', () => {
-    const session: WorkspaceSessionState = {
-      ...makeBaseSession(),
-      tabsByWorktree: {
-        w1: [
-          {
-            id: 'tt1',
-            ptyId: null,
-            worktreeId: 'w1',
-            title: 'bash',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 100
-          }
-        ]
-      },
-      openFilesByWorktree: {
-        w1: [
-          {
-            filePath: '/f1',
-            relativePath: 'f1',
-            worktreeId: 'w1',
-            language: 'ts'
-          }
-        ]
-      },
-      activeTabTypeByWorktree: { w1: 'editor' },
-      activeFileIdByWorktree: { w1: '/f1' }
-    }
-
-    const result = buildHydratedTabState(session, new Set(['w1']))
-    const group = result.groupsByWorktree.w1[0]
-    expect(group.activeTabId).toBe('/f1')
-  })
-
-  it('restores each worktree remembered terminal, not the globally-active one', () => {
-    // Why (regression): the legacy branch used the global session.activeTabId,
-    // so every worktree except the last-focused one lost its remembered
-    // terminal on restart and reopened on the first tab. Use the per-worktree
-    // activeTabIdByWorktree map instead.
-    const terminal = (id: string, worktreeId: string, sortOrder: number) => ({
-      id,
-      ptyId: null,
-      worktreeId,
-      title: id,
-      customTitle: null,
-      color: null,
-      sortOrder,
-      createdAt: 100 + sortOrder
-    })
-    const session: WorkspaceSessionState = {
-      ...makeBaseSession(),
-      // The globally-active tab belongs to w1.
-      activeTabId: 'w1-terminal-1',
-      tabsByWorktree: {
-        w1: [terminal('w1-terminal-1', 'w1', 0)],
-        w2: [terminal('w2-terminal-1', 'w2', 0), terminal('w2-terminal-2', 'w2', 1)]
-      },
-      activeTabIdByWorktree: { w1: 'w1-terminal-1', w2: 'w2-terminal-2' }
-    }
-
-    const result = buildHydratedTabState(session, new Set(['w1', 'w2']))
-    expect(result.groupsByWorktree.w2[0].activeTabId).toBe('w2-terminal-2')
-    expect(result.groupsByWorktree.w1[0].activeTabId).toBe('w1-terminal-1')
-  })
-
-  it('skips worktrees with no tabs or files', () => {
-    const session: WorkspaceSessionState = {
-      ...makeBaseSession(),
-      tabsByWorktree: { w1: [], w2: [] }
-    }
-
-    const result = buildHydratedTabState(session, new Set(['w1', 'w2']))
-    expect(Object.keys(result.unifiedTabsByWorktree)).toHaveLength(0)
-  })
   it('collapses tab records that a corrupt session persisted under one id', () => {
-    // Why: editor owner migration re-stamped a tab id a sibling record already
-    // held. Two rows under one id repeat a React key and strand a ghost row.
+    // Editor migration could re-stamp a sibling’s tab ID; duplicate React keys strand ghost rows.
     const duplicateId = 'editor:wt%3A%3Alungfish:env-a:FINAL-REPORT.md'
     const editorTab = (id: string, entityId: string, sortOrder: number) => ({
       id,
@@ -450,8 +321,7 @@ describe('buildHydratedTabState – legacy format', () => {
     const result = buildHydratedTabState(session, new Set(['w1']))
     const hydratedIds = result.unifiedTabsByWorktree.w1.map((tab) => tab.id)
     expect(hydratedIds).toEqual(['t-unique', duplicateId])
-    // Why sortOrder: the two duplicate records differ only there, so an id-only
-    // assertion passes just as well for an implementation that keeps the LAST one.
+    // Assert sortOrder too: IDs alone cannot distinguish keeping first versus last duplicate.
     expect(result.unifiedTabsByWorktree.w1.map((tab) => tab.sortOrder)).toEqual([0, 1])
     expect(new Set(hydratedIds).size).toBe(hydratedIds.length)
     expect(result.groupsByWorktree.w1[0].tabOrder).toEqual(['t-unique', duplicateId])

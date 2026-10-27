@@ -13,7 +13,8 @@ import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-s
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RateLimitService } from '../rate-limits/service'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import type { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
+import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
+import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../agent-awake-service'
@@ -24,7 +25,7 @@ import type { PluginKillListService } from '../plugins/plugin-kill-list-service'
 import type { PluginMarketplaceService } from '../plugins/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
+import type { RelayBrokerStatus } from '../runtime/mobile-cloud-relay/relay-session-broker-contract'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
@@ -66,7 +67,7 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
-  /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
+  /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,
   profileStateStartup: createInitialProfileStateStartup(),
@@ -87,11 +88,13 @@ export const mainProcessState = {
   runtimeRpc: null as OrcaRuntimeRpcServer | null,
   serveReadinessPublisher: new ServeReadinessPublisher(),
   desktopRelayService: null as DesktopRelayService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the installer assigned by main-process-relay-startup.
+  desktopRelayInstaller: null as DesktopRelayServiceInstaller | null,
   desktopPushService: null as DesktopPushService | null,
   desktopRelayStatus: 'offline' as RelayBrokerStatus,
   desktopRelayCellUrl: undefined as string | undefined,
   pendingUnpairedDeviceAuthFailure: false,
-  // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
+  // Advertise headless browser panes only when offscreen display initialization succeeds.
   headlessBrowserDisplayAvailable: false,
   starNag: null as StarNagService | null,
   agentAwakeService: null as AgentAwakeService | null,
@@ -100,6 +103,8 @@ export const mainProcessState = {
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
   unsubscribeSystemResumeBroadcast: null as (() => void) | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the stop function assigned by main-process-observers.
+  stopDesktopPresenceReporter: null as (() => void) | null,
   watcherShutdownPromise: null as Promise<void> | null,
   watcherShutdownDone: false,
   automations: null as AutomationService | null,
@@ -108,29 +113,26 @@ export const mainProcessState = {
   pluginMarketplaceService: null as PluginMarketplaceService | null,
   pluginMarketplaceInstaller: null as PluginMarketplaceInstaller | null,
   keybindings: null as KeybindingService | null,
-  // Why: a reload intent must not leak to a later load; the recovery reload re-fires did-finish-load, so its flag spares live PTYs from the orphan sweep (#5787).
+  // Timed reload flags cannot leak to later loads; recovery did-finish-load must preserve live PTYs (#5787).
   expectedRendererReload: createWebContentsTimedFlag(),
   recoveryReloadInFlight: createWebContentsTimedFlag(),
-  // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
+  // Retain Settings clicks until the renderer pulls after listener mount.
   pendingOpenSettings: createWebContentsTimedFlag(),
+  // Why: a confirmed Quit Completely can open the window; its renderer pulls this one-shot on mount.
+  pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
-  // Why: a Finder/Explorer "Open With" can land before any window exists; the renderer pulls this buffer on mount.
+  // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
-  // Why a latch and not just "a window exists": a window can be up while its renderer has not
-  // attached the ui:openMarkdownFiles listener yet, and a push into that gap is dropped by
-  // Electron with no error. Only the renderer's own pull proves the listener is live.
+  // Window existence does not prove listener readiness; only the renderer pull does, otherwise pushes silently vanish.
   osDocumentOpenListenerReady: false,
   firstWindowStartupServicesReady: Promise.resolve(),
-  // Why published: the default-session proxy must be applied before the first app-owned fetcher,
-  // but window creation has no reason to queue behind it (the request guard already fences it).
+  // Publish proxy readiness for fetchers; window creation can proceed behind the request guard.
   initialProxyApplicationReady: Promise.resolve(),
-  // Why published: i18n/menu init no longer precedes the launch phase, so the one launch-phase
-  // path that reads a translated string (the runtime-RPC startup failure dialog) waits on this.
-  // Never rejects: the phase's own failure is surfaced by initializeMainProcessReady.
+  // Parallel i18n gates the translated failure dialog only; phase failures are handled by readiness composition.
   mainProcessI18nReady: Promise.resolve(),
   managedWslCliReconciliationReady: Promise.resolve(),
   managedWslCliStartupBarrierReady: Promise.resolve(),
-  // Why: the serve barrier fails open, so this state tells headless clients a WSL PTY launch may still race an un-migrated registration ('settled' = off-Windows no-op).
+  // Fail-open serve barrier exposes pending migration to headless clients; settled is the off-Windows no-op.
   managedWslCliReconciliationStatus: 'settled' as 'pending' | 'settled' | 'failed',
   gpuCrashFallbackTracker: new GpuCrashFallbackTracker({
     windowMs: DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
@@ -159,7 +161,6 @@ export const mainProcessState = {
   tray: null as Tray | null
 }
 
-/** Environment passed to GPU fallback marker helpers. */
 export function gpuFallbackEnvironment(): GpuFallbackEnvironment {
   return {
     appVersion: app.getVersion(),

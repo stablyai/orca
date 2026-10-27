@@ -1,8 +1,14 @@
+import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/terminal-file-open-in-group-toast'
+import { beginLinkOpenRequest } from './link-open-request'
 import { translate } from '@/i18n/i18n'
-import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import {
+  openHttpLink,
+  captureHttpLinkIntent,
+  canHttpLinkOpenInSourceGroup,
+  type HttpLinkSourceOwner
+} from '@/lib/http-link-routing'
 
-// Catalog keys keep their original terminal namespace: they are opaque ids with
-// shipped translations, and the popover is now shared with native chat.
+// Keep original terminal catalog keys: their shipped translations are now shared with native chat.
 
 export type HttpLinkDestination = 'orca' | 'system'
 
@@ -42,6 +48,13 @@ export function httpLinkActionDestinationsFor(
     : { primary: 'system', alternate: 'orca' }
 }
 
+export function httpLinkDirectClickDestination(
+  destinations: HttpLinkActionDestinations,
+  shiftKey: boolean
+): HttpLinkDestination {
+  return shiftKey ? (destinations.alternate ?? destinations.primary) : destinations.primary
+}
+
 export function httpLinkDestinationLabel(destination: HttpLinkDestination): string {
   return destination === 'orca'
     ? translate(
@@ -54,11 +67,17 @@ export function httpLinkDestinationLabel(destination: HttpLinkDestination): stri
       )
 }
 
-/** One action per offered destination; surfaces share the labels and the open call. */
 export function buildHttpLinkActions(
   destinations: HttpLinkActionDestinations | undefined,
-  open: (destination: HttpLinkDestination | undefined) => void | Promise<void>
-): { primary: HttpLinkAction; alternate?: HttpLinkAction } {
+  open: (destination: HttpLinkDestination | undefined) => void | Promise<void>,
+  source?: {
+    worktreeId: string
+    url?: string
+    sourceOwner?: HttpLinkSourceOwner
+    sourceTabId?: string | null
+    openInSourceGroup: () => void | Promise<void>
+  }
+): { primary: HttpLinkAction; alternate?: HttpLinkAction; secondaryActions?: HttpLinkAction[] } {
   const primaryDestination = destinations?.primary
   const primary: HttpLinkAction = {
     external: primaryDestination === 'system',
@@ -67,12 +86,32 @@ export function buildHttpLinkActions(
       : translate('auto.components.terminal.pane.TerminalLinkActionPopover.openLink', 'Open link'),
     run: () => open(primaryDestination)
   }
+  const secondaryActions =
+    source &&
+    (destinations?.primary === 'orca' || destinations?.alternate === 'orca') &&
+    canHttpLinkOpenInSourceGroup(
+      source.worktreeId,
+      source.sourceTabId,
+      source.url,
+      source.sourceOwner
+    )
+      ? [
+          {
+            label: translate(
+              'auto.components.terminal.pane.TerminalLinkActionPopover.openInThisGroup',
+              'Open in this group'
+            ),
+            run: source.openInSourceGroup
+          }
+        ]
+      : undefined
   const alternateDestination = destinations?.alternate
   if (!alternateDestination) {
-    return { primary }
+    return { primary, ...(secondaryActions ? { secondaryActions } : {}) }
   }
   return {
     primary,
+    ...(secondaryActions ? { secondaryActions } : {}),
     alternate: {
       external: alternateDestination === 'system',
       label: httpLinkDestinationLabel(alternateDestination),
@@ -87,6 +126,8 @@ export type HttpLinkRoutingPreferenceRequester = (
 
 export type RoutedHttpLinkOptions = {
   worktreeId: string
+  sourceTabId?: string | null
+  openInSourceGroup?: boolean
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
   forceDestination?: HttpLinkDestination
@@ -94,10 +135,22 @@ export type RoutedHttpLinkOptions = {
 }
 
 export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): void {
+  const isCurrentRequest = beginLinkOpenRequest()
+  const linkIntent = captureHttpLinkIntent(
+    deps.worktreeId,
+    deps.sourceTabId,
+    deps.openInSourceGroup
+  )
+  if (deps.openInSourceGroup && !linkIntent) {
+    showOpenInGroupRefusedToast(url)
+    return
+  }
+  const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined
   // Why: the clicked link's owner beats the global active runtime for both local and remote routes.
   const sourceOwner = deps.sourceOwner ?? { kind: 'local' }
   if (deps.forceDestination) {
     openHttpLink(url, {
+      ...(linkContext ? { linkContext } : {}),
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
@@ -107,9 +160,9 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
     return
   }
   if (deps.modifierHeld) {
-    // Why: the modifier states a destination outright, so it also skips the
-    // one-time routing prompt; openHttpLink resolves which destination it means.
+    // Explicit modifier routing skips the one-time preference prompt; openHttpLink resolves its destination.
     openHttpLink(url, {
+      ...(linkContext ? { linkContext } : {}),
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
       modifierHeld: true,
@@ -122,16 +175,20 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
   const preferenceDecision =
     sourceOwner.kind === 'local' ? deps.requestOpenLinksInAppPreference?.(url) : null
   if (preferenceDecision === null || preferenceDecision === undefined) {
-    openHttpLink(url, { allowRemoteInApp: true, worktreeId: deps.worktreeId, sourceOwner })
+    openHttpLink(url, {
+      ...(linkContext ? { linkContext } : {}),
+      allowRemoteInApp: true,
+      worktreeId: deps.worktreeId,
+      sourceOwner
+    })
     return
   }
 
-  // Why: the first link click may need an async preference dialog.
-  // Suppress the browser's default link handling first, then route after the
-  // persisted choice is available.
+  // Prevent native navigation before awaiting the initial routing-preference dialog.
   void Promise.resolve(preferenceDecision)
     .then((openInOrca) => {
       openHttpLink(url, {
+        ...(linkContext ? { linkContext } : {}),
         allowRemoteInApp: true,
         worktreeId: deps.worktreeId,
         forceSystemBrowser: !openInOrca,
@@ -140,6 +197,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
     })
     .catch(() => {
       openHttpLink(url, {
+        ...(linkContext ? { linkContext } : {}),
         allowRemoteInApp: true,
         worktreeId: deps.worktreeId,
         forceSystemBrowser: true,

@@ -1,14 +1,36 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { GITLAB_METHODS } from './gitlab'
+import { WorkItemDetails } from '../../../../shared/rpc-contract/gitlab-params'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('gitlab RPC methods', () => {
+  it("lists a repo's assignable users on the server that owns the repo", async () => {
+    const users = [
+      { id: 7, username: 'ana', name: 'Ana', avatarUrl: 'https://gitlab.example.com/ana.png' }
+    ]
+    const listGitLabRepoAssignableUsers = vi.fn().mockResolvedValue(users)
+    const runtime = { getRuntimeId: () => 'test-runtime', listGitLabRepoAssignableUsers }
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods dispatch only listGitLabRepoAssignableUsers.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: GITLAB_METHODS
+    })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('gitlab.listAssignableUsers', { repo: 'id:repo-1' })
+    )
+
+    expect(listGitLabRepoAssignableUsers).toHaveBeenCalledWith('id:repo-1')
+    expect(response).toMatchObject({ ok: true, result: users })
+  })
+
   it('routes GitLab task queries and mutations to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -271,13 +293,44 @@ describe('gitlab RPC methods', () => {
       'id:repo-1',
       8,
       'mr',
-      projectRef
+      projectRef,
+      undefined
     )
     expect(runtime.getGitLabRepoWorkItemByPath).toHaveBeenCalledWith(
       'id:repo-1',
       { host: 'gitlab.example.com', path: 'group/project' },
       7,
       'issue'
+    )
+  })
+
+  it('forwards the optional Checks scope while old params safely strip it', async () => {
+    const getGitLabRepoWorkItemDetails = vi.fn().mockResolvedValue({ body: 'Details' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the runtime identity and work-item method are exercised by this dispatcher.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getGitLabRepoWorkItemDetails
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+    const params = { repo: 'id:repo-1', iid: 8, type: 'mr', includeReviewDetails: false }
+    await dispatcher.dispatch(makeRequest('gitlab.workItemDetails', params))
+    expect(getGitLabRepoWorkItemDetails).toHaveBeenCalledWith(
+      'id:repo-1',
+      8,
+      'mr',
+      undefined,
+      false
+    )
+    expect(WorkItemDetails.parse(params)).toHaveProperty('includeReviewDetails', false)
+    const oldParams = WorkItemDetails.omit({ includeReviewDetails: true }).parse(params)
+    expect(oldParams).not.toHaveProperty('includeReviewDetails')
+    await dispatcher.dispatch(makeRequest('gitlab.workItemDetails', oldParams))
+    expect(getGitLabRepoWorkItemDetails).toHaveBeenLastCalledWith(
+      'id:repo-1',
+      8,
+      'mr',
+      undefined,
+      undefined
     )
   })
 
@@ -347,8 +400,7 @@ describe('gitlab RPC methods', () => {
     )
   })
 
-  // Regression for #7732: the WS/relay transports close the connection on frames
-  // over 1 MB, so the excerpt must be produced before the response is serialised.
+  // Bound excerpts before serialization: WS/relay frames over 1 MiB close the connection (#7732).
   it('bounds the job trace before it crosses the transport when logExcerpt is set', async () => {
     const noisyTrace = [
       'section_start:1699000000:build\r\u001b[0K$ pnpm build',

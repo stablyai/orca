@@ -1,13 +1,3 @@
-// The idle sweep must never stop a provider child that still owes the user work.
-//
-// A Claude chat is published before its CLI answers initialize, and a message sent in that window
-// is accepted and stays queued until it does; the delivery loop hands it over once startup lands.
-// The idle sweep ticks meanwhile. Inside the idle window it must leave that queued message and the
-// starting child alone, and every journal publish — the handover included — starts the window
-// again; only a chat quiet for the whole window loses its agent. And a lead whose turn has settled
-// can leave subagents, commands and monitors running inside the child; stopping it then ends them
-// silently.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,6 +23,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const SWEEP_MS = 5
@@ -75,11 +66,9 @@ beforeEach(async () => {
         lifecycle.push(host.handleAdapterEvent(mapped))
       }
     },
-    // As the runtime wires it: an admitted prompt's outcome reaches the journal out of band.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     onChildWorkEvidence: (sessionId, evidence) =>
       host.publishChildWorkEvidence(sessionId, evidence),
-    // Initialize answers only when the test says so.
     openConnection: async (launch, handlers) => {
       const connection = await claude.openConnection(launch, handlers)
       const answer = connection.initializationResult
@@ -94,6 +83,7 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
@@ -102,7 +92,6 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-a',
     idleSweep: { intervalMs: SWEEP_MS, idleMs: IDLE_MS },
     now: () => clock,
-    // The host's status row and child records, as the runtime wires them.
     statusSink: {
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
       forget: (subject) => server.dropStructuredStatus(subject),
@@ -159,56 +148,62 @@ async function dispatchState(clientMessageId: string): Promise<string | undefine
   )?.dispatchState
 }
 
-/** The delivery loop hands a message over on its own serialized steps after startup lands; this
- *  yields to them without moving the host clock. */
+/** Yield to delivery without advancing host time. */
 async function untilSent(connection: { sent: unknown[] }): Promise<void> {
   for (let turn = 0; turn < 2000 && connection.sent.length === 0; turn += 1) {
     await new Promise((resolve) => setImmediate(resolve))
   }
 }
 
-/** Long enough for many sweep ticks, so "not stopped" means the sweep declined. */
+/** Observe enough ticks to distinguish a declined sweep from one that never ran. */
 function waitOutSeveralSweeps(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
 
 describe('a Claude chat whose CLI is still starting', () => {
-  it('keeps a message queued inside the idle window, and delivers it once startup lands', async () => {
+  it('holds a message until startup lands, and keeps the agent inside the idle window meanwhile', async () => {
     await attachStarting()
-    const held = await send('sent while starting')
+    const sent = await send('sent while starting')
 
+    expect(claude.connections[0].sent).toEqual([])
+    expect(await dispatchState(sent)).toBe('pending')
     clock += IDLE_MS - 1
     await waitOutSeveralSweeps()
 
+    expect(claude.connections[0].sent).toEqual([])
+    expect(await dispatchState(sent)).toBe('pending')
     expect(host.hasSession(SESSION)).toBe(true)
     expect(claude.connections[0].closeCount).toBe(0)
-    expect(await dispatchState(held)).toBe('pending')
 
     landInit()
-    await adapter.awaitStarted(SESSION)
-
-    await vi.waitFor(
-      () => expect(claude.connections[0].sent).toEqual([expect.objectContaining({ type: 'user' })]),
-      { timeout: 3000 }
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
     )
-    await vi.waitFor(async () => expect(await dispatchState(held)).toBe('accepted'))
+    await untilSent(claude.connections[0])
+    expect(claude.connections[0].sent).toEqual([expect.objectContaining({ type: 'user' })])
+    await vi.waitFor(async () => expect(await dispatchState(sent)).toBe('accepted'))
+    expect(host.hasSession(SESSION)).toBe(true)
   })
 
-  it('gives the message it hands over at startup a full idle window to open its turn', async () => {
+  it('gives a message held while starting a full idle window after startup lands to open its turn', async () => {
+    claude = fakeClaude({ replayUuid: null })
     await attachStarting()
-    const held = await send('sent while starting')
     const connection = claude.connections[0]
-    // Claude echoes a prompt only when it starts that turn, which a loaded machine delays.
-    connection.send = async (message) => {
-      connection.sent.push(message)
-    }
+    // Loaded runners may delay Claude’s first turn echo.
+    const held = await send('sent while starting')
+    expect(connection.sent).toEqual([])
+    expect(await dispatchState(held)).toBe('pending')
     clock += IDLE_MS - 1
     await waitOutSeveralSweeps()
+    expect(connection.sent).toEqual([])
+    expect(await dispatchState(held)).toBe('pending')
     expect(host.hasSession(SESSION)).toBe(true)
 
-    // Startup lands just before the window closes; the handover's publish starts it again.
+    // Startup just before expiry renews activity through handover.
     landInit()
-    await adapter.awaitStarted(SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     await Promise.all(lifecycle)
     await untilSent(connection)
     expect(connection.sent).toEqual([expect.objectContaining({ type: 'user' })])
@@ -221,13 +216,15 @@ describe('a Claude chat whose CLI is still starting', () => {
     await host.flushStreamedEvents(SESSION)
     await waitOutSeveralSweeps()
     expect(host.hasSession(SESSION)).toBe(true)
-    expect(await dispatchState(held)).toBe('accepted')
+    await vi.waitFor(async () => expect(await dispatchState(held)).toBe('accepted'))
   })
 
   it('stops the agent and closes the conversation once its turn has finished and it idled', async () => {
     await attachStarting()
     landInit()
-    await adapter.awaitStarted(SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     const answered = await send('answered')
     await vi.waitFor(async () => expect(await dispatchState(answered)).toBe('accepted'))
     claude.connections[0].handlers.onMessage?.({
@@ -265,7 +262,9 @@ describe('a chat whose settled lead still has background work running', () => {
   async function settleTurnLeavingTask(taskType: string): Promise<void> {
     await attachStarting()
     landInit()
-    await adapter.awaitStarted(SESSION)
+    await vi.waitFor(() =>
+      expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
+    )
     const fanOut = await send('fan out')
     await vi.waitFor(async () => expect(await dispatchState(fanOut)).toBe('accepted'))
     frame({
@@ -304,7 +303,7 @@ describe('a chat whose settled lead still has background work running', () => {
       task_id: 'task-1',
       status: 'completed'
     })
-    // A finished background task can wake the lead; that turn is owed too until it settles.
+    // Child completion still owes the lead’s wake-up turn.
     frame({ type: 'result', subtype: 'success', uuid: 'result-2', is_error: false, result: 'ok' })
     await host.flushStreamedEvents(SESSION)
     clock += IDLE_MS

@@ -1,7 +1,6 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
-/** Minimal row shape the lineage rules need; DashboardAgentRow satisfies it,
- *  and other surfaces (e.g. the Agents thread list) can feed synthetic rows. */
+/** Minimal lineage input for real dashboard rows and synthetic thread-list rows. */
 export type AgentLineageSourceRow = {
   paneKey: string
   entry: Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
@@ -84,8 +83,7 @@ export function buildAgentRowLineageTree<T extends AgentLineageSourceRow>(
 
   const rootRows = rows.filter((row) => !childPaneKeys.has(row.paneKey))
   if (rootRows.length === 0 && rows.length > 0) {
-    // Why: malformed orchestration metadata can form a closed cycle. Keep every
-    // row visible as a flat root instead of hiding all participants.
+    // Closed orchestration cycles have no roots; keep participants visible as flat rows.
     return { rootRows: [...rows], childrenByParentPaneKey: new Map(), childPaneKeys: new Set() }
   }
 

@@ -2,17 +2,68 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { NativeChatQueuedMessageEditor } from './NativeChatQueuedMessageEditor'
+import type * as NativeChatAttachmentUpload from './native-chat-attachment-upload'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import {
   NativeChatPaneFileDropSurface,
   useNativeChatPaneFileDropClaim
 } from './NativeChatPaneFileDropSurface'
-import { nativeChatPaneDragKind } from './native-chat-pane-file-drop'
+import {
+  nativeChatPaneDragKind,
+  registerNestedWorkspaceDropSink
+} from './native-chat-pane-file-drop'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('../../store', () => ({ useAppStore: { getState: () => ({}) } }))
+vi.mock('./native-chat-attachment-upload', async (original) => ({
+  ...(await original<typeof NativeChatAttachmentUpload>()),
+  resolveNativeChatAttachmentOwnerForWorktree: () => ({ kind: 'local' })
+}))
 
 const OVERLAY = '[data-native-chat-drop-overlay="true"]'
 const IGNORE_DRAG = (): void => {}
+
+function EditingCard({ disabled = false }: { disabled?: boolean }) {
+  return (
+    <TooltipProvider>
+      <NativeChatQueuedMessageEditor
+        editor={{
+          messageId: 'card',
+          text: 'edit',
+          acquiring: false,
+          saving: disabled,
+          canSave: true,
+          change: IGNORE_DRAG,
+          save: IGNORE_DRAG,
+          cancel: IGNORE_DRAG,
+          images: {
+            chips: [],
+            empty: false,
+            intake: {
+              begin: () => null,
+              resolve: () => false,
+              reveal: IGNORE_DRAG,
+              drop: () => false,
+              append: () => [],
+              remove: IGNORE_DRAG
+            }
+          }
+        }}
+        attachTo={{
+          terminalTabId: 'tab',
+          transport: {
+            sessionId: 's',
+            worktreeId: 'wt',
+            runtimeEnvironmentId: null,
+            acceptsImages: true
+          }
+        }}
+      />
+    </TooltipProvider>
+  )
+}
 
 class DropDataTransfer {
   dropEffect = 'none'
@@ -41,7 +92,6 @@ function osDrag(): DropDataTransfer {
   return transfer
 }
 
-/** Mounts the composer's claim the way the real composer hook does. */
 function ClaimingComposer({
   disabled = false,
   onDragOverCapture = IGNORE_DRAG,
@@ -52,7 +102,8 @@ function ClaimingComposer({
   onDropCapture?: (event: React.DragEvent<HTMLDivElement>) => void
 }) {
   useNativeChatPaneFileDropClaim({
-    scopeKey: 'pane:1',
+    destinationKey: 'pane:1',
+    captureExternalDrop: () => async () => {},
     disabled,
     onDragOverCapture,
     onDropCapture
@@ -103,6 +154,53 @@ describe('nativeChatPaneDragKind', () => {
 })
 
 describe('NativeChatPaneFileDropSurface', () => {
+  it('scopes OS and in-app hover to the editing card, clears on exit/end and respects disabled intake', () => {
+    const { container, rerender } = renderPane(
+      <>
+        <ClaimingComposer />
+        <EditingCard />
+      </>
+    )
+    const edit = screen.getByRole('textbox').closest('[data-queued-message-editor]')
+    if (!(edit instanceof HTMLElement)) {
+      throw new Error('Expected editing card')
+    }
+    for (const drag of [osDrag(), workspaceDrag()]) {
+      fireDrag(screen.getByTestId('transcript'), 'dragover', drag)
+      fireDrag(screen.getByRole('textbox'), 'dragover', drag)
+      expect(container.querySelectorAll(OVERLAY)).toHaveLength(1)
+      expect(edit.querySelector(OVERLAY)?.textContent).toContain('Drop to attach to this message')
+      fireDrag(
+        screen.getByRole('textbox'),
+        'dragleave',
+        drag,
+        screen.getByRole('button', { name: 'Attach file' })
+      )
+      expect(edit.querySelector(OVERLAY)).not.toBeNull()
+      fireDrag(
+        screen.getByRole('button', { name: 'Attach file' }),
+        'dragleave',
+        drag,
+        screen.getByTestId('transcript')
+      )
+      expect(edit.querySelector(OVERLAY)).toBeNull()
+      fireDrag(screen.getByRole('textbox'), 'dragover', drag)
+      act(() => document.dispatchEvent(new Event('dragend', { bubbles: true })))
+      expect(edit.querySelector(OVERLAY)).toBeNull()
+      fireDrag(screen.getByRole('textbox'), 'dragover', drag)
+      fireDrag(screen.getByRole('textbox'), 'drop', drag)
+      expect(container.querySelector(OVERLAY)).toBeNull()
+    }
+    rerender(
+      <NativeChatPaneFileDropSurface className="pane">
+        <ClaimingComposer />
+        <EditingCard disabled />
+      </NativeChatPaneFileDropSurface>
+    )
+    fireDrag(screen.getByRole('textbox'), 'dragover', osDrag())
+    expect(container.querySelector(OVERLAY)).toBeNull()
+  })
+
   it('routes a drop on the transcript to the composer that claimed the pane', () => {
     const onDropCapture = vi.fn()
     const { transcript, container } = renderPane(<ClaimingComposer onDropCapture={onDropCapture} />)
@@ -115,20 +213,38 @@ describe('NativeChatPaneFileDropSurface', () => {
     expect(container.querySelector(OVERLAY)).toBeNull()
   })
 
-  it('publishes the claiming composer as the OS drop route target', () => {
-    const { container } = renderPane(<ClaimingComposer />)
-    const surface = container.querySelector('.pane')
-    expect(surface?.getAttribute('data-native-file-drop-target')).toBe('composer')
-    expect(surface?.getAttribute('data-composer-scope-key')).toBe('pane:1')
+  it('hands an in-app drop on an editing queued card to that card, through the claim', () => {
+    const composerDrop = vi.fn()
+    const sink = vi.fn()
+    const { container } = renderPane(
+      <>
+        <ClaimingComposer onDropCapture={composerDrop} />
+        <div data-os-file-drop-owner="" data-testid="owner">
+          <span data-testid="card">card</span>
+        </div>
+      </>
+    )
+    const unregister = registerNestedWorkspaceDropSink(screen.getByTestId('owner'), sink)
+    const card = screen.getByTestId('card')
+    fireDrag(card, 'dragover', workspaceDrag())
+    expect(container.querySelector(OVERLAY)).toBeNull()
+    fireDrag(card, 'drop', workspaceDrag())
+    expect(composerDrop).toHaveBeenCalledWith(expect.anything(), sink)
+    unregister()
   })
 
-  it('leaves the pane to the terminal behind it while no composer is mounted', () => {
+  it('owns OS drops without publishing a scope marker', () => {
+    const { container } = renderPane(<ClaimingComposer />)
+    const surface = container.querySelector('.pane')
+    expect(surface?.hasAttribute('data-os-file-drop-owner')).toBe(true)
+    expect(surface?.hasAttribute('data-composer-scope-key')).toBe(false)
+  })
+
+  it('keeps an OS owner even while no composer is mounted', () => {
     const { transcript, container } = renderPane(null)
     fireDrag(transcript, 'dragover', workspaceDrag())
     expect(container.querySelector(OVERLAY)).toBeNull()
-    expect(container.querySelector('.pane')?.hasAttribute('data-native-file-drop-target')).toBe(
-      false
-    )
+    expect(container.querySelector('.pane')?.hasAttribute('data-os-file-drop-owner')).toBe(true)
   })
 
   it('does not invite a drop the guarded composer will refuse', () => {
@@ -138,12 +254,11 @@ describe('NativeChatPaneFileDropSurface', () => {
     )
     fireDrag(transcript, 'dragover', workspaceDrag())
     expect(container.querySelector(OVERLAY)).toBeNull()
-    // The composer still answers for the drag: that refusal is what keeps it
-    // out of the terminal behind the chat.
+    // Refused composer drags must not fall through to the terminal.
     expect(onDragOverCapture).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the overlay for an OS drag without claiming its drop', () => {
+  it('shows the overlay for OS drags while keeping workspace handlers separate', () => {
     const onDropCapture = vi.fn()
     const { transcript, container } = renderPane(<ClaimingComposer onDropCapture={onDropCapture} />)
     fireDrag(transcript, 'dragover', osDrag())
@@ -164,7 +279,7 @@ describe('NativeChatPaneFileDropSurface', () => {
 
     rerender(pane(true))
     expect(container.querySelector(OVERLAY)).toBeNull()
-    expect(container.querySelector('.pane')?.getAttribute('data-composer-scope-key')).toBe('pane:1')
+    expect(container.querySelector('.pane')?.hasAttribute('data-os-file-drop-owner')).toBe(true)
 
     rerender(pane(false))
     expect(container.querySelector(OVERLAY)).toBeNull()
@@ -183,13 +298,11 @@ describe('NativeChatPaneFileDropSurface', () => {
     expect(container.querySelector(OVERLAY)).toBeNull()
   })
 
-  it('clears an OS drag overlay from the document drop the preload route consumes', () => {
+  it('clears an OS drag overlay when a drop ends outside the pane', () => {
     const { transcript, container } = renderPane(<ClaimingComposer />)
     fireDrag(transcript, 'dragover', osDrag())
     expect(container.querySelector(OVERLAY)).not.toBeNull()
 
-    // The preload listener stops this event at `document`, so the surface never
-    // sees it as a React drop.
     act(() => {
       document.dispatchEvent(new Event('drop', { bubbles: false }))
     })

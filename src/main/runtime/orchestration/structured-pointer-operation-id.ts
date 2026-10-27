@@ -1,20 +1,5 @@
-/**
- * The agent-session operation id one structured worker mailbox's pointer send runs under.
- *
- * Orchestration's own `msg_<hex>` ids do not match the host's `^\d{13}-[0-9a-f]{32}$` shape and are
- * refused before the first send, so the id is minted here instead. It is durable and reused across
- * retries, because the id IS the send's idempotency key: a fresh id for the same nudge would land
- * as a second turn, and the host replays a recorded id's verdict without reaching the provider, so
- * a retry after a failed send starts nothing. It is re-minted only when the send is genuinely a
- * different call: a different batch of mail or session, or one the journal shows is owed again
- * (see `decideStructuredPointerAttempt`). Age never re-mints a send the host recorded: its verdict
- * is the only evidence of whether the nudge landed.
- *
- * Reuse is keyed on the MESSAGE IDS in the batch, never on the pointer body: the body names only
- * how many messages are waiting, so two unrelated same-size batches share a fingerprint. Reusing a
- * live id across them makes the host answer from its operation ledger — `accepted`, with no turn
- * sent — and this lane then marks the new mail delivered. That is silent mail loss.
- */
+/** Mint host-shaped durable ids and reuse retries; key by message ids, never equal-size pointer text, to prevent silent mail loss.
+ * Age never re-mints recorded sends; only changed identity or journal evidence can justify a new attempt. */
 
 import { createHash, randomBytes } from 'node:crypto'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
@@ -28,18 +13,8 @@ export type StructuredPointerSubmission = Pick<
   'clientMessageId' | 'dispatchState' | 'submittedAt'
 >
 
-/**
- * What to do with a mailbox's pointer, given its operation row and the session's recorded sends.
- *
- * - `stamp`: the row's send ran; the batch is pointed.
- * - `park`: the row's send is still in flight; its settlement is the next edge.
- * - `mint`: a new send. The batch or session changed; the agent ran a turn after the row was
- *   minted; an earlier process minted it, so its attempt died with that process; or the host never
- *   recorded it and would now refuse it as too old to admit.
- * - `reuse`: resend under the row's id. Unrecorded, it is a first delivery; recorded as failed, the
- *   host replays that verdict and starts nothing, so a provider that dies on every turn is not
- *   restarted by every status edge, and a user's Stop stays stopped.
- */
+/** stamp observed delivery; park in-flight sends; mint a genuinely new/recoverable attempt; reuse ids to replay recorded verdicts.
+ * Failed-send replay starts no provider turn, so repeated edges cannot restart a failed agent or undo the user's Stop. */
 export type StructuredPointerAttempt = 'mint' | 'reuse' | 'stamp' | 'park'
 
 export function decideStructuredPointerAttempt(input: {
@@ -82,10 +57,17 @@ export function mintAgentSessionOperationId(now: number): string {
 /** Batch identity, and the only thing reuse may be keyed on. */
 export function structuredPointerBatchFingerprint(
   sessionId: string,
-  messageIds: readonly string[]
+  messageIds: readonly string[],
+  contextClearOperationId?: string
 ): string {
   return createHash('sha256')
-    .update(JSON.stringify([sessionId, messageIds]))
+    .update(
+      JSON.stringify(
+        contextClearOperationId
+          ? [sessionId, messageIds, contextClearOperationId]
+          : [sessionId, messageIds]
+      )
+    )
     .digest('base64url')
 }
 
@@ -100,13 +82,18 @@ export function resolveStructuredPointerOperation(args: {
   sessionId: string
   /** The rows this nudge stands for; batch identity, not the body, decides reuse. */
   messageIds: readonly string[]
+  contextClearOperationId?: string
   submissions: readonly StructuredPointerSubmission[]
   /** The operation id this process last sent for this mailbox, if any. */
   sentByThisProcess: string | undefined
   now?: number
 }): StructuredPointerOperation {
   const now = args.now ?? Date.now()
-  const batchFingerprint = structuredPointerBatchFingerprint(args.sessionId, args.messageIds)
+  const batchFingerprint = structuredPointerBatchFingerprint(
+    args.sessionId,
+    args.messageIds,
+    args.contextClearOperationId
+  )
   const stored = args.db.getStructuredPointerOperation(args.mailboxHandle)
   const attempt = decideStructuredPointerAttempt({
     row: stored,

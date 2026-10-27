@@ -1,11 +1,14 @@
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  pickHostTurnEnd,
   pickParsedAgentStatusPayload,
   type AgentStatusEntry,
   type AgentStatusIpcPayload,
-  type ParsedAgentStatusPayload
+  type ParsedAgentStatusPayload,
+  type TurnEndDisposition
 } from '../../shared/agent-status-types'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
 
@@ -17,14 +20,16 @@ export type RuntimeAgentRowSnapshot = {
   connectionId: string | null
   payload: ParsedAgentStatusPayload
   stateStartedAt: number
+  turnEndedAt?: number
+  turnEndDisposition?: TurnEndDisposition
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
+  programStatus?: ProgramStatusFacet
 }
 
 function isLiveObservation(row: AgentStatusIpcPayload): boolean {
-  // A restored row cannot prove liveness (the turn may have ended while offline), and a
-  // resume-identity row carries no status at all.
+  // Restored rows cannot prove current liveness; resume-identity rows carry no status.
   return row.restoredUnconfirmed !== true && row.providerSessionOnly !== true
 }
 
@@ -89,8 +94,7 @@ export function selectFreshExplicitAgentStatus(args: {
     : null
 }
 
-/** The pane's live row for the mobile projection: its own key first, then the terminal it is
- *  bound to, which is the only join left once a pane key has moved. */
+/** Prefer the pane's own key, then its terminal binding when the pane key has moved. */
 export function selectFreshAgentRowForMobileTab(args: {
   paneKey: string
   terminalHandle: string | null
@@ -130,8 +134,10 @@ export function selectFreshAgentRowForMobileTab(args: {
     ...(match.tabId ? { tabId: match.tabId } : {}),
     payload: pickParsedAgentStatusPayload(match),
     stateStartedAt: match.stateStartedAt ?? match.receivedAt,
+    ...pickHostTurnEnd(match),
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
+    ...(match.programStatus ? { programStatus: match.programStatus } : {}),
     ...(match.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: match.evidenceObservedAt }
       : {})

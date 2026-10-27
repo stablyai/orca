@@ -9,8 +9,8 @@ import {
 } from '../../cloud/apps/relay/src/test-fixtures/relay-contract-baseline/control-messages'
 import { AssignmentRequestSchema } from '../../cloud/packages/relay-contract/src/director-messages'
 import { HostHelloSchema } from '../../cloud/packages/relay-contract/src/control-messages'
-import { requestRelayAssignment } from '../../src/main/runtime/relay/relay-http-client'
-import { RelayAssignRateGate } from '../../src/main/runtime/relay/relay-assign-rate-gate'
+import { requestRelayAssignment } from '../../src/main/runtime/mobile-cloud-relay/relay-http-client'
+import { RelayAssignRateGate } from '../../src/main/runtime/mobile-cloud-relay/relay-assign-rate-gate'
 
 const assignment = {
   v: 1,

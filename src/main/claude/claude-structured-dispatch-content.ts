@@ -15,9 +15,7 @@ import {
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import { claudeRecord } from './claude-structured-item-translation'
 
-/** Orca refused the message's content, as opposed to failing to read an attachment. */
 export class ClaudeDispatchContentError extends Error {
-  /** What was wrong, typed where the check saw it; `message` stays for logs. */
   readonly failure: SubmissionRejectionFact
 
   constructor(message: string, failure: SubmissionRejectionFact) {
@@ -34,7 +32,6 @@ function attachmentError(message: string, attachment: AgentSessionAttachmentProb
   )
 }
 
-/** A message Claude rejected, in the words that name Claude and its legacy markers. */
 export function claudeDispatchRejection(
   failure: SubmissionRejectionFact
 ): AgentJournalDispatchRejection {
@@ -45,13 +42,11 @@ export function claudeDispatchRejection(
   })
 }
 
-/** Why a message whose content could not be built was not sent: Orca's own refusal of it, or an
- *  attachment it could not read. Never the provider. */
+/** Content-build failures are local refusals or unreadable attachments, never provider failures. */
 export function claudeDispatchContentRejection(error: unknown): AgentJournalDispatchRejection {
   if (error instanceof ClaudeDispatchContentError) {
     return claudeDispatchRejection(error.failure)
   }
-  // The row says only that it could not be read; why belongs in the log.
   console.warn('[claude-dispatch] attachment could not be read:', error)
   return claudeDispatchRejection(agentSessionFailureFact('attachmentUnreadable'))
 }
@@ -91,14 +86,12 @@ export async function readClaudeImage(path: string, openImpl: typeof open = open
       }
       bytesRead += result.bytesRead
     }
-    // A file can grow after the initial stat and after the final read returns
-    // zero. Prove the descriptor's size matches what was copied before sending.
+    // A file can grow after EOF; verify the open descriptor still matches the bytes read.
     const finalInfo = await file.stat()
     if (bytesRead > MAX_IMAGE_BYTES) {
       throw tooLarge()
     }
     if (finalInfo.size !== bytesRead) {
-      // Not the image's fault: it changed while Orca read it, so it reads as unreadable.
       throw new Error('Claude image changed while it was read')
     }
     if (bytesRead === 0) {
@@ -159,17 +152,11 @@ async function imageContent(
   }
 }
 
-/**
- * Claude encodes a user turn as attachment blocks followed by the typed text, and recovers the
- * typed prompt by reading only the trailing text block. Verified against the real CLI over
- * stream-json: a body ending in an image has no recoverable prompt, so its `/command` reaches
- * the model as prose instead of being expanded.
- */
+/** Claude recovers only the trailing text as a prompt; ending in an image prevents slash expansion. */
 export async function claudeDispatchMessageContent(
   body: AgentJournalMessageItem
 ): Promise<unknown[]> {
   if (body.role !== 'user') {
-    // No Orca client sends one, so the fault is Orca's.
     throw new ClaudeDispatchContentError(
       'Claude dispatch accepts only user messages',
       agentSessionFailureFact('hostFault')
@@ -185,8 +172,7 @@ export async function claudeDispatchMessageContent(
       images.push(await imageContent(block, imageBudget))
     }
   }
-  // Join rather than append each block: only the trailing text is read as the prompt, so several
-  // text blocks would silently discard every one but the last.
+  // Claude reads only the last text block, so join text to avoid losing earlier blocks.
   const content = texts.length > 0 ? [...images, { type: 'text', text: texts.join('\n') }] : images
   if (content.length === 0) {
     throw new ClaudeDispatchContentError(
@@ -197,22 +183,17 @@ export async function claudeDispatchMessageContent(
   return content
 }
 
-/** The prompt Claude recovers from a dispatch, or null when the turn carries no prompt. */
 function claudeDispatchPrompt(content: readonly unknown[]): string | null {
   const last = claudeRecord(content.at(-1))
   return last?.type === 'text' && typeof last.text === 'string' ? last.text : null
 }
 
-/** Mirrors how Claude decides a turn is a command. Untrimmed on purpose: Claude does not trim
- *  here either, so leading whitespace really does mean no command runs. */
+/** Match Claude exactly: leading whitespace prevents slash-command expansion. */
 export function claudeDispatchInvokesSlashCommand(content: readonly unknown[]): boolean {
   return claudeDispatchPrompt(content)?.startsWith('/') === true
 }
 
-/**
- * Keep waiter metadata bounded even when a dispatch contains large base64 images.
- * The digest is only diagnostic: replay acknowledgement must use provider identity.
- */
+/** Bound waiter metadata for large images; replay uses this digest only when identity cannot match. */
 export function claudeDispatchContentKey(content: readonly unknown[]): string {
   const digest = createHash('sha256')
   const summary = content

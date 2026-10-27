@@ -14,7 +14,7 @@ const topLevelSettings: Record<string, { keys: string[] }> = fixture.topLevelSet
 function install(config: HooksConfig, claudeVersion: string | undefined): HooksConfig {
   return applyManagedHooks(
     config,
-    managedHook,
+    () => managedHook,
     SCRIPT_FILE_NAME,
     getClaudeManagedHookPlan(claudeVersion)
   )
@@ -35,7 +35,6 @@ const userHook = (event: string) => ({
   hooks: [{ type: 'command' as const, command: `echo user-${event}` }]
 })
 
-// Why: the user owns every event, managed or not, plus the keys an invalid file would discard.
 function userOwnedSettings(): HooksConfig {
   const events = [...Object.keys(CLAUDE_HOOK_EVENT_FIRST_VERSIONS), 'Notification']
   return {
@@ -54,6 +53,37 @@ function expectUserSettingsKept(config: HooksConfig): void {
 }
 
 describe('Claude managed hook events by resolved version', () => {
+  it.each([true, false])(
+    'keeps a managed hook async=%s across reinstall and migration',
+    (async) => {
+      const userAsyncHook = { type: 'command' as const, command: 'echo user', async: !async }
+      const oldManagedHook = {
+        type: 'command' as const,
+        command: '/bin/sh',
+        args: ['/old/.orca/agent-hooks/claude-hook.sh'],
+        async
+      }
+      const written = install(
+        {
+          hooks: {
+            PreToolUse: [{ hooks: [userAsyncHook, oldManagedHook] }],
+            PostToolUse: [{ hooks: [userAsyncHook] }]
+          }
+        },
+        '2.1.32'
+      )
+      expect(written.hooks?.PreToolUse).toEqual([
+        { hooks: [userAsyncHook] },
+        { matcher: '*', hooks: [{ ...managedHook, async }] }
+      ])
+      expect(written.hooks?.PostToolUse).toEqual([
+        { hooks: [userAsyncHook] },
+        { matcher: '*', hooks: [managedHook] }
+      ])
+      expect(install(written, '2.1.32')).toEqual(written)
+    }
+  )
+
   it.each(Object.keys(enums))('writes only events Claude %s knows', (version) => {
     const written = install({ hooks: {} }, version)
     const unknown = Object.keys(written.hooks ?? {}).filter(
@@ -110,7 +140,6 @@ describe('Claude managed hook events by resolved version', () => {
       const current = install(userOwnedSettings(), '2.1.261')
       expect(JSON.stringify(install(current, version))).toBe(JSON.stringify(current))
 
-      // Why: even an entry from an older hook command stays byte-identical; only a known version may rewrite it.
       const staleHook = {
         type: 'command' as const,
         command: '/old/.orca/agent-hooks/claude-hook.sh'
@@ -150,7 +179,14 @@ describe('Claude managed hook events by resolved version', () => {
 
     const downgraded = install(current, '2.1.32')
 
-    for (const event of ['StopFailure', 'PostCompact', 'TeammateIdle', 'SessionEnd']) {
+    for (const event of [
+      'StopFailure',
+      'PostCompact',
+      'TeammateIdle',
+      'SessionEnd',
+      'Elicitation',
+      'ElicitationResult'
+    ]) {
       expect(downgraded.hooks?.[event], event).toBeUndefined()
     }
   })
@@ -168,7 +204,6 @@ describe('Claude managed hook events by resolved version', () => {
     (version) => {
       const fresh = install(userOwnedSettings(), version)
       expectUserSettingsKept(fresh)
-      // Why: a downgrade from the newest set is the path that removes Orca entries.
       expectUserSettingsKept(install(install(userOwnedSettings(), '2.1.261'), version))
     }
   )

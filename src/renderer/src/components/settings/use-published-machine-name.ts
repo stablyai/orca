@@ -1,14 +1,7 @@
 import { useEffect, useState } from 'react'
 import { normalizeMachineName } from '../../../../shared/machine-name'
 
-/**
- * The name this computer publishes to paired devices: the saved override when there is one, else
- * the detected computer name.
- *
- * Why the override is not read back from the runtime: the store only holds a saved value after the
- * main process has written it, so it already is what devices see. The runtime is asked only for
- * the detected name, which nothing in the renderer can compute.
- */
+/** Saved overrides already reached main; query runtime only for the detected name to avoid stale echoes. */
 export function usePublishedMachineName(savedOverride: string): string | null {
   const override = normalizeMachineName(savedOverride)
   const [detectedName, setDetectedName] = useState<string | null>(null)

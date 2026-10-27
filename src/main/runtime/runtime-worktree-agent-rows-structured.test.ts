@@ -1,6 +1,9 @@
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { statusFeedChildView } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
+import { normalizeAgentStatusPayload } from '../../shared/agent-status-types'
+import { resolveWorktreeCatalogSnapshot } from './rpc/worktree-catalog-snapshot'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import {
   structuredAgentSessionPaneKey,
@@ -15,11 +18,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
-/**
- * A structured session has no PTY and no hook script, so the host publishes its projection into
- * the agent-status store itself. This walks that store into `worktree ps` rows: before it, the CLI
- * reported a worktree running one as idle while the sidebar showed it working.
- */
+/** Structured sessions have no PTY/hooks; host-published status must reach worktree ps as well as the sidebar. */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const SUBJECT = makeStructuredAgentStatusSubject(
@@ -59,9 +58,7 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
   const summariesById = new Map<string, RuntimeWorktreePsSummary>([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries: summariesById,
-    pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
-    missingWorktreeIds: new Set(),
-    workingTerminalEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {
@@ -69,10 +66,12 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
         paneKeys: new Set(),
         ptyIdByTerminalHandle: new Map()
       },
-      hookSnapshots: store.getStatusSnapshot()
+      hookSnapshots: store.getStatusSnapshot(),
+      readStructuredSummary: (sessionId) =>
+        summaries.findLast((entry) => entry.sessionId === sessionId)
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map, _p, _m, id) => map.get(id) ?? null
+    getSummary: (id) => summariesById.get(id) ?? null
   })
   return row
 }
@@ -82,6 +81,43 @@ beforeEach(() => {
 })
 
 describe('worktree ps reports structured sessions', () => {
+  it('carries canonical summary children, invalidates child-only changes, and clears an omitted roster', () => {
+    const child = statusFeedChildView()
+    const catalog = (children: (typeof child)[] | undefined) => ({
+      worktrees: [attach([summary({ children })])],
+      totalCount: 1,
+      truncated: false
+    })
+    const first = catalog([child])
+    expect(first.worktrees[0]?.agents[0]).toMatchObject({
+      children: [child],
+      subagentObservation: 'live'
+    })
+    const initial = resolveWorktreeCatalogSnapshot(first, null)
+    expect(resolveWorktreeCatalogSnapshot(catalog([child]), initial.snapshotId)).toEqual({
+      unchanged: true,
+      snapshotId: initial.snapshotId
+    })
+    expect(
+      resolveWorktreeCatalogSnapshot(catalog([{ ...child, state: 'waiting' }]), initial.snapshotId)
+    ).not.toHaveProperty('unchanged')
+    expect(catalog(undefined).worktrees[0]?.agents[0]?.children).toEqual([])
+    // Old readers keep the parent fields; hook payloads cannot become a child producer.
+    expect(normalizeAgentStatusPayload({ state: 'working', children: [child] })).not.toHaveProperty(
+      'children'
+    )
+  })
+
+  it("lists a person's Stop still ending the turn, and drops it once the host does", () => {
+    expect(attach([summary({ stopping: true })]).agents[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working', stopping: true }
+    })
+    const ended = attach([summary({ stopping: true }), summary({ updatedAt: 1_757_030_401_000 })])
+    expect(ended.agents[0]?.state).toBe('working')
+    expect(ended.agents[0]?.mainAgent).not.toHaveProperty('stopping')
+  })
+
   it('a busy structured session is not reported idle', () => {
     const row = attach([summary()])
     expect(row.agents).toHaveLength(1)
@@ -104,7 +140,7 @@ describe('worktree ps reports structured sessions', () => {
     )
   })
 
-  // Null status means no turn has been persisted; the chat itself shows nothing, so neither does this.
+  // No persisted turn means no projected status, matching the chat.
   it('omits a session with no projected status', () => {
     expect(attach([summary({ status: null })]).agents).toHaveLength(0)
   })
@@ -116,23 +152,15 @@ describe('worktree ps reports structured sessions', () => {
   })
 })
 
-/**
- * The deliberate non-goal. Adding structured rows to `terminal list` was investigated and rejected:
- * mobile mounts a terminal WebView per row that can never receive a frame, a `connected`-keyed
- * refresh check goes permanently true and pins shipped clients to a fast cadence with no exit, and
- * the plugin projection has no field that can carry `writable: false`. Every SAFE consumer of a
- * terminal summary checks `ptyId`; the breaking ones key off `connected` or mere row presence,
- * which no added field can qualify. This pins that the listing never reads the status store.
- */
+/** Keep structured rows out of terminal list: shipped clients mount WebViews and poll by row presence/connected, which no added field can qualify. */
 describe('terminal listing is deliberately left alone', () => {
   it('never reads the agent-status store that now carries structured rows', async () => {
     const { readFile } = await import('node:fs/promises')
-    // orca-runtime-subscribe-to-terminal-resize.ts owns listTerminals.
     const listing = await readFile(
-      new URL('./orca-runtime-subscribe-to-terminal-resize.ts', import.meta.url),
+      new URL('./terminal/layout/terminal-resize-listeners.ts', import.meta.url),
       'utf8'
     )
-    // Guard the guard: an empty read would make every assertion below vacuously true.
+    // An empty source read would satisfy every negative assertion.
     expect(listing).toContain('async listTerminals(')
     expect(listing).not.toContain('getAgentStatusSnapshotFn')
     expect(listing).not.toContain('structuredHost')

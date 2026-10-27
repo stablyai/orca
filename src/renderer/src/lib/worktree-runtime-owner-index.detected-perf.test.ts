@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import { runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'
+/** The owner's paired server, as production callers read it; null for this app or a twin. */
+function ownerEnvironmentId(
+  state: Parameters<typeof runtimeEnvironmentIdForWorkspaceOwner>[0],
+  workspaceId: string
+): string | null {
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId })
+  return owner.kind === 'resolved' ? owner.environmentId : null
+}
 
 const REPO_COUNT = 20
 const WORKTREES_PER_REPO = 100
@@ -61,7 +69,7 @@ const publishedWorktreesByRepo: Record<string, OwnerRecord[]> = Object.fromEntri
   ])
 )
 
-// Only the detected catalog changes identity: that is what isolates the collection under test.
+// Only detected-catalog identity changes, isolating this collection’s invalidation.
 function buildOwnerState(detectedWorktreesByRepo: DetectedByRepo): WorktreeRuntimeOwnerState {
   return {
     repos: publishedRepos,
@@ -85,10 +93,10 @@ describe('detected worktree index performance', () => {
     const catalog = buildDetectedCatalog(0, counter)
     const state = buildOwnerState(catalog)
 
-    getExplicitRuntimeEnvironmentIdForWorktree(state, 'repo-0::warm-the-index')
+    ownerEnvironmentId(state, 'repo-0::warm-the-index')
     counter.reads = 0
     for (const probeId of PROBE_IDS) {
-      getExplicitRuntimeEnvironmentIdForWorktree(state, probeId)
+      ownerEnvironmentId(state, probeId)
     }
     const indexedReads = counter.reads
 

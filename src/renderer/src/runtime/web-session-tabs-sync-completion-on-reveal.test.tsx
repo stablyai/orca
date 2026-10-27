@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type * as WebRuntimeSessionModule from './web-runtime-session'
+import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 import type * as WebSessionTerminalHandleEventsModule from './web-session-terminal-handle-events'
 vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
   const actual = await importOriginal<typeof WebSessionTerminalHandleEventsModule>()
@@ -27,8 +27,8 @@ vi.mock('./web-session-terminal-orphan-recovery', async () => {
   return { recoverWebSessionTerminalOrphansBeforeApply: frameOrderingMocks.recoverSnapshot }
 })
 
-vi.mock('./web-runtime-session', async (importOriginal) => {
-  const actual = await importOriginal<typeof WebRuntimeSessionModule>()
+vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
+  const actual = await importOriginal<typeof WebRuntimeTerminalCreationModule>()
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
   return { ...actual, createWebRuntimeSessionTerminal: frameOrderingMocks.createTerminal }
 })
@@ -52,8 +52,8 @@ import {
   publish,
   settle,
   setDocumentVisibility
-} from './host-session-mirror-frame-ordering-harness'
-import { useWebSessionTabsSync } from './web-session-tabs-sync'
+} from './host-session-mirror-frame-ordering-test-harness'
+import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
 
 function agentSnapshot(

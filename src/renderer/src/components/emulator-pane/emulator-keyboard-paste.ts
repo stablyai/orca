@@ -183,8 +183,7 @@ function getPositiveIntegerLimit(value: number | undefined, fallback: number): n
 }
 
 function waitForEmulatorKeyboardChunk(frameCount: number, frameDelayMs: number): Promise<void> {
-  // Why: serve-sim's sender spaces frames with timers, so later chunks must wait
-  // for the previous chunk's scheduled HID events instead of overlapping them.
+  // Wait for scheduled HID frames before the next chunk so serve-sim’s timer-spaced events cannot overlap.
   const delayMs = Math.max(frameDelayMs, frameCount * frameDelayMs)
   return new Promise((resolve) => window.setTimeout(resolve, delayMs))
 }

@@ -7,7 +7,7 @@ import type { StructuredAgentSessionAdapterStop } from '../native-chat/agent-ses
 import { answerClaudePrompt, cancelClaudeTurn } from './claude-structured-control-actions'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import { buildClaudePromptReply, claudePromptDismissal } from './claude-structured-prompt-replies'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import { CLAUDE_STOP_GRACE_MS } from './claude-request-end-wait'
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
@@ -23,18 +23,12 @@ function requireSession(sessions: Map<string, ClaudeSession>, sessionId: string)
   return session
 }
 
-/** The published journal's turn while it has one, else the in-memory turn (see the owner check). */
+/** Fall back to memory when the journal has not admitted a turn row. */
 function claudeLiveTurnId(session: ClaudeSession, request: CancelInput): string | null {
   return request.resolveLiveTurnId?.() ?? session.translator?.currentTurnId ?? null
 }
 
-/**
- * A Stop that names no turn, names the live one, or names one that ended before a written
- * follow-up opened its own: the conversation asked to stop whatever this child has in flight.
- * Claude's interrupt is session-scoped, so there is no turn identity to check — only that this is
- * still the child the host judged, and that it has a turn open or a written message whose turn has
- * not opened yet (the gap before its echo, which no client can name).
- */
+/** Session-scoped interrupts also cover written messages awaiting their first turn echo. */
 function cancelClaudeConversation(
   session: ClaudeSession,
   sessions: Map<string, ClaudeSession>,
@@ -48,10 +42,15 @@ function cancelClaudeConversation(
     session.fence === request.fence &&
     session.acquisitionGeneration === acquisitionGeneration &&
     (claudeLiveTurnId(session, request) !== null || session.dispatchWaiters.length > 0)
-  return cancelClaudeTurn(session, timeoutMs, isCurrent, onDispatchSettledLate)
+  return cancelClaudeTurn(
+    session,
+    timeoutMs,
+    isCurrent,
+    onDispatchSettledLate,
+    request.stoppedAt ?? Date.now()
+  )
 }
 
-/** A Stop's interrupt. A card's own Cancel never comes here: `claudePromptCancelRoute` routes it. */
 export async function cancelClaudeStructuredTurn(input: {
   request: CancelInput
   sessions: Map<string, ClaudeSession>
@@ -59,19 +58,16 @@ export async function cancelClaudeStructuredTurn(input: {
   onDispatchSettledLate?: ClaudeLateDispatchSettlement
 }): Promise<{ cancelled: boolean }> {
   const { request, sessions } = input
-  // A Stop ends the child next, so its interrupt shares the grace with Claude's wind-down after it.
+  // Interrupt and child shutdown share the Stop grace period.
   const timeoutMs = Math.min(input.timeoutMs ?? CLAUDE_STOP_GRACE_MS, CLAUDE_STOP_GRACE_MS)
   const session = requireSession(sessions, request.sessionId)
   const acquisitionGeneration = session.acquisitionGeneration
-  // Before startup lands nothing was written, so there is nothing to interrupt.
-  if (request.prompt || session.startup.state === 'pending') {
+  if (request.prompt) {
     return { cancelled: false }
   }
   const requestedTurnId = request.turnId
   const liveTurnId = claudeLiveTurnId(session, request)
-  // Naming the live turn asks for exactly what the conversation Stop interrupts, so a follow-up's
-  // pending handover is no reason to hold it; the queue sweep settles that follow-up. With nothing
-  // live, a written follow-up whose turn has not opened is one the naming client has not seen start.
+  // A conversation Stop also sweeps queued follow-ups and written messages awaiting an echo.
   if (
     requestedTurnId === undefined ||
     (session.translator?.commandTurnId !== requestedTurnId &&
@@ -86,17 +82,12 @@ export async function cancelClaudeStructuredTurn(input: {
       input.onDispatchSettledLate
     )
   }
-  // Judge against the published journal, because that is the only turn a client could have been
-  // shown — but only while it HAS an answer. A null read can mean the row never landed (a sink not
-  // yet bound, or refusing under backpressure), not that nothing is running; falling back to
-  // the in-memory turn there keeps Stop from being gated on bookkeeping. No live turn either way
-  // means nothing has published an identity this request can contradict.
+  // Prefer the client-visible turn; absent journal rows must not block Stop under backpressure.
   const ownsRequestedTurn = (): boolean => {
     const liveTurnId = claudeLiveTurnId(session, request)
     return liveTurnId === null ? session.dispatchSequence === 0 : liveTurnId === requestedTurnId
   }
-  // The host supplies the durable latest submission; direct adapter callers fall back to
-  // the current in-memory waiter so an unknown dispatch remains fenced without a latch.
+  // Direct callers lack durable admission status; retain fencing for unacknowledged dispatches.
   const dispatchAdmissionIsCurrent = (): boolean =>
     request.dispatchStatus
       ? request.dispatchStatus.state === 'accepted' ||
@@ -117,13 +108,14 @@ export async function cancelClaudeStructuredTurn(input: {
         session.fence === request.fence &&
         session.acquisitionGeneration === acquisitionGeneration &&
         (compactionOwnsTurn() || (ownsRequestedTurn() && dispatchAdmissionIsCurrent()))
-      // Read with the result that ends it: a stopped command reports no compaction.
+      // Suppress compaction reporting when the interrupted command ends.
       if (current && compactionOwnsTurn()) {
         session.translator?.commandInterruptRequested(requestedTurnId)
       }
       return current
     },
-    input.onDispatchSettledLate
+    input.onDispatchSettledLate,
+    request.stoppedAt ?? Date.now()
   )
 }
 
@@ -172,9 +164,7 @@ export async function answerClaudeStructuredPrompt(input: {
   }
 }
 
-/** The host records the dismissal (`commit`) while the claim is held. A Stop that ends the child
- *  leaves the request to end with it; only `answer` declines it, so Claude never gets a reply racing
- *  that Stop's interrupt. */
+/** Hold the claim through commit; only `answer` sends a denial, avoiding a race with Stop. */
 export async function dismissClaudeStructuredPrompt(input: {
   request: Parameters<NonNullable<StructuredAgentSessionAdapterStop['dismissPrompt']>>[0]
   sessions: Map<string, ClaudeSession>
@@ -187,15 +177,13 @@ export async function dismissClaudeStructuredPrompt(input: {
   }
   const { promptKey } = claim.found.prompt
   const journalPrompts = session.translator?.journalPrompts
-  // Before the commit: Claude's own cancel of the request, landing while the host writes, must
-  // not write after it.
+  // Transfer ownership before commit so provider cancellation cannot overwrite the host record.
   const handBack = journalPrompts?.handOver(promptKey)
   try {
     try {
       await request.commit()
     } catch (error) {
-      // Nothing recorded the card: it is Claude's again, and a withdrawal Claude made meanwhile,
-      // which wrote nothing then, closes it now.
+      // Restore ownership and apply any provider cancellation received during the failed commit.
       handBack?.()
       if (!session.prompts.find(request.itemId)) {
         journalPrompts?.cancel(promptKey)
@@ -208,4 +196,17 @@ export async function dismissClaudeStructuredPrompt(input: {
   } finally {
     session.prompts.releaseClaim(claim)
   }
+}
+
+/** Clear child waiting before closing its card so status never waits on a resolved prompt. */
+export function settleClaudePromptFreeingChild<R extends { commit: () => Promise<void> }>(
+  input: { request: R; sessions: Map<string, ClaudeSession>; free: () => void },
+  settle: (input: { request: R; sessions: Map<string, ClaudeSession> }) => Promise<void>
+): Promise<void> {
+  const { request, sessions, free } = input
+  const commit = async (): Promise<void> => {
+    free()
+    await request.commit()
+  }
+  return settle({ request: { ...request, commit }, sessions }).finally(free)
 }

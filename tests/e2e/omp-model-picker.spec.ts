@@ -53,7 +53,7 @@ test('OMP model picker dispatches its advertised command and adopts the host rep
     state.setAgentStatus(
       paneKey,
       {
-        state: 'idle',
+        state: 'done',
         prompt: '',
         agentType: 'omp',
         model: 'anthropic/claude-sonnet-4-5',
@@ -75,14 +75,12 @@ test('OMP model picker dispatches its advertised command and adopts the host rep
   const picker = orcaPage.getByRole('button', { name: 'Model Sonnet 4.5', exact: true })
   await expect(picker).toBeVisible()
   await picker.click()
-  await expect(
-    orcaPage.getByRole('menuitemradio', { name: 'Sonnet 4.6', exact: true })
-  ).toBeVisible()
+  await expect(orcaPage.getByRole('option', { name: 'Sonnet 4.6', exact: true })).toBeVisible()
   await orcaPage.screenshot({
     animations: 'disabled',
     path: testInfo.outputPath('omp-model-choices.png')
   })
-  await orcaPage.getByRole('menuitemradio', { name: 'Sonnet 4.6', exact: true }).click()
+  await orcaPage.getByRole('option', { name: 'Sonnet 4.6', exact: true }).click()
   await expect
     .poll(async () => readFile(output, 'utf8').catch(() => ''))
     .toContain('/orca-model anthropic/claude-sonnet-4-6')
@@ -90,7 +88,7 @@ test('OMP model picker dispatches its advertised command and adopts the host rep
     window.__store?.getState().setAgentStatus(
       paneKey,
       {
-        state: 'idle',
+        state: 'done',
         prompt: '',
         agentType: 'omp',
         model: 'anthropic/claude-sonnet-4-6',

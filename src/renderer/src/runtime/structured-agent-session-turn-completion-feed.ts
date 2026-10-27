@@ -1,28 +1,13 @@
-// One host turn-completion stream per runtime target, fanned out to whoever is listening.
-//
-// The status feed next door is a mirror: it keeps the latest summary per session so a late reader
-// still learns what every session is doing. This one keeps NOTHING. A completion is an edge, and
-// an edge that has already passed is not state a late reader needs — so there is no snapshot to
-// hand out, no buffer, and no catch-up after a reconnect. Losing the stream means the completions
-// that land while it is down are gone; the host baselines its own side and never replays them.
-//
-// That is deliberate. A retained completion would be a durable "unread is owed" obligation with
-// nothing to retire it, and a reconnect would then light the dot for work the user already read.
+// Share host completion/prompt edges per target without snapshots, buffers or reconnect catch-up. Status feed retains state; this feed intentionally loses outage edges. Retention would create unread obligations with nothing to retire them and relight already-read work.
 
-import type {
-  AgentSessionTurnCompletion,
-  AgentSessionTurnCompletionEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionAttentionEdge } from '../../../shared/agent-session-attention'
 import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import {
-  runtimeEnvironmentSupportsCapability,
-  type RuntimeClientTarget
-} from './runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionTurnCompletions } from './structured-agent-session-client'
 
-export type StructuredAgentSessionTurnCompletionListener = (
-  completion: AgentSessionTurnCompletion
-) => void
+export type StructuredAgentSessionTurnCompletionListener = (edge: AgentSessionAttentionEdge) => void
 
 export type StructuredAgentSessionTurnCompletionFeedOwner = {
   activate: () => () => void
@@ -48,11 +33,11 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
 
-  const deliver = (completion: AgentSessionTurnCompletion): void => {
+  const deliver = (edge: AgentSessionAttentionEdge): void => {
     // A copy, so a listener that unsubscribes mid-fanout does not skip its neighbour.
     for (const listener of Array.from(listeners)) {
       try {
-        listener(completion)
+        listener(edge)
       } catch (error) {
         console.warn('[structured-session-completion] listener failed', error)
       }
@@ -83,8 +68,7 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
       }
     }, delay)
   }
-  // NO CATCH-UP: reconnecting re-opens an empty stream. Nothing asks the host what was missed,
-  // because the host kept nothing to answer with.
+  // Reconnect starts empty; host retains no missed-edge history to request.
   const loseConnection = (candidate: number): void => {
     if (candidate !== generation) {
       return
@@ -105,7 +89,10 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
           return
         }
         reconnectAttempt = 0
-        deliver(event.completion)
+        // An arm this build cannot name is dropped, not handed on half-read.
+        if (event.type === 'completion' || event.type === 'prompt') {
+          deliver(event)
+        }
       },
       () => {
         if (active(candidate)) {
@@ -144,8 +131,7 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
         if (!active(candidate)) {
           return
         }
-        // A host without the method is terminal, not a fault: retrying would relay-probe forever.
-        // A failed probe is not an answer, so that path still reconnects.
+        // Unsupported methods stop permanently; failed probes remain retryable to avoid endless relay probing.
         if (supported) {
           subscribeToHost(candidate)
           return
@@ -199,8 +185,7 @@ export function getStructuredAgentSessionTurnCompletionFeed(
 }
 
 export function resetStructuredAgentSessionTurnCompletionFeedsForTests(): void {
-  // Dropping the map alone leaves a live subscription and its pending reconnect running into the
-  // next test, where they reopen a stream nothing is holding.
+  // Stop subscription/reconnect before dropping map or unheld streams leak into the next test.
   for (const owner of owners.values()) {
     owner.stop()
   }

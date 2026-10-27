@@ -1,4 +1,3 @@
-/** One-line flag descriptions shared by every command's help output. */
 export const FLAG_HELP_TEXT: Record<string, string> = {
   'external-worktree-visibility':
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
@@ -13,6 +12,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   direction:
     '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
   'display-name': '--display-name <name>  Override the Orca display name',
+  environment:
+    '--environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them',
+  'pairing-code':
+    '--pairing-code <code>  Run against a remote Orca server using an orca://pair?... code',
   'element-index': '--element-index <n>   Element index from get-app-state',
   title: '--title <text>         Custom title for the terminal tab (omit to reset)',
   enter: '--enter                Append Enter after sending text',
@@ -59,6 +62,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'restore-window': '--restore-window     Bring the target app/window forward before the operation',
   session: '--session <id>        Snapshot namespace for a related computer-use workflow',
   setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
+  surface:
+    '--surface chat|terminal Start the agent as a chat or in a terminal, instead of your setting',
   shell: '--shell <shell>        Windows shell the terminal itself runs as',
   terminal: '--terminal <handle>  Runtime-issued terminal handle',
   text: '--text <text>          Text payload to send or type',
@@ -100,12 +105,13 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'reuse-session':
     '--reuse-session        Reuse the previous live session for existing-workspace runs',
   'fresh-session': '--fresh-session        Disable session reuse for future runs',
+  'extra-agent-args':
+    '--extra-agent-args=<args> Extra agent arguments for fresh runs; empty clears',
   'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
   'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
   'value-stdin': '--value-stdin         Read set-value payload from stdin',
   'window-id': '--window-id <id>      Target a window id from list-windows',
   'window-index': '--window-index <n>   Target a window index from list-windows',
-  // Browser automation flags
   element: '--element <ref>        Element ref from snapshot (e.g. e3)',
   url: '--url <url>            URL to navigate to',
   value: '--value <text>         Value to fill or select',

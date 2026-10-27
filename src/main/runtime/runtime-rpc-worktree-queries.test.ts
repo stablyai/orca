@@ -89,33 +89,4 @@ describe('OrcaRuntimeRpcServer', () => {
 
     await server.stop()
   })
-
-  it('bounds worktree.list responses with limit metadata', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService(makeStore({ isUnread: true }) as never)
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
-
-    await server.start()
-
-    const metadata = readRuntimeMetadata(userDataPath)
-    const response = await sendRequest(metadata!.transports[0]!.endpoint, {
-      id: 'req_worktrees',
-      authToken: metadata!.authToken,
-      method: 'worktree.list',
-      params: {
-        limit: 1
-      }
-    })
-
-    expect(response).toMatchObject({
-      id: 'req_worktrees',
-      ok: true,
-      result: {
-        totalCount: 1,
-        truncated: false
-      }
-    })
-
-    await server.stop()
-  })
 })

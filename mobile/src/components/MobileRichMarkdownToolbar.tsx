@@ -18,6 +18,8 @@ import {
   Strikethrough
 } from 'lucide-react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileRichMarkdownCommand } from './mobile-rich-markdown-editor-contract'
 
 type ToolbarItem = {
@@ -26,13 +28,7 @@ type ToolbarItem = {
   icon: ComponentType<{ size?: number; color?: string }>
 }
 
-/**
- * The fifteen commands, in the order they are pressed in.
- *
- * Shared rather than declared twice because both surfaces drive the same document: inside the
- * WebView the press becomes an injected `runCommand` and on the page it is a call, but the row of
- * controls is the same row and a command added to the contract has to appear on both.
- */
+// Share command row across native injected runCommand and direct page calls so contract additions appear on both surfaces.
 const TOOLBAR_ITEMS: ToolbarItem[] = [
   { command: 'paragraph', label: 'Body', icon: Pilcrow },
   { command: 'heading1', label: 'H1', icon: Heading1 },
@@ -61,6 +57,7 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   editable: boolean
   onCommand: (command: MobileRichMarkdownCommand) => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.toolbar}>
       <ScrollView
@@ -93,7 +90,7 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   )
 })
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   toolbar: {
     minHeight: 42,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -120,4 +117,4 @@ const styles = StyleSheet.create({
   toolbarButtonDisabled: {
     opacity: 0.55
   }
-})
+}))

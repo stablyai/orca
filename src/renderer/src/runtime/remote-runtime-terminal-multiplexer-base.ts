@@ -1,5 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime-client-error-classification'
+import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import {
   encodeTerminalStreamFrame,
   type TerminalStreamOpcode
@@ -9,17 +9,13 @@ import {
   recordE2eRemoteTransportSubscribe,
   unsubscribeRuntimeEnvironmentForE2e
 } from './remote-runtime-terminal-e2e-control'
-import {
-  clearResyncTimer,
-  clearSnapshot,
-  discardOutputAcknowledgements,
-  rejectPendingSnapshotRequest
-} from './remote-runtime-terminal-snapshot-state'
+import { disposeRemoteTerminalStreamState } from './remote-runtime-terminal-snapshot-state'
 import type {
   RemoteRuntimeMultiplexedTerminalState,
   RuntimeEnvironmentSubscriptionHandle
 } from './remote-runtime-terminal-multiplexer-types'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { refreshRuntimeEnvironmentsAfterPairingChange } from './runtime-environment-pairing-refresh'
 
 export abstract class RemoteRuntimeTerminalMultiplexerBase {
   protected readonly streams = new Map<number, RemoteRuntimeMultiplexedTerminalState>()
@@ -51,6 +47,10 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     this.handleClose('Runtime environment pairing changed.')
   }
 
+  closeForEnvironmentRetirement(): void {
+    this.handleClose('Runtime environment was removed or replaced by another machine.', false)
+  }
+
   protected allocateStreamId(): number {
     const start = this.nextStreamId
     do {
@@ -68,6 +68,13 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     this.nextSnapshotRequestId =
       this.nextSnapshotRequestId >= 0x7fffffff ? 1 : this.nextSnapshotRequestId + 1
     return id
+  }
+
+  /** Opens the shared stream while the caller's create RPC is in flight, so the two round trips
+   *  overlap. The returned release closes it again if the caller never subscribed. */
+  prewarm(): () => void {
+    void this.ensureConnected().catch(() => {})
+    return () => this.closeIfIdle()
   }
 
   protected ensureConnected(): Promise<void> {
@@ -105,21 +112,21 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
         )
         .then((subscription) => {
           if (this.connectPromise !== connectPromise || (!this.ready && !this.readyRejecter)) {
-            // Why: close/error can arrive before subscribe() resolves because
-            // preload listens before ipcMain.handle() returns. The multiplexer
-            // may already be released; do not retain the late handle.
+            // Preload listens before IPC returns, so close/error can release the multiplexer before subscribe resolves; discard late handles.
             unsubscribeRuntimeEnvironmentForE2e(subscription)
             return
           }
           this.subscription = subscription
           this.resolveReadyIfConnected()
         })
-        .catch((error) => {
+        .catch(async (error) => {
           if (this.connectPromise === connectPromise) {
             this.connectPromise = null
             this.readyResolver = null
             this.readyRejecter = null
           }
+          // Why: a pane retries on this rejection; it must find the re-read pairing, not the stale one.
+          await refreshRuntimeEnvironmentsAfterPairingChange(error)
           reject(error instanceof Error ? error : new Error(String(error)))
         })
     })
@@ -130,13 +137,14 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
   protected sendFrame(
     streamId: number,
     opcode: TerminalStreamOpcode,
-    payload: Uint8Array<ArrayBufferLike> = new Uint8Array()
+    payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
+    seq = 0
   ): boolean {
     if (!this.matchesCurrentEnvironmentRevision() || !this.ready || !this.subscription) {
       return false
     }
     try {
-      this.subscription.sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: 0, payload }))
+      this.subscription.sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq, payload }))
       recordE2eRemoteStreamFrame(opcode)
       return true
     } catch (error) {
@@ -185,11 +193,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     // Why: close callbacks may resubscribe synchronously; release first so every replacement shares the new environment multiplexer.
     this.releaseIfCurrent(this.environmentId, this)
     for (const stream of streams) {
-      discardOutputAcknowledgements(stream)
-      stream.watchdog.dispose()
-      clearSnapshot(stream)
-      clearResyncTimer(stream)
-      rejectPendingSnapshotRequest(stream, message ?? 'Remote runtime connection closed.')
+      disposeRemoteTerminalStreamState(stream, message ?? 'Remote runtime connection closed.')
       const canHandleClose = Boolean(stream.callbacks.onTransportClose)
       stream.callbacks.onTransportClose?.({ recoverable })
       if (message && !canHandleClose) {

@@ -1,4 +1,3 @@
-import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -6,6 +5,7 @@ import type {
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { CursorAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
 import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
+import type { MiniMaxCredentialsStatus } from '../../shared/minimax-credentials-status'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -14,7 +14,6 @@ export type CodexAccountsApi = {
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
   cancelPendingLogin: () => Promise<boolean>
-  /** Sign-in link of the login waiting on a browser, or null when none is. */
   getPendingLoginUrl: () => Promise<string | null>
   onPendingLoginUrlChanged: (callback: (url: string | null) => void) => () => void
   reauthenticate: (args: {
@@ -34,8 +33,6 @@ export type CodexAccountsApi = {
       ptyId: string
       launchAccountId: string | null
       activeAccountId: string | null
-      /** Optional for compatibility with a pre-reason main process. */
-      reason?: 'account-change' | 'home-route-change'
     }[]
   >
   /** The selection lane each PTY launched from, keyed by pty id; unrecorded panes are absent. */
@@ -49,9 +46,16 @@ export type ClaudeAccountsApi = {
   add: (args?: {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
+    /** Copy the sign-in link instead of opening the default browser. */
+    copyLink?: boolean
   }) => Promise<ClaudeRateLimitAccountsState>
   cancelPendingLogin: () => Promise<boolean>
-  reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+  reauthenticate: (args: {
+    accountId: string
+    copyLink?: boolean
+  }) => Promise<ClaudeRateLimitAccountsState>
+  /** The pending sign-in's link once Claude hands it over; null if it ends without one. */
+  waitForSignInLink: () => Promise<string | null>
   remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
   select: (args: {
     accountId: string | null
@@ -69,38 +73,16 @@ export type CursorAccountsApi = {
 }
 
 export type MinimaxCredentialsApi = {
-  // Why: cookie + API key each live in their own safeStorage file, so the
-  // status separates them. 'configured' stays as the OR so existing callers
-  // that only care about "anything saved" keep working unchanged.
-  getStatus: () => Promise<{
-    configured: boolean
-    cookieConfigured: boolean
-    apiKeyConfigured: boolean
-    cookieProtection: SecretAtRestProtection | null
-    apiKeyProtection: SecretAtRestProtection | null
-  }>
-  saveCookie: (cookie: string) => Promise<{
-    cookieConfigured: boolean
-    cookieProtection: SecretAtRestProtection | null
-  }>
-  clearCookie: () => Promise<{
-    cookieConfigured: boolean
-    cookieProtection: SecretAtRestProtection | null
-  }>
-  saveApiKey: (key: string) => Promise<{
-    apiKeyConfigured: boolean
-    apiKeyProtection: SecretAtRestProtection | null
-  }>
-  clearApiKey: () => Promise<{
-    apiKeyConfigured: boolean
-    apiKeyProtection: SecretAtRestProtection | null
-  }>
+  // configured remains cookie OR API key for existing callers.
+  getStatus: () => Promise<MiniMaxCredentialsStatus>
+  saveCookie: (cookie: string) => Promise<MiniMaxCredentialsStatus>
+  clearCookie: () => Promise<MiniMaxCredentialsStatus>
+  saveApiKey: (key: string) => Promise<MiniMaxCredentialsStatus>
+  clearApiKey: () => Promise<MiniMaxCredentialsStatus>
 }
 
 export type ZcodePlanCredentialsApi = {
-  // Why: the GLM Coding Plan key lives in its own safeStorage file and the
-  // ZCode CLI's config is read-only, so the status reports both sources'
-  // presence; neither credential value ever crosses the IPC boundary.
+  // Report presence of the saved key and read-only CLI credentials without exposing either value.
   getStatus: () => Promise<ZcodePlanCredentialsStatus>
   saveApiKey: (key: string) => Promise<ZcodePlanCredentialsStatus>
   clearApiKey: () => Promise<ZcodePlanCredentialsStatus>

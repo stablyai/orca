@@ -1,9 +1,8 @@
 import type { AgentJournalTurnLifecycleState } from './agent-session-journal-types'
 
-/** Fallback text on a lifecycle row for readers that render status text raw.
- *  Must never overstate what the host knows: an unobserved end is not "completed". */
+/** Legacy raw status text must not call an unobserved end completed. */
 export function agentTurnLifecycleText(
-  agent: 'Claude' | 'Codex',
+  agent: string,
   state: AgentJournalTurnLifecycleState
 ): string {
   switch (state) {

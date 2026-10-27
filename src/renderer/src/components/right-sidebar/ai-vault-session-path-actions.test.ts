@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   canOpenAiVaultSessionLogInOrca,
   canUseLocalAiVaultSessionPathActions,
-  isSyntheticAiVaultSessionPath
+  isSyntheticAiVaultSessionPath,
+  revealAiVaultSessionPath
 } from './ai-vault-session-path-actions'
+
+const toastError = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 describe('canUseLocalAiVaultSessionPathActions', () => {
   it('allows OS path actions for local session history', () => {
@@ -54,5 +58,21 @@ describe('canOpenAiVaultSessionLogInOrca', () => {
         executionHostId: 'local'
       })
     ).toBe(false)
+  })
+})
+
+describe('revealAiVaultSessionPath', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('refuses an SSH session log instead of revealing a same-named local path', async () => {
+    const openInFileManager = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('window', { api: { shell: { openInFileManager } } })
+
+    await revealAiVaultSessionPath({ executionHostId: 'ssh:dev-box' }, '/home/ada/.codex/log.jsonl')
+    expect(openInFileManager).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalled()
+
+    await revealAiVaultSessionPath({ executionHostId: 'local' }, '/Users/ada/.codex/log.jsonl')
+    expect(openInFileManager).toHaveBeenCalledWith('/Users/ada/.codex/log.jsonl', 'local')
   })
 })

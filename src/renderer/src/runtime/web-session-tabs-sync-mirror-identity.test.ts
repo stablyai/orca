@@ -11,10 +11,10 @@ import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-pl
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
-  applyFreshWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyFreshWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
 const ENVIRONMENT_ID = 'web-env-1'
 const NOW = 1_700_000_000_000
@@ -70,6 +70,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},
@@ -348,8 +349,7 @@ describe('remote mirror resource identity', () => {
     expect(next.browserCertificateFailuresByPageId).not.toHaveProperty('host-browser-page-1')
   })
 
-  // Why: a client-hosted page's certificate failure is recorded by the local guest webview and is
-  // structurally absent from what the host publishes, so a host snapshot must not own that record.
+  // Guest owns client-hosted certificate failures; host snapshots omit them and must not clear them.
   it('keeps a locally recorded certificate failure for a client-hosted page', () => {
     const state = applySnapshot(
       makeState({
@@ -373,8 +373,7 @@ describe('remote mirror resource identity', () => {
     )
   })
 
-  // Why: same structural gap as the certificate record — the host publishes no loadError for a
-  // client-hosted page, so the pane's failure overlay would vanish on the next metadata snapshot.
+  // Host omits client-hosted loadError too; metadata echoes must not erase the guest failure overlay.
   it('keeps a locally recorded load failure for a client-hosted page', () => {
     const state = withLocalLoadFailure(
       applySnapshot(
@@ -399,8 +398,7 @@ describe('remote mirror resource identity', () => {
     expect(next.browserTabsByWorktree[WORKTREE_A]?.[0]?.loadError).toEqual(LOAD_ERROR)
   })
 
-  // Why: a host that omits placement and one that publishes 'server' must land on the same side
-  // of the carve-out, or the tests cannot tell the client check apart from an absence check.
+  // Both omitted and explicit server placements must fall outside the client-host carve-out.
   it.each([
     ['an unplaced page', undefined],
     ['an explicitly server-placed page', SERVER_PLACEMENT]

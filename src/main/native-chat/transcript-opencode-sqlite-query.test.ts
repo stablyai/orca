@@ -14,8 +14,7 @@ let tempDirs: string[] = []
 let openDbs: Database.Database[] = []
 
 afterEach(() => {
-  // Why: Windows keeps the file locked while the handle is open, which would
-  // make rmSync below fail with EPERM.
+  // Close before removal: Windows locks open databases.
   for (const db of openDbs) {
     db.close()
   }
@@ -35,8 +34,6 @@ function createTempDb(): { db: Database.Database; path: string } {
   return { db, path }
 }
 
-// The query module only touches these columns; the full production schema is
-// exercised by the scanner's own suite.
 function applySchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE session (id TEXT PRIMARY KEY);
@@ -177,9 +174,7 @@ describe('readOpenCodeTranscriptPage', () => {
 
   it('treats a session_v2-only (OpenCode 2) DB as not-found instead of throwing', () => {
     const { db, path } = createTempDb()
-    // Why: OpenCode 2 stores sessions in session_v2 — the v1 reader must fail
-    // soft like session-scanner-opencode2-sqlite-list.ts, not throw
-    // "no such table: session".
+    // A v2-only store must fail softly in the v1 reader.
     db.exec('CREATE TABLE session_v2 (id TEXT PRIMARY KEY)')
     expect(readOpenCodeTranscriptSignal(path, 'ses-1')).toBeNull()
     expect(readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 10 })).toBeNull()
@@ -199,7 +194,6 @@ describe('readOpenCodeTranscriptPage', () => {
     }
     const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 3 })
     expect(page).not.toBeNull()
-    // The probe row is the oldest extra — the newest message must survive.
     expect(page!.items.map((item) => item.message.id)).toEqual(['msg-8', 'msg-9', 'msg-10'])
     expect(page!.hasMore).toBe(true)
     expect(page!.beforeMessageRowId).toBe(page!.items[0]!.rowid)
@@ -230,8 +224,6 @@ describe('readOpenCodeTranscriptPage', () => {
   it('counts the limit in renderable messages, batching past non-renderable rows', () => {
     const { db, path } = createTempDb()
     applySchema(db)
-    // Rows 1..6 alternate step-start (no blocks) / renderable — mirror of the
-    // forward page's batching test, walking newest-to-oldest this time.
     for (let index = 1; index <= 6; index++) {
       insertMessage(db, { id: `msg-${index}`, time: index })
       insertPart(db, {
@@ -242,11 +234,9 @@ describe('readOpenCodeTranscriptPage', () => {
       })
     }
     const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 2 })
-    // Two renderable messages even though they span three raw rows.
     expect(page!.items.map((item) => item.message.id)).toEqual(['msg-4', 'msg-6'])
     expect(page!.hasMore).toBe(true)
-    // Cursor names the oldest RAW scanned row (msg-3, consumed but dropped),
-    // so the probe row msg-2 comes back on the next page — nothing is skipped.
+    // Cursor tracks the oldest raw row, including filtered rows, so the probe survives for the next page.
     expect(page!.beforeMessageRowId).toBe(messageRowid(db, 'msg-3'))
     const next = readOpenCodeTranscriptPage({
       dbPath: path,
@@ -273,16 +263,13 @@ describe('readOpenCodeTranscriptPage', () => {
     const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 2 })
     expect(page!.items).toEqual([])
     expect(page!.hasMore).toBe(false)
-    // The raw cursor still names the oldest scanned row — a later renderable
-    // append is picked up instead of being swallowed by the sparse prefix.
     expect(page!.beforeMessageRowId).toBe(messageRowid(db, 'msg-1'))
   })
 
   it('re-reads messages trimmed by an overshoot batch instead of skipping them', () => {
     const { db, path } = createTempDb()
     applySchema(db)
-    // Sparse-then-dense shape (reviewer repro): batch 1 yields one renderable
-    // past a step-start row, batch 2 is dense and overshoots the budget.
+    // Sparse first batch then dense second batch must trim without skipping overflow.
     for (const index of [1, 2, 3, 5]) {
       insertMessage(db, { id: `msg-${index}`, time: index })
       insertPart(db, {
@@ -314,19 +301,14 @@ describe('readOpenCodeTranscriptPage', () => {
       }
       cursor = page!.beforeMessageRowId
     }
-    // Every renderable message returns exactly once — msg-2 must not fall
-    // through the gap between the trimmed batch and the cursor. Pages arrive
-    // newest-first (the walk starts at the tail), so chronological order
-    // only holds inside each page.
+    // Pages arrive newest-first; preserve order within each page and include every message once.
     expect(seen).toEqual(['msg-3', 'msg-5', 'msg-1', 'msg-2'])
   })
 
   it('keeps hasMore true when a trim happens on the final short batch', () => {
     const { db, path } = createTempDb()
     applySchema(db)
-    // Batch 1 collects one renderable past a step-start; batch 2 hits the
-    // table end (rows.length <= limit → probe says no more) while still
-    // overshooting — the trim itself must keep the walk alive.
+    // A final batch can overshoot despite reaching table end; trimming must retain hasMore.
     for (const index of [1, 2, 4]) {
       insertMessage(db, { id: `msg-${index}`, time: index })
       insertPart(db, {
@@ -344,7 +326,6 @@ describe('readOpenCodeTranscriptPage', () => {
       data: { type: 'step-start' }
     })
     const first = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 2 })
-    // The overshoot trimmed msg-1 — that IS more history below the cursor.
     expect(first!.hasMore).toBe(true)
     const second = readOpenCodeTranscriptPage({
       dbPath: path,
@@ -359,8 +340,7 @@ describe('readOpenCodeTranscriptPage', () => {
   it('maps image file parts to image refs and skips non-image files', () => {
     const { db, path } = createTempDb()
     applySchema(db)
-    // A file:// URL written on the READING machine's platform decodes back to
-    // a local path; a foreign-platform one falls back to the opaque ref.
+    // Only native-platform file URLs decode to local paths; foreign paths stay opaque.
     const localPath = process.platform === 'win32' ? 'C:\\Users\\u\\pic.jpg' : '/home/user/pic.jpg'
     const fileUrl = pathToFileURL(localPath).href
     insertMessage(db, { id: 'msg-1', time: 1, role: 'user' })
@@ -401,7 +381,6 @@ describe('readOpenCodeTranscriptPage', () => {
     })
 
     const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 10 })
-    // Blocks follow part-row order; the PDF (non-image) renders nothing.
     expect(page!.items[0]!.message.blocks).toEqual([
       { type: 'image-ref', url: 'data:image/png;base64,AAA', alt: 'paste.png' },
       { type: 'image-ref', path: localPath },
@@ -458,7 +437,6 @@ describe('readOpenCodeTranscriptPage', () => {
         input: { command: 'ls' }
       },
       { type: 'tool-result', callId: 'call-1', output: 'file list' },
-      // A running tool captured no output yet — call only, no result block.
       { type: 'tool-call', callId: 'call-2', name: 'read', state: 'running', input: undefined }
     ])
   })
@@ -503,8 +481,12 @@ describe('readOpenCodeTranscriptSignal', () => {
     insertPart(db, { id: 'prt-1', messageId: 'msg-1', time: 10, data: { type: 'text', text: 'a' } })
     insertPart(db, { id: 'prt-2', messageId: 'msg-2', time: 20, data: { type: 'text', text: 'b' } })
 
+    db.exec(
+      "ALTER TABLE session ADD COLUMN directory TEXT; UPDATE session SET directory = '/folder'"
+    )
     const signal = readOpenCodeTranscriptSignal(path, 'ses-1')
     expect(signal).toEqual({
+      cwd: '/folder',
       messageCount: 2,
       partCount: 2,
       maxMessageRowId: 2,

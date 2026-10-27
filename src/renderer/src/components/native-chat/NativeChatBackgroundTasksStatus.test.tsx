@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { Profiler, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 
 afterEach(() => {
@@ -13,8 +14,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-/** The strip's disclosure is parent-owned, because the strip unmounts whenever
- *  live work momentarily drops to nothing; this stands in for that owner. */
+/** Own disclosure outside the strip so temporary roster gaps cannot reset expansion. */
 function DisclosureHost(
   props: Omit<
     Parameters<typeof NativeChatBackgroundTasksStatus>[0],
@@ -36,7 +36,7 @@ const TASKS: AgentSessionBackgroundTask[] = [
   { id: 'codex-command:exec-1', kind: 'command', description: 'sleep 90' }
 ]
 
-function renderStrip(props: { supportsTaskStop: boolean; supportsStopAll: boolean }): {
+function renderStrip(props: { supportsTaskStop: boolean; offersStopAll: boolean }): {
   onStop: ReturnType<typeof vi.fn>
 } {
   const onStop = vi.fn()
@@ -47,7 +47,7 @@ function renderStrip(props: { supportsTaskStop: boolean; supportsStopAll: boolea
       settledTasks={[]}
       indicatorActive
       supportsTaskStop={props.supportsTaskStop}
-      supportsStopAll={props.supportsStopAll}
+      offersStopAll={props.offersStopAll}
       stoppingTaskIds={new Set()}
       stoppingAll={false}
       onStop={onStop}
@@ -59,20 +59,18 @@ function renderStrip(props: { supportsTaskStop: boolean; supportsStopAll: boolea
 
 describe('NativeChatBackgroundTasksStatus stop affordances', () => {
   it('offers a per-task stop on a host that accepts targeted stops', () => {
-    renderStrip({ supportsTaskStop: true, supportsStopAll: true })
+    renderStrip({ supportsTaskStop: true, offersStopAll: false })
     expect(screen.getByLabelText('Stop count_a')).toBeInTheDocument()
     expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
   })
 
   it('falls back to a stop-all on a host that only accepts an untargeted stop', () => {
-    renderStrip({ supportsTaskStop: false, supportsStopAll: true })
+    renderStrip({ supportsTaskStop: false, offersStopAll: true })
     expect(screen.getByLabelText('Stop background tasks')).toBeInTheDocument()
   })
 
   it('withholds a row stop the host reported it cannot act on', () => {
-    // Claude publishes in-turn foreground rows with `stoppable: false`: the
-    // session accepts targeted stops, but `stopTask` has no target for this row,
-    // so a Stop here resolves to an empty list and reports nothing cancelled.
+    // In-turn Claude rows can be non-stoppable even when the session supports targeted stops; no button should promise an absent target.
     render(
       <DisclosureHost
         isVisible
@@ -83,7 +81,7 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
         settledTasks={[]}
         indicatorActive
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={vi.fn()}
@@ -96,9 +94,98 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
     expect(screen.getByLabelText('Stop backgrounded subagent')).toBeInTheDocument()
   })
 
+  it('stops a backgrounded Codex command by its own id, and offers none on the subagent beside it', () => {
+    const view = (overrides: Partial<AgentChildWorkView>): AgentChildWorkView => ({
+      id: 'child',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: Date.now() - 65_000,
+      observedAt: Date.now() - 1_000,
+      stoppable: true,
+      invocation: { invocationId: 'spawn-1', generation: 1 },
+      ...overrides
+    })
+    const onStop = vi.fn()
+    render(
+      <DisclosureHost
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[
+          view({
+            id: 'agent',
+            providerId: 'codex-agent:child-1',
+            description: 'count_a',
+            stoppable: false
+          }),
+          view({
+            id: 'cmd',
+            kind: 'command',
+            providerId: 'codex-command:exec-1',
+            description: 'pnpm dev'
+          })
+        ]}
+        indicatorActive
+        supportsTaskStop
+        offersStopAll={false}
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={onStop}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    expect(screen.queryByLabelText('Stop count_a')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Stop pnpm dev'))
+    expect(onStop).toHaveBeenCalledWith('codex-command:exec-1')
+  })
+
+  it('stops a Grok background command and the Grok subagent beside it by their own ids', () => {
+    const view = (overrides: Partial<AgentChildWorkView>): AgentChildWorkView => ({
+      id: 'child',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: Date.now() - 65_000,
+      observedAt: Date.now() - 1_000,
+      stoppable: true,
+      invocation: { invocationId: 'spawn-1', generation: 1 },
+      ...overrides
+    })
+    const onStop = vi.fn()
+    render(
+      <DisclosureHost
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[
+          view({ id: 'agent', providerId: 'subagent-1', description: 'Review the diff' }),
+          view({
+            id: 'cmd',
+            kind: 'command',
+            providerId: 'acp-task:01a10366',
+            description: 'Run the dev server'
+          })
+        ]}
+        indicatorActive
+        supportsTaskStop
+        offersStopAll={false}
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={onStop}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    fireEvent.click(screen.getByLabelText('Stop Run the dev server'))
+    fireEvent.click(screen.getByLabelText('Stop Review the diff'))
+    expect(onStop.mock.calls).toEqual([['acp-task:01a10366'], ['subagent-1']])
+    expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
+  })
+
   it('offers no stop at all when the provider exposes none', () => {
-    // Codex: a Stop button here would be a control that cannot act.
-    renderStrip({ supportsTaskStop: false, supportsStopAll: false })
+    renderStrip({ supportsTaskStop: false, offersStopAll: false })
     expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Stop count_a')).not.toBeInTheDocument()
     expect(screen.getByText('count_a')).toBeInTheDocument()
@@ -115,7 +202,7 @@ describe('background-tasks strip header', () => {
         settledTasks={[]}
         indicatorActive
         supportsTaskStop={false}
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -133,9 +220,7 @@ describe('background-tasks strip header', () => {
     ])
     expect(header).toHaveAttribute('aria-label', '3 agents · 1 monitor')
     expect(header.querySelector('.lucide-bot')).toBeInTheDocument()
-    // Heartbeat, the same glyph the agent sidebar shows for monitoring.
     expect(header.querySelector('.lucide-activity')).toBeInTheDocument()
-    // Two kind icons and the chevron: the aggregate state dot is gone.
     expect(header.querySelectorAll('svg')).toHaveLength(3)
     for (const icon of header.querySelectorAll('svg')) {
       expect(icon).toHaveAttribute('aria-hidden', 'true')
@@ -147,8 +232,6 @@ describe('background-tasks strip header', () => {
       { id: 'a1', kind: 'agent' },
       { id: 'm1', kind: 'monitor' }
     ])
-    // Same glyph AND same colour as AgentStateDot/StatusIndicator, or a monitor
-    // here does not read as the monitor there.
     expect(header.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
     expect(header.querySelector('.lucide-bot')?.classList).toContain('text-muted-foreground')
     expect(header.querySelector('.lucide-bot')?.classList).not.toContain('text-yellow-500')
@@ -162,7 +245,7 @@ describe('background-tasks strip header', () => {
         settledTasks={[]}
         indicatorActive={false}
         supportsTaskStop={false}
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -178,7 +261,6 @@ describe('background-tasks strip header', () => {
       { id: 'c1', kind: 'command', description: 'sleep 90' }
     ])
     fireEvent.click(header)
-    // Each kind group is its own labelled list, so scope to the monitor one.
     const monitors = screen.getByRole('list', { name: 'Monitors' })
     expect(monitors.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
     const shell = screen.getByRole('list', { name: 'Shell' })
@@ -196,12 +278,34 @@ describe('background-tasks strip header', () => {
       (element) => element.textContent === ' · '
     )
     expect(separators).toHaveLength(1)
-    // `--border` is a divider line (7% white in dark), an order of magnitude
-    // fainter than the counts it sits between.
     expect(separators[0].classList).not.toContain('text-border')
     expect(separators[0].classList).toContain('text-muted-foreground')
-    // One space either side; the icon's own margin is the icon-to-label gap.
     expect(header.textContent).toBe('1 agent · 1 shell')
+  })
+
+  describe('on a narrow strip', () => {
+    const wideWindow = window.innerWidth
+    afterEach(() => {
+      window.innerWidth = wideWindow
+    })
+
+    it('totals a breakdown across kinds', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent' },
+        { id: 'c1', kind: 'command' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 background tasks')
+    })
+
+    it('keeps one kind in its attention form', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent', state: 'waiting' },
+        { id: 'a2', kind: 'agent', state: 'waiting' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 agents waiting — needs approval')
+    })
   })
 
   it('carries no icon on a collapsed total, which spans kinds', () => {
@@ -217,8 +321,6 @@ describe('background-tasks strip header', () => {
 })
 
 describe('settled rows beside their live siblings', () => {
-  // Retention is the PR's headline: a finished child stays visible, keeps the
-  // usage it ended on, and stops claiming a clock or a stop control.
   it('keeps a settled row with its final usage, no clock and no stop', () => {
     render(
       <DisclosureHost
@@ -244,7 +346,7 @@ describe('settled rows beside their live siblings', () => {
         ]}
         indicatorActive
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -254,7 +356,6 @@ describe('settled rows beside their live siblings', () => {
     const agents = screen.getByRole('list', { name: 'Agents' })
     const rows = within(agents).getAllByRole('listitem')
     expect(rows).toHaveLength(2)
-    // First seen first: the settled sibling started earlier.
     expect(rows[0].textContent).toBe('settled child18.1k')
     expect(rows[1].textContent).toMatch(/^live child4\.1k · .+Stop$/)
     expect(within(rows[1]).getByRole('button', { name: 'Stop live child' })).toBeInTheDocument()
@@ -271,7 +372,7 @@ describe('background-task row reasons', () => {
         settledTasks={[]}
         indicatorActive
         supportsTaskStop={false}
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -281,8 +382,6 @@ describe('background-task row reasons', () => {
     return screen.getAllByRole('listitem')
   }
 
-  // `unverifiable` is the SSH verdict for lost contact; a row that hides it reads
-  // like a working child. `blocked` is the same class of loss.
   it('names the reason on every attention state, not only on waiting', () => {
     const rows = expandedRows([
       { id: 'a1', kind: 'agent', description: 'ssh child', state: 'unverifiable' },
@@ -291,10 +390,9 @@ describe('background-task row reasons', () => {
       { id: 'a4', kind: 'agent', description: 'busy child', state: 'working' }
     ])
     expect(rows).toHaveLength(4)
-    expect(rows[0].textContent).toContain('ssh child · no recent update')
+    expect(rows[0].textContent).toContain('ssh child · status unavailable')
     expect(rows[1].textContent).toContain('flaky child · failed')
     expect(rows[2].textContent).toContain('approval child · needs approval')
-    // A running row has nothing to explain.
     expect(rows[3].textContent).not.toContain('·')
   })
 })
@@ -313,7 +411,7 @@ it('stops elapsed renders in a hidden pane and catches up on reveal', () => {
         settledTasks={[]}
         indicatorActive
         supportsTaskStop={false}
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -365,7 +463,7 @@ it('lets the 1 Hz tick sleep while every row has settled, with each run frozen',
         childViews={[finished('a', 400_000, 520_000), finished('b', 700_000, 760_000)]}
         indicatorActive
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}

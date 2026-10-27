@@ -10,6 +10,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -34,18 +38,8 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -91,7 +85,12 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -146,7 +145,7 @@ describe('registerWorktreeHandlers', () => {
       { checkoutExistingBranch: true }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-bug-0',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-bug-0', hostId: 'local' }),
       expect.objectContaining({ preserveBranchOnDelete: true })
     )
     expect(result).toMatchObject({
@@ -158,7 +157,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('reuses an existing local branch when the worktree folder is renamed (#5181)', async () => {
-    // Why: reuse keeps branchNameOverride on the selected branch though the folder is renamed; backend must check out that branch (no -b).
     listWorktreesMock
       .mockResolvedValueOnce([
         {
@@ -204,7 +202,7 @@ describe('registerWorktreeHandlers', () => {
       { checkoutExistingBranch: true }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/my-folder',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/my-folder', hostId: 'local' }),
       expect.objectContaining({ preserveBranchOnDelete: true })
     )
     expect(result).toMatchObject({
@@ -215,7 +213,20 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('suffixes only the path when an existing local branch checkout path already exists', async () => {
+  it.each(['remote', 'local', 'busy'])('picker allocation (%s)', async (kind) => {
+    if (kind !== 'busy') {
+      getPRForBranchMock.mockResolvedValue({ number: 42 })
+    }
+    const branchName = kind === 'busy' ? 'fix/bug-0-2' : 'fix/bug-0'
+    getBranchConflictKindMock.mockImplementation(async (_repo, branch) =>
+      kind !== 'remote' && branch === 'fix/bug-0' ? 'local' : null
+    )
+    gitExecFileAsyncMock.mockImplementation(async (argv) => {
+      if (argv.includes('refs/heads/fix/bug-0-2^{commit}')) {
+        throw new Error('missing')
+      }
+      return { stdout: 'abc123', stderr: '' }
+    })
     const mainWorktree = {
       path: '/workspace/repo',
       head: 'main',
@@ -226,42 +237,42 @@ describe('registerWorktreeHandlers', () => {
     computeWorktreePathMock.mockImplementation((sanitizedName: string) =>
       sanitizedName === 'fix-bug-0' ? process.cwd() : `/workspace/${sanitizedName}`
     )
-    listWorktreesMock
-      .mockResolvedValueOnce([mainWorktree])
-      .mockResolvedValueOnce([mainWorktree])
-      .mockResolvedValueOnce([
-        mainWorktree,
-        {
-          path: '/workspace/fix-bug-0-2',
-          head: 'abc123',
-          branch: 'refs/heads/fix/bug-0',
-          isBare: false,
-          isMainWorktree: false
-        }
+    listWorktreesMock.mockResolvedValue([
+      { path: '/workspace/fix-bug-0-2', branch: `refs/heads/${branchName}` }
+    ])
+    if (kind === 'local') {
+      listWorktreesMock.mockResolvedValueOnce([mainWorktree]).mockResolvedValueOnce([mainWorktree])
+    } else if (kind === 'busy') {
+      listWorktreesMock.mockResolvedValueOnce([
+        { path: '/workspace/busy', branch: 'refs/heads/fix/bug-0' }
       ])
+    }
 
     const result = await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'fix/bug-0',
-      baseBranch: 'fix/bug-0',
-      branchNameOverride: 'fix/bug-0'
+      baseBranch: 'origin/fix/bug-0',
+      branchNameOverride: 'fix/bug-0',
+      branchIntent: 'open-existing'
     })
 
-    expect(getBranchConflictKindMock).not.toHaveBeenCalled()
-    expect(getPRForBranchMock).not.toHaveBeenCalled()
+    expect(getBranchConflictKindMock).toHaveBeenCalledTimes(kind === 'busy' ? 3 : 1)
+    expect(getPRForBranchMock.mock.calls.map(([, branch]) => branch)).toEqual(
+      kind === 'busy' ? ['fix/bug-0-2'] : []
+    )
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
       '/workspace/fix-bug-0-2',
-      'fix/bug-0',
-      'fix/bug-0',
+      branchName,
+      'origin/fix/bug-0',
       false,
       false,
-      { checkoutExistingBranch: true }
+      kind === 'local' ? { checkoutExistingBranch: true } : {}
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
         path: '/workspace/fix-bug-0-2',
-        branch: 'refs/heads/fix/bug-0'
+        branch: `refs/heads/${branchName}`
       })
     })
   })
@@ -314,7 +325,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
     getPRForBranchMock.mockResolvedValueOnce({
       number: 42,
       title: 'Selected PR',
@@ -349,7 +360,7 @@ describe('registerWorktreeHandlers', () => {
       { cwd: '/workspace/fix-title' }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-title', hostId: 'local' }),
       expect.objectContaining({
         baseRef: 'refs/remotes/origin/main',
         linkedPR: 42
@@ -375,7 +386,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
@@ -388,7 +399,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-title', hostId: 'local' }),
       expect.objectContaining({
         baseRef: 'refs/remotes/origin/main',
         linkedGitLabMR: 7
@@ -409,7 +420,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
     getHostedReviewForBranchMock.mockResolvedValueOnce({
       provider: 'bitbucket',
       number: 11,
@@ -440,7 +451,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/bitbucket-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/bitbucket-title', hostId: 'local' }),
       expect.objectContaining({ linkedBitbucketPR: 11 })
     )
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
@@ -496,7 +507,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/bitbucket-title-2',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/bitbucket-title-2', hostId: 'local' }),
       expect.objectContaining({ linkedBitbucketPR: 11 })
     )
   })
@@ -744,7 +755,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('skips past a suffix that already belongs to a PR after an initial branch conflict', async () => {
-    // Why: the PR-conflict probe (network-bound, 1–3s) only runs from suffix=2 onward, after a branch collision already forced past the first candidate.
+    // Network PR probes start only after the first branch collision, preserving the fast happy path.
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'improve-dashboard' ? 'remote' : null
     )
@@ -794,7 +805,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('does not call `gh pr list` on the happy path (no branch conflict)', async () => {
-    // Why: guard against a refactor reintroducing the PR probe on the happy path (1–3s GitHub round-trip per click).
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',

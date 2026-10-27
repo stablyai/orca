@@ -34,6 +34,8 @@ export type RuntimeSubscribeStub = Mock<
 >
 
 export const fsReadFile: PreloadStub = vi.fn()
+export const fsReadDir: PreloadStub = vi.fn()
+export const fsReadFileChunk: PreloadStub = vi.fn()
 export const fsWriteFile: PreloadStub = vi.fn()
 export const fsOnChanged: PreloadStub = vi.fn()
 export const fsCopy: PreloadStub = vi.fn()
@@ -68,6 +70,7 @@ export function installRuntimeFileClientEnvironment(): void {
     clearLegacyQuickOpenInventoryCacheForTests()
     replaceRuntimeEnvironmentRevisions([])
     fsReadFile.mockReset()
+    fsReadFileChunk.mockReset()
     fsWriteFile.mockReset()
     fsOnChanged.mockReset()
     fsCopy.mockReset()
@@ -114,7 +117,9 @@ export function installRuntimeFileClientEnvironment(): void {
     vi.stubGlobal('window', {
       api: {
         fs: {
+          readDir: fsReadDir,
           readFile: fsReadFile,
+          readFileChunk: fsReadFileChunk,
           writeFile: fsWriteFile,
           onFsChanged: fsOnChanged,
           copy: fsCopy,
@@ -139,6 +144,7 @@ export function installRuntimeFileClientEnvironment(): void {
         },
         runtime: { call: runtimeCall },
         runtimeEnvironments: {
+          cancelSubscription: vi.fn().mockResolvedValue(undefined),
           call: runtimeEnvironmentTransportCall,
           subscribe: runtimeEnvironmentSubscribe
         }

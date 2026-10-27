@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-process'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { ORCAD_STARTUP_PREFLIGHT_FLAG } from '../../shared/orcad-profile-preflight'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
@@ -29,7 +30,7 @@ vi.mock('../persistence/profile-state/profile-state-runtime-preflight', () => ({
 vi.mock('./orcad-runtime-native-preflight', () => ({
   preflightOrcadNativeRuntime: fixture.native
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: fixture.run }))
+vi.mock('@orca/process-host', () => ({ runProcess: fixture.run }))
 
 const identity = '0.1.0+aaaaaaaaaaaa'
 const nonce = '743bf9c8-2e58-4c79-a0ac-52c8d3e8e103'
@@ -80,7 +81,7 @@ describe('bundled Orca startup readiness', () => {
       expect(fixture.run).toHaveBeenCalledOnce()
       expect(fixture.run).toHaveBeenCalledWith({
         program: process.execPath,
-        args: [join('/slot', 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
+        args: [join('/slot', 'orcad-server.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
         env: expect.objectContaining({ ORCA_BACKGROUND_LAUNCH: '1' }),
         timeoutMs: 90_000,
         maxOutputBytes: 64 * 1024,

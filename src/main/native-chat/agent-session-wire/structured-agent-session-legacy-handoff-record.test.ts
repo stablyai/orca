@@ -1,7 +1,3 @@
-// Records an older build persisted mid terminal handoff. That build could leave a lease at
-// `preparing` or `old-owner-stopped`, or owned by a terminal (`runtimeKind: 'tui'`). This build
-// has no handoff to finish, so each state loads normalized and ends in a chat the user can send to.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { PersistedAgentSessionLease } from '../../../shared/agent-session-legacy-handoff-lease'
-import { writeOlderBuildLease } from '../../runtime/agent-session-older-build-lease.test-fixture'
+import { writeOlderBuildLease } from '../../runtime/agent-session/ownership/agent-session-older-build-lease.test-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -25,10 +21,13 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
-/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
+// Serialized delivery can exceed one second under load.
 function eventually(assertion: () => void | Promise<void>): Promise<void> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }
@@ -43,17 +42,24 @@ let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 
 function openHost(): void {
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
-      acquire,
-      closeSession: vi.fn(async () => true),
-      releaseAcquisition: vi.fn(async () => true),
-      dispatch,
-      cancelTurn: vi.fn(async () => ({ cancelled: false })),
-      answerPrompt: vi.fn(async () => undefined),
-      setOption: vi.fn(async () => undefined)
-    },
+    adapter: startsWhenPublished(
+      {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
+        acquire,
+        closeSession: vi.fn(async () => true),
+        releaseAcquisition: vi.fn(async () => true),
+        dispatch,
+        cancelTurn: vi.fn(async () => ({ cancelled: false })),
+        answerPrompt: vi.fn(async () => undefined),
+        setOption: vi.fn(async () => undefined)
+      },
+      () => host
+    ),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
@@ -63,8 +69,7 @@ function openHost(): void {
   })
 }
 
-/** Writes the lease an older build left behind, then starts a fresh app generation over it. */
-/** Older builds also wrote the retired settlement latch fields. */
+/** Older builds persisted these retired settlement latches. */
 type OlderBuildLease = Partial<PersistedAgentSessionLease> & {
   settlementRetryRequired?: boolean
   settlementRetryId?: string
@@ -74,15 +79,14 @@ async function persistFromOlderBuild(lease: OlderBuildLease): Promise<void> {
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const attached = store.getRecord(SESSION)?.lease
   await host.flushAllStreamedEvents()
-  // Over the attached owner: the older build's stage or terminal owner kept it from releasing.
+  // Replace the attached lease with legacy state that prevented release.
   await writeOlderBuildLease(root, SESSION, { ...attached, ...lease })
   store = await openTestAgentSessionRecordStore(root)
   acquire.mockClear()
   openHost()
 }
 
-/** A send is accepted at once; what became of it is the submission's state once the host's
- *  delivery settles it — handed over, or rejected with the reason the chat shows. */
+/** Wait for delivery settlement; acceptance alone does not prove provider handover. */
 async function delivered(text: string) {
   const sent = await send(text)
   expect(sent).toMatchObject({ ok: true })
@@ -122,10 +126,11 @@ beforeEach(async () => {
   stopOwnerProcess = vi.fn()
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW - 1_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex' as const, threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length
         ? ('resumed' as const)
         : ('created' as const),
@@ -144,7 +149,6 @@ afterEach(async () => {
 
 describe('a record an older build left mid terminal handoff', () => {
   it('loads a terminal-owned lease stopped mid return trip, and the chat accepts a send', async () => {
-    // The shape an older build wrote when its terminal owner died with a turn left to settle.
     await persistFromOlderBuild({
       runtimeKind: 'tui',
       runtimeFence: 2,
@@ -182,7 +186,6 @@ describe('a record an older build left mid terminal handoff', () => {
   })
 
   it('loads a lease released for a terminal that never started, and the chat accepts a send', async () => {
-    // The shape an older build wrote when its terminal launch was abandoned.
     await persistFromOlderBuild({
       runtimeFence: 2,
       handoffStage: 'old-owner-stopped',
@@ -234,7 +237,7 @@ describe('a record an older build left mid terminal handoff', () => {
 
   it('waits out a terminal owner that is still running, never stops it, then resumes the chat', async () => {
     await persistFromOlderBuild({ runtimeKind: 'tui' })
-    // A conflicted claim is probed but never stopped, by this build and by older ones.
+    // Conflicted claims may be probed, never stopped.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'conflicted'
@@ -247,9 +250,7 @@ describe('a record an older build left mid terminal handoff', () => {
       claimStatus: 'conflicted',
       handoffStage: 'recovering'
     })
-    // Sending and opening the chat both say what frees it: quitting that terminal agent. A send is
-    // accepted, then rejected by the start that cannot take the lease, and the chat's row says why,
-    // worded from the refusal's details; only the live refusal names the process.
+    // Both live refusal and settled rejection explain terminal ownership; only live refusal names the PID.
     const quitTerminal =
       'This chat is still open in a terminal agent (process 4242). Quit that agent to continue the chat here.'
     expect(await delivered('while the terminal still runs')).toMatchObject({
@@ -271,7 +272,6 @@ describe('a record an older build left mid terminal handoff', () => {
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(acquire).not.toHaveBeenCalled()
 
-    // The user closes the terminal; the next send's start proves it gone and the chat takes over.
     probe.mockResolvedValue({ outcome: 'pid-absent' })
 
     expect(stopOwnerProcess).not.toHaveBeenCalled()

@@ -1,5 +1,5 @@
 import { relayHostLogDigest } from './relay-host-log-digest.js'
-import { createHash } from 'node:crypto'
+import { hostCohortBucket } from './host-cohort-bucket.js'
 import type {
   RegionCorrectionRequest,
   RegionCorrectionResponse,
@@ -45,11 +45,7 @@ export async function exchangeRegionCorrection(
       const generation = Number(prior?.generation ?? 0) + 1
       if (!Number.isSafeInteger(generation)) throw new Error('region_generation_exhausted')
       const expiresAt = now + REGION_DECISION_TTL_MS
-      const cohortBucket =
-        createHash('sha256')
-          .update(JSON.stringify([identity.userId, identity.relayHostId]))
-          .digest()
-          .readUInt32BE(0) % 100
+      const cohortBucket = hostCohortBucket(identity)
       await transaction.query(
         `INSERT INTO relay_region_decisions
          (user_id, relay_host_id, generation, expires_at, assignment_epoch, incumbent_region,

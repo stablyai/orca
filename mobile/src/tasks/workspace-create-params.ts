@@ -5,7 +5,10 @@ import type {
 } from '../../../src/shared/worktree/create-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
-import { getWorkspaceSourceName } from '../../../src/shared/new-workspace/workspace-source'
+import {
+  buildJiraWorkspaceSource,
+  getWorkspaceSourceName
+} from '../../../src/shared/new-workspace/workspace-source'
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 
@@ -51,22 +54,24 @@ type WorkspaceCreateLinearItem = {
   }
 }
 
+type WorkspaceCreateJiraItem = {
+  provider: 'jira'
+  source: {
+    key: string
+    title: string
+    url: string
+  }
+}
+
 export type WorkspaceCreateTaskItem =
   | WorkspaceCreateGitHubItem
   | WorkspaceCreateGitLabItem
   | WorkspaceCreateLinearItem
+  | WorkspaceCreateJiraItem
 
-/** The outgoing worktree.create params, so the builder and the operation agree by type. */
 export type WorkspaceCreateParams = RpcSendParams<'worktree.create'>
 
-/**
- * `worktree.create` fields that create the worktree agent-first, so its startup terminal is the
- * agent. Send the agent id rather than a command so the host resolves launch args (permission
- * flags) and host-shell quoting, matching the "+" new-tab and CLI paths.
- *
- * These stay on every create: when the host routes through `agent.launch` it strips them and picks
- * the surface itself, and when it cannot, they are still what makes the agent start.
- */
+// Send agent ids so the host applies launch flags and quoting; legacy create retains them while agent.launch strips them to choose a surface.
 export function startupAgentCreateFields(agentId: TuiAgent | undefined): {
   startupAgent?: TuiAgent
   createdWithAgent?: TuiAgent
@@ -112,7 +117,7 @@ export function buildTaskWorkspaceCreateParams(args: {
   const comment = note?.trim()
   const selectedBaseBranch = baseBranch || hostedStartPoint?.baseBranch
   const selectedPushTarget = pushTarget ?? hostedStartPoint?.pushTarget
-  // Preserve provenance so the host can distinguish an intentional label from a generated title.
+  // Retain provenance so the host distinguishes deliberate names from generated titles.
   const sourceName =
     item.provider === 'linear'
       ? getWorkspaceSourceName({
@@ -123,7 +128,9 @@ export function buildTaskWorkspaceCreateParams(args: {
           url: item.source.url,
           linearIdentifier: item.source.identifier
         })
-      : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+      : item.provider === 'jira'
+        ? getWorkspaceSourceName(buildJiraWorkspaceSource(item.source))
+        : getWorkspaceSourceName({ provider: item.provider, ...item.source })
   const displayName = nameIsAutoManaged
     ? { displayName: sourceName.displayName, displayNameKind: 'generated' as const }
     : workspaceName?.trim()
@@ -165,6 +172,19 @@ export function buildTaskWorkspaceCreateParams(args: {
       ...(item.source.type === 'issue'
         ? { linkedGitLabIssue: item.source.number }
         : { linkedGitLabMR: item.source.number })
+    }
+  }
+
+  if (item.provider === 'jira') {
+    return {
+      repo: `id:${targetRepoId}`,
+      name: resolveMobileWorkspaceCreateName({
+        draft: workspaceName,
+        fallback: item.source.key.toLowerCase()
+      }),
+      ...displayName,
+      linkedWorkItem: buildJiraWorkspaceSource(item.source),
+      ...common
     }
   }
 

@@ -16,6 +16,8 @@ export type RightSidebarState = {
   aiVaultSearchFocusRequested: boolean
   rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
+  /** In memory: the tab the mounted sidebar renders, which differs from rightSidebarTab when that tab is hidden here. */
+  rightSidebarEffectiveTab: ActiveRightSidebarTab | null
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
@@ -29,6 +31,7 @@ export type RightSidebarState = {
   }) => void
   showAiVaultSearch: () => void
   clearAiVaultSearchFocusRequest: () => void
+  setRightSidebarEffectiveTab: (tab: ActiveRightSidebarTab | null) => void
   setActivityBarPosition: (position: ActivityBarPosition) => void
 }
 
@@ -42,6 +45,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     aiVaultSearchFocusRequested: false,
     rightSidebarTabByWorktree: {},
     rightSidebarExplorerViewByWorktree: {},
+    rightSidebarEffectiveTab: null,
     activityBarPosition: 'top',
     toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
@@ -138,6 +142,8 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
         aiVaultSearchFocusRequested: true
       })),
     clearAiVaultSearchFocusRequest: () => set({ aiVaultSearchFocusRequested: false }),
+    setRightSidebarEffectiveTab: (tab) =>
+      set((s) => (s.rightSidebarEffectiveTab === tab ? {} : { rightSidebarEffectiveTab: tab })),
     setActivityBarPosition: (position) => set({ activityBarPosition: position })
   }
 }

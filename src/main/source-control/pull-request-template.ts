@@ -1,8 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 
 const PULL_REQUEST_TEMPLATE_CANDIDATES = [
   '.github/pull_request_template.md',
@@ -43,21 +41,11 @@ export async function readHostedReviewTemplate(
   connectionId?: string | null,
   provider?: HostedReviewProvider | null
 ): Promise<string> {
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
+  if (connectionId) {
     return ''
   }
   for (const relativeCandidate of getTemplateCandidates(provider)) {
     try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional hosted-review template path.
@@ -76,7 +64,6 @@ export async function resolveHostedReviewBodyForGeneration(args: {
   if (!args.useTemplate || args.body.trim()) {
     return args.body
   }
-  // Why: generated non-empty bodies bypass provider-side template fallback, so
-  // preload the template into the AI context when the user asked to use it.
+  // Generated bodies bypass provider template fallback; include the requested template in AI context first.
   return readHostedReviewTemplate(args.repoPath, args.connectionId, args.provider)
 }

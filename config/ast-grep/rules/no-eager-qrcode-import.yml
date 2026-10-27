@@ -1,0 +1,33 @@
+# Startup must not parse the qrcode bundle; only mobile pairing reaches it.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: no-eager-qrcode-import
+language: typescript
+severity: error
+message: qrcode is only reachable from mobile pairing. Use `import type` plus `await import('qrcode')` so startup does not parse its bundle.
+rule:
+  kind: import_statement
+  has: { field: source, regex: '^.qrcode.$' }
+  not:
+    any:
+      - regex: '^import\s+type\b'
+      # `import { type A, type B } from 'qrcode'` erases too.
+      - all:
+          - has: { kind: import_clause, has: { kind: named_imports } }
+          - not: { has: { kind: import_clause, has: { kind: identifier } } }
+          - not: { has: { stopBy: end, kind: import_specifier, not: { regex: '^type\s' } } }
+---
+id: no-eager-qrcode-import-tsx
+language: tsx
+severity: error
+message: qrcode is only reachable from mobile pairing. Use `import type` plus `await import('qrcode')` so startup does not parse its bundle.
+rule:
+  kind: import_statement
+  has: { field: source, regex: '^.qrcode.$' }
+  not:
+    any:
+      - regex: '^import\s+type\b'
+      # `import { type A, type B } from 'qrcode'` erases too.
+      - all:
+          - has: { kind: import_clause, has: { kind: named_imports } }
+          - not: { has: { kind: import_clause, has: { kind: identifier } } }
+          - not: { has: { stopBy: end, kind: import_specifier, not: { regex: '^type\s' } } }

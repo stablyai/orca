@@ -1,3 +1,4 @@
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
 export function createRuntimeRpcAbortError(): Error {
@@ -18,14 +19,12 @@ export async function callAbortableRuntimeEnvironment(
   if (signal.aborted) {
     throw createRuntimeRpcAbortError()
   }
-  // Why: the one-shot runtime call bridge cannot cancel host work; the
-  // subscription bridge closes its request context when we unsubscribe.
+  // Unsubscribe closes the host request context; one-shot calls cannot cancel host work.
   return new Promise((resolve, reject) => {
+    const subscriptionId = createBrowserUuid()
     let handle: { unsubscribe: () => void } | null = null
     let settled = false
-    // Why: the subscription transport's own timeout only bounds subscription
-    // start, not the response. Keep the one-shot call path's response deadline
-    // so a connected-but-unresponsive runtime cannot stall the caller forever.
+    // Subscription timeout bounds start only; retain the response deadline or connected unresponsive hosts stall forever.
     const deadline =
       timeoutMs === undefined
         ? null
@@ -42,6 +41,11 @@ export async function callAbortableRuntimeEnvironment(
       }
       signal.removeEventListener('abort', onAbort)
       handle?.unsubscribe()
+      if (!handle) {
+        void window.api.runtimeEnvironments
+          .cancelSubscription({ subscriptionId })
+          .catch(() => undefined)
+      }
       complete()
     }
     const onAbort = (): void => finish(() => reject(createRuntimeRpcAbortError()))
@@ -49,6 +53,7 @@ export async function callAbortableRuntimeEnvironment(
     void window.api.runtimeEnvironments
       .subscribe(
         {
+          subscriptionId,
           selector: environmentId,
           method,
           params,

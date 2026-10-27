@@ -1,6 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Which journal changes republish a session's status now that the summary carries its own state
-// clock: a moved clock always does, and row activity alone does not once the clock dates the state.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -15,6 +13,7 @@ import { createTrackedJournalOpener } from '../agent-session-journal/journal-hos
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'clock-session'
 const THREAD = 'thread-1'
@@ -55,7 +54,7 @@ async function openFeed() {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     },
     now: () => (clock += 100),
     stateDirectory: join(root, SESSION)
@@ -63,7 +62,7 @@ async function openFeed() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => clock
   })
   const published: AgentSessionStatusSummary[] = []
@@ -98,7 +97,6 @@ describe('status republication and the state clock', () => {
     const settled = published.length
     expect(published.at(-1)).toMatchObject({ status: 'idle', statusStartedAt: 1_150 })
 
-    // A roster-style revision: new journal activity, same words, same clock.
     await write(codexItem(5), { kind: 'status', text: 'Subagent running' })
     await write(codexItem(5), { kind: 'status', text: 'Subagent running' })
     expect(published).toHaveLength(settled)

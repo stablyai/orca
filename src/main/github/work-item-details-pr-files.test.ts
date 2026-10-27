@@ -1,3 +1,4 @@
+import type * as WorkItemDetailsTestLookup from './work-item-details-test-lookup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RateLimitGuardResult =
@@ -52,8 +53,11 @@ vi.mock('./gh-utils', () => ({
   release: vi.fn()
 }))
 
-vi.mock('./client', () => ({
+vi.mock('./client', async () => ({
   getWorkItem: getWorkItemMock,
+  getWorkItemWithRepository: (
+    await vi.importActual<typeof WorkItemDetailsTestLookup>('./work-item-details-test-lookup')
+  ).makeWorkItemDetailsLookupMock(getWorkItemMock),
   getWorkItemByOwnerRepo: vi.fn(),
   getPRChecks: getPRChecksMock,
   getPRComments: getPRCommentsMock
@@ -75,8 +79,6 @@ import { getPRFileContents, getWorkItemDetails } from './work-item-details'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -183,8 +185,6 @@ describe('getWorkItemDetails PR file listing', () => {
     ).toHaveLength(3)
   })
 
-  // Why: a rate-limited/auth-failed file fetch must not render as an empty PR;
-  // the Files tab keys its retry state off details.filesUnavailable.
   it('flags filesUnavailable when the file fetch fails', async () => {
     getWorkItemMock.mockResolvedValueOnce(pullRequestItem(8305, 'Files fetch fails'))
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {

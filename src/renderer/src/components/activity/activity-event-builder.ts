@@ -1,11 +1,12 @@
 import { freshActivityLiveAgentState } from './activity-event-state'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { Repo } from '../../../../shared/repo-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
@@ -31,6 +32,7 @@ import {
 export { createActivityEventBuildCache, type ActivityEventBuildCache, newestActivityHistoryEntries }
 
 export type BuildActivityEventsArgs = {
+  chatNames: StructuredChatTabNames
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
@@ -58,15 +60,18 @@ export function buildActivityEvents(
   const events: ActivityEvent[] = []
   const paneEntryByPaneKey: Record<string, AgentStatusEntry> = {}
   const seenEventIds = new Set<string>()
-  const tabContext = buildActivityTabContext(args.tabsByWorktree, args.unifiedTabsByWorktree)
+  const tabContext = buildActivityTabContext(
+    args.tabsByWorktree,
+    args.unifiedTabsByWorktree,
+    args.chatNames
+  )
   const tabHostIndex = buildActivityTabHostIndex(args.unifiedTabsByWorktree)
   const ownerCache = new Map<string, ActivityEventOwner>()
   const liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot> = {}
   const seenCacheKeys = cache ? new Set<string>() : null
 
   const pushPaneEvents = (paneEvents: ActivityEvent[], rowEntry: AgentStatusEntry): void => {
-    // Why: a paneKey can appear in more than one source (live + retained overlap);
-    // event ids stay globally unique so the first source wins, as before.
+    // Live/retained sources can overlap; keep globally unique event IDs with first-source precedence.
     paneEntryByPaneKey[rowEntry.paneKey] ??= rowEntry
     for (const event of paneEvents) {
       if (seenEventIds.has(event.id)) {
@@ -95,8 +100,7 @@ export function buildActivityEvents(
       ownerCache
     )
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-    // Only fresh live turns contribute working activity; history cannot establish liveness.
-    // The freshness check runs on the raw entry (orchestration merges never change state/timing fields).
+    // Only fresh raw live state proves working; history and orchestration enrichment cannot establish liveness.
     const liveState = freshActivityLiveAgentState(entry, args.now)
     const {
       events: paneEvents,
@@ -137,7 +141,7 @@ export function buildActivityEvents(
     pushPaneEvents
   })
 
-  // Why: evict panes gone from every source so the cache can't outgrow the live state maps.
+  // Evict panes absent from every source so caches cannot outgrow live maps.
   if (cache && seenCacheKeys) {
     for (const cacheKey of cache.panes.keys()) {
       if (!seenCacheKeys.has(cacheKey)) {

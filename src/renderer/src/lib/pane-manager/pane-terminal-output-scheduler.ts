@@ -6,13 +6,13 @@ import {
 import { exposeTerminalOutputSchedulerDebugApi as exposeDebugApi } from './pane-terminal-output-scheduler-debug'
 import { flushTerminalOutputImpl } from './pane-terminal-output-flusher'
 import { writeTerminalOutputImpl } from './pane-terminal-output-writer'
+import { writeXtermParseBarrier } from './xterm-parse-barrier'
 import {
   requestRegisteredTerminalBacklogRecovery,
   type TerminalOutputTarget,
   type WriteTerminalOutputOptions
 } from './pane-terminal-output-queue-registry'
-// Why this bare import: pane-terminal-output-drain registers the drain runner that the registry's
-// scheduleDrain invokes, and this facade is every consumer's entry point into the scheduler graph.
+// Import for registration: drain installs the runner used by scheduleDrain; this facade is every consumer’s graph entry point.
 import './pane-terminal-output-drain'
 
 export {
@@ -95,7 +95,7 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
     }
     timer = setTimeout(finish, PARSE_SETTLE_TIMEOUT_MS)
     try {
-      terminal.write('', finishParsed)
+      writeXtermParseBarrier(terminal, finishParsed)
     } catch {
       // Why: a synchronous rejection means this xterm can't accept even an empty FIFO probe; recovery must replace it before reuse.
       failTerminalWriteStallWatch(terminal)

@@ -14,5 +14,8 @@ export type {
   RemoteBrowserPageHandle
 } from './browser/browser-slice-contract'
 export { createBrowserSlice } from './browser/create-browser-slice'
-export { isLocalBrowserPageOwner } from './browser/browser-host-state'
+export {
+  isClientHostedBrowserPageHandle,
+  isLocalBrowserPageOwner
+} from './browser/browser-host-state'
 export { sanitizeBrowserPageAnnotation } from './browser/browser-page-annotation'

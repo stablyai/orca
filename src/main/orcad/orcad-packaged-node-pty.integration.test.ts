@@ -4,7 +4,7 @@ import { mkdtemp, symlink, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { ORCAD_NODE_PTY_DIR } from '../../shared/orcad-artifacts'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
@@ -23,7 +23,7 @@ describe.skipIf(skip)('packaged node-pty under the pinned Node', () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-packaged-node-pty-'))
     try {
       const entry = join(directory, 'local-pty.cjs')
-      // Why a link and not NODE_PATH: the dynamic ESM import() ignores NODE_PATH.
+      // Dynamic ESM imports ignore NODE_PATH.
       await symlink(join(packageDir, 'node_modules'), join(directory, 'node_modules'), 'junction')
       await build({
         stdin: {
@@ -95,7 +95,7 @@ describe.skipIf(skip)('packaged node-pty under the pinned Node', () => {
         retired: true
       })
     } finally {
-      // Unlink first so tree removal can never walk into the package it links to.
+      // Remove the junction before recursively deleting the test root.
       await unlink(join(directory, 'node_modules')).catch(() => {})
       removeTreeSync(directory)
     }

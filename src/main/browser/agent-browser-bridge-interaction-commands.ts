@@ -11,9 +11,15 @@ import type {
   BrowserPdfResult
 } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
-import { WAIT_PROCESS_TIMEOUT_GRACE_MS } from './agent-browser-bridge-types'
+import {
+  agentBrowserWaitArguments,
+  type AgentBrowserWaitOptions
+} from './agent-browser-wait-arguments'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { parseCdpKeyEvent, imeFallbackKeyEvent } from './cdp-keyboard-us-layout'
+import { dispatchPageKeyEvent, type GuestCdpSender } from './guest-direct-key-input'
+import { sendGuestCdpCommand } from './guest-cdp-command'
+import { readRemoteCliAdmittedPage } from './remote-cli-page-admission'
 import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
 
 export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowserBridgeCaptureCommands {
@@ -54,56 +60,24 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
   }
 
   async wait(
-    options?: {
-      selector?: string
-      timeout?: number
-      text?: string
-      url?: string
-      load?: string
-      fn?: string
-      state?: string
-    },
+    options?: AgentBrowserWaitOptions,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserWaitResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['wait']
-      const hasCondition =
-        !!options?.selector || !!options?.text || !!options?.url || !!options?.load || !!options?.fn
-      if (options?.selector) {
-        args.push(options.selector)
-      } else if (options?.timeout != null && !hasCondition) {
-        args.push(String(options.timeout))
-      }
-      if (options?.text) {
-        args.push('--text', options.text)
-      }
-      if (options?.url) {
-        args.push('--url', options.url)
-      }
-      if (options?.load) {
-        args.push('--load', options.load)
-      }
-      if (options?.fn) {
-        args.push('--fn', options.fn)
-      }
-      const normalizedState = options?.state === 'visible' ? undefined : options?.state
-      if (normalizedState) {
-        args.push('--state', normalizedState)
-      }
-      // Why: agent-browser's selector wait lacks a per-command timeout — enforce it here so a missing selector fails as browser_timeout, not a hang.
+      const { args, conditionTimeoutMs, processTimeoutMs } = agentBrowserWaitArguments(
+        options ?? {}
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's wait --json answers the BrowserWaitResult shape.
       return (await this.execAgentBrowser(sessionName, args, {
-        timeoutMs:
-          options?.timeout != null && hasCondition
-            ? options.timeout + WAIT_PROCESS_TIMEOUT_GRACE_MS
-            : undefined,
+        timeoutMs: processTimeoutMs,
         timeoutError:
-          options?.timeout != null && hasCondition
-            ? new BrowserError(
+          conditionTimeoutMs === undefined
+            ? undefined
+            : new BrowserError(
                 'browser_timeout',
-                `Timed out waiting for browser condition after ${options.timeout}ms.`
+                `Timed out waiting for browser condition after ${conditionTimeoutMs}ms.`
               )
-            : undefined
       })) as BrowserWaitResult
     })
   }
@@ -140,7 +114,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       browserPageId,
       async (sessionName) => {
         if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
-          // Why: agent-browser resolves the ref directly, preserving iframe/shadow-root/unfocusable semantics for ordinary fields.
+          // Let the helper resolve ordinary refs inside iframes and shadow roots, including unfocusable fields.
           await this.execAgentBrowser(sessionName, ['fill', element, ''])
           return { cleared: element }
         }
@@ -158,7 +132,6 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     browserPageId?: string
   ): Promise<BrowserSelectAllResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: agent-browser has no select-all command — implement as focus + Ctrl+A
       await this.execAgentBrowser(sessionName, ['focus', element])
       return (await this.execAgentBrowser(sessionName, [
         'press',
@@ -178,9 +151,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       async (sessionName, target) => {
         const parsed = parseCdpKeyEvent(key) ?? imeFallbackKeyEvent(key)
         if (!parsed) {
-          // Why: a key name the table cannot express must not dispatch keyCode 0 and
-          // report success — route it to the helper, creating its session only now so
-          // the direct path never pays for it.
+          // Unknown keys need the helper; create its session only on this fallback path.
           await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
           return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
         }
@@ -202,24 +173,36 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
-          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
-            // Why: rawKeyDown is the no-character form; sending keyDown without text
-            // makes Blink synthesize an empty input for editing keys.
-            type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
-            ...event,
-            ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
-          })
-          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
-            type: 'keyUp',
-            ...event,
-            // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
-            modifiers: parsed.modifiers & ~parsed.selfModifier
-          })
+          await this.waitForPagePaint(wc, target.webContentsId)
+          const send: GuestCdpSender = (method, params, sessionId) =>
+            sendGuestCdpCommand(wc, method, params, sessionId)
+          const guardFocus = (): Promise<() => void> =>
+            this.browserManager.guardUserFocusForAgentInput(target.webContentsId)
+          await dispatchPageKeyEvent(
+            wc,
+            {
+              // keyDown without text makes Blink synthesize empty input; use rawKeyDown for editing keys.
+              type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
+              ...event,
+              ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
+            },
+            send,
+            guardFocus
+          )
+          await dispatchPageKeyEvent(
+            wc,
+            {
+              type: 'keyUp',
+              ...event,
+              // Blink clears a modifier's own bit on keyup.
+              modifiers: parsed.modifiers & ~parsed.selfModifier
+            },
+            send,
+            guardFocus
+          )
           return { pressed: key }
         } catch (error) {
-          // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as
-          // runtime_error — the helper path this replaced always produced a browser_* code, and
-          // the pane only reclaims a dead page when it sees one.
+          // Browser error codes let the pane recognize and reclaim a dead page.
           if (error instanceof BrowserError) {
             throw error
           }
@@ -234,22 +217,20 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           releaseDebugger()
         }
       },
-      { ensureSession: false }
+      { ensureSession: false, requireScopedTarget: true }
     )
   }
 
   async pdf(worktreeId?: string, browserPageId?: string): Promise<BrowserPdfResult> {
-    // Why: agent-browser's CDP printToPDF hangs in Electron webviews — use the native webContents.printToPDF().
-    // Printing lays the page out afresh, so it works on an undrawn page and needs no paint hold.
+    // Native printing avoids helper CDP hangs and lays out undrawn pages without a paint hold.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
       }
-      const buffer = await wc.printToPDF({
-        printBackground: true,
-        preferCSSPageSize: true
-      })
+      const buffer = await readRemoteCliAdmittedPage(wc.id, () =>
+        wc.printToPDF({ printBackground: true, preferCSSPageSize: true })
+      )
       return { data: buffer.toString('base64') }
     })
   }

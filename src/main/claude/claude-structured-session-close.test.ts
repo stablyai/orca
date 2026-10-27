@@ -3,7 +3,7 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+} from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   adapterFor,
@@ -13,10 +13,21 @@ import {
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { closeClaudeSession } from './claude-structured-session-close'
-import { ClaudeAcquisitionRegistry } from './claude-structured-session-state'
+import { claudeRootExitObserved, closeClaudeSession } from './claude-structured-session-close'
+import { ClaudeAcquisitionRegistry } from './structured/claude-structured-session-state'
 
 describe('Claude published session close lifecycle', () => {
+  it('never reads a failed spawn as an observed root exit, whatever checks it first', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const connection = claude.connections[0]!
+    connection.exitVerdict = { root: 'exited', tree: 'exited', processless: true }
+    expect(claudeRootExitObserved(connection)).toBe(false)
+    connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    expect(claudeRootExitObserved(connection)).toBe(true)
+  })
+
   it('reports a proven root exit when published-session close cannot prove descendants', async () => {
     const claude = fakeClaude()
     const adapter = adapterFor(claude)
@@ -37,7 +48,6 @@ describe('Claude published session close lifecycle', () => {
     const first = claude.connections[0]!
     first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     first.close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
-    // The owner releases the lease on this verdict, so the next surface resumes the chat.
     await expect(adapter.closeSession('session-1')).rejects.toBeInstanceOf(
       AgentSessionAcquisitionRootExitObservedError
     )
@@ -126,18 +136,16 @@ describe('Claude published session close lifecycle', () => {
     ).sessions.get('session-1')
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
-    await expect(adapter.closeSession('session-1')).rejects.toBe(persistenceError)
-    // The child is provably dead; a failed cursor write may not suppress the end.
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+    await vi.waitFor(() => expect(persistHandle).toHaveBeenCalledOnce())
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
     expect(disposeTranslator).toHaveBeenCalledOnce()
-    // A close Orca asked for stops the child still running, then the host hears the session end.
-    expect(childWork).toEqual(['live', 'ended', 'session-ended'])
+    // Session close cannot prove how unfinished child work ended.
+    expect(childWork).toEqual(['live', 'session-ended'])
 
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(persistHandle).toHaveBeenCalledTimes(2)
-    // The retry persists the same cursor without a second lifecycle end.
-    expect(events.filter((event) => event.type === 'handle')).toHaveLength(1)
+    expect(persistHandle).toHaveBeenCalledOnce()
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(disposeTranslator).toHaveBeenCalledOnce()
   })

@@ -53,13 +53,13 @@ it('does not answer jcode startup color queries but keeps keyboard support', () 
 })
 
 it('skips jcode startup colors when only the command or telemetry names it', () => {
-  // Why: a quick-launch pane carries no launchAgent, and it leaks the same
-  // composer text the launchAgent-based skip was added to prevent.
+  // Quick launch can omit launchAgent but still leak early color replies into the composer.
   const colors = { foreground: '#ffffff', background: '#282c34' }
   for (const launch of [
     { command: 'jcode', telemetry: { agent_kind: 'jcode' } },
     { telemetry: { agent_kind: 'jcode' } },
-    { command: 'jcode' }
+    { command: 'jcode' },
+    { command: 'sleep 30 && jcode' }
   ]) {
     expect(
       getStartupTerminalIngressIntent({
@@ -69,7 +69,6 @@ it('skips jcode startup colors when only the command or telemetry names it', () 
       })
     ).toEqual({ colors: {}, kittyKeyboardProtocol: true, deadlineMs: 5000 })
   }
-  // A different agent still gets its colors.
   expect(
     getStartupTerminalIngressIntent({
       launchAgent: 'claude',

@@ -47,8 +47,7 @@ describe('detectTerminalComposerDraft', () => {
   })
 
   it('keeps a typed draft whose stock placeholder is still rendered to its right', () => {
-    // The placeholder normally clears the moment you type, but a repaint can land the two on the
-    // row together. Classifying that as a placeholder would mask the row the user's text is on.
+    // Repaints can leave the placeholder beside typed text; do not mask that user draft.
     const context = {
       rows: ['\u203a \uc548\ub155Ask Codex to do anything'],
       typedRows: ['\u203a \uc548\ub155'],
@@ -379,6 +378,25 @@ describe('detectTerminalComposerDraft', () => {
         cursorViewportRow: 8
       })
     ).toMatchObject({ text: 'first line\n\nsecond line', endRow: 10 })
+  })
+
+  it('keeps a model-like Claude paragraph above the bottom composer frame', () => {
+    expect(
+      detectTerminalComposerDraft({
+        rows: ['────────', '❯ compare models'],
+        typedRows: ['────────', '❯ compare models'],
+        promptGlyphBoldRows: [false, false],
+        rowsWrapped: [false, false],
+        rowsBelow: ['', 'gpt-5 · verify', '────────'],
+        typedRowsBelow: ['', 'gpt-5 · verify', '────────'],
+        rowsBelowWrapped: [false, false, false],
+        beforeCursor: '❯ ',
+        afterCursor: 'compare models',
+        rawAfterCursor: 'compare models',
+        cursorHidden: false,
+        cursorViewportRow: 8
+      })?.text
+    ).toBe('compare models\n\ngpt-5 · verify')
   })
 
   it('stops before a blank row that only precedes the composer frame', () => {

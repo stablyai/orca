@@ -140,8 +140,12 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 }
 
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
+  // The CLI and app panes may use different homes; identify the one this status describes.
   const statusSummary = result.statuses
-    .map((status) => `${status.agent}: ${status.state}`)
+    .map(
+      (status) =>
+        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}`
+    )
     .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,
@@ -177,7 +181,7 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks prepare-codex': async ({ client, flags }) => {
     rejectRemoteHookSelection(flags)
     if (!process.env.WSL_DISTRO_NAME?.trim()) {
-      // Why a no-op: native pane wrappers from builds up to v1.4.216 still call it; delete once no supported build's wrapper does.
+      // Native wrappers through v1.4.216 still call this; retain the no-op until they are unsupported.
       return
     }
     try {

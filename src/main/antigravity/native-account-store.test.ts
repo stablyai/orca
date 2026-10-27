@@ -9,7 +9,7 @@ import {
 } from '../../shared/secret-store'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { AntigravityAccountService } from './native-account-service'
-import { credential, harness } from './native-account-test-fixtures'
+import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 
 let dir: string
 beforeEach(() => {
@@ -67,11 +67,11 @@ describe('protected Antigravity account snapshots', () => {
     const service = new AntigravityAccountService(store, h.backend)
     h.setNative(paddedCredential('new-account', 60000))
     await expect(service.addCurrentAccount()).rejects.toThrow('could not be saved')
-    expect(readFileSync(path)).toEqual(before)
+    expect(readFileSync(path).equals(before)).toBe(true)
     expect(store.read().accounts).toHaveLength(52)
     h.setNative(paddedCredential('large-51', 65000))
     await expect(service.listAccounts()).rejects.toThrow('could not be saved')
-    expect(readFileSync(path)).toEqual(before)
+    expect(readFileSync(path).equals(before)).toBe(true)
     expect(store.read().accounts).toHaveLength(52)
   })
 
@@ -115,9 +115,31 @@ describe('protected Antigravity account snapshots', () => {
         'Protected secret storage'
       )
       expect(() => store.read()).toThrow('Protected secret storage')
-      expect(readFileSync(path)).toEqual(before)
+      expect(readFileSync(path).equals(before)).toBe(true)
     }
   )
+
+  it('keeps the selected account launchable after agy refreshes its token without an id_token', async () => {
+    const h = harness()
+    const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
+    const service = new AntigravityAccountService(store, h.backend)
+    const id = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(id)
+    h.setNative(refreshedWithoutIdToken(2))
+    await service.prepareForLaunch()
+    const restarted = new AntigravityAccountService(store, h.backend)
+    h.setNative(refreshedWithoutIdToken(3))
+    expect(await restarted.listAccounts()).toMatchObject({
+      activeAccountId: id,
+      selectedAccountId: id,
+      currentAccount: { subject: 'a', identityKnown: true }
+    })
+    await restarted.prepareForLaunch()
+    expect(store.read().accounts[0].credentials).toBe(refreshedWithoutIdToken(3))
+    h.setNative(refreshedWithoutIdToken(4, 'refresh-other-grant'))
+    await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    expect(h.backend.write).not.toHaveBeenCalled()
+  })
 
   it('keeps an unreadable vault intact rather than treating it as empty', () => {
     const path = join(dir, 'vault')

@@ -2,17 +2,17 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 afterEach(cleanup)
 
-/** The first glyph of every row — the run header, then each tool line. Named by
- *  lucide's own class, so an icon that swaps shows up as a different name. */
+/** Read lucide classes so identity-changing glyph swaps remain observable. */
 function leadingGlyphs(container: HTMLElement): (string | null)[] {
   return [...container.querySelectorAll('button')].map(
     (button) =>
@@ -23,8 +23,7 @@ function leadingGlyphs(container: HTMLElement): (string | null)[] {
   )
 }
 
-/** The run header — the first button in a run, above its member rows. Its
- *  members render as separate pills, so it has no single joined summary node. */
+/** The first button is the header; summary members render as separate pills. */
 function runHeader(container: HTMLElement): HTMLElement {
   const header = container.querySelector('button')
   if (!header) {
@@ -45,7 +44,7 @@ describe('NativeChatToolRun', () => {
 
     render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
-    expect(screen.getByTitle('src/index.ts')).toHaveTextContent('src/index.ts')
+    expect(screen.getByTitle('src/index.ts')).toHaveTextContent('index.ts')
     expect(screen.queryByTitle('{"file_path":"src/index.ts","offset":10}')).toBeNull()
   })
 
@@ -54,8 +53,7 @@ describe('NativeChatToolRun', () => {
       {
         type: 'tool-call',
         name: 'apply_patch',
-        // The patch lives on the call in this lane, so the provider's own
-        // completion is what says the edit landed.
+        // This lane carries its patch on the call; provider completion proves the edit landed.
         state: 'completed',
         input: {
           changes: [
@@ -70,10 +68,11 @@ describe('NativeChatToolRun', () => {
     ]
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
 
     expect(screen.getByText('after')).toBeInTheDocument()
     expect(screen.getByText('before')).toBeInTheDocument()
-    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    expect(screen.getByText('Edited')).toBeInTheDocument()
     expect(container.querySelector('pre')).toBeNull()
   })
 
@@ -103,8 +102,8 @@ describe('NativeChatToolRun', () => {
     const { container } = render(
       <NativeChatToolRun blocks={projected?.blocks ?? []} expandSignal />
     )
+    openToolRunMembers()
 
-    // Row grounds come from the diff tokens, not a hardcoded palette value.
     expect(screen.getByText('after').closest('div')).toHaveClass('bg-[var(--diff-added-ground)]')
     expect(screen.getByText('before').closest('div')).toHaveClass('bg-[var(--diff-removed-ground)]')
     expect(container).not.toHaveTextContent('"changes"')
@@ -122,8 +121,10 @@ describe('NativeChatToolRun', () => {
     ]
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
 
-    expect(screen.queryByText('Edited file')).toBeNull()
+    const editRow = screen.getByRole('button', { name: /^Edit Tried to edit \/repo\/a\.ts/ })
+    expect(within(editRow).queryByText('Edited')).toBeNull()
     const body = container.querySelector('pre')
     expect(body).toHaveTextContent('String to replace not found in file.')
     expect(body).toHaveClass('text-destructive')
@@ -140,7 +141,8 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
-    expect(screen.queryByText('Edited file')).toBeNull()
+    const commandRow = screen.getByRole('button', { name: /^exec Ran git diff/ })
+    expect(within(commandRow).queryByText('Edited')).toBeNull()
     expect(container).toHaveTextContent('git diff')
   })
 
@@ -156,6 +158,7 @@ describe('NativeChatToolRun', () => {
     ]
 
     render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
 
     // Exact, because a snippet-relative number would sit ahead of the marker.
     expect(screen.getByText('now').closest('div')?.textContent).toBe('+now')
@@ -184,6 +187,7 @@ describe('NativeChatToolRun', () => {
     ]
 
     render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
 
     const separators = screen.getAllByRole('separator')
     expect(separators).toHaveLength(1)
@@ -203,8 +207,7 @@ describe('NativeChatToolRun', () => {
     render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
     expect(screen.getByTitle('gone.ts')).toBeInTheDocument()
-    // The header states the change; there is no body behind a disclosure.
-    expect(screen.getByText('Deleted file').closest('button')).not.toHaveAttribute('aria-expanded')
+    expect(screen.getByText('Deleted').closest('button')).not.toHaveAttribute('aria-expanded')
   })
 
   it('says a diff was clipped even while the card is collapsed', () => {
@@ -218,8 +221,7 @@ describe('NativeChatToolRun', () => {
       { type: 'tool-result', output: '@@ -1,3 +1,3 @@\n ctx\n-was\n+now\n… (48210 bytes)' }
     ]
 
-    // A defined expandOverride opens the run while leaving each card closed.
-    render(<NativeChatToolRun blocks={blocks} expandSignal={false} expandOverride />)
+    render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
     expect(screen.getByText('Diff truncated')).toBeInTheDocument()
     expect(screen.queryByText('was')).toBeNull()
@@ -267,9 +269,7 @@ describe('NativeChatToolRun', () => {
       { type: 'tool-call', name: 'read', input: { file_path: 'README.md' }, state: 'completed' }
     ]
 
-    // The header names the whole run, so it says what the run DID rather than
-    // listing the calls it made. Naming them was ambiguous in a way a category
-    // cannot be: a separator also occurs inside `browser.open` and `tools/read`.
+    // Summarize categories; separators also occur inside tool names and make joined call lists ambiguous.
     it('summarizes a run by category, in the order the run first used each one', () => {
       const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
 
@@ -314,24 +314,6 @@ describe('NativeChatToolRun', () => {
       expect(runHeader(container)).toHaveTextContent('Ran 2 commands and read 1 file')
     })
 
-    it('keeps the run in the transcript type, not a monospace dump', () => {
-      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
-
-      const label = runHeader(container).querySelector('span.truncate')
-      expect(label).toHaveClass('text-sm')
-      expect(label).not.toHaveClass('font-mono')
-    })
-
-    it('indents opened members so the run has a visible end', () => {
-      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal />)
-
-      const members = runHeader(container).parentElement?.querySelector('.pl-4')
-      expect(members).toBeInTheDocument()
-      expect(members?.querySelectorAll('button').length).toBe(batch.length)
-    })
-
-    // The split MCP name still appears on the row beneath; only the header has
-    // stopped naming calls at all.
     it('prints the split MCP name on the opened row', () => {
       render(<NativeChatToolRun blocks={batch} expandSignal />)
 
@@ -349,7 +331,6 @@ describe('NativeChatToolRun', () => {
       expect(runHeader(container)).toHaveTextContent('Used 1 tool')
     })
 
-    // A lone command is the one case where naming the call beats summarizing it.
     it('keeps a lone command as the header, unwrapped from its login shell', () => {
       const { container } = render(
         <NativeChatToolRun
@@ -379,8 +360,6 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
 
-    // The sentence counts the call in flight and speaks in the present; the
-    // latest call sits beside it. Earlier calls are one click away, not here.
     const header = runHeader(container)
     expect(header).toHaveTextContent('Running 3 commands')
     expect(header).toHaveTextContent('cat package.json')
@@ -422,11 +401,7 @@ describe('NativeChatToolRun', () => {
     expect(screen.queryByText('hello')).toBeNull()
   })
 
-  // The reported defect: the header was two elements, one per state, chosen by
-  // whether a call was mid-flight. Every call start and end remounted it, the
-  // count vanished while a call ran, and a call that finished inside a frame
-  // still bought the whole swap. Live is the turn's state, and the header is one
-  // element from the first call to the turn's end.
+  // Call transitions must preserve one turn-owned header, its count, hover and status mark.
   it('keeps one header element from a call starting until its turn ends', () => {
     const running: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'sleep 1' }, state: 'running' }
@@ -443,14 +418,12 @@ describe('NativeChatToolRun', () => {
     expect(header).toHaveTextContent('Running 1 command')
     expect(header).toHaveTextContent('sleep 1')
 
-    // The call settles; the turn has not. Same element, same words, no mark.
     rerender(<NativeChatToolRun blocks={settled} expandSignal={false} activeTurnIsWorking />)
     expect(runHeader(container)).toBe(header)
     expect(header).toHaveAttribute('data-native-chat-tool-run-state', 'live')
     expect(header).toHaveTextContent('Running 1 command')
     expect(header.querySelector('.lucide-check')).toBeNull()
 
-    // The next call starts: still the same element, now counting it.
     const next: NativeChatBlock[] = [
       ...settled,
       { type: 'tool-call', name: 'shell', input: { command: 'sleep 2' }, state: 'running' }
@@ -460,7 +433,6 @@ describe('NativeChatToolRun', () => {
     expect(header).toHaveTextContent('Running 2 commands')
     expect(header).toHaveTextContent('sleep 2')
 
-    // The turn ends: the same element settles in place.
     const done: NativeChatBlock[] = [
       ...settled,
       { type: 'tool-call', name: 'shell', input: { command: 'sleep 2' }, state: 'completed' },
@@ -491,7 +463,6 @@ describe('NativeChatToolRun', () => {
     expect(header).toHaveAttribute('data-native-chat-tool-run-state', 'settled')
     expect(header).not.toHaveTextContent('Running')
     expect(header.querySelector('.animate-pulse')).toBeNull()
-    // Still not a stated success: the call has not finished.
     expect(header.querySelector('.lucide-check')).toBeNull()
   })
 
@@ -524,15 +495,11 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal={false} />)
 
-    // The defect: nothing was running, so the header inherited a check and
-    // asserted success over a failure only expanding the run would reveal.
     expect(container.querySelector('.lucide-check')).toBeNull()
-    expect(runHeader(container)).toHaveTextContent('1 failed')
+    expect(runHeader(container)).toHaveTextContent(' · 1 failed')
     expect(runHeader(container)).toHaveAccessibleName(/Failed tool calls: 1/)
-    // Quiet text, not a severity escalation: no destructive tint, no swapped glyph.
     expect(container.querySelector('.lucide-circle-alert')).toBeNull()
     expect(container.querySelector('[class*="destructive"]')).toBeNull()
-    // The detail still belongs behind the disclosure.
     expect(screen.queryByText('exit 1')).toBeNull()
   })
 
@@ -564,61 +531,19 @@ describe('NativeChatToolRun', () => {
     expect(container.querySelector('.lucide-check')).toBeInTheDocument()
   })
 
-  it('keeps settled tool activity behind the completed turn disclosure', () => {
-    const blocks: NativeChatBlock[] = [
-      { type: 'tool-call', name: 'shell', input: { command: 'git log -1' }, state: 'failed' },
-      { type: 'tool-result', output: 'exit 128', isError: true }
-    ]
-
-    const { rerender, container } = render(
-      <NativeChatToolRun
-        blocks={blocks}
-        expandSignal={false}
-        expandOverride={false}
-        activeTurnIsWorking={false}
-      />
-    )
-
-    expect(screen.queryByText('git log -1')).toBeNull()
-    expect(screen.queryByText('exit 128')).toBeNull()
-
-    rerender(
-      <NativeChatToolRun
-        blocks={blocks}
-        expandSignal={false}
-        expandOverride
-        activeTurnIsWorking={false}
-      />
-    )
-
-    expect(runHeader(container)).toHaveTextContent('git log -1')
-  })
-
-  // Opening a turn lists the work; a call's output is one more click. Printing
-  // every result beside its call doubled an opened run's height with rows whose
-  // own word was `Result`.
+  // Keep output behind each call’s disclosure to avoid doubling expanded runs with Result rows.
   it('keeps a call output behind the call row, not beside it', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'git log -1' }, state: 'failed' },
       { type: 'tool-result', output: 'exit 128', isError: true }
     ]
 
-    // Opened from the turn's own caret, which is the path that leaves each
-    // call's line collapsed.
-    render(
-      <NativeChatToolRun
-        blocks={blocks}
-        expandSignal={false}
-        expandOverride
-        activeTurnIsWorking={false}
-      />
-    )
+    render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking={false} />)
 
     expect(screen.queryByText('Result')).toBeNull()
     expect(screen.queryByText('exit 128')).toBeNull()
 
-    // The row under the header, not the header itself, which names the same
-    // command because the run is a single call.
+    // Click the member, since this single-call header names the same command.
     const rows = screen.getAllByText('git log -1')
     fireEvent.click(rows.at(-1)!.closest('button')!)
 
@@ -664,7 +589,7 @@ describe('NativeChatToolRun', () => {
     const glyph = container.querySelector('.lucide-eye')
     expect(glyph).toBeInTheDocument()
     expect(glyph).toHaveAttribute('aria-hidden')
-    expect(screen.getByText('read', { selector: 'code' })).toBeInTheDocument()
+    expect(screen.getByText('Read')).toBeInTheDocument()
   })
 
   it('holds one glyph for a category across running, completed, and failed', () => {
@@ -682,7 +607,6 @@ describe('NativeChatToolRun', () => {
         <NativeChatToolRun blocks={searchCall(settled)} expandSignal activeTurnIsWorking={false} />
       )
 
-      // A leading check here would read as the row changing identity on settle.
       expect(leadingGlyphs(container)).toEqual(['lucide-search', 'lucide-search'])
     }
   })
@@ -699,7 +623,6 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
-    // A terminal here would assert a shell ran when nothing says one did.
     expect(container.querySelector('.lucide-square-terminal')).toBeNull()
     expect(container.querySelector('.lucide-wrench')).toBeInTheDocument()
   })
@@ -716,18 +639,17 @@ describe('NativeChatToolRun', () => {
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
-    // Header and row read the same function, so one run cannot show two glyphs.
     expect(leadingGlyphs(container)).toEqual(['lucide-wrench', 'lucide-wrench'])
   })
 
-  // A result with no call to answer still draws its own row, and its word is
-  // translated copy rather than a tool name.
+  // Unpaired results have translated labels rather than a tool name to classify.
   it('leaves an unpaired result row without a category glyph', () => {
     const blocks: NativeChatBlock[] = [{ type: 'tool-result', output: 'first line' }]
 
-    render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
-    const resultRow = screen.getByText('Result').closest('button')
+    expect(runHeader(container)).toHaveAccessibleName('Result')
+    const resultRow = screen.getByRole('button', { name: 'Result first line' })
     // Keying a category off 'Result' would resolve a different glyph per locale.
     expect(
       [...(resultRow?.querySelectorAll('svg') ?? [])].map(
@@ -755,18 +677,15 @@ describe('NativeChatToolRun', () => {
     })
 
     const { container } = render(
-      <NativeChatToolRun blocks={projected?.blocks ?? []} expandSignal={false} expandOverride />
+      <NativeChatToolRun blocks={projected?.blocks ?? []} expandSignal />
     )
 
-    // The run renders an edited-file card, so a wrench above it reads as a tool
-    // this vocabulary does not model.
     expect(container.querySelector('.lucide-pencil')).toBeInTheDocument()
     expect(container.querySelector('.lucide-wrench')).toBeNull()
   })
 
   describe('the settled header glyph over a whole run', () => {
-    // The header's text summarizes the run's first calls, so its glyph has to
-    // describe the same run rather than whichever call happened to finish last.
+    // The header glyph describes the summarized run, not its last-finishing call.
     const call = (name: string, input: unknown): NativeChatBlock => ({
       type: 'tool-call',
       name,
@@ -814,8 +733,6 @@ describe('NativeChatToolRun', () => {
         <NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking={false} />
       )
 
-      // An eye here — the last call's glyph — would claim a category the summary
-      // beside it does not describe.
       expect(leadingGlyphs(container)).toEqual([
         'lucide-wrench',
         'lucide-square-terminal',
@@ -835,16 +752,23 @@ describe('NativeChatToolRun', () => {
       expect(leadingGlyphs(container)).toEqual(['lucide-search', 'lucide-search'])
     })
 
-    it('leaves a run with no tool calls headed by no category glyph', () => {
-      const blocks: NativeChatBlock[] = [{ type: 'tool-result', output: 'first line' }]
+    it.each([1, 3])('labels a run of %s unpaired results without inventing tool calls', (count) => {
+      const blocks: NativeChatBlock[] = Array.from({ length: count }, (_, index) => ({
+        type: 'tool-result',
+        output: `first line ${index}`
+      }))
 
       const { container } = render(
         <NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking={false} />
       )
 
-      // Only the trailing check and the chevron; a wrench here would claim a
-      // tool category for a run holding no tool call.
-      expect(leadingGlyphs(container)).toEqual(['lucide-check', 'lucide-chevron-right'])
+      expect(runHeader(container)).toHaveAccessibleName('Result')
+      expect(runHeader(container)).not.toHaveTextContent(/tool calls?/)
+
+      expect(leadingGlyphs(container)).toEqual([
+        'lucide-check',
+        ...blocks.map(() => 'lucide-chevron-right')
+      ])
     })
 
     it('holds the run glyph across live and settled', () => {
@@ -857,9 +781,7 @@ describe('NativeChatToolRun', () => {
         <NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking />
       )
 
-      // The header speaks for the whole run in both states, so its glyph is the
-      // run's, never the latest call's — a glyph that swapped as calls came and
-      // went read as a change of identity.
+      // Keep the run’s identity glyph across state transitions instead of using the latest call’s category.
       expect(leadingGlyphs(container)[0]).toBe('lucide-wrench')
       rerender(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking={false} />)
       expect(leadingGlyphs(container)[0]).toBe('lucide-wrench')
@@ -882,9 +804,7 @@ describe('NativeChatToolRun', () => {
     expect(screen.getByTitle('ls')).toHaveTextContent('ls')
   })
 
-  // A bare `group-hover:` matches a hover on ANY ancestor carrying `.group`, and
-  // the assistant message row around this run is one. Hovering a single tool line
-  // therefore revealed every chevron in the message at once.
+  // Unnamed group-hover matches the surrounding message too, revealing every member caret at once.
   describe('hover reveal', () => {
     const run: NativeChatBlock[] = [
       { type: 'tool-call', name: 'Bash', input: { command: 'ls -la' }, state: 'completed' },
@@ -893,8 +813,7 @@ describe('NativeChatToolRun', () => {
       { type: 'tool-result', output: '/tmp' }
     ]
 
-    /** Every node's class list, read through the attribute because an SVG's
-     *  `className` is an `SVGAnimatedString` rather than a string. */
+    /** Read class attributes because SVG className is an SVGAnimatedString. */
     function hoverRevealed(container: HTMLElement): { element: Element; classes: string }[] {
       return [...container.querySelectorAll('[class*="group-hover"]')].map((element) => ({
         element,
@@ -904,9 +823,7 @@ describe('NativeChatToolRun', () => {
 
     it('scopes a row’s reveal to that row rather than the whole message', () => {
       // Open run, collapsed children — the state the turn caret leaves behind.
-      const { container } = render(
-        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
-      )
+      const { container } = render(<NativeChatToolRun blocks={run} expandSignal />)
 
       const revealed = hoverRevealed(container)
       expect(revealed.length).toBeGreaterThan(0)
@@ -916,9 +833,7 @@ describe('NativeChatToolRun', () => {
     })
 
     it('puts every reveal inside the row button that governs it', () => {
-      const { container } = render(
-        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
-      )
+      const { container } = render(<NativeChatToolRun blocks={run} expandSignal />)
 
       hoverRevealed(container).forEach(({ element, classes }) => {
         const scope = /group-hover\/([a-z-]+):/.exec(classes)?.[1]
@@ -927,15 +842,13 @@ describe('NativeChatToolRun', () => {
       })
     })
 
-    it('hides a collapsed chevron on every row until its own row is hovered', () => {
-      const { container } = render(
-        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
-      )
+    it('keeps every row’s chevron in view at the row’s right edge', () => {
+      const { container } = render(<NativeChatToolRun blocks={run} expandSignal />)
 
-      const chevrons = [...container.querySelectorAll('.pl-4 button svg.lucide-chevron-right')]
+      const chevrons = [...container.querySelectorAll('.border-l button svg.lucide-chevron-right')]
       expect(chevrons.length).toBeGreaterThan(1)
       chevrons.forEach((chevron) => {
-        expect(chevron.getAttribute('class')).toContain('group-hover/tool-line:opacity-100')
+        expect(chevron.getAttribute('class')).not.toContain('opacity-0')
       })
     })
   })
@@ -990,6 +903,7 @@ describe('NativeChatToolRun task lists', () => {
         expandSignal
       />
     )
+    openToolRunMembers()
     expect(screen.getByText('Invalid arguments', { selector: 'pre' })).toBeInTheDocument()
     expect(screen.getByText('Update rejected', { selector: 'pre' })).toBeInTheDocument()
     expect(screen.queryByText('1/1')).toBeNull()

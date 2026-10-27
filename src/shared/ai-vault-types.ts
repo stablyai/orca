@@ -25,16 +25,14 @@ export const AI_VAULT_AGENTS = [
   'cline',
   'kimi',
   'muse',
-  'jcode'
+  'jcode',
+  'kiro'
 ] as const satisfies readonly TuiAgent[]
 
-// Why: the aiVault.listSessions RPC schema CLAMPS scopePaths to this bound
-// (safe: scope paths only widen discovery). Producer-side caps against the same
-// value are optional belt-and-braces, not required for the request to succeed.
+// RPC clamps scopePaths to this bound because paths only widen discovery; matching producer-side caps are optional.
 export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
 
-// Why: IPC rejection drops `Error.name`, so the renderer can only recognise a
-// cancelled scan by its message. Both sides share this literal.
+// IPC drops Error.name; recognize cancelled scans by this shared message literal.
 export const AI_VAULT_SCAN_CANCELLED_MESSAGE = 'Agent Session History scan was cancelled'
 
 export function isAiVaultScanCancelledError(error: unknown): boolean {
@@ -45,6 +43,17 @@ export function isAiVaultScanCancelledError(error: unknown): boolean {
 }
 
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
+
+export function isAiVaultAgent(value: unknown): value is AiVaultAgent {
+  return AI_VAULT_AGENTS.some((agent) => agent === value)
+}
+
+/** The agents Session History may list `agent`'s sessions under. */
+export function aiVaultHistoryAgents(agent: AiVaultAgent): AiVaultAgent[] {
+  // One OpenCode store holds both versions' sessions, and the scanner labels current ones `opencode2`.
+  return agent === 'opencode' || agent === 'opencode2' ? ['opencode', 'opencode2'] : [agent]
+}
+
 export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'
 export const AI_VAULT_SEARCH_SORTS = ['relevance', 'newest'] as const
@@ -76,7 +85,8 @@ export const AI_VAULT_AGENT_LABELS = {
   cline: 'Cline',
   kimi: 'Kimi',
   muse: 'Muse',
-  jcode: 'Jcode'
+  jcode: 'Jcode',
+  kiro: 'Kiro'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -85,12 +95,10 @@ export type AiVaultSessionPreviewMessage = {
   timestamp: string | null
 }
 
-// Terminal statuses come from <task-notification> records in the parent
-// transcript; 'running' is inferred from recent transcript activity.
+// Parent task-notification records report terminal status; recent transcript activity implies running.
 export type AiVaultSubagentRunStatus = 'running' | 'completed' | 'failed' | 'stopped'
 
-// Set only on Task subagent transcript rows (listed on demand under their
-// parent session); null for every top-level scanned session.
+// Only on on-demand Task child rows; null for top-level scans.
 export type AiVaultSessionSubagentInfo = {
   parentSessionId: string
   agentType: string | null
@@ -105,6 +113,10 @@ export type AiVaultSession = {
   sessionId: string
   title: string
   cwd: string | null
+  /** The host's spellings of `cwd` under a symlinked scope path. Scope matching only; resume reads `cwd`. */
+  cwdAliases?: string[]
+  /** Host-derived affiliation; null is unknown, absence uses legacy attribution. */
+  projectOwnerKey?: string | null
   branch: string | null
   model: string | null
   filePath: string
@@ -115,25 +127,17 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
-  /** Older messages fell out of the newest-N window: the earliest preview turn
-   * is NOT the opening ask, so first-prompt consumers must not scan it. */
+  /** The opening ask fell outside the newest-N window; first-prompt readers must not search the surviving preview. */
   previewMessagesTruncated?: boolean
   /** Bounded opening-prompt identity for Antigravity history joins; never a rolling preview. */
   antigravityOpeningPrompt?: { hash: string; timestamp: string | null }
-  /**
-   * Full first non-injected user prompt. List scans omit this (payload/perf);
-   * populated only by on-demand `aiVault.getFirstUserPrompt` re-parses for copy.
-   */
+  /** Full first non-injected prompt only on on-demand getFirstUserPrompt reparses; list scans omit it for payload/cost. */
   firstUserPrompt?: string | null
   /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
   lastUserPrompt?: string | null
-  // Recoverable signal for sessions whose conversation transcript persisted zero
-  // user/assistant turns: queued (never-flushed) prompts survive even when the
-  // main conversation was lost.
+  // Queued unflushed prompts preserve recovery evidence even when conversation turns were lost.
   queuedMessageCount: number
-  // Number of Task subagent transcripts stored beside this session; always 0
-  // for agents that don't materialize subagent transcripts. Doubles as the
-  // recoverable signal for zero-turn sessions.
+  // Task transcript count doubles as zero-turn recovery evidence; zero for agents without child transcripts.
   subagentTranscriptCount: number
   resumeCommand: string
   subagent: AiVaultSessionSubagentInfo | null
@@ -142,6 +146,8 @@ export type AiVaultSession = {
     sessionId: string
     workspaceId: string
   }
+  /** The client's pairing with the listing server when it listed this row; host mutations are fenced to it. */
+  hostPairingRevision?: number
 }
 
 export type AiVaultSubagentListArgs = {
@@ -172,10 +178,7 @@ export type AiVaultFirstUserPromptResult = {
   prompt: string | null
 }
 
-// A session is only offered for normal resume when its transcript actually holds
-// conversation turns; resuming a zero-turn transcript lands in an empty session.
-// Conversation previews count as evidence too: some parsers (e.g. Grok, OpenCode
-// fallback schemas) only learn the turn count from metadata that may be absent.
+// Offer normal resume only with real conversation evidence. Count previews too when parser metadata lacks turns; zero-turn files otherwise reopen empty.
 export function isAiVaultSessionResumableContent(
   session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>
 ): boolean {
@@ -193,8 +196,7 @@ export function aiVaultSessionRecoverableSignalCount(
   return Math.max(0, session.queuedMessageCount) + Math.max(0, session.subagentTranscriptCount)
 }
 
-// Zero-turn transcript that still carries recoverable content (queued prompts
-// and/or subagent transcripts). Surfaced distinctly instead of hidden as empty.
+// Show zero-turn queued/subagent recovery content distinctly instead of hiding it as empty.
 export function isAiVaultSessionRecoverableEmpty(
   session: Pick<
     AiVaultSession,
@@ -216,19 +218,26 @@ export type AiVaultScanIssue = {
 }
 
 export type AiVaultListArgs = {
+  historyOwnership?: { projectKey?: string }
+  /** Opts a selected runtime-host refresh into content-conditional replies. */
+  afterFingerprint?: string | null
   /** Opt-in promises this client starts IDE history in a new CLI conversation. */
   includeAntigravityIdeSessions?: boolean
   limit?: number
   unlimited?: boolean
   force?: boolean
-  // Active workspace/project paths. The global result is recency-capped, so these
-  // guarantee a scoped view still surfaces its own (possibly older) sessions.
+  // Scope paths preserve older relevant sessions outside the globally recency-capped result.
   scopePaths?: readonly string[]
   executionHostScope?: ExecutionHostScope
   requestToken?: string
 }
 
 export type AiVaultListResult = {
+  /** Local scan entry that produced this result; absent for remote and merged results. */
+  scanId?: string
+  fingerprint?: string
+  /** Requires the caller to reuse the exact previously received body. */
+  unchanged?: true
   sessions: AiVaultSession[]
   issues: AiVaultScanIssue[]
   scannedAt: string

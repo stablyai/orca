@@ -7,8 +7,10 @@ import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalAppendResult, JournalItemAppendOptions } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
+import type { JournalOperationReceipt } from './journal-row-writer'
 
-const NOTHING_RESOLVED = new Error('journal_item_resolved_to_nothing')
+// Module-level Error stacks retain startup code and buffers; construct them only when needed.
+class NothingResolvedError extends Error {}
 
 export type JournalResolvedItem = { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
 
@@ -16,22 +18,26 @@ export class JournalItemAppender {
   constructor(
     private readonly deps: {
       state: () => JournalReducerState
-      enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
+      enqueue: (
+        build: (seq: number, ts: number) => JournalRow,
+        receipt?: JournalOperationReceipt
+      ) => Promise<JournalRow>
     }
   ) {}
 
   append(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: JournalItemAppendOptions
+    options: JournalItemAppendOptions,
+    receipt?: JournalOperationReceipt
   ): Promise<JournalAppendResult> {
     const itemId = agentJournalItemKey(identity)
     return this.deps
-      .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options))
+      .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options), receipt)
       .then((row) => appendResult(row, itemId))
   }
 
-  /** `resolve` reads the fold at the write's own place in the queue; null writes nothing. */
+  /** Resolve against preceding queued writes; null appends nothing. */
   appendResolved(
     resolve: () => JournalResolvedItem | null,
     options: JournalItemAppendOptions
@@ -41,7 +47,7 @@ export class JournalItemAppender {
       .enqueue((seq, ts) => {
         const resolved = resolve()
         if (resolved === null) {
-          throw NOTHING_RESOLVED
+          throw new NothingResolvedError('journal_item_resolved_to_nothing')
         }
         itemId = agentJournalItemKey(resolved.identity)
         return journalItemRowBuilder(
@@ -54,7 +60,7 @@ export class JournalItemAppender {
       .then(
         (row) => appendResult(row, itemId),
         (error: unknown) => {
-          if (error === NOTHING_RESOLVED) {
+          if (error instanceof NothingResolvedError) {
             return null
           }
           throw error

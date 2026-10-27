@@ -1,8 +1,5 @@
 import { reserveNotificationCooldown } from '../../../shared/notification-burst-cooldown'
-// Why: the out-of-band leg of the mobile notification fan-out. Every event that
-// already went to connected sockets is offered to the push gateway so a phone
-// with Orca closed still hears about it. Fire-and-forget by construction: the
-// socket fan-out must never wait on, or fail because of, a push.
+// Send background push after socket fan-out without making sockets wait or fail on gateway results.
 import {
   MOBILE_PUSH_SOURCES,
   type MobilePushAgentState,
@@ -13,8 +10,7 @@ import type { PushGatewayClient, PushSendNotification } from './push-gateway-cli
 import { PushOutcomeCounters } from './push-outcome-counters'
 
 const PUSH_RETRY_DELAY_MS = 2_000
-// The gateway rejects a whole request above this, so a host with more paired
-// phones fans out across several sends rather than starving the extras.
+// Split requests at the gateway's per-send limit so extra paired phones still receive notifications.
 const MAX_REGISTRATIONS_PER_SEND = 20
 const PUSH_TITLE_MAX_LENGTH = 80
 const PUSH_BODY_MAX_LENGTH = 180
@@ -120,7 +116,8 @@ export class PushDispatcher {
     event: MobileNotificationEvent
   ): { targets: PushTarget[]; notification: PushSendNotification } | null {
     if (event.type === 'dismiss') {
-      if (event.notificationSeq === undefined || !event.notificationEpoch) {
+      const target = event.dismissedDelivery ?? event
+      if (target.notificationSeq === undefined || !target.notificationEpoch) {
         return null
       }
       const targets = this.registry
@@ -133,9 +130,9 @@ export class PushDispatcher {
         notification: {
           kind: 'dismiss',
           expiresAt: Date.now() + 300_000,
-          notificationId: event.notificationId,
-          notificationSeq: event.notificationSeq,
-          notificationEpoch: event.notificationEpoch,
+          notificationId: target.notificationId,
+          notificationSeq: target.notificationSeq,
+          notificationEpoch: target.notificationEpoch,
           source: 'agent-task-complete',
           agentState: null,
           title: 'Orca',
@@ -165,7 +162,8 @@ export class PushDispatcher {
         event.emittedAt !== undefined &&
         !reserveNotificationCooldown(
           this.recentNotifications,
-          JSON.stringify([device.deviceId, event.worktreeId ?? 'global']),
+          // Keyed news is announced once by its producer, so only its own repeat may collapse it.
+          JSON.stringify([device.deviceId, event.attentionKey ?? event.worktreeId ?? 'global']),
           event.emittedAt
         )
       ) {
@@ -187,7 +185,9 @@ export class PushDispatcher {
         agentState,
         title: clip(event.title, PUSH_TITLE_MAX_LENGTH),
         body: clip(event.body, PUSH_BODY_MAX_LENGTH),
-        ...(event.worktreeId ? { worktreeId: event.worktreeId } : {})
+        ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
+        ...(event.paneKey ? { paneKey: event.paneKey } : {}),
+        ...(event.executionHost ? { executionHost: event.executionHost } : {})
       }
     }
   }
@@ -231,8 +231,7 @@ export class PushDispatcher {
         return
       }
       this.outcomes.record(result.reason)
-      // Only a transport-level miss is worth repeating; a gateway that refused
-      // this payload will refuse the identical retry.
+      // Retry transport misses once; an identical refused payload will be refused again.
       if (attempt === 0 && result.reason === 'unreachable') {
         this.scheduleRetry(() => {
           void this.deliver(targets, notification, attempt + 1)

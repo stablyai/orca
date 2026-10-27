@@ -28,21 +28,22 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     activeSessionTab
   } = scope
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
-  // Why: hosts without aiVault.v1 reject listSessions, so hide the header entry instead of a dead-end "update this host" panel.
+  // Hide history entry when the host cannot serve it rather than opening a dead end.
   const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
-  // Structured-session features are negotiated with the same host capability probe as
-  // the other session surfaces; consumers never maintain a second status cache.
+  const [quickCommandAgentPromptMaxLength, setQuickCommandAgentPromptMaxLength] = useState<
+    number | null
+  >(null)
+  // Reuse the shared capability probe so session features cannot diverge across status caches.
   const [agentSessionHostSupport, setAgentSessionHostSupport] =
     useState<StructuredAgentSessionHostSupport | null>(null)
-  // Why: stable callbacks (handleFileTap) read the live value via this ref, since
-  // the capability probe resolves after the callbacks are created.
+  // Stable handlers read live capabilities after the asynchronous probe resolves.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   browserScreencastSupportedRef.current = browserScreencastSupported
-  // Why: terminal gesture/input callbacks are stable/imperative, so keep their refs current before commit, not in a later effect.
+  // Imperative input callbacks need current refs before commit, not a later passive effect.
   clientRef.current = client
   connStateRef.current = connState
   activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
@@ -53,7 +54,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     createWarningState,
     initialCreateWarning
   )
-  // Why: Expo can reuse this screen for a new route; reconcile before paint so a dismissed old warning doesn't flash.
+  // Reconcile reused-route warning state before paint so dismissed old feedback cannot flash.
   if (reconciledCreateWarningState !== createWarningState) {
     // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
     setCreateWarningState(reconciledCreateWarningState)
@@ -131,6 +132,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionHistorySupported,
     quickCommandsSupported,
     setQuickCommandsSupported,
+    quickCommandAgentPromptMaxLength,
+    setQuickCommandAgentPromptMaxLength,
     agentSessionHostSupport,
     setAgentSessionHostSupport,
     browserScreencastSupportedRef,

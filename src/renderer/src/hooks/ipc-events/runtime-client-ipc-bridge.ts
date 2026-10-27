@@ -4,17 +4,24 @@ import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-win
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import {
+  refreshRuntimeEnvironmentCatalog,
+  setRuntimeEnvironmentCatalogRefresher
+} from '@/runtime/runtime-environment-pairing-refresh'
+import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState,
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
-import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
 import { useAppStore } from '../../store'
+import { invalidateRemoteWorktreeLineage } from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
+import { adoptFromEndpoint, type OwnedWorktreeEvent } from '../../store/adopt-from-endpoint'
 import { createRuntimeClientEventsSync } from '../runtime-client-events-sync'
 import {
   createRuntimeProjectRefreshScheduler,
@@ -28,17 +35,26 @@ import {
   invalidateRuntimeClientEventReplay
 } from './runtime-environment-subscription-selection'
 import type { WorktreeEventRuntime } from './worktree-event-runtime'
+import { readPublishedSortOrders } from '../../store/slices/worktrees/listing/worktree-sort-order-patch'
 
 export function registerRuntimeClientIpcBridge(
   unsubs: (() => void)[],
   worktreeRuntime: WorktreeEventRuntime
 ): () => void {
   const { worktreeChangeRefreshQueue, activateNotifiedWorktree } = worktreeRuntime
+  let stopped = false
+  unsubs.push(() => {
+    stopped = true
+  })
+  const isRuntimeEventRepoKnown = ({ repoId, executionHostId }: OwnedWorktreeEvent): boolean =>
+    (useAppStore.getState().repos ?? []).some(
+      (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
+    )
   const ensureRuntimeEventRepoKnown = async (
     environmentId: string,
-    repoId: string
+    event: OwnedWorktreeEvent
   ): Promise<void> => {
-    if ((useAppStore.getState().repos ?? []).some((repo) => repo.id === repoId)) {
+    if (isRuntimeEventRepoKnown(event)) {
       return
     }
     await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
@@ -48,12 +64,12 @@ export function registerRuntimeClientIpcBridge(
     refresh: async (environmentId) => {
       // Why: project events can reveal target CRUD, but known target states already arrive by push.
       void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})
+      // Why: hosts without workspaceViewChanged still refresh their columns here.
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
-      // Why: the host emits one reposChanged for group/folder-workspace edits too, so those
-      // catalogs go stale without this; groups first because folder workspaces resolve owners from them.
+      // Group/folder edits share reposChanged; refresh groups before folders to resolve their owners.
       const runtimeOwner = { runtimeEnvironmentId: environmentId }
-      // Why: catalogs and worktrees are independent; serializing them put two 15s RPC
-      // timeouts ahead of worktree/lineage convergence on a wedged host.
+      // Refresh catalogs/worktrees independently so two catalog RPC timeouts cannot delay lineage convergence.
       await Promise.all([
         (async () => {
           await useAppStore.getState().fetchProjectGroups(runtimeOwner)
@@ -71,6 +87,10 @@ export function registerRuntimeClientIpcBridge(
       console.error('Failed to refresh runtime projects:', error)
     }
   })
+  const requestProjectRefresh = (environmentId: string): void => {
+    invalidateRemoteWorktreeLineage(useAppStore.getState, environmentId)
+    runtimeProjectRefreshScheduler.request(environmentId)
+  }
 
   const handleRuntimeClientEvent = (
     environmentId: string,
@@ -92,8 +112,13 @@ export function registerRuntimeClientIpcBridge(
       applyNativeChatLaunchDraftResolved(useAppStore.getState(), event)
       return
     }
+    // A paired desktop keeps its own Workspace options; it reads only the host's columns, for the host's cards.
+    if (event.type === 'workspaceViewChanged') {
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
+      return
+    }
     if (event.type === 'reposChanged') {
-      runtimeProjectRefreshScheduler.request(environmentId)
+      requestProjectRefresh(environmentId)
       return
     }
     if (event.type === 'automationsChanged') {
@@ -105,16 +130,37 @@ export function registerRuntimeClientIpcBridge(
       })
       return
     }
+    if (event.type === 'browserProfilesChanged') {
+      void useAppStore
+        .getState()
+        .fetchBrowserSessionProfiles(toRuntimeExecutionHostId(environmentId))
+      return
+    }
     if (event.type === 'sshStateChanged') {
       applyRuntimeEnvironmentSshStateChanged(environmentId, event.targetId, event.state, generation)
       return
     }
+    const endpoint = { kind: 'environment' as const, environmentId }
     if (event.type === 'worktreesChanged') {
-      void ensureRuntimeEventRepoKnown(environmentId, event.repoId).then(() =>
-        worktreeChangeRefreshQueue.enqueue({
+      if (event.sortOrderOnly !== true) {
+        invalidateRemoteWorktreeLineage(useAppStore.getState, environmentId)
+      }
+      const owned = adoptFromEndpoint(endpoint, {
+        kind: 'worktreeEvent',
+        row: {
           repoId: event.repoId,
-          executionHostId: toRuntimeExecutionHostId(environmentId)
-        })
+          ...(event.sortOrderOnly === true ? { sortOrderOnly: true } : {})
+        }
+      })
+      const sortOrders =
+        event.sortOrderOnly === true ? readPublishedSortOrders(event.sortOrders) : null
+      if (sortOrders && isRuntimeEventRepoKnown(owned)) {
+        // Why sync: published values must enqueue in receipt order; an unknown repo refetches instead.
+        worktreeChangeRefreshQueue.enqueue({ ...owned, sortOrders })
+        return
+      }
+      void ensureRuntimeEventRepoKnown(environmentId, owned).then(() =>
+        worktreeChangeRefreshQueue.enqueue(owned)
       )
       return
     }
@@ -127,13 +173,51 @@ export function registerRuntimeClientIpcBridge(
         })
       return
     }
-    void ensureRuntimeEventRepoKnown(environmentId, event.repoId)
-      .then(() => activateNotifiedWorktree(event, { allowRuntimeEnvironment: true }))
+    // This window builds its sidebar from its own store, never from a host's phone feed.
+    if (event.type === 'sidebarInputsChanged') {
+      return
+    }
+    // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.
+    if (!event.navigation || !navigationTargetsClients(event.navigation)) {
+      return
+    }
+    const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+    const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
+    const isCurrent = (): boolean =>
+      !stopped &&
+      generation === getEnvironmentSshStateGeneration(environmentId) &&
+      runtimeGeneration === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
+      runtimeRevision === getRuntimeEnvironmentRevision(environmentId)
+    const owned = adoptFromEndpoint(endpoint, {
+      kind: 'worktreeEvent',
+      row: { repoId: event.repoId }
+    })
+    void ensureRuntimeEventRepoKnown(environmentId, owned)
+      .then(() => {
+        return isCurrent()
+          ? activateNotifiedWorktree(event, {
+              allowRuntimeEnvironment: true,
+              executionHostId: owned.executionHostId,
+              isCurrent
+            })
+          : undefined
+      })
       .catch((error) => {
         console.error('Failed to activate runtime-created worktree:', error)
       })
   }
 
+  setRuntimeEnvironmentCatalogRefresher(async () => {
+    useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+  })
+  unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
+  // `orca environment add/rm` edits the registry without any renderer request (#25251).
+  const stopCatalogChanged = window.api.runtimeEnvironments?.onCatalogChanged?.(() => {
+    void refreshRuntimeEnvironmentCatalog()
+  })
+  if (stopCatalogChanged) {
+    unsubs.push(stopCatalogChanged)
+  }
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
@@ -141,6 +225,7 @@ export function registerRuntimeClientIpcBridge(
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const subscription = subscribeRuntimeClientEvents(
         environmentId,
         (event) => {
@@ -166,7 +251,7 @@ export function registerRuntimeClientIpcBridge(
                 void state.refreshRuntimeEnvironmentStatus(environmentId)
               }
             },
-            requestProjectRefresh: () => runtimeProjectRefreshScheduler.request(environmentId),
+            requestProjectRefresh: () => requestProjectRefresh(environmentId),
             markEnvironmentSshStateStale: () =>
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),
             hydrateEnvironmentSshState: () =>
@@ -180,13 +265,13 @@ export function registerRuntimeClientIpcBridge(
     onEvent: handleRuntimeClientEvent
   })
 
-  // Why: no on-connect repo fetch (PR #2); seed discovery for connected runtimes or remote projects hide until Add-Project.
+  // Seed connected-runtime discovery or existing remote projects stay hidden until Add Project.
   const initialRuntimeEnvironmentState = useAppStore.getState()
   const runtimeClientEventEnvironmentIds = getRuntimeClientEventEnvironmentIds(
     initialRuntimeEnvironmentState
   )
   for (const environmentId of runtimeClientEventEnvironmentIds) {
-    runtimeProjectRefreshScheduler.request(environmentId)
+    requestProjectRefresh(environmentId)
   }
   const reachableRuntimeEnvironmentIds = getReachableRuntimeEnvironmentIds(
     initialRuntimeEnvironmentState
@@ -199,7 +284,7 @@ export function registerRuntimeClientIpcBridge(
     getReachableEnvironmentIds: getReachableRuntimeEnvironmentIds,
     requestProjectRefresh: (environmentId) =>
       // The scheduler coalesces bursts per environment.
-      runtimeProjectRefreshScheduler.request(environmentId),
+      requestProjectRefresh(environmentId),
     markEnvironmentSshStateStale: (environmentId) => {
       // No-op when the environment has no SSH bucket (e.g. web client).
       useAppStore.getState().markEnvironmentSshStateStale(environmentId)
@@ -209,9 +294,7 @@ export function registerRuntimeClientIpcBridge(
   const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe(
     handleRuntimeEnvironmentStoreWrite
   )
-  // Subscribe before the first runtime stream starts: replay invalidation may
-  // synchronously publish a tracked SSH bucket and relies on this listener to
-  // replace that subscription exactly once.
+  // Subscribe before streams start; replay invalidation can synchronously publish SSH buckets needing exactly one replacement subscription.
   runtimeClientEventsSync.sync()
   unsubs.push(runtimeClientEventsSync.stop)
   unsubs.push(runtimeProjectRefreshScheduler.stop)

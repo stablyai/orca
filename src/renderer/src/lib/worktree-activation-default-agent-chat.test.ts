@@ -14,11 +14,18 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent-test-state'
+} from '@/lib/worktree-activation-created-agent.test-fixture'
 import {
   createMockStore,
   registerWorktreeActivationReset
-} from './worktree-activation-test-harness'
+} from './worktree-activation.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const defaultChat = vi.hoisted(() => ({
   open: vi.fn(),
@@ -95,8 +102,7 @@ async function flushPromises(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-// Why: with chat as the default view, clicking an empty workspace used to open a bare shell the
-// user then had to turn into a chat by hand.
+// Chat-default users should get chat immediately on empty activation, without converting an unwanted shell.
 describe('empty workspace seeding with a default agent chat', () => {
   it('opens the default agent chat instead of a shell', () => {
     defaultChat.open.mockReturnValue({ primaryTabId: 'chat-tab' })
@@ -113,9 +119,32 @@ describe('empty workspace seeding with a default agent chat', () => {
       { seedUserDefaultSurface: true }
     )
 
-    expect(defaultChat.open).toHaveBeenCalledWith('wt-1')
+    expect(defaultChat.open).toHaveBeenCalledWith('wt-1', expect.any(Function))
     expect(primaryTabId).toBe('chat-tab')
     expect(createTab).not.toHaveBeenCalled()
+  })
+
+  // A host's "no" to the chat seeds the shell this workspace would have had, not the agent's TUI.
+  it('seeds the plain shell when the host declines the default chat', () => {
+    defaultChat.open.mockImplementation((_worktreeId: string, seedShell: () => boolean) => {
+      seedShell()
+      return { primaryTabId: null }
+    })
+    const createTab = vi.fn(() => ({ id: 'shell-tab' }))
+    const store = createMockStore({ createTab })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, undefined, undefined, {
+      seedUserDefaultSurface: true
+    })
+
+    expect(defaultChat.open).toHaveBeenCalledOnce()
+    expect(createTab).toHaveBeenCalledOnce()
+    expect(createTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.not.objectContaining({ launchAgent: expect.anything() })
+    )
   })
 
   it('falls back to a shell when no chat can open', () => {
@@ -156,7 +185,7 @@ describe('empty workspace seeding with a default agent chat', () => {
 
     activateAndRevealWorktree(worktree.id, { ...USER_OPEN, notifyHostRuntime: false })
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id)
+    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
   })
 
   it('back/forward navigation asks for the default surface', () => {
@@ -170,11 +199,10 @@ describe('empty workspace seeding with a default agent chat', () => {
 
     useAppStore.getState().goBackWorktree()
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id)
+    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
   })
 
-  // Why: CLI/phone creates, fallbacks after a failed agent launch, and the move after a delete
-  // activate with no intent; none of them may start an agent nobody picked.
+  // Activation without deliberate user intent (CLI/phone/failure/delete fallback) must not start an unrequested agent.
   it.each([
     ['no navigation intent', {}],
     ['a Blank Terminal pick', { ...USER_OPEN, agent: null }]
@@ -203,7 +231,7 @@ describe('the gated reseed that seeds an empty workspace in Electron', () => {
     expect(result === false ? 'failed' : result.primaryTabId).toBeNull()
     await gate.mock.results[0]?.value
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id)
+    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
     expect(tabCount(worktree.id)).toBe(0)
   })
 
@@ -227,7 +255,7 @@ describe('the gated reseed that seeds an empty workspace in Electron', () => {
     activateAndRevealFolderWorkspace(FOLDER_ID, { ...USER_OPEN, executionHostId: 'local' })
     await gate.mock.results[0]?.value
 
-    expect(defaultChat.open).toHaveBeenCalledWith(FOLDER_KEY)
+    expect(defaultChat.open).toHaveBeenCalledWith(FOLDER_KEY, expect.any(Function))
     expect(tabCount(FOLDER_KEY)).toBe(0)
   })
 
@@ -264,8 +292,7 @@ describe('the gated reseed that seeds an empty workspace in Electron', () => {
     expect(tabCount(worktree.id)).toBe(0)
   })
 
-  // Why: the wait used to keep the first activation's intent, so returning to the workspace through
-  // history (no host id) failed the first intent's host check and left it with no surface at all.
+  // Use latest activation intent: stale explicit host constraints once rejected later history navigation and left no surface.
   it('seeds for the latest activation when the workspace is reopened during the wait', async () => {
     defaultChat.open.mockReturnValue({ primaryTabId: null })
     defaultChat.awaitsDetection.mockReturnValue(true)

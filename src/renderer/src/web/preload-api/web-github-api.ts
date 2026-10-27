@@ -6,7 +6,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { GITHUB_WEB_RPC_METHODS } from './web-github-routes'
 import type { WebGitHubRuntimeMethod } from './web-github-routes'
-import { mapRepoPathArg } from './web-review-api'
+import { mapRepoPathArg } from '@/runtime/runtime-repo-selector-params'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { noopUnsubscribe } from './web-storage'
 

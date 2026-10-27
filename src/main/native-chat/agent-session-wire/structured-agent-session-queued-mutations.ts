@@ -1,12 +1,8 @@
-// `agentSession.queuedMessageSend` / `agentSession.queuedMessageDelete`, and
-// /clear's carry of the source's drafts to its replacement session. Settling
-// operations stamp op-scoped tombstone receipts, so a lost acknowledgement
-// replays from the rows themselves — never from the operation ledger, which
-// records only that an operation happened. No mutation returns draft text:
-// the published list is the one authority a client renders.
+// Commit action receipts with effects so lost replies replay without ledger admission.
+// Published cards own rendered text; mutation answers carry none.
 
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
@@ -14,23 +10,15 @@ import type {
   AgentSessionQueuedMessagesResumeResult,
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
+import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
+import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-failure'
 import {
-  isJournalWrittenByNewerOrca,
-  journalOpenRefusal
-} from '../agent-session-journal/journal-open-failure'
-import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
-import type { MutationPlan } from './structured-agent-session-mutation-plans'
-import {
-  queuedMessageFingerprint,
-  structuredQueueHold
-} from './structured-agent-session-queued-messages'
-import {
-  resumeStructuredQueue,
-  structuredAgentSessionHostInstance
-} from './structured-agent-session-queued-pause'
-import { unsettledQueuedMessages } from './structured-agent-session-queued-stop'
+  journalRowReceiptResult,
+  type MutationPlan
+} from './structured-agent-session-mutation-plans'
+import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
+import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
@@ -56,89 +44,17 @@ function submissionFor(
   return ctx.journal.submissions().find((entry) => entry.clientMessageId === clientMessageId)
 }
 
-/** One transaction, stamped with the operation's caller-scoped key so a replay
- *  answers "spent" from the receipts. Withdrawal retires any hold in the same
- *  UPDATE, and the store's commit notification publishes the change. */
-export async function withdrawQueuedMessagesForOperation(
-  journal: AgentSessionJournal,
-  input: {
-    sessionId: string
-    messageIds: readonly string[]
-    callerKey: string
-    operationId: string
-  }
-): Promise<QueuedMessageRow[]> {
-  return journal.queuedMessages.withdraw({
-    messageIds: input.messageIds,
-    settledByOp: agentSessionOperationKey(input.callerKey, input.operationId)
-  })
-}
-
-/**
- * /clear's carry: the source's unsettled drafts become rows on the replacement
- * session — the SAME for every client version, with no text on the wire — so the
- * cards stay visible where the user now is. The replacement's queue starts
- * paused ('cleared'), lifted exactly like a Stop's: the cards were written for the context /clear just
- * discarded, so they wait for the user's next turn there, or Resume, rather than
- * sending into the fresh context unasked. Each card records the conversation it
- * came from, which IS that pause, so the drain never sees a carried card unpaused
- * and no pause outlives the cards. Runs after the clear commits, opening the
- * replacement's conversation only when there are drafts to carry; the source
- * rows are then tombstoned. Bookkeeping around the clear: a failure, or a crash
- * before the carry, leaves the cards on the superseded source — whose
- * supersession fence already blocks the drain — reported, never gating the
- * clear. A crash between the copy and the tombstone leaves both, which the
- * fence also makes harmless: nothing is lost and nothing runs.
- */
-export async function carryQueuedMessagesToClearReplacement(
+function submissionRowReceipt(
   ctx: AgentSessionTurnContext,
-  input: {
-    replacementSessionId: string
-    openReplacementJournal: () => Promise<AgentSessionJournal | undefined>
-    callerKey: string
-    operationId: string
+  submission: AgentJournalSubmission | undefined
+): CommandReceiptResult {
+  if (submission?.submittedSequence === undefined) {
+    throw new Error('an acknowledged hand-off requires its submission row')
   }
-): Promise<void> {
-  try {
-    const rows = unsettledQueuedMessages(ctx.journal)
-    if (rows.length === 0) {
-      return
-    }
-    const replacement = await input.openReplacementJournal()
-    if (!replacement) {
-      throw new Error('the replacement journal is not open')
-    }
-    for (const row of rows) {
-      // A returned card carries over as a plain waiting draft — its refusal
-      // belonged to the source's submissions. The fingerprint is re-scoped to the
-      // replacement, or its echo could never alias the sent bubble.
-      await replacement.queuedMessages.insert({
-        messageId: row.messageId,
-        body: row.body,
-        fingerprint: queuedMessageFingerprint(input.replacementSessionId, row.body),
-        hostInstance: structuredAgentSessionHostInstance(),
-        carriedFrom: ctx.sessionId
-      })
-    }
-    await withdrawQueuedMessagesForOperation(ctx.journal, {
-      sessionId: ctx.sessionId,
-      messageIds: rows.map((row) => row.messageId),
-      callerKey: input.callerKey,
-      operationId: input.operationId
-    })
-  } catch (error) {
-    ctx.logger.warn("carrying queued drafts to /clear's replacement failed", {
-      scope: 'clear-queued-carry',
-      sessionId: ctx.sessionId,
-      replacementSessionId: input.replacementSessionId,
-      error
-    })
-  }
+  return { kind: 'journal-row', epoch: ctx.journal.epoch, sequence: submission.submittedSequence }
 }
 
-/** Draft actions run like any mutation: admitted on the session's lane, the
- *  conversation opened for the write. */
-function mutateQueued<TValue>(
+export function mutateQueued<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,
@@ -153,27 +69,7 @@ function mutateQueued<TValue>(
   )
 }
 
-/** A newer Orca's journal refuses a draft write with the words a send gets there. */
-async function refusingNewerOrcaJournal<TValue>(
-  run: Promise<TurnOutcome<TValue>>
-): Promise<TurnOutcome<TValue>> {
-  try {
-    return await run
-  } catch (error) {
-    if (isJournalWrittenByNewerOrca(error)) {
-      return { ok: false, refusal: journalOpenRefusal(error) }
-    }
-    throw error
-  }
-}
-
-/**
- * Send-now. It overrides ONLY queue policy — FIFO order, pause, the busy-turn
- * wait — through the same send block and pending-prompt gates as any send;
- * supersession, Stop and prepared commands are never overridden. The card goes
- * out under this operation's id, never its own, and the submission names it by
- * `queuedMessageId`; one id still means one delivery.
- */
+/** Override FIFO/hold/working policy only, never send/prompt safety gates; link via queuedMessageId. */
 export function sendQueuedStructuredAgentMessage(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -185,17 +81,16 @@ export function sendQueuedStructuredAgentMessage(
     method: 'agentSession.queuedMessageSend',
     fields: { messageId },
     conversationWrite: true,
+    commandReceipt: {
+      result: (row) => journalRowReceiptResult(row, 'submission'),
+      unwritten: (value, ctx) =>
+        submissionRowReceipt(ctx, 'submission' in value ? value.submission : undefined)
+    },
     run: async (ctx): Promise<TurnOutcome<AgentSessionSendResult>> => {
-      // A rerun of this operation after it consumed the card (its answer never
-      // settled): answer with the submission it made, never append it again.
-      const consumedHere = submissionFor(ctx, operationId)
-      if (consumedHere?.queuedMessageId === messageId) {
-        return { ok: true, value: { clientMessageId: operationId, submission: consumedHere } }
-      }
-      // The one queue gate; Send-now's override set is exactly `working` (plus
-      // FIFO order and the stored hold, which the consume below clears).
+      // Send-now overrides working/FIFO/stored holds, preserving stronger gates.
       const record = context.deps.store.getRecord(ctx.sessionId)
-      const hold = structuredQueueHold({ journal: ctx.journal, record, fence: ctx.fence })
+      const work = contextStructuredAgentSessionCurrentWork(ctx)
+      const hold = structuredQueueHold({ record, work })
       if (hold === 'blocked') {
         return structuredAgentSessionSendBlock(record) ?? invalid('This conversation cannot send.')
       }
@@ -210,30 +105,30 @@ export function sendQueuedStructuredAgentMessage(
         return invalid('This queued message was withdrawn.')
       }
       if (row.state === 'dispatched') {
-        // Already a submission — answer with it rather than sending twice.
         const submission = row.consumedAs === null ? undefined : submissionFor(ctx, row.consumedAs)
         return submission
           ? { ok: true, value: { clientMessageId: submission.clientMessageId, submission } }
           : invalid('This queued message was already sent.')
+      }
+      // Commands cannot steer; enforce idle-only Send even for older clients.
+      if (row.body.command && work.working()) {
+        return invalid("A command can't be sent while the agent is working.")
       }
       const submissionId = operationId
       try {
         await ctx.journal.appendSubmission(
           {
             clientMessageId: submissionId,
-            // The person asked for this turn, so it ends a Stop's pause once it starts.
+            // Personal handoffs return as cards on close/restart.
             origin: 'client',
             payloadFingerprint: row.fingerprint,
             body: row.body,
+            ...(row.options ? { options: row.options } : {}),
             fence: ctx.fence,
             handoverRecorded: true
           },
-          {
-            messageId,
-            expect: row.state,
-            settledByOp: agentSessionOperationKey(ctx.resolvedBy, operationId),
-            hostInstance: structuredAgentSessionHostInstance()
-          }
+          { messageId, expect: row.state },
+          ctx.operationReceipt
         )
       } catch (error) {
         if (error instanceof QueuedMessageNotConsumableError) {
@@ -245,38 +140,43 @@ export function sendQueuedStructuredAgentMessage(
       if (!submission) {
         throw new Error('agent_session_submission_lost')
       }
-      context.wakeDelivery(ctx.sessionId)
       return { ok: true, value: { clientMessageId: submissionId, submission } }
     },
-    replay: (ctx) => {
-      const opKey = agentSessionOperationKey(ctx.resolvedBy, operationId)
-      const row = ctx.journal.queuedMessages
-        .receipts(opKey)
-        .find((receipt) => receipt.messageId === messageId)
-      if (!row || row.state !== 'dispatched') {
-        return null
-      }
-      const submission = row.consumedAs === null ? undefined : submissionFor(ctx, row.consumedAs)
-      return submission ? { clientMessageId: submission.clientMessageId, submission } : null
+    // Replay the receipt’s original handoff, never the card’s newer handoff.
+    replay: (ctx, _outcome, receipt) => {
+      const submission =
+        receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
+          ? ctx.journal.submissions().find((entry) => entry.submittedSequence === receipt.sequence)
+          : undefined
+      return submission?.queuedMessageId === messageId
+        ? { clientMessageId: submission.clientMessageId, submission }
+        : null
     }
   }
   return mutateQueued(context, caller, params.envelope, plan)
 }
 
-/** Delete = discard, with no body in the answer: the card leaving the published
- *  list IS the outcome, so a lost answer needs no re-ask. An Edit is the client
- *  copying the text it already renders, then this Delete. */
+/** Discard with no text in the reply; published removal is the client’s outcome. */
 export function deleteQueuedStructuredAgentMessage(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   params: { envelope: AgentSessionMutationEnvelope; messageId: string }
 ): Promise<AgentSessionMutationResult<AgentSessionQueuedMessageDeleteResult>> {
   const { messageId } = params
-  const operationId = params.envelope.clientOperationId
   const plan: MutationPlan<AgentSessionQueuedMessageDeleteResult> = {
     method: 'agentSession.queuedMessageDelete',
     fields: { messageId },
     conversationWrite: true,
+    commandReceipt: {
+      result: () => ({ kind: 'queued-draft', messageId }),
+      unwritten: (value) =>
+        value.deleted
+          ? null
+          : {
+              kind: 'no-op',
+              outcome: { kind: 'queue-delete', messageId, disposition: value.disposition }
+            }
+    },
     run: async (ctx): Promise<TurnOutcome<AgentSessionQueuedMessageDeleteResult>> => {
       const row = ctx.journal.queuedMessages.get(messageId)
       if (!row) {
@@ -288,32 +188,24 @@ export function deleteQueuedStructuredAgentMessage(
       if (row.state === 'withdrawn') {
         return { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }
       }
-      // The withdrawal notifies through the journal's commit listener, which
-      // also re-derives the drain — deleting a returned card can unblock the
-      // drafts behind it.
-      const withdrawn = await withdrawQueuedMessagesForOperation(ctx.journal, {
-        sessionId: ctx.sessionId,
-        messageIds: [messageId],
-        callerKey: ctx.resolvedBy,
-        operationId
-      })
+      // Withdrawal commits wake delivery; removing a returned head can unblock later cards.
+      const withdrawn = await ctx.journal.queuedMessages.withdraw([messageId], ctx.operationReceipt)
       return withdrawn.length > 0
         ? { ok: true, value: { deleted: true, messageId } }
         : { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }
     },
-    replay: (ctx) => {
-      const replayed = ctx.journal.queuedMessages
-        .receipts(agentSessionOperationKey(ctx.resolvedBy, operationId))
-        .some((row) => row.messageId === messageId && row.state === 'withdrawn')
-      return replayed ? { deleted: true, messageId } : null
+    // Receipt survives tombstone pruning.
+    replay: (_ctx, _outcome, receipt) => {
+      if (receipt?.kind === 'no-op' && receipt.outcome.kind === 'queue-delete') {
+        return { deleted: false, messageId, disposition: receipt.outcome.disposition }
+      }
+      return receipt?.kind === 'queued-draft' ? { deleted: true, messageId } : null
     }
   }
   return mutateQueued(context, caller, params.envelope, plan)
 }
 
-/** Resume: ends the queue's pause — a Stop's, or a restart's — so the cards send
- *  again, oldest first, as the session goes idle. A no-op when nothing is paused,
- *  and a per-card `send_failed` hold stays for its own Send. */
+/** Lift queue pauses, preserving per-card holds for explicit Send; no-op when unpaused. */
 export function resumeStructuredAgentQueue(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -323,13 +215,17 @@ export function resumeStructuredAgentQueue(
     method: 'agentSession.queuedMessagesResume',
     fields: {},
     conversationWrite: true,
-    // The Resume row notifies through the journal's commit listener, which publishes the
-    // lifted pause and wakes the drain.
+    commandReceipt: {
+      result: (row) => journalRowReceiptResult(row, 'tombstone'),
+      unwritten: () => ({ kind: 'no-op', outcome: { kind: 'queue-resume', resumed: false } })
+    },
     run: async (ctx) => ({
       ok: true,
-      value: { resumed: await resumeStructuredQueue(ctx.journal, ctx.fence) }
+      value: {
+        resumed: await resumeStructuredQueue(ctx.journal, ctx.fence, ctx.operationReceipt)
+      }
     }),
-    // Like Stop's replay: the Resume already ran, so this one lifts nothing.
+    // Replay must not lift a newer pause.
     replay: () => ({ resumed: false })
   }
   return mutateQueued(context, caller, params.envelope, plan)

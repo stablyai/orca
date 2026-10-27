@@ -106,13 +106,12 @@ it('suppresses presentation when dismissal completes during the handler sound re
     })
     return { sound: true } as Awaited<ReturnType<typeof loadNotificationDeliveryPreferences>>
   })
-  const pending = foregroundNotificationBehavior({
-    request: {
-      identifier: 'foreground-alert',
-      trigger: null,
-      content: { title: null, subtitle: null, body: null, sound: null, data: { orca: payload } }
-    }
-  })
+  const foregroundAlert = {
+    identifier: 'foreground-alert',
+    trigger: null,
+    content: { title: null, subtitle: null, body: null, sound: null, data: { orca: payload } }
+  }
+  const pending = foregroundNotificationBehavior({ request: foregroundAlert })
   await vi.waitFor(() => expect(finish).toBeDefined())
   await foregroundNotificationBehavior({
     request: { content: { data: { orca: { ...fence, kind: 'dismiss' } } } }

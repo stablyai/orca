@@ -22,8 +22,7 @@ async function shellExitCode(script: string): Promise<number> {
 }
 
 describe('WSL missing-cwd exit code', () => {
-  // Why a real shell: the whole point is that `cd x && cmd` collapses into the shell's exit 1,
-  // which is also ripgrep's "no matches". Asserting on a mock would not prove the distinction.
+  // A real shell proves failed cd collides with rg no-match exit 1 without the guard.
   it('is indistinguishable from "no matches" without the guard, and distinct with it', async () => {
     expect(await shellExitCode('cd /definitely/not/here && echo hi')).toBe(1)
     expect(
@@ -41,8 +40,7 @@ describe('WSL missing-cwd exit code', () => {
     expect(isRipgrepMissingCwdExit(null)).toBe(false)
   })
 
-  // Why stub the platform: WSL routing is win32-only, so on any other host resolveCommand would
-  // return early and the assertions below would silently test nothing.
+  // Pin Windows so WSL resolution cannot return early and leave assertions unexercised.
   it('emits the guard only when asked', () => {
     const original = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

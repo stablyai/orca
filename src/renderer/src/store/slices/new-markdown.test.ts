@@ -1,13 +1,24 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
+import { makeTab } from './store-session-test-harness'
+import { emptyTabLayoutState } from './editor-slice-test-harness'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
   return createStore<any>()((...args: any[]) => ({
+    ...emptyTabLayoutState(),
     activeWorktreeId: 'wt-1',
     tabsByWorktree: {},
     browserTabsByWorktree: {},
@@ -110,7 +121,6 @@ describe('New Markdown — isUntitled flag', () => {
       isUntitled: true,
       mode: 'edit'
     })
-    // Re-open the same file (e.g. clicking it in explorer)
     store.getState().openFile({
       filePath: '/repo/untitled.md',
       relativePath: 'untitled.md',
@@ -216,7 +226,6 @@ describe('New Markdown — tab bar ordering with openFile', () => {
       isUntitled: true,
       mode: 'edit'
     })
-    // Re-open the same file
     store.getState().openFile({
       filePath: '/repo/untitled.md',
       relativePath: 'untitled.md',
@@ -273,17 +282,16 @@ describe('New Markdown — tab bar ordering with openFile', () => {
     })
 
     const order = store.getState().tabBarOrderByWorktree['wt-1']
-    // Existing tabs should keep their original interleaved order
     expect(order.indexOf('t1')).toBeLessThan(order.indexOf('b1'))
     expect(order.indexOf('b1')).toBeLessThan(order.indexOf('t2'))
     expect(order.indexOf('t2')).toBeLessThan(order.indexOf('b2'))
-    // New file at the end
     expect(order.at(-1)).toBe('/repo/untitled.md')
   })
 })
 
 describe('New Markdown — split group targeting', () => {
   it('opens into the explicitly requested group instead of the ambient active group', () => {
+    layoutApplyTestTransport.reset()
     const createdTabs: {
       worktreeId: string
       contentType: TabContentType
@@ -340,6 +348,19 @@ describe('New Markdown — split group targeting', () => {
       { preview: false, targetGroupId: 'group-b' }
     )
 
+    // A layout-owner build asks main to open the tab in that group; main's frame draws it there.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(createdTabs).toEqual([])
+      expect(layoutApplyTestTransport.sentOfType('openEditorTab')).toEqual([
+        expect.objectContaining({
+          workspace: 'wt-1',
+          contentType: 'editor',
+          fileId: '/repo/untitled.md',
+          groupId: 'group-b'
+        })
+      ])
+      return
+    }
     expect(createdTabs).toEqual([
       {
         worktreeId: 'wt-1',
@@ -358,7 +379,6 @@ describe('New Markdown — rename flow store operations', () => {
       tabBarOrderByWorktree: { 'wt-1': [] }
     })
 
-    // Create untitled file
     store.getState().openFile({
       filePath: '/repo/untitled.md',
       relativePath: 'untitled.md',
@@ -370,7 +390,6 @@ describe('New Markdown — rename flow store operations', () => {
     expect(store.getState().openFiles).toHaveLength(1)
     expect(store.getState().openFiles[0].isUntitled).toBe(true)
 
-    // Simulate rename: close old, open new
     store.getState().closeFile('/repo/untitled.md')
     store.getState().openFile({
       filePath: '/repo/notes.md',
@@ -386,8 +405,10 @@ describe('New Markdown — rename flow store operations', () => {
   })
 
   it('rename preserves active file to the new path', () => {
+    // Keep terminal in wt-1 so rename does not close its last tab and leave the workspace.
     const store = createEditorStore({
-      tabBarOrderByWorktree: { 'wt-1': [] }
+      tabBarOrderByWorktree: { 'wt-1': [] },
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'terminal-1', worktreeId: 'wt-1' })] }
     })
 
     store.getState().openFile({
@@ -564,7 +585,6 @@ describe('Tab close — tabBarOrderByWorktree cleanup', () => {
       mode: 'edit'
     })
 
-    // Close middle file
     store.getState().closeFile('/repo/b.md')
     expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([
       't1',
@@ -573,7 +593,6 @@ describe('Tab close — tabBarOrderByWorktree cleanup', () => {
       '/repo/c.md'
     ])
 
-    // Close first file
     store.getState().closeFile('/repo/a.md')
     expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual(['t1', 'b1', '/repo/c.md'])
   })
@@ -657,7 +676,6 @@ describe('Tab close — tabBarOrderByWorktree cleanup', () => {
       mode: 'edit'
     })
 
-    // Close a.md, then reopen it — should go to the end
     store.getState().closeFile('/repo/a.md')
     store.getState().openFile({
       filePath: '/repo/a.md',

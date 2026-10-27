@@ -5,9 +5,7 @@ import {
   type WorkspaceSessionWrite
 } from './session-write-subscriber'
 
-// Why: useAppStore is a module-level singleton — tests must snapshot and
-// restore the full state around each case so cross-test pollution can't mask
-// a real regression in the gate logic this suite exists to lock down.
+// Snapshot/restore the full singleton store so pollution cannot mask persistence-gate regressions.
 let initialState: AppState
 
 function makeTerminalSessionState(title: string, label = title): Partial<AppState> {
@@ -62,9 +60,6 @@ function makeTerminalSessionState(title: string, label = title): Partial<AppStat
   }
 }
 
-/** These cases reopen the gate through a store update, so they need no wake-up of their own. */
-const noGateOpenWakeUp = (): (() => void) => () => {}
-
 describe('createSessionWriteSubscriber', () => {
   beforeEach(() => {
     initialState = useAppStore.getState()
@@ -103,10 +98,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('writes when the gate is already open at creation, with no store tick to wake it', () => {
-    // Why the store-write spy: every other case here opens the gate *after* creating the
-    // subscriber, so the opening setState is itself the tick that produces the first write. With
-    // the gate already open only the creation-time seed can, and equal catalogs no longer publish
-    // a tick to stand in for it.
+    // With the gate already open, only creation-time seeding triggers the first write; unchanged catalogs no longer provide incidental store ticks.
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
 
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
@@ -145,8 +137,7 @@ describe('createSessionWriteSubscriber', () => {
     expect(persist).toHaveBeenCalledTimes(1)
     persist.mockClear()
 
-    // setAgentStatus / setCacheTimerStartedAt mutate fields that are NOT in
-    // SESSION_RELEVANT_FIELDS — the gate must skip the timer reset entirely.
+    // Agent-status/timer fields are outside SESSION_RELEVANT_FIELDS and must not reset debounce.
     useAppStore.getState().setAgentStatus('tab-1:1', {
       state: 'working',
       prompt: 'Fix tests',
@@ -430,8 +421,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   it('ignores recovery-ledger-only changes', () => {
-    // Why: the ledger is stripped from the persisted session, so churning it
-    // must not rebuild and rewrite the durable payload on every remount.
+    // The handoff ledger is not persisted; remount churn must not rebuild/rewrite durable payloads.
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
@@ -651,85 +641,6 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('defers rather than drops a change made while shouldSchedulePersist returns false', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    let shouldSchedule = false
-    const cleanup = createSessionWriteSubscriber({
-      store: useAppStore,
-      persist,
-      shouldSchedulePersist: () => shouldSchedule,
-      subscribeToPersistGateOpen: noGateOpenWakeUp
-    })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    expect(persist).not.toHaveBeenCalled()
-
-    shouldSchedule = true
-    useAppStore.setState({ activeTabId: 'tab-1' })
-    vi.advanceTimersByTime(200)
-    expect(persist).toHaveBeenCalledTimes(1)
-    // The suppressed first pass owed every field; only activeTabId changed after the gate opened.
-    expect(persist.mock.calls[0][0].patch.tabsByWorktree).toBeDefined()
-    cleanup()
-  })
-
-  it('holds a write whose change arrived while shouldSchedulePersist returned false', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    let shouldSchedule = true
-    const cleanup = createSessionWriteSubscriber({
-      store: useAppStore,
-      persist,
-      shouldSchedulePersist: () => shouldSchedule,
-      subscribeToPersistGateOpen: noGateOpenWakeUp
-    })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(50)
-    shouldSchedule = false
-    useAppStore.setState({ activeTabId: 'remote-tab' })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-
-    shouldSchedule = true
-    useAppStore.setState({ activeRepoId: 'repo-after-remote-pull' })
-    vi.advanceTimersByTime(200)
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch.activeTabId).toBe('remote-tab')
-    cleanup()
-  })
-
-  it('re-checks shouldSchedulePersist when a pending debounce fires', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    let shouldSchedule = true
-    const cleanup = createSessionWriteSubscriber({
-      store: useAppStore,
-      persist,
-      shouldSchedulePersist: () => shouldSchedule,
-      subscribeToPersistGateOpen: noGateOpenWakeUp
-    })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({ activeWorktreeId: 'wt-before-remote-pull' })
-    vi.advanceTimersByTime(50)
-    shouldSchedule = false
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-
-    // The suppressed write is owed, not forgotten: it lands when the gate reopens.
-    shouldSchedule = true
-    useAppStore.setState({ activeTabId: 'tab-after-remote-pull' })
-    vi.advanceTimersByTime(200)
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch.activeWorktreeId).toBe('wt-before-remote-pull')
-    cleanup()
-  })
-
   it('coalesces multiple relevant mutations within a debounce window', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -789,10 +700,7 @@ describe('createSessionWriteSubscriber', () => {
 
     expect(persist).not.toHaveBeenCalled()
 
-    // Why: without this second mutation, the assertion above only proves the
-    // pending timer was cancelled — a regression where cleanup() forgot to
-    // unsub() would still pass. Mutating after cleanup verifies the listener
-    // was detached and no new timer is queued.
+    // Mutate after cleanup to prove unsubscribe; timer cancellation alone passes even with the listener still attached.
     useAppStore.setState({ activeTabId: 'tab-2' })
     vi.advanceTimersByTime(200)
     expect(persist).not.toHaveBeenCalled()

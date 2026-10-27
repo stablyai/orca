@@ -1,18 +1,7 @@
 import type { SecretAtRestProtection } from './secret-at-rest-protection'
 
-/**
- * GLM Coding Plan site table shared by the zcode credential store, the usage
- * fetcher, and the Accounts settings section. The provider id stays `zcode`;
- * the two sites are the international Z.AI console and Zhipu's mainland
- * BigModel platform.
- */
+/** GLM Coding Plan sites share provider ID zcode: international Z.AI and mainland BigModel. */
 export type ZcodePlanSite = 'zai' | 'bigmodel'
-
-export const ZCODE_PLAN_SITES: readonly ZcodePlanSite[] = ['zai', 'bigmodel']
-
-export function isZcodePlanSite(value: unknown): value is ZcodePlanSite {
-  return value === 'zai' || value === 'bigmodel'
-}
 
 export const ZCODE_PLAN_SITE_BASE_URLS: Record<ZcodePlanSite, string> = {
   zai: 'https://api.z.ai',
@@ -29,4 +18,7 @@ export type ZcodePlanCredentialsStatus = {
   apiKeyConfigured: boolean
   zcodeCliConfigured: boolean
   apiKeyProtection: SecretAtRestProtection | null
+  /** Set when the saved file cannot be used here; 'sealed-elsewhere' means the other Orca app
+   *  on that machine (desktop vs orcad) saved it. */
+  apiKeyUnreadable?: 'sealed-elsewhere' | 'unreadable'
 }

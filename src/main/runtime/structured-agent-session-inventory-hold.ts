@@ -1,9 +1,4 @@
-/**
- * Answers whether a snapshot bound for a client may be read as this runtime's chat inventory.
- *
- * Sets *and* clears, like the client-hosted page hold beside it, because a frame is built once
- * and may already carry an answer from before the last tab restore.
- */
+/** Set and clear inventory uncertainty: reused frames may carry a verdict from before tab restore. */
 export function holdAgentSessionInventory<T extends { agentSessionsUnverifiable?: true }>(
   result: T,
   unverifiable: boolean

@@ -1,15 +1,17 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import {
   resolveLinearIssueEmptyKind,
   shouldOfferLinearIssueFetchMore
-} from '@/components/task-page-linear-issue-empty-state'
+} from './task-page-linear-issue-empty-state'
 import { Button } from '@/components/ui/button'
+import { LinearIcon } from '@/components/task-page/task-page-localized-options'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
 import {
   clampLinearIssueListLimit,
   LINEAR_ISSUE_LIST_MAX
 } from '../../../../../shared/linear/issue-read-limits'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import { TaskPageLinearIssueBoardColumns } from './IssueBoardColumns'
 import { TaskPageLinearIssueTable } from './IssueTable'
 export function TaskPageLinearIssueBoard({
@@ -26,11 +28,18 @@ export function TaskPageLinearIssueBoard({
     activeLinearIssues,
     activeLinearIssueLoading,
     activeLinearIssueError,
+    linearError,
     activeLinearIssueHasCollectionError,
     activeLinearIssueContextLabel,
     linearSearchActive,
     filteredLinearIssues
   } = model
+  // Why: the plain list's own read decides; host-wide status flags any broken workspace.
+  const linearLoginUnreadable =
+    activeLinearIssues.length === 0 &&
+    !activeLinearIssueContextLabel &&
+    Boolean(linearError) &&
+    isIntegrationCredentialDecryptionError(linearError)
   return (
     <div
       className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
@@ -38,13 +47,26 @@ export function TaskPageLinearIssueBoard({
         scrollbarGutter: 'stable'
       }}
     >
-      {activeLinearIssueError ? (
+      {linearLoginUnreadable ? (
+        <div className="m-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
+          <LinearIcon className="mb-4 size-8 text-muted-foreground/60" />
+          <p className="text-base font-medium text-foreground">
+            {translate('auto.components.TaskPage.linearLoginUnreadableTitle', 'Reconnect Linear')}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {translate(
+              'auto.components.TaskPage.linearLoginUnreadableBody',
+              'Unable to read saved Linear login. Reconnect it in Settings.'
+            )}
+          </p>
+        </div>
+      ) : activeLinearIssueError ? (
         <div className="border-b border-border px-4 py-4 text-sm text-destructive">
           {activeLinearIssueError}
         </div>
       ) : null}
 
-      {activeLinearIssueLoading && activeLinearIssues.length === 0 ? (
+      {activeLinearIssueLoading && activeLinearIssues.length === 0 && !linearLoginUnreadable ? (
         <div className="divide-y divide-border/50">
           {Array.from({
             length: 12

@@ -1,12 +1,8 @@
 import { Pressable, Text } from 'react-native'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-/**
- * The page offers Re-pair alone: its push of `/pair-scan` is handed to the shell
- * (`route-handoff.web.ts`), which opens the native scan screen. Retry and Remove are inert here —
- * `forceReconnect` is null (`client-context.web.tsx`) and removal refuses
- * (`page-host-removal-refusal.ts`) — so a line names the app for those two instead.
- */
+// Offer shell-routed /pair-scan only; web forceReconnect is null and page-host-removal-refusal rejects Remove, so direct users to app for both.
 export function AuthFailedBannerActions({
   onRepair
 }: {
@@ -15,6 +11,7 @@ export function AuthFailedBannerActions({
   onRepair: () => void
   onRemove: () => void
 }) {
+  useMobileColorScheme()
   return (
     <>
       <Pressable style={styles.action} onPress={onRepair}>

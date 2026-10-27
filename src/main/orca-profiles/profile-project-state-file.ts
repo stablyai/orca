@@ -1,3 +1,4 @@
+import { isRepoBackedProjectHostSetup } from '../persistence/tracking-repos/project-host-compatibility'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
@@ -27,18 +28,18 @@ import {
 import { parseProfileStateRoot } from '../persistence/profile-state/profile-state-document-validation'
 import { assertProfileStateCanInitialize } from '../persistence/profile-state/profile-state-recovery-required'
 import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/profile-state-storage-classification'
+import { ensureProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
 
 export type TransferProfileState = PersistedState
 
 export type ReadProfileStateResult = {
   state: TransferProfileState
-  /** SQLite profile revision observed with the state snapshot; absent for legacy JSON. */
+  /** Snapshot revision; absent for legacy JSON. */
   revision?: number
-  /** Exact compact JSON projection observed with the state snapshot. */
+  /** Exact compact snapshot JSON. */
   serialized?: string
 }
 
-/** A profile must have one unambiguous transfer source. */
 export class AmbiguousProfileStateStorageError extends Error {
   readonly code = 'ambiguous_profile_state_storage' as const
 
@@ -65,11 +66,7 @@ export function profileStateStorage(profileId: string, userDataPath: string): Pr
   return hasDatabase ? 'sqlite' : 'json'
 }
 
-/**
- * A migrated profile may retain its JSON export during the rollback window.
- * Select SQLite only when its acceptance marker still names the exact export;
- * any edit, missing marker, or corrupt database remains fail-closed.
- */
+/** Accept SQLite beside retained JSON only when its marker matches that exact export; fail closed otherwise. */
 function assertAcceptedLegacyJsonMirror(
   profileId: string,
   dataFile: string,
@@ -86,7 +83,6 @@ function assertAcceptedLegacyJsonMirror(
   }
 }
 
-/** Read one profile state and retain the SQLite revision that fenced that snapshot. */
 export function readProfileStateWithRevision(
   profileId: string,
   userDataPath: string
@@ -123,12 +119,13 @@ export function normalizeProfileProjectState(
   parsed: Partial<PersistedState>
 ): TransferProfileState {
   const defaults = getDefaultPersistedState(homedir())
+  const { uiLanguagePortugueseMigrationApplied: _migrationApplied, ...settingsDefaults } =
+    defaults.settings
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
     repos: arrayOrEmpty<Repo>(parsed.repos),
-    // Why normalize: another profile's file is untrusted JSON, and a null repoId/path here would be
-    // carried straight into the importing app's state.
+    // Inactive-profile JSON is untrusted; normalize rows before importing them.
     projects: normalizeProjectRows(arrayOrEmpty<Project>(parsed.projects)),
     projectHostSetups: normalizeProjectHostSetupRows(
       arrayOrEmpty<ProjectHostSetup>(parsed.projectHostSetups)
@@ -146,8 +143,8 @@ export function normalizeProfileProjectState(
     worktreeLineageById: recordOrEmpty(parsed.worktreeLineageById),
     workspaceLineageByChildKey: recordOrEmpty(parsed.workspaceLineageByChildKey),
     settings: isRecord(parsed.settings)
-      ? { ...defaults.settings, ...parsed.settings }
-      : defaults.settings,
+      ? { ...settingsDefaults, ...parsed.settings }
+      : settingsDefaults,
     ui: isRecord(parsed.ui) ? { ...defaults.ui, ...parsed.ui } : defaults.ui,
     githubCache: isRecord(parsed.githubCache)
       ? {
@@ -201,7 +198,7 @@ export function writeProfileState(
   writeSerializedProfileState(profileId, userDataPath, JSON.stringify(state), options)
 }
 
-/** Write an already validated JSON projection while preserving its exact bytes in SQLite. */
+/** Preserve validated projection bytes exactly in SQLite. */
 export function writeSerializedProfileState(
   profileId: string,
   userDataPath: string,
@@ -214,6 +211,7 @@ export function writeSerializedProfileState(
   const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
   const opened = openProfileStateDatabase(databaseFile, profileId)
   try {
+    ensureProfileStateAuthorityMarker(databaseFile)
     importProfileStateJson(opened.db, serialized, {
       expectedRevision: options.expectedRevision ?? readProfileStateRevision(opened.db)
     })
@@ -222,16 +220,12 @@ export function writeSerializedProfileState(
   }
 }
 
-function isRepoBackedProjectHostSetup(
-  setup: ProjectHostSetup,
-  currentRepoIds: ReadonlySet<string>
-): boolean {
-  return Boolean(setup.repoId && currentRepoIds.has(setup.repoId))
-}
-
 export function rebuildRepoBackedProjectState(state: TransferProfileState): TransferProfileState {
   const projection = projectHostSetupProjectionFromRepos(state.repos)
-  const succession = carryProjectStateThroughIdentityChange(projection.projects, state.projects)
+  const succession = carryProjectStateThroughIdentityChange(projection.projects, state.projects, {
+    previous: state.projectHostSetups,
+    current: projection.setups
+  })
   const currentRepoIds = new Set(state.repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
@@ -242,7 +236,7 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
       }
       return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
     })
-    // Why: follow the repo's project through a derived-id change so no ghost project row survives.
+    // Follow derived project-ID changes so no ghost setup row survives.
     .map((setup) => {
       const remappedProjectId = succession.remappedProjectIds.get(setup.projectId)
       return remappedProjectId ? { ...setup, projectId: remappedProjectId } : setup

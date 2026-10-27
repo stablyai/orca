@@ -1,31 +1,32 @@
-// The sentence a person reads beside each failure fact, and the one constructor that writes both.
-//
-// A row's `text`, a rejected message's `reason` and a conversation command's `error` are what
-// every released client prints as they are, so the host writes them here, from the fact, and
-// nowhere else: never Orca's own error text, a refusal's message, or a probe's evidence. A
-// provider's words reach the sentence only when the provider wrote them for a person. Each sentence
-// is built from the pieces in `agent-session-failure-copy`, which desktop translates to word the
-// same fact in the reader's language.
+// Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
 
 import {
   isSubmissionRejectionFact,
-  type AgentSessionAttachmentProblem,
-  type AgentSessionAttachmentProblemReason,
   type AgentSessionFailureFact,
   type AgentSessionFailureKind,
-  type ProviderDiagnostic,
   type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
-import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
+import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
 import {
+  agentCliInstallationFailureWords,
   sayAgentSessionFailureEnglish,
   type AgentSessionFailureCopyId,
-  type AgentSessionFailureCopyValues,
   type AgentSessionFailureSay
 } from './agent-session-failure-copy'
-import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from './agent-session-goal-control-copy'
+import { START_REFUSAL_RESUMABLE } from './agent-session-start-refusal-resumable'
+import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
+import {
+  usageLimitWords,
+  type AgentSessionUsageLimitResetWords
+} from './agent-session-usage-limit-words'
+import { commandRefusedByReason } from './agent-session-command-refusal-words'
+import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
 import { joinSentences } from './sentence-joining'
+import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
+import { requestTimeoutSeconds } from './agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
@@ -35,64 +36,38 @@ import {
 
 declare const failureSentence: unique symbol
 
-/** Words only `agentSessionFailureWords` makes, so no writer can put its own beside a fact. */
+/** Only agentSessionFailureWords constructs these, preventing competing wording beside a fact. */
 export type AgentSessionFailureSentence = string & { readonly [failureSentence]: true }
 
-/** A status row that reports a failure. */
 export type AgentSessionFailureRowWords = {
   text: AgentSessionFailureSentence
   failure: AgentSessionFailureFact
 }
 
-/** A rejection as the host writes it: the sentence (or, for the cases released clients already
- *  hide, the legacy marker) they print, and the fact newer ones read. */
+/** Legacy sentence/hidden marker and the newer fact, written together by the host. */
 export type AgentJournalDispatchRejection = {
   reason: AgentSessionFailureSentence
   rejection: SubmissionRejectionFact
 }
 
-/** `row`: a status row, about the chat. `rejection`: a rejected message's reason, about it. */
-export type AgentSessionFailureSurface = 'row' | 'rejection'
+/** row describes the chat; rejection describes a rejected message; answer describes a refused approval/question answer. */
+export type AgentSessionFailureSurface = 'row' | 'rejection' | 'answer'
 
 export type AgentSessionFailureWordsContext = {
   /** The chat's agent, when the writer knows it. */
   agentName?: string
+  stopNotice?: 'pauseUnconfirmed' | 'stopUnconfirmed'
   /** Names the legacy queue-full marker; without it a full queue is worded as a sentence. */
   provider?: 'claude' | 'codex'
-  /** The conversation command a failed start was for, so the next step is to run it again
-   *  rather than to send a message. */
+  /** Retry the failed start's conversation command instead of sending a message. */
   command?: AgentSessionConversationCommand
-  /** The surface retries for the person — its own Retry beside the words, or a read that reconnects
-   *  on its own — so they leave out sending or trying again. */
+  /** Omit retry advice when the surface already retries or offers its own Retry control. */
   retryControl?: boolean
+  /** A direct create has no submitted message to send again. */
+  messageSubmitted?: boolean
+  /** How this reader says a usage limit's reset; without it the words name no time. */
+  usageLimitReset?: AgentSessionUsageLimitResetWords
 }
-
-/**
- * Whether a refused start leaves the chat anything to start again from. `false`: this host has
- * nothing to restart it from — no record, or none it can run — so only a new chat continues.
- * A new wire code does not compile until it is classified here.
- */
-export const START_REFUSAL_RESUMABLE: Record<AgentSessionWireRefusalCode, boolean> = {
-  execution_owner_reconciling: true,
-  agent_session_conflict: true,
-  agent_session_checkpoint_stale: true,
-  agent_session_ownership_unknown: true,
-  agent_session_operation_capacity: true,
-  structured_agent_session_unsupported: false,
-  agent_session_operation_conflict: true,
-  agent_session_operation_expired: true,
-  agent_session_operation_invalid: true,
-  agent_session_operation_unknown: true,
-  agent_session_item_revision_stale: true,
-  agent_session_already_resolved: true,
-  agent_session_identity_required: false,
-  agent_session_journal_unreadable: true,
-  agent_session_owner_restart_failed: true
-}
-
-/** Person-facing provider text is quoted, but bounded so the sentence stays one. */
-const MAX_QUOTED_DETAIL_CHARS = 512
-const BYTES_PER_MB = 1024 * 1024
 
 type Sentence = (
   context: AgentSessionFailureWordsContext,
@@ -101,49 +76,69 @@ type Sentence = (
   say: AgentSessionFailureSay
 ) => string
 
-function agent(say: AgentSessionFailureSay, { agentName }: AgentSessionFailureWordsContext) {
-  return { agent: agentName ?? say('theAgent') }
-}
-
-function quotingPersonDetail(
-  say: AgentSessionFailureSay,
-  lead: AgentSessionFailureCopyId,
-  quotedLead: AgentSessionFailureCopyId,
-  detail: ProviderDiagnostic | undefined,
-  values: AgentSessionFailureCopyValues = {}
-): string {
-  const quoted =
-    detail?.audience === 'person'
-      ? detail.text
-          .slice(0, MAX_QUOTED_DETAIL_CHARS)
-          .trim()
-          .replace(/[.\s]+$/, '')
-      : ''
-  return quoted ? say(quotedLead, { ...values, detail: quoted }) : say(lead, values)
-}
-
-/** The provider's account of what failed goes on the line under the sentence, as it wrote it. */
-function withRetryCause(sentence: string, cause: string | undefined): string {
-  return cause ? `${sentence}\n${cause}` : sentence
+function namingAgent(id: AgentSessionFailureCopyId): Sentence {
+  return (context, _fact, _surface, say) => say(id, agent(say, context))
 }
 
 /** The next step after a start or restart that failed: the command, or the message, again. */
 function startRetry(
   say: AgentSessionFailureSay,
-  { command, retryControl }: AgentSessionFailureWordsContext
+  { command, retryControl, messageSubmitted }: AgentSessionFailureWordsContext,
+  sendAgain: 'sendToTryAgain' | 'sendAgainToTryOnceMore' = 'sendToTryAgain'
 ): string[] {
   if (retryControl) {
     return []
   }
-  return [command ? say('runCommandAgain', { command }) : say('sendToTryAgain')]
+  return [
+    command
+      ? say('runCommandAgain', { command })
+      : say(messageSubmitted === false ? 'sendToTryAgain' : sendAgain)
+  ]
 }
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
+    const installationFailure = agentCliInstallationFailureWords(fact.refusal, say)
+    if (installationFailure) {
+      return installationFailure
+    }
     const failed = say(verb, agent(say, context))
+    if (fact.argumentProblem) {
+      const problemCopy = {
+        unsupportedOption: 'argumentsUnsupportedOption',
+        missingValue: 'argumentsMissingValue',
+        multipleValues: 'argumentsMultipleValues',
+        positionalPrompt: 'argumentsPositionalPrompt'
+      } as const
+      return joinSentences([
+        failed,
+        say(problemCopy[fact.argumentProblem.problem], { option: fact.argumentProblem.option }),
+        say('editSavedArguments'),
+        ...startRetry(say, context)
+      ])
+    }
+    if (fact.requestTimeout) {
+      return joinSentences([
+        say('startTimedOut', {
+          ...agent(say, context),
+          method: fact.requestTimeout.method,
+          seconds: requestTimeoutSeconds(fact.requestTimeout)
+        }),
+        ...startRetry(say, context),
+        // No cause named: MCP startup, the network or config can stall a start too.
+        say('startTimedOutKeepsHappening')
+      ])
+    }
     // Only a terminal agent an older build recorded holds a claim; quitting it frees the chat.
     if (fact.refusal?.details?.reason === 'claimConflicted') {
       return joinSentences([failed, say('terminalAgentHoldsChat'), say('quitTerminalAgent')])
+    }
+    // The previous process may still run, so nothing started: that, never that it exited.
+    if (fact.refusal?.details?.reason === 'previousExitUnverifiable') {
+      return joinSentences([
+        say('previousExitUnverifiable', agent(say, context)),
+        ...startRetry(say, context, 'sendAgainToTryOnceMore')
+      ])
     }
     const code = fact.refusal?.code
     return joinSentences(
@@ -154,73 +149,59 @@ function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   }
 }
 
-// The number only; each language's sentence carries its own unit.
-function megabytes(bytes: number): string {
-  return String(Math.round((bytes / BYTES_PER_MB) * 10) / 10)
-}
-
-const ATTACHMENT_SENTENCES = {
-  empty: (say) => say('attachmentEmpty'),
-  tooLarge: (say, _, { limit }) =>
-    limit ? say('attachmentLargerThan', { size: megabytes(limit) }) : say('attachmentTooLarge'),
-  tooMany: (say, context, { limit }) =>
-    limit
-      ? say('attachmentAtMost', { ...agent(say, context), limit: String(limit) })
-      : say('attachmentTooMany'),
-  totalTooLarge: (say, _, { limit }) =>
-    limit
-      ? say('attachmentTotalMoreThan', { size: megabytes(limit) })
-      : say('attachmentTotalTooLarge'),
-  unsupportedType: (say, context) => say('attachmentUnsupportedType', agent(say, context)),
-  notAFile: (say) => say('attachmentNotAFile'),
-  noSource: (say) => say('attachmentNoSource')
-} satisfies Record<
-  AgentSessionAttachmentProblemReason,
-  (
-    say: AgentSessionFailureSay,
-    context: AgentSessionFailureWordsContext,
-    problem: AgentSessionAttachmentProblem
-  ) => string
->
-
 const FAILURE_SENTENCES = {
   providerStartFailed: (context, _fact, _surface, say) =>
     joinSentences([say('providerStartFailed', agent(say, context)), ...startRetry(say, context)]),
   startFailed: couldNot('couldNotStart'),
-  // Beside a Retry the resend is the button, but signing in is still a step to take first.
-  notSignedIn: (context, _fact, _surface, say) =>
-    joinSentences([
-      say('notSignedIn', agent(say, context)),
-      context.retryControl
-        ? say('signInFirst')
-        : context.command
-          ? say('signInThenRunCommand', { command: context.command })
-          : say('signInThenSend')
-    ]),
+  notSignedIn: (context, fact, surface, say) => notSignedInSentence(context, fact, say, surface),
+  cliMissing: (context, _fact, _surface, say) => cliMissingSentence(context, say),
   historyTooLarge: (_context, _fact, _surface, say) =>
     joinSentences([say('historyTooLarge'), say('startNewChat')]),
   managedAccountEnvOverride: (_context, _fact, _surface, say) => say('managedAccountEnvOverride'),
-  accountSwitchInProgress: (_context, _fact, _surface, say) => say('accountSwitchInProgress'),
+  accountSwitchInProgress: namingAgent('accountSwitchInProgress'),
+  launchFolderMissing: (_context, _fact, _surface, say) => say('launchFolderMissing'),
+  historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
+  claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
+  claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
+  agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
+  runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
+  fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
+  conversationOpenInTerminal: namingAgent('conversationOpenInTerminal'),
+  conversationOpenElsewhere: (_context, _fact, _surface, say) => say('conversationOpenElsewhere'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
     joinSentences([
       say('managedAccountUnsupported'),
-      context.retryControl
+      context.retryControl || context.messageSubmitted === false
         ? say('chooseClaudeAccount')
         : context.command
           ? say('chooseClaudeAccountThenRunCommand', { command: context.command })
           : say('chooseClaudeAccountThenSend')
     ]),
   providerExited: (context, _fact, surface, say) =>
-    say(surface === 'row' ? 'providerExitedRow' : 'providerExitedRejection', agent(say, context)),
+    say(
+      surface === 'row'
+        ? 'providerExitedRow'
+        : surface === 'answer'
+          ? 'providerExitedAnswer'
+          : 'providerExitedRejection',
+      agent(say, context)
+    ),
   restartFailed: couldNot('couldNotRestart'),
-  providerRejected: (_context, fact, _surface, say) =>
-    quotingPersonDetail(say, 'providerRejected', 'providerRejectedQuoted', fact.detail),
+  providerRejected: (context, fact, _surface, say) =>
+    quotingPersonDetail(
+      say,
+      'providerRejected',
+      'providerRejectedQuoted',
+      fact.detail,
+      agent(say, context)
+    ),
   attachmentInvalid: (context, fact, _surface, say) =>
     fact.attachment
-      ? ATTACHMENT_SENTENCES[fact.attachment.reason](say, context, fact.attachment)
+      ? attachmentProblemSentence(say, context, fact.attachment)
       : say('attachmentInvalid'),
   attachmentUnreadable: (_context, _fact, _surface, say) => say('attachmentUnreadable'),
   emptyMessage: (_context, _fact, _surface, say) => say('emptyMessage'),
+  commandUnavailable: namingAgent('commandUnavailable'),
   queueFull: (_context, _fact, _surface, say) => say('queueFull'),
   writeFailed: (_context, _fact, _surface, say) => say('writeFailed'),
   cancelled: (_context, _fact, _surface, say) => say('cancelled'),
@@ -228,12 +209,14 @@ const FAILURE_SENTENCES = {
   hostRestarted: (_context, _fact, _surface, say) => say('hostRestarted'),
   notDelivered: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'notDelivered' : 'notDeliveredSendAgain'),
-  commandRefused: ({ retryControl }, _fact, _surface, say) =>
-    say(retryControl ? 'commandRefused' : 'commandRefusedTryAgain'),
+  commandRefused: (context, fact, _surface, say) =>
+    commandRefusedByReason(say, context, fact) ??
+    say(context.retryControl ? 'commandRefused' : 'commandRefusedTryAgain'),
   compactionFailed: (_context, fact, _surface, say) =>
     quotingPersonDetail(say, 'compactionFailed', 'compactionFailedQuoted', fact.detail),
   compactionUnconfirmed: (_context, _fact, _surface, say) => say('compactionUnconfirmed'),
-  cancelUnconfirmed: (_context, _fact, _surface, say) => say('cancelUnconfirmed'),
+  cancelUnconfirmed: ({ stopNotice }, _fact, _surface, say) =>
+    stopNotice ? AGENT_SESSION_GOAL_CONTROL_COPY[stopNotice] : say('cancelUnconfirmed'),
   // The agent was reached and declined, so the sentence says that, not that the Stop was lost.
   stopRefused: (context, fact, _surface, say) =>
     fact.detail?.audience === 'person'
@@ -245,31 +228,35 @@ const FAILURE_SENTENCES = {
           agent(say, context)
         )
       : say('noTurnToStop', agent(say, context)),
+  // Mid-sentence, so an unnamed agent is not capitalized.
+  stopFailed: ({ agentName }, _fact, _surface, say) =>
+    agentName ? say('couldNotStop', { agent: agentName }) : say('couldNotStopTheAgent'),
+  backgroundTaskNotStopped: (_context, fact, _surface, say) =>
+    say(fact.backgroundStop === 'task' ? 'backgroundTaskNotStopped' : 'backgroundTasksNotStopped'),
   answerUnconfirmed: (_context, _fact, _surface, say) => say('answerUnconfirmed'),
   hostFault: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),
   hostStopped: (context, _fact, _surface, say) => say('hostStopped', agent(say, context)),
   // A provider that says how its retry is going, for a person, is quoted: that is the progress.
   providerRetrying: (context, { retry, detail }, _surface, say) =>
-    withRetryCause(
-      detail?.audience === 'person'
-        ? quotingPersonDetail(
+    detail?.audience === 'person'
+      ? withRetryCause(
+          quotingPersonDetail(
             say,
             'providerRetrying',
             'providerRetryingQuoted',
             detail,
             agent(say, context)
-          )
-        : say(
-            retry?.error === 'rate_limit' || retry?.status === 429
-              ? 'providerRateLimited'
-              : 'providerRetrying',
-            agent(say, context)
           ),
-      retry?.cause
-    ),
-  previousExitUnverifiable: (context, _fact, _surface, say) =>
-    say('previousExitUnverifiable', agent(say, context))
+          retry?.cause
+        )
+      : providerRetryWords(say, agent(say, context), retry),
+  usageLimitReached: (context, { usageLimit }, _surface, say) =>
+    usageLimitWords(say, agent(say, context), usageLimit, {
+      resetWords: context.usageLimitReset
+    }),
+  previousExitUnverifiable: namingAgent('previousExitUnverifiable'),
+  sessionNotRestored: namingAgent('sessionNotRestored')
 } satisfies Record<AgentSessionFailureKind, Sentence>
 
 /** The sentence a person reads for this fact on this surface; never a marker. */
@@ -284,8 +271,7 @@ export function agentSessionFailureSentence(
   return sentence(context, fact, surface, say)
 }
 
-/** The markers released clients hide, for the rejections that had one before rows carried a fact.
- *  A write failure is the bare marker: its error belongs in the log. */
+/** Preserve markers released clients hide. A write failure keeps the bare marker; its error stays in the log. */
 const LEGACY_REJECTION_MARKERS: Partial<
   Record<SubmissionRejectionKind, (context: AgentSessionFailureWordsContext) => string | undefined>
 > = {

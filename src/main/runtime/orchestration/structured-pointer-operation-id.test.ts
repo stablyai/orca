@@ -44,7 +44,7 @@ function fakeDb() {
 
 describe('structured pointer operation id', () => {
   it('mints ids the host will admit', () => {
-    // Orchestration's own msg_<hex> ids do not match and are refused before the first send.
+    // Use host operation ids; orchestration msg_<hex> ids are refused before send.
     expect(mintAgentSessionOperationId(Date.now())).toMatch(OPERATION_ID_PATTERN)
   })
 
@@ -67,6 +67,32 @@ describe('structured pointer operation id', () => {
     expect(second.operationId).toBe(first.operationId)
   })
 
+  it('re-mints an unresolved batch once for a fresh context in the same conversation', () => {
+    const db = fakeDb()
+    const input = {
+      db,
+      mailboxHandle: 'dispatch:d1',
+      sessionId: 's1',
+      messageIds: ['m1'],
+      now: 1_000
+    }
+    const before = resolveId(input)
+    const cleared = {
+      ...input,
+      contextClearOperationId: 'clear-1',
+      submissions: [
+        {
+          clientMessageId: before.operationId,
+          dispatchState: 'pending' as const,
+          submittedAt: 1_000
+        }
+      ]
+    }
+    const fresh = resolveId(cleared)
+    expect(fresh.operationId).not.toBe(before.operationId)
+    expect(resolveId(cleared).operationId).toBe(fresh.operationId)
+  })
+
   it('re-mints when the batch grows', () => {
     const db = fakeDb()
     const first = resolveId({
@@ -87,7 +113,7 @@ describe('structured pointer operation id', () => {
   })
 
   it('never re-mints an ambiguous batch after the host replay window expires', () => {
-    // The host recorded the send `unknown`: whether the nudge landed is still open, however old.
+    // Age cannot resolve whether a host-recorded unknown send landed.
     const db = fakeDb()
     const first = resolveId({
       db,
@@ -110,10 +136,7 @@ describe('structured pointer operation id', () => {
   })
 
   it('re-mints for a different batch of the same size', () => {
-    // The pointer body names only how many messages are waiting, so two unrelated same-size
-    // batches share a payload fingerprint. Reusing the live id across them makes the host replay
-    // its ledger answer — `accepted`, with no turn sent — and the lane then marks the NEW mail
-    // delivered. The worker is never told, and the mail is gone.
+    // Key reuse by message ids: unrelated equal-size batches share pointer text, and ledger replay would silently consume unsent mail.
     const db = fakeDb()
     const first = resolveId({
       db,
@@ -227,7 +250,6 @@ describe('what a pointer attempt does with its operation row', () => {
 
   it('sends under the same id when the host never recorded it', () => {
     expect(decide([])).toBe('reuse')
-    // A turn that ran before the row was minted is no news.
     expect(decide([userTurn('accepted', 1_500)])).toBe('reuse')
   })
 
@@ -241,9 +263,7 @@ describe('what a pointer attempt does with its operation row', () => {
     ['refused', sent('rejected')]
   ])('replays a send that was %s instead of starting the agent again', (_label, failed) => {
     expect(decide([failed])).toBe('reuse')
-    // A later send that has not run yet is no evidence the agent works again.
     expect(decide([failed, userTurn('pending')])).toBe('reuse')
-    // Age never re-mints a recorded send.
     expect(decide([failed], { now: 2_000 + AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + 1 })).toBe(
       'reuse'
     )
@@ -252,7 +272,6 @@ describe('what a pointer attempt does with its operation row', () => {
   it('mints once the agent ran a turn after the row was minted, recorded send or not', () => {
     expect(decide([sent('unknown'), userTurn('accepted')])).toBe('mint')
     expect(decide([sent('rejected'), userTurn('accepted')])).toBe('mint')
-    // A rewind dropped the row's own send from the journal.
     expect(decide([userTurn('accepted')])).toBe('mint')
   })
 

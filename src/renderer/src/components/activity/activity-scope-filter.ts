@@ -1,14 +1,33 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
+import {
+  isAutomationGeneratedWorkspace,
+  isCliCreatedWorkspace
+} from '../../../../shared/worktree/workspace-kinds'
+import { isWorkspaceOwnedBySomeoneElse } from '../../../../shared/workspace-creator-visibility'
 import type { AgentPaneThread } from './activity-thread-types'
 
-/** Host/project scope for the Agents activity surfaces. Persisted and separate
- *  from the workspace-nav filters; hosts `null` = all, repoIds empty = all. */
+/** Persisted Agents scope, independent of workspace navigation; null hosts and empty repo IDs mean all. */
 export type ActivityScopeFilter = {
   visibleHostIds: readonly ExecutionHostId[] | null
   filterRepoIds: readonly string[]
   defaultHostId: ExecutionHostId
+  hideWorkspacesFromOtherDevices: boolean
+  /** Only read when hideWorkspacesFromOtherDevices is on. */
+  pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
+  hideAutomationGeneratedWorkspaces: boolean
+  hideCliCreatedWorkspaces: boolean
+}
+
+function isActivityScopeActive(scope: ActivityScopeFilter): boolean {
+  return (
+    scope.visibleHostIds !== null ||
+    scope.filterRepoIds.length > 0 ||
+    scope.hideWorkspacesFromOtherDevices ||
+    scope.hideAutomationGeneratedWorkspaces ||
+    scope.hideCliCreatedWorkspaces
+  )
 }
 
 /** Repo ids that still exist; stale persisted ids must not count as an active filter. */
@@ -19,11 +38,7 @@ export function resolveActivityScopeRepoIds(
   return filterRepoIds.filter((repoId) => repoMap.has(repoId))
 }
 
-/**
- * Apply the scope to a thread list. Returns the input array by identity when
- * the scope is inactive or hides nothing, so downstream memos (visible threads,
- * grouping) see an unchanged dep instead of re-running on every rebuild.
- */
+/** Preserve the input array identity when scope hides nothing so downstream memos can reuse results. */
 export function filterThreadsByActivityScope(args: {
   threads: AgentPaneThread[]
   scope: ActivityScopeFilter
@@ -36,7 +51,7 @@ export function filterThreadsByActivityScope(args: {
   hiddenCount: number
 } {
   const { threads, scope, exemptPaneKey } = args
-  if (!scope.visibleHostIds && scope.filterRepoIds.length === 0) {
+  if (!isActivityScopeActive(scope)) {
     return { threads, matchingThreads: threads, hiddenCount: 0 }
   }
   const matchingThreads: AgentPaneThread[] = []
@@ -75,6 +90,19 @@ export function threadMatchesActivityScope(
     if (!thread.repo || !scope.filterRepoIds.includes(thread.repo.id)) {
       return false
     }
+  }
+  // Synthetic floating/standalone worktrees carry no provenance, so these never hide them.
+  if (scope.hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(thread.worktree)) {
+    return false
+  }
+  if (scope.hideCliCreatedWorkspaces && isCliCreatedWorkspace(thread.worktree)) {
+    return false
+  }
+  if (
+    scope.hideWorkspacesFromOtherDevices &&
+    isWorkspaceOwnedBySomeoneElse(thread.worktree, scope.pairedDeviceIdsByEnvironment)
+  ) {
+    return false
   }
   return true
 }

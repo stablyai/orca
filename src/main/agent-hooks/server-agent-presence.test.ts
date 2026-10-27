@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
-import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import { buildBody, LEAF_1, PANE, postHookEvent } from './server.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
@@ -13,15 +14,30 @@ const probe = vi.hoisted(() =>
 )
 vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
 const servers: AgentHookServer[] = []
+const temporaryPaths: string[] = []
+
+function createUserDataPath(prefix: string): string {
+  const path = mkdtempSync(join(tmpdir(), prefix))
+  temporaryPaths.push(path)
+  return path
+}
 afterEach(() => {
   for (const server of servers.splice(0)) {
     server.stop()
   }
+  for (const path of temporaryPaths.splice(0)) {
+    rmSync(path, { recursive: true, force: true })
+  }
+  vi.restoreAllMocks()
   probe.mockReset()
   probe.mockResolvedValue('unverifiable')
 })
 
 class PresenceTestServer extends AgentHookServer {
+  persistedWriterState(): string {
+    return this.serializeStatusFile()
+  }
+
   applyTranscriptUpdate(): void {
     const row = this.state.lastStatusByPaneKey.get(PANE)
     if (row) {
@@ -77,6 +93,29 @@ function visible(server: AgentHookServer): boolean {
 }
 
 describe('host-owned hook presence', () => {
+  it('keeps writer observations exact and topology local to the accepted row', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    const row = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)
+    expect(row).toBeDefined()
+    if (!row) {
+      throw new Error('Missing hook row')
+    }
+    const observed = server.readCliWriterObservation(row)
+    probe.mockResolvedValue('exited')
+    expect(await observed?.presence()).toBe('exited')
+    expect(observed?.current()).toBe(true)
+    expect(
+      server.readCliWriterObservation({
+        ...row,
+        providerSession: { key: 'session_id', id: 'other' }
+      })
+    ).toBeNull()
+    await hook(server, 'UserPromptSubmit')
+    expect(observed?.current()).toBe(false)
+    expect(server.persistedWriterState()).not.toContain('pane-owned')
+  })
+
   it('clears the status on SessionEnd while the terminal survives, without a renderer', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart')
@@ -152,7 +191,7 @@ describe('host-owned hook presence', () => {
       },
       'ssh-1'
     )
-    // The relay has no identity resolution, so it can hand the nested Claude ownership.
+    // Relays cannot resolve process identity and may initially attribute the pane to nested Claude.
     server.ingestRemote(
       {
         ...base,
@@ -229,7 +268,7 @@ describe('host-owned hook presence', () => {
   })
 
   it('checks each pane once after replaying its spooled hooks', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-presence-spool-'))
+    const userDataPath = createUserDataPath('orca-presence-spool-')
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
@@ -263,6 +302,10 @@ describe('host-owned hook presence', () => {
     servers.push(restarted)
     await restarted.start({ env: 'production', userDataPath })
     expect(probe).toHaveBeenCalledOnce()
+    expect(restarted.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
+      toolName: 'Bash',
+      toolInput: 'ls'
+    })
   })
 
   it('keeps unanswered reads and clears only a positive process exit', async () => {
@@ -338,9 +381,372 @@ describe('host-owned hook presence', () => {
     expect(probe).not.toHaveBeenCalled()
     expect(visible(server)).toBe(true)
     await hook(server, 'SessionStart', 'relaunch', undefined, 4002)
-    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
-    await vi.waitFor(() => expect(visible(server)).toBe(false))
+    expect(probe).toHaveBeenCalledOnce()
+    expect(
+      server.getStatusSnapshot().find((row) => row.paneKey === PANE)?.providerSession?.id
+    ).toBe('relaunch')
     await hook(server, 'UserPromptSubmit', 'relaunch', undefined, 4002)
     expect(state(server)).toBe('working')
+  })
+})
+
+describe('retained agent exit', () => {
+  it('keeps a SessionEnd exit readable after the row is reconciled', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresence(PANE)).toBeNull()
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('keeps a probed exit readable on every later read', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    probe.mockResolvedValue('exited')
+    expect(await server.checkAgentPresence(PANE)).toBe('exited')
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('ignores an exit from before the reader attached', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    expect(await server.checkAgentPresenceSince(PANE, Date.now() + 60_000)).toBeNull()
+  })
+
+  it('keeps the exit through a late terminal status with no process identity', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'UserPromptSubmit')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: null,
+      payload: { state: 'done', prompt: 'session-a task', agentType: 'claude' }
+    })
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('keeps the exit through a late terminal status from another provider', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: null,
+      payload: { state: 'done', prompt: '', agentType: 'codex' }
+    })
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('carries the exit with the pane when its authority moves', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    const moved = makePaneKey('tab-moved', LEAF_1)
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    server.transferPaneAuthority(PANE, moved)
+    expect(await server.checkAgentPresenceSince(moved, attachedAt)).toBe('exited')
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('keeps the exit readable through both keys when the pane moved before it ended', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    const moved = makePaneKey('tab-moved', LEAF_1)
+    await hook(server, 'SessionStart')
+    server.transferPaneAuthority(PANE, moved)
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(moved, attachedAt)).toBe('exited')
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('drops the exit once an agent without a process identity reports from the pane', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    await hook(server, 'UserPromptSubmit', 'replacement', undefined, null)
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBeNull()
+  })
+
+  it('drops the exit once a hookless agent run starts its process-lifetime turn', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: null,
+      origin: 'process',
+      yieldsToHookSince: Date.now(),
+      payload: { state: 'working', prompt: '', agentType: 'opencode' }
+    })
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBeNull()
+  })
+
+  it('does not retain an old owner death proved by a live replacement hook', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    probe.mockResolvedValue('exited')
+    await hook(server, 'SessionStart', 'replacement', undefined, 4002)
+    await vi.waitFor(() => expect(probe).toHaveBeenCalled())
+    probe.mockResolvedValue('live')
+    await vi.waitFor(async () =>
+      expect(await server.checkAgentPresenceSince(PANE, attachedAt)).not.toBe('exited')
+    )
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).not.toBe('exited')
+  })
+
+  it('does not answer exited to a read overlapping the replacement-triggered probe', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    let finish: (verdict: 'exited') => void = () => {}
+    probe.mockImplementationOnce(
+      () =>
+        new Promise<'live' | 'unverifiable' | 'exited'>((resolve) => {
+          finish = resolve
+        })
+    )
+    const replacement = hook(server, 'SessionStart', 'replacement', undefined, 4002)
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
+    const overlapping = server.checkAgentPresenceSince(PANE, attachedAt)
+    finish('exited')
+    await replacement
+    expect(await overlapping).not.toBe('exited')
+  })
+
+  it('keeps the exit through a delayed hook from the ended session without a process identity', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    await hook(server, 'Stop', 'session-a', undefined, null)
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('drops the exit when a provider-specific new turn starts in the pane', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    const response = await postHookEvent(
+      server,
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'next' }),
+      '/hook/pi'
+    )
+    expect(response.status).toBe(204)
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBeNull()
+  })
+
+  it('drops the exit when another provider reports from the pane without a new-turn event', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    const response = await postHookEvent(
+      server,
+      buildBody({ hook_event_name: 'agent_start', prompt: 'next' }),
+      '/hook/pi'
+    )
+    expect(response.status).toBe(204)
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBeNull()
+  })
+
+  it('keeps a persisted exit through a spooled start written before it', async () => {
+    const userDataPath = createUserDataPath('orca-presence-exit-spool-')
+    const first = new AgentHookServer()
+    servers.push(first)
+    await first.start({ env: 'production', userDataPath })
+    const attachedAt = Date.now() - 1
+    // Spool timestamps have whole-second precision.
+    const spooledAt = Date.now() - 5_000
+    await hook(first, 'SessionStart')
+    await hook(first, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    first.flushStatusPersistSync()
+    first.stop()
+    const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
+    mkdirSync(spoolDir, { recursive: true })
+    writeFileSync(
+      join(spoolDir, 'pane-spooled.jsonl'),
+      `\n${JSON.stringify({
+        paneKey: PANE,
+        source: 'claude',
+        receivedAt: spooledAt,
+        agentProcess: JSON.stringify({
+          pid: 4009,
+          platform: process.platform,
+          startTime: 'birth-4009'
+        }),
+        payload: { hook_event_name: 'SessionStart', session_id: 'session-old', source: 'startup' }
+      })}\n`
+    )
+    const restarted = new AgentHookServer()
+    servers.push(restarted)
+    await restarted.start({ env: 'production', userDataPath })
+    expect(await restarted.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('lets a successor start spooled in the exit second clear the exit', async () => {
+    const userDataPath = createUserDataPath('orca-presence-exit-same-second-')
+    const first = new AgentHookServer()
+    servers.push(first)
+    await first.start({ env: 'production', userDataPath })
+    const exitedAt = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(exitedAt)
+    const attachedAt = exitedAt - 1
+    await hook(first, 'SessionStart')
+    await hook(first, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await first.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    first.flushStatusPersistSync()
+    first.stop()
+    const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
+    mkdirSync(spoolDir, { recursive: true })
+    writeFileSync(
+      join(spoolDir, 'pane-spooled.jsonl'),
+      `\n${JSON.stringify({
+        paneKey: PANE,
+        source: 'pi',
+        receivedAt: Math.floor(exitedAt / 1000) * 1000,
+        payload: { hook_event_name: 'before_agent_start', prompt: 'next' }
+      })}\n`
+    )
+    const restarted = new AgentHookServer()
+    servers.push(restarted)
+    await restarted.start({ env: 'production', userDataPath })
+    expect(await restarted.checkAgentPresenceSince(PANE, attachedAt)).not.toBe('exited')
+  })
+
+  it('lets a replacement process clear the exit after a late unidentified hook', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    await hook(server, 'Stop', 'session-a', undefined, null)
+    probe.mockResolvedValue('live')
+    await hook(server, 'PreToolUse', 'replacement', undefined, 4002)
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).not.toBe('exited')
+  })
+
+  it('keeps the exit readable after the hook store restarts', async () => {
+    const userDataPath = createUserDataPath('orca-presence-exit-')
+    const first = new AgentHookServer()
+    servers.push(first)
+    await first.start({ env: 'production', userDataPath })
+    const attachedAt = Date.now() - 1
+    await hook(first, 'SessionStart')
+    await hook(first, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    first.flushStatusPersistSync()
+    first.stop()
+    const restarted = new AgentHookServer()
+    servers.push(restarted)
+    await restarted.start({ env: 'production', userDataPath })
+    expect(await restarted.checkAgentPresenceSince(PANE, attachedAt)).toBe('exited')
+  })
+
+  it('forgets an earlier exit when a worker attaches to the pane', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    server.forgetAgentExit(PANE)
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBeNull()
+  })
+
+  it('drops the exit once a new agent reports from the pane', async () => {
+    const server = await createServer()
+    const attachedAt = Date.now() - 1
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    await hook(server, 'SessionStart', 'relaunch', undefined, 4002)
+    probe.mockResolvedValue('live')
+    expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('live')
+  })
+})
+
+describe('retained agent exit lifetime', () => {
+  async function serverWithExit(): Promise<AgentHookServer> {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    return server
+  }
+
+  it('keeps the exit through a plain pane cleanup but drops it when the PTY retires', async () => {
+    const server = await serverWithExit()
+    server.clearPaneState(PANE)
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    server.clearPaneState(PANE, { forgetAgentExit: true })
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBeNull()
+  })
+
+  it('drops the exit when the pane tab closes', async () => {
+    const server = await serverWithExit()
+    server.dropStatusEntriesByTabPrefix('tab-1')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBeNull()
+  })
+
+  it('keeps a moved pane exit when its former tab closes', async () => {
+    const server = await serverWithExit()
+    const moved = makePaneKey('tab-moved', LEAF_1)
+    server.transferPaneAuthority(PANE, moved)
+    server.dropStatusEntriesByTabPrefix('tab-1')
+    expect(await server.checkAgentPresenceSince(moved, 0)).toBe('exited')
+    server.dropStatusEntriesByTabPrefix('tab-moved')
+    expect(await server.checkAgentPresenceSince(moved, 0)).toBeNull()
+  })
+
+  // Launch authority can retire while the PTY and retained exit remain valid.
+  it('keeps the exit when only the pane launch authority retires', async () => {
+    const server = await serverWithExit()
+    server.retirePaneAuthority(PANE)
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+  })
+
+  it('prunes an exit older than the hydrate window when saving', async () => {
+    const server = new AgentHookServer()
+    servers.push(server)
+    const userDataPath = createUserDataPath('orca-presence-exit-prune-')
+    await server.start({ env: 'production', userDataPath })
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    const saveEightDaysLater = (): void => {
+      const now = Date.now()
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 8 * 24 * 60 * 60 * 1000)
+      try {
+        server.flushStatusPersistSync()
+      } finally {
+        clock.mockRestore()
+      }
+    }
+    // A retained resume row keeps its session exit.
+    expect(server.getStatusSnapshot().some((row) => row.paneKey === PANE)).toBe(true)
+    saveEightDaysLater()
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+    server.clearPaneState(PANE)
+    saveEightDaysLater()
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBeNull()
   })
 })

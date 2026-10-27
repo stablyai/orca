@@ -17,6 +17,7 @@ let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
@@ -42,13 +43,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: mocks.operationId,
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: mocks.operationId
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
@@ -59,8 +62,8 @@ import type {
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
-} from '../../../../shared/native-chat-session-option-defaults'
-import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 /** Replay every host mutation in order, exactly as the runtime does. */
@@ -111,19 +114,10 @@ const FAST_OPTIONS = {
   current: { ...OPTIONS.current, fastMode: false, confirmed: ['fastMode'] }
 }
 
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((accept) => {
-    resolve = accept
-  })
-  return { promise, resolve }
-}
-
 describe('useStructuredAgentSession working state', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fence = 3
-    submissions = []
     mocks.call.mockResolvedValue(null)
   })
 
@@ -150,7 +144,6 @@ describe('useStructuredAgentSession working state', () => {
     )
 
     expect(result.current.isWorking).toBe(true)
-    // Only the provider can mint a cancellable turn, so Stop stays unavailable here.
     expect(result.current.turnId).toBeNull()
   })
 
@@ -258,8 +251,7 @@ describe('useStructuredAgentSession options', () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(false)
     })
 
-    // Said once, without the transport's text, and without claiming an outcome the failure
-    // cannot prove; nothing stays behind under the composer.
+    // Show one uncertainty notice without raw transport text or an unproved outcome.
     expect(mocks.toastError).toHaveBeenCalledWith(
       "Orca couldn't confirm what happened. Check the chat."
     )
@@ -273,7 +265,6 @@ describe('useStructuredAgentSession options', () => {
     let attempts = 0
     mocks.call.mockImplementation((_target, method) => {
       if (method !== 'agentSession.setOption') {
-        // The hook also holds the session while it is mounted; only option writes are attempts.
         return Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
       }
       attempts += 1
@@ -323,10 +314,13 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('sends the pick again as a new operation after a pending admission refusal', async () => {
+    const refreshedOptions = Promise.withResolvers<typeof OPTIONS>()
     let attempts = 0
     mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options' && fence === 4) {
+        return refreshedOptions.promise
+      }
       if (method !== 'agentSession.setOption') {
-        // The hook also holds the session while it is mounted; only option writes are attempts.
         return Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
       }
       attempts += 1
@@ -366,7 +360,8 @@ describe('useStructuredAgentSession options', () => {
     })
     fence = 4
     rerender()
-    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+    expect(result.current.optionSnapshot.every((entry) => !entry.settable)).toBe(true)
+    await act(async () => refreshedOptions.resolve(OPTIONS))
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(true)
     })
@@ -388,13 +383,15 @@ describe('useStructuredAgentSession options', () => {
     ).toEqual([3, 4])
   })
 
-  it('ignores an option failure from a superseded fence', async () => {
+  it('reports an option failure across startup while its pane remains current', async () => {
     let reject!: (error: Error) => void
     const pending = new Promise<never>((_resolve, rejectPromise) => {
       reject = rejectPromise
     })
     mocks.call.mockImplementation((_target, method) =>
-      method === 'agentSession.options' ? Promise.resolve(OPTIONS) : pending
+      method === 'agentSession.options' || method === 'agentSession.hold'
+        ? Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
+        : pending
     )
     const { result, rerender } = renderHook(() =>
       useStructuredAgentSession({
@@ -418,7 +415,7 @@ describe('useStructuredAgentSession options', () => {
     })
 
     expect(result.current.error).toBeNull()
-    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledOnce()
   })
 
   it('includes one background task id in the cancel fingerprint and payload', async () => {
@@ -666,9 +663,12 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('discards an option read that began before a Fast mutation', async () => {
-    const staleRead = deferred<typeof FAST_OPTIONS>()
+    const staleRead = Promise.withResolvers<typeof FAST_OPTIONS>()
     let optionReads = 0
     mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.modelCatalog') {
+        return Promise.resolve({ origin: 'unknown' })
+      }
       if (method === 'agentSession.options') {
         optionReads += 1
         if (optionReads === 1) {
@@ -782,8 +782,7 @@ describe('turn timing', () => {
       )
       expect(result.current.isWorking).toBe(true)
       expect(result.current.workingStartedAt).toBe(50_000 - 300)
-      // t2 is still running, so the host has no duration for it: an explicit null
-      // that outranks whatever this client clocked locally.
+      // A running turn’s explicit null duration outranks client-observed timing.
       expect([...result.current.settledTurns]).toEqual([
         ['u1', { startedAt: 9_000_000, workedSeconds: 4 }],
         ['u2', null]
@@ -850,9 +849,7 @@ describe('structured option surface snapshot identity', () => {
     mocks.call.mockResolvedValue(null)
   })
 
-  /** `SessionOptionsSurface` is read through `useSyncExternalStore` by the sibling
-   *  PTY surface, whose contract is a cached snapshot: an uncached `getSnapshot`
-   *  returns a new array per call and never quiesces. */
+  /** The sibling PTY surface uses useSyncExternalStore; unstable snapshots would never quiesce. */
   it('returns the same snapshot instance for repeated reads at one state', async () => {
     mocks.call.mockResolvedValue(FAST_OPTIONS)
     const { result } = renderHook(() =>

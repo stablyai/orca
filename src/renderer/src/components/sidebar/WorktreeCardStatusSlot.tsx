@@ -10,6 +10,11 @@ import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import type { WorkspaceReviewChecksSummary } from '../../../../shared/workspace-review-checks'
+import {
+  WorkspaceReviewChecksIndicator,
+  workspaceReviewChecksLabel
+} from './WorkspaceReviewChecksIndicator'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -20,30 +25,29 @@ type WorktreeCardStatusSlotProps = {
   onToggleUnread: React.MouseEventHandler<HTMLButtonElement>
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
   prDisplay?: WorktreeCardPrDisplay | null
+  reviewChecks?: WorkspaceReviewChecksSummary
   newCardStyle?: boolean
   hasBranchIdentity?: boolean
   branchIdentityLabel?: string
+  /** The review status is the last known one (its WSL host is off). */
+  reviewStale?: boolean
   className?: string
 }
 
 const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
-// Why: a missing review display can also mean provider state is unavailable,
-// so the passive label names the identity cue without claiming no review exists.
+// Missing provider state cannot prove no review exists; label only the branch identity.
 function getDefaultBranchIdentityLabel(): string {
   return translate('auto.components.sidebar.WorktreeCardStatusSlot.branchIdentity', 'Branch')
 }
 function getSleepingStatusLabel(): string {
   return translate('auto.components.sidebar.WorktreeCardStatusSlot.sleeping', 'Sleeping')
 }
-// Why: branch-style SVGs are optically left-heavy; this keeps them aligned with
-// the centered activity dots in the shared status column.
+// Offset optically left-heavy branch glyphs to align with centered activity dots.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
 const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
-// Why no faint tint here: the sleeping row is dimmed as a whole, so the glyph
-// keeps full muted-foreground and dims with everything around it.
+// The whole sleeping row is dimmed; extra glyph tint would double-dim it.
 const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
-// Why: a left-edge badge overlays unread on the status glyph without widening
-// the lane or indenting the title; ring-sidebar cuts the dot out from busy icons.
+// Overlay unread without widening the status lane; ring-sidebar separates the dot from busy glyphs.
 const newCardUnreadAlertClassName =
   'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
 
@@ -102,23 +106,24 @@ export function WorktreeCardStatusSlot({
   onToggleUnread,
   onPointerDown,
   prDisplay = null,
+  reviewChecks,
   newCardStyle = false,
   hasBranchIdentity = false,
   branchIdentityLabel,
+  reviewStale = false,
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
+  const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const status = useWorktreeActivityStatus(worktreeId)
   const isSleeping = useIsSleepingWorktree(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
-  // Why: sleep must stay distinct from awake completion; a sleeping workspace
-  // never collapses into branch/PR, even when retained done rows keep its
-  // status at 'done'. Attention states keep their own glyphs by construction.
+  // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
   const canShowSleepingStatus =
     newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&
-    prDisplay !== null &&
+    (prDisplay !== null || Boolean(collectionChecks)) &&
     !canShowSleepingStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowBranchStatus =
@@ -126,22 +131,32 @@ export function WorktreeCardStatusSlot({
     showStatus &&
     hasBranchIdentity &&
     prDisplay === null &&
+    !collectionChecks &&
     !canShowSleepingStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const passiveStatusLabel = canShowSleepingStatus
     ? getSleepingStatusLabel()
-    : canShowReviewStatus && prDisplay
-      ? getReviewStatusLabel(prDisplay)
-      : canShowBranchStatus
-        ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
-        : statusLabel
+    : canShowReviewStatus && collectionChecks
+      ? workspaceReviewChecksLabel(collectionChecks)
+      : canShowReviewStatus && prDisplay
+        ? getReviewStatusLabel(prDisplay)
+        : canShowBranchStatus
+          ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
+          : statusLabel
+  const reviewLabel =
+    reviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
+      ? `${passiveStatusLabel} · ${translate('workspace.links.lastKnownStatus', 'Last known status')}`
+      : passiveStatusLabel
   const passiveStatusAnnouncement =
-    newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
-  // Why: working and permission already own the new-card status lane, but
-  // unread state should still surface to assistive technology and reappear afterward.
+    newCardStyle && isUnread ? `${reviewLabel} · Unread` : reviewLabel
+  // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
-  const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
+  const reviewStatusIconClassName = cn(
+    compactReviewAndBranchStatusIconClassName,
+    // Same last-known treatment as the hover card's reference rows.
+    reviewStale && 'shimmer shimmer-duration-2400'
+  )
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
   const passiveStatus = canShowSleepingStatus ? (
@@ -149,9 +164,16 @@ export function WorktreeCardStatusSlot({
       {sleepingStatusIcon}
       <span className="sr-only">{passiveStatusAnnouncement}</span>
     </span>
-  ) : canShowReviewStatus && prDisplay ? (
+  ) : canShowReviewStatus && (collectionChecks || prDisplay) ? (
     <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
-      <ReviewIcon review={prDisplay} className={reviewStatusIconClassName} variant="generic" />
+      {collectionChecks ? (
+        <WorkspaceReviewChecksIndicator
+          summary={collectionChecks}
+          className={reviewStatusIconClassName}
+        />
+      ) : prDisplay ? (
+        <ReviewIcon review={prDisplay} className={reviewStatusIconClassName} variant="generic" />
+      ) : null}
       <span className="sr-only">{passiveStatusAnnouncement}</span>
     </span>
   ) : canShowBranchStatus ? (
@@ -188,7 +210,9 @@ export function WorktreeCardStatusSlot({
     return overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert)
   }
 
-  const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'
+  const actionLabel = isUnread
+    ? translate('auto.components.sidebar.WorktreeCardStatusSlot.markAsRead', 'Mark as read')
+    : translate('auto.components.sidebar.WorktreeCardStatusSlot.markAsUnread', 'Mark as unread')
   const tooltip =
     showStatus && !isUnread ? `${passiveStatusLabel} · ${unreadTooltip}` : unreadTooltip
 

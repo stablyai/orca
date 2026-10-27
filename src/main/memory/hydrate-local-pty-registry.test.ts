@@ -1,15 +1,3 @@
-/**
- * Tests for boot-time pty-registry hydration.
- *
- * Why these scenarios:
- *   - Daemon offline → graceful degradation. The renderer-side merge
- *     fallback should still work; we just lose the coverage win for that
- *     boot. Hydrator must catch and log, not throw.
- *   - Pid-write ordering. `pty:spawn` is the authoritative writer; if it
- *     wrote pid=12345 before the boot pass ran, the boot pass must NOT
- *     clobber that with `pid: null` from a pre-publish daemon listSessions.
- */
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
@@ -25,13 +13,21 @@ import type {
 } from './pty-registry'
 
 const LARGE_SESSION_COUNT = 150_000
-// Why: the hydrator pulls the daemon provider through this module-level
-// getter. Stubbing it lets us drive the offline / throwing / live paths
-// without spinning up real sockets.
 const getDaemonProviderMock = vi.fn()
-vi.mock('../daemon/daemon-init', () => ({
+vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
+
+// Adapter routing uses instanceof; the mock class must survive resetModules.
+const { FakeDaemonPtyRouter } = vi.hoisted(() => ({
+  FakeDaemonPtyRouter: class {
+    constructor(private readonly adapters: unknown[]) {}
+    getAllAdapters(): unknown[] {
+      return this.adapters
+    }
+  }
+}))
+vi.mock('../daemon/daemon-pty-router', () => ({ DaemonPtyRouter: FakeDaemonPtyRouter }))
 
 const getLocalProjectWorktreeGitOptionsMock = vi.fn()
 vi.mock('../project-runtime-git-options', () => ({
@@ -39,10 +35,6 @@ vi.mock('../project-runtime-git-options', () => ({
     getLocalProjectWorktreeGitOptionsMock(store, repo)
 }))
 
-// Why: the hydrator builds its worktreeId → connectionId map through
-// listLocalRepoWorktreesStrict(repo). The git I/O is out of scope for this
-// unit; the mock also lets count tests prove repos without live sessions
-// launch no Git work.
 const listLocalRepoWorktreesStrictMock = vi.fn()
 vi.mock('../repo-worktrees', () => ({
   listLocalRepoWorktreesStrict: (
@@ -51,7 +43,6 @@ vi.mock('../repo-worktrees', () => ({
   ) => listLocalRepoWorktreesStrictMock(repo, options)
 }))
 
-// The runtime option helper accepts Store; mocks keep this fixture scoped to hydration reads.
 function makeStore(
   repos: {
     id: string
@@ -60,7 +51,8 @@ function makeStore(
     kind?: Repo['kind']
     path?: string
   }[] = [],
-  worktreeMeta: Record<string, WorktreeMeta> = {}
+  worktreeMeta: Record<string, WorktreeMeta> = {},
+  folderWorkspaces: FolderWorkspace[] = []
 ): Store {
   const built: Repo[] = repos.map((r) => ({
     id: r.id,
@@ -72,15 +64,18 @@ function makeStore(
     executionHostId: r.executionHostId ?? null,
     kind: r.kind
   }))
-  return {
+  const store: Partial<Store> = {
     getRepos: () => built,
-    getFolderWorkspaces: (): FolderWorkspace[] => [],
+    getFolderWorkspaces: () => folderWorkspaces,
+    getProjectGroups: () => [],
     getAllWorktreeMeta: () => worktreeMeta,
     getAllWorktreeMetaForHost: (hostId) =>
       Object.fromEntries(
         Object.entries(worktreeMeta).filter(([, meta]) => !meta.hostId || meta.hostId === hostId)
       )
-  } as Store
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hydration reads only the store members stubbed above.
+  return store as Store
 }
 
 function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSessions'> {
@@ -89,10 +84,8 @@ function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSess
   }
 }
 
-function makeProviderGroup(adapters: Pick<DaemonPtyAdapter, 'listSessions'>[]): {
-  getAllAdapters: () => Pick<DaemonPtyAdapter, 'listSessions'>[]
-} {
-  return { getAllAdapters: () => adapters }
+function makeProviderGroup(adapters: Pick<DaemonPtyAdapter, 'listSessions'>[]): unknown {
+  return new FakeDaemonPtyRouter(adapters)
 }
 
 function makeLocalSessions(repoId: string, worktreePath: string, count: number): SessionInfo[] {
@@ -119,12 +112,7 @@ function createDeferred<T>(): {
   return { promise, resolve }
 }
 
-// Why: the module under test memoizes `hasHydrated` at module scope so it
-// only runs the git/RPC pass once per process. The pty-registry module
-// also stashes state in a module-level Map, so we have to load BOTH
-// fresh together — otherwise the hydrator writes into one Map and the
-// test reads from another. Dynamic import after vi.resetModules() returns
-// a coherent pair.
+// Reload hydration and its module-scoped registry together so both use the same Map.
 async function loadFresh(): Promise<{
   hydrate: typeof HydrateFn
   deadlineMs: number
@@ -162,9 +150,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(listRegisteredPtys()).toHaveLength(0)
     expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
 
-    // Why: the design says the hasHydrated guard must stay false until a
-    // provider is obtained, so a later macOS dock re-activation can retry.
-    // Provider becomes available; second call should now perform the pass.
+    // Missing providers must leave hydration retryable for later app activation.
     const provider = makeProvider([])
     getDaemonProviderMock.mockReturnValue(provider)
     listLocalRepoWorktreesStrictMock.mockResolvedValue([])
@@ -185,9 +171,6 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
       { path: '/local/Triton', isMainWorktree: true }
     ])
 
-    // Why: the renderer-side step-2 merge fallback covers this case. The
-    // hydrator must not surface the failure to the caller — it logs and
-    // moves on.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     await expect(hydrate(makeStore([{ id: 'repo-a' }]))).resolves.toBeUndefined()
     warnSpy.mockRestore()
@@ -427,9 +410,6 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     const { hydrate, listRegisteredPtys, registerPty } = await loadFresh()
 
     const ptyId = 'repo-a::/local/Triton@@deadbeef'
-    // Why: simulate the spawn-time path having already written the row
-    // with the real pid before the boot pass runs. The boot pass must
-    // skip rather than overwriting with a stale pid.
     registerPty({
       ptyId,
       worktreeId: 'repo-a::/local/Triton',
@@ -439,10 +419,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     })
 
     const provider = makeProvider([
-      // pid is null — typical of a session whose daemon-side pid hasn't
-      // been published yet. If the hydrator unconditionally re-registered,
-      // the live row would degrade to pid: null and the collector would
-      // stop sampling it on the next tick.
+      // Stale daemon PID publication must not replace a newer spawn-time PID with null.
       { sessionId: ptyId, pid: null, cwd: '/local/Triton' } as unknown as SessionInfo
     ])
     getDaemonProviderMock.mockReturnValue(provider)
@@ -535,9 +512,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
     await hydrate(makeStore([{ id: 'repo-ssh', connectionId: 'ssh-conn-1' }]))
 
-    // Why: SSH sessions execute on a remote host and their pids are not
-    // visible to the local process sampler. Mirrors the spawn-time gate
-    // around `registerPty` in `pty.ts`'s `pty:spawn` handler.
+    // Remote PIDs are outside the local sampler's process namespace.
     expect(listRegisteredPtys()).toHaveLength(0)
     expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
   })
@@ -875,9 +850,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
       pid: 4002,
       cwd: '/local/repo-b'
     } as unknown as SessionInfo
-    // Why: a briefly unreachable adapter can omit a session from the first
-    // listing; once it reappears on the re-read its repo must still be
-    // scanned and the session registered instead of silently dropped.
+    // Reappearing adapter sessions still need repo enumeration and registration.
     const listSessions = vi
       .fn()
       .mockResolvedValueOnce([sessionA])

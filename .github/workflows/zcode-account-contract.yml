@@ -1,0 +1,13 @@
+name: ZCode read-only account contract
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: zcode-account-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  account-contract:
+    uses: ./.github/workflows/zcode-credential-contract.yml
+    with:
+      contract: account

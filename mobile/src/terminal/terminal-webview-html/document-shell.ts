@@ -1,6 +1,6 @@
 import { TERMINAL_DOCUMENT_MARKUP } from './document-markup'
 import { TERMINAL_DOCUMENT_STYLE } from './document-style'
-import { XTERM_ENGINE_CSS } from '../terminal-webview-engine-css.generated'
+import { TERMINAL_NERD_FONT_CSS, XTERM_ENGINE_CSS } from '../terminal-webview-engine-css.generated'
 import { XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'
 
 export const TERMINAL_HTML_DOCUMENT_SHELL = `<!DOCTYPE html>
@@ -17,6 +17,7 @@ window.onerror = function(msg) {
 };
 </script>
 <style>${XTERM_ENGINE_CSS}</style>
+<style>${TERMINAL_NERD_FONT_CSS}</style>
 <style>
 ${TERMINAL_DOCUMENT_STYLE}
 </style>

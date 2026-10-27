@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The card decides whether to offer "Open automation", which means deciding
- * which host to ask. It sits outside `components/automations/`, so a sweep of
- * that folder misses it — and it inferred the automation's host from the
- * workspace's, which is a different fact.
- */
+/** Automation ownership comes from provenance and may differ from the resulting workspace’s host. */
 
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -96,8 +91,7 @@ describe('WorktreeCardAutomationDetailSection host resolution', () => {
   it('reports a miss as uncheckable when no host was ever recorded', async () => {
     const container = await render(provenance())
 
-    // The read went to the desktop for want of anywhere else, so its silence is
-    // not evidence the automation was removed.
+    // An unqualified desktop miss cannot establish that a host-owned automation was removed.
     expect(container.textContent).toContain('Automation availability could not be checked.')
     expect(container.textContent).not.toContain('Automation no longer available.')
   })
@@ -109,8 +103,7 @@ describe('WorktreeCardAutomationDetailSection host resolution', () => {
   })
 
   it('offers both affordances when a record with no recorded host is found anyway', async () => {
-    // The missing host degrades the *miss*, never the find: an automation the
-    // desktop positively returned is evidence, whatever the read was aimed by.
+    // A positive desktop result remains evidence even when recorded host provenance is missing.
     mocks.listAutomationsForTarget.mockResolvedValue([{ id: 'a-1' }])
     mocks.listAutomationRunsForTarget.mockResolvedValue([{ id: 'run-1' }])
 

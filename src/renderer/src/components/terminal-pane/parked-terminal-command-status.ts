@@ -1,9 +1,4 @@
-/**
- * Parked-pane command-lifecycle status policy.
- * Why: parking unmounts TerminalPane, so OSC 133;D and Command Code scrape signals went dark.
- * This ports the store-level subset of pty-connection's handlers; the pane-coupled parts
- * (foreground process-confirm ladder, key-intent interrupt inference) stay with the mounted pane.
- */
+/** Keep store-level command status while parked; foreground confirmation and input-intent inference remain with mounted panes. */
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -12,6 +7,7 @@ import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-f
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
 import {
   cancelCommandCodeDoneSettle,
@@ -19,7 +15,7 @@ import {
   setCommandCodeDoneSettleExecutor
 } from './command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
-import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 
 export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
@@ -28,10 +24,7 @@ export type ParkedTerminalCommandStatusPolicy = {
   dispose: () => void
 }
 
-// Why only 'working': an in-flight turn is the one state a recreated detector can still
-// resolve, and it proves the Command Code TUI is live — a stale 'done' row would arm the
-// scrape against whatever process replaced it. Shared by parked watchers and the reveal
-// remount, which both recreate the detector long past the banner.
+// Only working rows prove a live Command Code turn; stale done rows could arm a recreated detector against its replacement.
 export function readInFlightCommandCodeTurn(paneKey: string): { prompt: string } | null {
   const entry = useAppStore.getState().agentStatusByPaneKey?.[paneKey]
   if (entry?.agentType !== 'command-code' || entry.state !== 'working') {
@@ -82,13 +75,11 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     })
   }
 
-  // Port of pty-connection's dropCommandFinishedStatusIfSameTurn, minus the interrupt-inference
-  // option: parked panes receive no key events, so inference never has evidence here.
+  // Mirror mounted same-turn status drops without interrupt inference: parked panes receive no key events.
   const dropCommandFinishedStatusIfSameTurn = (entry: AgentStatusEntry | undefined): void => {
     const state = useAppStore.getState()
     if (!entry) {
-      // Why: an Orca-started agent can exit before its first hook status; clear the launch
-      // registry on command exit like the mounted path does.
+      // An agent can exit before its first hook; clear launch identity on command exit like mounted panes.
       state.clearAgentLaunchConfig(paneKey)
       return
     }
@@ -106,7 +97,9 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     if (!unchanged) {
       return
     }
-    state.dropAgentStatus(paneKey)
+    if (!isRetainedProgramResult(current)) {
+      state.dropAgentStatus(paneKey)
+    }
   }
 
   // Complete the row only while it is still this turn's command-code/working entry.
@@ -143,24 +136,20 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     )
   }
 
-  // Why the shared window: reveal disposes this watcher mid-settle and the remounted pane
-  // cannot re-observe the already-passed idle composer, so the deadline outlives whichever
-  // side owns the row — cancelling would strand 'working', flushing would complete the turn
-  // unrecoverably early (the same-prompt-done guard then drops a genuine working repaint).
+  // Reveal inherits the turn’s settle deadline: cancelling strands working state; flushing makes genuine working repaints irrecoverably late.
   const releaseCommandCodeDoneSettleExecutor = setCommandCodeDoneSettleExecutor(
     paneKey,
     settleCommandCodeDone
   )
 
-  // Why: a full-screen agent's nested shells leak 133;D, so make one confirming read (no retry
-  // ladder, unlike the mounted tracker) and retire the process read only on a shell or no answer.
+  // Confirm nested-shell 133;D once before retiring identity; mounted panes own the retry ladder.
   const retireForegroundAgentUnlessConfirmed = async (): Promise<void> => {
     const entry = useAppStore.getState().paneForegroundAgentByPaneKey[paneKey]
     if (!entry?.agent) {
       return
     }
     // Why: a parked pane holds no remote incarnation to fence host evidence with, so it has no answer.
-    const remote = isRemoteExecutionHostPtyId(ptyId) || parseAppSshPtyId(ptyId) !== null
+    const remote = isRemoteExecutionHostPtyId(ptyId)
     let processName: string | null = null
     if (!remote) {
       try {
@@ -183,14 +172,10 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       if (disposed) {
         return
       }
-      // Why: the finished command may have moved HEAD or the index (an agent running
-      // `git checkout` in a parked worktree); nudge git UI now instead of waiting for a poll.
+      // Commands can change HEAD/index; nudge git UI immediately rather than wait for polling.
       dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode)
       void retireForegroundAgentUnlessConfirmed()
-      // Why: drop the same-turn status row only for SSH PTYs — exact parity with the mounted
-      // path, whose foreground tracker refuses SSH ids and drops un-probed. Local PTYs need
-      // pty-connection's process-confirm ladder to tell a leaked nested-shell 133;D from a
-      // real agent exit, so their drop stays with the mounted pane.
+      // Mirror SSH’s unprobed same-turn drop; local PTYs require mounted foreground confirmation against nested-shell 133;D.
       if (parseAppSshPtyId(ptyId) === null) {
         return
       }
@@ -237,8 +222,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       )
     },
 
-    // Port of pty-connection's scheduleCommandCodeOutputDoneStatus: Command Code keeps rendering
-    // the composer while tools run, so only complete the row if no active repaint arrives.
+    // Command Code renders its composer during tool work; require no active repaint before completing.
     onCommandCodeDone: (prompt: string): void => {
       if (!canApplyCommandCodeOutputStatus()) {
         return
@@ -252,9 +236,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     },
 
     dispose: (): void => {
-      // Why release, not flush: the settle window belongs to the turn and outlives this
-      // watcher, so the remounted pane inherits the remaining deadline and a working
-      // repaint arriving before it still cancels the completion.
+      // Release without flushing so reveal inherits the remaining settle time and can still cancel with a working repaint.
       releaseCommandCodeDoneSettleExecutor()
       disposed = true
     }

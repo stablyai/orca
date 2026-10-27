@@ -17,7 +17,6 @@ const {
   glabExecFileAsyncMock,
   gitExecFileAsyncMock,
   getUpstreamStatusMock,
-  getSshGitProviderMock,
   getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
@@ -36,7 +35,6 @@ const {
   glabExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getUpstreamStatusMock: vi.fn(),
-  getSshGitProviderMock: vi.fn(),
   getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
@@ -105,20 +103,18 @@ vi.mock('../gitlab/gl-utils', () => ({
 
 vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
-
-vi.mock('./hosted-review', () => ({ getHostedReviewForBranch: getHostedReviewForBranchMock }))
+vi.mock('./hosted-review', () => ({
+  getHostedReviewForBranch: getHostedReviewForBranchMock
+}))
 
 import { createHostedReview, getHostedReviewCreationEligibility } from './hosted-review-creation'
 import { baseRefExistsOnRemote } from './hosted-review-creation-git-state'
 
 import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
 
-// Every eligibility case below is one local repo at the same path.
 const LOCAL_REPO_ARGS = { executionHostId: 'local' as const, repoPath: '/repo' }
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
+// Isolate module-level repository identities between tests.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -141,7 +137,6 @@ function resetMocks(): void {
     glabExecFileAsyncMock,
     gitExecFileAsyncMock,
     getUpstreamStatusMock,
-    getSshGitProviderMock,
     getEnterpriseGitHubRepoSlugMock
   ]) {
     mock.mockReset()
@@ -157,12 +152,9 @@ function mockGitHubProvider(): void {
   getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
 }
 
-// GHES: github.com-only slug parsing misses the custom host, so the enterprise
-// resolver claims the repo and reports the host for the gh auth probe (#8312).
+// #8312: authenticated GHES detection supplies the custom host.
 function mockGitHubEnterpriseProvider(): void {
   getProjectSlugMock.mockResolvedValue(null)
-  // Why: getRepoSlug resolves hosted identities itself now — a GHES remote
-  // comes back host-qualified instead of null + separate enterprise fallback.
   getRepoSlugMock.mockResolvedValue({
     owner: 'acme',
     repo: 'orca',
@@ -171,7 +163,6 @@ function mockGitHubEnterpriseProvider(): void {
   getBitbucketRepoSlugMock.mockResolvedValue(null)
   getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
   getGiteaRepoSlugMock.mockResolvedValue(null)
-  // The auth gate still keys off the enterprise resolver (authed-GHES signal).
   getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
     owner: 'acme',
     repo: 'orca',
@@ -515,9 +506,7 @@ describe('getHostedReviewCreationEligibility', () => {
   })
 
   it('never marks a clean, in-sync branch creatable when the review lookup fails', async () => {
-    // A failed existing-review lookup leaves review existence unproven, so the
-    // happy path must not claim canCreate — that would offer Create against a
-    // branch that might already have a review (finding 4).
+    // Failed lookup leaves existence unknown; Create would risk a duplicate review.
     getHostedReviewForBranchMock.mockRejectedValue(new Error('gh: could not connect to github.com'))
     await expect(
       getHostedReviewCreationEligibility({
@@ -564,12 +553,10 @@ describe('getHostedReviewCreationEligibility', () => {
     )
 
     expect(result).toMatchObject({ ok: false, code: 'validation' })
-    // The provider create API must never run on an inconclusive lookup.
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
 
-  // Stacked-worktree base resolution (Change 1/2). `stackedArgs` defaults to a
-  // bare local-only parent; `mockRefs` controls the remote-tracking snapshot.
+  // Stacked cases use a local-only parent by default; mockRefs supplies remote-tracking evidence.
   const stackedArgs = (
     overrides: Partial<Parameters<typeof getHostedReviewCreationEligibility>[0]> = {}
   ): Parameters<typeof getHostedReviewCreationEligibility>[0] => ({
@@ -649,8 +636,7 @@ describe('getHostedReviewCreationEligibility', () => {
   })
 
   it('preserves the candidate base when the remote probe cannot reach the host', async () => {
-    // Transport failure must not be read as "absent" — that would demote a
-    // legitimately-pushed parent to the repo default on a transient SSH blip.
+    // Transport failure is inconclusive; it must not demote a pushed parent to the default branch.
     mockRefs({ remoteProbeFails: true })
     await expect(
       getHostedReviewCreationEligibility(stackedArgs({ base: 'parent-pushed' }))
@@ -752,12 +738,10 @@ describe('getHostedReviewCreationEligibility', () => {
     })
     expect(result).not.toHaveProperty('stackedCreationSupported')
 
-    // Enterprise auth was already confirmed during detection; the gate must not
-    // fire a redundant gh probe.
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('resolves remote eligibility through SSH repo metadata without generating PR copy', async () => {
+  it('resolves remote eligibility from SSH repo metadata without running git or PR copy', async () => {
     const remoteGit = {
       exec: vi.fn(async (args: string[]) => ({
         stdout:
@@ -769,7 +753,6 @@ describe('getHostedReviewCreationEligibility', () => {
         stderr: ''
       }))
     }
-    getSshGitProviderMock.mockReturnValue(remoteGit)
 
     await expect(
       getHostedReviewCreationEligibility({
@@ -793,13 +776,7 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ repoPath: '/remote/repo', executionHostId: 'ssh:ssh-1' })
     )
-    // Why: the base-on-remote probe must run on the SSH host that will execute
-    // the provider create, so it flows through the relay exec, not local git.
-    expect(remoteGit.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
-    expect(remoteGit.exec).toHaveBeenCalledWith(
-      ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/main'],
-      '/remote/repo'
-    )
+    expect(remoteGit.exec).not.toHaveBeenCalled()
   })
 
   it('offers push as the next action for authenticated branches with local-only commits', async () => {

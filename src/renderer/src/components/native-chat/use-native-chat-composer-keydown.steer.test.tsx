@@ -1,13 +1,9 @@
 // @vitest-environment happy-dom
 
-// Cmd/Ctrl+Enter in an empty composer: steer the newest queued draft when one
-// exists; with nothing queued, or with text or images in the composer, the
-// chord stays what it always was — a send.
-// The primary modifier follows the platform (⌘ on Mac, Ctrl elsewhere).
+// Empty-composer Cmd/Ctrl+Enter steers the newest card; other cases retain ordinary send behavior.
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_HISTORY } from './native-chat-composer-state'
 
 const platform = vi.hoisted(() => ({ isMac: true }))
 vi.mock('./native-chat-shortcut', () => ({
@@ -28,16 +24,16 @@ function setup(
     send: vi.fn(),
     setActiveSuggestion: vi.fn(),
     setDraft: vi.fn(),
-    setCaret: vi.fn(),
-    setHistory: vi.fn()
+    setCaret: vi.fn()
   }
   const hook = renderHook(() =>
     useNativeChatComposerKeyDown({
       autocomplete: { mode: 'none' as const },
+      mentionFiles: { files: [], loading: false, failed: false },
+      completeMention: vi.fn(),
       activeSuggestion: 0,
       draft: composer.draft ?? '',
       hasAttachments: composer.hasAttachments ?? false,
-      history: EMPTY_HISTORY,
       isComposing: () => false,
       ...(steerQueued ? { steerQueued } : {}),
       ...callbacks

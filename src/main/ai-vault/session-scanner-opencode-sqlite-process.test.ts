@@ -3,8 +3,8 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import * as processRunner from '../../shared/child-process/run-process'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import * as processRunner from '@orca/process-host'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import SyncDatabase from '../sqlite/sync-database'
 import { appendTurns, writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
 import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sqlite-process-client'
@@ -205,7 +205,9 @@ describe('OpenCode SQLite process retirement', () => {
     signal.abort(new Error('read cancelled'))
     expect(await active).toMatchObject({ message: 'read cancelled' })
     client.dispose()
-    expect(await Promise.all(queued)).toHaveLength(64)
+    for (const error of await Promise.all(queued)) {
+      expect(error).toMatchObject({ message: 'Worker request queue disposed' })
+    }
     await expect(client.parse(args)).rejects.toThrow('disposed')
   })
 

@@ -1,12 +1,15 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { Repo as SharedRepo } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { SetupHookTrust } from '../tasks/setup-hook-trust'
-import { repoColor } from '../worktree/repo-color'
+import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
 
 export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'> &
   Partial<
     Pick<
       SharedRepo,
+      | 'addedAt'
+      | 'projectHostSetupMethod'
       | 'badgeColor'
       | 'connectionId'
       | 'executionHostId'
@@ -20,11 +23,21 @@ export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'
 export type NewWorktreeModalProps = {
   visible: boolean
   client: RpcClient | null
+  /** The desktop's servers this phone can reach now; their repos are offered and created there. */
+  serverClients?: ReadonlyMap<ExecutionHostId, RpcClient>
   hostId?: string
+  /** The host list's badge labels, so a run target reads as its row does. */
+  hostLabelById?: ReadonlyMap<ExecutionHostId, string>
   existingWorktreePaths?: readonly string[]
   existingWorktrees?: readonly { repoId: string; branch: string }[]
   openExternalUrl: (url: string) => void
-  onCreated: (worktreeId: string, name: string, warning?: string) => void
+  /** `executionHost` names the server the workspace was created on; absent for the desktop's own. */
+  onCreated: (
+    worktreeId: string,
+    name: string,
+    warning?: string,
+    executionHost?: ExecutionHostId
+  ) => void
   onClose: () => void
 }
 
@@ -39,5 +52,5 @@ export type SetupHookDetails = {
 }
 
 export function getMobileWorkspaceRepoBadgeColor(repo: MobileWorkspaceRepo | null): string {
-  return repo?.badgeColor || repoColor(repo?.displayName ?? 'repository')
+  return resolveRepoBadgeColor(repo?.badgeColor)
 }

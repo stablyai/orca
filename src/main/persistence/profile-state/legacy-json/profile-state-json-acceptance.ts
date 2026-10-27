@@ -19,7 +19,6 @@ export type ProfileStateJsonAcceptance = ProfileStateJsonAcceptanceVersion & {
   pending?: ProfileStateJsonAcceptanceVersion
 }
 
-/** Read the source acceptance marker, if this database has one. */
 export function readProfileStateJsonAcceptance(
   db: Database.Database
 ): ProfileStateJsonAcceptance | undefined {
@@ -69,8 +68,8 @@ function isJsonAcceptanceVersion(value: unknown): value is ProfileStateJsonAccep
   )
 }
 
-/** Accept either side of the upcoming JSON replacement before publishing it. */
-export function stageProfileStateJsonCompatibility(
+/** Accept both old and replacement JSON before publication. */
+export function stageProfileStateRecoveryJson(
   db: Database.Database,
   rawJson: string,
   expectedRevision: number,
@@ -99,8 +98,8 @@ export function stageProfileStateJsonCompatibility(
   })
 }
 
-/** Promote the staged JSON after publication; failures leave both versions accepted. */
-export function acceptProfileStateJsonCompatibility(
+/** Publish acceptance after replacement; failures keep both versions accepted. */
+export function acceptProfileStateRecoveryJson(
   db: Database.Database,
   rawJson: string,
   expectedRevision: number

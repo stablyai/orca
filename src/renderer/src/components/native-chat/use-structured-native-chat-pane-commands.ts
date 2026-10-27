@@ -4,36 +4,42 @@ import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isOrcaSessionId } from '../../../../shared/orca-session-address'
 import { resolveStructuredSessionOrcaSessionId } from '../../runtime/structured-session-orca-session-id'
-import type { RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu,
-  type NativeChatContextMenuActions
+  type NativeChatContextMenuActions,
+  type NativeChatContextMenuTargetArgs
 } from './use-native-chat-context-menu'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
 
 export function useStructuredNativeChatPaneCommands({
   tabId,
+  ownerWorktreeId,
   groupId,
   isVisible,
   rootRef,
   composerRef,
+  questionAnswerInputRef,
   terminalPaneActions,
   sessionId,
-  target
+  target,
+  ...menuTargets
 }: {
   tabId: string
+  ownerWorktreeId: string | null
   groupId?: string
   isVisible: boolean
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
+  questionAnswerInputRef: RefObject<HTMLInputElement | null>
   terminalPaneActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
   sessionId: string
   target: RuntimeClientTarget
-}) {
+} & NativeChatContextMenuTargetArgs) {
   const keybindings = useAppStore((state) => state.keybindings)
   const resolveOrcaSessionId = useMemo(
     () =>
@@ -42,8 +48,13 @@ export function useStructuredNativeChatPaneCommands({
         : undefined,
     [sessionId, target]
   )
-  const pasteClipboardIntoComposer = useNativeChatPasteBridge({ rootRef, composerRef })
+  const pasteClipboardIntoComposer = useNativeChatPasteBridge({
+    rootRef,
+    composerRef,
+    questionAnswerInputRef
+  })
   const contextMenu = useNativeChatContextMenu({
+    ...menuTargets,
     rootRef,
     actions: {
       ...emptyNativeChatContextMenuActions,
@@ -52,21 +63,15 @@ export function useStructuredNativeChatPaneCommands({
     },
     enabled: isVisible,
     resolveOrcaSessionId,
+    composerRef,
     showTerminalPaneActions: terminalPaneActions !== undefined,
     splitShortcutLabels: {
       right: formatShortcutLabel('terminal.splitRight', keybindings),
       down: formatShortcutLabel('terminal.splitDown', keybindings)
     },
-    workspaceLayout:
-      groupId && terminalPaneActions === undefined
-        ? {
-            unifiedTabId: tabId,
-            groupId,
-            shortcutLabels: {
-              right: formatShortcutLabel('terminal.splitRight', keybindings),
-              down: formatShortcutLabel('terminal.splitDown', keybindings)
-            }
-          }
+    chatPane:
+      ownerWorktreeId && groupId && terminalPaneActions === undefined
+        ? { tabId, worktreeId: ownerWorktreeId, groupId }
         : undefined
   })
   const onKeyDownCapture = useCallback<KeyboardEventHandler<HTMLDivElement>>(

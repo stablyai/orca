@@ -88,8 +88,7 @@ describe('useImeEnterGestureOwnership', () => {
     }
   }
 
-  // Regression: Shift+Enter is a newline, never a submit. Owning it swallowed the
-  // newline in multi-line comment boxes after a composition (DiffCommentPopover).
+  // Shift+Enter must remain a newline after composition, including multiline review comments.
   it('never owns Shift+Enter, during composition or on the redispatch', () => {
     const { result } = renderHook(() => useImeEnterGestureOwnership())
     result.current.setComposing(true)
@@ -103,33 +102,61 @@ describe('useImeEnterGestureOwnership', () => {
     expect(redispatch.prevented).toBe(false)
   })
 
-  // Regression: IMEs that report Process/229 for EVERY key (Pinyin) armed the carry on
-  // each letter. A non-Enter keyup must disarm it, or a later deliberate Enter is eaten.
-  it('expires the carry a frame after a non-Enter keyup so a later deliberate Enter submits', () => {
+  // Pinyin can emit Process/229 for every key; non-Enter keyup must disarm carry before a later deliberate submit.
+  it.each([
+    { key: '1', keyCode: 49 },
+    { key: 'Process', keyCode: 229 }
+  ])(
+    'expires the carry after candidate selection keyup %j so deliberate Enter submits',
+    (release) => {
+      const { result } = renderHook(() => useImeEnterGestureOwnership())
+      result.current.setComposing(true)
+
+      // Pinyin candidate selection: the last composing key is a digit reported as Process/229.
+      expect(
+        result.current.ownsKeyDown(
+          gestureEvent({ key: 'Process', keyCode: 229, isComposing: true })
+        )
+      ).toBe(true)
+      result.current.setComposing(false)
+      let frame: FrameRequestCallback | undefined
+      const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+        frame = cb
+        return 1
+      })
+      result.current.onKeyUp(gestureEvent(release))
+      frame?.(0)
+      raf.mockRestore()
+
+      const deliberate = gestureEvent({ key: 'Enter', keyCode: 13 })
+      expect(result.current.ownsKeyDown(deliberate)).toBe(false)
+      expect(deliberate.prevented).toBe(false)
+    }
+  )
+
+  it('keeps a newer gesture owned when an older keyup expires', () => {
     const { result } = renderHook(() => useImeEnterGestureOwnership())
-    result.current.setComposing(true)
-
-    // Pinyin candidate selection: the last composing key is a digit reported as Process/229.
-    expect(
-      result.current.ownsKeyDown(gestureEvent({ key: 'Process', keyCode: 229, isComposing: true }))
-    ).toBe(true)
-    result.current.setComposing(false)
-    let frame: FrameRequestCallback | undefined
-    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-      frame = cb
-      return 1
+    const frames: FrameRequestCallback[] = []
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback)
+      return frames.length
     })
-    result.current.onKeyUp(gestureEvent({ key: '1', keyCode: 49 }))
-    frame?.(0)
-    raf.mockRestore()
+    try {
+      const marked = { key: 'Process', keyCode: 229 }
+      result.current.ownsKeyDown(gestureEvent(marked))
+      result.current.onKeyUp(gestureEvent(marked))
+      result.current.ownsKeyDown(gestureEvent(marked))
+      frames[0]?.(0)
 
-    const deliberate = gestureEvent({ key: 'Enter', keyCode: 13 })
-    expect(result.current.ownsKeyDown(deliberate)).toBe(false)
-    expect(deliberate.prevented).toBe(false)
+      const redispatch = gestureEvent({ key: 'Enter', keyCode: 13 })
+      expect(result.current.ownsKeyDown(redispatch)).toBe(true)
+      expect(redispatch.prevented).toBe(true)
+    } finally {
+      raf.mockRestore()
+    }
   })
 
-  // Regression: holding Cmd/Ctrl through a composition confirm dropped the chord submit —
-  // the carry stands in for the bare redispatch only, never for a deliberate chord.
+  // Only bare confirm redispatch is suppressed; held Cmd/Ctrl still requests deliberate submit.
   it.each([
     ['meta', { metaKey: true }],
     ['ctrl', { ctrlKey: true }],
@@ -151,8 +178,7 @@ describe('useImeEnterGestureOwnership', () => {
     expect(chord.prevented).toBe(false)
   })
 
-  // Regression: the chorded redispatch fell through without spending the carry, so the
-  // next Enter in the same frame was swallowed — the mirror of the bug above.
+  // Chorded redispatch must spend carry without suppressing submit or the next Enter would be swallowed.
   it('spends the carry on the chorded redispatch so the next Enter is not eaten', () => {
     const { result } = renderHook(() => useImeEnterGestureOwnership())
     result.current.setComposing(true)

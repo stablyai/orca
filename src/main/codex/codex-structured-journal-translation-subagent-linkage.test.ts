@@ -18,9 +18,7 @@ const CHILD_LINKAGE = { agentId: CHILD, producerKind: 'agent' }
 
 type Written = { key: string; body: AgentJournalItemBody; linkage: AgentJournalProducerLinkage }
 
-/** Records the linkage every write carries — plain appends, batch mutations and
- *  lifecycle transitions alike — so an assertion about attribution can never
- *  pass against a harness that dropped it. */
+/** Retain attribution on every sink path so linkage assertions exercise the writer. */
 function harness(primaryThreadId: string | null = PARENT) {
   const writes: Written[] = []
   const record = (
@@ -84,7 +82,6 @@ function harness(primaryThreadId: string | null = PARENT) {
     item(spawner, 'item/started', turnId, body)
     item(spawner, 'item/completed', turnId, body)
   }
-  /** The linkage on the newest write whose serialized body mentions `text`. */
   const linkageOf = (text: string): AgentJournalProducerLinkage | undefined =>
     writes.findLast((write) => JSON.stringify(write.body).includes(text))?.linkage
   return { translator, writes, on, item, spawn, linkageOf }
@@ -104,24 +101,14 @@ describe('codex journal translation — subagent producer linkage', () => {
     item(PARENT, 'item/completed', 'pt', { type: 'agentMessage', id: 'm-2', text: 'own prose' })
 
     const commandRows = writes.filter((write) => write.key.includes('cmd-1'))
-    // Start, streamed checkpoint and completion: every revision restates it.
     expect(commandRows.length).toBeGreaterThanOrEqual(3)
     expect(commandRows.map((write) => write.linkage)).toEqual(commandRows.map(() => CHILD_LINKAGE))
     expect(linkageOf('child prose')).toEqual(CHILD_LINKAGE)
     expect(linkageOf('own prose')).toEqual({})
-    // The spawn-group row is the parent's list of its children, though a child's
-    // frames also write it.
-    expect(
-      writes.filter((write) => write.key.includes('codex-subagents')).map((w) => w.linkage)
-    ).toEqual(expect.arrayContaining([{}]))
-    expect(
-      writes.filter((write) => write.key.includes('codex-subagents') && write.linkage.agentId)
-    ).toEqual([])
+    expect(writes.filter((write) => write.key.includes('subagent'))).toEqual([])
   })
 
   it('stamps a child row that arrives before the spawn announcement names it', () => {
-    // The thread already proves it is not the session's own; only the parent
-    // and run are learned from the announcement.
     const { on, item, linkageOf } = harness()
     on(PARENT, 'turn/started', { turn: { id: 'pt' } })
     item(CHILD, 'item/completed', 'ct', { type: 'agentMessage', id: 'm-1', text: 'early words' })
@@ -135,7 +122,7 @@ describe('codex journal translation — subagent producer linkage', () => {
     spawn(PARENT, 'pt', CHILD, '/root/lead')
     on(CHILD, 'turn/started', { turn: { id: 'ct' } })
     spawn(CHILD, 'ct', GRANDCHILD, '/root/lead/worker')
-    // An `interacted` activity rides whichever agent acted, so it names no parent.
+    // Interaction does not establish parentage.
     item(CHILD, 'item/completed', 'ct', {
       type: 'subAgentActivity',
       id: 'poke-parent',
@@ -170,7 +157,6 @@ describe('codex journal translation — subagent producer linkage', () => {
     }
     item(CHILD, 'item/started', 'ct-1', { ...shell, status: 'inProgress' })
     on(CHILD, 'turn/completed', { turn: { id: 'ct-1', status: 'completed' } })
-    // A follow-up from the parent is the child's second run.
     on(CHILD, 'turn/started', { turn: { id: 'ct-2' } })
     item(CHILD, 'item/completed', 'ct-2', { type: 'agentMessage', id: 'r2', text: 'second run' })
     item(CHILD, 'item/completed', 'ct-1', { ...shell, status: 'completed', exitCode: 0 })
@@ -221,11 +207,9 @@ describe('codex journal translation — subagent producer linkage', () => {
     expect(producerOf('kid')).toEqual(CHILD_LINKAGE)
     expect(producerOf('child-approval')).toEqual(CHILD_LINKAGE)
     expect(producerOf('own')).toEqual({})
-    // A turn is the session's unit of work and never carries a producer.
     const turnRows = settled.filter((write) => write.body.kind === 'turn')
     expect(turnRows.length).toBe(1)
     expect(turnRows[0]?.linkage).toEqual({})
-    // The child's approval was admitted under the child, too.
     expect(writes[writes.findIndex((w) => w.key.includes('child-approval'))]?.linkage).toEqual(
       CHILD_LINKAGE
     )
@@ -258,7 +242,7 @@ describe('codex journal translation — subagent producer linkage', () => {
     const frame = writes.find((write) => JSON.stringify(write.body).includes('rate limit'))
     const goal = writes.find((write) => JSON.stringify(write.body).includes('Review the diff'))
     expect(frame?.linkage).toEqual(CHILD_LINKAGE)
-    // A goal belongs to the thread, not one run of it: no attempt, ever.
+    // Thread-scoped goals carry no run attempt.
     expect(goal?.linkage).toEqual(CHILD_LINKAGE)
   })
 

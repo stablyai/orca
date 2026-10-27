@@ -1,7 +1,4 @@
-// A profile whose chat records a newer Orca wrote opens read-only. The startup reconcile adjudicates
-// its leases in memory and writes nothing there; a reconcile whose write fails is bookkeeping too.
-// Either way startup must finish rather than put the whole app into its degraded "Session restore
-// failed" mode.
+// Newer records reconcile read-only in memory; bookkeeping write failures must not put startup into Session restore failed.
 
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -80,7 +77,8 @@ function startupRuntime(log = recordingStructuredAgentSessionLogger()) {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' })
     })
   internal.refreshMobileSessionPtyRecords = async () => new Set<string>()
   return runtime
@@ -92,7 +90,6 @@ it('finishes startup over records a newer Orca wrote, reads them, and writes not
   const log = recordingStructuredAgentSessionLogger()
   const runtime = startupRuntime(log)
 
-  // What the renderer's startup awaits through `app:prepareTerminalStartupRestoration`.
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 
   expect(log.entries).toEqual([])
@@ -123,8 +120,6 @@ it('finishes startup when the reconcile cannot write, and reports it', async () 
   expect(getStructuredAgentSessionHost()?.sessionAgent(sessionId)).toBe('claude')
 })
 
-// Closing a chat tab drops it from the restore index, which a newer Orca's records refuse: the
-// close is reported and goes on, since bookkeeping never keeps a tab open.
 it('closes a chat tab over records a newer Orca wrote, reporting the index it cannot write', async () => {
   const { sessionId } = await seedChat({ newer: true })
   const log = recordingStructuredAgentSessionLogger()

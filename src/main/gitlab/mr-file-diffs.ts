@@ -8,20 +8,11 @@ import {
   type ProjectRef
 } from './gl-utils'
 
-/**
- * Counts the added/removed lines in a single GitLab MR file's unified diff,
- * feeding the +N/-N shown in the MR file list. `---`/`+++` are file headers
- * only before the first `@@` hunk; every `+`/`-` line inside a hunk is content.
- * Requires hunk headers: a diff with no `@@` counts zero, so do not reuse this
- * for header-less agent-tool diffs (see `diffFromText` in shared/native-chat-diff).
- */
+/** Count unified hunks only; header-less agent diffs need the separate shared/native-chat-diff parser. */
 function countDiffLines(diff: string): { additions: number; deletions: number } {
   let additions = 0
   let deletions = 0
-  // Why: `---`/`+++` are file headers only before the first hunk. A removed line
-  // whose original text began with `--` (SQL/Lua/Haskell `-- comment`) becomes a
-  // diff line `---<content>`, colliding with the `--- a/file` header — so it must
-  // be counted once inside a hunk, not skipped.
+  // Inside a hunk ---/+++ are content prefixes, not file headers.
   let inHunk = false
   let cursor = 0
   while (cursor < diff.length) {
@@ -85,8 +76,7 @@ export async function fetchMRFiles(
     [
       'api',
       ...glabHostnameArgs(projectRef, connectionId),
-      // Why: GitLab deprecated the all-in-one `changes` endpoint in favor of
-      // the paginated diffs endpoint; cap the file snapshot at one visible page.
+      // GitLab replaces changes with paginated diffs; bound the visible snapshot to one page.
       `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/diffs?per_page=100`
     ],
     glabRepoExecOptions(repoPath, connectionId, localGitOptions)

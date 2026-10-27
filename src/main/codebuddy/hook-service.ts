@@ -27,8 +27,8 @@ export const codebuddyHookService = new ClaudeHookService({
   settings: {
     configDirName: '.codebuddy',
     scriptBaseName: 'codebuddy-hook',
-    usesWindowsCompatLauncher: true,
-    windowsHookShell: 'powershell'
+    // No `shell: 'powershell'`: CodeBuddy runs that as bare `pwsh`, absent on stock Windows (#27182).
+    usesWindowsCompatLauncher: true
   },
   hookPlan: CODEBUDDY_MANAGED_HOOK_PLAN
 })

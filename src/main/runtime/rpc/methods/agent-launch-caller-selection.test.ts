@@ -1,23 +1,19 @@
-/**
- * A launch from a paired client moves that client's view to the new tab and nobody else's: the view
- * intent belongs to the connection that asked. In-process callers and workspace-creating launches
- * keep today's behaviour.
- */
+/** Paired launches select only the caller's view; existing/folder targets select the tab, while worktree creates retain background provisioning. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import {
   CAPABLE_CLIENT,
   STRUCTURED_PREFERENCE,
   methodNamed,
   rpcContext,
   runtimeStub,
+  setAgentLaunchRecordStore,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -25,7 +21,10 @@ const createStructuredSession = vi.hoisted(() => vi.fn())
 vi.mock('./structured-agent-session-create', () => ({
   createStructuredAgentSessionForWorktree: createStructuredSession
 }))
-
+const deliverTerminalPrompt = vi.hoisted(() => vi.fn(async () => true))
+vi.mock('./agent-launch-terminal-prompt', () => ({
+  deliverTerminalAgentLaunchPrompt: deliverTerminalPrompt
+}))
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 const AGENT_LAUNCH_REPLAY = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
@@ -38,7 +37,13 @@ const CREATE_LAUNCH = {
   agent: 'claude',
   target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
 }
+const FOLDER_LAUNCH = {
+  agent: 'claude',
+  target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
+}
 const CALLER = 'device-1'
+const REVEAL_WARNING =
+  'Terminal term_1 is running, but Orca could not make it discoverable. Run `orca terminal focus --terminal term_1` to reveal and focus it.'
 
 function selectionRuntime(options: Parameters<typeof runtimeStub>[0]) {
   return Object.assign(runtimeStub(options), {
@@ -59,6 +64,7 @@ function chatActivation(): unknown {
 }
 
 beforeEach(() => {
+  deliverTerminalPrompt.mockClear()
   createStructuredSession
     .mockReset()
     .mockResolvedValue({ ok: true, value: { sessionId: 'sess-1' } })
@@ -91,6 +97,24 @@ describe('a paired client launching into an existing workspace', () => {
     )
   })
 
+  // Prompt delivery can take a minute; caller navigation must not wait.
+  it.each([['terminal', {}, deliverTerminalPrompt]] as const)(
+    'selects the new %s for the caller before its prompt is delivered',
+    async (_surface, settings, deliver) => {
+      const runtime = selectionRuntime({ settings, terminalPaneKey: PANE_KEY })
+
+      await launch(
+        { ...EXISTING_LAUNCH, prompt: { text: 'Fix it.\nLog:', delivery: 'submit' } },
+        runtime
+      )
+
+      const selectedAt = runtime.selectCreatedMobileSessionTabForClient.mock.invocationCallOrder[0]
+      const deliveredAt = deliver.mock.invocationCallOrder[0]
+      expect(deliveredAt).toBeDefined()
+      expect(selectedAt).toBeLessThan(deliveredAt!)
+    }
+  )
+
   it('still reports the launch when selecting its tab fails', async () => {
     const runtime = selectionRuntime({ settings: {}, terminalPaneKey: PANE_KEY })
     runtime.selectCreatedMobileSessionTabForClient.mockImplementationOnce(() => {
@@ -102,6 +126,70 @@ describe('a paired client launching into an existing workspace', () => {
 
     expect(result.outcome).toMatchObject({ kind: 'terminal', handle: 'term_1' })
     warn.mockRestore()
+  })
+
+  // Headless hosts have no window to reveal, but the caller still mirrors the tab.
+  it('does not pass on the host’s own reveal warning, since the caller shows the tab itself', async () => {
+    const runtime = selectionRuntime({
+      settings: {},
+      terminalPaneKey: PANE_KEY,
+      terminalWarning: REVEAL_WARNING
+    })
+
+    const result = await launch(EXISTING_LAUNCH, runtime)
+
+    expect(result.outcome).toMatchObject({ kind: 'terminal', handle: 'term_1' })
+    expect(result.warning).toBeUndefined()
+  })
+
+  it('still tells a caller that shows the tab itself that its folder was gone', async () => {
+    const runtime = selectionRuntime({
+      settings: {},
+      terminalPaneKey: PANE_KEY,
+      terminalWarning: REVEAL_WARNING,
+      terminalStartupCwdFallback: true
+    })
+
+    const result = await launch(EXISTING_LAUNCH, runtime)
+
+    expect(result.warning).toBe(STARTUP_CWD_FALLBACK_SENTENCE)
+  })
+
+  // A folder workspace has no setup for a host activation to run, so its create moves only the caller.
+  it('selects the chat in a folder workspace it creates without activating it on the host', async () => {
+    const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
+
+    // A desktop client of a remote server; a phone may not create folder workspaces at all.
+    await launch(FOLDER_LAUNCH, runtime, { ...CAPABLE_CLIENT, clientKind: 'runtime' })
+
+    expect(chatActivation()).toBe(false)
+    expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledExactlyOnceWith(
+      'folder:fw-new',
+      { sessionId: 'sess-1' },
+      CALLER
+    )
+  })
+
+  it.each(['focused', 'background'] as const)(
+    'keeps a paired %s chat inactive on the host',
+    async (presentation) => {
+      const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
+      await launch({ ...EXISTING_LAUNCH, presentation }, runtime)
+      expect(chatActivation()).toBe(false)
+      expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledTimes(
+        presentation === 'focused' ? 1 : 0
+      )
+    }
+  )
+
+  it('focuses a paired terminal only for the caller', async () => {
+    const runtime = selectionRuntime({ settings: {}, terminalPaneKey: PANE_KEY })
+    await launch({ ...EXISTING_LAUNCH, presentation: 'focused' }, runtime)
+    expect(runtime.createTerminal).toHaveBeenCalledWith(
+      'id:wt-7',
+      expect.objectContaining({ presentation: 'background', surfaceOwner: false })
+    )
+    expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledOnce()
   })
 
   it('selects nothing when the runtime reported no pane for the terminal', async () => {
@@ -123,6 +211,14 @@ describe('launches that keep the host-wide behaviour', () => {
     expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 
+  it('an in-process caller still hears that the host could not reveal the tab', async () => {
+    const runtime = selectionRuntime({ settings: {}, terminalWarning: REVEAL_WARNING })
+
+    const result = await launch(EXISTING_LAUNCH, runtime, {})
+
+    expect(result.warning).toBe(REVEAL_WARNING)
+  })
+
   it("the host's own desktop window, a runtime client with no paired device, still activates the chat", async () => {
     const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
 
@@ -136,7 +232,7 @@ describe('launches that keep the host-wide behaviour', () => {
     expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 
-  it('a workspace-creating launch from a paired client keeps the create navigation', async () => {
+  it('a worktree-creating launch from a paired client keeps the create navigation', async () => {
     const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
 
     await launch(CREATE_LAUNCH, runtime)
@@ -154,12 +250,11 @@ describe('a replayed launch', () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-caller-'))
     const store = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `deps.store` is the only member `agent.launch` reads, and a member it omits throws on call.
-    setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(store)
   })
 
   afterEach(async () => {
-    setStructuredAgentSessionHost(null)
+    setAgentLaunchRecordStore(null)
     await rm(directory, { recursive: true, force: true })
   })
 

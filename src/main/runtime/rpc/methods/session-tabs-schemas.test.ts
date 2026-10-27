@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ActivateTab, CloseLifecycleTab, CloseTab, UpdatePaneLayout } from './session-tabs-schemas'
+import {
+  ActivateTab,
+  CloseLifecycleTab,
+  CloseTab,
+  UpdatePaneLayout
+} from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 
 const WT = 'id:wt'
 
@@ -27,15 +32,14 @@ describe('CloseTab (session.tabs.close params)', () => {
   })
 
   it('accepts a reasonless payload from legacy clients', () => {
-    // Why: parsing remains compatible; the RPC policy, not the schema, refuses missing intent.
+    // Keep parsing compatible; RPC policy refuses missing intent.
     const parsed = CloseTab.parse({ worktree: WT, tabId: 'tab-1' })
     expect(parsed.tabId).toBe('tab-1')
     expect(parsed.reason).toBeUndefined()
   })
 
   it('keeps a new explicit-user payload parseable by the previous server schema', () => {
-    // Why: old hosts use ActivateTab here and must strip the additive field,
-    // not reject a manual close from an updated client.
+    // Older ActivateTab schemas must strip additive intent rather than reject new clients' manual closes.
     const parsed = ActivateTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'user' })
     expect(parsed).toEqual({ worktree: WT, tabId: 'tab-1' })
   })
@@ -94,7 +98,6 @@ describe('UpdatePaneLayout.root (untrusted remote pane-layout tree)', () => {
   })
 
   it('rejects an over-deep tree instead of overflowing the stack', () => {
-    // Build a tree deeper than the cap (64) without recursion in the test.
     let node: unknown = { type: 'leaf', leafId: 'x' }
     for (let i = 0; i < 5000; i++) {
       node = {

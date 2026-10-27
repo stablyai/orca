@@ -2,6 +2,8 @@ import { vi, type Mock } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { AppState } from '@/store'
+import { makeTerminalTab } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 /** Shared with the frame-ordering suites through their `vi.mock` factories, so
  *  this module must stay free of runtime imports that would form a cycle. */
@@ -38,8 +40,7 @@ export const BG_MIRROR_TAB_ID = toWebTerminalSurfaceTabId('host-tab-2')
 export const FLOATING_HOST_PARENT_TAB_ID = 'host-tab-floating'
 export const FLOATING_HOST_SURFACE_ID = `${FLOATING_HOST_PARENT_TAB_ID}::${LEAF_ID}`
 
-// A host tab that is NOT the parked mirror: publishing it retracts MIRROR_TAB_ID,
-// which is the host answering "that pane is gone" rather than staying silent.
+// Publishing another host tab retracts MIRROR_TAB_ID, proving its pane gone rather than unanswered.
 export const OTHER_HOST_PARENT_TAB_ID = 'host-tab-9'
 export const OTHER_HOST_SURFACE_ID = `${OTHER_HOST_PARENT_TAB_ID}::${LEAF_ID}`
 
@@ -130,6 +131,6 @@ export function makePtylessHostSnapshot(
   return snapshot as never
 }
 
-export function mirrorTabRow(tabId: string, worktreeId: string): unknown {
-  return { id: tabId, title: 'Codex', ptyId: null, worktreeId }
+export function mirrorTabRow(tabId: string, worktreeId: string): TerminalTab {
+  return makeTerminalTab({ id: tabId, worktreeId, title: 'Codex' })
 }

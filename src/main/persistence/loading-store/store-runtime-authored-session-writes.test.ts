@@ -1,12 +1,6 @@
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
-/**
- * Drives the real `Store`, not the helper and not a fake.
- *
- * `preserveRuntimeAuthoredWorkspaceSessionFields` is only worth anything where the shipping writers
- * call it, and a mutation that unwires it at the call site survives every test that drives the
- * helper directly. Both desktop write paths belong here: the ordinary session write and the
- * before-unload stage, which is the one the desktop actually takes when the user quits.
- */
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+// Exercise normal saves and quit staging through Store so both production paths preserve runtime fields.
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -40,7 +34,7 @@ const WT = 'repo-1::/tmp/worktree-a'
 const stores: InstanceType<typeof Store>[] = []
 
 afterEach(async () => {
-  // Leaving a debounced save armed would write into a temp dir after the test file finishes.
+  // Freeze debounced writes before their temporary directories disappear.
   for (const store of stores.splice(0)) {
     store.freezeWrites()
   }
@@ -68,7 +62,7 @@ function page(): PersistedClientHostedBrowserPage {
   }
 }
 
-/** What the renderer builds from Zustand: it has never heard of the runtime-authored field. */
+/** Model a renderer session that omits runtime-owned fields. */
 function rendererSession(activeTabId: string): WorkspaceSessionState {
   return {
     activeRepoId: 'repo-1',
@@ -106,8 +100,7 @@ describe('Store keeps runtime-authored session fields across desktop writes', ()
     const store = createStore()
     seedRuntimeRows(store)
 
-    // The beforeunload chain (use-app-session-persistence -> stageBeforeUnloadSync ->
-    // renderer-shutdown-checkpoint) lands here, and it is the last write before the process exits.
+    // Quit persistence reaches this final staging write before process exit.
     store.stageWorkspaceSessionBeforeUnload(rendererSession('before-unload'))
 
     expect(store.getWorkspaceSession().clientHostedBrowserPagesByWorktree).toEqual({
@@ -134,8 +127,7 @@ describe('Store keeps runtime-authored session fields across desktop writes', ()
     const store = createStore()
     seedRuntimeRows(store)
 
-    // The runtime writes an empty map rather than omitting the field, which is what separates its
-    // authoritative clear from a renderer write that simply never mentions it.
+    // An explicit empty map clears runtime state; renderer omission must preserve it.
     store.setWorkspaceSession({
       ...rendererSession('runtime-clear'),
       clientHostedBrowserPagesByWorktree: {}
@@ -155,7 +147,7 @@ describe('Store keeps runtime-authored session fields across desktop writes', ()
       }
     })
 
-    store.removeWorkspaceSessionStateForWorktree(WT)
+    store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: WT, hostId: 'local' }))
 
     expect(
       Object.keys(store.getWorkspaceSession().clientHostedBrowserPagesByWorktree ?? {})
@@ -183,5 +175,25 @@ describe('Store keeps runtime-authored session fields across desktop writes', ()
     expect(
       Object.keys(store.getWorkspaceSession().clientHostedBrowserPagesByWorktree ?? {})
     ).toEqual([other])
+  })
+})
+
+describe('a host partition written from a per-host renderer snapshot', () => {
+  it('keeps the maps the snapshot left out, on both desktop write paths', () => {
+    const store = createStore()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the renderer's per-host split omits maps a host has no rows in.
+    const slice = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      unifiedTabs: {}
+    } as unknown as WorkspaceSessionState
+    store.setWorkspaceSession(slice, 'runtime:env-1')
+    store.stageWorkspaceSessionBeforeUnload(slice, HOST_ID)
+    for (const hostId of ['runtime:env-1', HOST_ID]) {
+      expect(store.getWorkspaceSession(hostId)).toMatchObject({
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {}
+      })
+    }
   })
 })

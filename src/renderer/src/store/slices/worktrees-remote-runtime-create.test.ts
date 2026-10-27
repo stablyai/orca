@@ -1,10 +1,12 @@
+import { setLocalRuntimeCapabilitiesForTests } from '../../runtime/local-runtime-capabilities'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponse,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
-import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { TEST_REPO, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
   mockApi,
@@ -33,13 +35,86 @@ vi.mock('@/components/worktree-base-fallback-notice', () => ({
 beforeEach(resetWorktreeSliceModuleMemory)
 
 describe('worktree remote runtime mutations', () => {
+  it.each([false, true])(
+    'gates existing-branch intent on host capability (%s), retaining legacy suffix retry only without it',
+    async (supported) => {
+      const status = createCompatibleRuntimeStatusResponse('runtime-remote')
+      if (status.ok && !supported) {
+        status.result.capabilities = status.result.capabilities?.filter(
+          (cap) => cap !== 'worktree.open-existing-branch.v1'
+        )
+      }
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+        args.method === 'status.get' ? status : runtimeEnvironmentCall(args)
+      )
+      const store = createRepoTestStore()
+      seedRepoHost(store, 'runtime:env-1')
+      const create = store.getState().createWorktree
+      const args: Parameters<typeof create> = ['repo1', 'feature/test', 'origin/main', 'skip']
+      args[12] = 'feature/test'
+      args[25] = { branchIntent: 'open-existing' }
+      runtimeEnvironmentCall.mockRejectedValueOnce(new Error('Branch already has PR #42'))
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'create',
+        ok: true,
+        result: {
+          worktree: makeWorktree({
+            id: 'repo1::/path/feature-test-2',
+            repoId: 'repo1',
+            path: '/path/feature-test-2'
+          })
+        }
+      })
+
+      await (supported
+        ? expect(create(...args)).rejects.toThrow('Branch already has PR #42')
+        : create(...args))
+      const first = runtimeEnvironmentCall.mock.calls[0][0].params
+      if (supported) {
+        expect(first).toMatchObject({
+          branchIntent: 'open-existing',
+          branchNameOverride: 'feature/test'
+        })
+        expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+      } else {
+        expect(first).not.toHaveProperty('branchIntent')
+        expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
+        expect(runtimeEnvironmentCall.mock.calls[1][0].params).toMatchObject({
+          branchNameOverride: 'feature/test-2'
+        })
+      }
+    }
+  )
+
+  it('sends picker intent through the capable local host without suffixing a Git failure', async () => {
+    setLocalRuntimeCapabilitiesForTests(['worktree.open-existing-branch.v1'])
+    try {
+      const store = createRepoTestStore()
+      const create = store.getState().createWorktree
+      const args: Parameters<typeof create> = ['repo1', 'feature/test', 'origin/main', 'skip']
+      args[12] = 'feature/test'
+      args[25] = { branchIntent: 'open-existing' }
+      mockApi.worktrees.create.mockRejectedValueOnce(new Error('Branch already exists locally'))
+      await expect(create(...args)).rejects.toThrow('Branch already exists locally')
+      expect(mockApi.worktrees.create).toHaveBeenCalledTimes(1)
+      expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branchIntent: 'open-existing',
+          branchNameOverride: 'feature/test'
+        })
+      )
+    } finally {
+      setLocalRuntimeCapabilitiesForTests(null)
+    }
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
   })
 
   it('creates worktrees through the active remote runtime environment', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/feature',
       repoId: 'repo1',
@@ -52,9 +127,16 @@ describe('worktree remote runtime mutations', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      settings: {
+        ...store.getState().settings!,
+        activeRuntimeEnvironmentId: 'env-1',
+        nestWorkspaces: false,
+        refreshLocalBaseRefOnWorktreeCreate: true,
+        localBaseRefSuggestionDismissed: false
+      },
       worktreesByRepo: { repo1: [] }
-    } as Partial<AppState>)
+    })
+    seedRepoHost(store, 'runtime:env-1')
 
     const result = await store
       .getState()
@@ -81,6 +163,9 @@ describe('worktree remote runtime mutations', () => {
         baseBranch: 'origin/main',
         setupDecision: 'skip',
         sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
+        nestWorkspaces: false,
+        refreshLocalBaseRefOnWorktreeCreate: true,
+        localBaseRefSuggestionDismissed: false,
         telemetrySource: 'sidebar',
         displayName: 'Feature title',
         linkedIssue: 123,
@@ -93,6 +178,8 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([
       {
         ...wt,
+        projectId: 'repo:repo1',
+        projectHostSetupId: 'repo1',
         hostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1'
       }
@@ -100,7 +187,7 @@ describe('worktree remote runtime mutations', () => {
   })
 
   it('forwards generated-name provenance through paired-runtime create', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/nautilus', repoId: 'repo1' })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-create',
@@ -112,6 +199,7 @@ describe('worktree remote runtime mutations', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
+    seedRepoHost(store, 'runtime:env-1')
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = ['repo1', 'nautilus']
     args[25] = { nameWasGenerated: true }
@@ -127,7 +215,7 @@ describe('worktree remote runtime mutations', () => {
   })
 
   it('persists Jira item and source context through paired-runtime create', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/jira-link',
       repoId: 'repo1',
@@ -143,6 +231,7 @@ describe('worktree remote runtime mutations', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
+    seedRepoHost(store, 'runtime:env-1')
     const linkedWorkItem = {
       provider: 'jira' as const,
       type: 'issue' as const,
@@ -187,11 +276,12 @@ describe('worktree remote runtime mutations', () => {
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
       args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
     )
-    const store = createTestStore()
+    const store = createRepoTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
+    seedRepoHost(store, 'runtime:env-1')
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = ['repo1', 'jira-link']
     args[25] = {
@@ -210,7 +300,7 @@ describe('worktree remote runtime mutations', () => {
   })
 
   it('passes startup commands through remote runtime worktree creation', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/agent-startup',
       repoId: 'repo1',
@@ -226,6 +316,7 @@ describe('worktree remote runtime mutations', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
+    seedRepoHost(store, 'runtime:env-1')
 
     await store
       .getState()
@@ -281,7 +372,7 @@ describe('worktree remote runtime mutations', () => {
   })
 
   it('passes task startup drafts only to the owning remote runtime', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/task-draft',
       repoId: 'repo1',
@@ -297,6 +388,7 @@ describe('worktree remote runtime mutations', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
+    seedRepoHost(store, 'runtime:env-1')
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = ['repo1', 'task-draft', undefined, 'inherit']
     args[10] = 'codex'
@@ -317,7 +409,7 @@ describe('worktree remote runtime mutations', () => {
   })
 
   it('passes startup commands through local worktree creation IPC', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/local-agent-startup',
       repoId: 'repo1',
@@ -384,7 +476,7 @@ describe('worktree remote runtime mutations', () => {
   })
 
   it('retries a suffixed branchNameOverride when runtime create reports a branch conflict', async () => {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     const wt = makeWorktree({
       id: 'repo1::/path/feature-something-2',
       repoId: 'repo1',
@@ -402,6 +494,7 @@ describe('worktree remote runtime mutations', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
+    seedRepoHost(store, 'runtime:env-1')
 
     await store
       .getState()
@@ -442,3 +535,14 @@ describe('worktree remote runtime mutations', () => {
     )
   })
 })
+
+// Creation routes by the project row's own host, so every test seeds that row.
+function seedRepoHost(store: ReturnType<typeof createTestStore>, hostId: ExecutionHostId): void {
+  store.setState({ repos: [{ ...TEST_REPO, executionHostId: hostId }] })
+}
+
+function createRepoTestStore(): ReturnType<typeof createTestStore> {
+  const store = createTestStore()
+  seedRepoHost(store, 'local')
+  return store
+}

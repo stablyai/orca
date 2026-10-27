@@ -1,4 +1,4 @@
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   CHEAP_PS_ARGS,
   PS_MAX_BUFFER_BYTES,
@@ -11,17 +11,15 @@ import {
   createProcessTableSnapshotReader,
   withEvidenceBudget
 } from './process-table-snapshot-reader'
+import { psLocaleEnvironment } from './ps-locale-environment'
 
-/**
- * The cheap-tier sibling of the strict evidence reader: same coalescing and TTL, a
- * column set without `tty=`/`command=`. Separate instance because the two column sets
- * parse differently and a cheap capture must never be served to an evidence consumer.
- */
+/** Keep cheap captures separate: without tty=/command= they parse differently and cannot serve strict evidence readers. Share coalescing/TTL policy. */
 const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTableRow[]>({
   runPs: async () => {
     const result = await runProcess({
       program: 'ps',
       args: CHEAP_PS_ARGS,
+      env: psLocaleEnvironment(),
       timeoutMs: PS_TIMEOUT_MS,
       maxOutputBytes: PS_MAX_BUFFER_BYTES
     })
@@ -40,8 +38,7 @@ const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTab
   now: () => Date.now()
 })
 
-/** Same wait bound as the evidence read: a stalled cheap capture must fall through to the full
- *  path's own handling rather than pin a polled tick. */
+/** Bound stalled cheap reads so the full path can handle fallback instead of pinning a poll tick. */
 export async function getCheapProcessTableSnapshot(): Promise<CheapProcessTableRow[]> {
   return withEvidenceBudget(cheapProcessTableReader.getSnapshot())
 }

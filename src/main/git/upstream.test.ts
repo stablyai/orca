@@ -23,7 +23,6 @@ describe('getUpstreamStatus', () => {
     invalidateGitUpstreamStatusReads()
   })
 
-  // Why: the CI-enforced guard that the native/WSL path actually coalesces rather than fanning out.
   it('shares one physical read across ten identical native callers', async () => {
     let resolveSymbolicRef = (): void => {}
     const symbolicRefGate = new Promise<void>((resolve) => {
@@ -51,7 +50,6 @@ describe('getUpstreamStatus', () => {
       gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'symbolic-ref')
     ).toHaveLength(1)
     expect(new Set(results).size).toBe(1)
-    // A settled lease is dropped, so the next read must issue fresh Git work.
     await getUpstreamStatus('/repo')
     expect(
       gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'symbolic-ref')

@@ -132,9 +132,7 @@ describe('GitHub provider request upgrade coalescing', () => {
     )
     weak.resolve(workItems('weak'))
     await first
-    // Why: the strict callers must reach the bridge without waiting out the weaker
-    // replacement too — the upgrade wait is bounded, so a repeating weaker refresh
-    // can never starve them. They still share exactly one strict request.
+    // Bound upgrade waits so repeating weak replacements cannot starve strict callers, which still share one strict request.
     await vi.waitFor(() => expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3))
     expect(mockApi.gh.listWorkItems).toHaveBeenLastCalledWith(
       expect.objectContaining({ noCache: true })
@@ -227,8 +225,7 @@ describe('GitHub provider request upgrade coalescing', () => {
     }
   )
 
-  // Why: the bounded wait lets a force-only request (which still allows gh's own cache to answer)
-  // run beside a noCache one. Whichever settles last used to win the cache unconditionally.
+  // Force-only may overlap noCache; settlement order must not let the weaker reply overwrite fresher results.
   it('keeps a late weaker work-item reply from burying the stronger result', async () => {
     const store = createTestStore()
     const weak = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
@@ -272,8 +269,7 @@ describe('GitHub provider request upgrade coalescing', () => {
       .mockReturnValueOnce(noCacheOnly.promise)
       .mockReturnValue(forcedOnly.promise)
     const first = store.getState().fetchPRChecks('/repo', 1, 'main', 'sha')
-    // Why: force and noCache are incomparable, so each waits out the plain request and the second
-    // one then breaks out of the bounded wait while the first is still in flight.
+    // Force/noCache are incomparable; both await plain work once, then may overlap.
     const noCacheFetch = store
       .getState()
       .fetchPRChecks('/repo', 1, 'main', 'sha', undefined, { noCache: true })
@@ -308,17 +304,20 @@ describe('GitHub provider request upgrade coalescing', () => {
       .mockReturnValueOnce(replacementWeak.promise)
       .mockReturnValue(forcedResult.promise)
 
-    const first = store.getState().fetchProjectViewTable(projectViewRequest)
-    const forcedFetch = store.getState().fetchProjectViewTable(projectViewRequest, { force: true })
-    // Why: only a non-forced entry can be superseded mid-flight, and it has to appear in the
-    // microtask after the first request clears the key — before the forced waiter re-checks it.
+    const first = store.getState().fetchProjectViewTable({ kind: 'local' }, projectViewRequest)
+    const forcedFetch = store
+      .getState()
+      .fetchProjectViewTable({ kind: 'local' }, projectViewRequest, { force: true })
+    // Supersede non-forced entry in the microtask before forced waiter rechecks, after initial request clears.
     const pending = inflightProjectViewRequests.get(
       projectViewRequestKey(projectViewRequest, 'local')
     )
     expect(pending).toBeDefined()
     let replacementFetch: Promise<GetProjectViewTableResult> | undefined
     void pending?.promise.then(() => {
-      replacementFetch = store.getState().fetchProjectViewTable(projectViewRequest)
+      replacementFetch = store
+        .getState()
+        .fetchProjectViewTable({ kind: 'local' }, projectViewRequest)
     })
 
     const staleError = { type: 'network_error' as const, message: 'first attempt offline' }

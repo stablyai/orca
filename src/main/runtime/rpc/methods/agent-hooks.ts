@@ -6,6 +6,7 @@ import { PrepareCodexForWslPaneParams } from '../../../../shared/rpc-contract/ag
 export const AGENT_HOOK_METHODS = [
   defineMethod({
     name: 'agentHooks.prepareCodexForWslPane',
+    permission: 'workspace',
     params: PrepareCodexForWslPaneParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -17,7 +18,10 @@ export const AGENT_HOOK_METHODS = [
           ORCA_CODEX_HOME: params.orcaCodexHome,
           WSL_DISTRO_NAME: params.wslDistro
         },
-        hooksEnabled: isAgentStatusHooksEnabledForAgent(runtime.getClientSettings(), 'codex')
+        hooksEnabled: isAgentStatusHooksEnabledForAgent(
+          runtime.requireStore().getSettings(),
+          'codex'
+        )
       })
     }
   })

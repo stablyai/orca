@@ -3,6 +3,7 @@ import { dialog, type BrowserWindow, type MessageBoxOptions } from 'electron'
 import type { RuntimeRpcStartErrorClass } from '../../shared/telemetry-events'
 import { translateMain } from '../i18n/main-i18n'
 import { track } from '../telemetry/client'
+import { waitForWindowToShow } from '../window/wait-for-window-to-show'
 
 const MAX_VISIBLE_CAUSE_LENGTH = 500
 
@@ -25,7 +26,7 @@ function getErrorCode(error: unknown, seen = new Set<object>()): string | null {
     return null
   }
   seen.add(error)
-  // Why: only a mapped code ends the walk — an unmapped wrapper code would otherwise mask a nested EACCES/ENOSPC.
+  // Unmapped wrapper codes must not hide nested EACCES/ENOSPC; stop only on recognized codes.
   const code = 'code' in error ? error.code : undefined
   if (typeof code === 'string') {
     const normalizedCode = code.toUpperCase()
@@ -62,8 +63,7 @@ function describeRuntimeRpcStartFailure(error: unknown): string {
     : `${normalized.slice(0, MAX_VISIBLE_CAUSE_LENGTH - 1)}…`
 }
 
-// Why: a bare "restart" is wrong for every class but address_in_use — perms, full disks and missing
-// dirs all survive a relaunch, so each class names the thing the user actually has to change.
+// Restart fixes only address_in_use; permissions, full disks and missing directories need specific repair.
 const GUIDANCE_BY_ERROR_CLASS: Readonly<
   Record<RuntimeRpcStartErrorClass, { key: string; fallback: string }>
 > = {
@@ -122,32 +122,6 @@ export function recordRuntimeRpcStartFailure(error: unknown): void {
   } catch (telemetryError) {
     console.error('[runtime] Failed to record RPC startup failure telemetry:', telemetryError)
   }
-}
-
-function waitForWindowToShow(parentWindow: BrowserWindow): Promise<boolean> {
-  if (parentWindow.isDestroyed()) {
-    return Promise.resolve(false)
-  }
-  const parentWebContents = parentWindow.webContents
-  if (parentWebContents.isDestroyed()) {
-    return Promise.resolve(false)
-  }
-  if (parentWindow.isVisible()) {
-    return Promise.resolve(true)
-  }
-  return new Promise((resolve) => {
-    const settle = (visible: boolean): void => {
-      parentWindow.removeListener('show', onShow)
-      parentWebContents.removeListener('destroyed', onDestroyed)
-      resolve(visible)
-    }
-    const onShow = (): void =>
-      settle(!parentWindow.isDestroyed() && !parentWebContents.isDestroyed())
-    const onDestroyed = (): void => settle(false)
-    parentWindow.once('show', onShow)
-    // Why: keep this failure-only waiter off the crowded BrowserWindow `closed` event.
-    parentWebContents.once('destroyed', onDestroyed)
-  })
 }
 
 export async function showRuntimeRpcStartupFailureDialog(

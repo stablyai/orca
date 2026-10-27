@@ -33,6 +33,7 @@ import {
   isKnownRemoteStartFailure
 } from './federated-worker-start-receipts'
 import { parseTaskDeps } from '../worker/task-deps-argument'
+import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -156,6 +157,8 @@ export async function startFederatedWorker(args: {
       protocolVersion: federationProtocolVersion
     }
   })
+  // A remote retry can replace a failed local attempt whose terminal is still live here.
+  releaseRetriedWorkerTerminal(runtime, db, { retryOf: params.retryOf })
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
@@ -169,8 +172,7 @@ export async function startFederatedWorker(args: {
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,
-          // Carry the home dispatch depth across the federation boundary so a
-          // remote worker cannot be mistaken for a root when it dispatches again.
+          // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,
           worktree,

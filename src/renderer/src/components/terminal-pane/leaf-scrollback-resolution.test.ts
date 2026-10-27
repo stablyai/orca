@@ -6,9 +6,7 @@ import {
   type TerminalScrollbackSessionHomes
 } from './leaf-scrollback-resolution'
 
-// Why enumerated off the cap's constant: the invariant "no consumer reads a home directly" only
-// holds while the resolver reads every home the session can persist. A third entry in
-// TERMINAL_SCROLLBACK_SESSION_HOMES fails here (and the Pick type above) until the resolver reads it.
+// Enumerating the cap’s homes makes a new persistence home fail here and in the Pick type until the resolver reads it.
 describe.each(TERMINAL_SCROLLBACK_SESSION_HOMES)('resolveTabScrollbackBuffers reads %s', (home) => {
   const sessionWithBytesOnlyIn: Record<
     (typeof TERMINAL_SCROLLBACK_SESSION_HOMES)[number],

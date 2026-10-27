@@ -22,4 +22,17 @@ describe('runtime navigation authority', () => {
       })
     ).toBe('host')
   })
+
+  it('lets worktree operations default to the host without overriding paired or explicit intent', () => {
+    expect(resolveRuntimeNavigationTarget({ defaultTarget: 'host' })).toBe('host')
+    expect(resolveRuntimeNavigationTarget({ defaultTarget: 'host', notifyClients: false })).toBe(
+      'caller'
+    )
+    expect(resolveRuntimeNavigationTarget({ defaultTarget: 'host', clientKind: 'runtime' })).toBe(
+      'caller'
+    )
+    expect(resolveRuntimeNavigationTarget({ defaultTarget: 'host', navigation: 'clients' })).toBe(
+      'clients'
+    )
+  })
 })

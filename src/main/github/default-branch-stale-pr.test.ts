@@ -1,19 +1,4 @@
-/*
- * Issue #9171 — "Wrong PR diffs displayed when checking out the default branch".
- *
- * A repo's default branch is `master`. In the past someone opened a PR whose
- * HEAD was `master` (accidentally opening a PR *from* the default branch); it
- * was closed long ago. getPRForBranch looks a PR up purely by head branch name
- * with `state=all`, so without a guard that stale closed PR gets attached to
- * the default-branch checkout, surfacing its wrong diffs and checks.
- *
- * These tests assert the CORRECT behavior: an implicit (non-linked) branch or
- * fallback-number match on the repo default branch never surfaces a non-open
- * PR, while open PRs on the trunk and closed/merged PRs on feature branches
- * keep today's behavior. The default branch is resolved by the REAL
- * resolveDefaultBaseRefViaExec over the mocked git exec layer, so the
- * symbolic-ref / rev-parse plumbing and the `origin/` strip are exercised.
- */
+// Implicit non-open PRs must not attach to the default branch; exercise real default-ref resolution over mocked Git.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RateLimitGuardResult =
@@ -35,7 +20,6 @@ const {
   noteRepositoryRateLimitSpendMock,
   ghRepoExecOptionsMock,
   githubRepoContextMock,
-  getSshGitProviderMock,
   readLocalGitConfigSignatureMock,
   acquireMock,
   releaseMock
@@ -67,7 +51,6 @@ const {
     connectionId: connectionId ?? null,
     ...localGitOptions
   })),
-  getSshGitProviderMock: vi.fn(),
   readLocalGitConfigSignatureMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
@@ -107,10 +90,6 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
-}))
-
 vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
@@ -122,22 +101,17 @@ vi.mock('./rate-limit', () => ({
   noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock
 }))
 
-import {
-  getPRForBranch,
-  getPRForBranchOutcome,
-  _resetOwnerRepoCache,
-  _resetMergeQueueCacheForTests,
-  __resetTrackedUpstreamBranchCacheForTests
-} from './client'
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
+import { _resetOwnerRepoCache } from './gh-utils'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { __resetTrackedUpstreamBranchCacheForTests } from './client/lookup/tracked-upstream-cache'
 import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
 const DEFAULT_BRANCH_REF = 'refs/remotes/origin/master'
 
-/**
- * Answer the default-base and tracked-upstream snapshots and merged-at-head probe.
- */
 function primeGitExecForDefaultBranch({
   defaultRef = DEFAULT_BRANCH_REF,
   headOid = 'checkout-head-oid'
@@ -185,8 +159,7 @@ function restPR({
   }
 }
 
-/** Route the REST head-branch lookup; every other gh call fails so branch data
- *  is kept as-is (hydration falls back to the branch payload). */
+// Fixture REST branch lookup only; hydration failures retain its payload.
 function primeGhExecWithBranchList(list: Record<string, unknown>[]): void {
   ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
@@ -204,7 +177,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
-    // Why: getPRForBranch resolves origin through getOwnerRepoForRemote.
     getOwnerRepoForRemoteMock.mockImplementation(
       async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -223,7 +195,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     noteRateLimitSpendMock.mockReset()
     ghRepoExecOptionsMock.mockClear()
     githubRepoContextMock.mockClear()
-    getSshGitProviderMock.mockReset()
     readLocalGitConfigSignatureMock.mockReset()
     readLocalGitConfigSignatureMock.mockResolvedValue(undefined)
     acquireMock.mockReset()
@@ -243,12 +214,10 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
 
     const pr = await getPRForBranch('/repo-root', 'master')
 
-    // The head-branch lookup still runs (state=all) and sees the closed PR…
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1'],
       { cwd: '/repo-root', host: 'github.com' }
     )
-    // …but the default-branch guard discards it: no PR on the trunk (#9171).
     expect(pr).toBeNull()
   })
 
@@ -269,9 +238,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
 
     expect(pr?.number).toBe(8)
     expect(pr?.state).toBe('open')
-    // Open results never consult git for the default branch (lazy resolution).
-    // Remote-name listing is a separate concern from default-branch resolution,
-    // so allow it and keep every other git command forbidden here.
+    // Default-ref resolution stays lazy for open PRs; unrelated remote-name enumeration remains allowed.
     expect(
       gitExecFileAsyncMock.mock.calls
         .map(([args]) => args[0])
@@ -292,7 +259,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
   })
 
   it('preserves the merged-at-head carve-out on a feature branch', async () => {
-    // Worktree HEAD is exactly the merged PR's final head commit.
     primeGitExecForDefaultBranch({ headOid: 'merged-head-oid' })
     primeGhExecWithBranchList([
       restPR({
@@ -377,7 +343,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
   })
 
   it('fails open when the default branch cannot be resolved (stale PR still returned)', async () => {
-    // Every git probe fails: no origin/HEAD, no main/master refs.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'for-each-ref') {
         return { stdout: '', stderr: '' }

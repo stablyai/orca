@@ -1,19 +1,19 @@
 import { constants, copyFileSync, linkSync, lstatSync, mkdtempSync, rmSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
-import { runProcessSync } from '../../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 
-// Keep process startup overhead off small recovery copies.
+// Avoid process startup for small copies.
 const MINIMUM_CLONE_BYTES = 8 * 1024 * 1024
 const MAXIMUM_CLONE_FILES = 16
 
 type RecoveryCopy = { source: string; target: string }
 
-/** Copy quiescent recovery artifacts independently; never copy an active WAL database this way. */
+/** Quiescent artifacts only; raw copying an active WAL database is unsafe. */
 export function copyProfileStateRecoveryFile(source: string, target: string): void {
   copyProfileStateRecoveryFiles([{ source, target }])
 }
 
-/** Targets are staging files; callers validate, fsync and publish. */
+/** Caller validates, fsyncs and publishes these staging files. */
 export function copyProfileStateRecoveryFiles(files: readonly RecoveryCopy[]): void {
   const clones: RecoveryCopy[] = []
   const names = new Set<string>()
@@ -28,7 +28,7 @@ export function copyProfileStateRecoveryFiles(files: readonly RecoveryCopy[]): v
         !/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/i.test(name) ||
         names.has(name.toLowerCase()))
     ) {
-      // cp derives temporary basenames; ambiguous names need their own private directory.
+      // cp derives basenames, so ambiguous names require separate private directories.
       copyProfileStateRecoveryFile(file.source, file.target)
     } else {
       clones.push(file)

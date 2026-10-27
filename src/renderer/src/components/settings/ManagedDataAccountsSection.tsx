@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
@@ -103,8 +104,8 @@ export function ManagedDataAccountsSection({
           variant="outline"
           size="sm"
           onClick={() => {
-            void navigator.clipboard
-              .writeText(command)
+            void window.api.ui
+              .writeClipboardText(command)
               .then(() => setCopied(true))
               .catch((cause: unknown) => setError(String(cause)))
           }}

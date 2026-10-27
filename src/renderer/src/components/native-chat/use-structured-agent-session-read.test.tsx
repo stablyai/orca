@@ -8,7 +8,8 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage
+  type AgentSessionHistoryPage,
+  type AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
@@ -197,7 +198,6 @@ describe('useStructuredAgentSessionRead history window', () => {
       first = result.current.loadOlder()
     })
     expect(result.current.loadingOlder).toBe(true)
-    // A rail jump asking while scroll-to-top's page is in flight joins it.
     act(() => {
       second = result.current.loadOlder()
     })
@@ -340,9 +340,71 @@ describe('useStructuredAgentSessionRead history window', () => {
   })
 })
 
-// A workspace delete closes its structured chats while the pane is still mounted, so every read
-// against that session refuses `agent_session_ownership_unknown` until the tab retires. A page that
-// lost that race must not leave the pane holding an error the live transport is about to clear.
+describe('useStructuredAgentSessionRead currency', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+  })
+
+  it('is current only once a run has been caught up with the host', async () => {
+    const emits: ((event: AgentSessionSubscribeEvent) => void)[] = []
+    mocks.call.mockResolvedValue({
+      ok: true,
+      page: page('tail', [message('m-1', 1, 'user')], false)
+    })
+    const closes: (() => void)[] = []
+    mocks.subscribe.mockImplementation((_target, _params, onEvent, _onError, onClose) => {
+      emits.push(onEvent)
+      closes.push(onClose)
+      return Promise.resolve({ unsubscribe: vi.fn() })
+    })
+    const frame = (sequence: number, hasNewer: boolean): AgentSessionSubscribeEvent => ({
+      type: 'batch',
+      sessionId: 'session-a',
+      batch: {
+        cursor: { epoch: 'epoch-a', sequence },
+        items: [],
+        removedItemIds: [],
+        submissions: []
+      },
+      ...(hasNewer ? { hasNewer: true as const } : {})
+    })
+    const view = renderHook(
+      ({ isVisible }: { isVisible: boolean }) =>
+        useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET, isVisible }),
+      { initialProps: { isVisible: true } }
+    )
+    await waitFor(() => expect(emits).toHaveLength(1))
+    expect(view.result.current.readCurrent).toBe(false)
+
+    // A resume with nothing missed is an empty frame that changes no state.
+    act(() => emits[0]!(frame(view.result.current.state.cursor!.sequence, false)))
+    expect(view.result.current.readCurrent).toBe(true)
+
+    view.rerender({ isVisible: false })
+    expect(view.result.current.readCurrent).toBe(false)
+
+    view.rerender({ isVisible: true })
+    await waitFor(() => expect(emits).toHaveLength(2))
+    act(() => emits[1]!(frame(700, true)))
+    expect(view.result.current.readCurrent).toBe(false)
+    act(() => emits[1]!(frame(900, false)))
+    await waitFor(() => expect(view.result.current.readCurrent).toBe(true))
+
+    // A close makes retained state stale; a queued stream update must not mark it current afterward.
+    act(() => {
+      emits[1]!(frame(950, false))
+      closes[1]!()
+    })
+    expect(view.result.current.readCurrent).toBe(false)
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)))
+    expect(view.result.current.readCurrent).toBe(false)
+  })
+})
+
+// Workspace deletion briefly leaves mounted chats with unknown ownership; an older-page failure must not replace the conversation the stream is retiring.
 describe('useStructuredAgentSessionRead older page failures', () => {
   afterEach(cleanup)
 
@@ -378,7 +440,6 @@ describe('useStructuredAgentSessionRead older page failures', () => {
     return { result, outcome }
   }
 
-  // A failed older page is the list's to retry; it must never replace the loaded conversation.
   it.each([
     ['a closed session', refusal('agent_session_ownership_unknown')],
     ['any other reason', new Error('journal read failed')]
@@ -407,5 +468,66 @@ describe('useStructuredAgentSessionRead older page failures', () => {
       })
     })
     expect(result.current.olderHistoryGeneration).toBeGreaterThan(before)
+  })
+})
+
+// Keep loaded chats, including empty ones, through transport blips; show explicit host refusals or initial-load failures.
+describe('useStructuredAgentSessionRead stream failures', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  const journalRefusal = (details?: { reason: string }) => ({
+    code: 'runtime_error',
+    message: 'agent_session_journal_unreadable',
+    data: {
+      refusal: { code: 'agent_session_journal_unreadable', ...(details ? { details } : {}) }
+    }
+  })
+
+  async function loadedChatWithNoMessages() {
+    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+    expect(result.current.state.status).toBe('ready')
+    return { result, onError: mocks.subscribe.mock.calls[0]?.[3] }
+  }
+
+  it('leaves a loaded chat as it was when the connection drops', async () => {
+    const { result, onError } = await loadedChatWithNoMessages()
+    act(() => onError?.({ code: 'runtime_error', message: 'connection lost' }))
+    expect(result.current.state.status).toBe('ready')
+    expect(result.current.state.error).toBeUndefined()
+    expect(result.current.state.readRefusal).toBeUndefined()
+  })
+
+  // Unknown host refusal reasons are still authoritative answers.
+  it.each([
+    ['with its reason', { reason: 'journalUnavailable' }],
+    ['without a reason', undefined]
+  ])('still reports a refusal the host sent on a loaded chat, %s', async (_case, details) => {
+    const { result, onError } = await loadedChatWithNoMessages()
+    act(() => onError?.(journalRefusal(details)))
+    expect(result.current.state.status).toBe('error')
+    expect(result.current.state.readRefusal).toEqual({
+      code: 'agent_session_journal_unreadable',
+      ...(details ? { details } : {})
+    })
+  })
+
+  it('still reports a failure that names nothing before the chat first loads', async () => {
+    mocks.call.mockRejectedValueOnce(new Error('journal read failed'))
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    expect(result.current.state.error).toBe('journal read failed')
+    expect(result.current.state.epoch).toBeNull()
   })
 })

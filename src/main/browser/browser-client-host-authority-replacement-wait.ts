@@ -1,12 +1,6 @@
 export const DEFAULT_AUTHORITY_REPLACEMENT_GRACE_MS = 45_000
 
-/**
- * Holds a composition open while a replaced runtime's successor comes back to reclaim its guests.
- *
- * The bound is the point: a runtime that never returns would otherwise leave live webviews attached
- * to an authority that will never speak again, which is worse than retiring the environment. Arming
- * is idempotent, so a burst of mismatch errors still yields one deadline.
- */
+/** Allow restart to reclaim live guests, but expire the hold if no successor arrives. */
 export class BrowserClientHostAuthorityReplacementWait {
   private timer: ReturnType<typeof setTimeout> | null = null
 

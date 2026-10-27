@@ -1,9 +1,8 @@
-import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
-import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
+import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-sync-client'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
-import { settingsForRepoOwner } from './owner-routing'
+import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
 
 export const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
 
@@ -32,7 +31,7 @@ export function getSafeAutoForkSyncKey(repo: Repo): string {
   return `${getRepoExecutionHostId(repo)}:${repo.id}:${repo.path}`
 }
 
-export function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): void {
+export function scheduleSafeAutoForkSync(repos: readonly Repo[]): void {
   const now = Date.now()
   pruneSafeAutoForkSyncAttempts(now)
   for (const repo of repos) {
@@ -47,9 +46,13 @@ export function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Re
     ) {
       continue
     }
+    const target = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo))
+    if (!target) {
+      continue
+    }
     const promise = syncRuntimeGitForkDefaultBranch(
       {
-        settings: settingsForRepoOwner(get(), repo.id),
+        target,
         worktreeId: getRepoMainWorktreeId(repo),
         worktreePath: repo.path,
         connectionId: repo.connectionId ?? undefined

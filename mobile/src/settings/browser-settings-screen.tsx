@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Globe } from 'lucide-react-native'
@@ -10,6 +10,8 @@ import {
   type MobileTerminalLinkOpenMode
 } from '../storage/preferences'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const LINK_MODE_OPTIONS: PickerOption<MobileTerminalLinkOpenMode>[] = [
   {
@@ -35,18 +37,30 @@ export default function BrowserSettingsScreen({
 }: {
   onBack?: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const selectionRevision = useRef(0)
+  const failedSelectionRevision = useRef<number | null>(null)
+  const savedMode = useRef<MobileTerminalLinkOpenMode>('orca-browser')
+  const hasSaved = useRef(false)
 
   useEffect(() => {
     let active = true
     void loadTerminalLinkOpenMode().then(
       (mode) => {
-        if (active) {
-          setLinkMode(mode)
+        if (!hasSaved.current) {
+          savedMode.current = mode
+        }
+        if (
+          active &&
+          (selectionRevision.current === 0 ||
+            failedSelectionRevision.current === selectionRevision.current)
+        ) {
+          setLinkMode(savedMode.current)
         }
       },
       () => {
@@ -62,10 +76,20 @@ export default function BrowserSettingsScreen({
 
   const selectLinkMode = useCallback((mode: MobileTerminalLinkOpenMode) => {
     setError(null)
-    // Optimistic, as base was: the row shows the tapped mode before the write lands.
+    const revision = ++selectionRevision.current
     setLinkMode(mode)
-    void saveTerminalLinkOpenMode(mode).catch(() =>
-      setError('Could not save browser preferences. Try again.')
+    void saveTerminalLinkOpenMode(mode).then(
+      () => {
+        savedMode.current = mode
+        hasSaved.current = true
+      },
+      () => {
+        if (revision === selectionRevision.current) {
+          failedSelectionRevision.current = revision
+          setLinkMode(savedMode.current)
+          setError('Could not save browser preferences. Try again.')
+        }
+      }
     )
   }, [])
 
@@ -122,7 +146,7 @@ export default function BrowserSettingsScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -196,4 +220,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2
   }
-})
+}))

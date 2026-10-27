@@ -9,7 +9,6 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -26,7 +25,8 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getPRComments, setPRCommentReaction } from './client'
+import { getPRComments } from './client/fetch/get-pr-comments'
+import { setPRCommentReaction } from './client/update/pr-comment-reaction'
 import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
 import type { RateLimitGuardResult } from './client-test-mocks'
 

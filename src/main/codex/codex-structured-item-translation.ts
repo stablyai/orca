@@ -1,11 +1,11 @@
-import { toolExecutionMetadata, toolWebSearchResults } from '../../shared/native-chat-tool-identity'
+import {
+  toolExecutionMetadata,
+  toolWebSearchResults
+} from '../../shared/native-chat/tools/native-chat-tool-identity'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
-import {
-  boundInlineText,
-  boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
+import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
 import { commandActionFacts } from './codex-command-action-class'
@@ -32,17 +32,15 @@ export {
   MAX_CODEX_TURN_ORDINAL_BYTES,
   MAX_CODEX_TURN_ORDINAL_ENTRIES
 } from './codex-turn-ordinals'
+import { journalReasoningBody } from '../native-chat/agent-session-journal/journal-reasoning-row'
 
-// Codex thread items → journal item bodies.
-
-/** `userMessage` carries structured content parts; `agentMessage` a flat text. */
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   const text =
     item.type === 'agentMessage'
       ? (readString(item, 'text') ?? readTextContent(item, 'content'))
       : readString(item, 'text')
   if (text !== null) {
-    return [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    return [{ type: 'text', text }]
   }
   const content = item.content
   if (!Array.isArray(content)) {
@@ -55,10 +53,7 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
     }
     const partText = readString(part as Record<string, unknown>, 'text')
     if (partText !== null) {
-      blocks.push({
-        type: 'text',
-        text: boundInlineText(partText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-      })
+      blocks.push({ type: 'text', text: partText })
       continue
     }
     const record = part as Record<string, unknown>
@@ -71,32 +66,37 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   return blocks
 }
 
+/** The message text displays the question; this call block enables replies. */
+function codexAsyncQuestionBlock(item: CodexThreadItem): NativeChatBlock | null {
+  if (item.type !== 'agentMessage' || item.delivery !== 'async' || !Array.isArray(item.questions)) {
+    return null
+  }
+  return {
+    type: 'tool-call',
+    name: CODEX_ASYNC_QUESTION_TOOL,
+    callId: item.id,
+    input: { questions: item.questions }
+  }
+}
+
 export type CodexJournalItem = {
   body: AgentJournalItemBody | null
   handled: boolean
 }
 
-function reasoningMessageBody(text: string): AgentJournalItemBody {
-  return { kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text }] }
-}
-
 function commandItem(item: CodexThreadItem): CodexJournalItem {
   const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
-  const bounded = output === null ? null : boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   const parsed = commandActionFacts(item)
   return {
     body: {
       kind: 'tool-call',
       name: parsed?.name ?? 'shell',
       callId: item.id,
-      // Raw command and cwd stay so the expanded view still shows what ran.
-      input: boundToolInput(
-        { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
-        DEFAULT_JOURNAL_PAYLOAD_LIMITS
-      ),
+      // Preserve raw execution details alongside the classified label.
+      input: { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
       state: codexItemRunState(item),
       ...toolExecutionMetadata(item),
-      ...(bounded === null ? {} : { output: bounded.bounded })
+      ...(output === null ? {} : { output: journalPayload(output) })
     },
     handled: true
   }
@@ -117,40 +117,31 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         kind: 'tool-call',
         name: 'apply_patch',
         callId: item.id,
-        input: boundToolInput({ changes: item.changes ?? null }, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+        input: { changes: item.changes ?? null },
         state: codexItemRunState(item)
       },
       handled: true
     }
   }
   const patch = changes.map((change) => change.diff).join('\n')
-  const bounded = boundInlineText(patch, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
   return {
     body: {
       kind: 'diff',
       path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
-      patch: bounded
+      patch: journalPayload(patch)
     },
     handled: true
   }
 }
 
-/** The tool name reaches the row verbatim — downstream dispatch (diff renderer,
- *  question parsers, input previews) matches raw identifiers, so any casing
- *  transform would silently miss them. `server/` qualifies it so two servers
- *  exposing the same tool stay distinguishable and neither shadows a built-in. */
+/** Preserve names for exact dispatch; qualify by server to avoid tool collisions. */
 function mcpToolCallName(item: CodexThreadItem): string {
   const tool = readString(item, 'tool')
   const server = readString(item, 'server')
   return tool === null ? 'mcp' : server === null ? tool : `${server}/${tool}`
 }
 
-/** Row-label derivation only reads top-level keys, so the call's own arguments
- *  have to be the input itself. `arguments` is arbitrary JSON upstream: a
- *  non-object stays addressable under a key rather than being dropped, while a
- *  no-argument call — `{}` on the wire, the shape every argument-less MCP tool
- *  sends — becomes null so the row reads as a bare `server/tool` instead of a
- *  literal `{}`. */
+/** Labels read top-level keys; wrap non-object arguments and omit empty objects. */
 function mcpToolArguments(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) {
     return value === null || value === undefined ? null : { arguments: value }
@@ -163,25 +154,21 @@ function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
   const tool = readString(item, 'tool')
   const failure = readString(readRecord(item.error), 'message')
   const text = failure ?? readTextContent(readRecord(item.result), 'content')
-  const bounded = text === null ? null : boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
     body: {
       kind: 'tool-call',
       name: mcpToolCallName(item),
       callId: item.id,
       ...(server && tool ? { mcpIdentity: { server, tool } } : {}),
-      input: boundToolInput(mcpToolArguments(item.arguments), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+      input: mcpToolArguments(item.arguments),
       state: failure === null ? codexItemRunState(item) : 'failed',
-      ...(bounded === null ? {} : { output: bounded.bounded })
+      ...(text === null ? {} : { output: journalPayload(text) })
     },
     handled: true
   }
 }
 
-/** A row label is read off top-level keys only, so the action's own labelable
- *  fields are hoisted beside the query while `action` stays whole for the
- *  expanded detail. The action `type` lands on `description`, the lowest-ranked
- *  label key, so it names only an action that carries nothing better. */
+/** Hoist action fields for labels; description is the lowest-priority fallback. */
 function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
   const action = readRecord(item.action)
   const fields: [string, unknown][] = [
@@ -192,49 +179,39 @@ function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
   ]
   const query = readString(item, 'query') ?? readString(action, 'query')
   const present = fields.filter(([, value]) => value !== null)
-  // A blank `query` is the run header's "this call has no brief argument"
-  // signal; drop the key and the header stands the row's raw JSON in for one.
+  // A blank query prevents the run header from falling back to raw JSON.
   return query === null && present.length === 0
     ? null
     : { query: query ?? '', ...Object.fromEntries(present) }
 }
 
-/** `webSearch` carries no status: Codex starts it with an empty query and a null
- *  action, then sends the action, so `action` is the completion signal — a
- *  completed item's own `query` is routinely still empty. The hits arrive on
- *  `results` and are the call's output. */
+/** Web search has no status; action presence signals completion even when query is empty. */
 function webSearchItem(item: CodexThreadItem): CodexJournalItem {
   const results = toolWebSearchResults(item.results)
   const hits = Array.isArray(item.results) && item.results.length > 0 ? item.results : null
-  const bounded = hits && boundInlineText(JSON.stringify(hits), DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
     body: {
       kind: 'tool-call',
       name: 'web_search',
       callId: item.id,
       ...(results.length > 0 ? { webSearchResults: results } : {}),
-      input: boundToolInput(webSearchInput(item), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+      input: webSearchInput(item),
       state: item.action === null || item.action === undefined ? 'running' : 'completed',
-      ...(bounded === null ? {} : { output: bounded.bounded })
+      ...(hits === null ? {} : { output: journalPayload(JSON.stringify(hits)) })
     },
     handled: true
   }
 }
 
-/**
- * Journal body for a Codex item, or null for one with nothing to render.
- *
- * Known empty items wait for later deltas. Unknown types become bounded status
- * rows so a provider release cannot make new activity invisible. `started` is a
- * finished item's own started revision, when the caller still holds it.
- */
+/** Unknown items get bounded status rows; started supplies the earlier revision of a finished item. */
 export function codexJournalItem(
   item: CodexThreadItem,
   helperName?: CodexHelperName,
   started?: CodexThreadItem
 ): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
-    const blocks = codexMessageBlocks(item)
+    const question = codexAsyncQuestionBlock(item)
+    const blocks = question ? [...codexMessageBlocks(item), question] : codexMessageBlocks(item)
     return {
       body:
         blocks.length === 0
@@ -270,7 +247,7 @@ export function codexJournalItem(
           ? null
           : {
               kind: 'status',
-              text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+              text,
               presentation: 'plan-document'
             },
       handled: true
@@ -281,13 +258,7 @@ export function codexJournalItem(
       readTextContent(item, 'text') ??
       readTextContent(item, 'summary') ??
       readTextContent(item, 'content')
-    return {
-      body:
-        text === null
-          ? null
-          : reasoningMessageBody(boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text),
-      handled: true
-    }
+    return { body: journalReasoningBody(text), handled: true }
   }
   const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)
   return unhandled ? { body: unhandled.body, handled: false } : { body: null, handled: true }
@@ -297,19 +268,20 @@ export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | nul
   return codexJournalItem(item).body
 }
 
-/** Snapshot body for text still streaming, before its item completes. */
 export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
   return {
     kind: 'message',
     role: 'assistant',
-    blocks: [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    blocks: [{ type: 'text', text }]
   }
 }
 
-/** Snapshot body for any item-level stream, keyed onto its parent item. */
 export function codexStreamingJournalItem(item: CodexThreadItem, text: string): CodexJournalItem {
   if (item.type === 'agentMessage') {
     return { body: codexStreamingMessageBody(text), handled: true }
+  }
+  if (item.type === 'reasoning') {
+    return { body: journalReasoningBody(text), handled: true }
   }
   if (item.type === 'commandExecution') {
     return commandItem({ ...item, aggregatedOutput: text })
@@ -318,9 +290,8 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     const path = Array.isArray(item.changes)
       ? readString(readRecord(item.changes[0]), 'path')
       : null
-    const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
     return {
-      body: { kind: 'diff', path: path ?? 'pending patch', patch: bounded },
+      body: { kind: 'diff', path: path ?? 'pending patch', patch: journalPayload(text) },
       handled: true
     }
   }
@@ -328,18 +299,14 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     return {
       body: {
         kind: 'status',
-        text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+        text,
         presentation: 'plan-document'
       },
       handled: true
     }
   }
-  const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
-    body:
-      item.type === 'reasoning'
-        ? reasoningMessageBody(bounded.text)
-        : { kind: 'status', text: bounded.text },
+    body: { kind: 'status', text },
     handled: true
   }
 }

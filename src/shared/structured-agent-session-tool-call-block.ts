@@ -1,6 +1,4 @@
-// The one definition of a structured journal's tool actions: which rows the chat draws as a
-// tool call, and the block it draws. The status line reads the same definition, so the sidebar
-// names a tool exactly as the chat draws it.
+// Share tool-action projection between chat and sidebar so status names exactly the tool block the transcript draws.
 
 import type {
   AgentJournalDiffItem,
@@ -18,26 +16,28 @@ export function isStructuredAgentSessionToolAction(
   return body?.kind === 'tool-call' || body?.kind === 'diff'
 }
 
-/** A diff carries no lifecycle, so it reads as settled; otherwise a finished edit would stay the
- *  running call for the rest of its turn. */
+/** Diffs have no lifecycle and are settled, or completed edits would remain running all turn. */
 export function isRunningStructuredAgentSessionToolAction(
   action: StructuredAgentSessionToolAction
 ): boolean {
   return action.kind === 'tool-call' && action.state === 'running'
 }
 
+/** Use row itemId when provider call ID is absent so the result cannot pair with another row’s oldest unanswered call. */
 export function structuredAgentSessionToolCallBlock(
-  action: StructuredAgentSessionToolAction
+  action: StructuredAgentSessionToolAction,
+  itemId: string
 ): NativeChatToolCallBlock {
   if (action.kind === 'diff') {
-    return { type: 'tool-call', name: 'Diff', input: { path: action.path } }
+    return { type: 'tool-call', name: 'Diff', input: { path: action.path }, callId: itemId }
   }
   return {
     type: 'tool-call',
     name: action.name,
     input: action.input,
     state: action.state,
-    ...(action.callId !== undefined ? { callId: action.callId } : {}),
+    ...(action.endedAs !== undefined ? { endedAs: action.endedAs } : {}),
+    callId: action.callId ?? itemId,
     ...(action.mcpIdentity !== undefined ? { mcpIdentity: action.mcpIdentity } : {}),
     ...(action.exitCode !== undefined ? { exitCode: action.exitCode } : {}),
     ...(action.durationMs !== undefined ? { durationMs: action.durationMs } : {}),

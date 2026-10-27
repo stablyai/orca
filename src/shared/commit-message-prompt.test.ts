@@ -51,7 +51,6 @@ describe('truncateDiffForPrompt', () => {
     const diff = `${'keep this line\n'.repeat(40)}`
     const result = truncateDiffForPrompt(diff, 95)
     const body = result.split('\n...(diff truncated')[0]
-    // Every retained line is whole.
     for (const line of body.split('\n').filter(Boolean)) {
       expect(line).toBe('keep this line')
     }
@@ -72,10 +71,8 @@ describe('truncateDiffForPrompt', () => {
     const smallFile = 'diff --git a/src/app.ts b/src/app.ts\n+const meaningful = true\n'
     const result = truncateDiffForPrompt(`${hugeFile}${smallFile}`, 1_000)
 
-    // The small, human-authored change survives instead of being cut off.
     expect(result).toContain('a/src/app.ts')
     expect(result).toContain('const meaningful = true')
-    // The huge file is clipped, not the small one.
     expect(result).toMatch(/diff truncated, \d+ bytes omitted/)
   })
 })

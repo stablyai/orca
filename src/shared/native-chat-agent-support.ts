@@ -2,8 +2,7 @@ import type { TuiAgent } from './tui-agent'
 
 export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
 
-/** Agents whose transcripts the native chat view can parse and render, in the
- *  order the settings pane advertises them. */
+/** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'claude',
   'openclaude',
@@ -11,7 +10,8 @@ export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'grok',
   'omp',
   'opencode',
-  'opencode2'
+  'opencode2',
+  'zcode'
 ]
 
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(
@@ -37,15 +37,24 @@ export function shouldStepNativeChatAskAnswer(agent: string | null | undefined):
   )
 }
 
+/** OMP's configurable keys and existing checkbox state cannot be replaced through PTY input. */
+export function nativeChatAskRequiresTerminal(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'omp'
+}
+
+/** OpenCode confirms an interrupt with a second Escape; Claude Code and Codex read Esc-Esc at an idle prompt as rewind. */
+export function nativeChatStopSendsSecondEscape(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'opencode'
+}
+
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
-  // Why: OpenClaude writes the Claude transcript format and layout even though
-  // Orca preserves its distinct agent identity for launch and UI behavior.
+  // OpenClaude writes Claude transcripts but retains distinct launch/UI identity.
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }
-  if (agent === 'opencode' || agent === 'opencode2') {
+  if (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') {
     return 'opencode'
   }
   if (agent === 'codex' || agent === 'grok' || agent === 'omp') {

@@ -2,7 +2,7 @@ function matchesOption(token: string, aliases: readonly string[]): boolean {
   return aliases.some(
     (alias) =>
       token === alias ||
-      token.startsWith(`${alias}=`) ||
+      (alias !== '--' && token.startsWith(`${alias}=`)) ||
       (alias.startsWith('-') &&
         !alias.startsWith('--') &&
         token.startsWith(alias) &&
@@ -13,19 +13,27 @@ function matchesOption(token: string, aliases: readonly string[]): boolean {
 export function findOptionOccurrence(
   tokens: readonly string[],
   aliases: readonly string[],
-  stopAtTerminator: boolean
+  stopAtTerminator: boolean,
+  valueOptions: readonly string[] = [],
+  startIndex = 0,
+  /** False for a flag that takes no value, so the token after it stays where it is. */
+  takesValue = true
 ): { index: number; consumed: number; value?: string } | null {
-  for (let index = 0; index < tokens.length; index += 1) {
+  for (let index = startIndex; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (stopAtTerminator && token === '--') {
       break
     }
     if (!matchesOption(token, aliases)) {
+      // Required option values can look like flags, including `--`.
+      if (valueOptions.includes(token)) {
+        index += 1
+      }
       continue
     }
     const nextToken = tokens[index + 1]
     const consumesNext =
-      aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
+      takesValue && aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
     const alias = aliases.find((name) => matchesOption(token, [name]))
     const value = consumesNext
       ? nextToken

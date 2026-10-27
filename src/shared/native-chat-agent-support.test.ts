@@ -15,6 +15,8 @@ describe('resolveNativeChatTranscriptAgent', () => {
   it('passes codex, grok and omp through and rejects everything else', () => {
     expect(resolveNativeChatTranscriptAgent('opencode')).toBe('opencode')
     expect(resolveNativeChatTranscriptAgent('opencode2')).toBe('opencode')
+    // ZCode’s separate SQLite DB uses OpenCode-v1 history format.
+    expect(resolveNativeChatTranscriptAgent('zcode')).toBe('opencode')
     expect(resolveNativeChatTranscriptAgent('codex')).toBe('codex')
     expect(resolveNativeChatTranscriptAgent('grok')).toBe('grok')
     expect(resolveNativeChatTranscriptAgent('omp')).toBe('omp')
@@ -28,6 +30,7 @@ describe('isNativeChatSupportedAgent', () => {
   it('recognizes the parseable agents and rejects unknown / nullish input', () => {
     expect(isNativeChatSupportedAgent('opencode')).toBe(true)
     expect(isNativeChatSupportedAgent('opencode2')).toBe(true)
+    expect(isNativeChatSupportedAgent('zcode')).toBe(true)
     expect(isNativeChatSupportedAgent('claude')).toBe(true)
     expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
     expect(isNativeChatSupportedAgent('omp')).toBe(true)
@@ -43,6 +46,7 @@ describe('nativeChatRequiresLocalTranscript', () => {
     // native chat has to find their file on a disk this process can read.
     expect(nativeChatRequiresLocalTranscript('opencode')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('opencode2')).toBe(true)
+    expect(nativeChatRequiresLocalTranscript('zcode')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('grok')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('omp')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('claude')).toBe(false)
@@ -58,8 +62,7 @@ describe('shouldStepNativeChatAskAnswer', () => {
   it('steps the digit-commit selector agents (Claude, OpenClaude, Codex)', () => {
     expect(shouldStepNativeChatAskAnswer('claude')).toBe(true)
     expect(shouldStepNativeChatAskAnswer('openclaude')).toBe(true)
-    // Codex 0.145's request_user_input card ignores typed labels and commits on
-    // the highlighted row, so pasted answers misdeliver like STA-1860.
+    // Codex 0.145 commits the highlighted row, ignoring pasted labels (STA-1860).
     expect(shouldStepNativeChatAskAnswer('codex')).toBe(true)
     expect(shouldStepNativeChatAskAnswer('opencode')).toBe(true)
     expect(shouldStepNativeChatAskAnswer('opencode2')).toBe(true)

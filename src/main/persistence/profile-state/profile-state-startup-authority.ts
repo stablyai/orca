@@ -6,7 +6,6 @@ import type {
 } from './profile-state-store-factory'
 import { createLiveProfileStateStore } from './profile-state-live-store-factory'
 
-/** Runtime roots sharing the profile-state selection boundary. */
 export type ProfileStateStartupRuntime = 'desktop' | 'orcad'
 
 export type ProfileStateStartupAuthorityOptions = Omit<
@@ -16,6 +15,7 @@ export type ProfileStateStartupAuthorityOptions = Omit<
   runtime: ProfileStateStartupRuntime
   storageAuthority: AutomationStorageAuthority
   onPersistenceFailure?: (error: Error) => void
+  onPersistenceSaveDelayChanged?: (delayed: boolean) => void
 }
 
 export class ProfileStateStartupAuthorityError extends Error {
@@ -29,7 +29,7 @@ export class ProfileStateStartupAuthorityError extends Error {
   }
 }
 
-/** Construct both runtimes through the same validated authority boundary. */
+/** Desktop and orcad share the validated authority boundary. */
 export async function createProfileStateStoreForStartup(
   options: ProfileStateStartupAuthorityOptions
 ): Promise<ProfileStateStoreFactoryResult> {
@@ -37,6 +37,7 @@ export async function createProfileStateStoreForStartup(
     throw new ProfileStateStartupAuthorityError()
   }
   return createLiveProfileStateStore(options, {
+    onSaveDelayChanged: options.onPersistenceSaveDelayChanged,
     onFailure:
       options.onPersistenceFailure ??
       ((error) =>

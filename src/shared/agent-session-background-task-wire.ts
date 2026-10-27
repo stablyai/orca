@@ -1,13 +1,8 @@
-// The background-tasks half of the agent-session wire: the per-task row, the
-// roster state that carries it, and the field equality both the client reducer
-// and the host status feed compare with. Split out of `agent-session-wire.ts`
-// when that file reached its line budget; the definitions below are unchanged.
+// Background task wire rows and roster; keep task equality consistent across host publication and client reduction.
 
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 
-/** Per-task run state, reusing the agent-state vocabulary the dashboard already
- *  renders. Optional on the wire: an old host sends none and clients fall back
- *  to kind-derived defaults. */
+/** Optional state uses dashboard vocabulary; older hosts fall back to kind-derived defaults. */
 export type AgentSessionBackgroundTaskRunState =
   | 'working'
   | 'monitoring'
@@ -21,18 +16,14 @@ export type AgentSessionBackgroundTask = {
   id: string
   kind: 'agent' | 'workflow' | 'command' | 'monitor' | 'unknown'
   description?: string
-  /** Provider-reported identity (e.g. a subagent type). `description` stays the
-   *  display name; this is the fallback when the description is absent. */
+  /** Provider identity is a fallback name; description remains the display label. */
   name?: string
   state?: AgentSessionBackgroundTaskRunState
   /** Host epoch ms when the task was first observed, so clients render elapsed. */
   startedAt?: number
   /** Cumulative provider-reported token usage, where the provider supplies it. */
   totalTokens?: number
-  /** Whether this row's own stop can act on it. Absent means yes: every host
-   *  that predates this field published only backgrounded, stoppable rows, and
-   *  a client that read absence as "not stoppable" would hide a working control
-   *  on those hosts. A row the host cannot target sends `false`. */
+  /** Absent means stoppable for older hosts, which published only targetable tasks; unsupported targets explicitly send false. */
   stoppable?: boolean
 }
 
@@ -40,21 +31,16 @@ export type AgentSessionBackgroundTaskState = {
   state: 'monitoring'
   /** Optional so mixed-version clients can consume state-only hosts. */
   tasks?: AgentSessionBackgroundTask[]
-  /** Terminal-state siblings of a still-live roster, kept apart from `tasks`
-   *  so old clients keep rendering exactly the live set they render today. */
+  /** Keep settled rows separate so older clients still render only live tasks. */
   settledTasks?: AgentSessionBackgroundTask[]
   /** Optional so clients only send targeted stops to hosts that accept them. */
   supportsTaskStop?: boolean
-  /** Whether an untargeted "stop everything" is available at all. Absent means
-   *  yes: every host that predates this field accepted one, and a client that
-   *  read absence as "no stop" would hide a working control on those hosts.
-   *  A host whose provider exposes no honest stop sends `false`. */
+  /** Absent means stop-all supported for older hosts; providers without a valid stop must send false. */
   supportsStopAll?: boolean
-  /** The host's child records for this session as views, live and recently settled; `tasks` and
-   *  `settledTasks` are derived from them. Absent from older hosts. A reader that does not
-   *  advertise `agent-session.background-task-child-views.v1` never receives a state whose only
-   *  rows are settled: to it, as before, the roster is live work. */
+  /** Host child views derive live/settled task rows; only background-task-child-views.v1 clients may receive settled-only rosters. */
   children?: AgentChildWorkView[]
+  /** Unlisted/refused/dropped child work remains live; absence proves no end. Clear missing evidence on admission, its own end or session end. */
+  incomplete?: true
 }
 
 function backgroundTaskFieldsEqual(
@@ -73,9 +59,7 @@ function backgroundTaskFieldsEqual(
   )
 }
 
-/** Field equality for task lists, shared by the client reducer and the host
- *  status feed so a publish whose only change is one task's state is never
- *  judged equal and dropped. */
+/** Share equality across host/client so a task-state-only change cannot be dropped. */
 export function agentSessionBackgroundTasksEqual(
   left: AgentSessionBackgroundTask[] | undefined,
   right: AgentSessionBackgroundTask[] | undefined

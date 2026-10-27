@@ -125,8 +125,7 @@ export function useWorktreeJumpPaletteSections({
   const paletteSections = useMemo(() => {
     const retainOpenTab = (item: { id: string }): boolean => item.id === retainedOpenTabId
     const retainWorktree = (item: { id: string }): boolean => item.id === retainedWorktreeId
-    // Why: "See more" drops the above-the-fold trim outright instead of stepping 20 at a time, so one
-    // click reveals the whole recent history the shared render cap allows.
+    // See more removes the trim in one step, up to the shared render cap.
     const recentTabsCap = expandedSectionCaps['open-tabs']
       ? openTabsCap
       : EMPTY_QUERY_RECENT_TAB_CAP
@@ -172,6 +171,10 @@ export function useWorktreeJumpPaletteSections({
         })
       : null
     return {
+      // Whole-field equality outranks website navigation; exact words alone do not.
+      hasExactEntityDestination:
+        worktreeItems.some((item) => (item.match.rank?.destination ?? 3) <= 1) ||
+        openTabItems.some((item) => (item.result.rank?.destination ?? 3) <= 1),
       visibleWorktreeItems: worktrees.visible as PaletteItem[],
       worktreeOverflowCount: worktrees.overflowCount,
       visibleProjectTargetItems: projectTargets.visible as PaletteItem[],
@@ -198,8 +201,7 @@ export function useWorktreeJumpPaletteSections({
     worktreeItems
   ])
 
-  // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query, and an
-  // expanded section leaves its unaddressable rows unbadged rather than advertising ⌘10.
+  // Number only snapshotted recent rows: typed queries and expanded rows cannot advertise unavailable numeric shortcuts.
   const recentTabShortcutIndexByItem = useMemo(
     () =>
       new Map(

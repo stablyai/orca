@@ -5,6 +5,7 @@ import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-chan
 import { isTrustedUIRenderer } from '../ipc/ui'
 import type { Store } from '../persistence'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
@@ -17,28 +18,88 @@ import {
   setupAutoUpdater,
   showLinuxPackage,
   type PreQuitCleanupFailureMode,
-  type UpdateInstallMode
+  type UpdateInstallMode,
+  type UpdaterSetupOptions
 } from '../updater'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
-// Why: a manual check can arrive before deferred setup runs, so entry points force this pending setup to configure the updater first.
+// Manual checks may precede deferred setup; entry points must configure first.
 let pendingAutoUpdaterSetup: (() => void) | null = null
 
 export function ensureAutoUpdaterConfigured(): void {
   pendingAutoUpdaterSetup?.()
 }
 
+type UpdaterSetupHooks = {
+  onBeforeUpdateQuit?: () => void | Promise<void>
+  onBeforeUpdateQuitFailure?: PreQuitCleanupFailureMode
+  updateInstallMode?: UpdateInstallMode
+}
+
+function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): UpdaterSetupOptions {
+  return {
+    getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+    onBeforeQuit: async () => {
+      try {
+        await options?.onBeforeUpdateQuit?.()
+      } finally {
+        await store.flushPendingAsync()
+      }
+    },
+    setLastUpdateCheckAt: (timestamp) => {
+      store.updateUI({ lastUpdateCheckAt: timestamp })
+    },
+    getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+    getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+    setPendingUpdateNudgeId: (id) => {
+      // Applying a new campaign clears the hidden card; clearing a campaign must preserve dismissal.
+      if (id) {
+        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+      } else {
+        store.updateUI({ pendingUpdateNudgeId: null })
+      }
+    },
+    setDismissedUpdateNudgeId: (id) => {
+      store.updateUI({ dismissedUpdateNudgeId: id })
+    },
+    getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
+    onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
+    installMode: options?.updateInstallMode
+  }
+}
+
+function setupAutoUpdaterWithAppProxy(
+  mainWindow: BrowserWindow | null,
+  store: Store,
+  options?: UpdaterSetupHooks
+): void {
+  // Starts synchronously, so the session request guard holds the first update check until it settles.
+  void applyProxyToElectronUpdaterSession(store.getSettings())
+  setupAutoUpdater(mainWindow, buildUpdaterSetupOptions(store, options))
+}
+
+/** Headless serve has no window-driven setup; defer the slow require past readiness so remote updater support becomes available (#22261). */
+export function setupHeadlessServeAutoUpdater(store: Store, options: UpdaterSetupHooks): void {
+  setImmediate(() => {
+    try {
+      setupAutoUpdaterWithAppProxy(null, store, options)
+      logStartupMilestone('updater-setup-done')
+    } catch (error) {
+      console.warn(
+        '[serve] updater setup failed:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  })
+}
+
 export function scheduleMainWindowAutoUpdaterSetup(
   mainWindow: BrowserWindow,
   store: Store,
-  options?: {
-    onBeforeUpdateQuit?: () => void | Promise<void>
-    onBeforeUpdateQuitFailure?: PreQuitCleanupFailureMode
-    updateInstallMode?: UpdateInstallMode
-  }
+  options?: UpdaterSetupHooks
 ): void {
-  // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
+  // Cold Windows/Defender makes electron-updater require slow (#7225); defer past paint, with a timer for crash-looping renderers.
   let updaterSetupDone = false
   let updaterSetupFallback: ReturnType<typeof setTimeout> | null = null
   const clearDeferredSetup = (): void => {
@@ -56,35 +117,7 @@ export function scheduleMainWindowAutoUpdaterSetup(
     }
     updaterSetupDone = true
     try {
-      setupAutoUpdater(mainWindow, {
-        getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-        onBeforeQuit: async () => {
-          try {
-            await options?.onBeforeUpdateQuit?.()
-          } finally {
-            await store.flushPendingAsync()
-          }
-        },
-        setLastUpdateCheckAt: (timestamp) => {
-          store.updateUI({ lastUpdateCheckAt: timestamp })
-        },
-        getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-        getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-        setPendingUpdateNudgeId: (id) => {
-          // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
-          if (id) {
-            store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-          } else {
-            store.updateUI({ pendingUpdateNudgeId: null })
-          }
-        },
-        setDismissedUpdateNudgeId: (id) => {
-          store.updateUI({ dismissedUpdateNudgeId: id })
-        },
-        getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
-        onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
-        installMode: options?.updateInstallMode
-      })
+      setupAutoUpdaterWithAppProxy(mainWindow, store, options)
       logStartupMilestone('updater-setup-done')
     } finally {
       clearDeferredSetup()
@@ -124,8 +157,7 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
-  // Why: the response carries a local package path and the reveal touches the native desktop, so
-  // neither may be reached from a guest, dashboard popout, stale window, or utility renderer.
+  // Package paths/native reveal belong only to the current trusted main renderer; refuse guests, popouts and stale/utility windows.
   ipcMain.handle('updater:getLinuxPackageInstallInstructions', (event) => {
     assertTrustedUpdaterRecoverySender(event)
     return getLinuxPackageInstallInstructions()
@@ -151,8 +183,7 @@ export function registerUpdaterHandlers(_store: Store): void {
           builds: await listAvailableReleaseBuilds(channel, { force: options?.force === true })
         }
       } catch (error) {
-        // Why: a network/rate-limit failure is expected here; return it as data so
-        // the picker can render the reason instead of rejecting the invoke.
+        // Return expected network/rate-limit failures as data for the build picker.
         return { ok: false, channel, message: String((error as Error)?.message ?? error) }
       }
     }

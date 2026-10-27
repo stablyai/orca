@@ -1,14 +1,18 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 type ContentProps = {
   title: string
   message?: string
   confirmLabel?: string
-  cancelLabel?: string
+  /** `null` drops the Cancel button, for a notice that only needs acknowledging. */
+  cancelLabel?: string | null
   destructive?: boolean
-  onConfirm: () => void
+  /** Optional for a notice, whose one button only dismisses. */
+  onConfirm?: () => void
   onCancel: () => void
 }
 
@@ -31,6 +35,7 @@ export function ConfirmContent({
   onConfirm,
   onCancel
 }: ContentProps) {
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.content}>
@@ -38,12 +43,14 @@ export function ConfirmContent({
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
       <View style={styles.buttons}>
-        <Pressable
-          style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
-          onPress={onCancel}
-        >
-          <Text style={styles.cancelText}>{cancelLabel}</Text>
-        </Pressable>
+        {cancelLabel === null ? null : (
+          <Pressable
+            style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
+            onPress={onCancel}
+          >
+            <Text style={styles.cancelText}>{cancelLabel}</Text>
+          </Pressable>
+        )}
         <Pressable
           style={({ pressed }) => [
             styles.button,
@@ -51,7 +58,7 @@ export function ConfirmContent({
             pressed && styles.pressed
           ]}
           onPress={() => {
-            onConfirm()
+            onConfirm?.()
             onCancel()
           }}
         >
@@ -64,7 +71,7 @@ export function ConfirmContent({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   content: {
     paddingBottom: spacing.lg
   },
@@ -116,4 +123,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff'
   }
-})
+}))

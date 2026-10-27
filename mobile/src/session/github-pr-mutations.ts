@@ -6,6 +6,7 @@ import {
   githubPrIssueCommentDelete,
   githubPrIssueCommentEdit,
   githubPrMergeRun,
+  githubPrReadyForReviewMark,
   githubPrReviewCommentReplyAdd,
   githubPrReviewersRemove,
   githubPrReviewersRequest,
@@ -24,11 +25,6 @@ import {
   type GitHubPrRepoSlug
 } from './github-pr-repo-slug'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-
-// The github.* PR mutation surface: merge, auto-merge, open/close, reviewers, check reruns, the
-// inline title edit, and the conversation mutations (thread replies, root comments, resolution,
-// slug-addressed comment edit/delete). Each wrapper builds params and hands the bound operation to
-// the settle shape its host reply contract calls for.
 
 export type { GitHubPrMutationOutcome } from './github-pr-mutation-outcome'
 
@@ -51,8 +47,6 @@ export function fetchMergePR(
   )
 }
 
-// Edit the hosted-review title. The host returns a bare boolean (true on success),
-// so it takes the confirmation shape rather than the status envelope.
 export function fetchUpdatePRTitle(
   client: RpcOperationSender,
   worktreeId: string,
@@ -108,6 +102,24 @@ export function fetchUpdatePRState(
         githubPrStateSet.operation.method,
         worktreeId,
         { prNumber: args.prNumber, updates: { state: args.state } },
+        { prRepo: args.prRepo }
+      )
+    )
+  )
+}
+
+export function fetchMarkPRReadyForReview(
+  client: RpcOperationSender,
+  worktreeId: string,
+  args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null }
+): Promise<GitHubPrMutationOutcome> {
+  return settleGithubPrMutation(githubPrReadyForReviewMark, () =>
+    githubPrReadyForReviewMark.request(
+      client,
+      githubPrRequestParams(
+        githubPrReadyForReviewMark.operation.method,
+        worktreeId,
+        { prNumber: args.prNumber },
         { prRepo: args.prRepo }
       )
     )
@@ -177,9 +189,6 @@ export function fetchRerunPRChecks(
   )
 }
 
-// Reply within a review thread. Host returns GitHubCommentResult
-// (`{ ok, comment } | { ok:false, error }`), which the status reader admits.
-// We refetch afterward, so the returned comment is unused.
 export function fetchAddPRReviewCommentReply(
   client: RpcOperationSender,
   worktreeId: string,
@@ -217,7 +226,6 @@ export function fetchAddPRReviewCommentReply(
   )
 }
 
-// Add a root conversation comment to the PR. Host returns GitHubCommentResult.
 export function fetchAddIssueComment(
   client: RpcOperationSender,
   worktreeId: string,
@@ -238,9 +246,7 @@ export function fetchAddIssueComment(
   )
 }
 
-// Resolve/unresolve a review thread. `resolve` picks the direction (the host runs
-// the matching GraphQL mutation). Unlike the comment mutations, the host returns a
-// bare boolean, so a falsy result is a failure rather than the "no status" success.
+// Thread resolution returns boolean confirmation; do not apply status-envelope void-success semantics.
 export function fetchResolveReviewThread(
   client: RpcOperationSender,
   worktreeId: string,
@@ -262,10 +268,7 @@ export function fetchResolveReviewThread(
   )
 }
 
-// Edit a root conversation (issue) comment. The host RPC is slug-addressed
-// (owner/repo/commentId), not worktree-addressed, so the params are passed
-// directly rather than via the PR-scoped builder. Host returns the
-// GitHubProjectMutationResult `{ ok }` envelope the status reader admits.
+// Issue comment edits use owner/repo/commentId rather than worktree-scoped params.
 export function fetchUpdateIssueComment(
   client: RpcOperationSender,
   args: { owner: string; repo: string; host?: string; commentId: number; body: string }
@@ -279,7 +282,6 @@ export function fetchUpdateIssueComment(
   )
 }
 
-// Delete a root conversation (issue) comment. Slug-addressed like the edit wrapper.
 export function fetchDeleteIssueComment(
   client: RpcOperationSender,
   args: { owner: string; repo: string; host?: string; commentId: number }

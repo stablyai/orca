@@ -233,6 +233,26 @@ describe('agent hooks CLI handler', () => {
     }
   )
 
+  it('names the file each status reports on', async () => {
+    writeDataFile(userDataPath, getDefaultPersistedState(userDataPath))
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getManagedAgentHookStatusesMock.mockReturnValue([
+      {
+        agent: 'codex',
+        state: 'installed',
+        configPath: '/u/orca/codex-runtime-home/home/hooks.json',
+        managedHooksPresent: true,
+        detail: null
+      }
+    ])
+
+    await main(['agent', 'hooks', 'status'], userDataPath)
+
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('codex: installed (/u/orca/codex-runtime-home/home/hooks.json)')
+    )
+  })
+
   it.each(['missing', 'corrupt'] as const)(
     'uses the backup index when the primary is %s',
     async (primary) => {
@@ -258,6 +278,17 @@ describe('agent hooks CLI handler', () => {
       const { ensureActiveOrcaProfile } =
         await import('../../main/orca-profiles/profile-index-store.js')
       expect(ensureActiveOrcaProfile(userDataPath).profile.id).toBe(profileId)
+      const opened = openProfileStateDatabase(
+        getOrcaProfileStateDatabaseFile(profileId, userDataPath),
+        profileId
+      )
+      try {
+        expect(JSON.parse(exportProfileStateJson(opened.db)).settings.agentStatusHooksEnabled).toBe(
+          false
+        )
+      } finally {
+        opened.db.close()
+      }
     }
   )
 
@@ -442,6 +473,15 @@ describe('agent hooks CLI handler', () => {
     callMock.mockRejectedValue(new Error('method_not_found'))
 
     await expect(main(['agent', 'hooks', 'prepare-codex'], userDataPath)).resolves.toBeUndefined()
+    expect(callMock).toHaveBeenCalledExactlyOnceWith(
+      'agentHooks.prepareCodexForWslPane',
+      {
+        codexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
+        orcaCodexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
+        wslDistro: 'Ubuntu'
+      },
+      { timeoutMs: 50_000 }
+    )
     expect(process.exitCode).toBeUndefined()
   })
 
@@ -583,7 +623,9 @@ describe('agent hooks CLI handler', () => {
     await runAgentHooksOff(userDataPath)
 
     expect(process.exitCode).toBe(1)
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
     expect(readFileSync(getOrcaProfileDataFile(profileId, userDataPath), 'utf-8')).toBe(before)
+    expect(readFileSync(databaseFile, 'utf-8')).toBe('not sqlite')
   })
 
   it('fails closed when a profile index is present but unreadable', async () => {
@@ -595,6 +637,7 @@ describe('agent hooks CLI handler', () => {
     await runAgentHooksOff(userDataPath)
 
     expect(process.exitCode).toBe(1)
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
     expect(readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')).toBe(before)
   })
 })

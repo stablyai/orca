@@ -1,5 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { safeFind } from '../terminal-search-safe-find'
+import { buildTerminalSearchOptions } from '../terminal-search-options'
 import { resolveTerminalShortcutAction, type MacOptionAsAlt } from './terminal-shortcut-policy'
 import {
   keybindingMatchesAction,
@@ -23,7 +24,9 @@ export function resolveTerminalKeyboardShortcutAction(
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
   isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
   terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first',
-  hasCtrlEnterCsiUAuthority?: Parameters<typeof resolveTerminalShortcutAction>[12]
+  hasCtrlEnterCsiUAuthority?: Parameters<typeof resolveTerminalShortcutAction>[12],
+  getModifyOtherKeysActivePane?: Parameters<typeof resolveTerminalShortcutAction>[13],
+  isActivePaneNonAgentFullScreen?: Parameters<typeof resolveTerminalShortcutAction>[14]
 ): ReturnType<typeof resolveTerminalShortcutAction> {
   return resolveTerminalShortcutAction(
     event,
@@ -38,7 +41,9 @@ export function resolveTerminalKeyboardShortcutAction(
     getWindowsShiftEnterEncoding,
     isWindowsTerminalHost,
     terminalShortcutPolicy,
-    hasCtrlEnterCsiUAuthority
+    hasCtrlEnterCsiUAuthority,
+    getModifyOtherKeysActivePane,
+    isActivePaneNonAgentFullScreen
   )
 }
 
@@ -92,7 +97,7 @@ export function runTerminalSearchNavigation(
   direction: SearchNavigationDirection,
   searchState: SearchState
 ): boolean {
-  const options = { caseSensitive: searchState.caseSensitive, regex: searchState.regex }
+  const options = buildTerminalSearchOptions(searchState)
   return direction === 'next'
     ? safeFind(
         (term, findOptions) => pane.searchAddon.findNext(term, findOptions),

@@ -1,39 +1,35 @@
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
-import {
-  observeStructuredWorker,
-  resolveStructuredWorkerForDispatch
-} from '../../orchestration-structured-worker-lifecycle'
-import { structuredWorkerAddressable } from '../../../../structured-worker-custody'
+import { observeChatAssignee } from '../../../../orchestration/chat-assignee'
+import { inspectSessionWorker } from './session-worker-observation'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
   WorkerDispatchRow
 } from '../../../../orchestration/types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
-/** Observe a worker terminal, re-minting a live handle from the recorded process incarnation when the durable handle went stale, so a still-running worker is never reported missing and leaked. */
+/** Recover live handles by recorded process incarnation so stale durable handles cannot hide and leak running workers. */
 export async function inspectWorkerTerminal(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<{
-  terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
+  terminal: Awaited<ReturnType<WorkerTerminalReleaseRuntime['showTerminal']>> | null
   exact: boolean
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */
   reason?: string
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */
   agentWait?: RuntimeTerminalInteractiveWait | null
-  /** Structured workers only: whether mail still reaches it — at rest included, since the mail
-   *  starts it. Absent when ownership cannot be read. `status` stays the process verdict. */
+  /** Structured workers: mail reachability includes at-rest sessions that mail restarts; absent means ownership unreadable. status remains the process verdict. */
   addressable?: boolean
-  /** The handle that actually resolved: the durable one, or a live handle re-minted from the
-   *  recorded process incarnation after the durable handle went stale. Null when none resolved. */
+  /** The durable or incarnation-reminted live handle; null means none resolved. */
   terminalHandle: string | null
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
@@ -42,43 +38,14 @@ export async function inspectWorkerTerminal(
   if (!terminalHandle) {
     return { terminal: null, exact: false, status: 'unattached', terminalHandle: null }
   }
-  const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
-  if (structured) {
-    // Exactness is the recorded pane and lineage, which the runtime getters answer from the
-    // structured registry; there is no terminal to show.
-    //
-    // `agentWait` is deliberately ABSENT rather than null. Null is the contract's "Orca looked and
-    // found no wait", and nothing here looks: a structured worker parks on a journal question item,
-    // which no terminal prompt scan can see. Reporting null would tell a coordinator the worker is
-    // not waiting, which is the one thing the field's own documentation forbids inferring.
-    const exact = db.isDispatchProcessCurrent({
-      dispatchId,
-      paneKey: structured.paneKey,
-      processIncarnation: structured.processIncarnation
-    })
-    const observation = observeStructuredWorker(structured)
-    const addressable = structuredWorkerAddressable(
-      db,
-      structured.sessionId,
-      db.getWorkerTerminalResourceByHandle?.(structured.handle)
-    )
-    return {
-      terminal: null,
-      exact,
-      status: exact ? observation.status : 'identity_changed',
-      ...(exact && observation.reason ? { reason: observation.reason } : {}),
-      ...(exact && addressable !== null ? { addressable } : {}),
-      terminalHandle: null
-    }
+  const session = await inspectSessionWorker(runtime, db, dispatchId, terminalHandle)
+  if (session) {
+    return session
   }
   let effectiveHandle = terminalHandle
   let terminal = await runtime.showTerminal(effectiveHandle).catch(() => null)
   if (!terminal) {
-    // Why: the durable handle resolves nowhere after a renderer graph epoch bump or handle
-    // invalidation, yet the recorded process incarnation may still name a live PTY. Re-mint a
-    // live handle (incarnation-fenced) so worker-show and release act on the still-running
-    // process instead of reporting it missing — which would leak the agent process tree.
-    // (workerList is a pure DB projection and never calls inspectWorkerTerminal.)
+    // Remint by exact incarnation after durable-handle loss so show/release reach the live process; workerList never performs this inspection.
     const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
     const reminted = resource?.process_incarnation
       ? runtime.resolveTerminalHandleByProcessIncarnation(
@@ -106,13 +73,8 @@ export async function inspectWorkerTerminal(
   if (!exact) {
     return { terminal, exact, status: 'identity_changed', terminalHandle: effectiveHandle }
   }
-  // Why: the aggregate inventory only iterates registered providers, so a dropped
-  // relay clears `connected` for every remote PTY at once. Lost contact is not a
-  // death certificate, and the verdict is the only field that can tell them apart.
-  // Why reused rather than re-derived: showTerminal already scanned this pane's retained
-  // tail for the same verdict, and a second scan could also disagree with the one it published.
-  // Exact-gated by the early return above: a replaced process's prompt would attribute another
-  // lane's blocker to this worker.
+  // Dropped relays clear connected without proving death; reuse showTerminal's host verdict and prompt scan.
+  // Exact identity is required so another process's prompt cannot become this worker's blocker.
   const agentWait = terminal.agentWait
   const verdict = runtime.getTerminalLivenessVerdict?.(effectiveHandle) ?? null
   if (verdict?.status === 'unverifiable') {
@@ -142,10 +104,26 @@ export async function inspectWorkerTerminal(
         terminalHandle: effectiveHandle
       }
     }
+    // Switch point: main's rows carry the host's verdict; `connected` alone is the old word.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && terminal.verdict === 'unverifiable') {
+      return {
+        terminal,
+        exact,
+        status: 'unverifiable',
+        reason: 'missing_liveness_verdict',
+        agentWait,
+        terminalHandle: effectiveHandle
+      }
+    }
     return {
       terminal,
       exact,
-      status: terminal.connected === false ? 'exited' : 'live',
+      status:
+        ORCA_LAYOUT_OWNER_IS_MAIN && terminal.verdict
+          ? terminal.verdict
+          : terminal.connected === false
+            ? 'exited'
+            : 'live',
       agentWait,
       terminalHandle: effectiveHandle
     }
@@ -159,9 +137,7 @@ export async function inspectWorkerTerminal(
   }
 }
 
-/** Why conditional: a present `agentWait: null` must mean "looked, nothing waiting"; an
- *  unattached, missing or identity-changed worker was never looked at, and a bare
- *  `unverifiable` is not actionable without naming what contact was lost. */
+/** Emit agentWait:null only after checking the exact worker; absence means unknown. Name lost contact when liveness is unverifiable. */
 export function exposeObservation(observation: Awaited<ReturnType<typeof inspectWorkerTerminal>>) {
   return {
     status: observation.status,
@@ -177,7 +153,7 @@ function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
     dispatchId: dispatch.id,
     runtimeEpoch: null,
     state: 'unsupervised' as const,
-    // Why: with no worker row Orca supervises only the context; it keeps no record of an --inject paste.
+    // Without a worker row only context is supervised; inject paste has no durable record.
     stage: 'context_only',
     worktreeId: null,
     agentTerminalHandle: dispatch.assignee_handle,
@@ -191,16 +167,13 @@ function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
   }
 }
 
-// Why: `launch_token_hash` and `capability_hash` are authority material with no receipt
-// consumer, and `host_scope` shipped as a JSON string inside JSON. One camelCase shape,
-// the same one `exposeWorker` publishes beside it.
+// Hide authority hashes and decode host_scope; emit one camelCase shape matching exposeWorker.
 export function exposeDispatchContext(dispatch: DispatchContextRow) {
   return {
     id: dispatch.id,
     runId: dispatch.run_id,
     taskId: dispatch.task_id,
-    // Every shipped CLI prints `dispatch.task_id`, and mixed client/host versions are the
-    // normal state, so the rename ships beside the spelling old clients still read.
+    // Keep dispatch.task_id beside the rename because shipped CLIs still read it.
     task_id: dispatch.task_id,
     contractVersion: dispatch.contract_version,
     assigneeHandle: dispatch.assignee_handle,
@@ -223,7 +196,7 @@ export function exposeDispatchContext(dispatch: DispatchContextRow) {
 }
 
 export async function showContextOnlyWorker(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatch: DispatchContextRow
 ) {
@@ -238,9 +211,7 @@ export async function showContextOnlyWorker(
   }
 }
 
-// Why: the row was spread verbatim beside its parsed copies, so a reader got
-// `residual_resources` (a JSON string) next to `residualResources` (an array) and had to
-// guess which was authoritative. Parse once, emit camelCase once.
+// Decode residual_resources once and emit only residualResources; competing raw/parsed forms obscure authority.
 export function exposeWorker(worker: WorkerDispatchRow) {
   return {
     dispatchId: worker.dispatch_id,
@@ -259,15 +230,9 @@ export function exposeWorker(worker: WorkerDispatchRow) {
   }
 }
 
-/**
- * The same fleet verdict `worker-list` publishes, for one Dispatch.
- *
- * Why worker-show needs it: `observation.status` is PTY liveness, so an agent that died
- * at a trust prompt inside a live pane read `live` here and `unverifiable` from
- * `worker-list` — and `worker-list`'s own `nextAction` pointed back at this command.
- */
+/** Use the same agent verdict as worker-list: a live PTY does not prove its agent is live, especially when list recovery points to show. */
 export function projectFleetWorkerPage(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string
 ): ReturnType<typeof projectWorkerFleet> | null {
@@ -281,12 +246,13 @@ export function projectFleetWorkerPage(
     attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
     statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
     limit: 1,
-    now
+    now,
+    observeChat: (sessionId) => observeChatAssignee(sessionId, db)
   })
 }
 
 export function projectFleetWorker(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string
 ): OrchestrationFleetWorker | null {
@@ -298,7 +264,11 @@ export function exposeFederatedWorkerObservation(
   projected: boolean
 ) {
   if (!projected) {
-    return { status: 'unverifiable' as const, exactWorker: false, reason: 'observation_superseded' }
+    return {
+      status: 'unverifiable' as const,
+      exactWorker: false,
+      reason: 'observation_superseded'
+    }
   }
   // Legacy `running` maps to live; an absent peer verdict remains unverifiable.
   return {
@@ -308,7 +278,7 @@ export function exposeFederatedWorkerObservation(
 }
 
 export function resolvePinnedFederatedServer(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   federated: FederatedDispatchRow
 ) {
   const server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
@@ -322,7 +292,7 @@ export function resolvePinnedFederatedServer(
 }
 
 export async function callFederatedWorkerShow(
-  runtime: OrcaRuntimeService,
+  runtime: WorkerTerminalReleaseRuntime,
   federated: FederatedDispatchRow
 ): Promise<{
   runtimeEpoch: string

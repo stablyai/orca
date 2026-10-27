@@ -8,7 +8,10 @@ import type {
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
 } from '../../src/shared/agent-session-wire'
-import type { AgentJournalCursor } from '../../src/shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalCursor
+} from '../../src/shared/agent-session-journal-types'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
@@ -33,6 +36,7 @@ import {
   resetStructuredAgentSessionReadOwnersForTests
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const
@@ -56,7 +60,7 @@ async function fixture() {
       workspaceId: 'folder-workspace',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: join(root, 'journal')
   })
@@ -64,7 +68,7 @@ async function fixture() {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: `output-${index}` },
       { kind: 'status', text: `Tool output ${index}` },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
   for (let index = 1; index < 99; index += 1) {
@@ -121,7 +125,7 @@ describe('structured session cursor/body regression', () => {
   })
 
   it.each([40, 401])(
-    'replays an off-page dispatch after %i missed rows without stranding pending state',
+    'catches up an off-page dispatch after %i missed rows without stranding pending state',
     async (missedRows) => {
       const { journal, appendOutput, accept } = await fixture()
       let hostSummary: AgentSessionStatusSummary | undefined
@@ -132,12 +136,19 @@ describe('structured session cursor/body regression', () => {
             SESSION,
             {
               journal,
-              fence: 1,
-              params: { location: { workspaceId: 'folder-workspace' }, provider: 'codex' }
+              params: {
+                location: {
+                  executionHostId: 'local',
+                  wslDistro: null,
+                  workspaceId: 'folder-workspace',
+                  workspaceKind: 'folder'
+                },
+                provider: 'codex'
+              }
             }
           ]
         ]),
-        getRecord: () => null,
+        getConversation: () => null,
         now: () => 1_000,
         onStatusChanged: (summary) => {
           hostSummary = summary
@@ -224,7 +235,7 @@ describe('structured session cursor/body regression', () => {
       await journal.appendItem(
         { provider: 'orca', clientMessageId: 'completed-turn' },
         { kind: 'turn', turnId: 'turn-1', state: 'completed' },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       subscribers.publish(SESSION, journal)
       await vi.waitFor(() => expect(owner.getSnapshot().state.cursor).toEqual(journal.cursor()))
@@ -233,12 +244,18 @@ describe('structured session cursor/body regression', () => {
       expect(
         projectStructuredAgentSessionStatus(settled.items, settled.submissions, settled.fence)
       ).toBe(hostSummary?.status)
-      expect(settled.submissions).toEqual(journal.snapshot().submissions)
+      expect(settled.submissions).toEqual(
+        missedRows > 200 ? tail.submissions : journal.snapshot().submissions
+      )
       expect({
         cursor: caughtUp.cursor?.sequence,
         dispatch: caughtUp.submissions[0]?.dispatchState,
         unansweredDispatch: hasUnansweredStructuredAgentSessionDispatch(caughtUp.submissions, 1)
-      }).toEqual({ cursor: 100 + missedRows, dispatch: 'accepted', unansweredDispatch: false })
+      }).toEqual({
+        cursor: 100 + missedRows,
+        dispatch: missedRows > 200 ? undefined : 'accepted',
+        unansweredDispatch: false
+      })
       expect(mocks.call).toHaveBeenCalledTimes(1)
       expect(mocks.subscribe).toHaveBeenCalledTimes(2)
       expect(mocks.subscribe.mock.calls[1]?.[1]).toEqual({

@@ -2,7 +2,7 @@ import {
   collectRuntimePaneLeafIds,
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafId
-} from '@/lib/runtime-pane-title-leaf-id'
+} from '../../../../shared/runtime-pane-title-leaf-id'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'

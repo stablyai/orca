@@ -1,12 +1,4 @@
-// Which rows are part of delegating to subagents, rather than newer output that supersedes it.
-//
-// A roster row names the agents it announces, in the order they were added. A Codex collab
-// call (spawn, wait, resume, message, close) names the agents it acts on by thread id, which
-// is the agent id, and delegates to the first; one naming none (a spawn still starting, a
-// wait on any agent) is ordinary output. The host writes it as a tool call; journals from
-// before that hold it as a raw status row. A Claude spawn call names no agent — only its call id, which is re-minted on resume
-// and never a join key — so it belongs to the roster that announces its agent. A drawn row is
-// a spawn when its newest part is one.
+// Codex delegates by the first thread id, including legacy raw frames; Claude spawn call ids change on resume, so join via the announcing roster.
 
 import {
   codexCollabRowAgentIds,
@@ -25,6 +17,17 @@ const CLAUDE_SPAWN_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task'])
 const CODEX_COLLAB_CALL_FRAME = 'item:collabAgentToolCall'
 
 const delegations = new WeakMap<NativeChatMessage, NativeChatSubagentDelegation | null>()
+
+/** An older journal's raw collab-call row: not drawn, but still the agent acting. */
+export function isNativeChatCodexCollabCallFrameRow(message: NativeChatMessage): boolean {
+  const [only] = message.blocks
+  return (
+    message.blocks.length === 1 &&
+    only?.type === 'text' &&
+    only.providerFrame?.provider === 'codex' &&
+    only.providerFrame.kind === CODEX_COLLAB_CALL_FRAME
+  )
+}
 
 export function nativeChatSubagentDelegation(
   message: NativeChatMessage

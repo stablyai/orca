@@ -14,10 +14,18 @@ import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty
 } from '../../../../orchestration/orchestration-party'
+import {
+  admitChatAssignee,
+  chatAssigneeOf,
+  refuseChatSelfAssignment
+} from '../chat-assignee-admission'
+import { sendChatTask } from '../chat-task-delivery'
+import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
     name: 'orchestration.dispatch',
+    permission: 'workspace',
     params: DispatchParams,
     handler: async (
       params,
@@ -49,9 +57,15 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           runId: run.id
         })
       }
-      const assignee = params.to ? resolveDispatchAssigneeParty(params.to, db).address : undefined
+      const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
+      const assignee = assigneeParty?.address
+      // A chat has no pane, process or agent to probe: it is reached as mail to it is.
+      const chatAssignee = assigneeParty ? chatAssigneeOf(assigneeParty) : null
+      if (chatAssignee) {
+        await admitChatAssignee(runtime, chatAssignee, db)
+      }
 
-      // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
+      // Dry-run previews without state changes; skip readiness and use a placeholder Dispatch id.
       if (params.dryRun) {
         const maxDepth = runtime.getNestedWorkerMaxDepth()
         const previewDepth = db.resolveChildDispatchDepth(
@@ -62,6 +76,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
           canDispatchSubWorkers: previewDepth < maxDepth,
+          heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
           taskSpec: task.spec,
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
@@ -84,43 +99,49 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         )
       }
 
-      const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
-      const assigneePaneKey =
-        dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
+      const dispatchAuthority = chatAssignee ? null : runtime.getOrchestrationDispatchAuthority(to)
+      const assigneePaneKey = chatAssignee
+        ? undefined
+        : (dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined)
       const processIncarnation =
         dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
           ? dispatchAuthority.processIncarnation
           : undefined
-      // Why: the assignee side prefers dispatch authority, so the caller side must too — getTerminalPaneKey
-      // alone returns null for a handle reachable only through the window-graph leaf, going inert here.
+      // Resolve dispatch authority on both sides; pane lookup alone misses window-graph-only handles.
       const callerPane = params.from
         ? (runtime.getOrchestrationDispatchAuthority(params.from)?.paneKey ??
           runtime.getTerminalPaneKey(params.from) ??
           null)
         : null
+      if (params.inject && chatAssignee) {
+        // The session wins over `--from`, so a chat calling with none is still refused here.
+        refuseChatSelfAssignment({
+          sessionId: chatAssignee,
+          coordinatorSessionId: orchestrationCaller?.orcaSessionId,
+          remedy: 'Dispatch to a different agent, or use worker-start to create one.'
+        })
+      }
       if (
         params.inject &&
         params.from &&
         (to === params.from || (assigneePaneKey != null && assigneePaneKey === callerPane))
       ) {
-        // An injected preamble into the coordinator's own pane makes it answer itself forever
-        // (worker-start --terminal is the other door). A context-only self-dispatch writes
-        // nothing into the pane and stays legal for low-level topologies.
+        // Refuse self-injected preambles to avoid endless self-answering; context-only topology dispatch remains legal.
         throw new OrchestrationError(
           'terminal_is_coordinator',
           `Terminal ${to} is this coordinator's own terminal. Dispatch to a different agent pane, or use worker-start to create one.`
         )
       }
 
-      // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
-      if (params.inject) {
+      // Require a detected agent before injection so a bare shell cannot execute the preamble.
+      if (params.inject && !chatAssignee) {
         const hasAgent = await runtime.isTerminalRunningAgent(to)
         if (!hasAgent) {
           throw injectRejectedError(to, 'no_agent_detected')
         }
       }
 
-      if (params.inject && (!assigneePaneKey || !processIncarnation)) {
+      if (params.inject && !chatAssignee && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
           `Terminal ${to} has no stable pane/process incarnation for lifecycle authority.`
@@ -138,11 +159,12 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
 
-      // Why: built after ctx so dispatchId is the real ctx.id, letting heartbeats attribute liveness to a specific dispatch context, not just a task.
+      // Build after ctx to put its real id in heartbeats and attribute liveness to this Dispatch.
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
         canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
+        heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
         taskSpec: task.spec,
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
         workerHandle: orcaSessionIdOrHandle(to, db),
@@ -154,24 +176,38 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       let prompt
       if (params.inject) {
         try {
-          prompt = await sendAgentTurn({
-            kind: 'terminal',
-            runtime,
-            handle: to,
-            turn: {
-              purpose: 'dispatch-preamble',
-              body: preamble,
-              operationId: orchestrationMutation?.requestId ?? ctx.id
-            }
-          })
+          if (chatAssignee) {
+            const from = dispatchTaskSource({
+              db,
+              dispatch: ctx,
+              from: params.from,
+              senderName: (party, reported) =>
+                runtime.orchestrationSenderNames.nameOf(party, reported)
+            })
+            await sendChatTask({ db, dispatch: ctx, from, preamble })
+          } else {
+            prompt = await sendAgentTurn({
+              kind: 'terminal',
+              runtime,
+              handle: to,
+              turn: {
+                purpose: 'dispatch-preamble',
+                body: preamble,
+                operationId: orchestrationMutation?.requestId ?? ctx.id
+              }
+            })
+          }
           injected = true
         } catch (err) {
-          db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+          // Unknown delivery may still be running; keep Dispatch open for its report or explicit abandon.
+          if (!(err instanceof OrchestrationError && err.code === 'operation_unknown')) {
+            db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+          }
           throw err
         }
       }
 
-      // Why: returnPreamble is opt-in because the preamble is several hundred bytes most callers don't need in the response.
+      // Opt into returning the preamble to avoid hundreds of unnecessary response bytes.
       if (params.returnPreamble) {
         return {
           dispatch: ctx,
@@ -186,6 +222,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
 
   defineMethod({
     name: 'orchestration.dispatchShow',
+    permission: 'workspace',
     params: DispatchShowParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -203,9 +240,10 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         const workerHandle = ctx?.assignee_handle ?? 'worker'
         const preamble = buildDispatchPreamble({
           taskId: task.id,
-          // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
+          // Use the real Dispatch id for matching previews; use a placeholder before dispatch.
           dispatchId: ctx?.id ?? 'ctx_preview',
           canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+          heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
           taskSpec: task.spec,
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: orcaSessionIdOrHandle(workerHandle, db),

@@ -37,6 +37,7 @@ export function useSettingsPageEffects(
     setMountedSectionIds,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
+    setSettingsHostChoice,
     setSettingsProjectHostSelection,
     setSshHostAddIntentSignal,
     setPendingNavRequestTick,
@@ -67,7 +68,7 @@ export function useSettingsPageEffects(
       return
     }
     let canceled = false
-    // Why: modelStates starts empty, so Voice shouldn't look missing before the first speech-model scan reports state.
+    // An empty pre-scan state does not mean speech models are missing.
     setVoiceModelStatesLoading(true)
     void refreshModelStates().finally(() => {
       if (!canceled) {
@@ -84,11 +85,11 @@ export function useSettingsPageEffects(
       if (event.key !== 'Escape' || event.defaultPrevented) {
         return
       }
-      // Why: nested dialogs/menus own Escape before Settings page-level navigation.
+      // Nested overlays own Escape before page navigation.
       if (hasVisibleOverlay()) {
         return
       }
-      // Why: IME composition owns Escape; ordinary controls should still close Settings.
+      // IME composition owns Escape; ordinary controls may close Settings.
       if (event.isComposing) {
         return
       }
@@ -122,7 +123,7 @@ export function useSettingsPageEffects(
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeSectionId, closeSettingsPageWithPromptGuard, shortcutsEscapeConfirmUntilRef])
 
-  // Why: route window close/quit through the discard dialog; a bare beforeunload veto shows no UI and reads as an unquittable window.
+  // Use the discard dialog for close/quit; a bare unload veto offers no way to resolve dirty state.
   useEffect(() => {
     return registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
@@ -166,7 +167,7 @@ export function useSettingsPageEffects(
       settingsNavigationTarget.repoId,
       repoIdToRepresentative
     )
-    // Why: select the target repo's host before scrolling so its host-specific subsection anchor renders and the scroll lands.
+    // Select the repo’s host before scrolling so host-specific anchors exist.
     const targetRepoId = resolveSettingsTargetRepoId(
       settingsNavigationTarget,
       repoIdToHostSelection.keys()
@@ -181,13 +182,14 @@ export function useSettingsPageEffects(
         : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {
         setSettingsProjectHostSelection(
-          hostSelection.selectionKey,
+          hostSelection.projectId,
           hostSelection.hostId,
-          'setupId' in hostSelection && typeof hostSelection.setupId === 'string'
-            ? hostSelection.setupId
-            : undefined
+          hostSelection.setupId
         )
       }
+    }
+    if (settingsNavigationTarget.hostScope) {
+      setSettingsHostChoice(settingsNavigationTarget.hostScope)
     }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
@@ -196,7 +198,7 @@ export function useSettingsPageEffects(
         ? (settingsNavigationTarget.sectionId ?? null)
         : null
     )
-    // Why: ensure Appearance's nested status-bar section is open before scrolling so the row is visible.
+    // Open Appearance’s nested status-bar section before scrolling to its rows.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
       if (accordion) {
@@ -216,7 +218,7 @@ export function useSettingsPageEffects(
       }
       return new Set(previous).add(paneSectionId)
     })
-    // Why: bump state so the scroll effect runs even when the visible section set is unchanged (target is kept in refs).
+    // Pending refs cannot rerun scrolling; trigger a render even if visible sections stay unchanged.
     setPendingNavRequestTick((tick) => tick + 1)
     clearSettingsTarget()
   }, [
@@ -230,6 +232,7 @@ export function useSettingsPageEffects(
     setPendingNavRequestTick,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
+    setSettingsHostChoice,
     setSettingsProjectHostSelection,
     setSshHostAddIntentSignal,
     settings,

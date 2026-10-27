@@ -40,7 +40,7 @@ function createMockChild(): EventEmitter & { stdout: EventEmitter; stderr: Event
 /** Stand in for the guest shell: banner first, then the payload inside the command's fence. */
 function respondWithFencedPayload(payload: Buffer | string): void {
   execFileMock.mockImplementation((_command, args, _options, callback) => {
-    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
+    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
     const body = typeof payload === 'string' ? Buffer.from(payload, 'utf8') : payload
     const stdout = Buffer.concat([
       Buffer.from(BANNER, 'utf8'),
@@ -79,7 +79,6 @@ describe('WSL login-shell reads are fenced', () => {
   })
 
   it('keeps binary blob bytes intact through the fence', async () => {
-    // Why bytes: decoding to a string to find the fence would mangle a PNG header.
     const binary = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x0a, 0x00, 0x1b])
     respondWithFencedPayload(binary)
 
@@ -95,7 +94,7 @@ describe('WSL login-shell reads are fenced', () => {
   function respondToSshPolicyProbe(configured: string): void {
     execFileMock.mockImplementation((_command, args, _options, callback) => {
       const script = String(args.at(-1))
-      const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(script)?.[1] ?? ''
+      const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(script)?.[1] ?? ''
       const stdout = script.includes('sshcommand')
         ? `${BANNER}__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${configured}__ORCA_WSL_CAPTURE_END_${nonce}__`
         : 'ok'
@@ -112,8 +111,7 @@ describe('WSL login-shell reads are fenced', () => {
   }
 
   it('keeps the BatchMode guard when core.sshCommand is unset behind a banner', async () => {
-    // Banner-only reply: git printed nothing, so no sshCommand is configured.
-    // Unfenced, the banner reads as a configured wrapper and the guard is dropped.
+    // An unfenced banner could masquerade as core.sshCommand and drop the BatchMode guard.
     respondToSshPolicyProbe('')
 
     await gitExecFileAsync(['fetch', 'origin'], {

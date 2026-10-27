@@ -1,4 +1,6 @@
 import React from 'react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { getReviewChecksTone } from './worktree-review-helpers'
 import { Badge } from '@/components/ui/badge'
 import { CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -58,11 +60,23 @@ export function IssueStateBadge({ state }: { state: IssueInfo['state'] }): React
   )
 }
 
-export function LinearStateBadge({ stateName }: { stateName: string }): React.JSX.Element {
+export function LinearStateBadge({
+  stateName,
+  stateType
+}: {
+  stateName: string
+  stateType?: string
+}): React.JSX.Element {
   const normalized = stateName.toLowerCase()
-  const done = /done|closed|complete|completed|merged|resolved/.test(normalized)
-  const cancelled = /cancel|canceled|duplicate|wontfix/.test(normalized)
-  const active = /progress|doing|started|active/.test(normalized)
+  const done = stateType
+    ? stateType === 'completed'
+    : /done|closed|complete|completed|merged|resolved/.test(normalized)
+  const cancelled = stateType
+    ? stateType === 'canceled'
+    : /cancel|canceled|duplicate|wontfix/.test(normalized)
+  const active = stateType
+    ? stateType === 'started'
+    : /progress|doing|started|active/.test(normalized)
   const Icon = done ? CircleCheck : cancelled ? CircleX : active ? Clock : CircleDot
   const tone = done
     ? 'border-purple-500/25 bg-purple-500/5 text-purple-600 dark:text-purple-300'
@@ -100,10 +114,7 @@ export function ReviewStateBadge({
   if (state === 'merged') {
     return (
       <MetadataStatusBadge
-        label={translate(
-          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.f394b3e86e',
-          'State: Merged'
-        )}
+        label={reviewStateLabel(state, label)}
         className="border-purple-500/25 bg-purple-500/5 text-purple-600 dark:text-purple-300"
       >
         <GitMerge />
@@ -114,10 +125,7 @@ export function ReviewStateBadge({
   if (state === 'closed') {
     return (
       <MetadataStatusBadge
-        label={translate(
-          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.e888362def',
-          'State: Closed'
-        )}
+        label={reviewStateLabel(state, label)}
         className="border-rose-500/25 bg-rose-500/5 text-rose-600 dark:text-rose-300"
       >
         <CircleX />
@@ -128,11 +136,7 @@ export function ReviewStateBadge({
   if (state === 'draft') {
     return (
       <MetadataStatusBadge
-        label={translate(
-          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.2931b42b09',
-          'State: Draft {{value0}}',
-          { value0: label }
-        )}
+        label={reviewStateLabel(state, label)}
         className="border-border bg-muted/30 text-muted-foreground"
       >
         <CircleDot />
@@ -142,10 +146,7 @@ export function ReviewStateBadge({
 
   return (
     <MetadataStatusBadge
-      label={translate(
-        'auto.components.sidebar.WorktreeCardMetadataStatusBadges.fe188062a1',
-        'State: Open'
-      )}
+      label={reviewStateLabel(state, label)}
       className="border-emerald-500/25 bg-emerald-500/5 text-emerald-600 dark:text-emerald-300"
     >
       {label === 'MR' ? <GitMerge /> : <PullRequestIcon />}
@@ -193,5 +194,68 @@ export function ReviewChecksBadge({
     >
       <Clock />
     </MetadataStatusBadge>
+  )
+}
+
+export function reviewStateLabel(
+  state: WorktreeCardPrDisplay['state'],
+  label: 'MR' | 'PR'
+): string {
+  if (state === 'merged') {
+    return translate(
+      'auto.components.sidebar.WorktreeCardMetadataStatusBadges.f394b3e86e',
+      'State: Merged'
+    )
+  }
+  if (state === 'closed') {
+    return translate(
+      'auto.components.sidebar.WorktreeCardMetadataStatusBadges.e888362def',
+      'State: Closed'
+    )
+  }
+  if (state === 'draft') {
+    return translate(
+      'auto.components.sidebar.WorktreeCardMetadataStatusBadges.2931b42b09',
+      'State: Draft {{value0}}',
+      { value0: label }
+    )
+  }
+  if (state === 'open') {
+    return translate(
+      'auto.components.sidebar.WorktreeCardMetadataStatusBadges.fe188062a1',
+      'State: Open'
+    )
+  }
+  return translate('workspace.links.checksUnknown', 'Unknown')
+}
+
+export function ReviewChecksIndicator({
+  status
+}: {
+  status: WorktreeCardPrDisplay['status']
+}): React.JSX.Element | null {
+  if (!status || status === 'neutral') {
+    return null
+  }
+  const label = `Checks: ${checksLabel(status)}`
+  const Icon = status === 'success' ? CircleCheck : status === 'failure' ? CircleX : Clock
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          aria-label={label}
+          className={cn(
+            'inline-flex shrink-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            getReviewChecksTone(status)
+          )}
+        >
+          <Icon className="size-2.5" aria-hidden />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

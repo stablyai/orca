@@ -27,12 +27,7 @@ export function useFileExplorerDragExpand({
     [activeWorktreeId, expanded, toggleDir]
   )
 
-  // Why: native drag expand must be expand-only (never collapse). The preload
-  // captures native drop events in the capture phase and stops propagation,
-  // so React's handleDrop never fires and the expand timer is never cleared.
-  // If revealInExplorer already expanded the folder before the timer fires,
-  // a toggleDir call would collapse it. Reading current state at call time
-  // also avoids stale-closure issues with the 500ms timer callback.
+  // Expand only: native drop capture can leave this timer alive after reveal already expanded the folder, so read current state rather than toggle.
   const handleNativeDragExpandDir = useCallback(
     (dirPath: string) => {
       if (!activeWorktreeId) {

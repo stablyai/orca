@@ -19,8 +19,7 @@ vi.mock('./CacheTimer', () => ({
   usePromptCacheCountdownForPane: () => null
 }))
 
-// Captured on the unmodified renderer: a host that sends only today's legacy shapes (an old host,
-// or any CLI pane) must keep rendering exactly these rows.
+// Preserve captured legacy rendering for older hosts and CLI panes.
 
 const NOW = 1_000_000
 
@@ -197,7 +196,7 @@ function stripMarkup(supportsTaskStop: boolean): string {
             tasks={TASKS}
             settledTasks={SETTLED_TASKS}
             supportsTaskStop={supportsTaskStop}
-            supportsStopAll
+            offersStopAll={!supportsTaskStop}
             stoppingTaskIds={new Set(['agent-working'])}
             stoppingAll={false}
             indicatorActive
@@ -221,7 +220,7 @@ describe('chat strip rows from a legacy background-task roster', () => {
     container.innerHTML = markup
     expect([...container.querySelectorAll('li')].map((row) => row.textContent)).toEqual([
       'Failed child · failed',
-      'Background agent · no recent updateStop',
+      'Background agent · status unavailableStop',
       'Cancelled child',
       'Approve edits · needs approvalStop',
       'Summarize logs900',

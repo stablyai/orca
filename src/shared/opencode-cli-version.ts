@@ -1,5 +1,7 @@
 import { isValidAppVersion } from './app-version'
 
+export const OPENCODE_NATIVE_PROMPT_VERSIONS = ['2.0.12', '2.0.16'] as const
+
 export type OpenCodeCliCapabilities = {
   version: string | null
   pluginApi: 'v1' | 'v2' | 'unknown'
@@ -21,6 +23,11 @@ export function getOpenCodeCliCapabilities(
   return {
     version,
     pluginApi: major === '1' ? 'v1' : major === '2' ? 'v2' : 'unknown',
-    promptMode: major === '1' ? 'submit' : version === '2.0.16' ? 'prefill' : 'unknown'
+    promptMode:
+      major === '1'
+        ? 'submit'
+        : OPENCODE_NATIVE_PROMPT_VERSIONS.some((supported) => supported === version)
+          ? 'prefill'
+          : 'unknown'
   }
 }

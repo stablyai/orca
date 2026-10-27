@@ -29,8 +29,6 @@ describe('worktree jump navigation', () => {
     mocks.getVisibleWorktreeShortcutTargets.mockReturnValue([])
     mocks.worktreePassesSidebarFilters.mockReturnValue(false)
     mocks.getState.mockReturnValue({
-      sidebarBody: 'agents',
-      setSidebarBody: vi.fn(),
       worktreesByRepo: { repo: [] },
       showSleepingWorkspaces: true,
       filterRepoIds: ['other-repo'],
@@ -48,8 +46,7 @@ describe('worktree jump navigation', () => {
   })
 
   it('does not blame filters for a worktree that no longer exists', () => {
-    // A retained agent row can outlive its (deleted) worktree; every filter check fails for
-    // an unknown id, so without the existence guard any active filter would toast.
+    // Retained agents can outlive deleted worktrees; missing identity must not falsely blame active filters.
     const state = mocks.getState()
     state.getKnownWorktreeById.mockReturnValue(undefined)
 
@@ -58,18 +55,17 @@ describe('worktree jump navigation', () => {
     expect(mocks.worktreePassesSidebarFilters).not.toHaveBeenCalled()
     expect(mocks.warning).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/deleted', {
-      navigationIntent: 'user-open'
+      navigationIntent: 'user-open',
+      showWorkspaceList: true
     })
   })
 
   it('switches the left sidebar to Spaces and warns when filters hide the target', () => {
-    const state = mocks.getState()
-
     expect(jumpToWorktreeFromSidebar('repo::/target')).toBe(true)
 
-    expect(state.setSidebarBody).toHaveBeenCalledWith('workspaces')
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/target', {
       navigationIntent: 'user-open',
+      showWorkspaceList: true,
       revealInSidebar: false,
       clearSidebarFilters: false
     })
@@ -102,7 +98,8 @@ describe('worktree jump navigation', () => {
     expect(jumpToWorktreeFromSidebar('wt-collapsed')).toBe(true)
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-collapsed', {
-      navigationIntent: 'user-open'
+      navigationIntent: 'user-open',
+      showWorkspaceList: true
     })
     expect(mocks.warning).not.toHaveBeenCalled()
   })
@@ -118,8 +115,7 @@ describe('worktree jump navigation', () => {
   })
 
   it('does not let a hostless legacy target vouch for a host-scoped one', () => {
-    // Legacy rows publish without executionHostId; treating that as a match would clear the
-    // user's filters instead of preserving them and warning.
+    // Legacy hostless rows cannot vouch for remote targets or navigation clears filters instead of warning.
     mocks.getVisibleWorktreeShortcutTargets.mockReturnValue([{ id: 'repo::/target' }])
     mocks.worktreePassesSidebarFilters.mockReturnValue(false)
 
@@ -127,6 +123,7 @@ describe('worktree jump navigation', () => {
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/target', {
       navigationIntent: 'user-open',
+      showWorkspaceList: true,
       revealInSidebar: false,
       clearSidebarFilters: false,
       executionHostId: 'ssh:beta'
@@ -135,24 +132,20 @@ describe('worktree jump navigation', () => {
   })
 
   it('routes folder workspaces through the workspace dispatcher without a filter check', () => {
-    const state = mocks.getState()
-
     expect(jumpToWorktreeFromSidebar('folder:folder-1', { executionHostId: 'local' })).toBe(true)
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('folder:folder-1', {
       navigationIntent: 'user-open',
+      showWorkspaceList: true,
       executionHostId: 'local'
     })
     // Folder workspaces never get the filter-hidden treatment.
     expect(mocks.worktreePassesSidebarFilters).not.toHaveBeenCalled()
-    expect(state.setSidebarBody).toHaveBeenCalledWith('workspaces')
   })
 
   it('propagates a blocked folder-workspace activation as failure', () => {
-    const state = mocks.getState()
     mocks.activateAndRevealWorkspace.mockReturnValue(false)
 
     expect(jumpToWorktreeFromSidebar('folder:folder-1')).toBe(false)
-    expect(state.setSidebarBody).not.toHaveBeenCalled()
   })
 })

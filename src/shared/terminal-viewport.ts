@@ -1,7 +1,8 @@
 export const TERMINAL_VIEWPORT_MIN_COLS = 20
 export const TERMINAL_VIEWPORT_MAX_COLS = 1024
 export const TERMINAL_VIEWPORT_MIN_ROWS = 8
-export const TERMINAL_VIEWPORT_MAX_ROWS = 120
+// Why: matches the terminal.subscribe/send viewport bound; a 120 cap left tall remote panes taller than their PTY (#27425).
+export const TERMINAL_VIEWPORT_MAX_ROWS = 500
 
 export function clampTerminalViewport(cols: number, rows: number): { cols: number; rows: number } {
   return {

@@ -1,43 +1,28 @@
-import { useCallback, useEffect } from 'react'
+import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
+import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
-import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
+import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-registry'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
-import type { HostSectionRow } from '../../host-section-rows'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import {
   getCyclableRowIdentity,
   getCyclableWorktreeRows,
   resolveActiveCycleIdentity,
-  resolveCycledWorktreeId
+  resolveCycleAnchorExecutionHostId,
+  resolveCycleAnchorWorktreeId,
+  resolveCycledWorktreeId,
+  type LastActiveCycleWorkspace
 } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  // xterm's hidden input textarea isn't a real text field; treating it as one would block sidebar shortcuts.
-  if (target.classList.contains('xterm-helper-textarea')) {
-    return false
-  }
-
-  if (target.isContentEditable) {
-    return true
-  }
-
-  return (
-    target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !==
-    null
-  )
-}
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useWorktreeListKeyboardNavigation(args: {
   rows: HostSectionRow[]
@@ -62,19 +47,39 @@ export function useWorktreeListKeyboardNavigation(args: {
     markDirectScrollInput
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
+  const lastActiveWorkspaceRef = useRef<LastActiveCycleWorkspace | null>(null)
+  useEffect(() => {
+    // Closing the last tab clears both selection and host; history retains only the id.
+    if (activeWorktreeId !== null) {
+      lastActiveWorkspaceRef.current = {
+        worktreeId: activeWorktreeId,
+        executionHostId: activeWorkspaceExecutionHostId
+      }
+    }
+  }, [activeWorktreeId, activeWorkspaceExecutionHostId])
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
-      // Why: cycle over the rows the sidebar actually rendered — collapsing a group
-      // means "not now", and a rebuilt near-copy would drift from what is on screen
-      // (host sections, pinned placement, folder workspaces).
+      // Cycle actual rendered rows so collapse, pins, hosts and folder workspaces stay aligned with the screen.
       const worktreeRows = getCyclableWorktreeRows(rows, pinnedDisplayPolicy)
+      const { worktreeNavHistory, worktreeNavHistoryIndex } = useAppStore.getState()
+      const anchorWorktreeId = resolveCycleAnchorWorktreeId({
+        activeWorktreeId,
+        navHistory: worktreeNavHistory,
+        navHistoryIndex: worktreeNavHistoryIndex,
+        worktreeIds: worktreeRows.map((row) => row.worktree.id)
+      })
       const nextWorktreeIdentity = resolveCycledWorktreeId({
         worktreeIds: worktreeRows.map(getCyclableRowIdentity),
         activeWorktreeId: resolveActiveCycleIdentity({
           rows: worktreeRows,
-          activeWorktreeId,
-          activeWorkspaceExecutionHostId
+          activeWorktreeId: anchorWorktreeId,
+          activeWorkspaceExecutionHostId: resolveCycleAnchorExecutionHostId({
+            anchorWorktreeId,
+            activeWorktreeId,
+            activeWorkspaceExecutionHostId,
+            lastActiveWorkspace: lastActiveWorkspaceRef.current
+          })
         }),
         direction
       })
@@ -114,13 +119,14 @@ export function useWorktreeListKeyboardNavigation(args: {
       scrollRef.current?.removeAttribute('data-keyboard-navigation')
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (activeModal !== 'none' || isEditableTarget(e.target)) {
+      if (e.defaultPrevented || e.isComposing || activeModal !== 'none') {
         return
       }
 
       const platform = getShortcutPlatform()
       if (
         keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
+        !textFieldClaimsActionKey(e, 'sidebar.focusWorktreeList') &&
         !hasVisibleOverlay()
       ) {
         scrollRef.current?.focus()
@@ -133,19 +139,22 @@ export function useWorktreeListKeyboardNavigation(args: {
         : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
           ? 'down'
           : null
-      if (direction && !hasVisibleOverlay()) {
+      const directionAction = direction === 'up' ? 'worktree.navigateUp' : 'worktree.navigateDown'
+      if (direction && !textFieldClaimsActionKey(e, directionAction) && !hasVisibleOverlay()) {
         endListNavigation()
         markDirectScrollInput()
         navigateWorktree(direction)
         e.preventDefault()
+        // Why: a user-bound chord fired from a field must not also reach the field's own handler.
+        e.stopPropagation()
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    addAppKeyListener('keydown', handleKeyDown)
     window.addEventListener('pointerdown', endListNavigation, { capture: true })
     window.addEventListener('focusout', endListNavigation, { capture: true })
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, { capture: true })
+      removeAppKeyListener('keydown', handleKeyDown)
       window.removeEventListener('pointerdown', endListNavigation, { capture: true })
       window.removeEventListener('focusout', endListNavigation, { capture: true })
     }

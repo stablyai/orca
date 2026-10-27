@@ -35,6 +35,8 @@ export async function renderWorktreeListMarkup(): Promise<string> {
 export function createAppStoreModuleMock(): Record<string, unknown> {
   const getMockState = (): Record<string, unknown> => ({
     detectedWorktreesByRepo: {},
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     ...mockStore.state
   })
   const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
@@ -214,7 +216,6 @@ export function createWorktreeContextMenuModuleMock(): Record<string, unknown> {
   return {
     default: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
-    CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
     WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
   }
 }

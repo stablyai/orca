@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import { useStoredBufferedTerminalDrafts } from './use-stored-buffered-terminal-drafts'
+import { useCallback, useRef } from 'react'
 import type { RefObject } from 'react'
 import {
   type BufferedTerminalDraftRestorationToken,
@@ -21,6 +22,9 @@ interface BufferedTerminalDraftSend {
 }
 
 interface UseBufferedTerminalDraftsOptions {
+  readonly storageScope?: string
+  readonly storageKey?: string
+  readonly onStorageError?: () => void
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
 }
@@ -42,13 +46,23 @@ function getBufferedTerminalDraftSurfaceKey(tab: BufferedTerminalDraftTab): stri
 
 export function useBufferedTerminalDrafts({
   activeHandle,
-  activeHandleRef
+  activeHandleRef,
+  storageKey,
+  storageScope,
+  onStorageError
 }: UseBufferedTerminalDraftsOptions) {
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
   const pendingRestorationsRef = useRef<Map<string, BufferedTerminalDraftRestorationToken>>(
     new Map()
   )
   const handlesBySurfaceRef = useRef<Map<string, string>>(new Map())
+  const reconciledRef = useRef(false)
+  const [drafts, setDrafts] = useStoredBufferedTerminalDrafts(
+    storageKey,
+    handlesBySurfaceRef,
+    reconciledRef,
+    onStorageError,
+    storageScope
+  )
   const input = activeHandle ? (drafts[activeHandle] ?? '') : ''
 
   const setInput = useCallback(
@@ -112,6 +126,7 @@ export function useBufferedTerminalDrafts({
       nextTabs: readonly BufferedTerminalDraftTab[],
       { retainMissingSurfaces = false }: ReconcileBufferedTerminalDraftTabsOptions = {}
     ): void => {
+      reconciledRef.current = true
       const handlesBySurface = handlesBySurfaceRef.current
       for (const tab of previousTabs) {
         if (tab.type && tab.type !== 'terminal') {
@@ -175,6 +190,7 @@ export function useBufferedTerminalDrafts({
   const resetDrafts = useCallback((): void => {
     pendingRestorationsRef.current.clear()
     handlesBySurfaceRef.current.clear()
+    reconciledRef.current = false
     setDrafts((current) => (Object.keys(current).length === 0 ? current : {}))
   }, [])
 

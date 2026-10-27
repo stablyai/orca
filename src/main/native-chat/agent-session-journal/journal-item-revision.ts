@@ -1,5 +1,18 @@
 import type { JournalReducerState } from './journal-reducer'
 
+export function nextJournalItemRevision(
+  state: JournalReducerState,
+  itemId: string,
+  revisions?: Map<string, number>
+): number {
+  const resolved = state.aliases.get(itemId) ?? itemId
+  const revision =
+    (revisions?.get(resolved) ??
+      Math.max(state.items.get(resolved)?.revision ?? 0, state.tombstones.get(resolved) ?? 0)) + 1
+  revisions?.set(resolved, revision)
+  return revision
+}
+
 export function journalItemRevisionIsStale(
   state: JournalReducerState,
   itemId: string,

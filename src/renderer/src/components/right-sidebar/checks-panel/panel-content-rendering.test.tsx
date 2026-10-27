@@ -4,7 +4,6 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
-import { ChecksPanelReviewHeader } from '../ChecksPanel'
 
 vi.mock('../HostedReviewActions', () => ({ default: () => null }))
 vi.mock('../SourceControlAgentActionDialog', () => ({ SourceControlAgentActionDialog: () => null }))
@@ -116,17 +115,19 @@ describe('checks panel concrete content', () => {
       activeWorktreeId: 'worktree-1',
       agentComposerState: null,
       aiActionDisabledReason: undefined,
+      fixChecksDisabledReason: undefined,
       canTargetPRComments: false,
       checks: [],
+      checksError: null,
       checksLoading: false,
       claimedCommentResolutionRef: { current: null },
       commentResolutionLaunchAcceptedRef: { current: false },
       comments: [],
       commentsDisabledReason: undefined,
+      commentsError: null,
       commentsLoading: false,
       commentsSelectionClearRequest: null,
       conflictDetailsRefreshing: false,
-      consumeClaimedCommentResolutionAfterDeliveryRef: { current: vi.fn() },
       detachedHeadDisplay: null,
       editingTitle: false,
       getGitLabProjectRef: vi.fn(() => null),
@@ -135,8 +136,6 @@ describe('checks panel concrete content', () => {
       handleDeleteComment: vi.fn(),
       handleEditComment: vi.fn(),
       handleFixChecksWithAI: vi.fn(),
-      handleLaunchAborted: vi.fn(),
-      handleLaunchAccepted: vi.fn(),
       handleLinkAnotherReview: vi.fn(),
       handleLoadCheckDetails: vi.fn(),
       handleOpenPR: vi.fn(),
@@ -173,9 +172,7 @@ describe('checks panel concrete content', () => {
       titleSaving: false
     } satisfies ChecksPanelActiveContentModel
 
-    render(
-      <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
-    )
+    render(<ChecksPanelActiveContent model={model} />)
 
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
     expect(screen.getByText('No checks configured')).toBeTruthy()

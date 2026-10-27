@@ -1,5 +1,5 @@
 import type { DetailCommentRenderersModel } from './use-mobile-tasks-detail-comment-renderers'
-import { type PickerOption, View, useMemo } from './mobile-tasks-dependencies'
+import { type PickerOption, View, useMemo, useMobileColorScheme } from './mobile-tasks-dependencies'
 import {
   type GitHubRepoSources,
   type LinearTeam,
@@ -10,13 +10,17 @@ import {
   type TaskListEntry,
   sortMobileTaskItems,
   getRepoBadgeColor,
+  getTaskRepoDetail,
   hasGitHubIssueSourceChoice,
   issueSourceSlug,
   taskRepositoryMeta
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { PROVIDER_LABELS } from './mobile-task-view-options'
+import { jiraSiteLabel } from './jira-mobile-connection'
 
 export function useMobileTasksPickerProjection(model: DetailCommentRenderersModel) {
+  const colorScheme = useMobileColorScheme()
   const {
     createRepoId,
     createTeamId,
@@ -29,11 +33,13 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     githubRepoSources,
     hostedRepos,
     items,
+    jiraConnection,
     linearTeams,
     provider,
     reposById,
     selectedHostedRepos,
-    selectedRepoIds,
+    effectiveRepoIds,
+    repoHostLabels,
     taskSort,
     visibleProviders,
     workspaceRepos
@@ -44,14 +50,9 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
         ? hostedRepos.map((repo) => ({
             value: repo.id,
             label: repo.displayName,
-            subtitle: repo.path,
+            subtitle: getTaskRepoDetail(repo, repoHostLabels),
             renderIcon: () => (
-              <View
-                style={[
-                  styles.pickerRepoDot,
-                  { backgroundColor: getRepoBadgeColor(repo, repo.displayName) }
-                ]}
-              />
+              <View style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]} />
             )
           }))
         : linearTeams.map((team) => ({
@@ -59,7 +60,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
             label: team.name,
             subtitle: team.workspaceName
           })),
-    [hostedRepos, linearTeams, provider]
+    [hostedRepos, linearTeams, provider, repoHostLabels]
   )
   const selectedCreateTarget =
     provider === 'github' || provider === 'gitlab'
@@ -69,10 +70,20 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     provider === 'github' || provider === 'gitlab'
       ? ((selectedCreateTarget as RepoSummary | null)?.displayName ?? 'Select target')
       : ((selectedCreateTarget as LinearTeam | null)?.name ?? 'Select target')
-  const providerLabel =
-    provider === 'github' ? 'GitHub' : provider === 'gitlab' ? 'GitLab' : 'Linear'
+  const providerLabel = PROVIDER_LABELS[provider]
   const showHeaderCreateTask =
     provider === 'linear' || (provider === 'github' && githubMode === 'items')
+  const jiraSiteOptions = useMemo<PickerOption<string>[]>(
+    () => [
+      { value: 'all', label: 'All sites' },
+      ...jiraConnection.sites.map((site) => ({
+        value: site.id,
+        label: jiraSiteLabel(site),
+        subtitle: site.siteUrl
+      }))
+    ],
+    [jiraConnection.sites]
+  )
   const providerOptions = useMemo(
     () => PROVIDER_OPTIONS.filter((option) => visibleProviders.includes(option.value)),
     [visibleProviders]
@@ -108,29 +119,24 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
         )
       : `${githubIssueSourceRows.length} sources`
   const repoPickerLabel =
-    selectedRepoIds.size === 0 || selectedHostedRepos.length === hostedRepos.length
+    effectiveRepoIds.size === 0 || selectedHostedRepos.length === hostedRepos.length
       ? 'All repos'
       : selectedHostedRepos.length === 1
         ? selectedHostedRepos[0]!.displayName
         : `${selectedHostedRepos.length} repos`
   const repoPickerSelectedRepo =
-    selectedRepoIds.size > 0 && selectedHostedRepos.length === 1 ? selectedHostedRepos[0]! : null
+    effectiveRepoIds.size > 0 && selectedHostedRepos.length === 1 ? selectedHostedRepos[0]! : null
   const workspaceRepoOptions = useMemo<PickerOption<string>[]>(
     () =>
       workspaceRepos.map((repo) => ({
         value: repo.id,
         label: repo.displayName,
-        subtitle: repo.path,
+        subtitle: getTaskRepoDetail(repo, repoHostLabels),
         renderIcon: () => (
-          <View
-            style={[
-              styles.pickerRepoDot,
-              { backgroundColor: getRepoBadgeColor(repo, repo.displayName) }
-            ]}
-          />
+          <View style={[styles.pickerRepoDot, { backgroundColor: getRepoBadgeColor(repo) }]} />
         )
       })),
-    [workspaceRepos]
+    [repoHostLabels, workspaceRepos]
   )
   const sortedItems = useMemo(
     () => sortMobileTaskItems(items, taskSort, reposById),
@@ -156,7 +162,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
       entries.push({ type: 'item', key: item.key, item })
     }
     return entries
-  }, [reposById, sortedItems, taskSort])
+  }, [colorScheme, reposById, sortedItems, taskSort])
   const sortLabel = SORT_OPTIONS.find((option) => option.value === taskSort)?.label ?? 'Updated'
   const githubProjectFields = githubProjectTable?.selectedView.fields ?? []
   const githubProjectViewSort = githubProjectTable?.selectedView.sortByFields?.[0] ?? null
@@ -211,6 +217,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     createTargetOptions,
     selectedCreateTarget,
     selectedCreateTargetLabel,
+    jiraSiteOptions,
     providerLabel,
     showHeaderCreateTask,
     providerOptions,

@@ -1,0 +1,1874 @@
+{
+  "purpose": "Actual store lifecycle readiness, worker migration/fallback and large aggregate-report costs.",
+  "node": "v24.20.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpuModel": "Apple M4 Max",
+  "rounds": 6,
+  "usageKeys": 100000,
+  "inputReceipts": {
+    "legacyInlineBytes": 6326724,
+    "legacyInlineSha256": "c26dfb42e1975d0832a85c5764e2b2d18b6e30229c0b7274e3ac62606d842761",
+    "stableReportBytes": {
+      "published": 6326724,
+      "main": 1488,
+      "current": 1572
+    },
+    "largeReportBytes": {
+      "published": 13869524,
+      "main": 13869504,
+      "current": 13869588
+    },
+    "largeReportSessions": 13222
+  },
+  "methodology": {
+    "actual": "Production lifecycle, report parser/serializer, inline migration and source durable writes. Prestarted Node workers call the actual splitter and return exact immutable reportText/proof fact.",
+    "segments": "Constructor interval includes synchronous stat/read/parse. Main JSON.parse calls and production setImmediate validation yields are observed without changing their inputs/results. Segment observations exclude time waiting for the worker/filesystem.",
+    "shortcut": "Large-report repeat arm deliberately re-verifies the same worker-validated text on main; trusted arm uses the private worker result fact. Both preserve exact report and disabled-history accessibility.",
+    "largeReport": "About 13MiB of distinct aggregate rollups, with no source graph. This isolates a retained valid report even when its independently committed source cache is absent; it does not claim transcript parity for a generated historical corpus.",
+    "exclusions": "Worker startup, application startup, rendered responsiveness, RPC queueing and telemetry are excluded. Inactive telemetry/analytics/worktree accesses throw if reached. Worker message transfer and production main parse remain included in whenLoaded.",
+    "correctness": "Each loaded sessions/daily projection matches its input, remains accessible with tracking disabled, and report-only stores retain no source graph."
+  },
+  "toolingSha256": "b1d77e6bca0f0f56d5a192400675caa6993339936a744d9979ae5c416c0449bc",
+  "supportToolingSha256": {
+    "claude-usage-benchmark-persistence.mjs": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
+    "claude-usage-benchmark-readiness.mjs": "4927c6ca51f43645cb2faa48804d4d80da4eab52b547f8e997b4c92451c27088",
+    "claude-usage-benchmark-scanner.mjs": "cbaf8140fd02f617419548db76bc46eb8235568d61b8ee06cdef6ed104b048a0"
+  },
+  "arms": {
+    "published": {
+      "commit": "8467877ed92aba2ef59737aebf461e9cab52c273",
+      "scanner": {
+        "bundleSha256": "5268ad6672da5a53533e72a92648639b1015c8b378097a3cf4c0d907d9b3f393",
+        "sourceFingerprints": {
+          "src/main/claude-usage/scanner.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "ef42add20f63152cf2ebe106e0794119b9c388c763736c8450b559ae7c2418f5"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "6598c02e38ea1776ef5ef926ca424dbc5880f27e7ff03b651cf8f60b791996f6"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+          },
+          "src/main/claude-usage/transcript-token-checkpoint.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "e96cc4aa9b899cad90aee462f053f483f5bb010dea99de1ee11a9f8fd8a2d0f2"
+          },
+          "src/main/claude-usage/transcript-usage-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "56e2fe017f806670595dae766b6291e09b05b321b83e4b83e1ae5166bab2041c"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          },
+          "src/main/usage/jsonl-file-checkpoint.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+          },
+          "src/main/usage/jsonl-file-snapshot.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+          },
+          "src/main/usage/jsonl-line-offsets.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+          },
+          "src/shared/definitive-filesystem-absence.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "32344097f40a7106fa41936b23bd485e12a1c6c4aca33b8feae0f3fc73f6010a"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "4534b3ff429df50140595ee536507c33f0a8b45434f09d7446f4592a37dbe2fb",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b03bc2db9f1f93e9d26ba31b8a469f85f27237498a520ea5cc128df397d1ff94"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "7df97e1a448696348cf89506085ea4959a7e876dae1a03b8ef02e32346feb295"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "baffe60b5c403b0d65afc7608c1903f726dee12d61a597c1d9525c82b4ed7bc4"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "49759bda2ba0efb81ac785eb13d4c51685dac505f5aa245144d441353793b5b0"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "1ecfcf5f829617792a2b16615001aee4c888cc80c3e8156191378c4a57d637b6"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19",
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91",
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2"
+        }
+      },
+      "workerBootstrapSha256": null
+    },
+    "main": {
+      "commit": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+      "scanner": {
+        "bundleSha256": "afe7856890c4992bdc518344842478f8ec3ed398077cb083d0b14cc00af25fc6",
+        "sourceFingerprints": {
+          "src/main/claude-usage/scanner.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "933e772e7d33994efa00ac37547ff8fa554dc628905011f7aff511a26f89331a"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "6b1f31b8d25b496ac91b104c46bc67d17efc92c5092b6997efe5ddf69430ffc2"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "ec75f6f6f17d3f43ffa9ad7de543a80b2baf445560e80af77a44b38a63c275e2"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "55d1990fb662bfd005bfbfac8a2732702aa28b8511161b6259a72cd0e9f5a265",
+        "sourceFingerprints": {
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "009b4775505ab6a10a1e53329fdbd5444c47f4f137c52d7de6384ae31725aaec"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "d1a7041ef4e1366f7dc1c9225e663b49ebe5ef3ca60717d572bc4b9a85579232"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "657f5317536c7504416431c378bcc7a956ed5de7b7649a35f8d90674688f5da9"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2",
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549",
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91"
+        }
+      },
+      "workerBootstrapSha256": "653ad06eac9a0f111b74aa6d198ec548c7a40ecd4ee234a8bc1a4d64288c50f4"
+    },
+    "current": {
+      "commit": null,
+      "scanner": {
+        "bundleSha256": "20e5f37c5735564876e5566d419d4d8687f141f560cea6878a67a75785499544",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "worktree",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "worktree",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/scanner.ts": {
+            "source": "worktree",
+            "sha256": "8174e231f388f5fbc73cdcc2f1216d0cdb5d7213eaa97edd59c304bf76dd219e"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "worktree",
+            "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "worktree",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "worktree",
+            "sha256": "bfd4608941761444fdbc53a3d86f9e401d8d088a77f5d906cc36910786ac937b"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "worktree",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/transcript-token-checkpoint.ts": {
+            "source": "worktree",
+            "sha256": "6e3ebb95532118730eb7c91d486e6885d429c6cc0c47f4b1078fc71afd910b86"
+          },
+          "src/main/claude-usage/transcript-usage-projection.ts": {
+            "source": "worktree",
+            "sha256": "5711193900bcab341c110529c91c973f38dd625d045cbaaab91ac6b0903e118c"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "worktree",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "worktree",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          },
+          "src/main/usage/jsonl-file-checkpoint.ts": {
+            "source": "worktree",
+            "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+          },
+          "src/main/usage/jsonl-file-snapshot.ts": {
+            "source": "worktree",
+            "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+          },
+          "src/main/usage/jsonl-line-offsets.ts": {
+            "source": "worktree",
+            "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+          },
+          "src/shared/definitive-filesystem-absence.ts": {
+            "source": "worktree",
+            "sha256": "32344097f40a7106fa41936b23bd485e12a1c6c4aca33b8feae0f3fc73f6010a"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "worktree",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "a5d58e164cdd9abca97628de1ea6333660f1fc0b4bf4b9244621e5b7cad81610",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "worktree",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-source-cache.ts": {
+            "source": "worktree",
+            "sha256": "505c5274cb3d92c49b93f6eeb63164b239b6caf7baa550ef20174e60db6a4fa2"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "worktree",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/persisted-usage-report.ts": {
+            "source": "worktree",
+            "sha256": "13737060c3fde1287f194ad833e149f596842534e35eb91e8826b289f9686a04"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "worktree",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "worktree",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "worktree",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "worktree",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "worktree",
+            "sha256": "009b4775505ab6a10a1e53329fdbd5444c47f4f137c52d7de6384ae31725aaec"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "worktree",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-cache-json-integrity.ts": {
+            "source": "worktree",
+            "sha256": "7fbe3f92f3e59d7f6e55a4edf50899f142a313d8662587c85fdc9489976231d7"
+          },
+          "src/main/usage/usage-inline-cache-preservation.ts": {
+            "source": "worktree",
+            "sha256": "4167fe146fb6c87e2cbed190618fcb9e79166ec60fcc495106428b9fd0eecacf"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "worktree",
+            "sha256": "7dfa6cfdd487149c39c07a491ce4d327ebc366fa4809c695f7eca056e7584901"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "worktree",
+            "sha256": "ee53cd3c823ce5bd49892bf96486f48d285c0b4e536a295adfe5e94f147712f5"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "worktree",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "worktree",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "worktree",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "worktree",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "worktree",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "worktree",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2",
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19",
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91"
+        }
+      },
+      "workerBootstrapSha256": "be709916acff3b28fb4130e4c4a8a82fd089223e598b8c00b4abb624b70d3506"
+    }
+  },
+  "summary": {
+    "published:stable-cache": {
+      "constructorSyncMs": 36.034,
+      "whenLoadedMs": 36.036,
+      "workerReadParseVerifyMigrateMs": 0,
+      "mainParseAndValidationMs": 0,
+      "mainJsonParseMs": 6.838,
+      "mainWorkerResponseJsonParseMs": 0,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 36.034,
+      "productionYieldCount": 0,
+      "parseReportCalls": 0,
+      "sessions": 1,
+      "mainRetainedSourceCount": 1
+    },
+    "main:stable-cache": {
+      "constructorSyncMs": 0.092,
+      "whenLoadedMs": 0.094,
+      "workerReadParseVerifyMigrateMs": 0,
+      "mainParseAndValidationMs": 0,
+      "mainJsonParseMs": 0.011,
+      "mainWorkerResponseJsonParseMs": 0,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 0.092,
+      "productionYieldCount": 0,
+      "parseReportCalls": 0,
+      "sessions": 1,
+      "mainRetainedSourceCount": 0
+    },
+    "main:legacy-inline-migration": {
+      "constructorSyncMs": 8.453,
+      "whenLoadedMs": 63.06,
+      "workerReadParseVerifyMigrateMs": 38.079,
+      "mainParseAndValidationMs": 0,
+      "mainJsonParseMs": 6.819,
+      "mainWorkerResponseJsonParseMs": 0.019,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 8.453,
+      "productionYieldCount": 0,
+      "parseReportCalls": 0,
+      "sessions": 1,
+      "mainRetainedSourceCount": 0
+    },
+    "current:stable-cache": {
+      "constructorSyncMs": 0.116,
+      "whenLoadedMs": 0.117,
+      "workerReadParseVerifyMigrateMs": 0,
+      "mainParseAndValidationMs": 0.03,
+      "mainJsonParseMs": 0.011,
+      "mainWorkerResponseJsonParseMs": 0,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 0.116,
+      "productionYieldCount": 0,
+      "parseReportCalls": 1,
+      "sessions": 1,
+      "mainRetainedSourceCount": 0
+    },
+    "current:legacy-inline-migration": {
+      "constructorSyncMs": 8.752,
+      "whenLoadedMs": 94.434,
+      "workerReadParseVerifyMigrateMs": 70.842,
+      "mainParseAndValidationMs": 0.027,
+      "mainJsonParseMs": 6.916,
+      "mainWorkerResponseJsonParseMs": 0.02,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 8.752,
+      "productionYieldCount": 0,
+      "parseReportCalls": 1,
+      "sessions": 1,
+      "mainRetainedSourceCount": 0
+    },
+    "current:legacy-inline-worker-fallback": {
+      "constructorSyncMs": 8.574,
+      "whenLoadedMs": 49.287,
+      "workerReadParseVerifyMigrateMs": 0,
+      "mainParseAndValidationMs": 7.27,
+      "mainJsonParseMs": 14.189,
+      "mainWorkerResponseJsonParseMs": 0,
+      "maxObservedValidationSegmentMs": 0.493,
+      "maxObservedMainSynchronousSegmentMs": 8.574,
+      "productionYieldCount": 293,
+      "parseReportCalls": 1,
+      "sessions": 1,
+      "mainRetainedSourceCount": 0
+    },
+    "current:large-report-repeat-verification": {
+      "constructorSyncMs": 0.067,
+      "whenLoadedMs": 48.871,
+      "workerReadParseVerifyMigrateMs": 25.787,
+      "mainParseAndValidationMs": 21.393,
+      "mainJsonParseMs": 16.659,
+      "mainWorkerResponseJsonParseMs": 16.662,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 21.393,
+      "productionYieldCount": 0,
+      "parseReportCalls": 1,
+      "sessions": 13222,
+      "mainRetainedSourceCount": 0
+    },
+    "current:large-report-trusted-verification": {
+      "constructorSyncMs": 0.061,
+      "whenLoadedMs": 44.394,
+      "workerReadParseVerifyMigrateMs": 25.367,
+      "mainParseAndValidationMs": 16.512,
+      "mainJsonParseMs": 16.499,
+      "mainWorkerResponseJsonParseMs": 16.502,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 16.512,
+      "productionYieldCount": 0,
+      "parseReportCalls": 1,
+      "sessions": 13222,
+      "mainRetainedSourceCount": 0
+    },
+    "main:large-report-upstream": {
+      "constructorSyncMs": 0.094,
+      "whenLoadedMs": 39.592,
+      "workerReadParseVerifyMigrateMs": 20.478,
+      "mainParseAndValidationMs": 0,
+      "mainJsonParseMs": 16.684,
+      "mainWorkerResponseJsonParseMs": 16.69,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 16.69,
+      "productionYieldCount": 0,
+      "parseReportCalls": 0,
+      "sessions": 13222,
+      "mainRetainedSourceCount": 0
+    },
+    "current:large-report-worker-fallback": {
+      "constructorSyncMs": 0.065,
+      "whenLoadedMs": 25.187,
+      "workerReadParseVerifyMigrateMs": 0,
+      "mainParseAndValidationMs": 22.326,
+      "mainJsonParseMs": 17.496,
+      "mainWorkerResponseJsonParseMs": 0,
+      "maxObservedValidationSegmentMs": 0,
+      "maxObservedMainSynchronousSegmentMs": 22.326,
+      "productionYieldCount": 0,
+      "parseReportCalls": 1,
+      "sessions": 13222,
+      "mainRetainedSourceCount": 0
+    }
+  },
+  "samples": [
+    {
+      "arm": "published",
+      "scenario": "stable-cache",
+      "round": 1,
+      "order": ["published", "main", "current"],
+      "metrics": {
+        "constructorSyncMs": 35.65758300000016,
+        "whenLoadedMs": 35.660791000000245,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.920500000000175,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 35.65758300000016,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 1,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "stable-cache",
+      "round": 1,
+      "order": ["published", "main", "current"],
+      "metrics": {
+        "constructorSyncMs": 0.09304100000008475,
+        "whenLoadedMs": 0.09487499999977445,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 0.010958000000300672,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.09304100000008475,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "legacy-inline-migration",
+      "round": 1,
+      "order": ["published", "main", "current"],
+      "metrics": {
+        "constructorSyncMs": 8.287499999999909,
+        "whenLoadedMs": 68.49016699999993,
+        "workerReadParseVerifyMigrateMs": 44.751624999999876,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.722208999999566,
+        "mainWorkerResponseJsonParseMs": 0.017915999999786436,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.287499999999909,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "stable-cache",
+      "round": 1,
+      "order": ["published", "main", "current"],
+      "metrics": {
+        "constructorSyncMs": 0.10320799999999508,
+        "whenLoadedMs": 0.10575000000017099,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0.02820800000017698,
+        "mainJsonParseMs": 0.007875000000240107,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.10320799999999508,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-migration",
+      "round": 1,
+      "order": ["published", "main", "current"],
+      "metrics": {
+        "constructorSyncMs": 9.002040999999736,
+        "whenLoadedMs": 97.22658300000012,
+        "workerReadParseVerifyMigrateMs": 76.85220900000013,
+        "mainParseAndValidationMs": 0.025291999999808468,
+        "mainJsonParseMs": 7.090000999999575,
+        "mainWorkerResponseJsonParseMs": 0.01908400000002075,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 9.002040999999736,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-worker-fallback",
+      "round": 1,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 8.870832999999948,
+        "whenLoadedMs": 51.87975000000006,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 7.263500000000022,
+        "mainJsonParseMs": 14.462416000000303,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0.47595899999987523,
+        "maxObservedMainSynchronousSegmentMs": 8.870832999999948,
+        "productionYieldCount": 293,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-repeat-verification",
+      "round": 1,
+      "order": ["repeat", "trusted"],
+      "metrics": {
+        "constructorSyncMs": 0.06179199999996854,
+        "whenLoadedMs": 48.852334000000155,
+        "workerReadParseVerifyMigrateMs": 25.76033299999972,
+        "mainParseAndValidationMs": 21.684749999999894,
+        "mainJsonParseMs": 16.800583000000188,
+        "mainWorkerResponseJsonParseMs": 16.804041999999754,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 21.684749999999894,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-trusted-verification",
+      "round": 1,
+      "order": ["repeat", "trusted"],
+      "metrics": {
+        "constructorSyncMs": 0.071458999999777,
+        "whenLoadedMs": 45.11954199999991,
+        "workerReadParseVerifyMigrateMs": 27.10879100000011,
+        "mainParseAndValidationMs": 16.595250000000306,
+        "mainJsonParseMs": 16.582625000000007,
+        "mainWorkerResponseJsonParseMs": 16.585833000000093,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.595250000000306,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "large-report-upstream",
+      "round": 1,
+      "order": ["main"],
+      "metrics": {
+        "constructorSyncMs": 0.09349999999994907,
+        "whenLoadedMs": 39.55158299999994,
+        "workerReadParseVerifyMigrateMs": 20.307749999999942,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 16.781957999999577,
+        "mainWorkerResponseJsonParseMs": 16.785624999999982,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.785624999999982,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-worker-fallback",
+      "round": 1,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 0.07029199999988123,
+        "whenLoadedMs": 25.27841699999999,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 22.356207000000722,
+        "mainJsonParseMs": 17.442666000000372,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 22.356207000000722,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "stable-cache",
+      "round": 2,
+      "order": ["current", "main", "published"],
+      "metrics": {
+        "constructorSyncMs": 0.1187499999996362,
+        "whenLoadedMs": 0.11999999999989086,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0.03420899999991889,
+        "mainJsonParseMs": 0.011292000000139524,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.1187499999996362,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-migration",
+      "round": 2,
+      "order": ["current", "main", "published"],
+      "metrics": {
+        "constructorSyncMs": 8.82012500000019,
+        "whenLoadedMs": 102.74075000000039,
+        "workerReadParseVerifyMigrateMs": 77.28399999999965,
+        "mainParseAndValidationMs": 0.0284999999998945,
+        "mainJsonParseMs": 6.930707999999868,
+        "mainWorkerResponseJsonParseMs": 0.02041700000017954,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.82012500000019,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "stable-cache",
+      "round": 2,
+      "order": ["current", "main", "published"],
+      "metrics": {
+        "constructorSyncMs": 0.07579200000009223,
+        "whenLoadedMs": 0.07799999999997453,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 0.007499999999708962,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.07579200000009223,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "legacy-inline-migration",
+      "round": 2,
+      "order": ["current", "main", "published"],
+      "metrics": {
+        "constructorSyncMs": 8.522750000000087,
+        "whenLoadedMs": 47.7204999999999,
+        "workerReadParseVerifyMigrateMs": 27.546125000000302,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.907915999999659,
+        "mainWorkerResponseJsonParseMs": 0.017334000000118976,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.522750000000087,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "published",
+      "scenario": "stable-cache",
+      "round": 2,
+      "order": ["current", "main", "published"],
+      "metrics": {
+        "constructorSyncMs": 34.6984580000003,
+        "whenLoadedMs": 34.70120799999995,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 7.161000000000058,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 34.6984580000003,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 1,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-worker-fallback",
+      "round": 2,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 8.365125000000262,
+        "whenLoadedMs": 48.46266700000024,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 7.11645899999985,
+        "mainJsonParseMs": 13.830708000000413,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0.5020829999998568,
+        "maxObservedMainSynchronousSegmentMs": 8.365125000000262,
+        "productionYieldCount": 293,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-trusted-verification",
+      "round": 2,
+      "order": ["trusted", "repeat"],
+      "metrics": {
+        "constructorSyncMs": 0.05641599999989921,
+        "whenLoadedMs": 43.66750000000002,
+        "workerReadParseVerifyMigrateMs": 25.479917000000114,
+        "mainParseAndValidationMs": 16.359333999999762,
+        "mainJsonParseMs": 16.34787499999993,
+        "mainWorkerResponseJsonParseMs": 16.3505839999998,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.359333999999762,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-repeat-verification",
+      "round": 2,
+      "order": ["trusted", "repeat"],
+      "metrics": {
+        "constructorSyncMs": 0.0683750000002874,
+        "whenLoadedMs": 54.293458999999984,
+        "workerReadParseVerifyMigrateMs": 31.02624999999989,
+        "mainParseAndValidationMs": 21.812875000000076,
+        "mainJsonParseMs": 17.111041999999998,
+        "mainWorkerResponseJsonParseMs": 17.11437500000011,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 21.812875000000076,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "large-report-upstream",
+      "round": 2,
+      "order": ["main"],
+      "metrics": {
+        "constructorSyncMs": 0.09491699999989578,
+        "whenLoadedMs": 39.6674579999999,
+        "workerReadParseVerifyMigrateMs": 21.524167000000034,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 16.629875000000084,
+        "mainWorkerResponseJsonParseMs": 16.63304100000005,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.63304100000005,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-worker-fallback",
+      "round": 2,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 0.06520899999986796,
+        "whenLoadedMs": 25.096500000000106,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 22.296792000000096,
+        "mainJsonParseMs": 17.594374999999673,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 22.296792000000096,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "stable-cache",
+      "round": 3,
+      "order": ["main", "published", "current"],
+      "metrics": {
+        "constructorSyncMs": 0.1117500000000291,
+        "whenLoadedMs": 0.11299999999982901,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 0.012291999999888503,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.1117500000000291,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "legacy-inline-migration",
+      "round": 3,
+      "order": ["main", "published", "current"],
+      "metrics": {
+        "constructorSyncMs": 8.735709000000043,
+        "whenLoadedMs": 65.77287500000011,
+        "workerReadParseVerifyMigrateMs": 38.5972499999998,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 7.097416000000067,
+        "mainWorkerResponseJsonParseMs": 0.021666999999979453,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.735709000000043,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "published",
+      "scenario": "stable-cache",
+      "round": 3,
+      "order": ["main", "published", "current"],
+      "metrics": {
+        "constructorSyncMs": 34.229709000000184,
+        "whenLoadedMs": 34.233834000000115,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.72616700000026,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 34.229709000000184,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 1,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "stable-cache",
+      "round": 3,
+      "order": ["main", "published", "current"],
+      "metrics": {
+        "constructorSyncMs": 0.10512499999958891,
+        "whenLoadedMs": 0.1062499999998181,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0.026415999999699125,
+        "mainJsonParseMs": 0.010082999999667663,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.10512499999958891,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-migration",
+      "round": 3,
+      "order": ["main", "published", "current"],
+      "metrics": {
+        "constructorSyncMs": 8.684374999999818,
+        "whenLoadedMs": 86.96129199999996,
+        "workerReadParseVerifyMigrateMs": 64.88591699999961,
+        "mainParseAndValidationMs": 0.027791999999863037,
+        "mainJsonParseMs": 6.78020800000013,
+        "mainWorkerResponseJsonParseMs": 0.021582999999736785,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.684374999999818,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-worker-fallback",
+      "round": 3,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 8.158292000000074,
+        "whenLoadedMs": 46.74912500000028,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 6.9382080000000315,
+        "mainJsonParseMs": 13.468708000000333,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0.4404580000000351,
+        "maxObservedMainSynchronousSegmentMs": 8.158292000000074,
+        "productionYieldCount": 293,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-repeat-verification",
+      "round": 3,
+      "order": ["repeat", "trusted"],
+      "metrics": {
+        "constructorSyncMs": 0.05437500000016371,
+        "whenLoadedMs": 47.481166999999914,
+        "workerReadParseVerifyMigrateMs": 24.933084000000235,
+        "mainParseAndValidationMs": 21.11429100000032,
+        "mainJsonParseMs": 16.44733300000007,
+        "mainWorkerResponseJsonParseMs": 16.45037500000035,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 21.11429100000032,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-trusted-verification",
+      "round": 3,
+      "order": ["repeat", "trusted"],
+      "metrics": {
+        "constructorSyncMs": 0.07579200000009223,
+        "whenLoadedMs": 49.25145900000007,
+        "workerReadParseVerifyMigrateMs": 30.923541000000114,
+        "mainParseAndValidationMs": 16.7204999999999,
+        "mainJsonParseMs": 16.701542000000245,
+        "mainWorkerResponseJsonParseMs": 16.707374999999956,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.7204999999999,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "large-report-upstream",
+      "round": 3,
+      "order": ["main"],
+      "metrics": {
+        "constructorSyncMs": 0.09508400000049733,
+        "whenLoadedMs": 37.460667000000285,
+        "workerReadParseVerifyMigrateMs": 19.651834000000235,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 16.382291999999325,
+        "mainWorkerResponseJsonParseMs": 16.387416999999914,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.387416999999914,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-worker-fallback",
+      "round": 3,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 0.05141599999933533,
+        "whenLoadedMs": 24.764000000000124,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 21.924417000000176,
+        "mainJsonParseMs": 17.32129200000054,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 21.924417000000176,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "stable-cache",
+      "round": 4,
+      "order": ["current", "published", "main"],
+      "metrics": {
+        "constructorSyncMs": 0.13079199999992852,
+        "whenLoadedMs": 0.13225000000056752,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0.044833999999355,
+        "mainJsonParseMs": 0.012166999999863037,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.13079199999992852,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-migration",
+      "round": 4,
+      "order": ["current", "published", "main"],
+      "metrics": {
+        "constructorSyncMs": 8.410707999999431,
+        "whenLoadedMs": 91.64145800000006,
+        "workerReadParseVerifyMigrateMs": 67.43720799999937,
+        "mainParseAndValidationMs": 0.028874999999970896,
+        "mainJsonParseMs": 6.7993749999996,
+        "mainWorkerResponseJsonParseMs": 0.022417000000132248,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.410707999999431,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "published",
+      "scenario": "stable-cache",
+      "round": 4,
+      "order": ["current", "published", "main"],
+      "metrics": {
+        "constructorSyncMs": 38.509791000000405,
+        "whenLoadedMs": 38.51299999999992,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.54516700000022,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 38.509791000000405,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 1,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "stable-cache",
+      "round": 4,
+      "order": ["current", "published", "main"],
+      "metrics": {
+        "constructorSyncMs": 0.09133300000030431,
+        "whenLoadedMs": 0.09262500000022555,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 0.009917000000314147,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.09133300000030431,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "legacy-inline-migration",
+      "round": 4,
+      "order": ["current", "published", "main"],
+      "metrics": {
+        "constructorSyncMs": 8.242874999999913,
+        "whenLoadedMs": 52.822290999999495,
+        "workerReadParseVerifyMigrateMs": 32.83262500000001,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.690293000000565,
+        "mainWorkerResponseJsonParseMs": 0.01641699999981938,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.242874999999913,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-worker-fallback",
+      "round": 4,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 8.263832999999977,
+        "whenLoadedMs": 47.878624999999374,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 7.2763759999998,
+        "mainJsonParseMs": 13.915708999999879,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0.48395799999980227,
+        "maxObservedMainSynchronousSegmentMs": 8.263832999999977,
+        "productionYieldCount": 293,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-trusted-verification",
+      "round": 4,
+      "order": ["trusted", "repeat"],
+      "metrics": {
+        "constructorSyncMs": 0.06070799999997689,
+        "whenLoadedMs": 42.85579199999938,
+        "workerReadParseVerifyMigrateMs": 25.253915999999663,
+        "mainParseAndValidationMs": 16.260083000000122,
+        "mainJsonParseMs": 16.248875000000226,
+        "mainWorkerResponseJsonParseMs": 16.251667000000452,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.260083000000122,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-repeat-verification",
+      "round": 4,
+      "order": ["trusted", "repeat"],
+      "metrics": {
+        "constructorSyncMs": 0.06583399999999529,
+        "whenLoadedMs": 47.15870900000027,
+        "workerReadParseVerifyMigrateMs": 24.356249999999818,
+        "mainParseAndValidationMs": 21.168624999999338,
+        "mainJsonParseMs": 16.460374999999658,
+        "mainWorkerResponseJsonParseMs": 16.463791999999557,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 21.168624999999338,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "large-report-upstream",
+      "round": 4,
+      "order": ["main"],
+      "metrics": {
+        "constructorSyncMs": 0.09691699999984849,
+        "whenLoadedMs": 39.632792000000336,
+        "workerReadParseVerifyMigrateMs": 20.64812499999971,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 16.738749999999527,
+        "mainWorkerResponseJsonParseMs": 16.74774999999954,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.74774999999954,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-worker-fallback",
+      "round": 4,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 0.0667089999997188,
+        "whenLoadedMs": 25.94024999999965,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 22.875041000000238,
+        "mainJsonParseMs": 17.9320000000007,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 22.875041000000238,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "published",
+      "scenario": "stable-cache",
+      "round": 5,
+      "order": ["published", "current", "main"],
+      "metrics": {
+        "constructorSyncMs": 36.40962500000023,
+        "whenLoadedMs": 36.41187499999978,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 7.316792000000532,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 36.40962500000023,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 1,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "stable-cache",
+      "round": 5,
+      "order": ["published", "current", "main"],
+      "metrics": {
+        "constructorSyncMs": 0.1124999999992724,
+        "whenLoadedMs": 0.11354200000005221,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0.0308340000010503,
+        "mainJsonParseMs": 0.012417000000823464,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.1124999999992724,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-migration",
+      "round": 5,
+      "order": ["published", "current", "main"],
+      "metrics": {
+        "constructorSyncMs": 8.905249999999796,
+        "whenLoadedMs": 99.34195900000032,
+        "workerReadParseVerifyMigrateMs": 74.2465830000001,
+        "mainParseAndValidationMs": 0.02416700000048877,
+        "mainJsonParseMs": 7.330457999999453,
+        "mainWorkerResponseJsonParseMs": 0.017917000000124972,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.905249999999796,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "stable-cache",
+      "round": 5,
+      "order": ["published", "current", "main"],
+      "metrics": {
+        "constructorSyncMs": 0.11124999999992724,
+        "whenLoadedMs": 0.11283300000013696,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 0.012999999999919964,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.11124999999992724,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "legacy-inline-migration",
+      "round": 5,
+      "order": ["published", "current", "main"],
+      "metrics": {
+        "constructorSyncMs": 8.504249999999956,
+        "whenLoadedMs": 64.52520899999945,
+        "workerReadParseVerifyMigrateMs": 45.554416999999376,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.816417000000001,
+        "mainWorkerResponseJsonParseMs": 0.022249999999985448,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.504249999999956,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-worker-fallback",
+      "round": 5,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 8.78216699999939,
+        "whenLoadedMs": 50.111917000000176,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 7.4256249999998545,
+        "mainJsonParseMs": 14.583582999999635,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0.5342090000003736,
+        "maxObservedMainSynchronousSegmentMs": 8.78216699999939,
+        "productionYieldCount": 293,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-repeat-verification",
+      "round": 5,
+      "order": ["repeat", "trusted"],
+      "metrics": {
+        "constructorSyncMs": 0.07191700000021228,
+        "whenLoadedMs": 48.88983300000018,
+        "workerReadParseVerifyMigrateMs": 25.813208999999915,
+        "mainParseAndValidationMs": 21.599167000000307,
+        "mainJsonParseMs": 16.796957999999904,
+        "mainWorkerResponseJsonParseMs": 16.800250000000233,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 21.599167000000307,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-trusted-verification",
+      "round": 5,
+      "order": ["repeat", "trusted"],
+      "metrics": {
+        "constructorSyncMs": 0.06204199999956472,
+        "whenLoadedMs": 42.63987499999985,
+        "workerReadParseVerifyMigrateMs": 24.836833999999726,
+        "mainParseAndValidationMs": 16.42779100000007,
+        "mainJsonParseMs": 16.41491599999972,
+        "mainWorkerResponseJsonParseMs": 16.417958,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.42779100000007,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "large-report-upstream",
+      "round": 5,
+      "order": ["main"],
+      "metrics": {
+        "constructorSyncMs": 0.08583399999952235,
+        "whenLoadedMs": 37.79441700000007,
+        "workerReadParseVerifyMigrateMs": 19.551540999999816,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 16.29266700000062,
+        "mainWorkerResponseJsonParseMs": 16.300583000000188,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.300583000000188,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-worker-fallback",
+      "round": 5,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 0.059750000000349246,
+        "whenLoadedMs": 24.617541999999958,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 21.78599999999915,
+        "mainJsonParseMs": 17.215499999999338,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 21.78599999999915,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "stable-cache",
+      "round": 6,
+      "order": ["main", "current", "published"],
+      "metrics": {
+        "constructorSyncMs": 0.08674999999948341,
+        "whenLoadedMs": 0.08799999999973807,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 0.011541000000761414,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.08674999999948341,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "legacy-inline-migration",
+      "round": 6,
+      "order": ["main", "current", "published"],
+      "metrics": {
+        "constructorSyncMs": 8.401625000000422,
+        "whenLoadedMs": 61.594334000000345,
+        "workerReadParseVerifyMigrateMs": 37.561375000000226,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.821415999998862,
+        "mainWorkerResponseJsonParseMs": 0.020332999999482126,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.401625000000422,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "stable-cache",
+      "round": 6,
+      "order": ["main", "current", "published"],
+      "metrics": {
+        "constructorSyncMs": 0.1214589999999589,
+        "whenLoadedMs": 0.12258399999973335,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0.02933399999892572,
+        "mainJsonParseMs": 0.010833999999704247,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 0.1214589999999589,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-migration",
+      "round": 6,
+      "order": ["main", "current", "published"],
+      "metrics": {
+        "constructorSyncMs": 8.476791999999477,
+        "whenLoadedMs": 87.28620799999953,
+        "workerReadParseVerifyMigrateMs": 67.13983400000052,
+        "mainParseAndValidationMs": 0.021499999999832653,
+        "mainJsonParseMs": 6.901249999999891,
+        "mainWorkerResponseJsonParseMs": 0.01641699999981938,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 8.476791999999477,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "published",
+      "scenario": "stable-cache",
+      "round": 6,
+      "order": ["main", "current", "published"],
+      "metrics": {
+        "constructorSyncMs": 37.16779200000019,
+        "whenLoadedMs": 37.170208999999886,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 6.755125000000589,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 37.16779200000019,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 1,
+        "mainRetainedSourceCount": 1,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "legacy-inline-worker-fallback",
+      "round": 6,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 8.938917000000401,
+        "whenLoadedMs": 80.49279200000001,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 7.359416999999667,
+        "mainJsonParseMs": 14.694083999999748,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 16.96454099999937,
+        "maxObservedMainSynchronousSegmentMs": 16.96454099999937,
+        "productionYieldCount": 293,
+        "parseReportCalls": 1,
+        "sessions": 1,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-trusted-verification",
+      "round": 6,
+      "order": ["trusted", "repeat"],
+      "metrics": {
+        "constructorSyncMs": 0.057291999999506515,
+        "whenLoadedMs": 45.624416999999994,
+        "workerReadParseVerifyMigrateMs": 25.19262500000059,
+        "mainParseAndValidationMs": 18.31633299999976,
+        "mainJsonParseMs": 18.301375000000007,
+        "mainWorkerResponseJsonParseMs": 18.304791999999907,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 18.31633299999976,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-repeat-verification",
+      "round": 6,
+      "order": ["trusted", "repeat"],
+      "metrics": {
+        "constructorSyncMs": 0.07620799999949668,
+        "whenLoadedMs": 50.26850000000013,
+        "workerReadParseVerifyMigrateMs": 27.578082999999424,
+        "mainParseAndValidationMs": 21.18604199999936,
+        "mainJsonParseMs": 16.520166000000245,
+        "mainWorkerResponseJsonParseMs": 16.523666999999477,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 21.18604199999936,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "main",
+      "scenario": "large-report-upstream",
+      "round": 6,
+      "order": ["main"],
+      "metrics": {
+        "constructorSyncMs": 0.08845900000051188,
+        "whenLoadedMs": 40.09645900000032,
+        "workerReadParseVerifyMigrateMs": 21.627792000000227,
+        "mainParseAndValidationMs": 0,
+        "mainJsonParseMs": 16.958082999999533,
+        "mainWorkerResponseJsonParseMs": 16.966457999999875,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 16.966457999999875,
+        "productionYieldCount": 0,
+        "parseReportCalls": 0,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    },
+    {
+      "arm": "current",
+      "scenario": "large-report-worker-fallback",
+      "round": 6,
+      "order": ["current"],
+      "metrics": {
+        "constructorSyncMs": 0.06445900000016991,
+        "whenLoadedMs": 25.516125000000102,
+        "workerReadParseVerifyMigrateMs": 0,
+        "mainParseAndValidationMs": 22.466334000000643,
+        "mainJsonParseMs": 17.548749999999927,
+        "mainWorkerResponseJsonParseMs": 0,
+        "maxObservedValidationSegmentMs": 0,
+        "maxObservedMainSynchronousSegmentMs": 22.466334000000643,
+        "productionYieldCount": 0,
+        "parseReportCalls": 1,
+        "sessions": 13222,
+        "mainRetainedSourceCount": 0,
+        "enabled": false
+      }
+    }
+  ],
+  "largeReportSerializeSamples": [
+    {
+      "arm": "main",
+      "round": 1,
+      "serializeSealMs": 16.582915999999386
+    },
+    {
+      "arm": "current",
+      "round": 1,
+      "serializeSealMs": 20.60699999999997
+    },
+    {
+      "arm": "current",
+      "round": 2,
+      "serializeSealMs": 21.30395800000042
+    },
+    {
+      "arm": "main",
+      "round": 2,
+      "serializeSealMs": 16.002000000000407
+    },
+    {
+      "arm": "main",
+      "round": 3,
+      "serializeSealMs": 17.33245899999929
+    },
+    {
+      "arm": "current",
+      "round": 3,
+      "serializeSealMs": 21.145375000000058
+    },
+    {
+      "arm": "current",
+      "round": 4,
+      "serializeSealMs": 20.628374999999323
+    },
+    {
+      "arm": "main",
+      "round": 4,
+      "serializeSealMs": 15.834375000000364
+    },
+    {
+      "arm": "main",
+      "round": 5,
+      "serializeSealMs": 16.36341700000048
+    },
+    {
+      "arm": "current",
+      "round": 5,
+      "serializeSealMs": 20.321666999999252
+    },
+    {
+      "arm": "current",
+      "round": 6,
+      "serializeSealMs": 20.62787500000013
+    },
+    {
+      "arm": "main",
+      "round": 6,
+      "serializeSealMs": 15.646083999999973
+    }
+  ]
+}

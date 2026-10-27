@@ -1,9 +1,12 @@
-import { MAX_EDIT_LINES } from '../../../../shared/native-chat-edit-model'
+import { MAX_EDIT_LINES } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
-import { foldToolMessages } from './native-chat-tool-fold'
-import { buildDiffSummaries, buildEditCards } from './native-chat-edit-cards'
-import { nativeChatTurnDiffs } from './native-chat-turn-diffs'
+import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
+import {
+  buildDiffSummaries,
+  buildEditCards
+} from '../../../../shared/native-chat/tools/native-chat-edit-cards'
+import { nativeChatTurnDiffEditFile, nativeChatTurnDiffs } from './native-chat-turn-diffs'
 
 function diff(id: string, path: string, patch = '@@ -1 +1 @@\n-old\n+new'): NativeChatMessage {
   return {
@@ -33,6 +36,43 @@ describe('turn diff rollups', () => {
       added: 2,
       target: { messageId: 'first', editKey: 'Diff:1', fileIndex: 0 }
     })
+    expect(turn.files[0]?.edits).toHaveLength(2)
+    expect(turn.files[0]?.edits.map(nativeChatTurnDiffEditFile)).toMatchObject([
+      { path: 'a.ts', added: 1, removed: 1 },
+      { path: 'a.ts', added: 1, removed: 1 }
+    ])
+  })
+
+  it('resolves only the selected file edits in a folded message and reuses their patches', () => {
+    const bodyReads = [0, 0, 0]
+    const messages = foldToolMessages(
+      ['selected.ts', 'closed.ts', 'selected.ts'].map((path, index) => ({
+        ...diff(`edit-${index}`, path),
+        blocks: [
+          { type: 'tool-call' as const, name: 'Diff', input: { path } },
+          {
+            type: 'tool-result' as const,
+            get output() {
+              bodyReads[index] = (bodyReads[index] ?? 0) + 1
+              return `@@ -1 +1 @@\n-old-${index}\n+new-${index}`
+            }
+          }
+        ]
+      }))
+    )
+    expect(messages).toHaveLength(1)
+    const turn = nativeChatTurnDiffs(messages, ['turn']).get('turn')!
+    bodyReads.fill(0)
+    const selected = turn.files.find((file) => file.path === 'selected.ts')!
+    const patches = selected.edits.map(nativeChatTurnDiffEditFile)
+    expect(bodyReads).toEqual([1, 0, 1])
+    expect(patches.map((patch) => patch?.lines.at(-1)?.text)).toEqual(['new-0', 'new-2'])
+    expect(selected.edits.map(nativeChatTurnDiffEditFile)[0]).toBe(patches[0])
+    expect(selected.edits.map(nativeChatTurnDiffEditFile)[1]).toBe(patches[1])
+    expect(bodyReads).toEqual([1, 0, 1])
+    const originalCards = buildEditCards(messages[0]!.blocks).editCards
+    expect(originalCards.get(selected.edits[0]!.call)?.files[0]).toBe(patches[0])
+    expect(originalCards.get(selected.edits[1]!.call)?.files[0]).toBe(patches[1])
   })
 
   it('folds edits through chained renames into the destination and counts a deletion once', () => {
@@ -61,6 +101,30 @@ describe('turn diff rollups', () => {
     expect(turn.files.map((file) => file.path)).toEqual(['final.ts', 'gone.ts'])
     expect(turn).toMatchObject({ added: 1, removed: 2 })
     expect(turn.files[0]?.target.messageId).toBe('rename-again')
+    expect(turn.files[0]?.edits.map((edit) => edit.target.messageId)).toEqual([
+      'edit',
+      'rename',
+      'rename-again'
+    ])
+  })
+
+  it('keeps every patch in order when a rename joins two already edited paths', () => {
+    const messages = [
+      diff('destination', 'new.ts'),
+      diff('source', 'old.ts'),
+      diff('rename', 'old.ts', 'diff --git a/old.ts b/new.ts\nrename from old.ts\nrename to new.ts')
+    ]
+    const turn = nativeChatTurnDiffs(
+      messages,
+      messages.map(() => 'turn')
+    ).get('turn')!
+    expect(turn.files).toHaveLength(1)
+    expect(turn.files[0]?.edits.map((edit) => edit.target.messageId)).toEqual([
+      'destination',
+      'source',
+      'rename'
+    ])
+    expect(turn).toMatchObject({ added: 2, removed: 2 })
   })
 
   it('keeps turns separate and excludes history without a known boundary', () => {
@@ -80,6 +144,7 @@ describe('turn diff rollups', () => {
     expect(turn.files.map((file) => file.path)).toEqual(['a.ts', 'b.ts'])
     expect(turn).toMatchObject({ added: 2, removed: 2, truncated: true })
     expect(turn.files[1]?.target.fileIndex).toBe(1)
+    expect(turn.files[1]?.edits.map(nativeChatTurnDiffEditFile)).toMatchObject([{ path: 'b.ts' }])
   })
 
   it('does not count generic output, failed edits, running edits, or unparseable patches', () => {

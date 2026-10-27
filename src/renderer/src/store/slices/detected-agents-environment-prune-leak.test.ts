@@ -1,13 +1,4 @@
-/**
- * Memory-leak regression: runtime detected-agent caches must be evicted when a
- * runtime environment is removed.
- *
- * `runtimeDetectedAgentIds` and `isDetectingRuntimeAgents` are keyed by runtime
- * environmentId and gain an entry per environment that opens its tab-bar launch
- * menu. The only removal action (`clearRuntimeDetectedAgents`) had no production
- * caller, so removed environments leaked their entries for the renderer session.
- * `setRuntimeEnvironments` now prunes them to the surviving environment set.
- */
+/** Prune runtime detection/result maps when environments leave; no production clear caller previously removed launch-menu caches, leaking per-environment entries. */
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
@@ -50,7 +41,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: {} }
 
-import { createTestStore } from './store-test-helpers'
+import { createRuntimeDetectedAgentsPairingTestStore as createTestStore } from './runtime-detected-agents-pairing.test-fixture'
 
 function env(id: string): PublicKnownRuntimeEnvironment {
   return { id } as unknown as PublicKnownRuntimeEnvironment
@@ -64,13 +55,11 @@ describe('runtime detected-agents pruned on environment removal (leak regression
       isDetectingRuntimeAgents: { 'env-1': false, 'env-2': true }
     })
 
-    // env-2 is removed from the runtime environment list.
     store.getState().setRuntimeEnvironments([env('env-1')])
 
     const s = store.getState()
     expect(s.runtimeDetectedAgentIds).not.toHaveProperty('env-2')
     expect(s.isDetectingRuntimeAgents).not.toHaveProperty('env-2')
-    // Surviving environment is preserved.
     expect(s.runtimeDetectedAgentIds).toHaveProperty('env-1')
     expect(s.isDetectingRuntimeAgents['env-1']).toBe(false)
   })
@@ -102,7 +91,6 @@ describe('detect resolving after the environment was pruned does not re-leak', (
     expect(store.getState().isDetectingRuntimeAgents['env-1']).toBe(true)
     expect(rpcControl.deferreds).toHaveLength(1)
 
-    // Environment removed while the detect is still in flight.
     store.getState().retainRuntimeDetectedAgents([])
     expect(store.getState().isDetectingRuntimeAgents).not.toHaveProperty('env-1')
 

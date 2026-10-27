@@ -4,12 +4,9 @@ import { join } from 'node:path'
 import * as issueCommandFile from '../issue-command-file'
 import * as projectGitOptions from '../project-runtime-git-options'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createIssueCommandRunnerScriptMock,
-  getSshFilesystemProviderMock,
-  getSshGitProviderMock
-} from './worktrees-test-module-mocks'
+import { addWorktreeMock, listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -34,18 +31,8 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -91,7 +78,32 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
+
+const REMOTE_REPO_PATH = '/remote/repo'
+
+function makeRepo(fields: Record<string, unknown>) {
+  return {
+    id: 'repo-1',
+    path: REMOTE_REPO_PATH,
+    displayName: 'repo',
+    badgeColor: '#000',
+    addedAt: 0,
+    worktreeBaseRef: 'origin/main',
+    ...fields
+  }
+}
+
+function useRepo(repo: ReturnType<typeof makeRepo>): void {
+  store.getRepos.mockReturnValue([repo])
+  store.getRepo.mockReturnValue(repo)
+  store.setWorktreeMeta.mockImplementation((_target: unknown, meta: unknown) => meta)
+}
 
 describe('registerWorktreeHandlers', () => {
   beforeEach(() => {
@@ -157,166 +169,7 @@ describe('registerWorktreeHandlers', () => {
     }
   })
 
-  it('creates an issue-command runner for an existing repo/worktree pair', async () => {
-    const result = await handlers['hooks:createIssueCommandRunner'](null, {
-      repoId: 'repo-1',
-      worktreePath: '/workspace/improve-dashboard',
-      command: 'codex exec "long command"'
-    })
-
-    expect(createIssueCommandRunnerScriptMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'repo-1' }),
-      '/workspace/improve-dashboard',
-      'codex exec "long command"',
-      {},
-      // Why: issue runners take the resolved setup shell; it is undefined off Windows.
-      undefined
-    )
-    expect(result).toMatchObject({
-      runnerScriptPath: '/workspace/repo/.git/orca/issue-command-runner.sh',
-      envVars: {
-        ORCA_ROOT_PATH: '/workspace/repo',
-        ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
-      }
-    })
-  })
-
-  it('keeps SSH issue-command local overrides usable when shared read fails', async () => {
-    const repo = {
-      id: 'repo-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1',
-      worktreeBaseRef: null
-    }
-    const fsProvider = {
-      readFile: vi.fn(async (filePath: string) => {
-        if (filePath.endsWith('/.orca/issue-command')) {
-          return { content: 'local command\n', isBinary: false }
-        }
-        throw new Error('shared read failed')
-      })
-    }
-    store.getRepo.mockReturnValue(repo)
-    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
-
-    await expect(
-      handlers['hooks:readIssueCommand'](null, {
-        repoId: 'repo-ssh'
-      })
-    ).resolves.toMatchObject({
-      status: 'ok',
-      localContent: 'local command',
-      sharedContent: null,
-      effectiveContent: 'local command',
-      source: 'local'
-    })
-  })
-
-  it('writes SSH issue-command overrides without clobbering .gitignore on read failure', async () => {
-    const repo = {
-      id: 'repo-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1',
-      worktreeBaseRef: null
-    }
-    const fsProvider = {
-      createDir: vi.fn().mockResolvedValue(undefined),
-      readFile: vi.fn().mockRejectedValue(new Error('ssh read failed')),
-      writeFile: vi.fn().mockResolvedValue(undefined),
-      deletePath: vi.fn().mockResolvedValue(undefined)
-    }
-    store.getRepo.mockReturnValue(repo)
-    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
-
-    await expect(
-      handlers['hooks:writeIssueCommand'](null, {
-        repoId: 'repo-ssh',
-        content: 'orca issue command'
-      })
-    ).rejects.toThrow('ssh read failed')
-
-    expect(fsProvider.writeFile).not.toHaveBeenCalled()
-  })
-
-  it('reads an issue-command override from the requested host when repo ids collide', async () => {
-    const localRepo = {
-      id: 'repo-shared',
-      path: '/local/repo',
-      displayName: 'local',
-      badgeColor: '#000',
-      addedAt: 0
-    }
-    const sshRepo = {
-      ...localRepo,
-      path: '/remote/repo',
-      displayName: 'ssh',
-      connectionId: 'conn-1'
-    }
-    const fsProvider = {
-      readFile: vi.fn(async (filePath: string) => {
-        if (filePath.endsWith('/.orca/issue-command')) {
-          return { content: 'remote command\n', isBinary: false }
-        }
-        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
-      })
-    }
-    store.getRepos.mockReturnValue([localRepo, sshRepo])
-    store.getRepo.mockReturnValue(localRepo)
-    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
-
-    await expect(
-      handlers['hooks:readIssueCommand'](null, {
-        repoId: 'repo-shared',
-        hostId: 'ssh:conn-1'
-      })
-    ).resolves.toMatchObject({
-      localContent: 'remote command',
-      effectiveContent: 'remote command',
-      source: 'local'
-    })
-    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/.orca/issue-command')
-  })
-
-  it('creates remote .gitignore only when it is missing while writing SSH issue commands', async () => {
-    const repo = {
-      id: 'repo-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1',
-      worktreeBaseRef: null
-    }
-    const enoent = Object.assign(new Error('missing'), { code: 'ENOENT' })
-    const fsProvider = {
-      createDir: vi.fn().mockResolvedValue(undefined),
-      readFile: vi.fn().mockRejectedValue(enoent),
-      writeFile: vi.fn().mockResolvedValue(undefined),
-      deletePath: vi.fn().mockResolvedValue(undefined)
-    }
-    store.getRepo.mockReturnValue(repo)
-    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
-
-    await handlers['hooks:writeIssueCommand'](null, {
-      repoId: 'repo-ssh',
-      content: 'orca issue command'
-    })
-
-    expect(fsProvider.writeFile).toHaveBeenNthCalledWith(1, '/remote/repo/.gitignore', '.orca\n')
-    expect(fsProvider.writeFile).toHaveBeenNthCalledWith(
-      2,
-      '/remote/repo/.orca/issue-command',
-      'orca issue command\n'
-    )
-  })
-
-  it('rejects SSH issue-command writes when the remote filesystem provider is unavailable', async () => {
+  it('rejects SSH issue-command writes, which this process does not serve', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -327,7 +180,6 @@ describe('registerWorktreeHandlers', () => {
       worktreeBaseRef: null
     }
     store.getRepo.mockReturnValue(repo)
-    getSshFilesystemProviderMock.mockReturnValue(null)
 
     await expect(
       handlers['hooks:writeIssueCommand'](null, {
@@ -336,36 +188,60 @@ describe('registerWorktreeHandlers', () => {
       })
     ).rejects.toThrow('Remote filesystem unavailable')
   })
+})
 
-  it('preserves .gitignore when the SSH host already ignores .orca', async () => {
-    store.getRepo.mockReturnValue({
-      id: 'repo-ssh',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: '#000',
-      addedAt: 0,
-      connectionId: 'conn-1'
-    })
-    const checkIgnoredPaths = vi.fn().mockResolvedValue(['.orca/issue-command'])
-    getSshGitProviderMock.mockReturnValue({ checkIgnoredPaths })
-    const fsProvider = {
-      createDir: vi.fn().mockResolvedValue(undefined),
-      readFile: vi.fn(),
-      writeFile: vi.fn().mockResolvedValue(undefined)
-    }
-    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+describe('worktrees:create execution host routing', () => {
+  beforeEach(() => {
+    setupWorktreeHandlers()
+  })
 
-    await handlers['hooks:writeIssueCommand'](null, {
-      repoId: 'repo-ssh',
-      content: 'local command'
-    })
+  it('refuses a row that names an SSH host only as executionHostId instead of creating locally', async () => {
+    useRepo(makeRepo({ executionHostId: 'ssh:target-a' }))
 
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('conn-1')
-    expect(checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', ['.orca/issue-command'])
-    expect(fsProvider.readFile).not.toHaveBeenCalled()
-    expect(fsProvider.writeFile).toHaveBeenCalledExactlyOnceWith(
-      '/remote/repo/.orca/issue-command',
-      'local command\n'
+    await expect(
+      handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
+    ).rejects.toThrow(SshHostNotServedError)
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a runtime row with no nested SSH target instead of creating locally', async () => {
+    useRepo(makeRepo({ executionHostId: 'runtime:env-1' }))
+
+    await expect(
+      handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
+    ).rejects.toThrow('not dispatched by this process')
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a runtime row that also names a nested SSH target', async () => {
+    // This target belongs to env-1, never the local client.
+    useRepo(makeRepo({ executionHostId: 'runtime:env-1', connectionId: 'target-a' }))
+
+    await expect(
+      handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
+    ).rejects.toThrow('not dispatched by this process')
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('answers local for a row that declares itself local while carrying a connection', async () => {
+    // Explicit local ownership overrides legacy connection fields.
+    useRepo(
+      makeRepo({ path: '/workspace/repo', executionHostId: 'local', connectionId: 'target-a' })
     )
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/wt',
+        head: 'abc123',
+        branch: 'wt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'wt' })
+
+    expect(addWorktreeMock).toHaveBeenCalledTimes(1)
   })
 })

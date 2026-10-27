@@ -3,14 +3,19 @@ import {
   extractAttachmentContentIdsFromHtml,
   selectPreferredAttachmentIds,
   warnIfMediaResolutionIncomplete
-} from './attachment-discovery'
+} from './attachments/discovery'
 import {
   createMediaMarkdownResolver,
   loadIssueImageAttachments,
   type MediaResolutionStats
-} from './attachment-images'
+} from './attachments/images'
 import type { JiraClientForSite } from './authenticated-request'
 import { asRecord, asString, type JiraRecord } from './jira-record-pages'
+import {
+  JIRA_IMAGE_MAX_BYTES,
+  JIRA_IMAGE_MAX_REFERENCES,
+  type JiraMediaFormat
+} from '../../shared/jira/jira-attachment-image'
 
 export type MediaRequest = {
   attachmentField: unknown
@@ -21,7 +26,10 @@ export type MediaRequest = {
 }
 
 /** Pooled: HTML/ADF selection only — no binary downloads. */
-export function collectIssueMediaRequest(raw: JiraRecord): MediaRequest | undefined {
+export function collectIssueMediaRequest(
+  raw: JiraRecord,
+  mediaFormat?: JiraMediaFormat
+): MediaRequest | undefined {
   const fields = asRecord(raw.fields)
   const renderedFields = asRecord(raw.renderedFields)
   const htmlIds = extractAttachmentContentIdsFromHtml(
@@ -31,7 +39,8 @@ export function collectIssueMediaRequest(raw: JiraRecord): MediaRequest | undefi
   const selection = selectPreferredAttachmentIds({
     renderedHtmlIds: htmlIds,
     attachmentField: fields.attachment,
-    mediaAttrs
+    mediaAttrs,
+    ...(mediaFormat ? { maxBytes: JIRA_IMAGE_MAX_BYTES, maxImages: JIRA_IMAGE_MAX_REFERENCES } : {})
   })
   if (selection.needCount === 0 && selection.preferredIds.length === 0) {
     return undefined
@@ -54,7 +63,8 @@ export type PreparedMedia = {
 /** Unpooled: binary downloads + resolver (outside the Jira API semaphore). */
 export async function prepareMediaResolver(
   client: JiraClientForSite,
-  request: MediaRequest
+  request: MediaRequest,
+  mediaFormat?: JiraMediaFormat
 ): Promise<PreparedMedia | undefined> {
   if (request.preferredIds.length === 0) {
     warnIfMediaResolutionIncomplete({
@@ -70,7 +80,8 @@ export async function prepareMediaResolver(
   const images = await loadIssueImageAttachments(
     client,
     request.attachmentField,
-    request.preferredIds
+    request.preferredIds,
+    mediaFormat
   )
   if (images.length === 0) {
     warnIfMediaResolutionIncomplete({

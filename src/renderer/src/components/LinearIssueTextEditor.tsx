@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -19,6 +20,7 @@ import {
   resolveLinearIssueTextDraftState
 } from './linear-issue-text-draft-state'
 import { translate } from '@/i18n/i18n'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue
@@ -36,7 +38,7 @@ export function LinearIssueTextEditor({
   sourceContext
 }: LinearIssueTextEditorProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
   const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
@@ -45,8 +47,7 @@ export function LinearIssueTextEditor({
   const resolvedDraftState = resolveLinearIssueTextDraftState(draftState, issue)
   const issueChanged = draftState.issueId !== issue.id
   if (resolvedDraftState !== draftState) {
-    // Why: Linear can push updated title/description while another field has
-    // unsaved edits; reconcile only untouched drafts before the next paint.
+    // Reconcile untouched drafts before paint without clobbering unsaved fields when Linear pushes changes.
     setDraftState(resolvedDraftState)
     if (issueChanged && savingField !== null) {
       setSavingField(null)
@@ -190,7 +191,7 @@ export function LinearIssueTextEditor({
     <div className="min-w-0">
       {fields !== 'description' ? (
         <div className="relative">
-          <textarea
+          <ImeTextarea
             value={titleDraft}
             onChange={(event) => updateTitleDraft(event.target.value)}
             onBlur={() => void saveField('title')}
@@ -201,8 +202,7 @@ export function LinearIssueTextEditor({
               'auto.components.LinearIssueTextEditor.04d73b72dc',
               'Issue title'
             )}
-            // field-sizing:content grows the title with its text and re-wraps on
-            // container resize without a JS measure pass.
+            // CSS field sizing grows and rewraps titles without JS measurement.
             className={cn(
               'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
               '[field-sizing:content]',
@@ -225,6 +225,7 @@ export function LinearIssueTextEditor({
         <div className="relative">
           <LinearIssueMarkdownDescriptionEditor
             value={descriptionDraft}
+            imageUrls={issue.descriptionImageUrls}
             onChange={updateDescriptionDraft}
             onSave={saveDescriptionValue}
             density={density}

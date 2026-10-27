@@ -1,10 +1,6 @@
 name: Unit selection evidence
 
-# Why its own workflow: this job is advisory -- `continue-on-error` on both the job and its
-# comparison step, so it can never fail a PR. But a caller's `needs: test` waits for every job in
-# the called workflow, so while it lived in unit-tests.yml it held `verify` for ~36s after the
-# last shard finished. Called as a sibling instead, it still runs on every PR and still uploads
-# its review artifact; it just no longer sits on the critical path.
+# Call advisory evidence beside unit-tests, preserving artifacts without delaying verify ~36s after shards; job/comparison remain continue-on-error.
 on:
   workflow_call:
 
@@ -15,23 +11,29 @@ jobs:
   selection_evidence:
     if: ${{ !cancelled() }}
     continue-on-error: true
-    runs-on: ubuntu-slim
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v6
         with:
           sparse-checkout: config/scripts/ci-unit-selection-review.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
       - uses: actions/download-artifact@v8
         with:
           pattern: unit-shard-node-*-attempt-${{ github.run_attempt }}
           path: unit-evidence/
       - name: Compare selection with full results
         continue-on-error: true
-        run: node config/scripts/ci-unit-selection-review.mjs unit-evidence
+        uses: actions/github-script@v8
+        with:
+          github-token: unused
+          script: |
+            const env = { ...process.env }
+            delete env['INPUT_GITHUB-TOKEN']
+            await exec.exec(process.execPath, [
+              'config/scripts/ci-unit-selection-review.mjs',
+              'unit-evidence'
+            ], { env })
       - uses: actions/upload-artifact@v7
         if: always()
         continue-on-error: true

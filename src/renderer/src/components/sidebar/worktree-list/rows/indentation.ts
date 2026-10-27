@@ -186,35 +186,6 @@ export function getNewCardStyleParentContentMarginLeft(contentIndent: number): n
   return Math.max(-newInnerPadding, rawMargin)
 }
 
-export function getLineageNestedRowGeometry(args: {
-  experimentalNewWorktreeCardStyle: boolean
-  inheritedCardContentIndent: number
-  lineageDepth: number
-}): {
-  surfaceInset: number
-  cardContentIndent: number
-  lineageChildrenInlineOffset: number
-} {
-  if (args.experimentalNewWorktreeCardStyle) {
-    // Why: the parent card already contributes the baseline; lineage depth would double-count.
-    return {
-      surfaceInset: LINEAGE_NESTED_ROW_SURFACE_INSET,
-      cardContentIndent: 0,
-      lineageChildrenInlineOffset: LINEAGE_CHILDREN_INLINE_OFFSET
-    }
-  }
-
-  const surfaceInset = getWorktreeCardSurfaceInset({
-    isGrouped: true,
-    groupDepth: args.lineageDepth
-  })
-  return {
-    surfaceInset,
-    cardContentIndent: Math.max(0, args.inheritedCardContentIndent - surfaceInset),
-    lineageChildrenInlineOffset: LINEAGE_CHILDREN_INLINE_OFFSET
-  }
-}
-
 export function getLineageChildrenInlineStyle(offset: number | string): {
   marginLeft: string
   width: string

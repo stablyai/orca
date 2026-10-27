@@ -83,7 +83,7 @@ export function DiffSectionBody({
       wordWrapOptionsSubRef.current = null
       diffEditorRef.current = null
     })
-    // Why: Monaco applies the inline-layout wrap override after mount, once width is known.
+    // Monaco applies its inline wrap override after mount when width is known.
     wordWrapMountFrameRef.current = requestAnimationFrame(() => {
       if (diffEditorRef.current !== diffEditor) {
         return
@@ -209,13 +209,13 @@ export function DiffSectionBody({
           modified={section.modifiedContent}
           theme={isDark ? 'vs-dark' : 'vs'}
           onMount={handleEditorMount}
-          // Why: @monaco-editor/react can dispose models before widget teardown.
-          // Keep them through unmount and dispose unattached models next tick.
+          // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
           originalModelPath={`${modelPathBase}:original`}
           modifiedModelPath={`${modelPathBase}:modified`}
           keepCurrentOriginalModel
           keepCurrentModifiedModel
           options={{
+            dropIntoEditor: { enabled: false },
             // Native EditContext focus scrolls its hidden input into the combined viewport.
             editContext: false,
             readOnly: !isEditable,

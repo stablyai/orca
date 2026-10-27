@@ -1,5 +1,6 @@
 import { PanelsTopLeft, RefreshCw } from 'lucide-react'
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -9,13 +10,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { UsageRosterPanel } from './UsageRosterPanel'
-import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
   shouldOpenStatusBarContextMenu
 } from './status-bar-context-menu-policy'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
-import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
+import { StatusBarUsageChangeNotices } from './StatusBarUsageChangeNotices'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
@@ -25,9 +25,16 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
-import { ProviderDetailsMenu, CLOSE_ALL_CONTEXT_MENUS_EVENT } from './ProviderDetailsMenu'
+import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
+import {
+  UsageUnitLabel,
+  getUsageUnitLabelState,
+  usageChipShowsPercentage
+} from './usage-unit-label'
 import { useStatusBarController } from './use-status-bar-controller'
+import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
@@ -53,6 +60,8 @@ export type StatusBarProps = {
 export function StatusBarSurface({
   floatingTerminalOpen
 }: StatusBarProps): React.JSX.Element | null {
+  // Memoized labels still need to follow language changes.
+  useTranslation()
   const controller = useStatusBarController(floatingTerminalOpen)
   if (!controller) {
     return null
@@ -61,6 +70,7 @@ export function StatusBarSurface({
     anyFetching,
     anyVisible,
     barRef,
+    canSignInFromUsageRow,
     collapseUsage,
     collapsedUsageProviders,
     compact,
@@ -76,6 +86,7 @@ export function StatusBarSurface({
     isRefreshing,
     overflowing,
     petEnabled,
+    remoteOwner,
     rosterProviders,
     segmentsIconOnly,
     segmentsRef,
@@ -95,6 +106,8 @@ export function StatusBarSurface({
     usageRef,
     usageTightestOnly
   } = controller
+  const usageMode = usageTightestOnly ? 'compact' : statusBarUsageMode
+  const unitLabelState = getUsageUnitLabelState(rosterProviders, collapsedUsageProviders, usageMode)
 
   return (
     <div
@@ -105,7 +118,7 @@ export function StatusBarSurface({
         if (!shouldOpenStatusBarContextMenu(event.target)) {
           return
         }
-        // Why: mirror the app-wide right-click pattern — close peer menus, then anchor a hidden trigger at the cursor so re-clicks reposition.
+        // Close peer menus and anchor at the cursor so repeated right-clicks reposition the menu.
         event.preventDefault()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         const bounds = event.currentTarget.getBoundingClientRect()
@@ -121,11 +134,10 @@ export function StatusBarSurface({
         <div ref={usageRef} className="flex shrink-0 items-center gap-3">
           {isEmptyUsageState ? (
             showEmptyUsageCta ? (
-              <StatusBarUsageEmptyCta />
+              <StatusBarUsageEmptyCta remoteOwner={remoteOwner} />
             ) : null
           ) : hasVisibleUsageMeters ? (
-            // Consolidated roster pill → opens the all-agents Usage popover (mock parity).
-            <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
+            <StatusBarUsageChangeNotices hasVisibleUsageMeters={hasVisibleUsageMeters}>
               <DropdownMenu
                 open={usageMenuOpen}
                 onOpenChange={handleUsageMenuOpenChange}
@@ -140,12 +152,19 @@ export function StatusBarSurface({
                       'Usage'
                     )}
                   >
+                    {unitLabelState !== 'absent' ? (
+                      <UsageUnitLabel
+                        collapsed={unitLabelState === 'collapsed'}
+                        display={usagePercentageDisplay}
+                      />
+                    ) : null}
                     {rosterProviders.map((p) => (
                       // Why: collapsed chips leave the row but stay measurable, so the density hook can bring them back.
                       <span
                         key={p.provider}
                         data-usage-chip={p.provider}
                         data-usage-urgent={getUsageTone(p) === 'urgent'}
+                        data-usage-percentage={usageChipShowsPercentage(p, usageMode)}
                         data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
                         aria-hidden={collapsedUsageProviders.includes(p.provider)}
                         className="inline-flex data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
@@ -154,12 +173,13 @@ export function StatusBarSurface({
                           p={p}
                           compact={compact}
                           display={usagePercentageDisplay}
-                          mode={usageTightestOnly ? 'compact' : statusBarUsageMode}
+                          mode={usageMode}
                         />
                       </span>
                     ))}
                     {collapseUsage ? (
                       <UsageOverflowChip
+                        providerCount={rosterProviders.length}
                         hidden={rosterProviders.filter((p) =>
                           collapsedUsageProviders.includes(p.provider)
                         )}
@@ -173,8 +193,7 @@ export function StatusBarSurface({
                   side="top"
                   align="start"
                   sideOffset={8}
-                  // Keep the popover (and its drill-in submenus) above the status
-                  // bar instead of overlapping it — bottom padding ≈ footer height.
+                  // Reserve footer height so the popover and drill-in submenus stay above the status bar.
                   collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
                   className="w-[360px] p-0"
                   onPointerDownOutside={usageMenuFocusHandoff.onPointerDownOutside}
@@ -189,13 +208,15 @@ export function StatusBarSurface({
                     onRefresh={handleRefresh}
                     onOpenProvider={handleOpenProviderAccounts}
                     onSignIn={handleOpenProviderAccounts}
-                    canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
+                    canSignIn={canSignInFromUsageRow}
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
                     renderRow={(p, rowNode) => {
-                      // Every provider drills into its detail panel (parity with the
-                      // per-provider dropdowns on main); Claude/Codex additionally get
-                      // the account switcher + runtime toggle + Codex reset credits.
+                      // Why: a placeholder has nothing to drill into; its row opens the host's accounts.
+                      if (isOwnerNotSetUpPlaceholder(p)) {
+                        return null
+                      }
+                      // Claude/Codex detail panels also expose account switching and runtime controls.
                       if (p.provider === 'claude') {
                         return (
                           <ClaudeSwitcherMenu
@@ -235,7 +256,7 @@ export function StatusBarSurface({
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
-            </UsagePercentageDisplayChangeNotice>
+            </StatusBarUsageChangeNotices>
           ) : null}
           {anyVisible && !isEmptyUsageState && (
             <Tooltip>

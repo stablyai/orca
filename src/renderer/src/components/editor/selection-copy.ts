@@ -13,21 +13,23 @@ export function formatCopiedSelectionWithContext({
   selection,
   selectedText
 }: FormatCopiedSelectionArgs): string | null {
+  if (!canCopySelectionWithContext(selection)) {
+    return null
+  }
   const { startLine, endLine } = getContextualCopyLineRange(selection)
-  const isSingleLineSelection = selection.startLineNumber === selection.endLineNumber
-  if (isSingleLineSelection) {
-    return null
-  }
-
-  if (endLine < startLine) {
-    return null
-  }
 
   const codeFenceLanguage = getCodeFenceLanguage(language)
   const codeBlock = selectedText.endsWith('\n') ? selectedText : `${selectedText}\n`
   const lineLabel = startLine === endLine ? `Line: ${startLine}` : `Lines: ${startLine}-${endLine}`
 
   return `File: ${relativePath}\n${lineLabel}\n\n\`\`\`${codeFenceLanguage}\n${codeBlock}\`\`\``
+}
+
+export function canCopySelectionWithContext(selection: IRange): boolean {
+  return (
+    selection.startLineNumber !== selection.endLineNumber &&
+    getInclusiveEndLine(selection) >= selection.startLineNumber
+  )
 }
 
 export function getContextualCopyLineRange(selection: IRange): {
@@ -45,9 +47,7 @@ export function getInclusiveEndLine(selection: IRange): number {
     return selection.endLineNumber
   }
 
-  // Why: Monaco reports a full-line selection as ending at column 1 of the
-  // following line. We translate that boundary back to the last copied line so
-  // pasted context matches what the user actually selected.
+  // Monaco’s full-line selection ends at the next line’s column 1; report the last line actually copied.
   if (selection.endColumn === 1) {
     return selection.endLineNumber - 1
   }

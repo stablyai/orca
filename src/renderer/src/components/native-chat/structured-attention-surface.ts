@@ -1,14 +1,6 @@
-/**
- * Structured-chat implementation of the provider-neutral attention surface.
- *
- * Addressing: the subject key is the pane key the structured status producer already publishes,
- * `structuredAgentSessionPaneKey(unifiedTabId, sessionId)`, so the container this surface reports
- * as `groupId` is the unified tab id that prefixes it — never the split-layout group the tab sits
- * in. One structured tab owns exactly one session, so tab and subject are one-to-one.
- */
+/** Structured subjects pair tab/session ids one-to-one; groupId is the unified tab id, never its enclosing split-layout group. */
 import type { useAppStore } from '@/store'
 import type {
-  AgentAttentionRemainder,
   AgentAttentionSubject,
   AgentAttentionSurface,
   AgentAttentionSurfaceAdmission,
@@ -16,8 +8,10 @@ import type {
 } from '@/attention/agent-attention-contract'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { isOrcaWindowForegroundFocused } from '../terminal-pane/terminal-notification-pane-visibility'
-import { isStructuredTab, type StructuredTab } from './structured-agent-session-tabs'
+import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import type { StructuredTab } from './structured-agent-session-tabs'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -25,10 +19,7 @@ function structuredTabsIn(state: StoreSnapshot, workspaceId: string): Structured
   return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab)
 }
 
-/**
- * The structured tab a subject key addresses, and only while the key still names that tab's
- * current session — a tab rebound to a new session no longer owns the old key.
- */
+/** Resolve a subject only while its tab still owns that session; rebound tabs reject old keys. */
 function findSubjectTab(
   state: StoreSnapshot,
   workspaceId: string,
@@ -66,51 +57,17 @@ function admitStructuredSession(
     : { admitted: false, cause: 'superseded-surface' }
 }
 
-/** The tab the workspace's focused group is currently showing, if it is this structured tab. */
 function isViewedStructuredTab(
   state: StoreSnapshot,
   workspaceId: string,
   tab: StructuredTab
 ): boolean {
-  if (!isOrcaWindowForegroundFocused() || state.activeWorktreeId !== workspaceId) {
-    return false
-  }
-  const activeGroupId = state.activeGroupIdByWorktree[workspaceId]
-  const group = (state.groupsByWorktree[workspaceId] ?? []).find(
-    (candidate) => candidate.id === activeGroupId
-  )
-  return group?.activeTabId === tab.id
+  return isTabOnScreen(state, workspaceId, tab.id, 'structured')
 }
 
-function collectStructuredAttentionRemainder(
-  state: StoreSnapshot,
-  workspaceId: string
-): AgentAttentionRemainder {
-  const tabs = structuredTabsIn(state, workspaceId)
-  if (tabs.length === 0) {
-    return { hasSurfaces: false, unreadSubjectKeys: [], unreadGroupIds: [] }
-  }
-  const unreadSubjectKeys: string[] = []
-  const unreadGroupIds: string[] = []
-  // Why read per live tab instead of scanning the marker maps: a marker left behind by a closed
-  // tab or a superseded session would otherwise hold workspace unread lit with nothing to clear it.
-  for (const tab of tabs) {
-    const subjectKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    if (state.unreadAgentCompletionPanes[subjectKey]) {
-      unreadSubjectKeys.push(subjectKey)
-    }
-    if (state.unreadTerminalTabs[tab.id]) {
-      unreadGroupIds.push(tab.id)
-    }
-  }
-  return { hasSurfaces: true, unreadSubjectKeys, unreadGroupIds }
-}
-
-/** Binds the neutral surface contract to one store snapshot. */
 export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAttentionSurface {
   return {
-    // Why: a structured session runs on the execution host with no renderer PTY, so an open tab
-    // still bound to the session is the only liveness evidence this process holds.
+    // Without a renderer PTY, a tab still bound to the host session is this process’s liveness evidence.
     hasLiveSession: (subject: AgentAttentionSubject) =>
       subject.surfaceKey === undefined
         ? structuredTabsIn(state, subject.workspaceId).length > 0
@@ -120,10 +77,11 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
       const tab = findSubjectTab(state, subject.workspaceId, subject.surfaceKey)
       return tab !== null && isViewedStructuredTab(state, subject.workspaceId, tab)
     },
-    // Why: activeWorktreeId is in-app selection only. A backgrounded Orca still needs unread.
-    isWorkspaceViewed: (workspaceId) =>
-      state.activeWorktreeId === workspaceId && isOrcaWindowForegroundFocused(),
+    // Why: in-app selection alone is not viewing — a backgrounded Orca, Settings or an away user still need unread.
+    isWorkspaceViewed: (workspaceId) => isWorkspaceOnScreen(state, workspaceId),
     isWorkspaceActive: (workspaceId) => state.activeWorktreeId === workspaceId,
+    isWorkspaceMuted: (workspaceId) =>
+      isWorkspaceNotificationMutedBySidebarFilters(state, workspaceId),
     resolveViewedSubjectKey: (groupId) => {
       const tab = Object.values(state.unifiedTabsByWorktree)
         .flat()
@@ -131,8 +89,6 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
       return tab && isStructuredTab(tab)
         ? structuredAgentSessionPaneKey(tab.id, tab.entityId)
         : null
-    },
-    collectWorkspaceAttentionRemainder: (workspaceId) =>
-      collectStructuredAttentionRemainder(state, workspaceId)
+    }
   }
 }

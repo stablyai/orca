@@ -3,9 +3,10 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { getWorkspaceSessionTabActivityIds } from '../../shared/workspace-session-tab-activity'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
+import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
 import {
   getLatestPtyTitle,
   getLeafDisplayRecord,
@@ -16,35 +17,31 @@ import {
   mergeWorktreeSummaryStatus,
   type TitleDisplayClear
 } from './runtime-worktree-status-projection'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
+import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
-type SummaryLookup = (
-  summaries: Map<string, RuntimeWorktreePsSummary>,
-  pathIndex: RuntimeWorktreeSummaryPathIndex,
-  missingIds: Set<string>,
-  worktreeId: string
-) => RuntimeWorktreePsSummary | null
-
-export type RuntimeWorkingTerminalEvidence = {
+/** A live terminal whose title reads working or needs-permission, kept per pane so agent rows can suppress it. */
+export type RuntimeTerminalTitleEvidence = {
+  status: 'working' | 'permission'
   paneKey: string | null
   ptyId: string | null
   tabId: string | null
 }
 
 export function applyRuntimeWorktreePsTerminalActivity(args: {
-  summaries: Map<string, RuntimeWorktreePsSummary>
-  pathIndex: RuntimeWorktreeSummaryPathIndex
-  missingIds: Set<string>
   freshPtyLiveness: ReadonlySet<string> | null
+  /** Filled with every PTY this pass counts as live. */
+  countedPtyIds: Set<string>
   leaves: Iterable<RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   session: WorkspaceSessionState | null | undefined
   getPaneKey: (leaf: RuntimeLeafRecord) => string
+  paneOf: PtyPaneOf
   getTitleDisplayClear: (ptyId: string) => TitleDisplayClear | null
-  getSummary: SummaryLookup
-}): Map<string, RuntimeWorkingTerminalEvidence[]> {
-  const workingEvidence = new Map<string, RuntimeWorkingTerminalEvidence[]>()
+  getSummary: RuntimeWorktreePsSummaryLookup
+}): Map<string, RuntimeTerminalTitleEvidence[]> {
+  const titleEvidence = new Map<string, RuntimeTerminalTitleEvidence[]>()
   const savedTabOwnerById = new Map<string, { worktreeId: string; title: string }>()
   for (const [worktreeId, tabs] of Object.entries(args.session?.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
@@ -59,7 +56,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
       }
     }
   }
-  const countedPtyIds = new Set<string>()
+  const countedPtyIds = args.countedPtyIds
   for (const leaf of args.leaves) {
     if (
       !leaf.ptyId ||
@@ -72,16 +69,11 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (
       args.freshPtyLiveness !== null &&
       freshOwner?.connected &&
-      !runtimeWorktreeIdsEqual(freshOwner.worktreeId, leaf.worktreeId)
+      !worktreeIdsEqual(freshOwner.worktreeId, leaf.worktreeId)
     ) {
       continue
     }
-    const summary = args.getSummary(
-      args.summaries,
-      args.pathIndex,
-      args.missingIds,
-      leaf.worktreeId
-    )
+    const summary = args.getSummary(leaf.worktreeId)
     if (!summary) {
       continue
     }
@@ -95,8 +87,9 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
       getLeafDisplayRecord(leaf, args.getTitleDisplayClear(leaf.ptyId)),
       args.tabs.get(leaf.tabId)?.title ?? null
     )
-    if (leafStatus === 'working') {
-      addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
+    if (leafStatus === 'working' || leafStatus === 'permission') {
+      addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
+        status: leafStatus,
         paneKey: args.getPaneKey(leaf),
         ptyId: leaf.ptyId,
         tabId: leaf.tabId
@@ -126,15 +119,17 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (args.freshPtyLiveness !== null) {
       owner = { worktreeId: pty.worktreeId, title: owner?.title ?? displayTitle ?? '' }
     }
-    if (!owner && persistedTabId && pty.tabId === persistedTabId) {
+    const recorded = args.paneOf(pty)
+    if (!owner && persistedTabId && recorded.tabId === persistedTabId) {
       owner = { worktreeId: pty.worktreeId, title: displayTitle ?? '' }
     }
-    const pane = parsePaneKey(pty.paneKey ?? '')
+    const pane = parsePaneKey(recorded.paneKey ?? '')
     const hasExplicitOwner =
-      pty.tabId !== null && pane?.tabId === pty.tabId && pane.leafId.length > 0
-    const savedOwner = pty.tabId ? savedTabOwnerById.get(pty.tabId) : undefined
+      recorded.tabId !== null && pane?.tabId === recorded.tabId && pane.leafId.length > 0
+    const savedOwner = recorded.tabId ? savedTabOwnerById.get(recorded.tabId) : undefined
     const hasSavedLayout =
-      pty.tabId !== null && Object.hasOwn(args.session?.terminalLayoutsByTabId ?? {}, pty.tabId)
+      recorded.tabId !== null &&
+      Object.hasOwn(args.session?.terminalLayoutsByTabId ?? {}, recorded.tabId)
     if (!owner && hasExplicitOwner && !hasSavedLayout) {
       owner = {
         worktreeId: savedOwner?.worktreeId ?? pty.worktreeId,
@@ -144,26 +139,23 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (!owner) {
       continue
     }
-    const summary = args.getSummary(
-      args.summaries,
-      args.pathIndex,
-      args.missingIds,
-      owner.worktreeId
-    )
+    const summary = args.getSummary(owner.worktreeId)
     if (!summary) {
       continue
     }
+    countedPtyIds.add(pty.ptyId)
     const previousLastOutputAt = summary.lastOutputAt
     summary.liveTerminalCount += 1
     summary.hasAttachedPty = true
     summary.hasHostSidebarActivity = true
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
     const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
-    if (ptyStatus === 'working') {
-      addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
-        paneKey: pty.paneKey,
+    if (ptyStatus === 'working' || ptyStatus === 'permission') {
+      addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
+        status: ptyStatus,
+        paneKey: recorded.paneKey,
         ptyId: pty.ptyId,
-        tabId: pty.tabId ?? persistedTabId ?? null
+        tabId: recorded.tabId ?? persistedTabId ?? null
       })
     }
     mergeWorktreeSummaryStatus(summary, ptyStatus)
@@ -174,13 +166,13 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
       summary.preview = pty.preview
     }
   }
-  return workingEvidence
+  return titleEvidence
 }
 
-function addWorkingTerminalEvidence(
-  evidenceByWorktreeId: Map<string, RuntimeWorkingTerminalEvidence[]>,
+function addTerminalTitleEvidence(
+  evidenceByWorktreeId: Map<string, RuntimeTerminalTitleEvidence[]>,
   worktreeId: string,
-  evidence: RuntimeWorkingTerminalEvidence
+  evidence: RuntimeTerminalTitleEvidence
 ): void {
   const existing = evidenceByWorktreeId.get(worktreeId)
   if (existing) {
@@ -194,13 +186,12 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   store: RuntimeStore | null
   summaries: Map<string, RuntimeWorktreePsSummary>
   repoById: ReadonlyMap<string, Repo>
-  pathIndex: RuntimeWorktreeSummaryPathIndex
-  missingIds: Set<string>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
+  paneOf: PtyPaneOf
   /** Non-minting: a listing must not issue handles, only recognise the ones already bound. */
   getTerminalHandlesForPty: (ptyId: string) => readonly string[]
-  getSummary: SummaryLookup
+  getSummary: RuntimeWorktreePsSummaryLookup
 }): {
   mirroredWorktreeIdByTabId: Map<string, string>
   connectedPtyEvidence: {
@@ -226,27 +217,19 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
       if (tabs.length === 0) {
         continue
       }
-      const summary = args.getSummary(args.summaries, args.pathIndex, args.missingIds, worktreeId)
+      const summary = args.getSummary(worktreeId)
       if (summary && tabs.some((tab) => tab.ptyId && args.ptysById.get(tab.ptyId)?.connected)) {
         summary.hasHostSidebarActivity = true
       }
     }
-    for (const [worktreeId, tabs] of Object.entries(session.browserTabsByWorktree ?? {})) {
-      if (tabs.length === 0) {
-        continue
-      }
-      const summary = args.getSummary(args.summaries, args.pathIndex, args.missingIds, worktreeId)
+    for (const worktreeId of getWorkspaceSessionTabActivityIds(session)) {
+      const summary = args.getSummary(worktreeId)
       if (summary) {
         summary.hasHostSidebarActivity = true
       }
     }
     if (session.activeWorktreeId) {
-      const summary = args.getSummary(
-        args.summaries,
-        args.pathIndex,
-        args.missingIds,
-        session.activeWorktreeId
-      )
+      const summary = args.getSummary(session.activeWorktreeId)
       if (summary) {
         summary.isActive = true
       }
@@ -266,11 +249,12 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
     if (!pty.connected) {
       continue
     }
-    if (pty.tabId) {
-      connectedPtyEvidence.tabIds.add(pty.tabId)
+    const { tabId, paneKey } = args.paneOf(pty)
+    if (tabId) {
+      connectedPtyEvidence.tabIds.add(tabId)
     }
-    if (pty.paneKey) {
-      connectedPtyEvidence.paneKeys.add(pty.paneKey)
+    if (paneKey) {
+      connectedPtyEvidence.paneKeys.add(paneKey)
     }
     for (const terminalHandle of args.getTerminalHandlesForPty(pty.ptyId)) {
       connectedPtyEvidence.ptyIdByTerminalHandle.set(terminalHandle, pty.ptyId)

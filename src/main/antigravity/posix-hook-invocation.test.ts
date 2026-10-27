@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { createServer } from 'node:http'
 import { z } from 'zod'
 import { tokenizeCommandLine } from '../../shared/agent-command-line-entrypoint'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { AntigravityHookService } from './hook-service'
 
 const { homeMock } = vi.hoisted(() => ({ homeMock: vi.fn<() => string>() }))

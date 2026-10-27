@@ -1,28 +1,16 @@
-/**
- * Where `browser.dialogAccept` and `browser.dialogDismiss` send their answer.
- *
- * The answer has to reach the CDP session that reported the dialog. The agent-browser path cannot
- * be that session: it runs a fresh client whose bootstrap is renderer-bound, and a page sitting in
- * a modal dialog answers no renderer-bound command until the dialog is gone. So with a stream live
- * on the page, the stream settles it; with no stream, nothing changes.
- */
+/** Modal replies must use the reporting CDP session; a fresh renderer-bound client blocks behind the dialog. */
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   webContents: { fromId: () => ({ isDestroyed: () => false }) }
 }))
 
-import { RuntimeBrowserCommandsWithBrowserSetHeaders } from './runtime-browser-commands-browser-set-headers'
-import type { ActiveBrowserScreencastPage } from './runtime-browser-commands-browser-command-target-params'
+import { RuntimeBrowserDialogs } from './browser/browser-dialogs'
+import { settleBrowserDialogOnLiveScreencast } from './browser-dialog-settlement'
+import type { ActiveBrowserScreencastPage } from './browser/browser-screencast-contracts'
 import type { BrowserScreencastSession } from '../browser/browser-screencast-stream-types'
 
 const PAGE_ID = 'page-1'
-
-class DialogCommandsUnderTest extends RuntimeBrowserCommandsWithBrowserSetHeaders {
-  registerLiveScreencast(browserPageId: string, record: ActiveBrowserScreencastPage): void {
-    this.activeScreencastsByPageId.set(browserPageId, record)
-  }
-}
 
 function streamingPage(session: BrowserScreencastSession): ActiveBrowserScreencastPage {
   return {
@@ -48,11 +36,19 @@ function createCommands(settleDialog: (accept: boolean, promptText?: string) => 
     dialogAccept: vi.fn(async () => ({ via: 'bridge' })),
     dialogDismiss: vi.fn(async () => ({ via: 'bridge' }))
   }
-  const host = { getAgentBrowserBridge: () => bridge }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dialog path reads only getAgentBrowserBridge off the host.
-  const commands = new DialogCommandsUnderTest(host as never)
+  const activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
+  const commands = new RuntimeBrowserDialogs(
+    {
+      resolveBrowserCommandTarget: async (params) => ({ browserPageId: params.page }),
+      requireAgentBrowserBridge: () => bridge
+    },
+    {
+      settleDialog: (pageId, accept, promptText) =>
+        settleBrowserDialogOnLiveScreencast(activeScreencastsByPageId, pageId, accept, promptText)
+    }
+  )
   const registerStream = (): void => {
-    commands.registerLiveScreencast(
+    activeScreencastsByPageId.set(
       PAGE_ID,
       streamingPage({
         stop: () => {},
@@ -124,7 +120,6 @@ describe('a dialog reply goes to the stream that reported it', () => {
     expect(await streamed.commands.browserDialogDismiss({ page: PAGE_ID })).toEqual(
       await bridged.commands.browserDialogDismiss({ page: PAGE_ID })
     )
-    // The bridge answered on the second of each pair, so the bodies above came from both paths.
     expect(bridged.bridge.dialogAccept).toHaveBeenCalledTimes(1)
     expect(bridged.bridge.dialogDismiss).toHaveBeenCalledTimes(1)
     expect(streamed.bridge.dialogAccept).not.toHaveBeenCalled()

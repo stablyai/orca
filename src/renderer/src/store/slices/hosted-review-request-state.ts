@@ -9,6 +9,7 @@ export const inflightHostedReviewRequests = new Map<
   {
     promise: Promise<HostedReviewInfo | null>
     force: boolean
+    currentHeadOid: string | null
     generation: number
     startedAt: number
   }
@@ -177,6 +178,7 @@ export function registerInflightHostedReviewRequest(
   entry: {
     promise: Promise<HostedReviewInfo | null>
     force: boolean
+    currentHeadOid: string | null
     generation: number
     startedAt: number
   }

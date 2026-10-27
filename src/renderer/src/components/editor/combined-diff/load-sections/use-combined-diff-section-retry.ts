@@ -43,8 +43,7 @@ export function useCombinedDiffSectionRetry({
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
       invalidateViewStateCache()
-      // Why: reloading one section must not bump the global generation — that is part of
-      // the virtualizer item key, so it would remount every rendered Monaco editor (STA-3420).
+      // Use per-section tokens: global generation is in virtualizer keys and would remount every visible Monaco editor.
       sectionLoadTokensRef.current.set(index, (sectionLoadTokensRef.current.get(index) ?? 0) + 1)
       const coalesced = reloadTimersRef.current.get(index)
       if (coalesced !== undefined) {
@@ -59,6 +58,9 @@ export function useCombinedDiffSectionRetry({
                 ...section,
                 loading: !collapsed,
                 error: undefined,
+                // Retry explicitly refetches disk and discards edits retained after a refused save.
+                dirty: false,
+                saveConflict: undefined,
                 diffResult: null,
                 originalContent: '',
                 modifiedContent: '',
@@ -87,9 +89,7 @@ export function useCombinedDiffSectionRetry({
   )
   retrySectionRef.current = retrySection
 
-  // Why: invalidation (rebase/commit/external write) revalidates in place — it must not tear the
-  // section down first. Clearing content up front forces a Monaco remodel even when the refetched
-  // diff is identical, which is what wedged the renderer during a rebase (STA-3420).
+  // Revalidate in place; clearing content first rebuilds Monaco even for identical refetches and stalls rebases.
   const requestSectionReload = useCallback(
     (index: number): void => {
       const section = sectionsRef.current[index]
@@ -100,20 +100,16 @@ export function useCombinedDiffSectionRetry({
       invalidateViewStateCache()
       sectionLoadTokensRef.current.set(index, (sectionLoadTokensRef.current.get(index) ?? 0) + 1)
       if (loadingIndicesRef.current.has(index)) {
-        // Why: the in-flight load now carries a stale token, so it re-drives this reload when it
-        // settles. Scheduling one here would fetch the same large diff a second time.
+        // The stale in-flight token schedules its reload on settlement; another schedule here would duplicate the fetch.
         return
       }
       if (section.collapsed || !renderedIndicesRef.current.has(index)) {
-        // Why: a rebase invalidates every touched path at once. Refetching off-screen sections is
-        // unbounded work nobody can see; the row reloads on mount once it scrolls into view.
+        // Refetch only visible expanded rows; rebases invalidate many paths, and offscreen rows reload when mounted.
         return
       }
-      // Why: a rebase touches the same path many times over a few seconds. Without coalescing
-      // each touch refetches a whole diff, and the payload churn alone stalls the renderer.
-      const pending = reloadTimersRef.current.get(index)
-      if (pending !== undefined) {
-        window.clearTimeout(pending)
+      // Coalesce repeated path writes without postponing an armed timer, or sustained writes would starve reloads.
+      if (reloadTimersRef.current.has(index)) {
+        return
       }
       reloadTimersRef.current.set(
         index,

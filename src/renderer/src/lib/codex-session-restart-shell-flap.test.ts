@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { defaultScopeHost } from '@/lib/default-creation-host'
+
+// Why: these cases model a switch made on the focused host, as the status bar does.
+const focusedOwner = () => defaultScopeHost(useAppStore.getState().settings)
 import {
   markLiveCodexSessionsForRestart,
   markRestoredStaleCodexSessionsForRestart
@@ -13,11 +17,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 const ACCOUNT_A = 'account-a@example.com'
 const ACCOUNT_B = 'account-b@example.com'
 
-/**
- * The cached inspection can flap to the pane's shell for a live Codex session
- * (#11064), and the switch path has no retry — one spurious reading silently
- * loses the restart card forever. These pin the fresh-scan re-confirmation.
- */
+// Reconfirm cached shell readings: one transient flap during account switch would silently lose the only restart notice (#11064).
 describe('spurious shell readings on Codex-launched panes', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   const runtimeEnvironmentCall = vi.fn()
@@ -43,7 +43,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
         ]
       },
       ptyIdsByTabId: { 'tab-1': [ptyId] },
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {}
     })
   }
@@ -99,6 +99,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('codex-aarch64-ap')
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -114,6 +115,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -125,6 +127,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     vi.mocked(window.api.pty.confirmForegroundProcess).mockRejectedValue(new Error('daemon busy'))
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -138,6 +141,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     ).confirmForegroundProcess = undefined
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -149,6 +153,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     seedPane()
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -164,6 +169,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     })
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -173,7 +179,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
   })
 
   it('never routes a remote runtime pane through the local confirm bridge', async () => {
-    seedPane({ ptyId: 'remote:term-1', launchAgent: 'codex' })
+    seedPane({ ptyId: 'remote:env-1@@term-1', launchAgent: 'codex' })
     useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -183,12 +189,12 @@ describe('spurious shell readings on Codex-launched panes', () => {
     })
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
 
-    // Why: a fresh local scan can know nothing about env-1's PTY, and a
-    // cross-lane answer must never card (or spare) a remote pane.
+    // Local fresh scans say nothing about remote PTYs; reject cross-lane confirmation.
     expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalled()
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
   })

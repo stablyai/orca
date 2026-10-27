@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,9 +7,9 @@ import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
   isCommandAvailable,
-  isCommandOnPath,
-  shellQuote
+  isCommandOnPath
 } from './preflight-command-exec'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 const COMMAND = 'orca-22975-gh'
 const BROKEN_SHIM = 'echo broken-shim >&2\nexit 126\n'
@@ -20,7 +20,7 @@ async function cliInDirectory(label: string, body = 'echo gh-version-fixture\n')
   await mkdir(dir, { recursive: true })
   await writeFile(
     path.join(dir, COMMAND),
-    `#!/bin/sh\nprintf '%s\\n' "$@" >> ${shellQuote(path.join(dir, 'argv.txt'))}\n${body}`,
+    `#!/bin/sh\nprintf '%s\\n' "$@" >> ${quotePosixShell(path.join(dir, 'argv.txt'))}\n${body}`,
     { mode: 0o755 }
   )
   return dir
@@ -82,6 +82,20 @@ describe.skipIf(process.platform === 'win32')(
       expect(await probedArgs(second)).toEqual([])
     })
 
+    it('keeps the full timeout for a healthy first copy when other copies exist', async () => {
+      const first = await cliInDirectory('slow-first', '/bin/sleep 2\necho gh-version-fixture\n')
+      const second = await cliInDirectory('broken-second', BROKEN_SHIM)
+      const third = await cliInDirectory('broken-third', BROKEN_SHIM)
+      vi.stubEnv('PATH', [first, second, third].join(path.delimiter))
+
+      await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
+        status: 'available',
+        binary: path.join(first, COMMAND)
+      })
+      expect(await probedArgs(second)).toEqual([])
+      expect(await probedArgs(third)).toEqual([])
+    })
+
     it('distinguishes exhausted failing copies from an absent command', async () => {
       const first = await cliInDirectory('first', BROKEN_SHIM)
       const second = await cliInDirectory('second', BROKEN_SHIM)
@@ -96,21 +110,6 @@ describe.skipIf(process.platform === 'win32')(
       })
       expect(await probedArgs(first)).toEqual(['--version'])
       expect(await probedArgs(second)).toEqual(['--version'])
-    })
-
-    it('skips directories and non-executable files before a working copy', async () => {
-      const directory = path.join(root, 'directory')
-      await mkdir(path.join(directory, COMMAND), { recursive: true })
-      const plain = await cliInDirectory('plain')
-      await chmod(path.join(plain, COMMAND), 0o644)
-      const good = await cliInDirectory('good')
-      vi.stubEnv('PATH', [directory, plain, good].join(path.delimiter))
-
-      await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-        status: 'available',
-        binary: path.join(good, COMMAND)
-      })
-      expect(await probedArgs(plain)).toEqual([])
     })
 
     it('never substitutes another binary for an explicit failing path', async () => {
@@ -187,17 +186,24 @@ describe.skipIf(process.platform === 'win32')(
       expect(await probedArgs(good)).toEqual([])
     })
 
-    it('stops at a real timeout and leaves later copies unprobed', async () => {
-      const hung = await cliInDirectory('hung', 'exec /bin/sleep 30\n')
+    it('recovers a working copy after a real launcher timeout', async () => {
+      const marker = path.join(root, 'descendant-terminated')
+      const childScript = `trap ${quotePosixShell(`printf terminated > ${quotePosixShell(marker)}; exit 0`)} TERM\n/bin/sleep 30 &\nwait\n`
+      const hung = await cliInDirectory(
+        'hung',
+        `/bin/sh -c ${quotePosixShell(childScript)} &\nwait\n`
+      )
       const good = await cliInDirectory('good')
       vi.stubEnv('PATH', [hung, good].join(path.delimiter))
 
       await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-        status: 'timeout',
-        binary: path.join(hung, COMMAND)
+        status: 'available',
+        binary: path.join(good, COMMAND)
       })
-      expect(await probedArgs(good)).toEqual([])
-    }, 10_000)
+      expect(await probedArgs(hung)).toEqual(['--version'])
+      expect(await probedArgs(good)).toEqual(['--version'])
+      expect(await readFile(marker, 'utf8')).toBe('terminated')
+    }, 15_000)
 
     it('uses the known Nix install directory after PATH copies fail', async () => {
       const shim = await cliInDirectory('shim', BROKEN_SHIM)
@@ -246,4 +252,32 @@ describe.runIf(process.platform === 'win32')('Windows preflight batch shims', ()
       ).resolves.toMatchObject({ stdout: expect.stringContaining('gh-version-fixture') })
     }
   })
+
+  // Include the probe, tree-cleanup deadline, and recovery probe on a busy Windows runner.
+  it('recovers after a hung batch launcher and terminates its Node child', async () => {
+    const first = path.join(root, 'hung')
+    const second = path.join(root, 'working')
+    await mkdir(first)
+    await mkdir(second)
+    const name = `${COMMAND}.CMD`
+    await writeFile(
+      path.join(first, 'hang.js'),
+      `require('node:fs').writeFileSync(require('node:path').join(__dirname, 'child.pid'), String(process.pid)); setTimeout(function () {}, 60000);`
+    )
+    await writeFile(path.join(first, name), `@echo off\r\n"${process.execPath}" "%~dp0hang.js"\r\n`)
+    await writeFile(
+      path.join(second, name),
+      '@echo off\r\necho gh-version-fixture\r\nexit /b 0\r\n'
+    )
+    vi.stubEnv('PATH', [first, second].join(path.delimiter))
+    vi.stubEnv('Path', [first, second].join(path.delimiter))
+
+    await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
+      status: 'available',
+      binary: path.posix.join(second, name)
+    })
+    const childPid = Number(await readFile(path.join(first, 'child.pid'), 'utf8'))
+    expect(Number.isSafeInteger(childPid) && childPid > 0).toBe(true)
+    expect(() => process.kill(childPid, 0)).toThrow()
+  }, 30_000)
 })

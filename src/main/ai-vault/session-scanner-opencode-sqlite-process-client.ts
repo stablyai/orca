@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { WorkerRequestTransport } from '../lazy-worker-thread-host'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'

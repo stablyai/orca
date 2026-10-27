@@ -15,7 +15,9 @@ const storeBox = vi.hoisted(() => ({
 }))
 
 const mocks = vi.hoisted(() => ({
+  activateTab: vi.fn(),
   createTab: vi.fn(),
+  setActiveTabForWorktree: vi.fn(),
   setTabBarOrder: vi.fn(),
   queueTabStartupCommand: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
@@ -149,6 +151,8 @@ beforeEach(() => {
       agentDefaultEnv: {}
     },
     createTab: mocks.createTab,
+    activateTab: mocks.activateTab,
+    setActiveTabForWorktree: mocks.setActiveTabForWorktree,
     setTabBarOrder: mocks.setTabBarOrder,
     queueTabStartupCommand: mocks.queueTabStartupCommand,
     tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: EXISTING_TAB_ID }] },
@@ -174,20 +178,27 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
     clickLaunch()
 
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith({
+      requestId: expect.any(String),
       agent: 'claude',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      launchSource: 'shortcut'
+      launchSource: 'shortcut',
+      activate: false
     })
-    // Why: the whole point of the migration. The shared launcher owns the startup plan and the
-    // tab it lands in, so this button must not reach past it into the tab store.
+    // The launcher owns tab creation and startup; this control must not write the tab store directly.
     expect(mocks.createTab).not.toHaveBeenCalled()
     expect(mocks.queueTabStartupCommand).not.toHaveBeenCalled()
     expect(mocks.setTabBarOrder).not.toHaveBeenCalled()
   })
 
-  it('focuses the launched terminal tab', () => {
+  it('activates the launched terminal tab so the floating panel selects and focuses it', () => {
     clickLaunch()
 
+    // activateTab updates the unified group’s visible selection; the legacy per-worktree map alone cannot.
+    expect(mocks.setActiveTabForWorktree).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      NEW_AGENT_TAB_ID
+    )
+    expect(mocks.activateTab).toHaveBeenCalledWith(NEW_AGENT_TAB_ID)
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith(NEW_AGENT_TAB_ID)
   })
 
@@ -197,14 +208,10 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
     clickLaunch()
 
     expect(toast.error).toHaveBeenCalledWith('Could not build launch command for Claude.')
-    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+    expect(mocks.activateTab).not.toHaveBeenCalled()
   })
 
-  // Why: a floating window has nowhere to keep a structured session, so the launch must resolve a
-  // terminal. Pinned against the shared resolver the launcher routes on, not a restatement here.
-  it('keeps the floating workspace off the structured route', () => {
-    // `claude` is a structured-session provider on a local host, so `floating-workspace` is the
-    // only blocker that can produce this result — any other answer means the kind stopped deciding.
+  it('routes the floating workspace by capability, not by workspace kind', () => {
     expect(
       resolveStructuredNativeChatSupport({
         agent: 'claude',
@@ -212,6 +219,6 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
         hostCapabilities: null,
         workspaceKind: 'floating'
       })
-    ).toEqual({ supported: false, blocker: 'floating-workspace' })
+    ).toEqual({ supported: false, blocker: 'runtime-capability-unknown' })
   })
 })

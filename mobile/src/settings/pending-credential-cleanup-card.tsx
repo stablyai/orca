@@ -1,8 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { KeyRound } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   loadPendingHostCredentialCleanup,
   subscribePendingHostCredentialCleanup
@@ -10,6 +12,7 @@ import {
 import { retryPendingHostCredentialCleanup } from '../transport/host-store'
 
 export function PendingCredentialCleanupCard() {
+  useMobileColorScheme()
   const [pendingCredentialIds, setPendingCredentialIds] = useState<string[]>([])
   const [credentialStorageUnreadable, setCredentialStorageUnreadable] = useState(false)
   const [retryingCredentialCleanup, setRetryingCredentialCleanup] = useState(false)
@@ -26,8 +29,7 @@ export function PendingCredentialCleanupCard() {
           if (active && generation === credentialRefreshGenerationRef.current) {
             setPendingCredentialIds(state.ids)
             setCredentialStorageUnreadable(state.storageUnreadable)
-            // Why: neutral copy once the queue is confirmed empty so a later
-            // pending set does not inherit a previous Retry failure message.
+            // Clear the old retry failure when the queue empties so later entries start with neutral copy.
             if (state.ids.length === 0 && !state.storageUnreadable) {
               setCredentialRetryFailed(false)
             }
@@ -63,9 +65,7 @@ export function PendingCredentialCleanupCard() {
   }, [retryingCredentialCleanup])
 
   const pendingCredentialCount = pendingCredentialIds.length
-  // Why: show the cleanup card whenever cleanup is pending OR the durable queue
-  // is unreadable — an unreadable queue can hide an orphaned token, so keep a
-  // retry affordance rather than a silently-empty (hidden) section.
+  // Unreadable durable queues may hide orphaned tokens; keep cleanup and Retry visible.
   if (pendingCredentialCount === 0 && !credentialStorageUnreadable) {
     return null
   }
@@ -110,7 +110,7 @@ export function PendingCredentialCleanupCard() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
     borderRadius: 12,
@@ -156,4 +156,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary
   }
-})
+}))

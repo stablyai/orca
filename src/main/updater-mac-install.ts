@@ -10,6 +10,8 @@ export function registerMacUpdaterEvents({
   getPendingInstallVersion,
   getKnownReleaseUrl,
   performQuitAndInstall,
+  commitStagedMacInstall,
+  failMacStaging,
   shouldDeferMacQuitForInstall,
   sendStatus
 }: {
@@ -18,11 +20,16 @@ export function registerMacUpdaterEvents({
   getPendingInstallVersion: () => string
   getKnownReleaseUrl: () => string | undefined
   performQuitAndInstall: () => void | Promise<void>
+  commitStagedMacInstall: () => void
+  failMacStaging: (error: unknown) => void
   shouldDeferMacQuitForInstall: () => boolean
   sendStatus: (status: UpdateStatus) => void
 }): void {
   if (process.platform === 'darwin') {
+    nativeUpdater.on('error', failMacStaging)
     nativeUpdater.on('update-downloaded', () => {
+      // Commit before MacUpdater's later listener calls app.quit.
+      commitStagedMacInstall()
       const hasInstallableVersion = hasInstallableDownloadedVersion()
       handleMacInstallerReady(hasInstallableVersion, performQuitAndInstall, () => {
         sendStatus({
@@ -34,12 +41,12 @@ export function registerMacUpdaterEvents({
     })
   }
 
-  // Why: veto before startup listeners begin shutting down services.
+  // Veto before other listeners start shutting down services.
   app.prependListener('before-quit', (event) => {
     if (!shouldDeferMacQuitForInstall()) {
       return
     }
-    // Why: an Update & Restart is checking blockers or cleaning up; a second quit must not tear down underneath it.
+    // A second quit must not tear down services during install preflight.
     if (macInstallPreflightInProgress) {
       event.preventDefault()
       return
@@ -68,7 +75,6 @@ export function registerMacUpdaterEvents({
   })
 }
 
-/** Whether Squirrel.Mac has finished downloading the update from the localhost proxy. */
 let squirrelReady = false
 let macInstallPreflightInProgress = false
 
@@ -78,14 +84,11 @@ export function setMacInstallPreflightInProgress(value: boolean): void {
     bypassMacInstallGuardUntilNextAttempt = false
   }
 }
-/** Remembers a user/app quit request that arrived before Squirrel.Mac had a
- * staged update ready to apply. Without this handoff, quitting during the
- * localhost-proxy phase exits back into the old app and the update is lost. */
+// Defer early quit/install requests until Squirrel stages the update, or the update is lost.
 let requestedActionAfterSquirrelReady: 'quit' | 'install' | null = null
-/** Prevents the updater-specific before-quit guard from re-blocking the
- * quitAndInstall-triggered shutdown that is supposed to apply the update. */
+// Do not re-block the shutdown triggered by quitAndInstall.
 let quitAndInstallInFlight = false
-/** Both quit passes must proceed when native readiness times out. */
+// Timeout recovery must allow both quit passes.
 let bypassMacInstallGuardUntilNextAttempt = false
 let pendingInstallTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -140,9 +143,7 @@ export function isWaitingForMacInstallerReadiness(
     return false
   }
 
-  // electron-updater fires 'update-downloaded' before Squirrel.Mac has staged
-  // the update. Once we show 100% downloaded, treat quits as "install this as
-  // soon as ShipIt is ready" instead of exiting back into the old version.
+  // electron-updater reports completion before Squirrel stages; hold quits until native readiness.
   return currentStatus.state === 'downloading' && currentStatus.percent === 100
 }
 
@@ -160,7 +161,6 @@ export function deferMacQuitUntilInstallerReady(
   if (intent === 'install') {
     bypassMacInstallGuardUntilNextAttempt = false
   }
-  // Why: an ordinary retry of quit must not downgrade a pending Update & Restart.
   if (intent === 'install' || requestedActionAfterSquirrelReady !== 'install') {
     requestedActionAfterSquirrelReady = intent
   }
@@ -185,9 +185,7 @@ export function deferMacQuitUntilInstallerReady(
       }
     )
     requestedActionAfterSquirrelReady = null
-    // This is a safety valve. The updater path should wait for ShipIt so the
-    // staged update can apply, but if the native ready signal never arrives we
-    // must let the app close instead of trapping the user in a blocked quit.
+    // Native readiness may never arrive; let the user quit rather than trapping the app.
     bypassMacInstallGuardUntilNextAttempt = true
     app.quit()
   }, MAC_INSTALL_READY_TIMEOUT_MS)

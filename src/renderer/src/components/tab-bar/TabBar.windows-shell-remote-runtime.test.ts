@@ -14,7 +14,8 @@ import {
   stubSortableTab,
   stubStatusDisplay,
   stubTabInsertion,
-  stubTabStripDragScroll
+  stubTabStripDragScroll,
+  stubTooltip
 } from './tab-bar-windows-shell-launch-render-stubs'
 import {
   appStoreSnapshot,
@@ -38,6 +39,7 @@ vi.mock('./QuickLaunchButton', () => stubQuickLaunchButton())
 vi.mock('./shell-icons', () => stubShellIcons())
 vi.mock('@/lib/focus-terminal-tab-surface', () => stubFocusTerminalTabSurface())
 vi.mock('@/components/ui/dropdown-menu', () => stubDropdownMenu())
+vi.mock('@/components/ui/tooltip', () => stubTooltip())
 
 describe('TabBar PowerShell launch wiring', () => {
   beforeEach(() => {
@@ -188,12 +190,7 @@ describe('TabBar PowerShell launch wiring', () => {
   })
 
   it('hides local Windows shell rows for a non-Windows serve runtime', async () => {
-    // Why: a Windows desktop client paired to a Linux `orca serve` runs its PTY on
-    // the serve host. The local Windows shell choices (PowerShell/CMD/WSL) are
-    // meaningless there; the plain "New Terminal" already opens the serve's default
-    // shell. Sibling tests above assert that a win32 remote host still shows the
-    // rows, so the LOCAL Windows-WSL project-runtime menu (hostPlatform 'win32')
-    // is unaffected by this suppression.
+    // Show Windows shell choices for Windows execution hosts only, independent of the client platform.
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     vi.stubGlobal('window', {

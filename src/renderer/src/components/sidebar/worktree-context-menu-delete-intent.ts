@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
+import { deleteFolderWorkspaceUnlessUnsaved } from './folder-workspace-delete'
 import type { WorktreeDeleteIdentity } from './worktree-delete-request'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -49,23 +49,11 @@ export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDe
     })
     return
   }
-  const state = useAppStore.getState()
-  void state
-    .deleteFolderWorkspace(
-      intent.folderWorkspaceId,
-      intent.executionHostId ? { executionHostId: intent.executionHostId } : undefined
-    )
-    .then((deleted) => {
-      const current = useAppStore.getState()
-      if (
-        deleted &&
-        current.activeWorktreeId === folderWorkspaceKey(intent.folderWorkspaceId) &&
-        (!intent.executionHostId ||
-          current.activeWorkspaceExecutionHostId === intent.executionHostId)
-      ) {
-        current.setActiveWorktree(null)
-      }
-    })
+  void deleteFolderWorkspaceUnlessUnsaved(
+    useAppStore.getState,
+    intent.folderWorkspaceId,
+    intent.executionHostId
+  )
 }
 
 export function deferWorktreeContextMenuDeleteIntent(

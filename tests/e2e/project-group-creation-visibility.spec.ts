@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { selectCanonicalProjectHostSetups } from '../../src/renderer/src/store/project-host-setup-selector'
+import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 test.use({ seedTestRepo: false })
 
@@ -26,7 +27,11 @@ for (const delayCreateResponse of [false, true]) {
     const paths = Array.from({ length: 30 }, (_, index) =>
       path.join(root, `repo-${String(index).padStart(2, '0')}`)
     )
-    for (const repoPath of paths) {
+    const templatePath = paths[0]
+    if (!templatePath) {
+      throw new Error('Repository fixture requires a first path')
+    }
+    for (const repoPath of [templatePath]) {
       mkdirSync(repoPath)
       writeFileSync(path.join(repoPath, 'seed.txt'), 'seed\n')
       for (const args of [
@@ -47,6 +52,9 @@ for (const delayCreateResponse of [false, true]) {
         const result = await runProcess({ program: 'git', args, cwd: repoPath, timeoutMs: 10_000 })
         expect(result.code, result.stderr).toBe(0)
       }
+    }
+    for (const repoPath of paths.slice(1)) {
+      cpSync(templatePath, repoPath, { recursive: true, force: false, errorOnExist: true })
     }
     const repoIds = await orcaPage.evaluate(async (paths) => {
       const store = window.__store!
@@ -87,7 +95,7 @@ for (const delayCreateResponse of [false, true]) {
       })
     }
     const creation = orcaPage.evaluate(() =>
-      window.__store!.getState().createProjectGroup('Crowded group')
+      window.__store!.getState().createProjectGroup('Crowded group', 'local')
     )
     if (delayCreateResponse) {
       try {
@@ -115,20 +123,32 @@ for (const delayCreateResponse of [false, true]) {
     if (!createdGroup) {
       throw new Error('Group creation failed')
     }
-    await orcaPage.evaluate(
+    const catalog = await orcaPage.evaluate(
       async ({ repoIds, groupId }) => {
         const store = window.__store!
         for (const repoId of repoIds.slice(0, 2)) {
-          await store.getState().moveProjectToGroup(repoId, groupId)
+          const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
+          if (!repo) {
+            throw new Error(`Missing repo ${repoId}`)
+          }
+          await store.getState().moveProjectToGroup(repo, groupId)
         }
-        const collapsedGroups = store
-          .getState()
-          .projectHostSetups.map((setup) => `project:${setup.projectId}`)
-        await window.api.ui.set({ groupBy: 'repo', collapsedGroups })
-        store.setState({ collapsedGroups: new Set(collapsedGroups) })
+        const state = store.getState()
+        return {
+          repos: state.repos,
+          endpointProjects: state.endpointProjects,
+          endpointProjectHostSetups: state.endpointProjectHostSetups
+        }
       },
       { repoIds, groupId: createdGroup.id }
     )
+    const collapsedGroups = selectCanonicalProjectHostSetups(catalog).map(
+      (setup) => `project:${setup.projectId}`
+    )
+    await orcaPage.evaluate(async (collapsedGroups) => {
+      await window.api.ui.set({ groupBy: 'repo', collapsedGroups })
+      window.__store!.setState({ collapsedGroups: new Set(collapsedGroups) })
+    }, collapsedGroups)
 
     const scroller = orcaPage.locator('[data-worktree-sidebar]')
     const group = scroller.locator(`[data-project-group-header-id="${createdGroup.id}"]`)
@@ -163,7 +183,11 @@ for (const delayCreateResponse of [false, true]) {
       }
     }
     await expect(group).toHaveCount(1)
-    await orcaPage.evaluate(() => window.__store!.getState().fetchProjectGroups())
+    await orcaPage.evaluate(() =>
+      window
+        .__store!.getState()
+        .fetchProjectGroups({ runtimeEnvironmentId: null, throwOnError: true })
+    )
     await expect(group).toHaveCount(1)
     await group.click()
     for (const repo of groupedRepos) {

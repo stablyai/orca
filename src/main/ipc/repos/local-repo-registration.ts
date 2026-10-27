@@ -5,8 +5,13 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
-import { inspectGitRepoForRegistration, getGitRepoRoot, getRepoName } from '../../git/repo'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  inspectGitRepoForRegistrationAsync,
+  getGitRepoRootAsync,
+  getRepoName
+} from '../../git/repo'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 
@@ -20,7 +25,7 @@ export async function addLocalRepoFromPath(
   if (repoKind === 'git') {
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
   }
-  const gitInfo = repoKind === 'git' ? inspectGitRepoForRegistration(path) : null
+  const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
   if (gitInfo && !gitInfo.isRepo) {
     return { error: `Not a valid git repository: ${path}` }
   }
@@ -46,16 +51,23 @@ export async function addLocalRepoFromPath(
       return { repo: existingAfterRootResolve, alreadyExisted: true }
     }
   }
+  const existingAtRealPath = await findProjectAtSameRealPath(
+    store.getRepos().filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID),
+    resolvedPath
+  )
+  if (existingAtRealPath) {
+    return { repo: existingAtRealPath, alreadyExisted: true }
+  }
 
-  // Why: a linked worktree reports itself as its own toplevel, so the path checks above can't see that
-  // it belongs to an already-tracked repo. Adding it anyway yields a second "ready" host setup on the
-  // same project and host — a duplicate run-target row that resolves to a transient worktree path.
+  // Linked worktrees report their own toplevel; resolve the main checkout to avoid duplicate host setups.
+  let mainRepoKey: string | null = null
   if (repoKind === 'git') {
-    const mainRepoRoot = gitInfo?.mainRepoPath ? getGitRepoRoot(gitInfo.mainRepoPath) : null
+    const mainRepoRoot = gitInfo?.mainRepoPath
+      ? await getGitRepoRootAsync(gitInfo.mainRepoPath)
+      : null
     if (mainRepoRoot) {
-      const mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
-      // Why !isFolderRepo: only a git-kind main checkout projects onto the same project as its
-      // worktree, so matching a folder record would suppress the add without deduping anything.
+      mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
+      // Only Git checkouts share project identity with their worktrees; folder records do not deduplicate them.
       const trackedMainRepo = store
         .getRepos()
         .find(
@@ -75,6 +87,21 @@ export async function addLocalRepoFromPath(
     kind: repoKind,
     executionHostId: LOCAL_EXECUTION_HOST_ID
   })
+  // Another registration can finish while icon discovery is pending.
+  const raceWinner = store.getRepos().find((repo) => {
+    if (repo.connectionId) {
+      return false
+    }
+    const repoPathKey = normalizeRuntimePathForComparison(repo.path)
+    return (
+      repoPathKey === pathKey ||
+      repoPathKey === resolvedPathKey ||
+      (mainRepoKey !== null && !isFolderRepo(repo) && repoPathKey === mainRepoKey)
+    )
+  })
+  if (raceWinner) {
+    return { repo: raceWinner, alreadyExisted: true }
+  }
   const repo: Repo = {
     id: randomUUID(),
     path: resolvedPath,
@@ -86,7 +113,7 @@ export async function addLocalRepoFromPath(
     ...(repoKind === 'git'
       ? {
           externalWorktreeVisibilityLegacy: false,
-          // Why: new Add Project imports are explicit ready host setups; 'legacy-repo' is reserved for older records/projection.
+          // Explicit imports are ready host setups; legacy-repo is reserved for migrated records.
           projectHostSetupMethod: 'imported-existing-folder' as const
         }
       : {})

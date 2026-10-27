@@ -1,29 +1,16 @@
-/**
- * A provider session id names a transcript in ONE machine's agent state directory. Replaying a
- * record captured on host A as a `--resume` executed on host B answers
- * `No conversation found with session ID: <id>` at best, and at worst reopens an unrelated
- * transcript that happens to share the id.
- *
- * Nothing in the resume path was host-scoped: `worktreeId` is `repoId::path` with no host component
- * (shared/worktree/host-qualified-identity.ts), sleeping records are `'sleepingAgentKeyed'` so the
- * boot-time host-contention parking never arbitrates them and every partition's records merge into
- * one map, and `launchSleepingAgentSession` resolves its launch target from the *current* catalog.
- *
- * Both directions matter. The sweep must decline when the record names another machine, and it must
- * still resume everything it cannot positively rule out — a gate that refuses on absent evidence
- * would strand every record captured before the stamp existed.
- */
+/** Provider session IDs locate machine-local transcripts; resuming elsewhere fails or opens an unrelated same-ID transcript. Worktree IDs/merged sleeping records/current-catalog routing lack sufficient host scope. Refuse positively foreign records while preserving unstamped legacy resumes; absence of evidence alone cannot strand them. */
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
-import { makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import {
   agentResumeOriginNamesAnotherExecutionHost,
+  sleepingRecordHostAllowsSessionClaim,
   sleepingRecordNamesAnotherExecutionHost
 } from './sleeping-record-execution-host-scope'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -87,8 +74,7 @@ describe('sleepingRecordNamesAnotherExecutionHost', () => {
     ['the same SSH target', TARGET_ID, `ssh:${TARGET_ID}`],
     ['a target id needing URI encoding', 'my host', 'ssh:my%20host'],
     ['a local record on the local host', null, 'local'],
-    // A paired client renames its host's workspaces — including that host's SSH ones — into its own
-    // runtime namespace, so a runtime answer is no evidence about the machine holding the transcript.
+    // Runtime namespaces relabel paired hosts’ local and nested-SSH workspaces; runtime alone cannot identify transcript ownership.
     ['an SSH record whose workspace now reads as a paired runtime', TARGET_ID, 'runtime:env-1'],
     ['a local-or-runtime record on a paired runtime', null, 'runtime:env-1']
   ] as const)('allows %s', (_label, connectionId, hostId) => {
@@ -100,8 +86,7 @@ describe('sleepingRecordNamesAnotherExecutionHost', () => {
     ['never stamped', undefined],
     ['stamped with whitespace', '   ']
   ] as const)('fails open on a record %s', (_label, connectionId) => {
-    // #9030 leaves SSH orphans unstamped. Refusing on absent evidence would strand every record
-    // captured before the stamp existed, which is a worse failure than the one being fixed.
+    // Legacy SSH orphans are unstamped (#9030); absence alone must not strand them.
     const record = makeRecord(connectionId === undefined ? {} : { connectionId })
     expect(
       sleepingRecordNamesAnotherExecutionHost(record, catalogOwnedBy(`ssh:${TARGET_ID}`))
@@ -114,12 +99,15 @@ describe('sleepingRecordNamesAnotherExecutionHost', () => {
   ] as const)(
     'fails open for %s when the catalog has no row for the worktree',
     (_label, connectionId) => {
-      // The routing resolver answers `'local'` for a worktree it has no row for. Read as a host, that
-      // would make every SSH record look foreign until its repo row lands — a gate that never resumes
-      // yours is the inverse of the defect and worse.
+      // Missing catalog rows route local by default; that fallback cannot prove SSH records foreign before hydration.
       const record = makeRecord({ connectionId })
       expect(
-        sleepingRecordNamesAnotherExecutionHost(record, { repos: [], worktreesByRepo: {} })
+        sleepingRecordNamesAnotherExecutionHost(record, {
+          repos: [],
+          worktreesByRepo: {},
+          settings: { activeRuntimeEnvironmentId: 'unrelated' },
+          runtimeEnvironments: [{ id: 'unrelated' }]
+        })
       ).toBe(false)
     }
   )
@@ -129,15 +117,36 @@ describe('sleepingRecordNamesAnotherExecutionHost', () => {
     expect(
       sleepingRecordNamesAnotherExecutionHost(record, {
         repos: [{ id: 'repo-1' }],
-        worktreesByRepo: {}
+        worktreesByRepo: {},
+        settings: { activeRuntimeEnvironmentId: 'unrelated' },
+        runtimeEnvironments: [{ id: 'unrelated' }]
       })
     ).toBe(true)
   })
 })
 
+describe('folder-owned SSH with conflicting inherited group owners', () => {
+  it.each(['local first', 'SSH first'] as const)('uses the folder target with %s', (order) => {
+    const groups = [
+      { id: 'group', executionHostId: 'local' },
+      { id: 'group', executionHostId: 'ssh:other-target' }
+    ] as const
+    const state: WorktreeRuntimeOwnerState = {
+      folderWorkspaces: [{ id: 'folder', projectGroupId: 'group', connectionId: TARGET_ID }],
+      projectGroups: order === 'local first' ? groups : groups.toReversed()
+    }
+    const local = makeRecord({ worktreeId: 'folder:folder', connectionId: null })
+    const matching = makeRecord({ worktreeId: 'folder:folder', connectionId: TARGET_ID })
+
+    expect(sleepingRecordNamesAnotherExecutionHost(local, state)).toBe(true)
+    expect(sleepingRecordNamesAnotherExecutionHost(matching, state)).toBe(false)
+    expect(sleepingRecordHostAllowsSessionClaim(local, matching, state)).toBe(false)
+    expect(sleepingRecordHostAllowsSessionClaim(matching, matching, state)).toBe(true)
+  })
+})
+
 describe('agentResumeOriginNamesAnotherExecutionHost', () => {
-  // The pane cold-restore path asks the same question against the transport the pane is attached to
-  // rather than the catalog, so the host-pair form is exported and pinned separately.
+  // Cold-restore compares against actual pane transport, not catalog routing; pin the exported host-pair form too.
   it.each([
     ['an SSH origin against another SSH pane', TARGET_ID, 'ssh:elsewhere', true],
     ['an SSH origin against a local pane', TARGET_ID, 'local', true],
@@ -158,9 +167,7 @@ describe('agentResumeOriginNamesAnotherExecutionHost', () => {
   )
 })
 
-/** The SSH workspace after its host has answered, so terminal-host authority is decided and the
- *  sweep is allowed to act. Without the hydration mark the sweep declines for an unrelated reason
- *  and every assertion below would pass vacuously. */
+/** Use connected SSH so host authority allows the sweep; otherwise unrelated connection refusal makes these assertions vacuous. */
 function seedAnsweredSshWorkspace(...records: SleepingAgentSessionRecord[]): void {
   useAppStore.setState({
     repos: [{ ...TEST_REPO, id: 'repo-1', path: '/home/neil/projects', connectionId: TARGET_ID }],
@@ -179,7 +186,12 @@ function seedAnsweredSshWorkspace(...records: SleepingAgentSessionRecord[]): voi
       records.map((record) => [record.paneKey, record])
     )
   })
-  useAppStore.getState().markRemoteWorkspaceHydrated(TARGET_ID)
+  useAppStore.getState().setSshConnectionState(TARGET_ID, {
+    targetId: TARGET_ID,
+    status: 'connected',
+    error: null,
+    reconnectAttempt: 0
+  })
 }
 
 describe('the resume sweep under execution-host scope', () => {
@@ -201,8 +213,7 @@ describe('the resume sweep under execution-host scope', () => {
     resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
     resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
 
-    // Declining is recoverable only if the record survives; deleting it on a host disagreement
-    // would destroy the user's only handle on that transcript.
+    // Host disagreement must preserve the record, the user’s only transcript locator.
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
@@ -237,3 +248,131 @@ describe('the resume sweep under execution-host scope', () => {
     expect(state.sleepingAgentSessionsByPaneKey[native.paneKey]).toBeUndefined()
   })
 })
+
+const ownerEvidenceCases: {
+  name: string
+  state: WorktreeRuntimeOwnerState
+  connectionId: string | null
+  worktreeId?: string
+  foreign: boolean
+}[] = [
+  {
+    name: 'the active local host over an SSH catalog',
+    state: {
+      ...catalogOwnedBy('ssh:openclaw'),
+      activeWorktreeId: WORKTREE_ID,
+      activeWorkspaceExecutionHostId: 'local'
+    },
+    connectionId: TARGET_ID,
+    foreign: true
+  },
+  {
+    name: 'the matching active SSH host over a local catalog',
+    state: {
+      ...catalogOwnedBy('local'),
+      activeWorktreeId: WORKTREE_ID,
+      activeWorkspaceExecutionHostId: 'ssh:openclaw'
+    },
+    connectionId: TARGET_ID,
+    foreign: false
+  },
+  {
+    name: 'a foreign detected-only SSH owner',
+    state: {
+      detectedWorktreesByRepo: {
+        remote: { worktrees: [{ id: WORKTREE_ID, repoId: 'remote', hostId: 'ssh:other' }] }
+      }
+    },
+    connectionId: TARGET_ID,
+    foreign: true
+  },
+  {
+    name: 'conflicting detected owners',
+    state: {
+      detectedWorktreesByRepo: {
+        a: { worktrees: [{ id: WORKTREE_ID, repoId: 'a', hostId: 'ssh:other' }] },
+        b: { worktrees: [{ id: WORKTREE_ID, repoId: 'b', hostId: 'local' }] }
+      }
+    },
+    connectionId: TARGET_ID,
+    foreign: false
+  },
+  ...[TARGET_ID, 'other'].map((connectionId) => ({
+    name: `physical SSH ownership through a runtime for ${connectionId}`,
+    state: {
+      repos: [{ id: 'repo-1', connectionId: TARGET_ID, executionHostId: 'runtime:hub' as const }],
+      worktreesByRepo: {
+        'repo-1': [{ id: WORKTREE_ID, repoId: 'repo-1', hostId: 'ssh:openclaw' as const }]
+      }
+    },
+    connectionId,
+    foreign: connectionId !== TARGET_ID
+  })),
+  {
+    name: 'a direct SSH folder for a locally captured session',
+    worktreeId: 'folder:f',
+    state: { folderWorkspaces: [{ id: 'f', projectGroupId: 'g', connectionId: TARGET_ID }] },
+    connectionId: null,
+    foreign: true
+  },
+  {
+    name: 'a known unstamped local folder',
+    worktreeId: 'folder:f',
+    state: { folderWorkspaces: [{ id: 'f', projectGroupId: 'g' }] },
+    connectionId: TARGET_ID,
+    foreign: true
+  },
+  {
+    name: 'a restored runtime folder before its catalog',
+    worktreeId: 'folder:f',
+    state: { restoredRuntimeHostIdByWorkspaceSessionKey: { 'folder:f': 'runtime:restored' } },
+    connectionId: TARGET_ID,
+    foreign: false
+  },
+  {
+    name: 'a missing folder',
+    worktreeId: 'folder:f',
+    state: {},
+    connectionId: TARGET_ID,
+    foreign: false
+  },
+  {
+    name: 'conflicting folder owners',
+    worktreeId: 'folder:f',
+    state: {
+      folderWorkspaces: [
+        { id: 'f', projectGroupId: 'g', executionHostId: 'local' },
+        { id: 'f', projectGroupId: 'g', executionHostId: 'ssh:other' }
+      ]
+    },
+    connectionId: TARGET_ID,
+    foreign: false
+  },
+  {
+    name: 'conflicting inherited folder group owners',
+    worktreeId: 'folder:f',
+    state: {
+      folderWorkspaces: [{ id: 'f', projectGroupId: 'g' }],
+      projectGroups: [
+        { id: 'g', executionHostId: 'local' },
+        { id: 'g', executionHostId: 'ssh:other' }
+      ]
+    },
+    connectionId: TARGET_ID,
+    foreign: false
+  }
+]
+
+it.each(ownerEvidenceCases)(
+  'compares capture against $name',
+  ({ state, connectionId, worktreeId, foreign }) => {
+    const record = makeRecord({ connectionId, ...(worktreeId ? { worktreeId } : {}) })
+    expect(
+      sleepingRecordNamesAnotherExecutionHost(record, {
+        settings: { activeRuntimeEnvironmentId: 'unrelated' },
+        runtimeEnvironments: [{ id: 'unrelated' }],
+        ...state
+      })
+    ).toBe(foreign)
+  }
+)

@@ -1,15 +1,17 @@
+import { AiVaultChatForkSourceSchema } from '../../shared/ai-vault-chat-fork-contract'
 import { z } from 'zod'
 import {
+  AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultListArgs,
   type AiVaultListResult,
   type AiVaultSession
 } from '../../shared/ai-vault-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
-import { listEnvironments } from '../../shared/runtime-environment-store'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import type {
-  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
 import type {
@@ -18,30 +20,47 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
-
-export type RuntimeAiVaultHostInfo = {
-  environmentId: string
-  executionHostId: `runtime:${string}`
-}
+import { isGatedOffWslHost } from '../wsl/wsl-host-gate'
+import type {
+  AiVaultDeleteSessionArgs,
+  AiVaultDeleteSessionResult
+} from '../../shared/ai-vault-session-deletion'
+import {
+  readRuntimeAiVaultDeleteSessionResponse,
+  runtimeAiVaultDeleteSessionParams
+} from '../../shared/ai-vault-runtime-session-delete'
+import type { RuntimeAiVaultHostInfo } from '../ipc/ai-vault-runtime-scan'
 
 export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
 }
 
-// Why: zod strips unknown keys, so the repin home must be declared or the
-// parent would silently drop it and resume under the wrong account's home.
+// Zod strips undeclared keys; keep the repinned home so resume uses the correct account.
 const aiVaultPrepareSessionResumeResultSchema = z.object({
   useRealCodexHome: z.boolean(),
-  substituteCodexHome: z.string().optional()
+  cliForkSource: AiVaultChatForkSourceSchema.optional(),
+  substituteCodexHome: z.string().optional(),
+  forkedSession: z
+    .object({
+      sessionId: z.string(),
+      agent: z.enum(AI_VAULT_AGENTS),
+      filePath: z.string().optional()
+    })
+    .optional()
 })
 
 export function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string
 ): readonly RuntimeAiVaultHostInfo[] {
-  return listEnvironments(userDataPath).map((environment) => ({
-    environmentId: environment.id,
-    executionHostId: toRuntimeExecutionHostId(environment.id)
-  }))
+  return listEnvironments(userDataPath)
+    .filter((environment) => !isGatedOffWslHost(environment))
+    .map((environment) => ({
+      environmentId: environment.id,
+      executionHostId: toRuntimeExecutionHostId(environment.id),
+      ...(environment.connectionDependency
+        ? { connectionDependency: environment.connectionDependency }
+        : {})
+    }))
 }
 
 export async function scanRuntimeAiVaultSessions(
@@ -51,19 +70,20 @@ export async function scanRuntimeAiVaultSessions(
   options: RuntimeAiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
   const executionHostId = toRuntimeExecutionHostId(environmentId)
+  // Captured before the call: a re-pair mid-scan leaves rows fenced to the older pairing, never the newer.
+  const pairingRevision = savedPairingRevision(userDataPath, environmentId)
   const response = await callRuntimeEnvironment(
     userDataPath,
     environmentId,
     'aiVault.listSessions',
     {
+      historyOwnership: args.historyOwnership,
       includeAntigravityIdeSessions: args.includeAntigravityIdeSessions,
       limit: args.limit,
       unlimited: args.unlimited,
       force: args.force,
-      // Why: cap here so the set of scanned paths is explicit on this side —
-      // the RPC schema CLAMPS to the same bound anyway (older hosts had no
-      // cap). Dropped paths only lose the older-than-recency-cap guarantee,
-      // never the recent sessions themselves.
+      ...(args.afterFingerprint !== undefined ? { afterFingerprint: args.afterFingerprint } : {}),
+      // Cap paths for older hosts too; omitted scope paths lose deep-history coverage, not recent sessions.
       scopePaths: args.scopePaths?.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT),
       executionHostId
     },
@@ -71,10 +91,14 @@ export async function scanRuntimeAiVaultSessions(
   )
   if (response.ok === true) {
     try {
-      const result = withRuntimeExecutionHost(
-        parseAiVaultListResult(response.result),
-        executionHostId
-      )
+      const parsed = parseAiVaultListResult(response.result)
+      if (parsed.unchanged) {
+        if (parsed.fingerprint !== args.afterFingerprint) {
+          throw new Error('Unchanged response did not match the requested fingerprint')
+        }
+        return parsed
+      }
+      const result = withRuntimeExecutionHost(parsed, executionHostId, pairingRevision)
       if (!args.scopePaths || args.scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
         return result
       }
@@ -132,7 +156,7 @@ export async function resolveRuntimeAiVaultSessionTitles(
 export async function prepareRuntimeAiVaultSessionResume(
   userDataPath: string,
   environmentId: string,
-  args: AiVaultPrepareSessionResumeArgs
+  args: AiVaultPrepareSessionResumeRequest
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const response = await callRuntimeEnvironment(
     userDataPath,
@@ -141,6 +165,13 @@ export async function prepareRuntimeAiVaultSessionResume(
     args
   )
   if (response.ok !== true) {
+    if (
+      response.error.code === 'method_not_found' &&
+      response.error.message === 'Unknown method: aiVault.prepareSessionResume'
+    ) {
+      // Electron drops custom error fields; preserve this compatibility verdict in the message.
+      throw new Error('aiVault.prepareSessionResume: method_not_found')
+    }
     throw new Error(response.error.message)
   }
   const parsed = aiVaultPrepareSessionResumeResultSchema.safeParse(response.result)
@@ -152,27 +183,59 @@ export async function prepareRuntimeAiVaultSessionResume(
   return parsed.data
 }
 
+/** The owning host validates and deletes; a host without the RPC asks for an update instead. */
+export async function deleteRuntimeAiVaultSession(
+  userDataPath: string,
+  environmentId: string,
+  args: AiVaultDeleteSessionArgs
+): Promise<AiVaultDeleteSessionResult> {
+  const response = await callRuntimeEnvironment(
+    userDataPath,
+    environmentId,
+    'aiVault.deleteSession',
+    runtimeAiVaultDeleteSessionParams(args),
+    undefined,
+    args.expectedEnvironmentPairingRevision
+  )
+  return readRuntimeAiVaultDeleteSessionResponse(response, args.agent)
+}
+
+function savedPairingRevision(userDataPath: string, environmentId: string): number | undefined {
+  try {
+    const environment = resolveEnvironment(userDataPath, environmentId)
+    return environment.pairingRevision ?? environment.createdAt
+  } catch {
+    return undefined
+  }
+}
+
 function withRuntimeExecutionHost(
   result: AiVaultListResult,
-  executionHostId: `runtime:${string}`
+  executionHostId: `runtime:${string}`,
+  pairingRevision: number | undefined
 ): AiVaultListResult {
   return {
-    sessions: result.sessions.map((session) => retagRuntimeSession(session, executionHostId)),
+    sessions: result.sessions.map((session) =>
+      retagRuntimeSession(session, executionHostId, pairingRevision)
+    ),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
-    scannedAt: result.scannedAt
+    scannedAt: result.scannedAt,
+    ...(result.fingerprint ? { fingerprint: result.fingerprint } : {})
   }
 }
 
 function retagRuntimeSession(
   session: AiVaultSession,
-  executionHostId: `runtime:${string}`
+  executionHostId: `runtime:${string}`,
+  pairingRevision: number | undefined
 ): AiVaultSession {
-  // The paired server is the transport, but the parent owns which concrete
-  // runtime host was scanned; never trust returned host ids across the boundary.
+  // The caller selects the scanned host; a transport peer cannot supply trusted execution IDs or pairings.
+  const { hostPairingRevision: _untrusted, ...rest } = session
   return {
-    ...session,
+    ...rest,
     executionHostId,
-    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
+    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`,
+    ...(pairingRevision !== undefined ? { hostPairingRevision: pairingRevision } : {})
   }
 }
 

@@ -5,7 +5,7 @@ import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo,
   getProjectedWorktreeLineageChildrenByParentId
-} from './worktree-lineage-projection'
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 function makeWorktree(id: string): Worktree {
   return {
@@ -27,10 +27,7 @@ function makeLineage(childId: string, parentId: string): WorktreeLineage {
   } as unknown as WorktreeLineage
 }
 
-/**
- * A sidebar-scale fixture: one root with many children, mirroring the shape the
- * row builder scans on every store write.
- */
+/** Model the many-child lineage shape scanned on each store write. */
 function buildFixture(childCount: number): {
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>

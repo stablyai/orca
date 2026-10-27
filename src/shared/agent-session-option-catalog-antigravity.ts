@@ -16,7 +16,7 @@ const ANTIGRAVITY_EFFORT: CatalogOption = {
   },
   apply: {
     launchArgs: (value) => ['--effort', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort']),
+    removeAgentArgs: (tokens) => removeAgentArgOption('antigravity', tokens, ['--effort']),
     midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
   }
 }
@@ -27,7 +27,7 @@ export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption('antigravity', tokens, ['--model']),
     midSession: { kind: 'agent-picker', command: '/model' }
   },
   unknownModelOptions: [ANTIGRAVITY_EFFORT]

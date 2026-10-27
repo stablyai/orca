@@ -11,6 +11,9 @@ const { setupMock, milestoneMock } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
 vi.mock('../updater', () => ({ setupAutoUpdater: setupMock }))
+vi.mock('../updater/electron-updater-proxy-session', () => ({
+  applyProxyToElectronUpdaterSession: vi.fn()
+}))
 vi.mock('../ipc/ui', () => ({ isTrustedUIRenderer: () => true }))
 vi.mock('../startup/startup-diagnostics', () => ({ logStartupMilestone: milestoneMock }))
 
@@ -26,6 +29,7 @@ function createWindowOwner() {
     releaseChannelOverride: 'rc'
   } satisfies Partial<ReturnType<Store['getUI']>>
   const store = {
+    getSettings: vi.fn(() => ({})),
     getUI: vi.fn(() => ui),
     updateUI: vi.fn<(patch: Parameters<Store['updateUI']>[0]) => void>(),
     flushPendingAsync: vi.fn<Store['flushPendingAsync']>().mockResolvedValue(undefined)

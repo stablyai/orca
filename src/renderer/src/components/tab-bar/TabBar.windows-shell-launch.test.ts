@@ -14,7 +14,8 @@ import {
   stubSortableTab,
   stubStatusDisplay,
   stubTabInsertion,
-  stubTabStripDragScroll
+  stubTabStripDragScroll,
+  stubTooltip
 } from './tab-bar-windows-shell-launch-render-stubs'
 import {
   appStoreSnapshot,
@@ -38,6 +39,7 @@ vi.mock('./QuickLaunchButton', () => stubQuickLaunchButton())
 vi.mock('./shell-icons', () => stubShellIcons())
 vi.mock('@/lib/focus-terminal-tab-surface', () => stubFocusTerminalTabSurface())
 vi.mock('@/components/ui/dropdown-menu', () => stubDropdownMenu())
+vi.mock('@/components/ui/tooltip', () => stubTooltip())
 
 describe('TabBar PowerShell launch wiring', () => {
   beforeEach(() => {
@@ -107,11 +109,25 @@ describe('TabBar PowerShell launch wiring', () => {
   it('hides the WSL terminal row for local host-runtime projects', async () => {
     appStoreSnapshot.activeRepoId = 'repo-1'
     appStoreSnapshot.activeWorktreeId = 'wt-1'
-    appStoreSnapshot.projects = [
+    appStoreSnapshot.endpointProjects = [
       {
         id: 'project-1',
         localWindowsRuntimePreference: { kind: 'windows-host' },
         sourceRepoIds: ['repo-1']
+      }
+    ]
+    appStoreSnapshot.endpointProjectHostSetups = [
+      {
+        id: 'repo-1',
+        repoId: 'repo-1',
+        projectId: 'project-1',
+        hostId: 'local',
+        path: 'C:/repo',
+        displayName: 'project',
+        setupMethod: 'legacy-repo',
+        setupState: 'ready',
+        createdAt: 0,
+        updatedAt: 0
       }
     ]
     appStoreSnapshot.repos = [{ id: 'repo-1' }]
@@ -175,11 +191,25 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('shows only the WSL terminal row for local WSL-runtime projects', async () => {
     appStoreSnapshot.activeRepoId = 'repo-1'
-    appStoreSnapshot.projects = [
+    appStoreSnapshot.endpointProjects = [
       {
         id: 'project-1',
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
         sourceRepoIds: ['repo-1']
+      }
+    ]
+    appStoreSnapshot.endpointProjectHostSetups = [
+      {
+        id: 'repo-1',
+        repoId: 'repo-1',
+        projectId: 'project-1',
+        hostId: 'local',
+        path: 'C:/repo',
+        displayName: 'project',
+        setupMethod: 'legacy-repo',
+        setupState: 'ready',
+        createdAt: 0,
+        updatedAt: 0
       }
     ]
     appStoreSnapshot.repos = [{ id: 'repo-1' }]

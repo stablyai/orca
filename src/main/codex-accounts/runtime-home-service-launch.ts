@@ -25,18 +25,13 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       settings.codexManagedAccounts,
       normalizeCodexRuntimeSelection(settings).host
     )
-    // Why: WSL-managed homes never touch host ~/.codex; treating one as "last synced" makes cold start mangle host auth Orca never touched.
+    // WSL selection must not make cold-start reconciliation treat host auth as previously managed.
     this.lastSyncedAccountId = this.getWslManagedHomePath(activeAccount)
       ? null
       : normalizeCodexRuntimeSelection(settings).host
   }
 
-  /**
-   * Materializes the runtime home needed before launching the CLI.
-   *
-   * Historical session bridging is requested in the background so launch setup
-   * returns as soon as the active runtime home is ready.
-   */
+  /** Prepare the launch home without waiting for background history bridging. */
   prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
@@ -58,13 +53,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       if (perAccountHome) {
         return perAccountHome
       }
-      // Why: only an untrusted home clears the selection; fall through to the
-      // system default without injecting a path Orca cannot prove it owns.
     }
-    if (this.isHostSystemDefaultRealHome(launchEnv)) {
-      // Why: the system default runs Codex on the user's own ~/.codex.
-      // Returning null tells the PTY/env layer to inject no managed CODEX_HOME;
-      // the retired mirror is refreshed only for pre-rollout PTYs.
+    if (this.isHostSystemDefaultRealHomeSelected(launchEnv)) {
+      // Null leaves CODEX_HOME uninjected; refresh the retired mirror only for retained panes.
       this.copyMirrorLoginIntoEmptySystemHome()
       this.reconcileLegacySharedHomeForRetainedPanes()
       return null
@@ -73,7 +64,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     this.syncForCurrentSelection(target, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
-    // Why: sessions can be large; bridge them after launch so starting a fresh TUI never waits on a full tree walk.
+    // Keep large history scans off the launch path.
     void startSystemCodexSessionBridgeInBackground(
       {},
       resolveHostCodexSessionSourceHome(this.store.getSettings())
@@ -81,14 +72,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     return this.getRuntimeHomePath()
   }
 
-  /**
-   * The CODEX_HOME `prepareForCodexLaunch` would pin for a host launch right
-   * now, resolved with no side effects: no home/auth sync, no session bridge,
-   * no backfill bookkeeping, no hook state, and never a cleared selection.
-   * Record-less model catalog reads key on it — a picker open is a read and
-   * must not change account state. Same null contract as prepare: null means
-   * the system-default real ~/.codex.
-   */
+  /** Resolve the launch home without side effects for catalog reads; null means real ~/.codex. */
   resolveHostCodexHomePathForLaunchReadOnly(launchEnv?: NodeJS.ProcessEnv): string | null {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
@@ -97,19 +81,18 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
         return resolved.homePath
       }
       if (resolved.kind === 'indeterminate') {
-        // Why: launch prep refuses here too — an unreadable home must not key
-        // a read under the system default while the UI shows this account.
+        // Keep reads under the selected account; an unreadable home cannot imply system default.
         throw new ManagedCodexHomeTemporarilyUnavailableError()
       }
-      // Why: launch prep deselects an UNTRUSTED home before routing onward, so
-      // its next check sees no selection; predict that route, clearing nothing.
-      return this.wouldSystemDefaultRouteToRealHome(launchEnv)
+      // Predict launch's route after deselection while leaving the selection untouched.
+      return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
         ? null
         : resolveOrcaManagedCodexHomePath()
     }
-    // Why the path-only resolver: getRuntimeHomePath() mkdirs the mirror, and
-    // this lookup must not create directories either.
-    return this.isHostSystemDefaultRealHome(launchEnv) ? null : resolveOrcaManagedCodexHomePath()
+    // Avoid getRuntimeHomePath(), which creates the mirror directory.
+    return this.isHostSystemDefaultRealHomeSelected(launchEnv)
+      ? null
+      : resolveOrcaManagedCodexHomePath()
   }
 
   async prepareForCodexLaunchAsync(
@@ -122,8 +105,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     }
     const wslTarget = this.resolveWslDefaultTarget(target)
     const homePath = this.getWslCodexHomePathForSelection(wslTarget)
-    // Why: the retired home may hold the freshest credential, so the first
-    // direct-home Codex spawn must wait for its bounded guest transaction.
+    // Drain potentially fresher retired-home credentials before the first direct-home spawn.
     await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
     this.finishWslLaunchPreparation(wslTarget, homePath)
     return homePath
@@ -142,7 +124,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     ) {
       return null
     }
-    // Why: an older pass can clear launch preparation while PTY spawn awaits recovery.
+    // An older pass can clear launch preparation while PTY spawn awaits recovery.
     return this.invalidateBackfillAfterManagedSystemDefaultLaunch(
       options.reattached && !codexHomePath ? undefined : options.launchEnv
     )
@@ -169,15 +151,13 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = true
       this.pendingHostSystemDefaultSessionMigrationTarget = target
     }
-    // Why: the launch creates rollouts for these dates; record them durably so a
-    // force-quit recovers a bounded window instead of re-walking all history.
+    // Persist rollout dates so force-quit recovery scans a bounded window.
     const markerOwesFullScan = markCodexSessionBackfillMarkerPending(
       paths.markerPath,
       paths.systemSessionsRoot,
       scanDates.length > 0 ? scanDates : [getCodexSessionBackfillDate()]
     )
-    // Why: the marker is the only place an overflowed pending window survives a
-    // restart, so its demand has to reach this pass rather than die in the file.
+    // Carry the marker's full-scan requirement across restarts after pending-window overflow.
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= markerOwesFullScan
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }

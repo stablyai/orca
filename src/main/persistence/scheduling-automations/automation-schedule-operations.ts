@@ -18,10 +18,32 @@ export function advanceAutomationNextRun(
   const current = state.automations[index]
   const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
   const updated = { ...current, nextRunAt, updatedAt: now }
-  // Replaced, not patched in place: the list projection caches on array identity.
+  // Replace the array to invalidate identity-keyed list projections.
   state.automations = state.automations.map((entry) => (entry.id === id ? updated : entry))
   flush()
   return updated
+}
+
+/** Bypasses owner fencing: callers disable rows another authority now schedules. */
+export function disableAutomations(
+  state: PersistedState,
+  flush: () => void,
+  ids: ReadonlySet<string>
+): number {
+  let disabled = 0
+  const now = Date.now()
+  const automations = (state.automations ?? []).map((entry) => {
+    if (!entry.enabled || !ids.has(entry.id)) {
+      return entry
+    }
+    disabled += 1
+    return { ...entry, enabled: false, updatedAt: now }
+  })
+  if (disabled > 0) {
+    state.automations = automations
+    flush()
+  }
+  return disabled
 }
 
 export function getLatestAutomationOccurrence(

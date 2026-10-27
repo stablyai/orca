@@ -28,10 +28,6 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' })
-}))
-
 let root: Root | null = null
 
 beforeEach(() => {
@@ -59,8 +55,7 @@ async function renderDialog(ui: ReactElement, existingRoot?: Root): Promise<Root
   await act(async () => {
     targetRoot.render(ui)
   })
-  // Why: Radix attaches its document pointerdown listener on a setTimeout(0), so a
-  // synchronous dispatch right after mount is missed.
+  // Radix installs outside-pointer listeners on setTimeout(0); wait before dispatching.
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
@@ -75,8 +70,7 @@ function appendContainer(): HTMLDivElement {
 
 async function outsideClick(): Promise<void> {
   await act(async () => {
-    // Why: modal DialogContent sets deferPointerDownOutside, so the dismissal resolves on the
-    // click that follows the outside pointerdown. Events must bubble to reach the document listeners.
+    // Modal dismissal waits for click after outside pointerdown; bubble both to the document listeners.
     document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }))
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
   })
@@ -247,7 +241,6 @@ describe('BitbucketCredentialsDialog outside dismiss', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
-  // Why: the base URL is submitted in both auth modes, so it must block dismissal in token mode too.
   it('keeps a typed base URL in token mode when the backdrop is clicked', async () => {
     const onOpenChange = vi.fn()
     await renderDialog(<BitbucketCredentialsDialog open onOpenChange={onOpenChange} />)
@@ -268,8 +261,6 @@ describe('BitbucketCredentialsDialog outside dismiss', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  // Why: the baseline is seeded from the initial props, so an untouched prefilled edit form is
-  // clean and must still dismiss on a backdrop click.
   it('still dismisses on a backdrop click for an untouched prefilled edit', async () => {
     const onOpenChange = vi.fn()
     await renderDialog(
@@ -287,8 +278,7 @@ describe('BitbucketCredentialsDialog outside dismiss', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  // Why: a status refresh may rewrite the stored metadata mid-edit; the baseline must stay at the
-  // values captured at open so an untouched form does not become sticky.
+  // Keep the open-time dirty baseline stable when stored metadata refreshes mid-edit.
   it('stays clean when the stored metadata is refreshed mid-edit', async () => {
     const onOpenChange = vi.fn()
     const targetRoot = await renderDialog(
@@ -352,8 +342,7 @@ describe('BitbucketCredentialsDialog outside dismiss', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  // Why: a basic-mode email is not submitted in token mode, so it must not make the token form
-  // sticky — only the fields the active mode submits count as the draft.
+  // Only fields submitted by the active auth mode count as an unsaved draft.
   it('dismisses after switching to token mode with only a basic-mode email typed', async () => {
     const onOpenChange = vi.fn()
     await renderDialog(<BitbucketCredentialsDialog open onOpenChange={onOpenChange} />)

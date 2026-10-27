@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isOpenCodeGoExplicitNoAccessPayload,
+  parseOpenCodeGoBillingStatusPayload,
   parseOpenCodeGoStatusPayload,
   parseOpenCodeGoUsageApiPayload
 } from './opencode-go-status-parsing'
@@ -117,6 +119,76 @@ describe('parseOpenCodeGoStatusPayload', () => {
         })
       )
     ).toBeNull()
+  })
+})
+
+describe('parseOpenCodeGoBillingStatusPayload', () => {
+  it('maps the verified PAYG micro-cent string into USD major units', () => {
+    expect(
+      parseOpenCodeGoBillingStatusPayload(
+        JSON.stringify({
+          billingMode: 'prepaid',
+          mode: 'pay-as-you-go',
+          balanceMicroCents: '2786781005'
+        })
+      )
+    ).toBe(27.86781005)
+  })
+
+  it('preserves zero and negative balances', () => {
+    expect(
+      parseOpenCodeGoBillingStatusPayload(
+        JSON.stringify({
+          billingMode: 'prepaid',
+          mode: 'pay-as-you-go',
+          balanceMicroCents: '0'
+        })
+      )
+    ).toBe(0)
+    expect(
+      parseOpenCodeGoBillingStatusPayload(
+        JSON.stringify({
+          billingMode: 'prepaid',
+          mode: 'pay-as-you-go',
+          balanceMicroCents: '-125000000'
+        })
+      )
+    ).toBe(-1.25)
+  })
+
+  it.each([
+    { billingMode: 'credit', mode: 'pay-as-you-go', balanceMicroCents: '100000000' },
+    { billingMode: 'seat', mode: 'pay-as-you-go', balanceMicroCents: '100000000' },
+    { billingMode: 'prepaid', mode: 'invoiceable', balanceMicroCents: '100000000' },
+    { billingMode: 'prepaid', mode: 'pay-as-you-go', balanceMicroCents: 100000000 },
+    { billingMode: 'prepaid', mode: 'pay-as-you-go', balanceMicroCents: '1.5' },
+    {
+      billingMode: 'prepaid',
+      mode: 'pay-as-you-go',
+      balanceMicroCents: '9007199254740992'
+    }
+  ])('rejects unsupported or unsafe billing payloads: $billingMode/$mode', (payload) => {
+    expect(parseOpenCodeGoBillingStatusPayload(JSON.stringify(payload))).toBeNull()
+  })
+
+  it('fails closed for malformed and non-object bodies', () => {
+    expect(parseOpenCodeGoBillingStatusPayload('{not json')).toBeNull()
+    expect(parseOpenCodeGoBillingStatusPayload('[]')).toBeNull()
+    expect(parseOpenCodeGoBillingStatusPayload('')).toBeNull()
+  })
+})
+
+describe('isOpenCodeGoExplicitNoAccessPayload', () => {
+  it('accepts only explicit JSON null or access:null without an error verdict', () => {
+    expect(isOpenCodeGoExplicitNoAccessPayload('null')).toBe(true)
+    expect(isOpenCodeGoExplicitNoAccessPayload('{"access":null}')).toBe(true)
+    expect(
+      isOpenCodeGoExplicitNoAccessPayload('{"access":null,"error":{"type":"AuthError"}}')
+    ).toBe(false)
+    expect(isOpenCodeGoExplicitNoAccessPayload('{"access":{}}')).toBe(false)
+    expect(isOpenCodeGoExplicitNoAccessPayload('{}')).toBe(false)
+    expect(isOpenCodeGoExplicitNoAccessPayload('<html></html>')).toBe(false)
+    expect(isOpenCodeGoExplicitNoAccessPayload('{not json')).toBe(false)
   })
 })
 

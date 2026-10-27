@@ -3,7 +3,6 @@ import { EventEmitter } from 'node:events'
 import {
   bundledRipgrepCommandMock,
   getLocalGitOptionsForRegisteredWorktreeMock,
-  getSshFilesystemProviderMock,
   resolveAuthorizedPathMock,
   wslAwareSpawnMock
 } from './orca-runtime-files-mock-registry'
@@ -21,7 +20,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -33,10 +32,6 @@ vi.mock(
 )
 vi.mock('../ripgrep/bundled-ripgrep-path', async () =>
   (await import('./orca-runtime-files-mock-registry')).bundledRipgrepPathModuleMock()
-)
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
 )
 
 type MockRuntimeSearchChild = EventEmitter & {
@@ -63,6 +58,32 @@ async function flushRuntimeSearchMicrotasks(): Promise<void> {
 describe('RuntimeFileCommands', () => {
   useRuntimeFileCommandsLifecycle()
 
+  it('keeps concurrent runtime clients on the same root independent during cancellation', async () => {
+    const { commands } = createRuntimeFileCommands()
+    const firstChild = createRuntimeSearchChild()
+    const secondChild = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    wslAwareSpawnMock.mockImplementation((_command, args: string[]) =>
+      args.includes('first') ? firstChild : secondChild
+    )
+    const controller = new AbortController()
+    const first = commands.searchRuntimeFiles(
+      'id:wt-1',
+      { query: 'first' },
+      { signal: controller.signal }
+    )
+    const firstRejected = expect(first).rejects.toMatchObject({ name: 'AbortError' })
+    const second = commands.searchRuntimeFiles('id:wt-1', { query: 'second' })
+    await vi.waitFor(() => expect(wslAwareSpawnMock).toHaveBeenCalledTimes(2))
+    expect(firstChild.kill).not.toHaveBeenCalled()
+    controller.abort()
+    await firstRejected
+    expect(firstChild.kill).toHaveBeenCalledOnce()
+    expect(secondChild.kill).not.toHaveBeenCalled()
+    secondChild.emit('close', 1, null)
+    await expect(second).resolves.toMatchObject({ totalMatches: 0, truncated: false })
+  })
+
   it('rejects a synchronous launch failure without invoking child cleanup', async () => {
     const { commands } = createRuntimeFileCommands({
       resolveRuntimeFileTarget: vi.fn(async () => ({
@@ -79,24 +100,34 @@ describe('RuntimeFileCommands', () => {
     )
   })
 
-  it('keeps byte-budgeted legacy listings count-bounded across an SSH hop', async () => {
-    const listFiles = vi.fn().mockResolvedValue(['src/index.ts'])
-    getSshFilesystemProviderMock.mockReturnValue({ listFiles })
-    const { commands } = createRuntimeFileCommands({
-      resolveRuntimeFileTarget: vi.fn(async () => ({
-        worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
-        executionHostId: 'ssh:ssh-1'
-      }))
+  it('keeps runtime result paths canonical when its authorized root differs from the workspace path', async () => {
+    const { commands } = createRuntimeFileCommands()
+    const child = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('/canonical/repo')
+    wslAwareSpawnMock.mockReturnValue(child)
+    const pending = commands.searchRuntimeFiles('id:wt-1', { query: 'needle' })
+    await flushRuntimeSearchMicrotasks()
+    child.stdout.emit(
+      'data',
+      JSON.stringify({
+        type: 'match',
+        data: {
+          path: { text: './example.txt' },
+          lines: { text: 'needle\n' },
+          line_number: 1,
+          submatches: [{ match: { text: 'needle' }, start: 0, end: 6 }]
+        }
+      })
+    )
+    child.emit('close', 0, null)
+    await expect(pending).resolves.toMatchObject({
+      files: [{ filePath: '/canonical/repo/example.txt', relativePath: 'example.txt' }]
     })
-
-    await expect(commands.listRuntimeFiles('id:wt-1', { maxContentBytes: 1024 })).resolves.toEqual([
-      'src/index.ts'
-    ])
-    expect(listFiles).toHaveBeenCalledWith('/repo', {
-      excludePaths: undefined,
-      maxResults: 20_001,
-      signal: undefined
-    })
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cwd: '/canonical/repo' })
+    )
   })
 
   it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {
@@ -148,8 +179,7 @@ describe('RuntimeFileCommands', () => {
       const child = createRuntimeSearchChild()
       Object.defineProperty(child, 'pid', { value: undefined })
       Object.defineProperties(child, { stdout: { value: undefined }, stderr: { value: undefined } })
-      // Why a root that exists: an ENOENT spawn failure is also what a vanished workspace looks
-      // like, so this stays about the binary only while the search root is reachable.
+      // Keep root reachable so ENOENT proves missing binary rather than vanished workspace.
       resolveAuthorizedPathMock.mockResolvedValue(process.cwd())
       wslAwareSpawnMock.mockReturnValue(child)
 
@@ -174,8 +204,7 @@ describe('RuntimeFileCommands', () => {
     }
   )
 
-  // Why close(97): the WSL wrapper's "cd failed" code. It is above rg's own 0/1/2, so a handler
-  // that checks it after the unavailable branch reports a broken install instead.
+  // WSL cd failure 97 exceeds rg's 0/1/2; classify it before binary-unavailable errors.
   it('names the unreachable root when the WSL wrapper cannot enter it', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
@@ -218,7 +247,7 @@ describe('RuntimeFileCommands', () => {
     await expect(resultPromise).rejects.toThrow("Orca's bundled search tool (ripgrep)")
   })
 
-  it('routes runtime rg searches through the registered WSL project runtime', async () => {
+  it('runs host rg for a Windows drive root even under a WSL project runtime', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: {
         id: 'wt-1',
@@ -238,9 +267,7 @@ describe('RuntimeFileCommands', () => {
       query: 'needle',
       maxResults: 10
     })
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushRuntimeSearchMicrotasks()
     child.emit('close', 0, null)
 
     await expect(resultPromise).resolves.toMatchObject({ files: [] })
@@ -249,40 +276,48 @@ describe('RuntimeFileCommands', () => {
       'C:\\repo',
       'C:\\repo'
     )
+    expect(bundledRipgrepCommandMock).toHaveBeenCalledWith({ wsl: false })
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      '/bundled/rg',
+      expect.any(Array),
+      expect.objectContaining({ cwd: 'C:\\repo' })
+    )
+    expect(wslAwareSpawnMock.mock.calls[0]?.[2]).not.toHaveProperty('wslDistro')
+  })
+
+  it('routes runtime rg searches for a WSL filesystem root through the project runtime', async () => {
+    const wslRoot = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: wslRoot
+      },
+      executionHostId: 'local'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const child = createRuntimeSearchChild()
+    Object.defineProperty(child, 'pid', { value: 1 })
+    resolveAuthorizedPathMock.mockResolvedValue(wslRoot)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+      query: 'needle',
+      maxResults: 10
+    })
+    await flushRuntimeSearchMicrotasks()
+    child.emit('close', 0, null)
+
+    await expect(resultPromise).resolves.toMatchObject({ files: [] })
     expect(bundledRipgrepCommandMock).toHaveBeenCalledWith({ wsl: true })
     expect(wslAwareSpawnMock).toHaveBeenCalledWith(
       '/bundled/linux/rg',
       expect.any(Array),
       expect.objectContaining({
-        cwd: 'C:\\repo',
+        cwd: wslRoot,
         wslDistro: 'Ubuntu'
       })
     )
-  })
-
-  it('keeps legacy SSH Quick Open replies within the frame-sized result bound', async () => {
-    const resolveRuntimeFileTarget = vi.fn(async () => ({
-      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
-      executionHostId: 'ssh:ssh-1'
-    }))
-    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
-    const listFiles = vi.fn(async () => ['src/target.ts'])
-    getSshFilesystemProviderMock.mockReturnValue({
-      supportsQuickOpenSearch: vi.fn(async () => false),
-      listFiles
-    })
-
-    await expect(commands.searchQuickOpenFilePaths('id:wt-1', 'target', 32)).resolves.toMatchObject(
-      {
-        files: [{ relativePath: 'src/target.ts' }],
-        totalCount: 1,
-        truncated: false
-      }
-    )
-    expect(listFiles).toHaveBeenCalledWith('/repo', {
-      excludePaths: undefined,
-      maxResults: 32,
-      signal: undefined
-    })
   })
 })

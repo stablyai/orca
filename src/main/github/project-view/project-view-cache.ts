@@ -3,9 +3,6 @@ import { githubProjectHost } from '../../../shared/github/project-identity'
 
 export const PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES = 512
 
-// ─── Module-scope caches (reset on HMR — intentional) ──────────────────
-
-// Why: owners are user-controlled over a long session; bound cache entries to avoid unbounded retention while keeping the hot-owner fast path.
 function rememberProjectViewCacheEntry<K, V>(
   cache: Map<K, V>,
   key: K,
@@ -34,18 +31,15 @@ function getProjectViewCacheEntry<K, V>(cache: Map<K, V>, key: K): V | undefined
   return value
 }
 
-// Why: plain module locals so HMR code swaps re-run capability probes instead of carrying a stale "unsupported" flag.
+// Module reloads must discard stale capability results.
 const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
-// Why: keyed per owner (not a process-global flag) so one owner's capability gap doesn't poison others that DO support Issue.parent (bug-scan finding 2).
+// One owner's unsupported parent field must not poison another owner's capability.
 const parentFieldRetriedByOwner = new Map<string, true>()
 const parentFieldWarningLoggedByOwner = new Map<string, true>()
-// Why: in-flight promise per owner so concurrent fetchAllItems callers share one probe instead of each racing a duplicate first-page probe.
+// Share first-page capability probes per owner.
 export const parentFieldProbeInFlight = new Map<string, Promise<void>>()
 
-// Why: GHES owners are a separate namespace and capability surface from
-// github.com owners with the same login — scope cache keys by host so one
-// host's probe result can't leak into another. Normalize github.com so
-// host-less callers share the same probe state as explicitly pinned calls.
+// Isolate same-name owners across hosts; normalize implicit and explicit github.com to one scope.
 export function ownerScopeKey(
   owner: string,
   ownerType: GitHubProjectOwnerType,

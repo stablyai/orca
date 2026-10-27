@@ -11,6 +11,8 @@ import {
 } from './rpc-param-primitives'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
+import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
 
@@ -43,9 +45,7 @@ export const AutomationWorkspaceProvenanceRequest = z.object({
   createRequestId: z.string()
 })
 
-// Why no dispatch token (unlike automation provenance): this is a descriptive
-// origin marker for sidebar filtering, not an authority grant. The host stamps
-// createdAt itself so a client clock can't skew sort order.
+// Descriptive provenance grants no authority; the host stamps createdAt to avoid client-clock sort skew.
 export const CliWorkspaceProvenanceRequest = z.object({
   callerTerminalHandle: OptionalString
 })
@@ -74,7 +74,9 @@ export const WorktreePsParams = z.object({
 })
 
 export const WorktreeSortOrder = z.object({
-  orderedIds: z.array(z.string())
+  orderedIds: z.array(z.string()),
+  // Parallel to orderedIds: the copy each id names, so a same-id twin keeps its own order.
+  hostIds: z.array(z.string()).optional()
 })
 
 export const WorktreeSelector = z.object({
@@ -82,6 +84,11 @@ export const WorktreeSelector = z.object({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing worktree selector'))
+})
+
+// Why optional: an older host strips the unknown field and marks its chats asleep as before.
+export const WorktreeSleepParams = WorktreeSelector.extend({
+  markChatsAsleep: z.boolean().optional()
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
@@ -110,12 +117,9 @@ export function assertLinkedWorkItemSourceContextMatch(
 }
 
 export const WorktreeSet = WorktreeSelector.extend({
-  // Why: '' is the blanking contract — "fall back to the branch/folder name".
-  // OptionalString coerced it to undefined, so on remote/SSH hosts clearing the
-  // name was dropped here and the old name came back on the next refresh.
+  // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
   displayName: OptionalPlainString,
-  // Why: empty comments are meaningful metadata updates, so use the plain
-  // string parser instead of OptionalString's empty-as-undefined behavior.
+  // Preserve empty comment updates instead of coercing them to absent.
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
@@ -129,6 +133,9 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedAzureDevOpsPR: TriStateLinkedIssue,
   linkedGiteaPR: TriStateLinkedIssue,
   linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
+  linkedItems: WorkspaceAttachmentsSchema.optional(),
+  linkedItemsBase: WorkspaceAttachmentsSchema.optional(),
+  linkedItemsSelectionChanged: z.boolean().optional(),
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
@@ -150,8 +157,9 @@ export const WorktreeSet = WorktreeSelector.extend({
     })
     .nullable()
     .optional(),
-  diffComments: z.array(z.unknown()).optional(),
-  mobileDiffReview: z.unknown().optional(),
+  // Older clients may send unsupported review shapes alongside unrelated metadata edits.
+  diffComments: z.array(DiffCommentSchema).optional().catch(undefined),
+  mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
@@ -167,13 +175,10 @@ export const WorktreeSet = WorktreeSelector.extend({
 export const WorktreeRemove = WorktreeSelector.extend({
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
-  // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
-  // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
-  // waiver travels on its own field.
+  // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).
   allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean,
-  // Why (#19334): a failed archive hook blocks removal. This waives that refusal and is recorded
-  // in the result; it is NOT `force`, and it does not decide whether the hook runs.
+  // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
   allowFailedArchiveHook: OptionalBoolean
 })
 

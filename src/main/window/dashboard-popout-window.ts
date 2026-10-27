@@ -1,6 +1,5 @@
 import { app, BrowserWindow, nativeTheme, type WebContents, type Event } from 'electron'
 import { join } from 'node:path'
-import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
 import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
@@ -21,12 +20,10 @@ const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 720
 const DASHBOARD_POPOUT_PARTITION = 'orca-dashboard-popout'
 
-// Why: singleton — the dashboard is a companion surface, so a second "Pop Out"
-// request focuses the existing window rather than spawning duplicates.
+// Reuse the companion window across Pop Out requests.
 let dashboardPopoutWindow: BrowserWindow | null = null
 
-/** The live pop-out window, or null when closed. Used by the dashboard relay to
- *  forward snapshots to the popout's webContents. */
+/** Live popout for snapshot relaying, or null. */
 export function getDashboardPopoutWindow(): BrowserWindow | null {
   return dashboardPopoutWindow &&
     !dashboardPopoutWindow.isDestroyed() &&
@@ -54,7 +51,7 @@ function resolveZoomShortcut(
   input: KeybindingInput,
   keybindings: KeybindingOverrides | undefined
 ): UIZoomDirection | null {
-  // Why: this runs on every keydown; avoid scanning unrelated window shortcuts in the typing path.
+  // This runs per keydown; inspect only zoom shortcuts.
   for (const [actionId, direction] of ZOOM_SHORTCUTS) {
     if (
       keybindingMatchesAction(actionId, input, process.platform, keybindings, { context: 'app' })
@@ -65,12 +62,7 @@ function resolveZoomShortcut(
   return null
 }
 
-/**
- * Apply a zoom step to the pop-out when it is the focused window. Returns false
- * when the pop-out is closed or unfocused so the caller can route the action to
- * the main window instead — the menu's zoom items must act on the window the
- * user is looking at.
- */
+/** Zoom the focused popout; return false so menu actions can fall back to the main window. */
 export function zoomDashboardPopoutIfFocused(direction: UIZoomDirection): boolean {
   const popout = getDashboardPopoutWindow()
   if (!popout || !popout.isFocused()) {
@@ -89,8 +81,7 @@ export function onDashboardPopoutOpenChanged(listener: (open: boolean) => void):
   return () => popoutOpenListeners.delete(listener)
 }
 
-// Why: the main renderer's snapshot publisher only runs while the pop-out is
-// open. Tell that exact window when the state flips, then notify listeners.
+// The main renderer publishes snapshots only while open; notify its exact trusted window before local listeners.
 function broadcastPopoutOpenChanged(open: boolean): void {
   sendToTrustedUIRenderer('dashboard:popoutOpenChanged', open)
   for (const listener of popoutOpenListeners) {
@@ -99,9 +90,8 @@ function broadcastPopoutOpenChanged(open: boolean): void {
 }
 
 function loadDashboardPopout(window: BrowserWindow): void {
-  // Why: mirror loadMainWindow's dev/prod branch — the dev server serves the
-  // second HTML entry, prod loads the emitted file.
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+  // Match main-window loading: dev server entry versus packaged emitted HTML.
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html`)
   } else {
     void window.loadFile(join(__dirname, '../renderer/popout.html'))
@@ -129,12 +119,7 @@ function resolveRestoredBounds(store: Store | null): {
   return null
 }
 
-/**
- * Open the pop-out dashboard window, or focus it if already open. The window is
- * a standalone top-level BrowserWindow with a native frame that reuses the same
- * preload/window.api as the main window but renders its own React root
- * (popout.html).
- */
+/** Reuse a native-framed companion window with the main preload and its own popout.html renderer. */
 export function createOrFocusDashboardPopout(
   store: Store | null,
   options: { getKeybindings?: () => KeybindingOverrides | undefined } = {}
@@ -161,25 +146,18 @@ export function createOrFocusDashboardPopout(
     show: false,
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
-    // Why: the pop-out uses a standard native frame so it is movable, closable,
-    // and minimizable on every platform without reimplementing the main
-    // window's custom titlebar/drag-region/window-control chrome. The main
-    // window is frameless because it draws its own titlebar; the dashboard has
-    // no such chrome yet, so a native frame is the correct default here.
+    // Use native movable/closable chrome on every platform; the popout renders no custom titlebar.
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
-      // Why: Chromium shares zoom by origin; a separate in-memory session keeps pop-out zoom window-local.
+      // Chromium shares zoom by origin; isolate the session to keep popout zoom local.
       partition: DASHBOARD_POPOUT_PARTITION,
-      // Why: the dashboard is plain DOM — no <webview> guests — so keep the
-      // guest-embedding surface off for this window. For the same reason it is
-      // deliberately not stamped with the browser-host id: no guest of ours can
-      // run here, so every client-placed page is a mirror to this renderer.
+      // No webviews run here; disable embedding and omit host identity so client-placed pages stay mirrors.
       webviewTag: false
     }
   })
   installPrivilegedWindowNavigationPolicy(window.webContents)
-  // Why: isolated sessions do not inherit the main session's deny-by-default permission policy.
+  // Isolated sessions do not inherit the main session's deny-by-default permission policy.
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) =>
     callback(false)
   )
@@ -187,17 +165,13 @@ export function createOrFocusDashboardPopout(
   dashboardPopoutWindow = window
   broadcastPopoutOpenChanged(true)
 
-  // Why: uiZoomLevel is the app-wide UI zoom; without this the pop-out always
-  // renders at 100% while the main window honors the persisted level.
+  // Apply persisted app zoom or the popout always opens at 100%.
   window.webContents.on('dom-ready', () => {
     if (!window.isDestroyed()) {
       window.webContents.setZoomLevel(store?.getUI().uiZoomLevel ?? 0)
     }
   })
-  // Follow app-zoom changes made while the pop-out is open (main-window zoom,
-  // settings control, mobile ui.set). Compare against the last followed value,
-  // not the live webContents level, so a window-local zoom via the menu/chords
-  // is not snapped back until the app-wide level actually changes.
+  // Compare against last app zoom, not live window zoom, so local changes persist until app-wide zoom actually changes.
   let lastFollowedZoomLevel = store?.getUI().uiZoomLevel ?? 0
   const unsubscribeUIChanged = store?.onUIChanged((ui) => {
     const level = ui.uiZoomLevel ?? 0
@@ -210,8 +184,7 @@ export function createOrFocusDashboardPopout(
     }
   })
 
-  // Why: the pop-out has no renderer-side shortcut plumbing; resolve only the
-  // zoom chords here and let every other key fall through untouched.
+  // No renderer shortcut routing exists here; handle zoom chords and yield everything else.
   window.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') {
       return
@@ -224,7 +197,7 @@ export function createOrFocusDashboardPopout(
   })
 
   window.webContents.on('zoom-changed', (event, direction) => {
-    // Why: Electron reports Ctrl/Cmd+wheel zoom outside the keyboard input path.
+    // Ctrl/Cmd+wheel arrives outside keyboard input routing.
     if (
       (direction === 'in' || direction === 'out') &&
       nativeZoomCommandMatchesKeybindings(direction, process.platform, options.getKeybindings?.(), {
@@ -240,9 +213,7 @@ export function createOrFocusDashboardPopout(
     showWindowWithoutStealingFocus(window)
   })
 
-  // Bounds persistence — mirrors the main window's debounced/frozen approach so
-  // teardown-time resize/move events can't clobber the remembered size with
-  // near-minimum bounds.
+  // Freeze/debounce remembered bounds during teardown so resize events cannot replace them with minimum size.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
   let windowClosing = false
   const saveBounds = (): void => {
@@ -290,8 +261,7 @@ export function createOrFocusDashboardPopout(
   return window
 }
 
-/** Close the pop-out dashboard if it is open. Called when the main window
- *  closes so the dashboard never orphans without its owning app window. */
+/** Close with the owning main window so the dashboard cannot become orphaned. */
 export function closeDashboardPopout(): void {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
     dashboardPopoutWindow.close()

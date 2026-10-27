@@ -5,12 +5,20 @@ import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-se
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent-test-state'
+} from '@/lib/worktree-activation-created-agent.test-fixture'
 import {
   createMockStore,
   registerWorktreeActivationReset,
-  setSetupScriptLaunchMode
-} from './worktree-activation-test-harness'
+  setLegacySetupScriptLaunchMode,
+  createdTabStartups
+} from './worktree-activation.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -26,8 +34,7 @@ const setup = {
   envVars: { ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1' }
 }
 
-// Why: a native-chat create used to land the user on a bare "Terminal 1" beside the chat,
-// because the returned setup script counted as work needing a shell to attach to.
+// Returned setup scripts must not force Terminal 1 beside a new native chat.
 describe('seeding beside a caller-provided chat surface', () => {
   it('runs a new-tab setup script without seeding a shell', () => {
     let createdIndex = 0
@@ -49,25 +56,41 @@ describe('seeding beside a caller-provided chat surface', () => {
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Setup', {
       recordInteraction: false
     })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+    expect(createdTabStartups(store)['tab-1']).toEqual({
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
       env: setup.envVars
     })
   })
 
-  it('still seeds a shell when setup runs as a split', () => {
-    let createdIndex = 0
-    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
-    const store = createMockStore({ createTab })
-    setSetupScriptLaunchMode('split-vertical')
-
-    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, setup, undefined, undefined, {
-      callerProvidesSurface: true
-    })
-
-    expect(createTab).toHaveBeenCalledTimes(1)
-    expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', expect.anything())
-  })
+  it.each(['split-vertical', 'split-horizontal', 'new-tab', null] as const)(
+    'ignores retired setup location %s beside a caller-provided chat',
+    (mode) => {
+      setLegacySetupScriptLaunchMode(mode)
+      const store = createMockStore()
+      const primary = ensureWorktreeHasInitialTerminal(
+        store,
+        'wt-1',
+        undefined,
+        setup,
+        undefined,
+        undefined,
+        { callerProvidesSurface: true, activateCreatedTabs: false }
+      )
+      expect(primary).toBeNull()
+      expect(store.createTab).toHaveBeenCalledExactlyOnceWith('wt-1', undefined, undefined, {
+        recordInteraction: false,
+        activate: false,
+        pendingStartup: {
+          command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+          env: setup.envVars
+        }
+      })
+      expect(store.setActiveTab).not.toHaveBeenCalled()
+      expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Setup', {
+        recordInteraction: false
+      })
+    }
+  )
 
   it('still seeds a shell for issue automation, which splits from it', () => {
     let createdIndex = 0
@@ -117,5 +140,23 @@ describe('seeding beside a caller-provided chat surface', () => {
     expect(result).not.toBe(false)
     expect(result === false ? 'unused' : result.primaryTabId).toBeNull()
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+  })
+  it('does not enqueue setup again when its consumed tab is reactivated', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    activateAndRevealWorktree(worktree.id, {
+      providesInitialSurface: true,
+      notifyHostRuntime: false,
+      setup
+    })
+    const state = useAppStore.getState()
+    const setupTab = state.tabsByWorktree[worktree.id]?.[0]
+    if (!setupTab) {
+      throw new Error('missing Setup tab')
+    }
+    expect(state.consumeTabStartupCommand(setupTab.id)?.command).toContain('setup-runner.sh')
+    activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+    expect(useAppStore.getState().pendingStartupByTabId).toEqual({})
   })
 })

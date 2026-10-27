@@ -1,16 +1,15 @@
 // @vitest-environment happy-dom
-//
-// The preview is an editor tab that has to read like a browser tab. These pin the parts of that
-// illusion a reader can catch us on: the document names itself and its owning machine instead of
-// showing the internal preview scheme, Back/Forward really drive the guest's history, and the chip
-// hands over the path the owner spells rather than the one the grant was minted with.
 import { act } from 'react'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type * as WebviewRegistryModule from '../host-guest/webview-registry'
+import type * as DocPreviewArtifactShareModule from './doc-preview-artifact-share'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/webview-drag-passthrough'
+
+const confirmExternalLink = async (): Promise<boolean> => false
 
 const GRANT_ID = 'a'.repeat(32)
 // The draw-tool hint's own storage key; the hook that owns it keeps it private.
@@ -22,32 +21,52 @@ const clipboard = vi.hoisted(() => ({ writes: [] as string[] }))
 const grabCalls: { browserPageId: string; enabled: boolean }[] = []
 const osOpens: string[] = []
 
-vi.mock('@/lib/doc-preview-grants', () => ({
-  buildDocPreviewGrantRequest: () => ({
+const grants = vi.hoisted(() => {
+  const mintedLocation = {
     owner: {
       kind: 'runtime' as const,
       environmentId: 'env-1',
       worktreeSelector: 'id:wt-1',
       worktreeRoot: '/repo'
     },
+    requestBase: '/repo',
     root: '/repo',
-    entryRelativePath: ENTRY_RELATIVE_PATH
-  }),
+    entryRelativePath: 'docs/reports/index.html'
+  }
+  const shareControlCalls: unknown[][] = []
+  return { mintedLocation, requestLocation: mintedLocation, shareControlCalls }
+})
+
+vi.mock('@/lib/doc-preview-grants', () => ({
+  buildDocPreviewGrantRequest: () => grants.requestLocation,
+  // The real cache keeps the first mint's handle for the tab, whatever a later request says.
   ensureDocPreviewGrant: () =>
     Promise.resolve({
       grantId: GRANT_ID,
-      url: `orca-preview://${GRANT_ID}/${ENTRY_RELATIVE_PATH}`
+      url: `orca-preview://${GRANT_ID}/${ENTRY_RELATIVE_PATH}`,
+      location: grants.mintedLocation
     }),
   releaseDocPreviewGrant: () => undefined
 }))
+
+vi.mock('./doc-preview-artifact-share', async (importOriginal) => {
+  const actual = await importOriginal<typeof DocPreviewArtifactShareModule>()
+  return {
+    ...actual,
+    buildDocPreviewShareControl: (
+      ...args: Parameters<typeof actual.buildDocPreviewShareControl>
+    ) => {
+      grants.shareControlCalls.push(args)
+      return actual.buildDocPreviewShareControl(...args)
+    }
+  }
+})
 
 vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
   ...(await importOriginal<typeof WebviewRegistryModule>()),
   moveFocusToRendererBeforeWebviewDetach: () => undefined
 }))
 
-// The real one walks half the store to decide who owns a worktree; the chip only cares that
-// whatever it decides reaches the pill.
 vi.mock('@/lib/execution-host-display-label', () => ({
   selectWorktreeHostDisplayLabel: () => 'Studio Mac mini'
 }))
@@ -59,8 +78,7 @@ const store = vi.hoisted(() => ({
   conversions: [] as { pageId: string; target: unknown }[]
 }))
 
-// The document lives on the SSH host that owns the workspace, which is what makes the preview a
-// preview at all — the client OS has no copy of it.
+// The document lives only on its workspace’s SSH host.
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: () => 'ssh-1',
   getConnectionIdForFile: () => 'ssh-1',
@@ -100,6 +118,7 @@ const storeState = {
     store.pageStateUpdates.push({ pageId, updates })
   },
   browserUrlHistory: [],
+  browserPagesByWorkspace: {},
   workspaceDocHistory: [],
   recordWorkspaceDocVisit: () => undefined,
   browserDefaultSearchEngine: 'google',
@@ -134,16 +153,19 @@ async function renderPreview(
   const { HtmlDocPreview } = await import('./HtmlDocPreview')
   await act(async () => {
     root.render(
-      <TooltipProvider>
-        <HtmlDocPreview
-          isActive={options.isActive ?? true}
-          previewId="preview-1"
-          filePath={ABSOLUTE_PATH}
-          relativePath={ENTRY_RELATIVE_PATH}
-          worktreeId="wt-1"
-          holdsGuestFocus={options.holdsGuestFocus ?? false}
-        />
-      </TooltipProvider>
+      <ConfirmationDialogContext.Provider value={confirmExternalLink}>
+        <TooltipProvider>
+          <HtmlDocPreview
+            isActive={options.isActive ?? true}
+            previewId="preview-1"
+            browserWorkspaceId="browser-1"
+            filePath={ABSOLUTE_PATH}
+            relativePath={ENTRY_RELATIVE_PATH}
+            worktreeId="wt-1"
+            holdsGuestFocus={options.holdsGuestFocus ?? false}
+          />
+        </TooltipProvider>
+      </ConfirmationDialogContext.Provider>
     )
   })
   const webview = container.querySelector('webview') as StubWebview | null
@@ -276,6 +298,26 @@ describe('HtmlDocPreview browser chrome', () => {
     expect(hasLiveBrowserGuest('preview-1')).toBe(false)
   })
 
+  it('shares through the minted grant even after the workspace resolves to another host', async () => {
+    grants.shareControlCalls.length = 0
+    await renderPreview(container, root)
+    expect(grants.shareControlCalls.at(-1)).toEqual([ABSOLUTE_PATH, grants.mintedLocation])
+    expect(button(container, 'Share as artifact')).not.toBeNull()
+
+    grants.requestLocation = {
+      ...grants.mintedLocation,
+      owner: { ...grants.mintedLocation.owner, environmentId: 'env-2' }
+    }
+    storeState.settings = { activeRuntimeEnvironmentId: 'env-2' }
+    try {
+      await renderPreview(container, root)
+      expect(grants.shareControlCalls.at(-1)).toEqual([ABSOLUTE_PATH, grants.mintedLocation])
+    } finally {
+      grants.requestLocation = grants.mintedLocation
+      storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
+    }
+  })
+
   it('identifies the document by its workspace path and owning machine', async () => {
     await renderPreview(container, root)
 
@@ -286,8 +328,6 @@ describe('HtmlDocPreview browser chrome', () => {
     expect(text).toContain('Studio Mac mini')
   })
 
-  // The internal scheme is an implementation detail of how the workspace hands bytes to the guest.
-  // The guest's own src attribute necessarily carries it; no other node in the tree may.
   it('never shows the internal preview scheme to the reader', async () => {
     const webview = await renderPreview(container, root)
 
@@ -299,9 +339,7 @@ describe('HtmlDocPreview browser chrome', () => {
     expect(withoutGuest.innerHTML).not.toContain('orca-preview')
   })
 
-  // Why this is a drag bug and not a styling one: a <webview> takes the pointer stream the
-  // document never sees, so a tab drag stops getting pointermove the moment the cursor crosses
-  // the preview — the dragged tab stops following the cursor and the split cannot be dropped.
+  // Guests consume pointer events outside the document; passthrough must preserve renderer tab dragging.
   it('holds the guest click-through while a renderer drag is in flight', async () => {
     const webview = await renderPreview(container, root)
 
@@ -318,9 +356,7 @@ describe('HtmlDocPreview browser chrome', () => {
     expect(guest.style.pointerEvents).toBe('')
   })
 
-  // Why append time and not the enrolling effect: dragging the preview's OWN tab across a split
-  // remounts this component mid-drag, and an effect settles a turn later — for the rest of that
-  // turn the fresh guest is hittable and eats the pointer stream, which is the original freeze.
+  // Mid-drag remount must be click-through at append time; a later effect leaves a turn that can swallow the drag.
   it('holds a guest that appears mid-drag click-through the moment it is appended', async () => {
     const appendedPointerEvents: string[] = []
     const originalAppendChild = HTMLElement.prototype.appendChild
@@ -342,8 +378,6 @@ describe('HtmlDocPreview browser chrome', () => {
     }
   })
 
-  // Why: the chip sits in the row's height-pinned slot, and a wrapper of its own between the two
-  // would leave it its natural height again — the toolbar would shrink for document tabs.
   it('hands the identity chip straight to the height-pinned address slot', async () => {
     await renderPreview(container, root)
 
@@ -354,9 +388,7 @@ describe('HtmlDocPreview browser chrome', () => {
     expect(chip.className).not.toMatch(/(^|\s)h-/)
   })
 
-  // Browser parity: a browser tab is named by the document it shows. What the document names is
-  // the tab; what it must never rename is the chip, which is the reader's only proof of which
-  // file on which host they are looking at.
+  // The document may rename its tab; the chip must keep proving file and host identity.
   it('lets the document name its tab while the chip keeps naming the file', async () => {
     const webview = await renderPreview(container, root)
     store.pageStateUpdates.length = 0
@@ -373,9 +405,7 @@ describe('HtmlDocPreview browser chrome', () => {
     expect(button(container, 'Edit address').textContent).toContain(ENTRY_RELATIVE_PATH)
   })
 
-  // The convergence contract (STA-5681): clicking the chip swaps in the real address bar,
-  // prefilled with the file the reader can retype, and a committed web URL converts the page —
-  // it never navigates a doc guest, whose policy would deny the URL anyway.
+  // Committed web URLs convert the preview; its guest policy would refuse navigating them.
   it('edits the address in place and converts a committed URL instead of navigating', async () => {
     await renderPreview(container, root)
     store.conversions.length = 0
@@ -399,9 +429,7 @@ describe('HtmlDocPreview browser chrome', () => {
     ])
   })
 
-  // Escape hands the slot back to the chip with nothing converted — the reader looked, then left.
-  // The first press belongs to the address bar (it closes the suggestion dropdown, as in the URL
-  // pane); the second one reaches the wrapper and exits the edit.
+  // First Escape closes suggestions; the second leaves editing without converting the page.
   it('returns to the chip on Escape without converting', async () => {
     await renderPreview(container, root)
     store.conversions.length = 0
@@ -423,16 +451,13 @@ describe('HtmlDocPreview browser chrome', () => {
     expect(button(container, 'Edit address')).not.toBeNull()
   })
 
-  // Why: the browsing tour walks anchors by name, and a preview answering to the browser pane's
-  // anchors would hand it steps about profiles and cookies that a document tab does not have.
+  // Preview anchors must not enroll the document in a browsing tour about profiles and cookies.
   it('claims none of the browsing tour anchors', async () => {
     await renderPreview(container, root)
 
     expect(container.querySelector('[data-contextual-tour-target]')).toBeNull()
   })
 
-  // Why the menu and no longer the chip: clicking the chip now edits the address, so the menu is
-  // the one copy affordance left for the absolute path the owning machine spells.
   it('copies the absolute path the owning machine spells, not the workspace-relative one', async () => {
     await renderPreview(container, root)
 
@@ -480,12 +505,10 @@ describe('HtmlDocPreview browser chrome', () => {
     })
 
     expect(goBack).toHaveBeenCalledTimes(1)
-    // Why: a disabled edge control must be inert, not merely dimmed.
     expect(goForward).not.toHaveBeenCalled()
   })
 
-  // Fragment links navigate in-document, which is still a history entry a reader expects Back to
-  // unwind — the guest reports it on a different event than a full navigation.
+  // Fragment history arrives on a distinct event but must still support Back.
   it('tracks in-document navigation as history too', async () => {
     const webview = await renderPreview(container, root)
     stubHistory(webview, { canGoBack: true, canGoForward: true })
@@ -525,16 +548,13 @@ describe('HtmlDocPreview browser chrome', () => {
       }
     })
 
-    // Why: cookies land in a browsing session, and a preview reads workspace disk over a grant —
-    // there is no session for an import to reach.
     it('hides cookie import, which a preview has no session for', async () => {
       await renderPreview(container, root)
 
       expect(container.querySelector('button[aria-label="Import cookies from browser"]')).toBeNull()
     })
 
-    // The picker is driven through main, which resolves the page to whichever guest is rendering
-    // this document now — so the id it sends is the page, not the grant a re-mint would replace.
+    // Main resolves the current guest by stable page ID; grants change on re-mint.
     it('arms the element picker against the page the document is open in', async () => {
       await renderPreview(container, root)
 
@@ -562,8 +582,7 @@ describe('HtmlDocPreview browser chrome', () => {
       ])
     })
 
-    // Why: a preview is a remote document by construction — the client OS has no copy to launch,
-    // so "open externally" has to download first.
+    // Remote documents need downloading before the client OS can open them.
     it('downloads a runtime-owned document before handing it to the OS', async () => {
       await renderPreview(container, root)
 
@@ -575,9 +594,7 @@ describe('HtmlDocPreview browser chrome', () => {
       expect(osOpens).toEqual([])
     })
 
-    // Why the storage flag and not the popover: the nudge fires once per install, and the harm is
-    // consuming that one view — a reader who opened a document would spend the browsing pane's
-    // introduction to a tool they were not shown.
+    // Check the storage flag so a preview cannot consume the once-per-install browsing hint.
     it('never spends the once-per-install draw-tool hint', async () => {
       window.localStorage.removeItem(MARKUP_DRAW_HINT_SEEN_KEY)
 
@@ -587,8 +604,7 @@ describe('HtmlDocPreview browser chrome', () => {
     })
   })
 
-  // Why it has to be somewhere: the preview hides the editor's path header, and the relative path
-  // was only ever copyable from there — the chip and the menu both give the absolute one.
+  // The hidden editor header no longer exposes the relative path; preserve a copy action.
   it('still offers the workspace-relative path the hidden editor header used to copy', async () => {
     await renderPreview(container, root)
 
@@ -611,8 +627,6 @@ describe('HtmlDocPreview browser chrome', () => {
   })
 })
 
-// Why this is a test and not left to the pane: a preview has no address bar to hand focus to the
-// document, so without this its keyboard and link input can silently land outside the visible guest.
 describe('HtmlDocPreview guest focus', () => {
   let container: HTMLDivElement
   let root: Root
@@ -656,7 +670,6 @@ describe('HtmlDocPreview guest focus', () => {
 
     expect(focused).not.toContain(webview)
 
-    // And the window coming back does not reopen the offer a preview behind a terminal refused.
     await act(async () => {
       window.dispatchEvent(new Event('focus'))
     })
@@ -665,9 +678,7 @@ describe('HtmlDocPreview guest focus', () => {
     expect(focused).not.toContain(webview)
   })
 
-  // Why the window's own focus has to re-offer: another app taking the front pulls focus out of the
-  // guest, and coming back lands it on the embedder. The guest is where a clicked link is reported
-  // from, so without this the route out of the preview stays shut until something remounts it.
+  // Returning window focus lands on the embedder; offer it back to the guest for keyboard and link input.
   it('offers the guest focus again after the window gets it back', async () => {
     const webview = await renderPreview(container, root, { holdsGuestFocus: true })
     await settleFrames()
@@ -681,9 +692,7 @@ describe('HtmlDocPreview guest focus', () => {
     expect(focused).toContain(webview)
   })
 
-  // Why that re-offer has to yield: the window also gets focus back when the reader presses a tab,
-  // because the guest holding the keyboard is what blurred the embedder. Taking it back from there
-  // fights the reader for their own click.
+  // Window focus may follow the reader clicking another tab; never reclaim their chosen target.
   it('leaves focus with whatever claimed it when the window comes back', async () => {
     const webview = await renderPreview(container, root, { holdsGuestFocus: true })
     await settleFrames()

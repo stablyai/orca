@@ -1,11 +1,11 @@
-/**
- * The redrive edge is coalesced, and coalescing is not allowed to change what gets delivered.
- *
- * Every journal batch is a redrive candidate, because a settled turn is tombstoned rather than
- * rewritten. Once mail is parked on a session, each candidate re-resolves the dispatch, queries
- * unread mail and reads the host's gate facts — so a turn that streams tool calls paid the full
- * gate per batch, only to re-park because the turn was still running.
- */
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
+import { emptyAgentSessionBatch } from '../../../native-chat/agent-session-wire/agent-session-empty-batch'
+import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+/** Coalesce parked-mail journal nudges without changing delivery; each gate reads dispatch, unread mail and host facts, so per-batch evaluation is expensive. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -21,39 +21,58 @@ vi.mock('./structured-agent-session-create', () => ({
   })
 }))
 
-type JournalEmit = (event: { type: string }) => void
+type JournalEventType = 'batch' | 'reset' | 'snapshot'
+type JournalEmit = (type: JournalEventType) => void
 
 /** Captures the redrive subscription so the test can drive journal batches by hand. */
-function installHost(): { emit: (type: string) => void; unsubscribed: () => boolean } {
+function installHost(): { emit: (type: JournalEventType) => void; unsubscribed: () => boolean } {
   let emitter: JournalEmit | null = null
   let disposed = false
-  setStructuredAgentSessionHost({
-    hasSession: () => true,
-    hold: async () => {},
-    release: () => {},
-    subscribe: (subscription: { emit: JournalEmit }) => {
-      emitter = subscription.emit
-      return () => {
-        disposed = true
-      }
-    },
-    deps: {
-      store: {
-        getRecord: () => ({
-          provider: 'claude',
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
-            claimStatus: 'live',
-            deathEvidence: null,
-            runtimeFence: 1
-          }
+  const { host, store } = hostTestState()
+  vi.spyOn(host, 'hasSession').mockReturnValue(true)
+  vi.spyOn(host, 'subscribe').mockImplementation(async (subscription) => {
+    const cursor = { epoch: 'redrive', sequence: 0 }
+    const page: AgentSessionHistoryPage = {
+      sessionId: subscription.sessionId,
+      epoch: cursor.epoch,
+      direction: 'tail',
+      items: [],
+      removedItemIds: [],
+      submissions: [],
+      window: { oldest: null, newest: null, nextCursor: cursor },
+      liveCursor: cursor,
+      hasOlder: false,
+      hasNewer: false
+    }
+    emitter = (type) => {
+      if (type === 'batch') {
+        subscription.emit({
+          type,
+          sessionId: subscription.sessionId,
+          batch: emptyAgentSessionBatch(cursor)
         })
+      } else if (type === 'reset') {
+        subscription.emit({
+          type,
+          sessionId: subscription.sessionId,
+          reset: 'epoch_changed',
+          page,
+          fence: 1
+        })
+      } else {
+        subscription.emit({ type, sessionId: subscription.sessionId, page, fence: 1 })
       }
     }
-  } as never)
+    return () => {
+      disposed = true
+    }
+  })
+  vi.spyOn(store, 'requireWritableRecord').mockImplementation((sessionId) =>
+    agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))
+  )
+  setStructuredAgentSessionHost(host)
   return {
-    emit: (type: string) => emitter?.({ type }),
+    emit: (type: JournalEventType) => emitter?.(type),
     unsubscribed: () => disposed
   }
 }
@@ -99,7 +118,6 @@ describe('the structured redrive edge', () => {
       vi.advanceTimersByTime(10)
     }
 
-    // Still inside the quiet window: nothing has fired for 25 batches.
     expect(onJournalActivity).not.toHaveBeenCalled()
     vi.advanceTimersByTime(300)
     expect(onJournalActivity).toHaveBeenCalledTimes(1)
@@ -129,7 +147,6 @@ describe('the structured redrive edge', () => {
     }
 
     expect(onJournalActivity.mock.calls.length).toBeGreaterThan(0)
-    // ...but nowhere near one per batch.
     expect(onJournalActivity.mock.calls.length).toBeLessThan(10)
   })
 

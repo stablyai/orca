@@ -75,23 +75,9 @@ function harness() {
     }
     return admission
   }
-  function state(parentTurn: string): string | undefined {
-    for (const body of rows.values()) {
-      if (body.kind !== 'message') {
-        continue
-      }
-      for (const block of body.blocks) {
-        if (block.type === 'subagent-group' && block.groupId === `${PRIMARY}:${parentTurn}`) {
-          return block.agents[0]?.state
-        }
-      }
-    }
-    return undefined
-  }
   return {
     send,
     tracker,
-    state,
     refuse: (value: boolean) => {
       refused = value
     },
@@ -111,8 +97,6 @@ describe('shared child execution projection', () => {
     const h = harness()
     h.send(activity('parent-1'))
     h.send(activity('parent-2', 'interacted'))
-    expect(h.state('parent-1')).toBeUndefined()
-    expect(h.state('parent-2')).toBeUndefined()
     expect(h.tracker.state).toBeNull()
     h.dispose()
   })
@@ -130,18 +114,12 @@ describe('shared child execution projection', () => {
       expect(h.tracker.state).toBeNull()
       h.send(turn('turn/started', CHILD, 'child-2'))
       h.send(turn('turn/completed', PRIMARY, parent))
-      expect(h.state(parent)).toBe('working')
       expect(h.tracker.state?.tasks).toHaveLength(1)
       h.send(turn('turn/completed', CHILD, 'child-1'))
       h.send(turn('turn/started', CHILD, 'child-1'))
       h.send(activity('parent-1', 'completed'))
-      expect(h.state(parent)).toBe('working')
       expect(h.tracker.state?.tasks).toHaveLength(1)
-      if (parent === 'parent-2') {
-        expect(h.state('parent-1')).toBe('completed')
-      }
       h.send(turn('turn/completed', CHILD, 'child-2'))
-      expect(h.state(parent)).toBe('completed')
       expect(h.tracker.state).toBeNull()
       h.dispose()
     }
@@ -153,8 +131,6 @@ describe('shared child execution projection', () => {
     h.send(turn('turn/completed', PRIMARY, 'parent-1'))
     h.send(activity('parent-2', 'interacted'))
     h.send(turn('turn/completed', PRIMARY, 'parent-2'))
-    expect(h.state('parent-1')).toBe('completed')
-    expect(h.state('parent-2')).toBeUndefined()
     expect(h.tracker.state).toBeNull()
     h.dispose()
   })
@@ -166,8 +142,6 @@ describe('shared child execution projection', () => {
     h.send(activity('parent-2', 'interacted'))
     h.send(activity('parent-1', 'completed'))
     h.send(turn('turn/started', CHILD, 'child-2'))
-    expect(h.state('parent-1')).toBe('completed')
-    expect(h.state('parent-2')).toBe('working')
     expect(h.tracker.state?.tasks).toHaveLength(1)
     h.dispose()
   })
@@ -183,28 +157,20 @@ describe('shared child execution projection', () => {
     h.send(turn('turn/started', CHILD, 'child-1'))
     h.send(turn('turn/completed', PRIMARY, 'parent-2'))
     expect(h.tracker.state?.tasks).toHaveLength(1)
-    expect(h.state('parent-2')).toBeUndefined()
     h.send(turn('turn/completed', CHILD, 'child-1'))
-    expect(h.state('parent-1')).toBe('completed')
-    expect(h.state('parent-2')).toBeUndefined()
     expect(h.tracker.state).toBeNull()
     h.dispose()
   })
 
-  it('does not expose pending child settlement before journal admission and retries the same fact', () => {
+  it('settles a child on its own completion, which writes no row the journal could hold back', () => {
     const h = harness()
     h.send(turn('turn/started', PRIMARY, 'parent-1'))
     h.send(activity('parent-1'))
     h.send(turn('turn/started', CHILD, 'child-1'))
     h.send(turn('turn/completed', PRIMARY, 'parent-1'))
-    const complete = turn('turn/completed', CHILD, 'child-1')
-    h.refuse(true)
-    expect(h.send(complete)).toEqual({ accepted: false, reason: 'backpressure' })
     expect(h.tracker.state?.tasks).toHaveLength(1)
-    expect(h.state('parent-1')).toBe('working')
-    h.refuse(false)
-    expect(h.send(complete)).toEqual({ accepted: true })
-    expect(h.state('parent-1')).toBe('completed')
+    h.refuse(true)
+    expect(h.send(turn('turn/completed', CHILD, 'child-1'))).toEqual({ accepted: true })
     expect(h.tracker.state).toBeNull()
     h.dispose()
   })

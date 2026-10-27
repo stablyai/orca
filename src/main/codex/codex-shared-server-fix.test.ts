@@ -2,13 +2,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-process'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 const mocks = vi.hoisted(() => ({
   runProcess: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>(),
   probeCodexSharedServer: vi.fn<(home: string) => Promise<'live' | 'absent' | 'unknown'>>()
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: mocks.runProcess }))
+vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 vi.mock('./codex-shared-server-probe', () => ({
   probeCodexSharedServer: mocks.probeCodexSharedServer
 }))

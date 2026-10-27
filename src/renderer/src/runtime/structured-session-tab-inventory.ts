@@ -1,6 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { refreshLocalStructuredSessionTabs } from './local-structured-session-tabs-sync'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import { refreshLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/inventory-refresh'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { isSessionTabsListAllResult } from './web-session-tabs-sync/tracking'
 

@@ -1,12 +1,11 @@
 import type { WorktreeSetupLaunch } from '../../../shared/worktree/launch-types'
 import { buildSetupRunnerCommand } from './setup-runner'
-import { useAppStore } from '@/store'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
 } from '@/lib/worktree-activation-store-contract'
 
-// Why: accept either a main-generated runner script or a plain TaskPage command string, so callers needn't synthesize a runner file.
+// Accept main runner files and expanded TaskPage commands without synthesizing another script.
 export type IssueCommandLaunch =
   | WorktreeSetupLaunch
   | { command: string; env?: Record<string, string> }
@@ -14,16 +13,14 @@ export type IssueCommandLaunch =
 export function queueSetupAndIssueCommands(
   store: WorktreeActivationStore,
   worktreeId: string,
-  /** Null when the caller opens its own primary surface: setup still gets its own tab, but there is no shell to split from or return focus to. */
+  /** Null when the caller opens its own primary surface: setup still gets its own tab, with no terminal selection to restore. */
   terminalTabId: string | null,
   setup: WorktreeSetupLaunch | undefined,
   issueCommand: IssueCommandLaunch | undefined,
   wrappedSetupCommandStr: string | undefined,
   opts: InitialTerminalOptions | undefined
 ): void {
-  // Why: setup launch location is user-configurable — 'new-tab' keeps setup output off the primary pane; splits keep it adjacent.
   if (setup) {
-    const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
     const setupCommand = {
       command:
         wrappedSetupCommandStr ??
@@ -31,27 +28,19 @@ export function queueSetupAndIssueCommands(
         buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
       env: setup.envVars
     }
-    if (mode === 'new-tab') {
-      const setupTab = store.createTab(worktreeId, undefined, undefined, {
-        recordInteraction: false,
-        ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
-      })
-      // Why: createTab auto-activates the new tab; revert so focus stays on the primary terminal while Setup runs in the background.
-      if (opts?.activateCreatedTabs !== false && terminalTabId) {
-        store.setActiveTab(terminalTabId)
-      }
-      // Why: customTitle overrides the auto "Terminal N" label everywhere the tab renders, so it's the authoritative label source.
-      store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
-      store.queueTabStartupCommand(setupTab.id, setupCommand)
-    } else if (terminalTabId) {
-      store.queueTabSetupSplit(terminalTabId, {
-        ...setupCommand,
-        direction: mode === 'split-horizontal' ? 'horizontal' : 'vertical'
-      })
+    const setupTab = store.createTab(worktreeId, undefined, undefined, {
+      recordInteraction: false,
+      ...(opts?.activateCreatedTabs === false ? { activate: false } : {}),
+      pendingStartup: setupCommand
+    })
+    // createTab auto-activates; restore primary focus while Setup runs in background.
+    if (opts?.activateCreatedTabs !== false && terminalTabId) {
+      store.setActiveTab(terminalTabId)
     }
+    store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
   }
 
-  // Why: issue automation runs in its own split, queued independently from setup so both can start in parallel (separate concerns).
+  // Queue issue work independently in its own split so setup and automation run in parallel.
   if (issueCommand && terminalTabId) {
     // Why: WorktreeSetupLaunch carries a runner-script file to shell out to; the TaskPage variant is already an expanded command string.
     const queuedIssueCommand =

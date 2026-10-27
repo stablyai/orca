@@ -1,3 +1,5 @@
+import { buildCmdJSettingsResults } from '../components/cmd-j/palette-results'
+import { matchesSettingsSearch } from '../components/settings/settings-search'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/repo-types'
@@ -31,6 +33,47 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
+  it.each([false, undefined])(
+    'omits Chat navigation and search when the opt-in is %s',
+    (enabled) => {
+      const sections = buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient: false,
+        nativeChatEnabled: enabled,
+        repos: []
+      })
+      expect(sections.some((section) => section.id === 'chat')).toBe(false)
+      expect(buildCmdJSettingsResults(sections).some((result) => result.sectionId === 'chat')).toBe(
+        false
+      )
+      for (const query of ['Code text size', 'Reset chat appearance']) {
+        expect(
+          sections.some((section) => matchesSettingsSearch(query, section.searchEntries))
+        ).toBe(false)
+      }
+    }
+  )
+
+  it('places Chat directly after Appearance in Interface and moves its search entries', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      nativeChatEnabled: true,
+      repos: []
+    })
+    const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')
+    const chat = sections[appearanceIndex + 1]
+    expect(chat.id).toBe('chat')
+    expect(chat.title).toBe('Chat')
+    expect(chat.group).toBe('interface')
+    for (const query of ['Code text size', 'Reset chat appearance']) {
+      expect(matchesSettingsSearch(query, chat.searchEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, sections[appearanceIndex].searchEntries)).toBe(false)
+    }
+  })
+
   it('puts AI capability panes at the top on desktop', () => {
     expect(ids().slice(0, 10)).toEqual([
       'agents',
@@ -305,8 +348,7 @@ describe('settings navigation metadata', () => {
 
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(terminal?.searchEntries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
-    // Right-click to paste is now exposed on every platform (#8322), so it is
-    // indexed even when only the terminal host — not the client — is Windows.
+    // Right-click paste is indexed on every client platform, including clients of Windows terminal hosts.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
       true
     )
@@ -368,11 +410,7 @@ describe('settings navigation metadata', () => {
     expect(desktopIds.indexOf('privacy')).toBeLessThan(desktopIds.indexOf('advanced'))
   })
 
-  // Note: this exercises the isDev parameter and isWebClient branches only.
-  // Production safety rests on the hard `import.meta.env.DEV` term in the
-  // builder, which is compile-time-inlined per build and cannot be flipped from
-  // a test (vitest always runs with DEV=true) — don't mistake this for full
-  // prod-gate coverage. The bundle exclusion is what guarantees prod safety.
+  // Vitest always has DEV=true; these branches cannot prove the compile-time production gate or bundle exclusion.
   it('shows Dev tools only in desktop development metadata', () => {
     expect(ids()).not.toContain('dev')
     expect(ids({ isDev: true })).toContain('dev')

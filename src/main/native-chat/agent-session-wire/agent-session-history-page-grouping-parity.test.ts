@@ -7,7 +7,7 @@ import {
   oversizedHistoryItem
 } from './agent-session-history-page-bounds'
 
-/** The pre-generator eager grouping, verbatim, as the differential oracle. */
+/** Frozen eager grouping is the differential oracle. */
 function referenceGroups(items: readonly AgentJournalRenderItem[]): AgentJournalRenderItem[][] {
   const groups: AgentJournalRenderItem[][] = []
   for (const item of items) {
@@ -75,7 +75,6 @@ function item(index: number, sequence: number): AgentJournalRenderItem {
   }
 }
 
-/** Every run-length composition of `length` items. */
 function* runLengthCompositions(length: number): Generator<number[]> {
   if (length === 0) {
     yield []
@@ -88,8 +87,7 @@ function* runLengthCompositions(length: number): Generator<number[]> {
   }
 }
 
-/** Build items from run lengths; `repeatSequence` reuses an earlier sequence value
- *  in a later run so non-adjacent duplicates are exercised too. */
+/** Reuse sequence values in separate runs to exercise nonadjacent duplicates. */
 function buildItems(runs: number[], repeatSequence: boolean): AgentJournalRenderItem[] {
   const items: AgentJournalRenderItem[] = []
   let index = 0
@@ -108,7 +106,6 @@ it('matches eager grouping at every newest-window limit for every run shape', ()
     for (const runs of runLengthCompositions(length)) {
       for (const repeatSequence of [false, true]) {
         const items = buildItems(runs, repeatSequence)
-        // Every boundary, including 0, each exact group edge, and past the end.
         for (let limit = 0; limit <= length + 1; limit += 1) {
           expect(
             newestWholeSequenceGroups(items, limit),
@@ -131,7 +128,7 @@ it('matches eager byte bounding at every budget boundary in both directions', ()
       for (const repeatSequence of [false, true]) {
         const items = buildItems(runs, repeatSequence)
         const perItem = historyEntryBytes(items[0]!, submissionBytes)
-        // Sweep exact group-boundary budgets plus one byte either side of each.
+        // Probe exact group budgets and either side of each edge.
         const budgets = new Set<number>([0, 1])
         for (let n = 0; n <= length + 1; n += 1) {
           budgets.add(n * perItem - 1)
@@ -167,7 +164,6 @@ it('matches eager byte bounding at every budget boundary in both directions', ()
       }
     }
   }
-  // The oversized-first-group and partial-window paths must both be exercised.
   expect(truncatedCases).toBeGreaterThan(50)
   expect(partialCases).toBeGreaterThan(50)
 })

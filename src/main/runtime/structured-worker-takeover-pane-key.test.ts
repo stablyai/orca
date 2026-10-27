@@ -1,5 +1,10 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionLease } from '../../shared/agent-session-record'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -8,7 +13,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { OrcaRuntimeWithGetPtyRecordForPaneKey } =
-  await import('./orca-runtime-get-pty-record-for-pane-key')
+  await import('./orchestration/terminal-pane-mail-routing')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -18,16 +23,22 @@ const {
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
-function installRecord(lease: { runtimeKind: string; claimStatus: string }): void {
+function installRecord(lease: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'>): void {
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) =>
-          ({
-            sessionId,
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-          }) as unknown as AgentSessionRecord
+        getConversation: (sessionId: string) =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(
+              agentSessionLeaseFixture({
+                ...lease,
+                sessionId,
+                runtimeFence: 1,
+                deathEvidence: null
+              })
+            )
+          ),
+        listConversations: () => []
       }
     },
     hasSession: () => true
@@ -76,8 +87,7 @@ describe('resolving a structured worker takeover by session', () => {
   })
 
   it('answers nothing for a session that is not an orchestration worker', () => {
-    // A plain chat session owns no worker-terminal resource, so there is no ownership to
-    // relinquish and nothing to mark.
+    // Plain chats own no worker resource, so takeover has nothing to relinquish.
     installRecord({ runtimeKind: 'native', claimStatus: 'live' })
     expect(runtime().getStructuredWorkerPaneKeyForSession(SESSION_ID)).toBeNull()
   })

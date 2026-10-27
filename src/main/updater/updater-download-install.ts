@@ -9,8 +9,8 @@ import { isExternallyManagedLinuxInstall } from '../linux-update-package-type'
 import { LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE } from '../linux-package-downloaded-status'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
+import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
 
-/** Coordinates renderer-facing download/install actions and their duplicate guards. */
 export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
   protected quitAndInstall(): void {
     if (
@@ -30,6 +30,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     this.finishActiveUpdateCheckAttempt()
     this.clearBackgroundCheckLaunchPending()
     if (
+      !this.isMacStagingDeferredToInstall() &&
       deferMacQuitUntilInstallerReady(
         this.currentStatus,
         this.hasInstallableDownloadedVersion(),
@@ -43,7 +44,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (process.platform === 'darwin') {
       setMacInstallPreflightInProgress(true)
     }
-    // Why: defer the quit a tick so the renderer can flush dismissals/state before windows start closing.
+    // Defer quit one tick so the renderer can flush state before windows close.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
       void this.performQuitAndInstall()
     }, QUIT_AND_INSTALL_DELAY_MS)
@@ -60,7 +61,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     ) {
       return
     }
-    // Why: allow retry from 'error' (availableVersion stays cached) so the error card's Retry Download button works.
+    // Retain availableVersion after errors so Retry Download still works.
     const canStart =
       this.currentStatus.state === 'available' ||
       (this.currentStatus.state === 'error' && this.hasInstallableDownloadedVersion())
@@ -72,15 +73,12 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (!version) {
       return
     }
-    // Why: main owns this verdict, not the card — an older renderer or a direct IPC call must not be
-    // able to spend a package download that this host could never install.
+    // Enforce host installability in main for older renderers and direct IPC callers.
     if (isExternallyManagedLinuxInstall()) {
       recordUpdaterLifecycle('linux_package_externally_managed_download_blocked', {
         version
       })
-      // Why: a pinned jump resolves to 'release' on Linux (no dev-channel artifact is built for it),
-      // so refusing without unwinding would strand isPinnedBuildActive and silently kill every
-      // background check for the rest of the process. A no-op on the ordinary release path.
+      // A refused Linux pin still owns the release feed; unwind it or background checks remain disabled.
       this.clearAvailableUpdateContext()
       this.restoreReleaseUpdateSource()
       this.sendStatus({
@@ -97,19 +95,30 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'
     beginMacUpdateDownload()
-    // Why: setup can take seconds before progress emits; surface acceptance now so the action never looks inert.
+    // Acknowledge acceptance before setup delays progress events so the card responds immediately.
     this.sendStatus({ state: 'downloading', percent: 0, version })
-    this.getAutoUpdater()
-      .downloadUpdate()
-      .catch((err) => {
-        this.downloadInFlight = false
-        const message = String(err?.message ?? err)
-        if (localBuildDownload) {
-          this.sendLocalBuildErrorAndRestore(message)
-        } else {
-          this.sendErrorStatus(message)
-        }
-      })
+    const startDownload = (): void => {
+      this.getAutoUpdater()
+        .downloadUpdate()
+        .catch((err) => {
+          this.downloadInFlight = false
+          const message = String(err?.message ?? err)
+          if (localBuildDownload) {
+            this.sendLocalBuildErrorAndRestore(message)
+          } else {
+            this.sendErrorStatus(message)
+          }
+        })
+    }
+    // Prepare before download because Squirrel stages on completion unless staging is deferred to install.
+    const preparingStaging = this.isMacStagingDeferredToInstall()
+      ? null
+      : prepareThisProcessShipItStaging()
+    if (preparingStaging) {
+      void preparingStaging.then(startDownload)
+    } else {
+      startDownload()
+    }
   }
 
   protected isQuittingForUpdate(): boolean {

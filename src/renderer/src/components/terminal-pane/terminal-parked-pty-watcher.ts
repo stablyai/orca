@@ -1,6 +1,6 @@
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
@@ -41,14 +41,9 @@ export function startParkedPtyWatcher(args: {
   const state = useAppStore.getState()
   const ptyId = pane.ptyId
   // Why: the tab model can change after the park decision, and legacy leaf ids make pane keys throw.
-  // Why: the pane's primary exit handler is gone from unmount and this sidecar
-  // arrives a passive effect later, so an exit landing in between is buffered
-  // and replayed to nobody. Registering would pin a dead PTY as a live parked
-  // owner, and the runtime graph publishes its leaf on exactly that claim.
+  // An exit can land between primary unmount and passive sidecar install; refusing its buffered tombstone prevents publishing a dead parked owner.
   if (ptyId && !entry.disposersByPtyId.has(ptyId) && hasPreHandlerPtyExit(ptyId)) {
-    // Mirror handlePtyExit's first act: no live pane will ever overwrite this
-    // slot, so leaving it would strand a dead pane's last title (a 'working'
-    // agent title pins worktree status) until reveal or close.
+    // Clear dead runtime titles immediately; no live pane remains to remove a stale working status.
     state.clearRuntimePaneTitle(tab.id, pane.paneId)
     return
   }
@@ -61,25 +56,20 @@ export function startParkedPtyWatcher(args: {
     return
   }
   const handlePtyExit = (code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
+    // Replacement waits for a future connect, but the dead process’s working title must clear now.
+    useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
     if (isPtyExitReplacedByRestart(ptyId)) {
       // Why: the pane lives on under its replacement PTY; only this watcher's subscription ends.
       entry.disposersByPtyId.get(ptyId)?.()
       entry.disposersByPtyId.delete(ptyId)
       return
     }
-    useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
-    // A negative code is a synthetic loss sentinel, not a death certificate.
-    // Preserve the tab so host shutdown/reconnect cannot be mistaken for an
-    // explicit close by either this watcher or the orphan sweep.
+    // Negative codes prove lost contact, not process death; preserve the tab through host shutdown/reconnect.
     const provenExit = isProvenProcessExit(code)
     if (!provenExit) {
       useAppStore.getState().markUnverifiedPtyLoss(tab.id)
     }
-    // Why: detach drops the session-bound exit observer (it pinned the disposed
-    // pane's xterm buffers), so this sidecar is the sole owner of a parked PTY's
-    // exit. A sleep/shutdown exit must keep the tab AND its layout — revival
-    // belongs to the wake path — and must leave the buffered exit in place as
-    // the tombstone that stops watcher syncs re-pinning the dead PTY.
+    // Detach removed the primary observer; this sidecar must preserve sleep state/layout and keep the buffered-exit tombstone against stale watcher re-registration.
     if (!hadPrimary && isSleepPreservedParkedPtyExit(ptyId)) {
       entry.disposersByPtyId.get(ptyId)?.()
       entry.disposersByPtyId.delete(ptyId)
@@ -106,20 +96,11 @@ export function startParkedPtyWatcher(args: {
       entry.disposersByPtyId.delete(ptyId)
       return
     }
-    // Why: parity with the session observer's sole-newborn guard (pty-exit-hibernate) —
-    // a worktree's only fresh-spawned shell nobody ever typed into can die on shell
-    // startup (e.g. a failing .envrc); keep its tab readable instead of closing it and
-    // stranding the user on Landing. Split siblings keep their own branch above.
+    // Match the sole-newborn guard: keep an untouched startup shell’s failure readable instead of stranding the user on Landing.
     if (pane.untouchedFreshSpawn) {
       entry.disposersByPtyId.get(ptyId)?.()
       entry.disposersByPtyId.delete(ptyId)
-      // Consume the buffered exit exactly as the pre-fix primary observer did — NOT
-      // the sleep branch's tombstone. A tombstone would send reveal down connectIpcPty's
-      // exitedBeforeAttach path, draining the exit into the reattached session (where
-      // spawnedFreshPtyId is null, so the guard fails) and closing the tab the moment
-      // the user reveals it. Consumption cannot let a later watcher sync re-register
-      // this dead PTY: paneIdByPtyId deliberately keeps the slot, so
-      // reconcileParkedWatcherPtyIds never computes it as added.
+      // Consume newborn exit instead of retaining a sleep tombstone: replay on reveal would bypass the fresh-spawn guard and close the tab. Retained paneIdByPtyId prevents re-registration.
       consumePreHandlerPtyState(ptyId)
       return
     }
@@ -162,12 +143,7 @@ export function startParkedPtyWatcher(args: {
   })
 }
 
-// Why these three markers: a pending renderer shutdown transaction, a
-// suppressed intentional restart, or a committed sleep (host-initiated remote
-// sleep marks it from the exit payload) all mean this exit is orchestrated —
-// closing the tab would destroy state the wake/restart path owns. Host-sleep
-// dispositions are remote-runtime-only and remote PTYs never reach this
-// sidecar, so consumeCommittedPtyShutdownExit runs without an environment id.
+// Shutdown, suppressed restart and committed sleep markers preserve state for wake/restart. Remote host-sleep dispositions never reach this sidecar, so no environment ID is needed.
 function isSleepPreservedParkedPtyExit(ptyId: string): boolean {
   const state = useAppStore.getState()
   if (state.isPtyShutdownPending(ptyId) || state.suppressedPtyExitIds[ptyId]) {

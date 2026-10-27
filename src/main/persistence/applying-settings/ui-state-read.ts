@@ -33,7 +33,6 @@ import {
 } from './ui-selection-normalization'
 import { stripMainOwnedTelemetryMarkerFromUI } from './ui-interaction-merge'
 
-/** Returns normalized UI state with the authoritative active view and without the main-owned telemetry marker. */
 export function getPersistedUI(
   state: PersistedState,
   activeView: PersistedState['ui']['activeView']
@@ -58,7 +57,8 @@ export function getPersistedUI(
     syncTaskStatusFromWorkspaceBoard: state.ui?.syncTaskStatusFromWorkspaceBoard === true,
     usagePercentageDisplay: normalizeUsagePercentageDisplay(state.ui?.usagePercentageDisplay),
     statusBarUsageMode: normalizeStatusBarUsageMode(state.ui?.statusBarUsageMode),
-    // Why: strict boolean coercion so a missing/legacy value reads as false (first-run notice still fires).
+    statusBarCompactChangeNoticeDismissed:
+      state.ui?.statusBarCompactChangeNoticeDismissed !== false,
     trayMinimizeNoticeShown: state.ui?.trayMinimizeNoticeShown === true,
     osc52ClipboardDefaultOnNoticePending: state.ui?.osc52ClipboardDefaultOnNoticePending === true,
     markdownTocPanelWidth: clampMarkdownTocPanelWidth(state.ui?.markdownTocPanelWidth),

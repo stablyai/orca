@@ -1,19 +1,24 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'
-import type {
-  RuntimeBrowserCommandHost,
-  RuntimeBrowserCommands
-} from '../runtime/orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import { isProcessAlive } from '../../shared/serve-bundle-coordination'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
+import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
+import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
+import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
+import { electronServeEnvironment } from './electron-serve-browser-environment'
 import {
   ElectronSidecarTabRegistry,
   ElectronSidecarTabSchema,
@@ -52,33 +57,6 @@ async function reserveLoopbackPort(): Promise<number> {
   })
   return address.port
 }
-function electronServeEnvironment(userDataPath: string): NodeJS.ProcessEnv {
-  const environment = { ...process.env }
-  for (const key of [
-    'ORCA_E2E_USER_DATA_DIR',
-    'ORCA_USER_DATA',
-    'ORCA_USER_DATA_PATH',
-    'AGENT_BROWSER_ARGS',
-    'AGENT_BROWSER_AUTO_CONNECT',
-    'AGENT_BROWSER_CDP',
-    'AGENT_BROWSER_ENGINE',
-    'AGENT_BROWSER_EXECUTABLE_PATH',
-    'AGENT_BROWSER_HEADED',
-    'AGENT_BROWSER_PROFILE',
-    'AGENT_BROWSER_PROVIDER',
-    'AGENT_BROWSER_SESSION',
-    'AGENT_BROWSER_SESSION_NAME',
-    'AGENT_BROWSER_STATE'
-  ]) {
-    delete environment[key]
-  }
-  // Keep Electron's native home override active in isolated sidecars.
-  if (process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR) {
-    environment.ORCA_E2E_USER_DATA_DIR = userDataPath
-  }
-  return environment
-}
-
 function signalProcess(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(pid, signal)
@@ -87,28 +65,21 @@ function signalProcess(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-function processIsLive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
-}
-
 export class ElectronServeBrowserProcess {
-  private child: SpawnedProcess | null = null
+  private child: ReturnType<typeof spawnProcess> | null = null
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
   private sidecarDataPath: string | null = null
 
   constructor(private readonly executablePath: string) {}
 
-  async start(): Promise<void> {
+  async start(signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     const temporaryRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
     const userDataPath = await mkdtemp(join(temporaryRoot, 'orcad-browser-'))
     this.sidecarDataPath = userDataPath
     const port = await reserveLoopbackPort()
+    signal?.throwIfAborted()
     const child = spawnProcess({
       program: this.executablePath,
       args: [
@@ -117,14 +88,20 @@ export class ElectronServeBrowserProcess {
         String(port),
         '--serve-json',
         '--serve-no-pairing',
-        ...(process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR
-          ? ['--password-store=basic', '--use-mock-keychain']
-          : []),
+        ...electronIsolatedProfileSwitches(process.env),
+        ...headlessServeOzonePlatformSwitches(process.platform),
         `--user-data-dir=${userDataPath}`
       ],
-      env: electronServeEnvironment(userDataPath)
+      env: { ...electronServeEnvironment(userDataPath), [BROWSER_SIDECAR_OWNER_ENV]: '1' },
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+      serialization: 'json'
     })
     this.child = child
+    let spawnError: unknown = null
+    // Bundle swaps can race restart; report ENOENT as start failure without crashing orcad.
+    child.on('error', (error) => {
+      spawnError = error
+    })
     for (const stream of [child.stdout, child.stderr]) {
       stream?.on('error', () => undefined)
       stream?.resume()
@@ -132,12 +109,14 @@ export class ElectronServeBrowserProcess {
     const deadline = Date.now() + START_TIMEOUT_MS
     let lastError: unknown = null
     while (Date.now() < deadline) {
+      signal?.throwIfAborted()
       const metadata = readRuntimeMetadata(userDataPath)
       if (metadata) {
         try {
           const status = RuntimeStatusResult.parse(
             await sendOrcadSidecarRequest(metadata, 'status.get', undefined, 5_000)
           )
+          signal?.throwIfAborted()
           if (status.capabilities?.includes('browser.headless.v1')) {
             this.metadata = metadata
             return
@@ -147,10 +126,14 @@ export class ElectronServeBrowserProcess {
           lastError = error
         }
       }
+      if (spawnError) {
+        lastError = spawnError
+        break
+      }
       if (child.exitCode !== null || child.signalCode !== null) {
         break
       }
-      await delay(100)
+      await delay(100, undefined, { signal })
     }
     throw new Error(
       `Installed Electron browser provider did not become ready: ${
@@ -161,6 +144,8 @@ export class ElectronServeBrowserProcess {
 
   createCommands(host: RuntimeBrowserCommandHost): RuntimeBrowserCommands {
     return new Proxy({} as RuntimeBrowserCommands, {
+      // Startup checks membership before resolving commands dynamically.
+      has: (_target, property) => typeof property === 'string' && property !== 'then',
       get: (_target, property) => {
         if (property === 'then') {
           return undefined
@@ -173,7 +158,13 @@ export class ElectronServeBrowserProcess {
     })
   }
   isAvailable(): boolean {
-    return this.metadata !== null && processIsLive(this.metadata.pid)
+    return this.metadata !== null && isProcessAlive(this.metadata.pid)
+  }
+
+  /** Read child exit state so recycled PIDs cannot identify an unrelated process. */
+  pid(): number | null {
+    const child = this.child
+    return child?.pid && child.exitCode === null && child.signalCode === null ? child.pid : null
   }
 
   async stop(): Promise<void> {
@@ -187,15 +178,18 @@ export class ElectronServeBrowserProcess {
     if (sidecarPid) {
       signalProcess(sidecarPid, 'SIGTERM')
       const deadline = Date.now() + STOP_TIMEOUT_MS
-      while (processIsLive(sidecarPid) && Date.now() < deadline) {
+      while (isProcessAlive(sidecarPid) && Date.now() < deadline) {
         await delay(50)
       }
-      if (processIsLive(sidecarPid)) {
+      if (isProcessAlive(sidecarPid)) {
         signalProcess(sidecarPid, 'SIGKILL')
       }
     }
     if (sidecarDataPath) {
-      await rm(sidecarDataPath, { recursive: true, force: true })
+      // Windows helpers may briefly hold this temp profile; cleanup failure must not strand the instance lock.
+      await removeTree(sidecarDataPath).catch((error: unknown) =>
+        console.warn('[orcad] Electron browser sidecar data was not removed:', error)
+      )
     }
   }
 
@@ -220,7 +214,7 @@ export class ElectronServeBrowserProcess {
     const original = (args[0] ?? {}) as Record<string, unknown>
     const worktreeId =
       typeof original.worktree === 'string'
-        ? (await host.resolveWorktreeSelector(original.worktree)).id
+        ? (await host.resolveBrowserWorkspace(original.worktree)).id
         : undefined
     const params: Record<string, unknown> = { ...original, worktree: undefined }
     const requestedPageId = typeof original.page === 'string' ? original.page : undefined
@@ -233,10 +227,7 @@ export class ElectronServeBrowserProcess {
         this.tabs.require(requestedPageId, worktreeId)
         return { browserPageId: requestedPageId }
       }
-      // Why drop `page`: the runtime advertises browser.tabCreate.known-id.v1, so web
-      // clients send a provisional id for a page that does not exist yet. The sidecar
-      // mints its own id and the caller's is adopted as the public one below; passing
-      // the unknown id through would make the generic branch require() a missing page.
+      // Sidecars mint their own IDs; adopt the caller’s provisional ID after creation.
       delete params.page
     }
 
@@ -266,7 +257,12 @@ export class ElectronServeBrowserProcess {
 
     let result: unknown
     try {
-      result = await sendOrcadSidecarRequest(metadata, rpcMethod, params)
+      result = await sendOrcadSidecarRequest(
+        metadata,
+        rpcMethod,
+        params,
+        method === 'browserWait' ? browserWaitRequestTimeoutMs(params.timeout) : undefined
+      )
     } catch (error) {
       if (
         targetPage &&

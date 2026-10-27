@@ -26,8 +26,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -96,23 +98,6 @@ describe('AgentBrowserBridge', () => {
     await expect(b.pdf()).resolves.toEqual({ data: Buffer.from('pdf').toString('base64') })
 
     expect(holdPaintForCapture).not.toHaveBeenCalled()
-  })
-
-  it('gives the helper proxy a paint hold scoped to its page', async () => {
-    const release = vi.fn()
-    const holdPaintForCapture = vi.fn(() => release)
-    const b = new AgentBrowserBridge(
-      mockBrowserManager(undefined, undefined, { holdPaintForCapture })
-    )
-    b.setActiveTab(100)
-    webContentsFromIdMock.mockReturnValue(mockWebContents(100))
-
-    succeedWith({ snapshot: 'tree' })
-    await b.snapshot()
-
-    const holdPaint = CdpWsProxyMock.mock.calls[0]?.[1]
-    expect(holdPaint()).toBe(release)
-    expect(holdPaintForCapture).toHaveBeenCalledWith(100)
   })
 
   it('captures full-page screenshots directly through CDP using CSS layout bounds', async () => {

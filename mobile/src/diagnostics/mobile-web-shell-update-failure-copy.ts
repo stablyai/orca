@@ -8,7 +8,7 @@ import type {
 } from '../mobile-web-shell/mobile-web-shell-update-failure'
 import { formatTimeAgo } from '../worktree/agent-row-display'
 
-/** Each phrase restates the recorded code and nothing more: this row claims only what was written. */
+// Describe only the recorded code; this row has no further evidence about the failure.
 const REASON_COPY: Record<MobileWebShellUpdateFailureReason, string> = {
   'no-connection': 'not connected to the host',
   'connection-lost': 'the connection dropped',
@@ -41,7 +41,9 @@ const WALL_COPY: Record<MobileWebShellUpdateFailureWall, string> = {
   'bundle-unavailable': 'the host has no workspace bundle',
   'bundle-shell-too-old': 'this app is too old for the saved bundle',
   'host-too-old-for-bundle': 'the host is too old for the saved bundle',
-  'bundle-too-old-for-host': 'the saved bundle is too old for the host'
+  'bundle-too-old-for-host': 'the saved bundle is too old for the host',
+  'page-route-unlisted': "the host's workspace does not include this screen",
+  'page-route-grant-missing': 'this screen needs a newer app'
 }
 
 function generation(buildId: string): string {
@@ -61,6 +63,8 @@ function outcomeCopy(failure: MobileWebShellUpdateFailure): string {
         : `Blocked: ${WALL_COPY[failure.wall]}.`
     case 'native-route':
       return 'Showed the native screen.'
+    case 'route-unavailable':
+      return 'Showed that the screen is not available.'
     case 'failed':
       return 'Showed the failure screen.'
     case 'waiting':
@@ -68,8 +72,6 @@ function outcomeCopy(failure: MobileWebShellUpdateFailure): string {
   }
 }
 
-/** "Last update from Host 1 failed 12m ago: asset checksum mismatch (generation 3f2a…)." plus what
- *  the shell showed instead. */
 export function formatUpdateFailure(
   failure: MobileWebShellUpdateFailure,
   hostName: string,

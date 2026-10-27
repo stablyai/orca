@@ -8,8 +8,7 @@ import type { AgentStatusEntry, AgentStatusPayload } from '../../../../shared/ag
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
-// The transcript source and the composer are stubbed; the wire under test is
-// store status -> resolved view -> the shared message list and prompt card.
+// Stub transcript/composer to exercise store status through the view into shared turn and prompt rendering.
 const retained = vi.hoisted((): { session: NativeChatLiveSession | null } => ({ session: null }))
 vi.mock('./use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
@@ -17,6 +16,7 @@ vi.mock('./use-native-chat-retained-session', () => ({
 vi.mock('./NativeChatComposer', () => ({ NativeChatComposer: () => null }))
 
 const { NativeChatResolvedView } = await import('./NativeChatResolvedView')
+const { TooltipProvider } = await import('@/components/ui/tooltip')
 const { useAppStore } = await import('../../store')
 const { installNativeChatMessageListTestViewport } =
   await import('./native-chat-message-list-test-viewport')
@@ -62,8 +62,7 @@ const stepCall: NativeChatMessage = {
   source: 'transcript'
 }
 
-// `status` and `hookAwaitingInput` are what the live session reconciles from the
-// same hook row; the test states both so the view is fed a consistent session.
+// State both reconciled fields so the fixture represents a consistent live session.
 function transcript(
   status: NativeChatLiveSession['status'],
   hookAwaitingInput: boolean,
@@ -110,17 +109,19 @@ function patchStatus(fields: Partial<AgentStatusEntry>): void {
 
 function renderPane(): void {
   render(
-    <NativeChatResolvedView
-      paneKey={paneKey}
-      agent="claude"
-      sessionId="session-state"
-      transcriptPath={null}
-      isVisible
-      isFocusedGroup={false}
-      targetPtyId="pty-state"
-      terminalTabId="tab-state"
-      ownsTabWideLaunchDraft={false}
-    />
+    <TooltipProvider>
+      <NativeChatResolvedView
+        paneKey={paneKey}
+        agent="claude"
+        sessionId="session-state"
+        transcriptPath={null}
+        isVisible
+        isFocusedGroup={false}
+        targetPtyId="pty-state"
+        terminalTabId="tab-state"
+        ownsTabWideLaunchDraft={false}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -139,9 +140,6 @@ afterEach(() => {
   useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
 })
 
-// A terminal-backed pane renders through the structured chat's own turn-status
-// UI: the clock bar under the prompt, the live line at the tail, and the row a
-// question uses when the agent waits on the reader.
 describe('NativeChatResolvedView turn status', () => {
   it('counts the working turn from the host-stamped epoch, with the live line at the tail', () => {
     retained.session = transcript('working', false)
@@ -162,7 +160,6 @@ describe('NativeChatResolvedView turn status', () => {
 
       renderPane()
 
-      // A whole phrase: there is no question to name after a colon.
       expect(screen.getByText('Awaiting user input')).toBeInTheDocument()
       expect(liveActivityLine()).toBeNull()
       // The turn runs on behind the wait, as a structured turn does behind its card.
@@ -191,15 +188,13 @@ describe('NativeChatResolvedView turn status', () => {
 
     renderPane()
 
-    // One row says it: the question's own, not a second one at the tail.
     expect(document.querySelectorAll('[data-native-chat-ask-row="awaiting"]')).toHaveLength(1)
     expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
     expect(screen.getAllByText('Which name?').length).toBeGreaterThan(0)
     expect(screen.queryByText('Asked:')).toBeNull()
   })
 
-  // Answering a terminal-only prompt means leaving the chat, which remounts it on return; a reload
-  // also starts the store with no state history. The host's stamp covers both.
+  // Terminal round trips and reloads lose client history; the host’s turn-start stamp must retain timing.
   it("counts a turn it first sees after a wait from the host's turn start, not the last state", () => {
     retained.session = transcript('working', false)
     setStatus({ state: 'working' }, 5_000)
@@ -210,12 +205,10 @@ describe('NativeChatResolvedView turn status', () => {
     expect(screen.getByText('Working for 1m 30s')).toBeInTheDocument()
   })
 
-  // The host recorded the turn's end, so a pane mounted after it (a switch to the terminal and
-  // back) folds it behind its duration instead of drawing it unfinished.
+  // A remounted pane must use the host’s recorded end and duration instead of drawing an unfinished turn.
   it('shows the host-ended latest turn with its host duration after a remount', () => {
     retained.session = transcript('ready', false, [userTurn, stepCall])
     setStatus({ state: 'done' })
-    // One clock read: the duration is the difference of these two stamps.
     const now = Date.now()
     patchStatus({ stateStartedAt: now - 10_000, turnStartedAt: now - 100_000 })
 
@@ -225,8 +218,7 @@ describe('NativeChatResolvedView turn status', () => {
     expect(screen.getByRole('button', { name: 'Toggle turn details' })).toBeInTheDocument()
   })
 
-  // The store's staleness drops a silent row after 30 minutes. A wait left unanswered that long
-  // must not read as a finished turn: nothing says it ended.
+  // Store staleness alone cannot prove an unanswered turn ended.
   it('does not settle a turn the host went quiet on', () => {
     retained.session = transcript('ready', true, [userTurn, stepCall])
     setStatus({ state: 'waiting' }, 60_000)

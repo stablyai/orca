@@ -1,22 +1,17 @@
 import { readFileSync } from 'node:fs'
 import { getDaemonPidPath } from './daemon-spawner'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
-import {
-  getPsProcessIdentityAsync,
-  queryWindowsProcessIdentity
-} from './daemon-process-identity-query'
+import { getPsProcessIdentityAsync, type ProcessIdentity } from './daemon-process-identity-query'
+import { queryWindowsProcess } from './daemon-process-inspection'
 import {
   START_TIME_TOLERANCE_MS,
   startTimeMatches,
   startTimesWithinTolerance
 } from './daemon-process-start-time'
 import { PROTOCOL_VERSION } from './types'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 
-// Why: on Windows the pid file's startedAtMs is the daemon's self-reported
-// Node start time, while verification reads the OS process creation time —
-// the gap between them is the exe bootstrap, which AV/disk pressure can
-// stretch to seconds. Pid recycling differs by minutes-to-days, so a wide
-// tolerance keeps the guard effective without false mismatches.
+// Windows OS creation precedes Node self-report; allow bootstrap delays from antivirus or disk pressure.
 const WIN32_START_TIME_TOLERANCE_MS = 10_000
 
 export function commandLineMatchesDaemon(
@@ -35,13 +30,27 @@ export function isNoSuchProcessError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ESRCH'
 }
 
-/**
- * 'unknown' is load-bearing: a failed inspection is not evidence that the recorded PID is
- * someone else's. `ps` runs under a 2s budget and PowerShell CIM under 3s, and a loaded
- * machine blows both — reading that as "not our daemon" is what authorized reclaiming a live
- * daemon's ownership in the first place.
- */
+/** Inspection failures are unknown, never proof that a live daemon lost ownership. */
 export type DaemonProcessIdentity = 'match' | 'mismatch' | 'unknown'
+
+async function queryWindowsProcessIdentity(pid: number): Promise<ProcessIdentity | null> {
+  const startedAt = performance.now()
+  try {
+    const evidence = await queryWindowsProcess(pid)
+    // A signal-live PID with an absent or denied table row has unknown identity.
+    return evidence.status === 'present' && evidence.commandLine
+      ? { commandLine: evidence.commandLine, startedAtMs: evidence.startedAtMs }
+      : null
+  } finally {
+    if (isStartupDiagnosticsEnabled()) {
+      logStartupDiagnostic('daemon-pid-check', {
+        t: Math.round(performance.now()),
+        pid,
+        ms: Math.round(performance.now() - startedAt)
+      })
+    }
+  }
+}
 
 export async function inspectDaemonProcessIdentity(
   pid: number,
@@ -52,8 +61,7 @@ export async function inspectDaemonProcessIdentity(
   try {
     process.kill(pid, 0)
   } catch (error) {
-    // Why: only ESRCH proves the process is gone. EPERM means it exists and belongs to
-    // another user — reading that as absence deletes a live daemon's ownership.
+    // Only ESRCH proves absence; EPERM must not authorize ownership cleanup.
     return isNoSuchProcessError(error) ? 'mismatch' : 'unknown'
   }
 
@@ -64,9 +72,7 @@ export async function inspectDaemonProcessIdentity(
     if (identity === null) {
       return 'unknown'
     }
-    // Why: image names are too broad after PID reuse. Match the daemon entry
-    // plus the exact socket/token args so we only kill the daemon for this
-    // userData protocol endpoint.
+    // Image names alone cannot distinguish a recycled PID from this protocol endpoint.
     return verdict(
       commandLineMatchesDaemon(identity.commandLine, socketPath, tokenPath) &&
         startTimesWithinTolerance(identity.startedAtMs, startedAtMs, WIN32_START_TIME_TOLERANCE_MS)
@@ -120,10 +126,7 @@ export async function getDaemonLaunchIdentity(
     return parsedPid.entryPath === expectedEntryPath ? 'match' : 'mismatch'
   }
 
-  // Why: older pid files did not persist entryPath. The command line still
-  // carries daemon-entry.js, so use it to stop dev worktrees from reusing a
-  // daemon forked from a deleted sibling checkout. If command-line probing is
-  // unavailable, fail open so we don't kill live sessions unnecessarily.
+  // Older records lack entryPath; use argv to avoid adopting a daemon from a deleted sibling checkout.
   const commandLine = await getDaemonCommandLine(parsedPid.pid)
   if (!commandLine) {
     return 'unknown'

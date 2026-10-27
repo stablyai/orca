@@ -11,6 +11,7 @@ import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { bindClaudeContextUsageCapture } from './claude-context-usage'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const journals = createTrackedJournalOpener()
 let root: string
@@ -104,14 +105,13 @@ async function openJournal(): Promise<AgentSessionJournal> {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'claude',
-      providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
+      providerHandle: claudeProviderHandle('claude-session', null)
     },
     now: () => 9_000,
     stateDirectory: join(root, 'orca-session')
   })
 }
 
-/** One acquisition: a fresh sink and translator over the session's journal. */
 function acquire(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
@@ -155,7 +155,6 @@ describe('context usage across a restart', () => {
     expect(ring(journal)).toMatchObject({ usedTokens: 150_000, windowTokens: 1_000_000 })
     before.release()
 
-    // A new acquisition builds a new translator; it holds no turn of its own.
     const after = acquire(journal)
     after.translator.handle(compactBoundary(10_000))
     await after.settle()
@@ -192,7 +191,6 @@ describe('context usage across a restart', () => {
     after.translator.handle(assistantFrame('reply-b', 11_000, 160_000))
     await after.settle()
     expect(ring(journal)).toMatchObject({ usedTokens: 160_000, windowTokens: 1_000_000 })
-    // Adopted: a response on another model says the journal's window no longer serves.
     after.translator.handle(assistantFrame('reply-b2', 12_000, 170_000, 'claude-sonnet-5'))
     await after.settle()
     expect(ring(journal)).toBeNull()
@@ -210,7 +208,6 @@ describe('context usage across a restart', () => {
     crashed.translator.handle(userFrame('turn-b', 4_000))
     crashed.translator.handle(assistantFrame('reply-b', 5_000, 120_000))
     await crashed.settle()
-    // The child dies with turn-b running; nothing ends it from the provider side.
     crashed.release()
 
     await settleStaleStructuredAgentSessionState({
@@ -232,7 +229,6 @@ describe('context usage across a restart', () => {
     live.translator.handle(userFrame('turn-a', 1_000))
     live.translator.handle(assistantFrame('reply-a', 2_000, 20_000))
     await live.settle()
-    // The write is queued while the host settles the turn behind the sink's back.
     live.detach()
     live.translator.handle(assistantFrame('reply-a2', 3_000, 30_000))
     await settleStaleStructuredAgentSessionState({
@@ -266,7 +262,6 @@ describe('context usage across a restart', () => {
     const expected = { usedTokens: 150_000, windowTokens: 1_000_000, percentage: 15 }
     expect(ring(journal)).toMatchObject(expected)
     expect(journal.contextUsage()).toMatchObject({ window: { tokens: 1_000_000 } })
-    // A client whose loaded page lacks the turn reads the host's answer.
     expect(selectStructuredAgentContextUsage([], journal.contextUsage())).toMatchObject(expected)
     live.release()
   })

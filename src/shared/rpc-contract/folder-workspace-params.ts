@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
 import { isTuiAgent } from '../tui-agent-config'
@@ -34,6 +35,8 @@ export const FolderWorkspaceCreate = z
     folderPath: OptionalString.nullable().optional(),
     connectionId: OptionalString.nullable().optional(),
     linkedTask: FolderWorkspaceLinkedTask.optional(),
+    linkedItems: WorkspaceAttachmentsSchema.optional(),
+
     linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
     createdWithAgent: z.string().refine(isTuiAgent).optional(),
     pendingFirstAgentMessageRename: z.boolean().optional()
@@ -47,6 +50,9 @@ export const FolderWorkspaceUpdate = z.object({
       name: OptionalString,
       folderPath: OptionalString,
       linkedTask: FolderWorkspaceLinkedTask.optional(),
+      linkedItems: WorkspaceAttachmentsSchema.optional(),
+      linkedItemsBase: WorkspaceAttachmentsSchema.optional(),
+      linkedItemsSelectionChanged: z.boolean().optional(),
       linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
       comment: z.string().optional(),
       isArchived: z.boolean().optional(),

@@ -1,3 +1,4 @@
+import { compileSessionSearchProjectOwnership } from '../ai-vault-search/session-search-project-ownership'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
@@ -16,12 +17,6 @@ import {
   type AiVaultSessionSearchInit
 } from './session-scanner-service-protocol'
 
-/**
- * The child, booted the way a spawn boots it: an init frame and messages, with
- * no renderer, no Electron and no scan request. What this proves is that consent
- * alone constructs the indexer and that every search answer crosses the protocol.
- */
-
 const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 
 let harness: SessionSearchIndexerHarness
@@ -34,7 +29,6 @@ function emit(message: AiVaultServiceParentMessage): void {
   process.emit('message', message, undefined)
 }
 
-/** One request, and the reply the child sent for it, still discriminated by operation. */
 async function call(body: AiVaultServiceRequestBody): Promise<AiVaultServiceResultValue> {
   const id = nextId++
   emit({ ...body, id })
@@ -139,6 +133,30 @@ it('answers a search and a reconcile over the protocol', async () => {
   }
 })
 
+it('executes the canonical selection through the actual child message executor and native index', async () => {
+  const selection = await compileSessionSearchProjectOwnership(
+    {
+      repos: [{ id: 'actual', path: '/repo/app', displayName: 'app', badgeColor: '', addedAt: 1 }],
+      projects: [],
+      projectHostSetups: [],
+      worktreeMeta: {},
+      settings: { workspaceDir: '', nestWorkspaces: false }
+    },
+    'repo:actual'
+  )
+  const response = await call({
+    type: 'request',
+    operation: 'searchSessions',
+    request: { query: 'distinctive' },
+    hostScope: { kind: 'canonical', selection }
+  })
+  expect(response.operation).toBe('searchSessions')
+  if (response.operation !== 'searchSessions') {
+    throw new Error('wrong operation')
+  }
+  expect(response.value).toMatchObject({ kind: 'results', hits: [{ sessionId: SESSION_ID }] })
+})
+
 it('discovers a new root through the parent exchange on manual reconciliation', async () => {
   const lateHome = join(harness.root, 'late-home')
   const id = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -175,7 +193,6 @@ it('answers disabled once consent is withdrawn, without a respawn', async () => 
   emit({ type: 'sessionSearch', init: searchInit(false) })
   expect(await searchSessions('distinctive')).toEqual({ kind: 'unavailable', reason: 'disabled' })
   expect(await searchStatus()).toMatchObject({ enabled: false, phase: 'idle' })
-  // Re-consenting reuses the index that was left on disk rather than rebuilding it.
   emit({ type: 'sessionSearch', init: searchInit(true) })
   expect((await searchSessions('distinctive')).kind).toBe('results')
 })

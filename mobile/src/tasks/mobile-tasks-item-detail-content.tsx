@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { isBrokenCheck } from '../../../src/shared/pr-checks-fix-prompt'
 import {
   View,
   ActivityIndicator,
@@ -14,7 +15,6 @@ import {
   taskKindLabel,
   SHOW_MOBILE_DETAIL_LABEL_CHIPS,
   SHOW_MOBILE_DETAIL_REVIEW_PANELS,
-  isFailedGitHubCheck,
   formatDurationSeconds,
   SHOW_MOBILE_LINEAR_DETAIL_TOOLS,
   discussionSummary
@@ -25,6 +25,7 @@ import {
   renderMobileTasksItemFiles
 } from './mobile-tasks-item-review-sections'
 import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-editors'
+import { JiraDetailMeta } from '../components/JiraDetailMeta'
 
 export function renderMobileTasksItemDetailContent(model: ConnectionPresentationModel) {
   const {
@@ -81,6 +82,13 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             <Text style={styles.detailMetaValue}>{detailPayload.project.name}</Text>
           </View>
         ) : null}
+        {detailPayload.provider === 'jira' ? (
+          <JiraDetailMeta
+            assignee={detailPayload.assignee}
+            priorityName={detailPayload.priorityName}
+            projectName={detailPayload.projectName}
+          />
+        ) : null}
         {(detailPayload.provider === 'github' || detailPayload.provider === 'gitlab') &&
         detailPayload.assignees.length > 0 ? (
           <View style={styles.detailMetaItem}>
@@ -126,7 +134,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
               </Pressable>
               <Pressable
                 style={styles.inlineSaveButtonCompact}
-                disabled={mutatingStatus || !detailPayload.checks.some(isFailedGitHubCheck)}
+                disabled={mutatingStatus || !detailPayload.checks.some(isBrokenCheck)}
                 onPress={() => void rerunGitHubChecks(actionItem, true)}
               >
                 <Text style={styles.inlineSaveText}>Rerun failed</Text>

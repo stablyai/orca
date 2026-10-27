@@ -1,6 +1,10 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/groups'
+import {
+  dispatchReportMailbox,
+  isDispatchReportType
+} from '../../../../orchestration/dispatch-report-mailbox'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
 import {
   SendParams,
@@ -19,8 +23,9 @@ import {
   readMutationReplayNudge,
   readWorkerDoneReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-executor'
+} from '../../../orchestration-mutation-receipt'
 import { replayMutationNudge } from './mutation-replay-nudge'
+import { handBackReplayTargets } from '../../../../orchestration/db/messages/helper-mailbox-hand-back'
 import { sendRemoteMessage } from './send-remote'
 import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
@@ -32,6 +37,7 @@ import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',
+    permission: 'workspace',
     params: SendParams,
     handler: async (
       params,
@@ -61,6 +67,12 @@ export const ORCHESTRATION_SEND_METHODS = [
           : undefined)
       if (replayNudge) {
         replayMutationNudge(runtime, replayNudge)
+        const settled =
+          params.type === 'worker_done' ? settledDispatchId(replayedMutationReceipt) : undefined
+        // Why: derived, since the executor's receipt rewrites drop stored hand-back targets.
+        for (const target of settled ? handBackReplayTargets(db, settled) : []) {
+          runtime.notifyMessageArrived(target.to, target.type)
+        }
         return stripMutationReplayNudge(replayedMutationReceipt)
       }
       const from = params.from ?? 'unknown'
@@ -109,7 +121,8 @@ export const ORCHESTRATION_SEND_METHODS = [
         sender,
         to: params.to,
         runId: runGroup ? undefined : params.run,
-        payload: runGroup ? undefined : params.payload
+        payload: runGroup ? undefined : params.payload,
+        type: params.type
       })
       if (
         params.type === 'worker_done' &&
@@ -133,7 +146,11 @@ export const ORCHESTRATION_SEND_METHODS = [
         (!to ||
           ((params.type === 'worker_done' || params.type === 'heartbeat') && routing.dispatchId))
       ) {
-        to = `run:${routing.run.id}`
+        const reporting =
+          routing.dispatchId && isDispatchReportType(params.type)
+            ? db.getDispatchContextById(routing.dispatchId)
+            : undefined
+        to = reporting ? dispatchReportMailbox(db, reporting) : `run:${routing.run.id}`
       }
       if (!to) {
         throw new OrchestrationError(
@@ -246,3 +263,16 @@ export const ORCHESTRATION_SEND_METHODS = [
     }
   })
 ]
+
+function settledDispatchId(receipt: unknown): string | undefined {
+  if (!receipt || typeof receipt !== 'object' || !('lifecycle' in receipt)) {
+    return undefined
+  }
+  const { lifecycle } = receipt
+  return lifecycle &&
+    typeof lifecycle === 'object' &&
+    'dispatchId' in lifecycle &&
+    typeof lifecycle.dispatchId === 'string'
+    ? lifecycle.dispatchId
+    : undefined
+}

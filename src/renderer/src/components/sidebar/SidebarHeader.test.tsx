@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
   const shortcutLabel: { current: string | null } = { current: '⌘N' }
 
   return {
+    bucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
     openWorkspaceCreationComposerWithTourHandoff: vi.fn(),
     popoverContentProps,
     shortcutLabel,
@@ -44,7 +45,7 @@ vi.mock('@/store', () => {
 })
 
 vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
-  useAgentBucketCounts: () => ({ attention: 0, working: 0, done: 0, idle: 0 })
+  useAgentBucketCounts: () => mocks.bucketCounts
 }))
 
 vi.mock('./SidebarWorkspaceOptionsMenu', () => ({
@@ -77,7 +78,7 @@ vi.mock('../contextual-tours/workspace-creation-tour-handoff', () => ({
 
 vi.mock('sonner', () => ({ toast: mocks.toast }))
 
-// Deterministic popover: expose the open flag instead of relying on radix portals.
+// Expose open state directly to isolate this header test from Radix portals.
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
     <div data-intro-open={open ? '' : undefined}>{children}</div>
@@ -106,6 +107,7 @@ function createButton(): HTMLButtonElement {
 }
 
 beforeEach(() => {
+  mocks.bucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
   mocks.openWorkspaceCreationComposerWithTourHandoff.mockClear()
   mocks.toast.mockClear()
   mocks.shortcutLabel.current = '⌘N'
@@ -131,6 +133,44 @@ afterEach(() => {
 })
 
 describe('SidebarHeader', () => {
+  it.each(['workspaces', 'agents'] as const)(
+    'prioritizes questions, then working, and shows idle zero in the %s view',
+    (sidebarBody) => {
+      mockState.sidebarBody = sidebarBody
+      const render = () => {
+        act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+        return headerButton(sidebarBody === 'agents' ? 'Turn off activity view' : 'View activity')
+      }
+      mocks.bucketCounts = { attention: 2, working: 5, done: 3, idle: 4 }
+      let button = render()
+      expect(button.querySelector('[aria-label="Needs You: 2"]')?.textContent).toBe('2')
+      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeTruthy()
+      expect(button.querySelector('[aria-label="Working: 5"]')).toBeNull()
+
+      mocks.bucketCounts.attention = 0
+      button = render()
+      expect(button.querySelector('[aria-label="Working: 5"]')?.textContent).toBe('5')
+      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeNull()
+
+      mocks.bucketCounts.working = 0
+      button = render()
+      expect(button.querySelector('[aria-label="Idle: 0"]')?.textContent).toBe('0')
+      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeNull()
+      expect(button.getAttribute('aria-describedby')).toBe(
+        button.querySelector('[aria-label="Idle: 0"]')?.id
+      )
+    }
+  )
+
+  it.each([9, 12, 99, 100])('keeps the working count accessible at %s agents', (working) => {
+    mocks.bucketCounts.working = working
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+    const button = headerButton('View activity')
+    const status = button.querySelector(`[aria-label="Working: ${working}"]`)
+    expect(status?.textContent).toBe(working > 99 ? '99+' : String(working))
+    expect(button.getAttribute('aria-describedby')).toBe(status?.id)
+  })
+
   it('keeps New workspace clickable with zero projects, since the composer adds the first one', async () => {
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
@@ -142,20 +182,6 @@ describe('SidebarHeader', () => {
       createButton().click()
     })
 
-    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
-  })
-
-  it('opens the composer the same way once projects exist', async () => {
-    mockState.repos = [{ id: 'repo-a' }]
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    await act(async () => {
-      createButton().click()
-    })
-
-    expect(createButton().disabled).toBe(false)
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
   })
 
@@ -174,163 +200,5 @@ describe('SidebarHeader', () => {
 
     expect(mockState.openModal).toHaveBeenCalledWith('add-repo')
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
-  })
-
-  it('keeps the create button rightmost so the frequent action stays where it was', () => {
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    const labels = [...container.querySelectorAll<HTMLElement>('[aria-label]')]
-      .map((node) => node.getAttribute('aria-label'))
-      .filter((label): label is string => label === 'Add project' || label === 'New workspace')
-    expect(labels).toEqual(['Add project', 'New workspace'])
-  })
-
-  it('advertises the workspace shortcut on the create tooltip, and omits it when unassigned', () => {
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-    expect(container.textContent).toContain('⌘N')
-
-    mocks.shortcutLabel.current = null
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-    expect(container.textContent).not.toContain('⌘N')
-  })
-
-  it('opens agent activity from the bell button', () => {
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    const activityButton = container.querySelector<HTMLButtonElement>(
-      '[aria-label="View activity"]'
-    )
-    expect(activityButton).toBeTruthy()
-
-    act(() => {
-      activityButton?.click()
-    })
-
-    expect(mockState.setSidebarBody).toHaveBeenCalledWith('agents')
-  })
-
-  it('shows the Agents introduction only for migrated users and never offers a hide action', () => {
-    mockState.settings = { agentsSidebarMigratedFromExperimental: true }
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    expect(container.querySelector('[data-intro-open]')).toBeTruthy()
-    expect(container.textContent).toContain('Agents are easier to find')
-    expect(container.textContent).not.toContain('Hide Agents')
-
-    mockState.settings = {}
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-    expect(container.querySelector('[data-intro-open]')).toBeNull()
-  })
-
-  it('turns off agent activity from the active bell button', () => {
-    mockState.sidebarBody = 'agents'
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    const activityButton = container.querySelector<HTMLButtonElement>(
-      '[aria-label="Turn off activity view"]'
-    )
-    expect(activityButton?.getAttribute('aria-pressed')).toBe('true')
-
-    act(() => {
-      activityButton?.click()
-    })
-
-    expect(mockState.setSidebarBody).toHaveBeenCalledWith('workspaces')
-  })
-
-  it('uses the legacy title based on workspace grouping', () => {
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    expect(container.querySelector('[data-sidebar-section-title="projects"]')?.textContent).toBe(
-      'Projects'
-    )
-
-    mockState.groupBy = 'workspace-status'
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-    expect(container.querySelector('[data-sidebar-section-title="workspaces"]')?.textContent).toBe(
-      'Workspaces'
-    )
-  })
-
-  it('drops both project actions in the agents view, which lists activity, not projects', () => {
-    mockState.sidebarBody = 'agents'
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    expect(container.querySelector('[aria-label="Turn off activity view"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="New workspace"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="Workspace options"]')).toBeNull()
-    expect(container.querySelector('[aria-label="Add project"]')).toBeNull()
-  })
-
-  it('keeps the activity bell and actions on one row at the default sidebar width', () => {
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    const headerRow = container.querySelector('.mt-2')
-    const headerClasses = new Set(headerRow?.className.split(/\s+/) ?? [])
-    expect(headerClasses.has('flex-wrap')).toBe(false)
-    expect(headerClasses.has('h-8')).toBe(true)
-    expect(container.querySelector('[aria-label="View activity"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="Add project"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="New workspace"]')).toBeTruthy()
-  })
-
-  it('keeps the same actions on one row at compact width', async () => {
-    mockState.sidebarWidth = 220
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    expect(container.querySelector('[aria-label="Add project"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="View activity"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="New workspace"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="Workspace options"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="More workspace actions"]')).toBeNull()
-
-    await act(async () => {
-      createButton().click()
-    })
-    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not reset a persisted agents body before settings hydrate', () => {
-    mockState.settings = undefined
-    mockState.sidebarBody = 'agents'
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    expect(mockState.setSidebarBody).not.toHaveBeenCalled()
-  })
-
-  it('does not expose the deprecated full Agents view in agents mode', () => {
-    mockState.settings = { agentsSidebarIntroShown: true }
-    mockState.sidebarBody = 'agents'
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
-
-    expect(container.querySelector('[aria-label="Open full Agents view"]')).toBeNull()
   })
 })

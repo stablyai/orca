@@ -1,8 +1,4 @@
-/**
- * Minimal `electron` module for wsl-hook-relay-reattach-benchmark.mjs, which loads the real
- * src/main/ipc/pty.ts under plain node. Only the surfaces that main's PTY graph touches are
- * implemented; everything else stays undefined so an unexpected dependency fails loudly.
- */
+// Stub only Electron surfaces needed by real main PTY graph under Node; unexpected dependency stays undefined and fails loudly.
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'

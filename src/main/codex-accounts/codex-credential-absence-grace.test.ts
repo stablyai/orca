@@ -60,7 +60,6 @@ describe('CodexCredentialAbsenceGrace', () => {
     writeFileSync(authPath, VALID_AUTH, 'utf-8')
     expect(grace.assess(authPath, 2_000)).toEqual({ state: 'present', durable: true })
 
-    // A later absence starts a fresh grace window instead of inheriting the old clock.
     rmSync(authPath)
     expect(grace.assess(authPath, 100_000)).toEqual({ state: 'missing', durable: false })
     expect(grace.assess(authPath, 100_000 + CODEX_CREDENTIAL_ABSENCE_GRACE_MS)).toEqual({

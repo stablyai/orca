@@ -8,7 +8,7 @@ import { scheduleSave } from './write-scheduling'
 
 export type ProfileStateMaintenanceOptions = {
   signal?: AbortSignal
-  /** Recovery must preserve the existing database even when its state cannot be flushed. */
+  /** Recovery may need to preserve a database whose current state cannot be flushed. */
   flush?: boolean
 }
 
@@ -42,7 +42,7 @@ export async function freezeProfileStateWritesAsync(runtime: StoreRuntimeState):
   }
 }
 
-/** Stop admission before the first await; only unchanged-source maintenance may resume. */
+/** Fence admission synchronously; only maintenance of unchanged state may resume. */
 export function beginProfileStateMaintenance(
   runtime: StoreRuntimeState,
   domains: StoreDomains,
@@ -132,13 +132,12 @@ async function pauseProfileState(
   await drainProfileFileWork(runtime)
   signal?.throwIfAborted()
   if (flush) {
-    // Cancel between commands so a dispatched commit retains a known outcome.
+    // Cancel between commands so dispatched commits retain known outcomes.
     await flushCurrentStateAsync(domains.flushBarriers, {
       requireInitialGenerationDurable: true,
       fullCheckpoint: true
     })
     signal?.throwIfAborted()
-    await authority?.writeJsonCompatibilityExportAsync?.(runtime.dataFile)
   }
   signal?.throwIfAborted()
   runtime.writesFrozen = true

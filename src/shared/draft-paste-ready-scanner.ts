@@ -1,31 +1,24 @@
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal, TuiAgentConfig } from './tui-agent-config'
+import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
+import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
 
-// Why: agents enable bracketed paste (DECSET 2004) before their composer is
-// actually mounted/focused. These markers let the scanner detect the real
-// "input is ready" moment per agent instead of guessing from output silence.
+// Paste mode precedes composer readiness; per-agent markers avoid guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
-const CODEX_COMPOSER_PROMPT = '›'
-// Why: opencode emits the DECTCEM show-cursor only once the composer row is
-// mounted and the text cursor is placed in it — a "composer ready" signal,
-// analogous to Codex's prompt glyph. It fires ~2s after bracketed paste is
-// enabled, so gating on it (instead of a quiet window) stops the paste from
-// racing the composer mount under slow/noisy startup. mimo-code uses the same
-// signal by parity; the quiet-window fallback covers any agent that differs.
+// OpenCode show-cursor follows composer mount ~2s after paste mode; do not race slow startup with a quiet timer. mimo-code shares this signal.
 const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
-// Why: grok's composer prompt glyph (U+276F), rendered once the input box
-// mounts. It is also the default glyph of popular shell prompts (starship,
-// pure), so it is anchored on the alternate-screen switch below — the shell
-// prompt that precedes the launch command is always in the normal buffer.
-// grok swaps it for `> ` on legacy Windows consoles, which is too generic to
-// match; those fall back to the quiet window and the caller's hard timeout.
+// Grok ❯ also appears in shell prompts: require alt screen. Legacy Windows > is too generic, so retain quiet/timeout fallback.
 const GROK_COMPOSER_PROMPT = '❯'
-// Why: ZCode's composer box top-left corner (U+256D), painted once the input box mounts.
-// It is locale-independent — ZCode translates the placeholder and the mode label in the
-// box title, but not the frame — and its modal dialogs draw SQUARE corners, so this glyph
-// means the composer specifically. Anchored on the alternate-screen switch for the same
-// reason as grok: a powerline shell prompt can also draw `╭`.
+// ZCode’s locale-independent round composer corner differs from square modal corners; anchor alt screen because powerline shell prompts also draw ╭.
 const ZCODE_COMPOSER_BOX_CORNER = '╭'
+// Why: Claude Code's prompt-input mode indicator is `figures.pointer` + NBSP; its startup menus
+// (trust, theme) draw the same pointer followed by a cursor move, so the NBSP means the composer.
+const CLAUDE_COMPOSER_PROMPT = '❯\u00a0'
+// Why: Claude 2.1.310 turns on palette-change reports with bracketed paste and drops both on exit.
+// zsh/bash never send it, so their p10k/starship `❯` prompt cannot arm the marker; fish 4+ holds it
+// only while idle at its prompt, where a `❯` + NBSP glyph is unlikely.
+const DECSET_COLOR_PALETTE_UPDATES = '\x1b[?2031h'
+const DECRST_COLOR_PALETTE_UPDATES = '\x1b[?2031l'
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
@@ -40,54 +33,54 @@ type DraftPasteReadySignalSpec = {
   quietAnchor: string | null
 }
 
-const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySignalSpec> = {
-  'codex-composer-prompt': {
-    markerAnchor: DECSET_BRACKETED_PASTE,
-    markerAnchorEnd: null,
-    marker: CODEX_COMPOSER_PROMPT,
-    quietAnchor: null
-  },
+// Signals that read the screen's structure, not one marker; a Record so none lacks its scanner.
+type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt'
+const STRUCTURAL_SCANNERS: Record<
+  StructuralSignal,
+  () => { observe: (data: string) => { ready: boolean; readyAfterMs?: number | null } }
+> = {
+  'opencode-agent-row': createOpenCodeAgentRowScanner,
+  'codex-composer-prompt': createCodexComposerReadyScanner
+}
+
+type SingleSignal = Exclude<DraftPasteReadySignal, StructuralSignal>
+
+const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec> = {
   'render-cursor-after-bracketed-paste': {
     markerAnchor: DECSET_BRACKETED_PASTE,
-    // Why: the launching shell's prompt turns bracketed paste on and back off before exec
-    // (terminal-agent-paste-bracketing.ts), so a show-cursor after that `2004l` is a launcher's,
-    // never a composer that takes a bracketed paste. OpenCode never sends `2004l` while booting.
+    // Shells toggle paste off before exec; later launcher cursor toggles must not count. OpenCode keeps paste enabled during boot.
     markerAnchorEnd: DECRST_BRACKETED_PASTE,
     marker: DECTCEM_SHOW_CURSOR,
     quietAnchor: null
   },
   'grok-composer-prompt': {
     markerAnchor: DECSET_ALT_SCREEN,
-    // Why: leaving the alternate screen hands the terminal back to the shell, whose
-    // prompt may be `❯`. Without revoking the anchor, a grok that entered the alt
-    // screen and then died — or a pager run from the user's shell rc before grok even
-    // launched — would leave the glyph armed forever and paste into the shell.
+    // Revoke on alt-screen exit so dead agents/rc pagers cannot authorize a later shell ❯ and receive the draft.
     markerAnchorEnd: DECRST_ALT_SCREEN,
     marker: GROK_COMPOSER_PROMPT,
-    // Why: the quiet window stays on DECSET 2004, independent of the alt-screen
-    // marker anchor. grok can be configured to render inline (`--no-alt-screen`,
-    // `[ui] screen_mode = "minimal"`), where 1049h never arrives — anchoring the
-    // fallback there too would leave the draft with no delivery path at all, and
-    // the main-process caller drops the draft when readiness never resolves.
+    // Inline/minimal grok lacks alt-screen entry; a separate 2004 quiet anchor preserves its delivery path instead of dropping drafts.
     quietAnchor: DECSET_BRACKETED_PASTE
   },
-  // Why: DSH-TUI draws the same U+276F composer glyph inside the alternate screen, and
-  // animates its intro continuously behind it, so it needs grok's marker-plus-quiet shape
-  // rather than the default quiet window. Its own entry (not grok's) so the two agents'
-  // evidence — and any future divergence — stay separable.
+  // DSH-TUI’s animated intro needs marker/quiet behavior independently of Grok. Evidence: dsh-tui-ready-no-key.txt (2004 byte 6, 1049h byte 40, first ❯ byte 5910).
   'dsh-composer-prompt': {
     markerAnchor: DECSET_ALT_SCREEN,
     markerAnchorEnd: DECRST_ALT_SCREEN,
     marker: GROK_COMPOSER_PROMPT,
     quietAnchor: DECSET_BRACKETED_PASTE
   },
+  // Why: Claude renders inline (no alt screen); the quiet window keeps the old delivery where the
+  // glyph differs (Windows `figures` fallback).
+  'claude-composer-prompt': {
+    markerAnchor: DECSET_COLOR_PALETTE_UPDATES,
+    markerAnchorEnd: DECRST_COLOR_PALETTE_UPDATES,
+    marker: CLAUDE_COMPOSER_PROMPT,
+    quietAnchor: DECSET_BRACKETED_PASTE
+  },
   'zcode-composer-prompt': {
     markerAnchor: DECSET_ALT_SCREEN,
     markerAnchorEnd: DECRST_ALT_SCREEN,
     marker: ZCODE_COMPOSER_BOX_CORNER,
-    // Why: ZCode animates its ASCII banner forever, so the quiet window never settles on
-    // its own — but keep it armed as the floor for a build that renders inline and never
-    // switches to the alternate screen, where the marker anchor would never arm.
+    // ZCode banner animates indefinitely; keep quiet fallback for inline builds whose alt-screen marker never arms.
     quietAnchor: DECSET_BRACKETED_PASTE
   },
   'render-quiet-after-bracketed-paste': {
@@ -101,73 +94,59 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
 /** Longest anchor sequence minus one — the carry needed to rejoin one split across chunks. */
 const ANCHOR_CARRY_CHARS = 7
 
+/** Whether the signal has a composer marker, rather than only a quiet window after its anchor. */
+export function draftPasteReadySignalHasMarker(readySignal: DraftPasteReadySignal): boolean {
+  return !isSingleSignal(readySignal) || DRAFT_PASTE_READY_SIGNALS[readySignal].marker !== null
+}
+
 export type DraftPasteReadyScanResult = {
   /** The agent-specific ready signal fired — caller should deliver the paste now. */
   ready: boolean
   /** Caller should (re)arm the quiet-window fallback timer for this chunk. */
   armQuietTimer: boolean
+  /** Ready after this many ms unless the signal fires first; null withdraws an armed one. */
+  readyAfterMs?: number | null
 }
 
-/**
- * Pure, incremental scanner shared by the renderer and main-process draft-paste
- * readiness waiters so the two delivery paths (desktop-local vs runtime/SSH/
- * remote) cannot drift. It only parses the PTY byte stream; timers, the PTY
- * subscription, and resolution stay with each caller because their transports
- * and return types differ.
- *
- * Per agent signal:
- *   - `codex-composer-prompt`: ready when the `›` glyph renders after DECSET
- *     2004, or when DECSET follows a glyph rendered while Codex owns the
- *     alternate screen; never arms the quiet window.
- *   - `render-cursor-after-bracketed-paste`: ready when DECTCEM show-cursor
- *     (`\x1b[?25h`) renders while DECSET 2004 is held; `\x1b[?2004l` revokes it.
- *     Like Codex it does NOT arm the quiet window: opencode stays silent for up
- *     to ~3.9s between enabling bracketed paste and mounting its composer, so a
- *     quiet window would fire during that gap and pre-empt the marker. opencode
- *     re-emits show-cursor on every render frame once mounted, so the marker is
- *     effectively guaranteed; the caller's hard timeout is the backstop if it
- *     never appears.
- *   - `grok-composer-prompt`: ready when grok's `❯` glyph renders after the
- *     alternate-screen switch (`\x1b[?1049h`). grok shimmers its startup logo
- *     until the session opens, so the quiet window alone never settles and the
- *     draft waited out the full hard timeout (~8s). The glyph is anchored on the
- *     alt-screen switch rather than DECSET 2004 because the shell that runs the
- *     launch command emits 2004 too and its own prompt may be `❯` (starship,
- *     pure) — anchoring there could paste into the shell. This is the only
- *     signal with both a marker and a quiet window, and they use DIFFERENT
- *     anchors: grok can render inline (`--no-alt-screen`, `[ui] screen_mode =
- *     "minimal"`) and on legacy Windows consoles draws `> ` instead of `❯`, so
- *     the marker is best-effort and the 2004-anchored quiet window is the floor
- *     that keeps those launches on the pre-existing delivery path. The alt-screen
- *     anchor is revoked on `\x1b[?1049l`: leaving it hands the terminal back to
- *     the shell, so a glyph after that is the shell's prompt, not grok's composer.
- *   - `dsh-composer-prompt`: the grok shape applied to DSH-TUI, whose composer draws the
- *     same `❯` inside the alternate screen. The committed
- *     `dsh-tui-ready-no-key.txt` transcript is the evidence: DECSET 2004 at byte 6,
- *     `\x1b[?1049h` at byte 40, and the first `❯` at byte 5910.
- *   - `zcode-composer-prompt`: ready when ZCode's composer box corner (`╭`) renders
- *     after the alternate-screen switch. ZCode repaints its animated ASCII banner
- *     indefinitely — the captured transcript is still repainting 30s after the composer
- *     mounted — so the quiet window alone never settles and a launch draft would wait out
- *     the whole hard timeout, exactly as grok did. Same alt-screen anchoring and
- *     revocation as grok, because a powerline shell prompt can draw `╭` too.
- *   - `render-quiet-after-bracketed-paste` (default): no signal marker; arms the
- *     quiet window once DECSET 2004 is seen.
- *
- * A 512-byte ring (`recent` / `postAnchorRecent`) covers escape sequences
- * split across chunk boundaries without retaining terminal scrollback.
- */
-export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal): {
+export type DraftPasteReadyScanner = { observe: (data: string) => DraftPasteReadyScanResult }
+
+/** The signal to wait for before a paste; one that Enter follows waits for the submit signal. */
+export function resolvePasteReadySignal(
+  agentConfig: Pick<TuiAgentConfig, 'draftPasteReadySignal' | 'submitPasteReadySignal'> | null,
+  submit: boolean
+): DraftPasteReadySignal {
+  return (
+    (submit ? agentConfig?.submitPasteReadySignal : undefined) ??
+    agentConfig?.draftPasteReadySignal ??
+    'render-quiet-after-bracketed-paste'
+  )
+}
+
+/** Share bounded incremental PTY parsing across local/SSH/runtime waiters; callers own transport and timers. Marker ownership and quiet fallback remain independent so inline builds retain delivery without allowing shell prompts to claim agent input. */
+export function createDraftPasteReadyScanner(
+  readySignal: DraftPasteReadySignal
+): DraftPasteReadyScanner {
+  if (isSingleSignal(readySignal)) {
+    return createSingleSignalScanner(readySignal)
+  }
+  const scanner = STRUCTURAL_SCANNERS[readySignal]()
+  return {
+    observe: (data) => ({ ...scanner.observe(data), armQuietTimer: false })
+  }
+}
+
+function isSingleSignal(signal: DraftPasteReadySignal): signal is SingleSignal {
+  return !(signal in STRUCTURAL_SCANNERS)
+}
+
+function createSingleSignalScanner(readySignal: SingleSignal): {
   observe: (data: string) => DraftPasteReadyScanResult
 } {
   let recent = ''
   let postAnchorRecent = ''
   let anchorCarry = ''
-  let codexCarry = ''
   let sawMarkerAnchor = false
   let sawQuietAnchor = false
-  let codexAltScreen = false
-  let sawCodexPromptInAltScreen = false
 
   const {
     markerAnchor,
@@ -176,12 +155,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
     quietAnchor
   } = DRAFT_PASTE_READY_SIGNALS[readySignal]
 
-  /**
-   * Why: an anchor the agent can leave (the alternate screen) has to be tracked in
-   * stream ORDER, not as "seen once". Walk the chunk segment by segment so a marker
-   * only counts while the anchor is actually held, and re-entering re-arms it.
-   * Only reachable for signals that define `markerAnchorEnd`.
-   */
+  /** Track revocable anchors in stream order so markers count only while the mode is held; exit revokes and re-entry re-arms. */
   const scanRevocableAnchorSegments = (
     window: string,
     carriedLength: number,
@@ -201,8 +175,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
         continue
       }
       const leaveIndex = window.indexOf(end, cursor)
-      // Why: carried chars only rejoin a split anchor or leave; postAnchorRecent already holds
-      // them, so re-reading them could join a marker across the duplicated seam.
+      // Carry rejoins anchors only; replaying it into postAnchorRecent could fabricate a marker at the duplicated seam.
       const segmentStart = Math.max(cursor, carriedLength)
       const segment =
         leaveIndex === -1 ? window.slice(segmentStart) : window.slice(segmentStart, leaveIndex)
@@ -220,37 +193,6 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
     return false
   }
 
-  const scanCodexPreAnchorPrompt = (data: string): void => {
-    const window = codexCarry + data
-    codexCarry = window.slice(-ANCHOR_CARRY_CHARS)
-    let cursor = 0
-    while (cursor < window.length) {
-      const enterIndex = window.indexOf(DECSET_ALT_SCREEN, cursor)
-      const leaveIndex = window.indexOf(DECRST_ALT_SCREEN, cursor)
-      const promptIndex = window.indexOf(CODEX_COMPOSER_PROMPT, cursor)
-      const nextIndex = Math.min(
-        ...[enterIndex, leaveIndex, promptIndex].filter((index) => index !== -1)
-      )
-      if (!Number.isFinite(nextIndex)) {
-        return
-      }
-      if (nextIndex === enterIndex) {
-        codexAltScreen = true
-        sawCodexPromptInAltScreen = false
-        cursor = nextIndex + DECSET_ALT_SCREEN.length
-      } else if (nextIndex === leaveIndex) {
-        codexAltScreen = false
-        sawCodexPromptInAltScreen = false
-        cursor = nextIndex + DECRST_ALT_SCREEN.length
-      } else {
-        if (codexAltScreen) {
-          sawCodexPromptInAltScreen = true
-        }
-        cursor = nextIndex + CODEX_COMPOSER_PROMPT.length
-      }
-    }
-  }
-
   return {
     observe(data: string): DraftPasteReadyScanResult {
       const combined = recent + data
@@ -258,13 +200,9 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
       if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {
         sawQuietAnchor = true
       }
-      if (readySignal === 'codex-composer-prompt' && !sawMarkerAnchor) {
-        scanCodexPreAnchorPrompt(data)
-      }
       if (signalMarker !== null && markerAnchor !== null) {
         if (markerAnchorEnd !== null) {
-          // Why: carry only the bytes an anchor could straddle, so already-scanned
-          // output is never re-walked into a second enter/leave transition.
+          // Carry only split-anchor bytes so prior output cannot create a second enter/leave transition.
           const carriedLength = anchorCarry.length
           const window = anchorCarry + data
           anchorCarry = window.slice(-ANCHOR_CARRY_CHARS)
@@ -275,9 +213,6 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
           const anchorIndex = combined.indexOf(markerAnchor)
           if (anchorIndex !== -1) {
             sawMarkerAnchor = true
-            if (readySignal === 'codex-composer-prompt' && sawCodexPromptInAltScreen) {
-              return { ready: true, armQuietTimer: false }
-            }
             const postAnchorChunk = combined.slice(anchorIndex + markerAnchor.length)
             if (postAnchorChunk.includes(signalMarker)) {
               return { ready: true, armQuietTimer: false }
@@ -291,13 +226,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
           postAnchorRecent = (postAnchorRecent + data).slice(-512)
         }
       }
-      // Why: the Codex glyph and opencode show-cursor signals must NOT arm the
-      // quiet window (they carry no quiet anchor). opencode goes silent for
-      // Up to ~3.9s between enabling bracketed paste and mounting its composer, so a
-      // quiet window would fire during that gap — before the composer exists —
-      // and pre-empt the marker. Those signals wait for their marker, bounded
-      // only by the caller's hard timeout (and its best-effort
-      // process-ownership paste after that).
+      // No quiet anchor for cursor/Codex signals: OpenCode startup silence can last ~3.9s before mount. Wait for markers within caller timeout/process-ownership fallback.
       return { ready: false, armQuietTimer: sawQuietAnchor }
     }
   }

@@ -10,12 +10,7 @@ const FAILURE = {
   canProceed: true
 }
 
-/**
- * The blanket runtime-active guard on this channel came from the streamed-only era, where a
- * connected runtime meant every browser page's state arrived through the host's tab sync. A
- * client-hosted page is a local Electron webview whose certificate challenge is raised by THIS
- * main process, so the same guard silently emptied its "Proceed Anyway" affordance.
- */
+/** Client-hosted certificate challenges originate from local webviews; the former runtime-active guard silently removed Proceed Anyway. */
 describe('browser certificate failures while a runtime environment is active', () => {
   it('stores a client-hosted page failure', async () => {
     const setBrowserPageCertificateFailure = vi.fn()
@@ -74,6 +69,54 @@ describe('browser certificate failures while a runtime environment is active', (
   })
 })
 
+type AudioStateEvent = { browserPageId: string; audible: boolean }
+
+// A rebuilt guest (eviction, crash recovery, client-hosted rebind) starts unmuted; main's
+// registration report is the renderer's only cue to carry the tab's mute over to it. Local pages
+// (e.g. floating browser tabs) still report while a remote environment is active.
+describe('browser audio state', () => {
+  it('re-applies a muted tab to each reporting page, even with a remote environment active', async () => {
+    const setBrowserPageAudible = vi.fn()
+    const setPageAudioMuted = vi.fn(() => Promise.resolve(true))
+    let audioStateChanged: (event: AudioStateEvent) => void = () => {}
+    const harness = await loadIpcEventsHarness(
+      createHarnessStoreState({
+        tabsByWorktree: {},
+        remoteBrowserPageHandlesByPageId: {},
+        browserPagesByWorkspace: {
+          'tab-muted': [{ id: 'page-muted', workspaceId: 'tab-muted' }],
+          'tab-loud': [{ id: 'page-loud', workspaceId: 'tab-loud' }]
+        },
+        browserAudioMutedTabIds: { 'tab-muted': true },
+        setBrowserPageAudible,
+        settings: {
+          terminalFontSize: 13,
+          experimentalNativeChat: false,
+          activeRuntimeEnvironmentId: 'env-a'
+        }
+      }),
+      {
+        browserApi: {
+          onAudioStateChanged: (listener: (event: AudioStateEvent) => void) => {
+            audioStateChanged = listener
+            return () => {}
+          },
+          setPageAudioMuted
+        }
+      }
+    )
+    harness.useIpcEvents()
+
+    audioStateChanged({ browserPageId: 'page-muted', audible: false })
+    audioStateChanged({ browserPageId: 'page-loud', audible: true })
+
+    expect(setBrowserPageAudible).toHaveBeenCalledWith('page-muted', false)
+    expect(setBrowserPageAudible).toHaveBeenCalledWith('page-loud', true)
+    expect(setPageAudioMuted).toHaveBeenCalledTimes(1)
+    expect(setPageAudioMuted).toHaveBeenCalledWith({ browserPageId: 'page-muted', muted: true })
+  })
+})
+
 function storeStateWithRuntime(
   setBrowserPageCertificateFailure: ReturnType<typeof vi.fn>,
   remoteBrowserPageHandlesByPageId: Record<string, unknown>
@@ -85,7 +128,6 @@ function storeStateWithRuntime(
     settings: {
       terminalFontSize: 13,
       experimentalNativeChat: false,
-      openAgentTabsInChatByDefault: false,
       activeRuntimeEnvironmentId: 'env-a'
     }
   })

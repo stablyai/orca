@@ -63,11 +63,7 @@ type PtyTitleEvidence = PtyTitleRecord & {
   lastAgentStatusStartedAtEpochMs: number | null
 }
 
-/**
- * A PTY record as display surfaces show it. Records keep the agent's own title for readiness,
- * delivery and presence; display readers project through here so they show the cleared title
- * the tab shows. Why max(): a restore seed re-stamps the native title after the clear.
- */
+/** Display-only title clearing; readiness/delivery/presence retain native evidence. max() handles restore seeds re-stamping the native title. */
 export function getPtyDisplayRecord<T extends PtyTitleEvidence>(
   pty: T,
   clear: TitleDisplayClear | null
@@ -104,12 +100,7 @@ export function getLeafDisplayRecord<T extends LeafStatusRecord>(
   }
 }
 
-/**
- * The prompt lifecycle as display shows it. Main recorded the clear's status there as well, so a
- * title snapshot projected through the clear is only comparable with a lifecycle projected the
- * same way. Display, blocked-dialog checks and prompt-submission verification read it; readiness
- * and delivery never do.
- */
+/** Project lifecycle through the same display clear as titles; blocked-dialog and submission verification use this, readiness/delivery do not. */
 export function getDisplayPromptLifecycle(
   lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined,
   clear: TitleDisplayClear | null
@@ -124,7 +115,7 @@ export function getLeafWorktreeStatus(
   leaf: LeafStatusRecord,
   tabTitle: string | null
 ): RuntimeWorktreeStatus {
-  // Why: recompute from the live title each call (no sticky state) so worktree.ps mirrors the desktop sidebar's getWorktreeStatus.
+  // Recompute without sticky state so worktree.ps mirrors desktop getWorktreeStatus.
   const titleCandidates = [
     { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
     { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
@@ -162,8 +153,7 @@ export function getLatestLeafTitle(
   )
 }
 
-// Why: an 'agent' title only proves an agent owns the pane when something other than a
-// quarter-circle spinner carries it — those glyphs are generic progress frames (STA-4028).
+// Quarter-circle spinners prove activity, not agent ownership (STA-4028).
 export function agentTitleProvesAgentPresence(
   title: string | null,
   classification: 'agent' | 'management' | 'neutral'
@@ -263,13 +253,6 @@ export function mapExplicitAgentStateToRuntimeTerminalStatus(
   }
 }
 
-export function mergeWorktreeStatus(
-  current: RuntimeWorktreeStatus,
-  next: RuntimeWorktreeStatus
-): RuntimeWorktreeStatus {
-  return WORKTREE_STATUS_PRIORITY[next] > WORKTREE_STATUS_PRIORITY[current] ? next : current
-}
-
 export function mergeWorktreeSummaryStatus(
   summary: RuntimeWorktreePsSummary,
   next: RuntimeWorktreeStatus,
@@ -309,14 +292,13 @@ export function compareWorktreePs(
   left: RuntimeWorktreePsSummary,
   right: RuntimeWorktreePsSummary
 ): number {
-  // Pinned and unread worktrees sort above others so they survive truncation.
   if (left.isPinned !== right.isPinned) {
     return left.isPinned ? -1 : 1
   }
   if (left.unread !== right.unread) {
     return left.unread ? -1 : 1
   }
-  // Why: worktree.ps is truncated for mobile, so host-visible activity must sort above inactive rows.
+  // Mobile truncates worktree.ps, so host-visible activity must outrank inactive rows.
   if (left.hasHostSidebarActivity !== right.hasHostSidebarActivity) {
     return left.hasHostSidebarActivity ? -1 : 1
   }

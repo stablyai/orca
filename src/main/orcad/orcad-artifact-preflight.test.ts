@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { orcadArtifactFilenames } from '../../shared/orcad-artifacts'
+import { ORCAD_MOBILE_WEB_MANIFEST, orcadArtifactFilenames } from '../../shared/orcad-artifacts'
 import { runOrcadProfilePreflight } from './orcad-profile-preflight'
 import { readOrcadArtifactIdentity } from './orcad-artifact-identity'
 import { resolveOrcadExitCode } from './orcad-exit-code'
@@ -25,12 +25,21 @@ vi.mock('./orcad-bundled-runtime', async (importOriginal) => ({
   isRunningAsBundledOrcadRuntime: () => false
 }))
 
+function fixtureContents(filename: string): string {
+  if (filename === '.server-target') {
+    return 'linux-x64-glibc\n'
+  }
+  return filename === ORCAD_MOBILE_WEB_MANIFEST
+    ? JSON.stringify({ assets: [{ path: 'index.html' }] })
+    : filename
+}
+
 beforeEach(async () => {
   fixture.directory = await mkdtemp(join(tmpdir(), 'orcad-artifact-preflight-'))
-  for (const filename of orcadArtifactFilenames('linux-x64-glibc')) {
+  for (const filename of orcadArtifactFilenames('linux-x64-glibc', ['out/mobile-web/index.html'])) {
     const path = join(fixture.directory, filename)
     await mkdir(dirname(path), { recursive: true })
-    await writeFile(path, filename === '.server-target' ? 'linux-x64-glibc\n' : filename)
+    await writeFile(path, fixtureContents(filename))
   }
   vi.spyOn(console, 'log').mockImplementation(() => {})
 })
@@ -53,7 +62,8 @@ describe('installed artifact admission', () => {
     '.server-target',
     'node_modules/@parcel/watcher/watcher.node',
     '.runtime-node',
-    'node_modules/node-pty/build/Release/pty.node'
+    'node_modules/node-pty/build/Release/pty.node',
+    'out/mobile-web/index.html'
   ])('refuses a missing %s as configuration before any profile probe', async (filename) => {
     await rm(join(fixture.directory, filename))
     const error = await runOrcadProfilePreflight(randomUUID()).catch((failure: unknown) => failure)

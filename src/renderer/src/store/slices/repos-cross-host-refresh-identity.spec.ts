@@ -1,0 +1,186 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTestStore } from './store-test-helpers'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+
+export function registerReposCrossHostRefreshIdentityTests(): void {
+  // Same-name local/remote clones with distinct repo IDs exercise compat sourceRepoIds assembled across hosts.
+  const SHARED_PROJECT_ID = 'github:stablyai/orca'
+
+  const localRepo: Repo = {
+    id: 'local-repo',
+    path: '/local/orca',
+    displayName: 'orca',
+    badgeColor: '#22c55e',
+    upstream: { owner: 'stablyai', repo: 'orca' },
+    addedAt: 1_700_000_000_000
+  }
+
+  const remoteRepo: Repo = {
+    id: 'remote-repo',
+    path: '/srv/orca',
+    displayName: 'orca',
+    badgeColor: '#737373',
+    upstream: { owner: 'stablyai', repo: 'orca' },
+    addedAt: 1_700_000_001_000
+  }
+
+  const localProject: Project = {
+    id: SHARED_PROJECT_ID,
+    displayName: 'orca',
+    badgeColor: '#22c55e',
+    sourceRepoIds: ['local-repo'],
+    createdAt: 1,
+    updatedAt: 1
+  }
+
+  const remoteProject: Project = {
+    ...localProject,
+    badgeColor: '#737373',
+    sourceRepoIds: ['remote-repo'],
+    createdAt: 2,
+    updatedAt: 2
+  }
+
+  function setup(repoId: string, path: string): ProjectHostSetup {
+    return {
+      id: `${repoId}-setup`,
+      projectId: SHARED_PROJECT_ID,
+      hostId: 'local',
+      repoId,
+      path,
+      displayName: 'orca',
+      setupState: 'ready',
+      setupMethod: 'imported-existing-folder',
+      createdAt: 1,
+      updatedAt: 1
+    }
+  }
+
+  const reposList = vi.fn()
+  const projectsList = vi.fn()
+  const listHostSetups = vi.fn()
+  const runtimeEnvironmentsList = vi.fn()
+  const runtimeEnvironmentTransportCall = vi.fn()
+
+  // Allocate fresh IPC rows so stable identity cannot pass accidentally.
+  function clone<T>(value: T): T {
+    return structuredClone(value)
+  }
+
+  function runtimeResult(method: string): unknown {
+    if (method === 'repo.list') {
+      return { repos: [clone(remoteRepo)] }
+    }
+    if (method === 'project.list') {
+      return { projects: [clone(remoteProject)] }
+    }
+    if (method === 'projectHostSetup.list') {
+      return { setups: [clone(setup('remote-repo', '/srv/orca'))] }
+    }
+    return {}
+  }
+
+  function sharedProject(store: ReturnType<typeof createTestStore>): Project | undefined {
+    return store.getState().endpointProjects.find((project) => project.id === SHARED_PROJECT_ID)
+  }
+
+  describe('cross-host project refresh identity', () => {
+    beforeEach(() => {
+      clearRuntimeCompatibilityCacheForTests()
+      reposList.mockReset()
+      projectsList.mockReset()
+      listHostSetups.mockReset()
+      runtimeEnvironmentsList.mockReset()
+      runtimeEnvironmentTransportCall.mockReset()
+
+      reposList.mockImplementation(async () => [clone(localRepo)])
+      projectsList.mockImplementation(async () => [clone(localProject)])
+      listHostSetups.mockImplementation(async () => [clone(setup('local-repo', '/local/orca'))])
+      runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1', name: 'awin' }])
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+        const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (compatible) {
+          return compatible
+        }
+        return {
+          id: `rpc-${args.method}`,
+          ok: true,
+          result: runtimeResult(args.method),
+          _meta: { runtimeId: 'runtime-remote' }
+        }
+      })
+
+      vi.stubGlobal('window', {
+        api: {
+          repos: { list: reposList },
+          projects: { list: projectsList, listHostSetups },
+          projectGroups: { list: vi.fn().mockResolvedValue([]) },
+          folderWorkspaces: { list: vi.fn().mockResolvedValue([]) },
+          runtimeEnvironments: {
+            call: runtimeEnvironmentTransportCall,
+            list: runtimeEnvironmentsList
+          }
+        },
+        dispatchEvent: vi.fn()
+      })
+    })
+
+    it('keeps sourceRepoIds ordered the same whichever host refreshed', async () => {
+      const store = createTestStore()
+      // Null active environment really selects local, alternating with runtime below.
+      store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
+      await store.getState().fetchReposForAllHosts()
+      const afterAllHosts = sharedProject(store)?.sourceRepoIds
+      expect(afterAllHosts).toHaveLength(2)
+
+      await store.getState().fetchRepos(catalogOwner(store))
+      const afterLocal = sharedProject(store)?.sourceRepoIds
+
+      await store.getState().fetchRuntimeEnvironmentRepos('env-1')
+      const afterRuntime = sharedProject(store)?.sourceRepoIds
+
+      expect(afterLocal).toEqual(afterAllHosts)
+      expect(afterRuntime).toEqual(afterAllHosts)
+    })
+
+    it('reuses the cross-host project row across alternating single-host refreshes', async () => {
+      const store = createTestStore()
+      store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
+      await store.getState().fetchReposForAllHosts()
+      // Settle compat merge’s two-host fixed point before measuring no-op identity.
+      await store.getState().fetchRepos(catalogOwner(store))
+      const settled = sharedProject(store)
+
+      await store.getState().fetchRuntimeEnvironmentRepos('env-1')
+      expect(sharedProject(store)).toBe(settled)
+
+      await store.getState().fetchRepos(catalogOwner(store))
+      expect(sharedProject(store)).toBe(settled)
+    })
+
+    it('reuses the cross-host project row across a no-op all-hosts refresh', async () => {
+      const store = createTestStore()
+      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+      await store.getState().fetchReposForAllHosts()
+      await store.getState().fetchReposForAllHosts()
+      const settled = sharedProject(store)
+
+      await store.getState().fetchReposForAllHosts()
+
+      expect(sharedProject(store)).toBe(settled)
+    })
+  })
+
+  // The catalog these tests read is the one the focused host would have shown.
+  function catalogOwner(store: {
+    getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+  }): { runtimeEnvironmentId: string | null } {
+    return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+  }
+}

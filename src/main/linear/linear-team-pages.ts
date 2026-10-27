@@ -19,6 +19,7 @@ type TeamLabelNode = {
   id: string
   name: string
   color: string
+  isGroup: boolean
 }
 
 type TeamMemberNode = {
@@ -83,7 +84,9 @@ export async function fetchAllTeamLabels(team: {
   while (labels.pageInfo.hasNextPage) {
     await labels.fetchNext()
   }
-  return labels.nodes.map((l) => ({ id: l.id, name: l.name, color: l.color }))
+  return labels.nodes
+    .filter((l) => !l.isGroup)
+    .map((l) => ({ id: l.id, name: l.name, color: l.color }))
 }
 
 export async function fetchAllTeamMembers(team: {

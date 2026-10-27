@@ -1,3 +1,5 @@
+import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
@@ -14,6 +16,7 @@ import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
+import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
@@ -47,12 +50,6 @@ export async function connectIpcPty(
     return
   }
   if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
-    if (options.admitPtyId && !options.admitPtyId(options.sessionId)) {
-      return context.isDestroyed() ? undefined : { id: options.sessionId }
-    }
-    if (context.isDestroyed()) {
-      return
-    }
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
     if (context.isDestroyed()) {
@@ -84,12 +81,11 @@ export async function connectIpcPty(
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
-    // Why read it before the request and not after: a redeployed SSH relay renumbers from pty-1, so
-    // this spawn can be handed an id a dead PTY used to own. State dated at or below this fence was
-    // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
+    // Fence before spawning: redeployed relays recycle IDs, so earlier buffered state belongs to a previous PTY lifetime.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
-    const retireFreshSpawn = async (path: 'disposed' | 'refused'): Promise<void> => {
+    settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
+    const retireDisposedFreshSpawn = async (): Promise<void> => {
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
         return
       }
@@ -97,40 +93,28 @@ export async function connectIpcPty(
       if (spawnResult.isReattach || spawnResult.coldRestore || context.ownsPtyId(spawnResult.id)) {
         return
       }
-      // Only disposed transports can have a successor; live refusal must still retire the PTY (#11003).
-      const retained = path === 'disposed' && retainDisposedSpawn?.() === true
-      if (!retained) {
+      // A disposed transport can have a successor that still owns this PTY (#11003).
+      if (retainDisposedSpawn?.() !== true) {
         await window.api.pty.kill(spawnResult.id)
       }
     }
 
     if (context.isDestroyed()) {
-      await retireFreshSpawn('disposed')
-      return
-    }
-    if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
-      await retireFreshSpawn('refused')
-      return context.isDestroyed() ? undefined : spawnResult
-    }
-    if (context.isDestroyed()) {
-      await retireFreshSpawn('disposed')
+      await retireDisposedFreshSpawn()
       return
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
       if (context.isDestroyed()) {
-        await retireFreshSpawn('disposed')
+        await retireDisposedFreshSpawn()
         return
       }
     }
 
-    // Why unconditional: this runs on identity, not timing. Whatever we attached to — fresh,
-    // reattach or cold restore — an exit naming a different incarnation of the id is not ours, so
-    // it is safe to drop even for the reattach the fence below deliberately leaves alone.
+    // Drop foreign-incarnation exits for fresh and restored sessions alike; identity proves they cannot belong to this attachment.
     discardPreHandlerPtyExitFromForeignIncarnation(spawnResult.id, spawnResult.incarnationId)
     if (!admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore) {
-      // Why only a fresh spawn: a reattach deliberately re-owns an id that already existed, so its
-      // buffered exit is the real thing. A fresh spawn's PTY did not exist yet.
+      // Only fresh spawns discard pre-request state; reattach deliberately re-owns a pre-existing ID and needs its real buffered exit.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
     context.bind(spawnResult.id)
@@ -149,7 +133,17 @@ export async function connectIpcPty(
       if (!context.isExpectedExitCurrent()) {
         return
       }
-      return { id: spawnResult.id, exitedBeforeAttach: true }
+      return {
+        ...terminalLaunchFacts(spawnResult),
+        id: spawnResult.id,
+        exitedBeforeAttach: true,
+        // Why kept: a shell that replaced a resume and then exited never resumed the agent, and a
+        // refused plan must still not be registered or consume the saved session.
+        ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {}),
+        ...(spawnResult.agentResumeRefused
+          ? { agentResumeRefused: spawnResult.agentResumeRefused }
+          : {})
+      }
     }
     if (context.isDestroyed()) {
       return
@@ -168,6 +162,7 @@ export async function connectIpcPty(
     }
     return projectIpcPtyConnectResult(spawnResult)
   } catch (error) {
+    settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, null)
     if (context.isDestroyed()) {
       return
     }
@@ -190,15 +185,13 @@ function handleConnectError(
   if (message.includes('was explicitly killed')) {
     return undefined
   }
+  const deferral = readTerminalSpawnDeferral(message)
+  if (deferral) {
+    context.getCallbacks().onSpawnDeferred?.(deferral)
+    return undefined
+  }
   if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {
-    // Why not `sessionExpired`: this string is minted by `toRelaySshPtyId`/`toAppSshPtyId` from a
-    // pure client-side id comparison, before any relay is contacted — it reports that the id is not
-    // addressable through THIS connection, never that its process died. Respawning here cold-restores
-    // the agent, and after an SSH target re-adoption the "other" connection is the same machine, so
-    // that puts a second `claude --resume` on the transcript the surviving PTY still owns
-    // (docs/reference/ssh-execution-boundary.md — an unaddressable id is `unverifiable`, not `exited`).
-    // Returning undefined without an error keeps #7661's no-red-toast outcome while routing the pane
-    // to the remount-and-reattach recovery instead of a fresh shell.
+    // An unaddressable cross-connection ID is unverifiable, not expired; reattach recovery avoids cold-resuming a second agent onto a live transcript (docs/reference/ssh-execution-boundary.md).
     return undefined
   }
   if (connectionId && message.includes('No PTY provider for connection')) {

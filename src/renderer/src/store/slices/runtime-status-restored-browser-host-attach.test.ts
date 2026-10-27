@@ -8,6 +8,7 @@ import {
   createRuntimeStatusSlice,
   type RuntimeStatusSlice
 } from './runtime-status'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }
@@ -22,14 +23,10 @@ const prepareBrowserClientHostPlacement = vi.fn(async (_args: { selector: string
 }))
 
 function stubApi(getStatus: ReturnType<typeof vi.fn>): void {
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        getStatus,
-        list: vi.fn(),
-        prepareBrowserClientHostPlacement
-      }
-    }
+  stubRuntimeEnvironmentBridge({
+    getStatus,
+    list: vi.fn(),
+    prepareBrowserClientHostPlacement
   })
 }
 

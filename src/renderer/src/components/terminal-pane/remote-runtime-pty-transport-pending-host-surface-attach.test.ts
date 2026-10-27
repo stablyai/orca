@@ -5,6 +5,18 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
 
@@ -116,8 +128,9 @@ describe('initial host-mirror attach against a surface published as pending-hand
     await vi.advanceTimersByTimeAsync(HOST_SURFACE_ATTACH_WINDOW_MS)
     await expect(connect).resolves.toBeUndefined()
 
-    expect(transport.getRecoveryState?.().phase).toBe('recovering')
-    expect(recoveryStates.at(-1)?.phase).toBe('recovering')
+    // Why backoff: the wait ended with unknown liveness, so a retry is armed rather than parked (#27178).
+    expect(transport.getRecoveryState?.().phase).toBe('backoff')
+    expect(recoveryStates.at(-1)?.phase).toBe('backoff')
 
     await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
 
@@ -209,7 +222,7 @@ describe('initial host-mirror attach against a surface published as pending-hand
 
     expect(onError).not.toHaveBeenCalled()
     expect(countCalls('session.tabs.activate')).toBeGreaterThan(1)
-    expect(transport.getRecoveryState?.().phase).toBe('recovering')
+    expect(transport.getRecoveryState?.().phase).toBe('backoff')
   })
 
   it('never reads an empty tab inventory as a closed remote terminal', async () => {
@@ -234,8 +247,7 @@ describe('initial host-mirror attach against a surface published as pending-hand
     const connect = transport.connect({ url: '', callbacks: { onError } })
     await vi.advanceTimersByTimeAsync(1_000)
 
-    // A snapshot with no surface for the tab is a client-side view of a host that may still be
-    // republishing — unknown liveness, so no terminal-closed verdict may be surfaced.
+    // Missing tab surfaces during host republish prove unknown liveness, never terminal closure.
     expect(onError).not.toHaveBeenCalled()
 
     hostRepublished = true

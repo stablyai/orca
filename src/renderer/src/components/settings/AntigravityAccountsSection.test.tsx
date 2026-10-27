@@ -10,7 +10,9 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AntigravityAccountState } from '../../../../shared/antigravity-account-types'
 
 vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
-  callAntigravityAccounts: vi.fn()
+  callAntigravityAccounts: vi.fn(),
+  callAntigravityChatSignIn: vi.fn(),
+  subscribeAntigravityChatSignIn: vi.fn()
 }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
@@ -59,6 +61,12 @@ const changedState: AntigravityAccountState = {
     identityKnown: true
   }
 }
+const unidentifiedState: AntigravityAccountState = {
+  accounts: [],
+  activeAccountId: null,
+  selectedAccountId: null,
+  currentAccount: { email: null, subject: null, authMethod: 'consumer', identityKnown: false }
+}
 
 beforeEach(() => {
   vi.mocked(callAntigravityAccounts).mockReset().mockResolvedValue(state)
@@ -68,6 +76,20 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('native Antigravity Accounts', () => {
+  it('saves a signed-in account with unknown identity and displays the confirmed account', async () => {
+    const save = Promise.withResolvers<AntigravityAccountState>()
+    vi.mocked(callAntigravityAccounts)
+      .mockResolvedValueOnce(unidentifiedState)
+      .mockReturnValueOnce(save.promise)
+    render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
+    await screen.findByText('Signed-in identity unavailable')
+    await userEvent.click(screen.getByRole('button', { name: 'Save current account' }))
+    expect(screen.getByRole('button', { name: 'Save current account' })).toBeDisabled()
+    save.resolve({ ...state, selectedAccountId: null })
+    await screen.findByText('Native account')
+    expect(screen.getAllByText('synthetic@example.invalid')).toHaveLength(2)
+  })
+
   it.each(['Refresh accounts', 'Save current account'])(
     'hides the previous account quota when %s observes a different native identity',
     async (action) => {
@@ -80,31 +102,70 @@ describe('native Antigravity Accounts', () => {
       await userEvent.click(screen.getByRole('button', { name: action }))
       await screen.findByText('second@example.invalid')
       expect(screen.queryByText('Session: 31% · Weekly: —')).toBeNull()
+      await userEvent.click(screen.getByRole('button', { name: 'Refresh accounts' }))
+      await screen.findByText('Native account')
+      expect(screen.queryByText('Session: 31% · Weekly: —')).toBeNull()
     }
   )
 
-  it('clears previous quota when an identity changes during a new usage refresh', async () => {
+  it.each([
+    { change: 'a known identity changes', before: state, after: changedState },
+    { change: 'a known identity becomes unknown', before: state, after: unidentifiedState },
+    { change: 'an unknown identity becomes known', before: unidentifiedState, after: state },
+    {
+      change: 'an unidentified account signs out',
+      before: unidentifiedState,
+      after: { ...unidentifiedState, currentAccount: null }
+    },
+    {
+      change: 'the authentication method changes',
+      before: unidentifiedState,
+      after: {
+        ...unidentifiedState,
+        currentAccount: {
+          email: null,
+          subject: null,
+          authMethod: 'enterprise',
+          identityKnown: false
+        }
+      }
+    }
+  ])('clears previous quota when $change during usage refresh', async ({ before, after }) => {
+    vi.mocked(callAntigravityAccounts).mockResolvedValue(before)
     vi.mocked(callRuntimeRpc).mockResolvedValue(usage)
     render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
-    await screen.findByText('Native account')
+    await screen.findByRole('button', { name: 'Refresh usage' })
     await userEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
     await screen.findByText('Session: 31% · Weekly: —')
-    vi.mocked(callAntigravityAccounts)
-      .mockResolvedValueOnce(state)
-      .mockResolvedValueOnce(changedState)
+    vi.mocked(callAntigravityAccounts).mockResolvedValueOnce(before).mockResolvedValueOnce(after)
     await userEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('native account changed')
     expect(screen.queryByText('Session: 31% · Weekly: —')).toBeNull()
   })
 
-  it('shows the native identity and supported CLI sign-in instructions without inventing a login', async () => {
+  it.each(['Refresh accounts', 'Save current account'])(
+    'shows unidentified usage until %s rechecks credentials',
+    async (action) => {
+      vi.mocked(callAntigravityAccounts).mockResolvedValue(unidentifiedState)
+      vi.mocked(callRuntimeRpc).mockResolvedValue(usage)
+      render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
+      await screen.findByText('Signed-in identity unavailable')
+      await userEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
+      await screen.findByText('Session: 31% · Weekly: —')
+      expect(screen.queryByRole('alert')).toBeNull()
+      if (action === 'Save current account') {
+        vi.mocked(callAntigravityAccounts).mockRejectedValueOnce(new Error('Identity unavailable'))
+      }
+      await userEvent.click(screen.getByRole('button', { name: action }))
+      await waitFor(() => expect(screen.getByRole('button', { name: action })).toBeEnabled())
+      expect(screen.queryByText('Session: 31% · Weekly: —')).toBeNull()
+    }
+  )
+
+  it('shows the native identity and prevents removing the active account', async () => {
     render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
     await screen.findByText('Native account')
     expect(screen.getAllByText('synthetic@example.invalid')).toHaveLength(2)
-    expect(screen.getByText(/use \/logout in agy/)).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Sign-in instructions' }).getAttribute('href')).toBe(
-      'https://antigravity.google/docs/cli/install/'
-    )
     expect(screen.getByRole('button', { name: 'Remove' }).hasAttribute('disabled')).toBe(true)
   })
 

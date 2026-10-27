@@ -26,8 +26,8 @@ import {
 } from '../../src/shared/node-runtime-pin.ts'
 import { currentTarget } from './server-build-target.mjs'
 import { nodeDistArchiveName, windowsImportLibFile } from './node-dist-archive-name.mjs'
-import { runProcessSync } from './script-child-process.mjs'
-import { getZipExtractorCommand } from './zip-extractor-command.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { getTarProgram, getZipExtractorCommand } from './zip-extractor-command.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const PIN_FILE = join(root, 'src/shared/node-runtime-pin.ts')
@@ -182,12 +182,6 @@ function run(program, args) {
   return result.stdout
 }
 
-function tarProgram() {
-  return process.platform === 'win32'
-    ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
-    : 'tar'
-}
-
 export function extract(archivePath, destination, member) {
   mkdirSync(destination, { recursive: true })
   if (archivePath.endsWith('.zip')) {
@@ -195,7 +189,7 @@ export function extract(archivePath, destination, member) {
     run(command.file, command.args)
     return
   }
-  run(tarProgram(), ['-xzf', archivePath, '-C', destination, member])
+  run(getTarProgram(), ['-xzf', archivePath, '-C', destination, member])
 }
 
 function gpgAvailable() {

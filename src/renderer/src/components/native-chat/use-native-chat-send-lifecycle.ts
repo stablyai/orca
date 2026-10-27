@@ -9,7 +9,13 @@ export type NativeChatSendLifecycle = {
 export function useNativeChatSendLifecycle(
   terminalTabId: string,
   targetPtyId: string | null,
-  onPendingSendCanceled?: (pendingId: string) => void
+  onPendingSendCanceled?: (pendingId: string) => void,
+  cardOwnership?: {
+    /** A prompt card owns the agent's input while the composer stays mounted. */
+    inputOwnedByCard: boolean
+    /** Settles the echo of a send the card retired; it keeps the user's text visible. */
+    onPendingSendRetired?: (pendingId: string) => void
+  }
 ): NativeChatSendLifecycle {
   const pendingSendHandlesRef = useRef(
     new Map<
@@ -17,19 +23,26 @@ export function useNativeChatSendLifecycle(
       { cleanupTimer: ReturnType<typeof setTimeout> | null; pendingId?: string }
     >()
   )
-  const cancelPendingSends = useCallback(() => {
-    for (const [handle, entry] of pendingSendHandlesRef.current) {
-      const { cleanupTimer, pendingId } = entry
-      if (cleanupTimer !== null) {
-        clearTimeout(cleanupTimer)
+  const settlePendingSends = useCallback(
+    (onSettled?: (pendingId: string) => void, keepInput = false) => {
+      for (const [handle, entry] of pendingSendHandlesRef.current) {
+        const { cleanupTimer, pendingId } = entry
+        if (cleanupTimer !== null) {
+          clearTimeout(cleanupTimer)
+        }
+        handle.cancel(keepInput)
+        if (pendingId) {
+          onSettled?.(pendingId)
+        }
       }
-      handle.cancel()
-      if (pendingId) {
-        onPendingSendCanceled?.(pendingId)
-      }
-    }
-    pendingSendHandlesRef.current.clear()
-  }, [onPendingSendCanceled])
+      pendingSendHandlesRef.current.clear()
+    },
+    []
+  )
+  const cancelPendingSends = useCallback(
+    () => settlePendingSends(onPendingSendCanceled),
+    [settlePendingSends, onPendingSendCanceled]
+  )
   const trackPendingSend = useCallback((handle: NativeChatSendHandle, pendingId?: string) => {
     const entry = {
       cleanupTimer: null as ReturnType<typeof setTimeout> | null,
@@ -49,9 +62,17 @@ export function useNativeChatSendLifecycle(
     }, handle.settleAfterMs)
   }, [])
 
-  // Why: delayed Enter/image writes belong to the exact PTY target. A pane
-  // swap or unmount must cancel them before that PTY can close or be reused.
+  // Cancel delayed Enter/image writes during commit before a swapped PTY can close or be reused.
   useLayoutEffect(() => cancelPendingSends, [cancelPendingSends, targetPtyId, terminalTabId])
+
+  const inputOwnedByCard = cardOwnership?.inputOwnedByCard === true
+  const onPendingSendRetired = cardOwnership?.onPendingSendRetired ?? onPendingSendCanceled
+  // Card ownership makes a pending Enter an answer; retire it without typing a line-clear under the dialog.
+  useLayoutEffect(() => {
+    if (inputOwnedByCard) {
+      settlePendingSends(onPendingSendRetired, true)
+    }
+  }, [inputOwnedByCard, onPendingSendRetired, settlePendingSends])
 
   return { cancelPendingSends, trackPendingSend }
 }

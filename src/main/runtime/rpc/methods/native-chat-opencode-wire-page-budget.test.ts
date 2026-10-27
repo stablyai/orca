@@ -10,7 +10,7 @@ import { readOpenCodeTranscriptPage } from '../../../native-chat/transcript-open
 import type { SubscribeNativeChatTranscriptArgs } from '../../../native-chat/transcript-watch-contract'
 import { createDispatcherStreamingFeatureEmitter } from '../dispatcher-streaming-feature-emitter'
 import { mobileE2EETextPayloadAdmissionBytes } from '../mobile-e2ee-outbound-admission'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { buildRegistry, isStreamingMethod, type RpcContext } from '../core'
 
 const state: { path: string; watcher: SubscribeNativeChatTranscriptArgs | null } = vi.hoisted(
@@ -109,8 +109,12 @@ function denseFixture(version: 'v1' | 'v2'): string {
 }
 
 function context(clientKind: RpcContext['clientKind'] = 'mobile'): RpcContext {
-  const runtime = { registerSubscriptionCleanup: vi.fn(), cleanupSubscription: vi.fn() }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Native-chat only uses these subscription cleanup methods; its feature emitter records no interaction.
+  const runtime = {
+    getAgentProviderSessionRows: () => [],
+    registerSubscriptionCleanup: vi.fn(),
+    cleanupSubscription: vi.fn()
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Native-chat only uses the hook rows and these subscription cleanup methods; its feature emitter records no interaction.
   return { runtime: runtime as unknown as RpcContext['runtime'], clientKind }
 }
 

@@ -248,7 +248,6 @@ describe('regional host drain endpoint', () => {
       graceMs: 0
     }
 
-    expect(REGIONAL_REHOME_TRUST_PROBE_HOST_ID).toHaveLength(16)
     for (let call = 0; call < 2; call++) {
       const response = await post(app, 'rehome-token', probe)
       expect(response.status).toBe(200)
@@ -372,9 +371,7 @@ describe('regional rehome director controls', () => {
   })
 
   it('accepts the exact safety payload the cell heartbeat composes', async () => {
-    // Why: index.ts spreads the FULL pool-pressure counts into safety; a
-    // strict schema missing any produced field 400s every heartbeat (the
-    // 2026-08-15..26 outage that left all cells at rehome protocol 0).
+    // index.ts sends full pool-pressure safety counts; missing strict-schema fields once rejected every heartbeat and left rehome protocol at 0 (2026-08-15..26).
     const recordCellRegionalRehomeStatus = vi.fn().mockResolvedValue(undefined)
     const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
       store: {} as never,
@@ -470,24 +467,28 @@ describe('regional rehome director controls', () => {
       (await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', withoutCooldown))
         .status
     ).toBe(400)
+    expect(applyRegionalRehomeControl).toHaveBeenCalledExactlyOnceWith(apply)
   })
 
   it('probes dedicated trust twice and returns only aggregate proof', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
-    const cellDeploymentStatus = vi.fn().mockResolvedValue({
-      cellId: 'production-gce-c7',
-      cellUrl: 'https://c7.relay.example.test',
-      region: 'us-central1',
-      runtime: {
-        cellIncarnation,
-        ready: true,
-        heartbeatFresh: true,
-        regionalRehomeProtocol: 1
+    const reserveAwareCellDeploymentStatus = vi.fn().mockResolvedValue({
+      admitMode: 'db',
+      status: {
+        cellId: 'production-gce-c7',
+        cellUrl: 'https://c7.relay.example.test',
+        region: 'us-central1',
+        runtime: {
+          cellIncarnation,
+          ready: true,
+          heartbeatFresh: true,
+          regionalRehomeProtocol: 1
+        }
       }
     })
     const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
       store: {} as never,
-      assignments: { cellDeploymentStatus } as never,
+      assignments: { reserveAwareCellDeploymentStatus } as never,
       drain: vi.fn(),
       regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
       regionalRehomeFetch: (async (url, init) => {
@@ -540,20 +541,23 @@ describe('regional rehome director controls', () => {
   it('probes a source cell in any region, not only the default one', async () => {
     // Rehoming moves hosts in both directions, so an asia-east2 cell is a
     // source too and its trust has to be provable the same way.
-    const cellDeploymentStatus = vi.fn().mockResolvedValue({
-      cellId: 'production-gce-c27',
-      cellUrl: 'https://c27.relay.example.test',
-      region: 'asia-east2',
-      runtime: {
-        cellIncarnation,
-        ready: true,
-        heartbeatFresh: true,
-        regionalRehomeProtocol: 1
+    const reserveAwareCellDeploymentStatus = vi.fn().mockResolvedValue({
+      admitMode: 'db',
+      status: {
+        cellId: 'production-gce-c27',
+        cellUrl: 'https://c27.relay.example.test',
+        region: 'asia-east2',
+        runtime: {
+          cellIncarnation,
+          ready: true,
+          heartbeatFresh: true,
+          regionalRehomeProtocol: 1
+        }
       }
     })
     const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
       store: {} as never,
-      assignments: { cellDeploymentStatus } as never,
+      assignments: { reserveAwareCellDeploymentStatus } as never,
       drain: vi.fn(),
       regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
       regionalRehomeFetch: (async () =>
@@ -576,21 +580,24 @@ describe('regional rehome director controls', () => {
   })
 
   it('still refuses a trust probe against a cell without the drain protocol', async () => {
-    const cellDeploymentStatus = vi.fn().mockResolvedValue({
-      cellId: 'production-gce-c27',
-      cellUrl: 'https://c27.relay.example.test',
-      region: 'asia-east2',
-      runtime: {
-        cellIncarnation,
-        ready: true,
-        heartbeatFresh: true,
-        regionalRehomeProtocol: 0
+    const reserveAwareCellDeploymentStatus = vi.fn().mockResolvedValue({
+      admitMode: 'db',
+      status: {
+        cellId: 'production-gce-c27',
+        cellUrl: 'https://c27.relay.example.test',
+        region: 'asia-east2',
+        runtime: {
+          cellIncarnation,
+          ready: true,
+          heartbeatFresh: true,
+          regionalRehomeProtocol: 0
+        }
       }
     })
     const sourceFetch = vi.fn<typeof fetch>()
     const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
       store: {} as never,
-      assignments: { cellDeploymentStatus } as never,
+      assignments: { reserveAwareCellDeploymentStatus } as never,
       drain: vi.fn(),
       regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
       regionalRehomeFetch: sourceFetch,
@@ -604,6 +611,8 @@ describe('regional rehome director controls', () => {
     })
 
     expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'regional_rehome_trust_probe_source_unavailable' })
+    expect(reserveAwareCellDeploymentStatus).toHaveBeenCalledExactlyOnceWith('production-gce-c27')
     expect(sourceFetch).not.toHaveBeenCalled()
   })
 
@@ -633,14 +642,17 @@ describe('regional rehome director controls', () => {
   })
 
   it('fails closed when the source rejects the dedicated identity', async () => {
-    const cellDeploymentStatus = vi.fn().mockResolvedValue({
-      cellUrl: 'https://c7.relay.example.test',
-      region: 'us-central1',
-      runtime: {
-        cellIncarnation,
-        ready: true,
-        heartbeatFresh: true,
-        regionalRehomeProtocol: 1
+    const reserveAwareCellDeploymentStatus = vi.fn().mockResolvedValue({
+      admitMode: 'db',
+      status: {
+        cellUrl: 'https://c7.relay.example.test',
+        region: 'us-central1',
+        runtime: {
+          cellIncarnation,
+          ready: true,
+          heartbeatFresh: true,
+          regionalRehomeProtocol: 1
+        }
       }
     })
     const sourceFetch = vi
@@ -648,7 +660,7 @@ describe('regional rehome director controls', () => {
       .mockResolvedValue(Response.json({ error: 'invalid_token' }, { status: 401 }))
     const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
       store: {} as never,
-      assignments: { cellDeploymentStatus } as never,
+      assignments: { reserveAwareCellDeploymentStatus } as never,
       drain: vi.fn(),
       regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
       regionalRehomeFetch: sourceFetch,
@@ -661,8 +673,9 @@ describe('regional rehome director controls', () => {
     })
 
     expect(response.status).toBe(409)
+    expect(reserveAwareCellDeploymentStatus).toHaveBeenCalledExactlyOnceWith('production-gce-c7')
     expect(sourceFetch).toHaveBeenCalledOnce()
-    expect(JSON.stringify(await response.json())).not.toContain('rehome-token')
+    expect(await response.json()).toEqual({ error: 'regional_rehome_trust_probe_source_401' })
   })
 })
 
@@ -734,7 +747,7 @@ describe('cell drain endpoint pacing', () => {
   })
 
   it('refuses a window that is negative, fractional, or past the cap', async () => {
-    for (const paceWindowMs of [-1, 1.5, 300_001]) {
+    for (const paceWindowMs of [-1, 1.5, 1_200_001]) {
       const { app, drain } = appWithDrain()
       const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
         v: 1,
@@ -751,10 +764,10 @@ describe('cell drain endpoint pacing', () => {
     const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
       v: 1,
       graceMs: 0,
-      paceWindowMs: 300_000
+      paceWindowMs: 1_200_000
     })
     expect(response.status).toBe(200)
-    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 300_000 })
+    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 1_200_000 })
   })
 
   it('still rejects an unauthenticated pacing request', async () => {

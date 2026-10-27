@@ -1,29 +1,17 @@
-/**
- * The one plain-text rendering of a worker transcript message.
- *
- * The CLI prints `worker-read --source transcript` with it, and `terminal read` serves a structured
- * worker's recent output through it, so a peer sees the same text either way. Shared rather than
- * copied: two renderings would let the two surfaces disagree about what a tool call looked like.
- */
+/** Share worker-read transcript and terminal-read text rendering so peers see identical tool-call output through either surface. */
 
-import { claimBackgroundTaskTwins } from './native-chat-background-task-row'
+import { claimBackgroundTaskTwins } from './native-chat/input/native-chat-background-task-row'
 import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText
 } from './native-chat-subagent-summary'
+import { subagentFallbackText } from './native-chat-subagent-items'
 import type { NativeChatMessage } from './native-chat-types'
 
 export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
-  // Every roster block is written beside a plain-text twin carrying the same
-  // sentence, for clients that cannot draw the block. Text surfaces are those
-  // clients, so they print the twin and drop the block. The renderer reaches the
-  // same single print from the other side but not by the same rule: it drops
-  // every fallback-shaped text block as soon as any group is present and draws
-  // each group, so it never has to decide which twin belongs to which group.
+  // Print roster text twins instead of blocks. Renderer uses the inverse presentation rule (draw groups, hide fallback-shaped text).
   const standIns = claimSubagentGroupTwins(message.blocks)
-  // A background task's row is the same shape: one block, one frozen twin. Its
-  // twin is matched on exact text rather than by shape, because the sentence is
-  // often the provider's own and has none.
+  // Background-task twins require exact text: provider sentences have no reliable fallback shape.
   const taskTwins = claimBackgroundTaskTwins(message.blocks)
   const blocks = message.blocks.map((block, index) => {
     if (block.type === 'text') {
@@ -44,25 +32,20 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
     if (block.type === 'subagent-group') {
       return standIns.get(index) ?? null
     }
-    // The journal deliberately admits block types this build does not know, and
-    // a newer remote host can send one over the wire. Degrade to a marker rather
-    // than reading fields off a shape that has none.
+    if (block.type === 'subagent') {
+      // A subagent's own row is its block and its twin, nothing else.
+      return message.blocks.some((other) => other.type === 'text')
+        ? null
+        : `[subagents] ${subagentFallbackText(block)}`
+    }
+    // Newer hosts may send unknown journal blocks; emit a marker instead of reading nonexistent fields.
     return '[unsupported block]'
   })
   return `[${message.role}] ${blocks.filter((line) => line !== null).join('\n')}`.trimEnd()
 }
 
-/** For each roster block, the sentence it must print itself — absent when a twin
- *  beside it already prints one.
- *
- *  Exact-text claims are settled for EVERY group before any leftover twin is
- *  claimed by position: claiming in block order let an earlier group consume a
- *  later group's twin, silencing the earlier roster while the later one printed
- *  twice. The positional fallback stays because a roster written by a newer build
- *  holds a state this build reads as `unverifiable`, so its frozen twin can never
- *  equal the sentence recomputed here and a text match alone would print it
- *  twice. A group left with no twin prints its own: the wire admits a roster that
- *  arrived without one, and dropping that would lose the sentence altogether. */
+/** Claim exact twins for every roster before positional fallback, or an earlier group can steal a later group’s twin.
+ * Keep positional matching for newer/unverifiable states whose frozen wording differs; groups with no twin must print their own sentence. */
 function claimSubagentGroupTwins(blocks: NativeChatMessage['blocks']): Map<number, string> {
   const twins = new Map<string, number>()
   let remainingTwins = 0

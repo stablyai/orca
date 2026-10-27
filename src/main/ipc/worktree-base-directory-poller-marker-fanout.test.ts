@@ -10,9 +10,7 @@ import type {
   WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
 
-// Why: the backstop full scan stats a `.git` marker per candidate dir; an
-// unbounded fan-out at hundreds of worktrees would queue thousands of `stat`
-// calls on libuv's 4-thread pool (#17828).
+// Bound full-scan marker stats so large fleets cannot flood libuv's filesystem pool (#17828).
 const { concurrency, markerStatGate } = vi.hoisted(() => ({
   concurrency: { current: 0, peak: 0 },
   // Parks `.git` stats so a batch's launched-at-once width is observable without wall clocks.
@@ -98,9 +96,6 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
     )
     cleanups.push(() => poller.unsubscribe())
 
-    // 200 candidates stated unbounded would peak near 200 concurrent `stat`
-    // calls; bounding the marker probe keeps the peak independent of count —
-    // while still overlapping requests (not serialized one-at-a-time).
     expect(concurrency.peak).toBeGreaterThan(1)
     expect(concurrency.peak).toBeLessThan(20)
   })
@@ -134,7 +129,6 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
 
     await waitUntil(() => markerStatGate.parked.length > 0)
 
-    // Serial probing parks after one; the batch launches exactly the bound at once.
     expect(probed.length).toBe(MARKER_PROBE_CONCURRENCY)
 
     parkFirstBatch = false
@@ -144,7 +138,6 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
     }
     await waitUntil(() => probed.length >= pendingCount)
 
-    // The first tick still probes every due dir exactly once.
     expect(new Set(probed.slice(0, pendingCount)).size).toBe(pendingCount)
   })
 })

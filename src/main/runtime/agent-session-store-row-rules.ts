@@ -1,8 +1,4 @@
-/**
- * What makes one agent-session store row readable. A load applies these to every row it reads; a
- * transaction applies them to every row it changed before committing, so the rows this build writes
- * are exactly the rows a later load accepts.
- */
+// Loads and transactions share validation so every committed row remains readable.
 
 import {
   agentSessionOperationKey,
@@ -12,10 +8,9 @@ import {
 import { isAgentSessionId, isPersistedAgentSessionRecord } from '../../shared/agent-session-record'
 import type { PersistedAgentSessionRecord } from '../../shared/agent-session-legacy-handoff-lease'
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
-import type { RetiredAgentSessionClaimKey } from './agent-session-record-store-file'
-import type { PersistedAgentSessionTab } from './agent-session-tab-table'
+import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
+import type { PersistedAgentSessionTab } from './agent-session/agent-session-tab-table'
 
-/** A record row a load keeps in `records` rather than quarantining. */
 export function isReadableAgentSessionStoreRecord(
   sessionId: string,
   value: unknown
@@ -50,7 +45,6 @@ export function isReadableRetiredAgentSessionClaimKey(
   )
 }
 
-/** One chat tab entry; a table is readable when every entry is and no id repeats. */
 export function isReadableAgentSessionStoreTab(entry: unknown): entry is PersistedAgentSessionTab {
   return (
     typeof entry === 'object' &&

@@ -1,6 +1,3 @@
-// A failed Codex turn through the real path its record takes:
-// translator → deferred sink queue → on-disk journal → the shared turn-timing reader.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,6 +11,7 @@ import { createTrackedJournalOpener } from '../native-chat/agent-session-journal
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-codex-failed-turn'
 const THREAD = 'thread-abc'
@@ -35,7 +33,7 @@ async function session() {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
+      providerHandle: codexProviderHandle(THREAD)
     },
     stateDirectory: root,
     now: () => 1_000
@@ -92,8 +90,6 @@ describe('a failed Codex turn in the journal', () => {
     )
     await drained()
 
-    // Codex writes both frames back to back; the error's status row is still being
-    // written when the failed completion arrives.
     on(
       'error',
       { turnId: TURN, willRetry: false, error: { message: 'stream disconnected' } },
@@ -109,14 +105,11 @@ describe('a failed Codex turn in the journal', () => {
       completedAt: 3_100,
       durationMs: 1_900
     })
-    // "Worked for" under the turn's message reads Codex's own duration.
     expect(
       completedStructuredAgentTurnSeconds(selectStructuredAgentRunningTurnTiming(rows, TURN))
     ).toBe(1)
   })
 
-  // Codex ends a turn once, so a second completion is not expected. If one came,
-  // the settlement id keeps the first record, whether it is still queued or written.
   it.each([
     ['still queued', false],
     ['already written', true]
@@ -127,7 +120,7 @@ describe('a failed Codex turn in the journal', () => {
       on('turn/started', { turn: { id: TURN } }, 1_000)
       await drained()
 
-      // The reply's row is being written, so the first completion waits behind it.
+      // Queue a reply so the completion must wait behind its write.
       on(
         'item/completed',
         { turnId: TURN, item: { type: 'agentMessage', id: 'agent-1', text: 'Done' } },

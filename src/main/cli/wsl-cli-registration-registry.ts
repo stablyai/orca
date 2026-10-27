@@ -7,8 +7,7 @@ import { normalizeWslDistroKey } from './wsl-cli-registration-operation'
 const REGISTRY_FILE_NAME = 'wsl-cli-registrations.json'
 const REGISTRY_SCHEMA_VERSION = 2
 const DEFAULT_NEGATIVE_INSPECTION_TTL_MS = 7 * 24 * 60 * 60 * 1_000
-// Why: the registry is advisory; cap per-distro bookkeeping so hosts that
-// cycle many uniquely named distros cannot grow the file without bound.
+// Bound advisory bookkeeping on hosts that cycle through many distro names.
 const MAX_INSPECTION_ENTRIES = 64
 
 type WslCliRegistrationReconciliation = {
@@ -26,9 +25,7 @@ type WslCliRegistrationRegistryState = {
 type WslCliRegistrationRegistryTiming = {
   now?: number
   negativeInspectionTtlMs?: number
-  // Why: a registered distro already reconciled against this exact launcher
-  // by this exact app build has nothing to repair; skipping it avoids booting
-  // its VM on every startup while still re-probing after each app update.
+  // Unchanged launcher/build pairs need no repair; app updates must trigger a new probe.
   currentTarget?: string | null
   appVersion?: string | null
 }
@@ -36,8 +33,7 @@ type WslCliRegistrationRegistryTiming = {
 export type WslCliRegistrationObservation = {
   distro: string
   inspected: boolean
-  // Why: null records an inspection without changing registration ownership —
-  // used for 'unsupported' probes where managed-ness could not be determined.
+  // Null preserves ownership when unsupported probes cannot determine whether registration is managed.
   managed: boolean | null
   reconciled?: WslCliRegistrationReconciliation | null
 }
@@ -110,8 +106,7 @@ function parseState(content: string): WslCliRegistrationRegistryState {
       reconciliations: parseReconciliations(parsed.reconciliations)
     }
   } catch {
-    // Why: a corrupt advisory registry must trigger safe rediscovery rather
-    // than preventing managed registrations from receiving future updates.
+    // Rediscover after corruption so managed registrations can still receive updates.
     return emptyState()
   }
 }
@@ -154,8 +149,7 @@ async function writeState(
   state: WslCliRegistrationRegistryState
 ): Promise<void> {
   await mkdir(userDataPath, { recursive: true })
-  // Why: userData writes on Windows can hit Chromium's Protected-DACL EPERM;
-  // writeFileAtomically carries the ACL-repair retry a plain rename lacks.
+  // writeFileAtomically retries Chromium Protected-DACL EPERM with ACL repair on Windows.
   writeFileAtomically(getRegistryPath(userDataPath), `${JSON.stringify(state, null, 2)}\n`)
 }
 
@@ -192,8 +186,7 @@ export async function getWslCliRegistrationCandidates(
   availableDistros: string[],
   timing: WslCliRegistrationRegistryTiming = {}
 ): Promise<string[]> {
-  // Why: the stored queue tail never rejects, so a failed concurrent write
-  // cannot abort candidate discovery; reads still see fully applied updates.
+  // Wait for complete writes; the nonrejecting tail keeps failed writes from aborting discovery.
   await getKeyedSerializedQueueTail(writeQueues, getRegistryPath(userDataPath))
   const state = await readState(userDataPath)
   const registered = new Set(state.registeredDistros.map(normalizeWslDistroKey))

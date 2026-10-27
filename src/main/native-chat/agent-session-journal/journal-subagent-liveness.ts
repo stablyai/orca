@@ -1,17 +1,5 @@
-// A roster row left claiming live children by a host that is gone.
-//
-// The writing host revises its `subagent-group` rows in place while it can see
-// the children, and sweeps whatever is still `working` when the provider goes
-// away. A host that DIED — crash, quit, force-restart — does neither: its last
-// revision goes on saying `working`, and nothing replays those children, so no
-// later event can ever settle them. Opening the journal is the one moment a new
-// host can state the truth about the old one: contact was lost. That is
-// `unverifiable`, never a synthesized exit — see
-// `docs/reference/ssh-execution-boundary.md`.
-//
-// Reconciles JOURNAL ROWS, not roster state. A producer that continues a roster
-// from the journal reads these rows after this revision, so it inherits the
-// verdict rather than the dead host's `working`.
+// A crashed host cannot settle its working rows. Reopen marks them unverifiable, preserving keys
+// for later runs; never invent exits (docs/reference/ssh-execution-boundary.md).
 
 import {
   agentJournalItemKey,
@@ -31,12 +19,15 @@ import {
   backgroundTaskFallbackText,
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskState
-} from '../../../shared/native-chat-background-task-row'
+} from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { subagentFallbackText } from '../../../shared/native-chat-subagent-items'
 import {
   isBackgroundTaskBlock,
+  isSubagentBlock,
   isSubagentGroupBlock,
   type NativeChatBlock,
   type NativeChatBackgroundTaskBlock,
+  type NativeChatSubagentBlock,
   type NativeChatSubagentGroupBlock
 } from '../../../shared/native-chat-types'
 
@@ -45,30 +36,42 @@ export type JournalSubagentLivenessRevision = {
   body: AgentJournalItemBody
 }
 
-/** The revisions a reopened journal owes: one per row still claiming a live
- *  child. Empty — the common case — when nothing was left mid-flight. */
 export function staleSubagentRosterRevisions(
   items: Iterable<AgentJournalRenderItem>
 ): JournalSubagentLivenessRevision[] {
   const revisions: JournalSubagentLivenessRevision[] = []
   for (const item of items) {
-    const body = item.body
-    if (body.kind !== 'message' || !body.blocks.some(hasStaleLiveWork)) {
+    const body = lostLiveWorkJournalBody(item.body)
+    if (!body) {
       continue
     }
-    // A key that will not parse cannot be re-addressed, and appending under a
-    // fresh identity would duplicate the row rather than revise it.
+    // A new identity would duplicate an unaddressable row.
     const identity = parseAgentJournalItemKey(item.itemId)
     if (!identity || agentJournalItemKey(identity) !== item.itemId) {
       continue
     }
-    revisions.push({ identity, body: { ...body, blocks: settleBlocks(body.blocks) } })
+    revisions.push({ identity, body })
   }
   return revisions
 }
 
+/** Mark live work unverifiable; lostAt is known only when a live host observes session end. */
+export function lostLiveWorkJournalBody(
+  body: AgentJournalItemBody,
+  lostAt?: number
+): AgentJournalItemBody | null {
+  if (body.kind !== 'message' || !body.blocks.some(hasStaleLiveWork)) {
+    return null
+  }
+  return { ...body, blocks: settleBlocks(body.blocks, lostAt) }
+}
+
 function hasStaleLiveWork(block: NativeChatBlock): boolean {
-  return hasWorkingChild(block) || hasLiveBackgroundTask(block)
+  return hasWorkingChild(block) || isWorkingSubagent(block) || hasLiveBackgroundTask(block)
+}
+
+function isWorkingSubagent(block: NativeChatBlock): block is NativeChatSubagentBlock {
+  return isSubagentBlock(block) && normalizeSubagentState(block.state) === 'working'
 }
 
 function hasWorkingChild(block: NativeChatBlock): block is NativeChatSubagentGroupBlock {
@@ -85,52 +88,59 @@ function hasLiveBackgroundTask(block: NativeChatBlock): block is NativeChatBackg
   )
 }
 
-/** No `settledAt`: the child stopped being observable at an unknown moment, and
- *  stamping the reopen would report the time the app was down as how long it
- *  ran. Readers already draw an unverifiable child with no stamp as having no
- *  known run length. */
-function settleBlocks(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
-  const backgroundTaskTwinText = new Map<string, string>()
+/** Unknown loss time must not turn app downtime into a fabricated run duration. */
+function settleBlocks(blocks: readonly NativeChatBlock[], lostAt?: number): NativeChatBlock[] {
+  const twinText = new Map<string, string>()
   const settled = blocks.map((block) => {
     if (hasWorkingChild(block)) {
-      return settleGroup(block)
+      return settleGroup(block, lostAt)
+    }
+    if (isWorkingSubagent(block)) {
+      const next: NativeChatSubagentBlock = {
+        ...block,
+        state: 'unverifiable',
+        ...(lostAt !== undefined ? { settledAt: lostAt } : {})
+      }
+      twinText.set(subagentFallbackText(block), subagentFallbackText(next))
+      return next
     }
     if (hasLiveBackgroundTask(block)) {
       const next = settleBackgroundTask(block)
-      backgroundTaskTwinText.set(
-        backgroundTaskFallbackText(block),
-        backgroundTaskFallbackText(next)
-      )
+      twinText.set(backgroundTaskFallbackText(block), backgroundTaskFallbackText(next))
       return next
     }
     return block
   })
-  const withBackgroundTaskTwins = settled.map((block) =>
-    block.type === 'text'
-      ? { ...block, text: backgroundTaskTwinText.get(block.text) ?? block.text }
-      : block
+  const withTwins = settled.map((block) =>
+    block.type === 'text' ? { ...block, text: twinText.get(block.text) ?? block.text } : block
   )
-  const rosters = withBackgroundTaskTwins.filter(isSubagentGroupBlock)
+  const rosters = withTwins.filter(isSubagentGroupBlock)
   const only = rosters.length === 1 ? rosters[0] : undefined
   if (!only) {
-    return withBackgroundTaskTwins
+    return withTwins
   }
-  // The plain-text twin is all a client without the block type ever shows, so it
-  // has to move with the block or the two would disagree about the same row.
+  // Older clients see only the fallback, which must agree with the structured block.
   const twin = subagentGroupFallbackText(only.agents)
-  return withBackgroundTaskTwins.map((block) =>
+  return withTwins.map((block) =>
     block.type === 'text' && isSubagentGroupFallbackText(block.text)
       ? { ...block, text: twin }
       : block
   )
 }
 
-function settleGroup(block: NativeChatSubagentGroupBlock): NativeChatSubagentGroupBlock {
+function settleGroup(
+  block: NativeChatSubagentGroupBlock,
+  lostAt?: number
+): NativeChatSubagentGroupBlock {
   return {
     ...block,
     agents: block.agents.map((agent) =>
       normalizeSubagentState(agent.state) === 'working'
-        ? { ...agent, state: 'unverifiable' as const }
+        ? {
+            ...agent,
+            state: 'unverifiable' as const,
+            ...(lostAt !== undefined ? { settledAt: lostAt } : {})
+          }
         : agent
     )
   }

@@ -1,22 +1,20 @@
 export type CommandSpec = {
   path: string[]
-  // Why: conventional alternate verbs should resolve without duplicating specs or handlers.
   aliases?: string[][]
   argumentMode?: 'parsed' | 'passthrough'
-  // Why: typo recovery must never steer a benign mistake into destructive state changes.
+  // Prevent typo recovery from suggesting destructive actions for unrelated commands.
   destructive?: boolean
   hidden?: boolean
   summary: string
   usage: string
   allowedFlags: string[]
-  // Why: repeatability is per-command vocabulary. `--agent` repeats for `search`
-  // and is single-valued for `worktree create`, which one global set cannot say.
+  // Flag repeatability varies by command, even for the same flag name.
   repeatableFlags?: string[]
   positionalArgs?: string[]
+  variadicPositional?: boolean
   examples?: string[]
   notes?: string[]
-  // Why: `--from`/`--terminal` names either the acting caller or a target, and only the spec can
-  // say which. An agent session refuses a caller flag naming anyone else before dispatch.
+  // Caller flags must match the acting agent session; target flags may name another session.
   identityFlagRoles?: Partial<Record<IdentityFlag, 'caller' | 'target'>>
 }
 

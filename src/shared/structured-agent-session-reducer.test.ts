@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
-import type { AgentSessionHistoryPage } from './agent-session-wire'
+import type { AgentSessionHistoryPage, AgentSessionLatestTurn } from './agent-session-wire'
+import { runningStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
@@ -119,8 +120,7 @@ describe('structured agent session reducer', () => {
   })
 
   it("republishes when only a row's stoppability changes", () => {
-    // A row losing its stop is the whole difference between an honest control
-    // and a dead one, so it must not be dropped as an equal state.
+    // A lost Stop button changes behavior and must invalidate equality.
     const backgroundTasks = {
       state: 'monitoring' as const,
       supportsTaskStop: true,
@@ -257,6 +257,49 @@ describe('structured agent session reducer', () => {
 
     expect(restored.items).toHaveLength(84)
     expect(restored.hasOlder).toBe(false)
+  })
+
+  it('stops offering older history once a /clear divider is loaded, live or paged in', () => {
+    const clearRow = (sequence: number): AgentJournalRenderItem => ({
+      ...item(`clear-${sequence}`, sequence),
+      body: {
+        kind: 'status',
+        text: 'Context cleared',
+        presentation: 'context-cleared',
+        contextClear: { operationId: `clear-${sequence}`, afterFence: 1, clearedAt: sequence }
+      }
+    })
+    const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page: { ...hydrationPage([item('old', 10)]), hasOlder: true }
+    })
+    expect(restored.hasOlder).toBe(true)
+    const cleared = reduceStructuredAgentSession(restored, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 11 },
+          items: [clearRow(11)],
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+    expect(cleared.hasOlder).toBe(false)
+
+    const afterLongChat = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page: { ...hydrationPage([item('new', 40)]), hasOlder: true }
+    })
+    const pagedBack = reduceStructuredAgentSession(afterLongChat, {
+      type: 'older-page',
+      requestedCursor: { epoch: 'epoch-a', sequence: 40 },
+      page: { ...hydrationPage([item('old', 10), clearRow(11)]), hasOlder: true }
+    })
+    expect(pagedBack.items.map(({ itemId }) => itemId)).toEqual(['old', 'clear-11', 'new'])
+    expect(pagedBack.hasOlder).toBe(false)
   })
 
   it('projects additive background task state without changing transcript identity', () => {
@@ -455,6 +498,37 @@ describe('structured agent session reducer', () => {
     expect(withoutCapability.backgroundTasks).toBeUndefined()
   })
 
+  // Old hosts omit empty rosters; a cursor resume must clear the detached client’s stale roster (#24227).
+  it("drops the held roster on a resumed subscription's first batch that omits it", () => {
+    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)]),
+        backgroundTasks: { state: 'monitoring' }
+      }
+    })
+    const batch = {
+      type: 'batch' as const,
+      sessionId: 'session-a',
+      batch: { cursor: monitoring.cursor!, items: [], removedItemIds: [], submissions: [] },
+      fence: 1
+    }
+
+    expect(reduceStructuredAgentSession(monitoring, { type: 'event', event: batch })).toBe(
+      monitoring
+    )
+    const resumed = reduceStructuredAgentSession(monitoring, {
+      type: 'event',
+      event: batch,
+      opensSubscription: true
+    })
+    expect(resumed.backgroundTasks).toBeUndefined()
+    expect(resumed.items).toBe(monitoring.items)
+  })
+
   it('projects ephemeral activity without changing transcript identity and clears it', () => {
     const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
@@ -500,6 +574,120 @@ describe('structured agent session reducer', () => {
 
     expect(cleared.activity).toBeNull()
     expect(cleared.items).toBe(active.items)
+  })
+
+  describe("the host's newest turn record", () => {
+    const turnRow = (state: 'running' | 'completed'): AgentJournalRenderItem => ({
+      itemId: 'turn-record',
+      revision: state === 'running' ? 1 : 2,
+      sequence: 1,
+      observedAt: 1,
+      body: { kind: 'turn', turnId: 'turn-1', state }
+    })
+    const hostTurn = (state: 'running' | 'completed'): AgentSessionLatestTurn => ({
+      itemId: 'turn-record',
+      observedAt: 1,
+      turn: { turnId: 'turn-1', state }
+    })
+    const opened = () =>
+      reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+        type: 'event',
+        event: {
+          type: 'snapshot',
+          sessionId: 'session-a',
+          fence: 1,
+          page: { ...hydrationPage([turnRow('running')]), latestTurn: hostTurn('running') }
+        }
+      })
+    const batch = (
+      state: ReturnType<typeof opened>,
+      items: AgentJournalRenderItem[],
+      latestTurn?: AgentSessionLatestTurn | null
+    ) =>
+      reduceStructuredAgentSession(state, {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            cursor: { epoch: 'epoch-a', sequence: state.cursor!.sequence + items.length },
+            items,
+            removedItemIds: [],
+            submissions: []
+          },
+          activity: { turnId: 'turn-1', text: 'Reading' },
+          ...(latestTurn !== undefined ? { latestTurn } : {})
+        }
+      })
+
+    it('keeps it across a frame that carries no rows, and takes the next one rows carry', () => {
+      const quiet = batch(opened(), [])
+      expect(quiet.latestTurn).toEqual(hostTurn('running'))
+      const ended = batch(quiet, [turnRow('completed')], hostTurn('completed'))
+      expect(ended.latestTurn).toEqual(hostTurn('completed'))
+      expect(runningStructuredAgentSessionTurnId(ended)).toBeNull()
+    })
+
+    it('falls back to the loaded rows when rows arrive without it, as from an older host', () => {
+      // A cursor resume against a downgraded host: its rows end the turn but restate nothing.
+      const downgraded = batch(opened(), [turnRow('completed')])
+      expect(downgraded.latestTurn).toBeUndefined()
+      expect(runningStructuredAgentSessionTurnId(downgraded)).toBeNull()
+    })
+  })
+
+  it("keeps the host's working answer and prompts across a quiet frame, takes a row-less restatement, and drops them for rows that name none", () => {
+    const pending: AgentJournalRenderItem = {
+      itemId: 'prompt',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: {
+        kind: 'approval',
+        title: 'Run command?',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    }
+    const frame = (
+      items: AgentJournalRenderItem[],
+      host: { working?: boolean; actionablePromptIds?: string[] } = {}
+    ) => ({
+      type: 'event' as const,
+      event: {
+        type: 'batch' as const,
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 1 },
+          items,
+          removedItemIds: [],
+          submissions: []
+        },
+        ...host
+      }
+    })
+    const opened = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: { ...hydrationPage([pending]), working: true, actionablePromptIds: ['prompt'] }
+      }
+    })
+    const quiet = reduceStructuredAgentSession(opened, frame([]))
+    expect(quiet).toMatchObject({ working: true, actionablePromptIds: ['prompt'] })
+    // The generation ended with no row written: the host restates both.
+    const ended = reduceStructuredAgentSession(
+      quiet,
+      frame([], { working: false, actionablePromptIds: [] })
+    )
+    expect(ended).toMatchObject({ working: false, actionablePromptIds: [] })
+    // Rows from a downgraded host name neither: back to deriving from rows.
+    const downgraded = reduceStructuredAgentSession(ended, frame([{ ...pending, revision: 2 }]))
+    expect(downgraded.working).toBeUndefined()
+    expect(downgraded.actionablePromptIds).toBeUndefined()
   })
 
   it('records the host clock from frames that carry it and keeps it otherwise', () => {

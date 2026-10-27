@@ -88,7 +88,6 @@ const JA_AUDIT_OVERRIDES = {
   'Pull requests and commit statuses for detected repositories':
     '検出されたリポジトリの PR とコミットステータス',
   'Keep at phone size (default)': 'スマートフォンサイズを維持（デフォルト）',
-  // Round 5: inline/launch/action homographs, MR/review status chips, concise prompts.
   Inline: 'インライン',
   inline: 'インライン',
   Launch: '起動',
@@ -156,8 +155,7 @@ const JA_AUDIT_OVERRIDES = {
   'Choose parent folder...': '親フォルダーを選択...',
   'Check for stuck work, stale generated files, failing validation, and anything that needs human attention. Report only actionable issues.':
     'スタックした作業、古い生成ファイル、検証の失敗、および人間の対応が必要なものがないか確認してください。対応が必要なイシューのみを報告してください。',
-  // Round 6: homograph/term mistranslations surfaced by a full ja.json audit.
-  // Why: machine translation rendered UI terms as unrelated everyday words.
+  // Round 6 repairs everyday-word mistranslations of UI terms found in full ja.json audit.
   Smart: 'スマート',
   Jobs: 'ジョブ',
   Bold: '太字',
@@ -433,8 +431,6 @@ const JA_AUDIT_OVERRIDES = {
     'ステージ済みの変更からコミットメッセージを生成します。',
   lan: 'LAN',
   deploy: 'deploy',
-  'Connect this source to check for Hermes automations in the remote profile.':
-    'このソースに接続すると、リモートプロファイル内の Hermes オートメーションを確認できます。',
   'Notes sent to active agent.': 'メモをアクティブな Agent に送信しました。',
   'Review before attaching. Captured page context may include visible site content.':
     '添付する前に確認してください。取得したページのコンテキストには、表示中のサイトの内容が含まれる場合があります。',
@@ -528,8 +524,7 @@ const JA_AUDIT_OVERRIDES = {
   'Hide from sidebar': 'サイドバーから非表示',
   'Show in sidebar': 'サイドバーに表示',
   'Recent or tab strip.': '「最近」またはタブストリップ。',
-  // Settings-search keywords: proper nouns keep their canonical spelling, and the rest were
-  // translated in the wrong sense (windows→窓, gitignore→ギティ無視, component→成分).
+  // Settings-search proper nouns keep canonical spelling; repair wrong-sense windows/gitignore/component translations.
   windows: 'Windows',
   'windows powershell': 'Windows PowerShell',
   'powershell 7': 'PowerShell 7',

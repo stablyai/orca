@@ -10,7 +10,7 @@ export function focusedValueSetExpression(
     : ''
   return [
     '(() => { const el = document.activeElement; if (el) {',
-    // Why: ARIA spinbutton wrappers can hold focus while a contained or controlled input owns the value.
+    // Spinbutton wrappers can hold focus while another input owns the value.
     " const editableSelector = \"input:not([type='hidden']):not([type='button']):not([type='checkbox']):not([type='radio']):not([type='file']):not([type='image']):not([type='reset']):not([type='submit']), textarea\";",
     " const isEditable = (node) => !!node && (node.matches?.(editableSelector) ?? (node.tagName === 'TEXTAREA' || (node.tagName === 'INPUT' && !/^(hidden|button|checkbox|radio|file|image|reset|submit)$/i.test(node.getAttribute?.('type') ?? ''))));",
     ' const findEditable = (root) => root?.querySelector?.(editableSelector) ?? null;',
@@ -29,7 +29,7 @@ export function focusedValueSetExpression(
   ].join('')
 }
 
-// Why: rich editors reconcile only real browser edit transactions; a direct-DOM fallback can leave their model stale.
+// Rich editors require browser edit transactions to keep their models synchronized.
 export function focusedRichTextEditExpression(
   valueExpression: string,
   options?: { selectAll?: boolean }

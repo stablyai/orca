@@ -5,6 +5,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -180,13 +181,15 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
-    getEphemeralVmsSearchEntry()
+    getEphemeralVmsSearchEntry(),
+    // Index WSL toggles only on Windows desktops that expose them.
+    ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
+      ? [getWslHostsExperimentalSearchEntry()]
+      : [])
   ]
 )
 
-// Why: title-keyed lookup avoids a fragile numeric-index invariant — the array
-// shape can change without breaking consumers, and a typo/rename throws loudly
-// instead of silently matching the wrong (or empty) entry.
+// Resolve by title and fail loudly on renames so changing catalog shape cannot silently retarget numeric indexes.
 function findEntry(title: string): SettingsSearchEntry {
   const entry = getExperimentalPaneSearchEntries().find((e) => e.title === title)
   if (!entry) {

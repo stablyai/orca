@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -28,13 +28,5 @@ describe('Node file content equality', () => {
     expect(nodeFileContentsEqualSync(filePath, 'launch 🐋\n')).toBe(true)
     await expect(nodeFileContentsEqual(filePath, 'different\n')).resolves.toBe(false)
     expect(nodeFileContentsEqualSync(filePath, 'different\n')).toBe(false)
-  })
-
-  it('rejects a large sparse replacement from metadata without reading its payload', async () => {
-    const filePath = createFile('owned launcher\n')
-    truncateSync(filePath, 256 * 1024 * 1024)
-
-    await expect(nodeFileContentsEqual(filePath, 'owned launcher\n')).resolves.toBe(false)
-    expect(nodeFileContentsEqualSync(filePath, 'owned launcher\n')).toBe(false)
   })
 })

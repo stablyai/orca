@@ -10,6 +10,14 @@ import { PluginCommandRegistry } from './plugin-command-registry'
 import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 
+type ContentFamily = {
+  reconcile: (
+    discovered: readonly DiscoveredPlugin[],
+    isApproved: (plugin: ValidDiscoveredPlugin) => boolean
+  ) => Promise<void>
+  error: (pluginKey: string) => string | null
+}
+
 export class PluginContentPackRegistry {
   readonly languagePacks: PluginLanguagePackRegistry
   readonly vmRecipes: PluginVmRecipeRegistry
@@ -18,8 +26,7 @@ export class PluginContentPackRegistry {
 
   constructor(
     contentVerifier: PluginContentVerifier,
-    /** Revocation chokepoint: no caller-supplied predicate can readmit a
-     *  killed plugin's language packs, VM recipes, or commands. */
+    /** No caller predicate may readmit revoked contributions. */
     private readonly isKilled: (pluginKey: string) => boolean
   ) {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
@@ -63,17 +70,14 @@ export class PluginContentPackRegistry {
     )
 
     while (true) {
-      // `approvedKeys` is a snapshot from before the awaited verification
-      // above, so a kill list arriving during that wait would otherwise still
-      // publish. Re-read revocation here, the last gate before publication.
+      // Approval predates awaited verification; recheck revocation immediately before publication.
       const approveAtomically = (plugin: ValidDiscoveredPlugin): boolean =>
         approvedKeys.has(plugin.pluginKey) &&
         !excluded.has(plugin.pluginKey) &&
         !this.isKilled(plugin.pluginKey)
-      const languagePacks = this.languagePacks.reconcile(discovered, approveAtomically)
-      const vmRecipes = this.vmRecipes.reconcile(discovered, approveAtomically)
-      this.commands.reconcile(discovered, approveAtomically, keybindings)
-      await Promise.all([languagePacks, vmRecipes])
+      await Promise.all(
+        this.families(keybindings).map((family) => family.reconcile(discovered, approveAtomically))
+      )
 
       let foundNewError = false
       for (const pluginKey of approvedKeys) {
@@ -95,10 +99,25 @@ export class PluginContentPackRegistry {
   }
 
   private registryError(pluginKey: string): string | null {
-    return (
-      this.languagePacks.error(pluginKey) ??
-      this.vmRecipes.error(pluginKey) ??
-      this.commands.error(pluginKey)
-    )
+    for (const family of this.families()) {
+      const error = family.error(pluginKey)
+      if (error !== null) {
+        return error
+      }
+    }
+    return null
+  }
+
+  /** Keep contribution errors in this family order. */
+  private families(keybindings: KeybindingOverrides = {}): readonly ContentFamily[] {
+    return [
+      this.languagePacks,
+      this.vmRecipes,
+      {
+        reconcile: async (discovered, isApproved) =>
+          this.commands.reconcile(discovered, isApproved, keybindings),
+        error: (pluginKey) => this.commands.error(pluginKey)
+      }
+    ]
   }
 }

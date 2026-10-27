@@ -21,18 +21,17 @@ const MUSE_EFFORT: CatalogOption = {
   },
   apply: {
     launchArgs: (value) => ['--reasoning-effort', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--reasoning-effort'])
+    removeAgentArgs: (tokens) => removeAgentArgOption('muse', tokens, ['--reasoning-effort'])
   }
 }
 
 export const MUSE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
-  // Why: Muse model ids are account/channel-scoped and it has no listing command, so
-  // seed nothing (no picker) and let worker-start pass the caller's id to `--model`.
+  // Muse has account-scoped IDs and no listing command: seed no picker; let worker-start pass the caller's --model.
   models: [],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model'])
+    removeAgentArgs: (tokens) => removeAgentArgOption('muse', tokens, ['--model'])
   },
   unknownModelOptions: [MUSE_EFFORT]
 }

@@ -9,10 +9,10 @@ import {
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import {
   applyWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshots,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
-import { toWebTerminalSurfaceTabId } from './web-runtime-session'
+  applyWebSessionTabsSnapshots
+} from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
+import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import {
   ENV,
   HOST_SURFACE_ID,

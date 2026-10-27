@@ -9,7 +9,11 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { openJournalOwingImport } from '../agent-session-journal/journal-owed-import-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget,
@@ -17,6 +21,7 @@ import {
 } from './structured-agent-session-event-sink'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const ROW: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'row' }
 
@@ -36,26 +41,24 @@ let journal: AgentSessionJournal
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-resolved-append-'))
-  // Its copy owed, so every write handed over waits in the queue: a resolver that read at submit
-  // would read the row before the revisions ahead of it had landed.
-  ;({ journal } = await openJournalOwingImport({
-    stateDirectory: root,
+  journal = await openAgentSessionJournal({
+    database: openTestJournalHostDatabase(root),
     identity: {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
       hostId: 'host-1',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     }
-  }))
+  })
 })
 
 afterEach(async () => {
   await journal.close()
+  closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
-/** The real journal: each resolved write reads the fold at its own place in the write queue. */
 function journalTarget(): StructuredAgentSessionEventTarget {
   return { journal, fence: 1, publish: vi.fn() }
 }
@@ -87,9 +90,9 @@ describe('resolved revisions', () => {
         accepted: true
       })
     }
-    // Three revisions of one row stay three operations; none replaces another.
     expect(deferred.state().queuedOperations).toBe(3)
-    deferred.bind(journalTarget())
+    // Bind within a queued read; early resolution would miss the preceding revisions.
+    await journal.readInOrder(() => deferred.bind(journalTarget()))
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(rowText()).toBe('abc')
   })
@@ -119,7 +122,6 @@ describe('resolved revisions', () => {
     vi.mocked(target.publish).mockImplementation(() => published.push(rowText()))
     deferred.bind(target)
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    // Published once, after the append: the revision that resolves to nothing publishes nothing.
     expect(published).toEqual(['a'])
   })
 

@@ -1,6 +1,8 @@
-import type { StateCreator } from 'zustand'
-import type { AppState } from '../types'
-import type { RuntimeStatusSlice } from './runtime-status-types'
+import type {
+  RuntimeStatusSlice,
+  RuntimeStatusStoreSetState,
+  RuntimeStatusStoreState
+} from './runtime-status-types'
 export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -15,16 +17,25 @@ import {
   dismissRuntimeDisconnectedToast,
   showRuntimeDisconnectedToast
 } from './runtime-environment-disconnect-toast'
-import { reconcileCatalogRows } from './repo-identity-reconcile'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 import {
-  ensureBrowserClientHostForRestartedRuntime,
+  pairedTerminalTabCloseIntentStoreOf,
+  reconcileWebSessionCloseReplaysWithCatalog
+} from '@/runtime/web-session-close-replay'
+import {
+  ensureBrowserClientHostOnRuntimeContact,
   ensureBrowserClientHostsForRestoredPages
 } from '@/runtime/restored-client-hosted-browser-host-attach'
-import { applyRuntimeHostStatusSnapshot } from './runtime-status-snapshot'
+import { applyRuntimeHostStatusSnapshot, snapshotOutrunsCatalog } from './runtime-status-snapshot'
+import { refreshRuntimeEnvironmentCatalog } from '@/runtime/runtime-environment-pairing-refresh'
+import {
+  classifyPeerReplacements,
+  replacedRuntimeEnvironmentIds
+} from './runtime-environment-peer-replacement'
 
 export const clearRuntimeEnvironmentConnectionGenerationsForTests = (): void => {
   runtimeStatusConnectionGeneration.clearRuntimeEnvironmentConnectionGenerations()
@@ -35,10 +46,11 @@ export {
   setRuntimeEnvironmentConnectionGenerationForTests
 } from './runtime-status-connection-generation'
 
-export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeStatusSlice> = (
-  set,
-  get
-) => ({
+export const createRuntimeStatusSlice: (
+  set: RuntimeStatusStoreSetState,
+  get: () => RuntimeStatusStoreState,
+  store?: unknown
+) => RuntimeStatusSlice = (set, get) => ({
   runtimeEnvironments: [],
   runtimeEnvironmentCatalogHydrated: false,
   runtimeEnvironmentCatalogSettled: false,
@@ -55,25 +67,16 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   },
 
   setRuntimeEnvironments: (environments) => {
-    const previousRevisionById = new Map(
-      get().runtimeEnvironments.map((environment) => [
-        environment.id,
-        environment.pairingRevision ?? environment.createdAt
-      ])
+    const previousEnvironments = get().runtimeEnvironments
+    const replacedEnvironmentIds = replacedRuntimeEnvironmentIds(previousEnvironments, environments)
+    const peerReplacement = classifyPeerReplacements(
+      previousEnvironments,
+      environments,
+      replacedEnvironmentIds
     )
-    const replacedEnvironmentIds = environments
-      .filter((environment) => {
-        const previousRevision = previousRevisionById.get(environment.id)
-        return (
-          previousRevision !== undefined &&
-          previousRevision !== (environment.pairingRevision ?? environment.createdAt)
-        )
-      })
-      .map((environment) => environment.id)
-    replaceRuntimeEnvironmentRevisions(environments)
-    // Why: diff against the accumulated in-memory saved list (not a second disk
-    // read) so a main-initiated removal that never calls setRuntimeEnvironments
-    // still enters the diff on the next list read. #8881.
+    // Fence replaced-peer transports before publishing revisions; only proven same-host rotations may continue.
+    replaceRuntimeEnvironmentRevisions(environments, peerReplacement)
+    // Diff accumulated in-memory state so main-initiated removals reach the purge on the next list read (#8881).
     const nextIds = new Set(environments.map((environment) => environment.id))
     const removedIds = get()
       .runtimeEnvironments.map((environment) => environment.id)
@@ -95,9 +98,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         }
         runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
       }
-      // Add just-removed ids as tombstones and clear any that were re-added, so an
-      // in-flight catalog merge for a removed env can be dropped without mistaking a
-      // not-yet-hydrated env for a removed one (#8881).
+      // Tombstone removed IDs, clearing re-added ones, to reject late catalog merges without mistaking pre-hydration absence for removal (#8881).
       const nextRemoved = new Set(s.removedRuntimeEnvironmentIds)
       let removedChanged = false
       for (const id of removedIds) {
@@ -111,8 +112,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           removedChanged = true
         }
       }
-      // Why: list()/hydrate always allocate (IPC structuredClone + redact remaps
-      // endpoints[]). Reuse equal rows so Object.is subscribers don't miss 100%.
+      // IPC clones and endpoint redaction allocate equal rows; reconcile to preserve subscriber identity.
       const reconciled = reconcileCatalogRows(
         s.runtimeEnvironments,
         environments,
@@ -136,36 +136,47 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         ...(removedChanged ? { removedRuntimeEnvironmentIds: nextRemoved } : {})
       }
     })
-    // Why: evict detected-agent caches for environments that no longer exist so
-    // they don't leak per-environment entries for the renderer session.
-    // Optional-chained: minimal store assemblies (some unit tests) omit the
-    // detected-agents slice.
+    // Prune removed environments’ agent/command caches; partial test stores may omit these slices.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
     get().retainRuntimeTerminalQuickCommands?.(environments.map((environment) => environment.id))
     // A detached environment's mirrored SSH state must not outlive it.
     get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
     for (const id of replacedEnvironmentIds) {
       clearRuntimeCompatibilityCache(id)
+      get().clearRuntimeDetectedAgents?.(id)
       get().markEnvironmentSshStateStale?.(id)
     }
-    // Why: same-id re-pair publications belong to the retired peer just as surely as removed ids.
-    const retiredEnvironmentIds = [...new Set([...removedIds, ...replacedEnvironmentIds])]
+    // Why: a same-id re-pair to another peer retires it as surely as a removal.
+    const retiredEnvironmentIds = [...new Set([...removedIds, ...peerReplacement.retired])]
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
+      get().clearHostWorkspaceStatuses?.(retiredEnvironmentIds)
       retiredEnvironmentIds.forEach(dismissRuntimeDisconnectedToast)
     }
+    reconcileWebSessionCloseReplaysWithCatalog(pairedTerminalTabCloseIntentStoreOf(get), {
+      listed: nextIds,
+      ...peerReplacement
+    })
   },
 
-  applyRuntimeHostStatusSnapshot: (snapshot) =>
-    applyRuntimeHostStatusSnapshot(snapshot, get(), (entry) => {
-      set((s) => ({
-        runtimeStatusByEnvironmentId: new Map(s.runtimeStatusByEnvironmentId).set(
-          snapshot.environmentId,
-          entry
-        )
-      }))
-    }),
+  applyRuntimeHostStatusSnapshot: (snapshot) => {
+    const apply = (): void =>
+      applyRuntimeHostStatusSnapshot(snapshot, get(), (entry) => {
+        set((s) => ({
+          runtimeStatusByEnvironmentId: new Map(s.runtimeStatusByEnvironmentId).set(
+            snapshot.environmentId,
+            entry
+          )
+        }))
+      })
+    if (snapshotOutrunsCatalog(snapshot, get())) {
+      // Applied once after the re-read; a catalog that is still behind drops it as before.
+      void refreshRuntimeEnvironmentCatalog().then(apply)
+      return
+    }
+    apply()
+  },
 
   setRuntimeEnvironmentStatus: (environmentId, status, options) => {
     const previous = get().runtimeStatusByEnvironmentId.get(environmentId)
@@ -174,16 +185,16 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     }
     const previousVerifiedStatus = lastVerifiedRuntimeStatus(previous)
     const pairedDeviceId = status.status?.pairedDeviceId?.trim()
-    // A new runtime id under a known previous one is a restart, not a first connect: the guests are
-    // still ours to host, but only a fresh attach hands them back to the replacement runtime.
+    // Changed runtime ID means restart: reattach to return our client-hosted browsers to the replacement runtime.
     const runtimeRestarted = Boolean(
       status.status !== null &&
       previousVerifiedStatus != null &&
       previousVerifiedStatus.runtimeId !== status.status.runtimeId
     )
-    // Why: a non-null status proves the runtime just answered, so drop any stale
-    // "offline" compat failure before this online transition fires the
-    // reuse-flagged background refetches — a recovered host must re-probe.
+    // An outage past the browser-host lease grace drops this desktop's hosting, so regained contact
+    // must re-claim it just like a restart does.
+    const contactRegained = previous?.status === null && status.status !== null
+    // Reachable status clears offline compatibility failures before reuse-flagged refetches can pin them.
     if (status.status !== null) {
       clearRecentRuntimeCompatibilityFailure(environmentId, status.status)
     }
@@ -195,11 +206,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         status.status !== null &&
         (previousVerifiedStatus == null ||
           previousVerifiedStatus.runtimeId !== status.status.runtimeId)
-      // Why narrower than the session start: a first publication has no prior connection to
-      // differ from, so it is not a reconnect. Advancing the generation there retires reads
-      // already issued against this very connection — a startup worktree scan that had
-      // already answered was discarded, leaving those repos absent until an unrelated
-      // refresh (#19241).
+      // First publication has no prior connection; advancing its fence would discard same-connection startup scans (#19241).
       const connectionChanged = previous !== undefined && runtimeSessionStarted
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       const connectionGeneration = connectionChanged
@@ -211,23 +218,16 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(
             environmentId
           ))
-      // A same-runtime return is not a new connection, so it must not move the generation the
-      // mirror is keyed on. It still needs its own "the host is back" edge: the streams died with
-      // the transport, an 'end' frame resubscribes nothing, and the parking layer retries only a
-      // rejected subscribe. This counter is that edge, read only as a subscription-effect dep.
-      const reconnectedAfterLostContact = status.status !== null && previous?.status === null
+      // Same-runtime recovery preserves mirror generation; advance a separate epoch to reinstall streams that ended with transport loss.
       const hostContactEpoch =
-        (previous?.hostContactEpoch ?? status.hostContactEpoch ?? 0) +
-        (reconnectedAfterLostContact ? 1 : 0)
-      // Why the session flag and not `connectionChanged`: integration-readiness caches key
-      // off the runtime session, for which a first publication is a real transition.
+        (previous?.hostContactEpoch ?? status.hostContactEpoch ?? 0) + (contactRegained ? 1 : 0)
+      // Provider readiness tracks session start, including first publication, rather than connection changes alone.
       if (activeEnvironmentId === environmentId && (sessionEnded || runtimeSessionStarted)) {
         bumpProviderRuntimeSessionGeneration()
       }
       const nextEntry = { ...status, connectionGeneration, hostContactEpoch }
       const currentEntry = s.runtimeStatusByEnvironmentId.get(environmentId)
-      // Why: an unchanged re-probe must not invalidate every Map subscriber. Real
-      // transitions change `status` or advance `connectionGeneration`, so they still write.
+      // Preserve map identity for unchanged probes; real status/counter transitions still publish.
       const statusUnchanged = Boolean(
         currentEntry && runtimeEnvironmentStatusesEqual(currentEntry, nextEntry)
       )
@@ -252,12 +252,12 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         ...(environmentsChanged ? { runtimeEnvironments } : {})
       }
     })
-    if (runtimeRestarted) {
-      void ensureBrowserClientHostForRestartedRuntime(get(), environmentId)
+    if (runtimeRestarted || contactRegained) {
+      void ensureBrowserClientHostOnRuntimeContact(get(), environmentId)
     }
     if (options?.suppressDisconnectToast) {
       dismissRuntimeDisconnectedToast(environmentId)
-    } else if (previous?.status === null && status.status !== null) {
+    } else if (contactRegained) {
       dismissRuntimeDisconnectedToast(environmentId)
     } else if (previous && previous.status !== null && status.status === null) {
       showRuntimeDisconnectedToast(environmentId, get)
@@ -302,16 +302,11 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       environmentId,
       timeoutMs,
       (entry) => {
-        // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
-        // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
         get().setRuntimeEnvironmentStatus(environmentId, entry)
         if (entry.status) {
-          // Why here: hydration can ask before the environment is reachable, and a restored
-          // client-hosted page only comes back once this desktop attaches as its host.
+          // Early hydration may precede reachability; restored client pages need this desktop to attach as host.
           void ensureBrowserClientHostsForRestoredPages(get())
-          // Why alongside: the same restart that hands those rows back also restores rows the user
-          // already closed while this environment was down, so the closes it never heard have to be
-          // replayed before its persisted records can put them on screen again.
+          // Replay closes missed during downtime before restored runtime records can reopen those tabs.
           const {
             clientHostedBrowserCloseIntentsByEnvironment,
             clearClientHostedBrowserCloseIntents

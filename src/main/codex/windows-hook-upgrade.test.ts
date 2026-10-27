@@ -65,10 +65,10 @@ describe.skipIf(process.platform !== 'win32')('Unicode Windows hook upgrade', ()
       }))
     )
     const service = new CodexHookService()
-    expect(service.getStatus().state).not.toBe('installed')
+    expect(service.getStatus(runtimeHome).state).not.toBe('installed')
     for (let pass = 0; pass < 2; pass++) {
       expect((await service.install()).state).toBe('installed')
-      expect(service.getStatus().state).toBe('installed')
+      expect(service.getStatus(runtimeHome).state).toBe('installed')
       const hooks = readHooksJson(configPath)?.hooks
       const trust = readFileSync(tomlPath, 'utf8')
       for (const event of CODEX_EVENTS) {

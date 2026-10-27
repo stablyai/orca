@@ -14,10 +14,25 @@ type VirtualizerOptionsCapture = {
     | null
 }
 
+type SizeChangeProbe = {
+  scrollOffset: number
+  scrollDirection: 'forward' | 'backward' | null
+  itemSizeCache: Map<string, number>
+}
+type SizeChangePolicyHolder = {
+  shouldAdjustScrollPositionOnItemSizeChange?: (
+    item: { index: number; key: string; end: number },
+    delta: number,
+    instance: SizeChangeProbe
+  ) => boolean
+}
+
 const virtualizerMock = vi.hoisted(() => {
   const scrollElement: { current: HTMLElement | null } = { current: null }
+  const instance: { current: SizeChangePolicyHolder | null } = { current: null }
   return {
     options: { current: null } as VirtualizerOptionsCapture,
+    instance,
     getTotalSize: vi.fn(() => 0),
     getVirtualItems: vi.fn(() => []),
     measureElement: vi.fn(),
@@ -25,6 +40,11 @@ const virtualizerMock = vi.hoisted(() => {
     resizeItem: vi.fn(),
     scrollElement,
     scrollToEnd: vi.fn(),
+    scrollToIndex: vi.fn(),
+    getOffsetForIndex: vi.fn<(index: number, align: string) => [number, string]>(() => [
+      0,
+      'start'
+    ]),
     scrollToOffset: vi.fn(),
     takeSnapshot: vi.fn<() => VirtualItem[]>(() => [])
   }
@@ -34,7 +54,12 @@ vi.mock('@tanstack/react-virtual', () => ({
   elementScroll: vi.fn(),
   useVirtualizer: (options: VirtualizerOptionsCapture['current']) => {
     virtualizerMock.options.current = options
-    return { ...virtualizerMock, scrollElement: virtualizerMock.scrollElement.current }
+    const instance: SizeChangePolicyHolder & Record<string, unknown> = {
+      ...virtualizerMock,
+      scrollElement: virtualizerMock.scrollElement.current
+    }
+    virtualizerMock.instance.current = instance
+    return instance
   }
 }))
 
@@ -57,6 +82,7 @@ function slot(id: string): NativeChatMessageSlot {
     receipt: undefined,
     status: undefined,
     folded: false,
+    drawsMessage: true,
     turnFolds: false,
     turnDiff: undefined,
     subagentRoster: undefined,
@@ -221,7 +247,61 @@ describe('native chat transcript virtualizer contract', () => {
     expect(virtualizerMock.scrollToOffset).not.toHaveBeenCalled()
   })
 
-  // Rows drawn after the window (a message shown as not sent) still fill the container.
+  // Layout can clamp before the jump lands; hold ownership until geometry proves arrival or the reader takes over.
+  it('holds a jump to a row pending until the view reaches it, or the reader takes the scroll', () => {
+    const scrollElement = document.createElement('div')
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 1_000 }
+    })
+    const row = document.createElement('div')
+    row.dataset.index = '3'
+    scrollElement.append(row)
+    virtualizerMock.scrollElement.current = scrollElement
+    virtualizerMock.getOffsetForIndex.mockReturnValue([400, 'start'])
+    const { result } = renderHook(() =>
+      useNativeChatTranscriptWindow({
+        scrollRef: { current: scrollElement },
+        slots: [slot('message-0')],
+        isVisible: true,
+        revealIndex: -1
+      })
+    )
+    expect(result.current.isAlignPending()).toBe(false)
+
+    result.current.alignToViewportTop(row)
+    expect(virtualizerMock.scrollToIndex).toHaveBeenCalledWith(3, {
+      align: 'start',
+      behavior: 'auto'
+    })
+    scrollElement.scrollTop = 900
+    expect(result.current.isAlignPending()).toBe(true)
+    scrollElement.scrollTop = 401
+    expect(result.current.isAlignPending()).toBe(false)
+
+    // Compensate growth above a resting jump, but preserve an upward-scrolling reader’s position.
+    const compensates = (heard = scrollElement.scrollTop): boolean | undefined =>
+      virtualizerMock.instance.current?.shouldAdjustScrollPositionOnItemSizeChange?.(
+        { index: 1, key: 'row-1', end: 300 },
+        18,
+        {
+          scrollOffset: heard,
+          scrollDirection: 'backward',
+          itemSizeCache: new Map([['row-1', 100]])
+        }
+      )
+    expect(compensates()).toBe(true)
+    // An unseen scroll write makes virtualizer offsets stale; compensation would undo the new position.
+    expect(compensates(scrollElement.scrollTop + 500)).toBe(false)
+
+    result.current.alignToViewportTop(row)
+    scrollElement.scrollTop = 700
+    result.current.cancelAlign()
+    expect(result.current.isAlignPending()).toBe(false)
+    expect(compensates()).toBe(false)
+    expect(virtualizerMock.scrollToOffset).toHaveBeenLastCalledWith(700, { behavior: 'auto' })
+  })
+
   it('follows the bottom of the container when no row is windowed', () => {
     const container = document.createElement('div')
     Object.defineProperty(container, 'scrollHeight', { configurable: true, value: 2000 })

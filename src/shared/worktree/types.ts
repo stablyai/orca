@@ -8,6 +8,33 @@ import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from '../worktree-scan-failure'
+import type { SmartTier } from '../sidebar-list/sort-stamps'
+
+export type WorkspaceAttachmentOrigin = {
+  kind: 'observed'
+  tabId: string
+  paneKey?: string
+  hostId?: ExecutionHostId
+  label?: string
+  agent?: string
+  sessionId?: string
+}
+
+export type WorkspaceAttachment = {
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'bitbucket' | 'azure-devops' | 'gitea'
+  type: 'issue' | 'pr' | 'mr'
+  number: number
+  identifier?: string
+  title?: string
+  url?: string
+  repoId?: string
+  linearIdentifier?: string
+  jiraIdentifier?: string
+  linearWorkspaceId?: string
+  linearOrganizationUrlKey?: string
+  taskSourceContext?: TaskSourceContext
+  origins?: WorkspaceAttachmentOrigin[]
+}
 
 export type WorkspaceLinkedItem = {
   provider: 'github' | 'gitlab' | 'linear' | 'jira'
@@ -20,7 +47,6 @@ export type WorkspaceLinkedItem = {
   repoId?: string
 }
 
-// ─── Worktree (git-level) ────────────────────────────────────────────
 export type GitWorktreeInfo = {
   path: string
   head: string
@@ -29,23 +55,16 @@ export type GitWorktreeInfo = {
   isSparse?: boolean
   locked?: boolean
   lockReason?: string
-  /** True when Git reports the worktree as prunable (its directory is gone but
-   *  the registration remains). Detected via the `prunable` porcelain field
-   *  (Git ≥ 2.36) or a path-existence probe on older Git. */
+  /** Git 2.36+ reports prunable registration; older Git needs a directory-existence probe. */
   prunable?: boolean
   prunableReason?: string
-  /** True for the repo's main working tree (the first entry from `git worktree list`).
-   *  Linked worktrees created via `git worktree add` have this set to false. */
+  /** Git lists the main checkout first; linked worktrees set false. */
   isMainWorktree: boolean
-  /** Not from Git: the error of a local delete that failed after Git dropped this checkout's
-   *  registration. The host lists the leftover so Delete can retry it. */
+  /** Local delete failed after Git deregistration; list the leftover so Delete can retry. */
   removalError?: string
 }
 
-/** Head/branch snapshot read from Git metadata files without spawning Git.
- *  Carries background-worktree freshness when status-only churn includes a
- *  real head move (external commit/amend/reset) that must not re-enter the
- *  structural `worktrees:changed` fanout. */
+/** Read HEAD/branch without spawning Git to refresh background head moves without structural worktrees:changed fanout. */
 export type WorktreeHeadIdentity = {
   worktreePath: string
   head: string
@@ -53,7 +72,13 @@ export type WorktreeHeadIdentity = {
   branch: string | null
 }
 
-// ─── Worktree (app-level, enriched) ──────────────────────────────────
+/** `worktreePaths` names the only checkouts whose status the burst can have
+ *  changed; absent means unattributed, so every listener must refresh. */
+export type GitStatusMetadataChangedEvent = {
+  repoId: string
+  worktreePaths?: string[]
+}
+
 export type WorkspaceStatus = string
 
 export type WorkspaceStatusDefinition = {
@@ -92,20 +117,15 @@ export type Worktree = {
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
-  // Why: parallel slots for non-GitHub work-item references. Kept as separate
-  // fields (rather than reusing linkedIssue / linkedPR with a provider
-  // discriminator) so the persistence layer is unambiguous when a user
-  // has remotes from several providers on the same repo, and so the
-  // existing GitHub renderer code keeps reading linkedPR / linkedIssue
-  // unchanged. Optional on the type so existing test fixtures and
-  // persisted older worktrees that never carried these fields continue
-  // to typecheck and load without migration.
+  // Separate provider slots preserve simultaneous multi-provider links and existing GitHub readers. Optional fields keep legacy records/fixtures compatible.
   linkedGitLabMR?: number | null
   linkedGitLabIssue?: number | null
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  /** All attachments; singular fields select the active review/task for older readers. */
+  linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean
@@ -113,27 +133,25 @@ export type Worktree = {
   sortOrder: number
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
+  /** Recent's key, stamped by the owning host on events (and still by the window). */
   lastActivityAt: number
-  /** Set once when Orca creates the worktree. Absent for worktrees discovered
-   *  on disk or persisted before this field existed. Used by the sidebar to
-   *  grant newly-created worktrees a short grace window at the top of Recent,
-   *  immune to ambient PTY-bump reordering in other worktrees. */
+  /** Smart's tier, stamped by the owning host on agent transitions; absent is Rest. */
+  smartTier?: SmartTier
+  /** When the workspace entered its tier. */
+  smartAt?: number
+  /** Owning host throttles terminal-input/phone-attach timestamps for cleanup and other last-active readers; never use as a sort key. */
+  lastTerminalUseAt?: number
+  /** Orca-created worktrees get a short Recent grace period against ambient PTY bumps. Discovered/legacy rows omit this timestamp. */
   createdAt?: number
-  /** Agent selected when Orca originally created the worktree. Used only to
-   *  seed a replacement terminal if the user later reopens the worktree after
-   *  closing every visible surface. */
+  /** Seed a replacement terminal with the original agent after every visible surface has closed. */
   createdWithAgent?: TuiAgent
-  /** True while an auto-named workspace is waiting for the first agent message
-   *  to drive the branch/title rename. */
+  /** Awaiting a first-agent-message branch/title rename. */
   pendingFirstAgentMessageRename?: boolean
-  /** Holds the last auto-rename generation failure message so the sidebar can
-   *  show a "rename failed" badge. null/undefined when there is no failure
-   *  (never attempted, succeeded, or only a benign skip). */
+  /** Last auto-rename generation failure for the badge; null/undefined covers unattempted, successful and benign skips. */
   firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
-  /** ID of the saved preset this worktree was created from, if any. Cleared
-   *  when the worktree is no longer sparse on refresh. */
+  /** Saved preset identity; clear when refresh reports the worktree is no longer sparse. */
   sparsePresetId?: string
   /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
   baseRef?: string
@@ -151,14 +169,11 @@ export type Worktree = {
   removing?: true
 } & GitWorktreeInfo
 
-/** Provenance for workspaces created through `orca worktree create`. Absent on
- *  workspaces created before this field existed and on every non-CLI create, so
- *  consumers must read "missing" as "not CLI-created". */
+/** Only CLI-created workspaces carry this; missing means not CLI-created, including older rows. */
 export type CliWorkspaceProvenance = {
   kind: 'created-by-cli'
   createdAt: number
-  /** Orca terminal the CLI ran inside, when the caller had one — distinguishes
-   *  an agent-issued create from one hand-typed in an external shell. */
+  /** Calling Orca terminal, if any, distinguishes agent-issued creates from external-shell creates. */
   callerTerminalHandle?: string
   /** Agent requested via `--agent`, when one was passed. */
   startupAgent?: TuiAgent

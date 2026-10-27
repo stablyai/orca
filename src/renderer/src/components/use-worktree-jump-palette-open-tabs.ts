@@ -27,7 +27,7 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 import {
   encodePaletteIdentity,
   type PaletteSearchContext
-} from '@/lib/palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 import {
   buildBrowserPaletteItems,
   buildOpenTabPaletteItems,
@@ -49,7 +49,7 @@ type WorktreeJumpPaletteOpenTabsInput = WorktreeJumpPaletteStoreState &
 export function useWorktreeJumpPaletteOpenTabs({
   paletteStatusInputsActive,
   browserSortedWorktrees,
-  allWorktrees,
+  workspaces,
   repoMap,
   repoByHostIdentity,
   worktreeOrder,
@@ -87,7 +87,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     }
     return buildSearchableBrowserPages({
       worktrees: browserSortedWorktrees,
-      ownershipWorktrees: allWorktrees,
+      ownershipWorktrees: workspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -105,7 +105,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    allWorktrees,
+    workspaces,
     browserPagesByWorkspace,
     browserTabsByWorktree,
     browserSortedWorktrees,
@@ -127,7 +127,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     }
     return buildSearchableSimulatorTabs({
       worktrees: browserSortedWorktrees,
-      ownershipWorktrees: allWorktrees,
+      ownershipWorktrees: workspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -144,7 +144,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    allWorktrees,
+    workspaces,
     browserSortedWorktrees,
     groupsByWorktree,
     repoByHostIdentity,
@@ -165,7 +165,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     }
     return buildSearchableWorkspaceTabs({
       worktrees: browserSortedWorktrees,
-      ownershipWorktrees: allWorktrees,
+      ownershipWorktrees: workspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -200,7 +200,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabTypeByWorktree,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    allWorktrees,
+    workspaces,
     agentStatusByPaneKey,
     browserSortedWorktrees,
     groupsByWorktree,

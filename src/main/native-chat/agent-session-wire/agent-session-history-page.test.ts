@@ -20,7 +20,7 @@ import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-w
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimePayload
-} from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import {
   createTrackedJournalOpener,
@@ -34,14 +34,24 @@ import type {
 } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
-import { readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
+import { hostTestMessage } from './structured-agent-session-host-test-data'
+import {
+  createAgentSessionCatchUpReader,
+  readAgentSessionHistory,
+  resolveHistoryLimit
+} from './agent-session-history-page'
+import { readAgentSessionConversationOutline } from './agent-session-conversation-outline'
+import { shortenedAgentJournalItem } from './agent-session-item-wire-form'
+import { firstStructuredChatNamingPrompt } from '../../../shared/structured-chat-naming-eligibility'
+import { structuredSessionGateFacts } from '../../runtime/orchestration/structured-session-pointer-delivery'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const journals = createTrackedJournalOpener()
@@ -103,6 +113,90 @@ describe('resolveHistoryLimit', () => {
 })
 
 describe('readAgentSessionHistory', () => {
+  it('refreshes a retained catch-up reader after a same-cursor disk reload', async () => {
+    const options = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    await journal.appendItem(item(0), { kind: 'turn', turnId: 'turn-1', state: 'running' }, options)
+    const view = journal.publicRead()
+    expect(view.snapshot.items).toHaveLength(1)
+    const cursor = journal.cursor()
+    const read = createAgentSessionCatchUpReader(journal, undefined, view)
+    const request = {
+      sessionId: IDENTITY.sessionId,
+      direction: 'after' as const,
+      cursor: { epoch: cursor.epoch, sequence: 0 }
+    }
+    expect(read(request)).toMatchObject({
+      ok: true,
+      page: { items: [{ body: { state: 'running' } }], latestTurn: { turn: { state: 'running' } } }
+    })
+    openTestJournalHostDatabase(root)
+      .db.prepare(
+        "UPDATE journal_rows SET row_json = json_set(row_json, '$.body.state', 'completed') WHERE session_id = ? AND epoch = ? AND seq = ?"
+      )
+      .run(IDENTITY.sessionId, cursor.epoch, cursor.sequence)
+    await journal.open()
+    expect(journal.cursor()).toEqual(cursor)
+    expect(read(request)).toMatchObject({
+      ok: true,
+      page: {
+        items: [{ body: { state: 'completed' } }],
+        latestTurn: { turn: { state: 'completed' } }
+      }
+    })
+  })
+
+  it('serves current detail, outline, naming and mail facts without changing later history', async () => {
+    const options = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    await journal.appendSubmission({
+      clientMessageId: 'u',
+      payloadFingerprint: 'u',
+      body: hostTestMessage('Name this'),
+      fence: 1
+    })
+    const turn = await journal.appendItem(
+      item(0),
+      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      options
+    )
+    const replies = { ...options, turnScope: { kind: 'turn' as const, turnItemId: turn.itemId } }
+    await journal.appendItem(item(1), body('obsolete reply'), replies)
+    await journal.appendItem(item(2), body('initial reply'), replies)
+    const warm = journal.snapshot()
+    await journal.resolveDispatch({
+      clientMessageId: 'u',
+      state: 'accepted',
+      providerIdentity: null,
+      fence: 1
+    })
+    await journal.appendItem(item(2), body('Revised reply'), replies)
+    await journal.appendTombstone(item(1), { fence: 1 })
+    await journal.appendItem(
+      item(0),
+      { kind: 'turn', turnId: 'turn-1', state: 'completed' },
+      options
+    )
+    const current = journal.snapshot()
+    const expected = structuredClone(current)
+    expect(current).not.toBe(warm)
+    const detail = current.items.at(-1)!
+    expect(shortenedAgentJournalItem(detail, 1024)?.body).toMatchObject({
+      blocks: [{ text: 'Revised reply' }]
+    })
+    expect(readAgentSessionConversationOutline(current).entries).toMatchObject([
+      { preview: 'Name this', reply: 'Revised reply' }
+    ])
+    expect(firstStructuredChatNamingPrompt(current, 0)).toBe('Name this')
+    expect(structuredSessionGateFacts(current.items).turnRunning).toBe(false)
+    expect(current.submissions).toMatchObject([{ clientMessageId: 'u', dispatchState: 'accepted' }])
+    expect(
+      readAgentSessionHistory(journal, { sessionId: IDENTITY.sessionId, direction: 'tail' })
+    ).toMatchObject({
+      ok: true,
+      page: { items: expected.items, submissions: expected.submissions }
+    })
+    expect(journal.snapshot()).toEqual(expected)
+  })
+
   it('serves the newest page on tail and pages backward from it', async () => {
     await appendItems(5)
     const tail = readAgentSessionHistory(journal, {
@@ -217,8 +311,7 @@ describe('readAgentSessionHistory', () => {
 })
 
 describe('history page byte ceiling', () => {
-  // A legal user message may be 256 KiB; twenty of them serialize past the
-  // 4 MiB outbound channel cap, which closes the socket on overflow.
+  // Several legal messages exceed the 4 MiB outbound cap.
   const LARGE_TEXT = 'x'.repeat(250 * 1024)
 
   async function appendLargeItems(count: number): Promise<void> {
@@ -234,7 +327,6 @@ describe('history page byte ceiling', () => {
     if (!result.ok) {
       throw new Error(`expected a page, got reset ${result.reset}`)
     }
-    // The actual channel gate: the page must serialize under the outbound cap.
     serializeRemoteRuntimePayload(result.page)
     return result.page
   }
@@ -309,7 +401,7 @@ describe('history page byte ceiling', () => {
     expect(new Set(seen).size).toBe(20)
   })
 
-  it('degrades a single over-budget item to a visible truncation marker instead of overflowing', async () => {
+  it('sends a single over-budget item shortened and marked, never replaced', async () => {
     await journal.appendItem(item(1), body(`1:${'y'.repeat(3 * 1024 * 1024)}`), {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
@@ -319,12 +411,14 @@ describe('history page byte ceiling', () => {
       readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
     )
     expect(tail.items).toHaveLength(1)
-    // Named for the client to word, with English for a client that can't.
-    expect(tail.items[0]?.body).toEqual({
-      kind: 'status',
-      text: 'This part of the chat was too large to show.',
-      presentation: 'history-item-too-large'
-    })
+    const sent = tail.items[0]
+    const text =
+      sent?.body.kind === 'message' && sent.body.blocks[0]?.type === 'text'
+        ? sent.body.blocks[0].text
+        : ''
+    expect(sent?.shortened).toBe(true)
+    expect(text.startsWith('1:yyy')).toBe(true)
+    expect(text.length).toBeLessThan(3 * 1024 * 1024)
   })
 })
 
@@ -491,7 +585,6 @@ describe('projectJournalBatch', () => {
   })
 })
 
-/** Serialize through the actual channel gate and hand back the byte length. */
 function serializedPageBytes(value: unknown): number {
   return Buffer.byteLength(serializeRemoteRuntimePayload(value), 'utf8')
 }
@@ -500,8 +593,7 @@ type RawSeedRow =
   | Omit<JournalItemRow, 'v' | 'epoch' | 'fence' | 'ts'>
   | Omit<JournalTombstoneRow, 'v' | 'epoch' | 'fence' | 'ts'>
 
-/** Simulate rows admitted before identity bounding existed: written straight
- *  into the log, then loaded by a fresh journal instance. */
+/** Seed raw legacy rows, then reopen to exercise current read bounds. */
 async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSessionJournal> {
   const full = rows.map(
     (row) =>
@@ -513,8 +605,6 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
         ts: tick()
       }) as JournalRow
   )
-  // Rows are staged straight into the session database: the reopen below has to
-  // see them exactly as a previous writer would have committed them.
   await journal.close()
   const opened = openTestJournalHostDatabase(root)
   try {
@@ -530,9 +620,7 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
 }
 
 describe('pre-existing oversized identities', () => {
-  // The exact escape from the round-two review: a legal 5 MiB Codex turnId
-  // admitted before bounding, then tombstoned. Its removal id alone exceeds
-  // the 4 MiB outbound cap, so no page can ever carry it.
+  // Legacy oversized tombstone IDs cannot fit any outbound page.
   const HUGE_ITEM_ID = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
 
   it('answers an unfittable pre-existing removal with a bounded reset instead of an unsendable page', async () => {
@@ -557,9 +645,7 @@ describe('pre-existing oversized identities', () => {
       expect(serializedPageBytes(result.page)).toBeLessThanOrEqual(
         REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
       )
-      // The reset page replaces client state wholesale, so the removal is
-      // applied without carrying the id, and resuming from the live cursor
-      // starts past the unsendable row.
+      // Reset replaces client state without sending an unsendable removal ID.
       expect(result.page.items).toEqual([])
       const liveCursor = result.page.liveCursor
       if (!liveCursor) {

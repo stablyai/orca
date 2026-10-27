@@ -1,7 +1,3 @@
-// How a record-store write reaches the chat database: only the rows it changed, each checked with
-// the rules a load applies, never inside a caller's own transaction, and never in memory unless the
-// rows committed.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,6 +12,7 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -31,7 +28,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** Reserve, observe the spawn, prove the handle: a chat with a live writer. */
 async function liveChat(
   store: AgentSessionRecordStore,
   sessionId: string
@@ -76,7 +72,7 @@ async function liveChat(
     fence,
     link: {
       linkId: `link-${counter}`,
-      handle: { provider: 'claude', sessionId: `provider-${counter}`, leafUuid: null },
+      handle: claudeProviderHandle(`provider-${counter}`, null),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW
@@ -122,8 +118,7 @@ describe('writing a transaction', () => {
     expect(totalChanges()).toBe(before)
   })
 
-  // Every mutation lands after the caller's frame, so one made inside an open journal transaction
-  // on the same connection never nests a BEGIN there.
+  // Defer BEGIN beyond the caller's frame to avoid nesting its open journal transaction.
   it('runs a store call made inside an open journal transaction after that transaction', async () => {
     const store = await openTestAgentSessionRecordStore(root)
     await liveChat(store, 'chat-a-0001')
@@ -137,6 +132,56 @@ describe('writing a transaction', () => {
     expect((await readPersistedTestAgentSessionStore(root)).records['chat-a-0001']).toMatchObject({
       conversationName: 'renamed'
     })
+  })
+})
+
+describe('a receipt', () => {
+  const operationId = `${NOW}-${'7'.repeat(32)}`
+  const outcome = { status: 'succeeded' as const, sessionId: 'chat-a-0001' }
+
+  async function pendingOperation(): Promise<AgentSessionRecordStore> {
+    const store = await openTestAgentSessionRecordStore(root)
+    await liveChat(store, 'chat-a-0001')
+    await store.admitOperation({ callerKey: 'client-1', operationId, fingerprint: 'fp', now: NOW })
+    return store
+  }
+
+  async function persistedStatus(): Promise<string | undefined> {
+    const reopened = await openTestAgentSessionRecordStore(root)
+    return reopened.getOperationRow('client-1', operationId)?.outcome.status
+  }
+
+  it('shows its rows in memory only once committed is called after the commit', async () => {
+    const store = await pendingOperation()
+    const receipt = store.operationOutcomeReceipt({ callerKey: 'client-1', operationId, outcome })
+
+    openTestJournalHostDatabase(root).transaction((db) => {
+      receipt.write(db)
+      expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+    })
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+    expect(await persistedStatus()).toBe('succeeded')
+
+    receipt.committed()
+    expect(store.getOperationRow('client-1', operationId)?.outcome).toEqual(outcome)
+  })
+
+  it('leaves memory and rows as they were when the transaction rolls back', async () => {
+    const store = await pendingOperation()
+    const receipt = store.operationOutcomeReceipt({ callerKey: 'client-1', operationId, outcome })
+
+    expect(() =>
+      openTestJournalHostDatabase(root).transaction((db) => {
+        receipt.write(db)
+        throw new Error('the journal row was refused')
+      })
+    ).toThrow('the journal row was refused')
+
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+    expect(await persistedStatus()).toBe('pending')
+    // A discarded draft must not become the next diff baseline.
+    await store.setConversationName('chat-a-0001', 'after')
+    expect(await persistedStatus()).toBe('pending')
   })
 })
 
@@ -187,7 +232,6 @@ describe('rows in memory', () => {
 })
 
 describe('after the database closes', () => {
-  // Late settlement at quit lands here: the caller reports it, and nothing in memory moves.
   it('refuses a write with journal_closed and leaves memory as it was', async () => {
     const store = await openTestAgentSessionRecordStore(root)
     const before = await liveChat(store, 'chat-a-0001')

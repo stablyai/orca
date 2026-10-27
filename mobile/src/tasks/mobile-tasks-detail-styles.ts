@@ -1,6 +1,13 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import {
+  StyleSheet,
+  themedStyleSheet,
+  colors,
+  radii,
+  spacing,
+  typography
+} from './mobile-tasks-dependencies'
 
-export const mobileTasksDetailStyles = StyleSheet.create({
+export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   groupSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
@@ -166,4 +173,4 @@ export const mobileTasksDetailStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     color: colors.textPrimary
   }
-})
+}))

@@ -7,8 +7,7 @@ import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge
 
 const mocks = vi.hoisted(() => ({
   openFile: vi.fn<EditorFilesSlice['openFile']>(() => 'file-1'),
-  updateSettings: vi.fn(async () => {}),
-  isFloatingWorkspacePanelVisible: vi.fn(() => false),
+  updateSettings: vi.fn(async (_updates: { floatingTerminalEnabled?: boolean }) => {}),
   toastError: vi.fn(),
   subscribe: vi.fn<(listener: (state: { workspaceSessionReady: boolean }) => void) => () => void>()
 }))
@@ -17,14 +16,12 @@ let storeState: {
   openFile: typeof mocks.openFile
   updateSettings: typeof mocks.updateSettings
   settings: { floatingTerminalEnabled?: boolean } | undefined
+  floatingWorkspacePanelOpen: boolean
   workspaceSessionReady: boolean
 }
 
 vi.mock('../../store', () => ({
   useAppStore: { getState: () => storeState, subscribe: mocks.subscribe }
-}))
-vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
-  isFloatingWorkspacePanelVisible: mocks.isFloatingWorkspacePanelVisible
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -75,11 +72,15 @@ describe('registerOsMarkdownFileOpenBridge', () => {
       openFile: mocks.openFile,
       updateSettings: mocks.updateSettings,
       settings: { floatingTerminalEnabled: true },
+      floatingWorkspacePanelOpen: false,
       workspaceSessionReady: true
     }
     mocks.openFile.mockReturnValue('file-1')
-    mocks.updateSettings.mockResolvedValue(undefined)
-    mocks.isFloatingWorkspacePanelVisible.mockReturnValue(false)
+    mocks.updateSettings.mockImplementation(
+      async (updates: { floatingTerminalEnabled?: boolean }) => {
+        storeState.settings = { ...storeState.settings, ...updates }
+      }
+    )
     mocks.subscribe.mockReset().mockReturnValue(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
       frames.push(callback)
@@ -174,6 +175,8 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     await settle()
 
     expect(mocks.updateSettings).toHaveBeenCalledWith({ floatingTerminalEnabled: true })
+    runFrames()
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
   })
 
   it('leaves settings alone when the floating workspace is already enabled', async () => {
@@ -205,7 +208,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
   })
 
   it('does not toggle when the panel is already visible', async () => {
-    mocks.isFloatingWorkspacePanelVisible.mockReturnValue(true)
+    storeState.floatingWorkspacePanelOpen = true
     stubPreload({
       onOpenMarkdownFiles: () => () => {},
       consumePendingMarkdownFileOpens: () => Promise.resolve([markdownDocument()])
@@ -244,8 +247,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     await settle()
 
     expect(mocks.toastError).toHaveBeenCalledWith('Failed to open the file.')
-    // Why: App.tsx awaits hydration around this registration and treats any throw as
-    // "session restore failed", so the bridge must swallow its own failures.
+    // App classifies registration throws as restore failure; this bridge must contain its own errors.
     expect(unhandledRejections).toEqual([])
   })
 
@@ -298,8 +300,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
   it('ignores a non-array payload from a mismatched preload', async () => {
     stubPreload({
       onOpenMarkdownFiles: () => () => {},
-      // Why: the payload crosses the preload boundary, so a stale preload can resolve with
-      // something that is not an array. Reading .length off it would throw inside the chain.
+      // Older preloads can return non-arrays; validate before reading length across the boundary.
       consumePendingMarkdownFileOpens: () => Promise.resolve(null as unknown as MarkdownDocument[])
     })
 

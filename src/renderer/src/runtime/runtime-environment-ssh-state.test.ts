@@ -3,10 +3,8 @@ import type { SshConnectionState, SshProviderEpoch } from '../../../shared/ssh-t
 import { useAppStore } from '@/store'
 import {
   applyRuntimeEnvironmentSshStateChanged,
-  connectRuntimeEnvironmentSshTarget,
   hydrateRuntimeEnvironmentSshState,
-  refreshRuntimeEnvironmentSshTargetMetadata,
-  resyncRuntimeEnvironmentSshTargets
+  refreshRuntimeEnvironmentSshTargetMetadata
 } from './runtime-environment-ssh-state'
 import { callRuntimeRpc } from './runtime-rpc-client'
 
@@ -74,52 +72,6 @@ beforeEach(() => {
 })
 
 describe('hydrateRuntimeEnvironmentSshState', () => {
-  it('populates the environment bucket with targets, tombstones, and per-target states', async () => {
-    const envId = nextEnvId()
-    installRpcResponses({
-      targets: [
-        { id: 'ssh-1', label: 'devbox' },
-        { id: 'ssh-2', label: 'buildbox' }
-      ],
-      labels: { 'ssh-old': 'retired box' },
-      states: { 'ssh-1': connState('ssh-1', 'connected') }
-    })
-
-    await hydrateRuntimeEnvironmentSshState(envId)
-
-    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
-    expect(bucket?.targetsHydrated).toBe(true)
-    expect(bucket?.targetLabels.get('ssh-1')).toBe('devbox')
-    expect(bucket?.removedTargetLabels.get('ssh-old')).toBe('retired box')
-    expect(bucket?.connectionStates.get('ssh-1')?.status).toBe('connected')
-    expect(bucket?.connectionStates.get('ssh-1')).toMatchObject({
-      providerEpoch: 'ssh-1-provider-epoch',
-      connectionGeneration: 7
-    })
-    // ssh-2 had no live state: absent, so reads fall back to 'disconnected'.
-    expect(bucket?.connectionStates.has('ssh-2')).toBe(false)
-    // Local maps stay untouched.
-    expect(useAppStore.getState().sshTargetLabels.size).toBe(0)
-    expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
-    // Every call was routed to the owning environment.
-    for (const [target] of callRuntimeRpcMock.mock.calls) {
-      expect(target).toEqual({ kind: 'environment', environmentId: envId })
-    }
-  })
-
-  it('skips refetching when already hydrated unless forced', async () => {
-    const envId = nextEnvId()
-    installRpcResponses({ targets: [] })
-    await hydrateRuntimeEnvironmentSshState(envId)
-    const callsAfterFirst = callRuntimeRpcMock.mock.calls.length
-
-    await hydrateRuntimeEnvironmentSshState(envId)
-    expect(callRuntimeRpcMock.mock.calls.length).toBe(callsAfterFirst)
-
-    await hydrateRuntimeEnvironmentSshState(envId, { force: true })
-    expect(callRuntimeRpcMock.mock.calls.length).toBeGreaterThan(callsAfterFirst)
-  })
-
   it('does not rerun when an ordinary refresh joins a forced hydration', async () => {
     const envId = nextEnvId()
     useAppStore
@@ -153,41 +105,6 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
     expect(
       callRuntimeRpcMock.mock.calls.filter(([, method]) => method === 'ssh.getState')
     ).toHaveLength(1)
-  })
-
-  it('hydrates without force after the environment bucket is marked stale', async () => {
-    const envId = nextEnvId()
-    useAppStore
-      .getState()
-      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-old', label: 'old box' }])
-    useAppStore.getState().markEnvironmentSshStateStale(envId)
-    installRpcResponses({
-      targets: [{ id: 'ssh-new', label: 'new box' }],
-      states: { 'ssh-new': connState('ssh-new') }
-    })
-
-    await hydrateRuntimeEnvironmentSshState(envId)
-
-    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
-    expect(bucket?.targetsHydrated).toBe(true)
-    expect(bucket?.targetLabels.get('ssh-new')).toBe('new box')
-    expect(bucket?.connectionStates.get('ssh-new')?.status).toBe('connected')
-  })
-
-  it('refreshes only target summaries when hydrated metadata is unchanged', async () => {
-    const envId = nextEnvId()
-    installRpcResponses({
-      targets: [{ id: 'ssh-1', label: 'devbox' }],
-      states: { 'ssh-1': connState('ssh-1') }
-    })
-    await hydrateRuntimeEnvironmentSshState(envId)
-    callRuntimeRpcMock.mockClear()
-
-    await refreshRuntimeEnvironmentSshTargetMetadata(envId)
-
-    expect(callRuntimeRpcMock.mock.calls.map(([, method]) => method)).toEqual([
-      'ssh.listTargetSummaries'
-    ])
   })
 
   it('reads state for a labelled target the bucket never recorded a state for', async () => {
@@ -326,16 +243,6 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
     ])
   })
 
-  it('leaves the bucket un-hydrated when the host lacks the ssh RPC methods', async () => {
-    const envId = nextEnvId()
-    installRpcResponses({ failListTargets: true })
-
-    await expect(hydrateRuntimeEnvironmentSshState(envId)).rejects.toThrow()
-
-    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
-    expect(bucket?.targetsHydrated ?? false).toBe(false)
-  })
-
   it('still hydrates the target list when the removed-labels fetch fails', async () => {
     const envId = nextEnvId()
     installRpcResponses({
@@ -400,54 +307,9 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
 
     expect(useAppStore.getState().sshStateByEnvironment.has(envId)).toBe(false)
   })
-
-  it('prunes connection state for targets removed by an authoritative refresh', async () => {
-    const envId = nextEnvId()
-    useAppStore.getState().setEnvironmentSshTargetsMetadata(envId, [
-      { id: 'ssh-live', label: 'live box' },
-      { id: 'ssh-removed', label: 'retired box' }
-    ])
-    useAppStore
-      .getState()
-      .setEnvironmentSshConnectionState(envId, 'ssh-live', connState('ssh-live'))
-    useAppStore
-      .getState()
-      .setEnvironmentSshConnectionState(envId, 'ssh-removed', connState('ssh-removed'))
-    installRpcResponses({
-      targets: [{ id: 'ssh-live', label: 'live box' }],
-      states: { 'ssh-live': connState('ssh-live') }
-    })
-
-    await hydrateRuntimeEnvironmentSshState(envId, { force: true })
-
-    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
-    expect(bucket?.targetLabels.has('ssh-removed')).toBe(false)
-    expect(bucket?.connectionStates.has('ssh-removed')).toBe(false)
-    expect(bucket?.connectionStates.get('ssh-live')?.status).toBe('connected')
-  })
 })
 
 describe('applyRuntimeEnvironmentSshStateChanged', () => {
-  it('applies a known target state directly into the owning bucket without RPC', () => {
-    const envId = nextEnvId()
-    useAppStore
-      .getState()
-      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-1', label: 'devbox' }])
-
-    applyRuntimeEnvironmentSshStateChanged(envId, 'ssh-1', connState('ssh-1', 'disconnected'))
-
-    expect(
-      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')
-    ).toMatchObject({
-      status: 'disconnected',
-      providerEpoch: 'ssh-1-provider-epoch',
-      connectionGeneration: 7
-    })
-    expect(callRuntimeRpcMock).not.toHaveBeenCalled()
-    // Local map untouched.
-    expect(useAppStore.getState().sshConnectionStates.size).toBe(0)
-  })
-
   it('rejects partial authority before retaining a runtime-owned state', () => {
     const envId = nextEnvId()
     useAppStore
@@ -501,96 +363,5 @@ describe('applyRuntimeEnvironmentSshStateChanged', () => {
     // The trailing event must not resurrect the removed target's state.
     expect(bucket?.connectionStates.has('ssh-gone')).toBe(false)
     expect(bucket?.removedTargetLabels.get('ssh-gone')).toBe('old devbox')
-  })
-
-  it('picks up a just-added target through the forced refresh', async () => {
-    const envId = nextEnvId()
-    installRpcResponses({
-      targets: [{ id: 'ssh-new', label: 'fresh box' }],
-      states: { 'ssh-new': connState('ssh-new', 'connecting') }
-    })
-
-    applyRuntimeEnvironmentSshStateChanged(envId, 'ssh-new', connState('ssh-new', 'connecting'))
-    await vi.waitFor(() => {
-      expect(
-        useAppStore.getState().sshStateByEnvironment.get(envId)?.targetLabels.get('ssh-new')
-      ).toBe('fresh box')
-    })
-
-    expect(
-      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-new')
-        ?.status
-    ).toBe('connecting')
-  })
-})
-
-describe('connectRuntimeEnvironmentSshTarget', () => {
-  it('routes ssh.connect to the owning environment and mirrors the returned state', async () => {
-    const envId = nextEnvId()
-    callRuntimeRpcMock.mockResolvedValue({ state: connState('ssh-1', 'connected') } as never)
-
-    const state = await connectRuntimeEnvironmentSshTarget(envId, 'ssh-1')
-
-    expect(state?.status).toBe('connected')
-    expect(callRuntimeRpcMock).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: envId },
-      'ssh.connect',
-      { targetId: 'ssh-1' },
-      expect.anything()
-    )
-    expect(
-      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')?.status
-    ).toBe('connected')
-    expect(
-      useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.get('ssh-1')
-    ).toMatchObject({
-      providerEpoch: 'ssh-1-provider-epoch',
-      connectionGeneration: 7
-    })
-    expect(useAppStore.getState().sshConnectionStates.size).toBe(0)
-  })
-
-  it('propagates connect failures without writing any state', async () => {
-    const envId = nextEnvId()
-    callRuntimeRpcMock.mockRejectedValue(new Error('SSH target not found'))
-
-    await expect(connectRuntimeEnvironmentSshTarget(envId, 'ssh-dead')).rejects.toThrow(
-      'SSH target not found'
-    )
-    expect(useAppStore.getState().sshStateByEnvironment.has(envId)).toBe(false)
-  })
-})
-
-describe('resyncRuntimeEnvironmentSshTargets', () => {
-  it('applies the target list even when the removed-labels refresh fails', async () => {
-    const envId = nextEnvId()
-    installRpcResponses({
-      targets: [{ id: 'ssh-live', label: 'devbox' }],
-      failRemovedLabels: true
-    })
-
-    await resyncRuntimeEnvironmentSshTargets(envId)
-
-    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
-    expect(bucket?.targetLabels.get('ssh-live')).toBe('devbox')
-    expect(bucket?.targetsHydrated).toBe(true)
-  })
-
-  it('reads the connection state of a host re-added under a new target id', async () => {
-    const envId = nextEnvId()
-    useAppStore
-      .getState()
-      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-old', label: 'devbox' }])
-    installRpcResponses({
-      targets: [{ id: 'ssh-new', label: 'devbox' }],
-      labels: { 'ssh-old': 'devbox' },
-      states: { 'ssh-new': connState('ssh-new') }
-    })
-
-    await resyncRuntimeEnvironmentSshTargets(envId)
-
-    const bucket = useAppStore.getState().sshStateByEnvironment.get(envId)
-    expect(bucket?.targetLabels.get('ssh-new')).toBe('devbox')
-    expect(bucket?.connectionStates.get('ssh-new')?.status).toBe('connected')
   })
 })

@@ -2,19 +2,21 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { translate } from '@/i18n/i18n'
+import {
+  resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteForHost
+} from '@/lib/worktree-operation-route'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { blockRemovalForUnsavedFiles } from './removal-unsaved-files'
 
-// A failed delete usually means unresolved changes, so land on the diff panel.
 function viewWorktreeDiff(
   worktreeId: string,
   executionHostId: WorktreeRemovalTarget['executionHostId']
 ): void {
-  // The Source Control panel is the requested surface — don't re-seed a shell in a
-  // workspace the user is trying to delete.
+  // Open Source Control without reseeding a shell in the workspace being deleted.
   activateAndRevealWorktree(worktreeId, {
     providesInitialSurface: true,
     ...(executionHostId ? { executionHostId } : {})
@@ -31,17 +33,21 @@ export function runWorktreeDeleteWithToast(
 ): Promise<boolean> {
   const worktreeId = target.id
   const removeWorktree = useAppStore.getState().removeWorktree
-  const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-  const focusSuccessor = options.focusSuccessorOnDelete !== false
 
   const removeOptions = {
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
-    ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {})
+    ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {}),
+    ...(options.confirmedDiscards ? { confirmedDiscards: options.confirmedDiscards } : {}),
+    ...(options.assertBeforeDispatch ? { assertBeforeDispatch: options.assertBeforeDispatch } : {})
   }
   const showFailureToast = (
     error: string,
     state: ReturnType<typeof getDeleteStateForWorktreeHost>
   ): void => {
+    const currentState = useAppStore.getState()
+    const route = target.executionHostId
+      ? resolveWorktreeOperationRouteForHost(currentState, worktreeId, target.executionHostId)
+      : resolveWorktreeOperationRoute(currentState, worktreeId)
     const hasKnownChanges =
       (useAppStore.getState().gitStatusByWorktree[worktreeId]?.length ?? 0) > 0
     showDeleteWorktreeFailureToast({
@@ -52,8 +58,9 @@ export function runWorktreeDeleteWithToast(
       lockReason: state?.lockReason ?? null,
       hasKnownChanges,
       onViewChanges: () => viewWorktreeDiff(worktreeId, target.executionHostId),
-      // Why (#19334): re-runs the archive hook and waives the failure this time, so the waiver
-      // is an informed choice made after reading the refusal -- not something `force` implied.
+      onAlwaysForceDelete: () =>
+        useAppStore.getState().updateSettingsOrThrow({ alwaysForceDeleteWorktrees: true }),
+      // Waive archive-hook failure only after explicit refusal review; force alone does not imply consent.
       onDeleteAnyway: () =>
         retryFromToast({ force: options.force === true, allowFailedArchiveHook: true }),
       // The explicit Force Delete retry may waive an unverified PTY-stop proof.
@@ -68,13 +75,14 @@ export function runWorktreeDeleteWithToast(
           withViewAction: true
         }),
       worktreeId,
-      worktreeName
+      executionHostId: target.executionHostId,
+      worktreeName,
+      nestedRemovalTarget: route && !route.runtimeEnvironmentId ? target : undefined,
+      onNestedDeleted: () => options.onForceDeleted?.(target)
     })
   }
 
-  // Both toast buttons do the same thing: recapture focus (the user may have navigated while the
-  // toast was open), retry with one waiver added, and report a success through `onForceDeleted` so
-  // the caller's bookkeeping runs. Only the waiver and the failure copy differ.
+  // Recapture focus and report completion for caller bookkeeping regardless of the waiver chosen.
   const retryFromToast = (retry: {
     force: boolean
     allowUnverifiedPtyStop?: boolean
@@ -82,7 +90,6 @@ export function runWorktreeDeleteWithToast(
     failedTitle?: string
     withViewAction?: boolean
   }): void => {
-    const commitRetryFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
     const viewAction = retry.withViewAction
       ? {
           action: {
@@ -91,11 +98,7 @@ export function runWorktreeDeleteWithToast(
           }
         }
       : {}
-    // Why re-show the full failure toast rather than a bare `toast.error` (#19334): a retry can
-    // fail for a DIFFERENT reason than the one the user just answered. Waiving a failed archive
-    // hook on a dirty checkout lands on the dirty preflight next, and a bare error offers no
-    // buttons — leaving the user stuck one step further in, which is the dead end this gate has
-    // now produced three times. Routing back through the same toast keeps every retry actionable.
+    // Retries may fail at a different gate; show its actionable toast so another refusal is not a dead end.
     const failed = (description: string): void => {
       const retryState = getDeleteStateForWorktreeHost(
         { id: worktreeId, hostId: target.executionHostId ?? undefined },
@@ -114,20 +117,31 @@ export function runWorktreeDeleteWithToast(
         { description, ...viewAction }
       )
     }
+    // Why: edits made since the first attempt would close unlisted; refuse until saved or closed.
+    if (
+      blockRemovalForUnsavedFiles(
+        useAppStore.getState,
+        [{ id: worktreeId, hostId: target.executionHostId ?? undefined }],
+        worktreeName
+      )
+    ) {
+      return
+    }
     useAppStore
       .getState()
       .removeWorktree(target, retry.force, {
         ...(retry.allowUnverifiedPtyStop ? { allowUnverifiedPtyStop: true } : {}),
-        ...(retry.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {})
+        ...(retry.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {}),
+        ...(options.assertBeforeDispatch
+          ? { assertBeforeDispatch: options.assertBeforeDispatch }
+          : {})
       })
       .then((result) => {
         if (!result.ok) {
           failed(result.error)
           return
         }
-        commitRetryFocus()
-        // "A retry started from this toast completed the delete" — callers hang their bookkeeping
-        // off it, so without this a batch or Space-panel delete keeps listing what it removed.
+        // Notify the caller so batch and Space-panel bookkeeping removes the deleted workspace.
         options.onForceDeleted?.(target)
       })
       .catch((err: unknown) => failed(err instanceof Error ? err.message : String(err)))
@@ -150,9 +164,6 @@ export function runWorktreeDeleteWithToast(
               ? { runtimeEnvironmentId: result.preservedBranch.runtimeEnvironmentId }
               : {})
           })
-        }
-        if (focusSuccessor) {
-          commitFocus()
         }
         return true
       }

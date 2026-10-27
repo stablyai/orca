@@ -1,6 +1,6 @@
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
@@ -36,8 +36,7 @@ export function buildWorktreeChecksReviewIndex({
     if (!repo) {
       continue
     }
-    // Why: Cmd+J builds this index for every worktree before search runs, so a
-    // branch-less folder workspace or partially hydrated row must not throw here.
+    // Folder workspaces and partially hydrated rows can have no branch even before search starts.
     const branch = resolveWorktreeBranchLabel(worktree)
     const prKey = getGitHubPRCacheKey(
       repo.path,
@@ -57,8 +56,7 @@ export function buildWorktreeChecksReviewIndex({
       repo.executionHostId,
       true
     )
-    // Why: Cmd+J should expose exactly the review metadata Checks has already
-    // resolved, without starting another provider lookup from the search path.
+    // Reuse Checks’ resolved metadata; search must not start another provider lookup.
     const pr = prCache[prKey]?.data
     const review = selectChecksPanelReview({
       hostedReview: hostedReviewCache[hostedReviewKey]?.data,
@@ -71,8 +69,7 @@ export function buildWorktreeChecksReviewIndex({
       linkedGiteaPR: worktree.linkedGiteaPR ?? null
     })
     if (review) {
-      // Why: persisted IDs can be identical across execution hosts; the search
-      // scope preserves these object references while sorting and filtering.
+      // Persisted IDs repeat across hosts; search preserves these object references during sorting/filtering.
       reviews.set(worktree, review)
     } else if (
       (pr && isGitHubPRSuppressed(worktree, pr.number)) ||
@@ -81,8 +78,7 @@ export function buildWorktreeChecksReviewIndex({
       worktree.linkedAzureDevOpsPR != null ||
       worktree.linkedGiteaPR != null
     ) {
-      // Why: an empty Checks selection caused by suppression or a non-GitHub
-      // link is authoritative; omission lets Cmd+J fall back to stale GitHub data.
+      // Suppressed/non-GitHub selections are authoritative; explicit null prevents fallback to stale GitHub data.
       reviews.set(worktree, null)
     }
   }

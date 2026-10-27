@@ -1,8 +1,7 @@
 function randomOperationNonce(): string {
   const cryptoApi = globalThis.crypto
   if (!cryptoApi?.getRandomValues) {
-    // Why: a weak nonce can collide across clients and turn distinct launches
-    // into the same idempotent operation, so fail instead of using Math.random.
+    // Weak nonces can collide across clients and deduplicate distinct launches; fail instead of using Math.random.
     throw new Error('Secure randomness is unavailable for this agent launch.')
   }
   const bytes = new Uint8Array(16)

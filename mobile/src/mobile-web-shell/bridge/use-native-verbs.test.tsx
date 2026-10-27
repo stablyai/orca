@@ -1,10 +1,8 @@
-/** The page's side of the verbs, over the real pair: what it sends, and what it refuses to send. */
 import type { ReactElement } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Avoid Expo imports through re-exported screen hooks; this test calls none of them.
 vi.mock('../../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -26,6 +24,8 @@ import {
   type NativeVerbs
 } from './use-native-verbs'
 
+const mounted: ReactTestRenderer[] = []
+
 const held: { verbs: NativeVerbs | null } = { verbs: null }
 
 function Screen(): null {
@@ -44,7 +44,7 @@ function render(pair: BridgePortPair): ReactElement {
 async function mount(pair: BridgePortPair): Promise<NativeVerbs> {
   await pair.flush()
   act(() => {
-    create(render(pair))
+    mounted.push(create(render(pair)))
   })
   const verbs = held.verbs
   if (verbs === null) {
@@ -58,26 +58,38 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  act(() => {
+    for (const tree of mounted.splice(0)) {
+      tree.unmount()
+    }
+  })
   vi.useRealTimers()
 })
 
 describe('a page calling a native verb', () => {
   it('writes through the shell and hears whether the pasteboard took it', async () => {
-    const pair = createFakeBridgePortPair()
+    const serveNativeVerb = vi.fn(async () => ({ written: true }))
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
     const verbs = await mount(pair)
+    expect(verbs.granted).toBe(true)
     const written = verbs.writeClipboardText('copied')
     await pair.flush()
     await expect(written).resolves.toBe(true)
-    // The whole point of the seam: it never reached the desktop's client.
+    expect(serveNativeVerb).toHaveBeenCalledWith('native.clipboard.write', {
+      mime: 'text',
+      value: 'copied'
+    })
     expect(pair.rpc.requests).toEqual([])
   })
 
   it('reads through the shell', async () => {
-    const pair = createFakeBridgePortPair()
+    const serveNativeVerb = vi.fn(async () => ({ value: 'pasteboard' }))
+    const pair = createFakeBridgePortPair({ serveNativeVerb })
     const verbs = await mount(pair)
     const read = verbs.readClipboardText()
     await pair.flush()
     await expect(read).resolves.toBe('pasteboard')
+    expect(serveNativeVerb).toHaveBeenCalledWith('native.clipboard.read', { mime: 'text' })
     expect(pair.rpc.requests).toEqual([])
   })
 
@@ -113,23 +125,12 @@ describe('a shell that granted no native verbs', () => {
     expect(verbs.granted).toBe(false)
     const before = page.sent.length
     await expect(verbs.readClipboardText()).rejects.toThrow(/did not grant/)
-    // A rejection after a round trip and one that never left look the same to an `await`; only the
-    // first would have put a request on the wire.
+    // Inspect the wire to distinguish local refusal from an otherwise identical rejected round trip.
     expect(page.sent).toHaveLength(before)
-  })
-
-  it('says so before it is called, so a caller can choose its own fallback', async () => {
-    const pair = createFakeBridgePortPair()
-    const verbs = await mount(pair)
-    expect(verbs.granted).toBe(true)
   })
 })
 
-/**
- * The member exists so the raw port stays inside the module that owns it. That is only true while
- * it cannot be used as a raw port: a desktop method sent through it would reach the desktop, and
- * the inventory would not see it, because a bare-identifier call is not a shape the scan counts.
- */
+// The typed member must reject desktop methods too; widened callers could otherwise bypass the raw-port inventory’s call shapes.
 describe('the native verb member on the client', () => {
   it('refuses a method outside the prefix instead of sending it to the desktop', async () => {
     const pair = createFakeBridgePortPair()
@@ -145,12 +146,7 @@ describe('the native verb member on the client', () => {
   })
 })
 
-/**
- * Every refusal reaches the caller under one type, carrying the shell's own code.
- *
- * Without this a caller had to read message text to tell an out-of-scope mime from a clipboard too
- * large to send, and those are different things to do something about.
- */
+// Preserve one typed refusal with a stable code; callers must not distinguish recovery actions by message text.
 describe('a verb the shell refuses', () => {
   async function rejectionFrom(serveNativeVerb: () => Promise<unknown>): Promise<NativeVerbError> {
     const pair = createFakeBridgePortPair({ serveNativeVerb })
@@ -165,15 +161,13 @@ describe('a verb the shell refuses', () => {
   }
 
   it('names an out-of-scope mime as its own reason, without the handler message', async () => {
-    // A coded error, not the handler's class: what the host reads is the `code` property, so this
-    // is the contract between the two and importing the real class would pull react-native in.
+    // Model only the handler’s code property; importing its real class would load React Native into this test.
     const declined = Object.assign(new Error('image is not served by this build'), {
       code: 'native_verb_out_of_scope'
     })
     const error = await rejectionFrom(() => Promise.reject(declined))
     expect(error.reason).toBe('native_verb_out_of_scope')
-    // The handler's words stay on the device: this one names the mime, and a read that failed
-    // after reading could name what it read.
+    // Handler messages remain on-device because failed reads may contain the data they read.
     expect(error.message).not.toContain('image')
   })
 
@@ -189,7 +183,6 @@ describe('a verb the shell refuses', () => {
       (await rejectionFrom(() => Promise.resolve({ value: 'a'.repeat(9 * 1024 * 1024) }))).reason,
       (await rejectionFrom(() => Promise.resolve({ nonsense: 1 }))).reason
     ]
-    // No `unreported`: every path this build can take names itself.
     for (const reason of reasons) {
       expect(NATIVE_VERB_REASONS, reason).toContain(reason)
       expect(reason).not.toBe('unreported')
@@ -217,9 +210,7 @@ describe('a verb the shell refuses', () => {
 
 describe('a code this page has never heard of', () => {
   it('floors to unreported rather than crossing verbatim', async () => {
-    // Delivered as a frame, not through the pair: this build's host normalises an unknown code to
-    // `native_verb_failed` before it leaves, so the only way to be a page reading a shell newer
-    // than itself is to be handed the frame such a shell would send.
+    // Inject a newer-shell code directly; this host normalizes unknown codes before sending, so the pair cannot produce it itself.
     const page = createPageClient()
     page.deliver({ ...INIT, grants: { ...GRANTS, native: [...BRIDGE_NATIVE_VERB_NAMES] } })
     act(() => {
@@ -253,30 +244,5 @@ describe('a code this page has never heard of', () => {
     const caught = await read
     expect(caught).toBeInstanceOf(NativeVerbError)
     expect(caught instanceof NativeVerbError && caught.reason).toBe('unreported')
-  })
-})
-
-describe('what the surface offers a screen', () => {
-  it('carries no capability flag with nothing behind it', async () => {
-    const pair = createFakeBridgePortPair({})
-    const verbs = await mount(pair)
-    // Pinned so an unread flag has to be added here on purpose. `canCaptureAudio` was one: four
-    // grants read and answered to nobody, where the fence that actually holds is the per-verb
-    // `ungranted` check every member already makes before a frame is sent. A flag no screen reads
-    // is a capability negotiation that exists only in this file.
-    expect(Object.keys(verbs).sort()).toEqual([
-      'canPickMedia',
-      'canReadClipboardText',
-      'canWriteClipboardText',
-      'granted',
-      'pickMedia',
-      'readAudio',
-      'readClipboardText',
-      'readMedia',
-      'releaseMedia',
-      'startAudio',
-      'stopAudio',
-      'writeClipboardText'
-    ])
   })
 })

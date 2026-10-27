@@ -1,16 +1,17 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
-import { findWorktreeById } from './worktree-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import {
   enqueueDiffCommentPersist,
   mutateDiffComments,
   normalizeDiffComment
 } from './diff-comment-persistence'
+import {
+  readDiffCommentsForChange,
+  selectWorktreeDiffCommentsOrEmpty
+} from '../worktree-diff-comments-selector'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -63,9 +64,6 @@ function deliverySnapshotMatches(
   )
 }
 
-// Why: a frozen shared sentinel avoids selector re-renders and mutation.
-const EMPTY_COMMENTS: readonly DiffComment[] = Object.freeze([])
-
 // Why: best-effort telemetry runs only after the note is on disk, so a throw here must not report a failed save.
 function recordReviewNoteInteraction(get: () => AppState): void {
   try {
@@ -79,22 +77,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   set,
   get
 ) => ({
-  getDiffComments: (worktreeId) => {
-    // Why: return the stable sentinel for a missing worktree so optional-worktree callers don't allocate a fresh [] and trigger re-renders.
-    if (!worktreeId) {
-      return EMPTY_COMMENTS as DiffComment[]
-    }
-    const scope = parseWorkspaceKey(worktreeId)
-    const worktree =
-      scope?.type === 'folder'
-        ? findFolderWorkspaceOwner(get(), scope.folderWorkspaceId)
-        : findWorktreeById(get().worktreesByRepo, worktreeId)
-    if (!worktree?.diffComments) {
-      // Why: cast the frozen sentinel to the mutable return type; runtime freeze makes accidental mutation throw.
-      return EMPTY_COMMENTS as DiffComment[]
-    }
-    return worktree.diffComments
-  },
+  // Why the shared selector: rendered surfaces and actions must read the same twin's notes.
+  getDiffComments: (worktreeId) => selectWorktreeDiffCommentsOrEmpty(get(), worktreeId),
 
   addDiffComment: async (input) => {
     const comment: DiffComment = normalizeDiffComment({
@@ -124,8 +108,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
 
-    // Why: distinguish "comment missing" (false; keep draft, likely edit-while-deleted) from "body unchanged" (true; close editor) before mutating.
-    const existing = get().getDiffComments(worktreeId)
+    // Missing notes return false to keep draft; unchanged body returns true to close editor without mutation.
+    const existing = readDiffCommentsForChange(get(), worktreeId, [commentId])
     const existingIdx = existing.findIndex((c) => c.id === commentId)
     if (existingIdx === -1) {
       return false
@@ -134,19 +118,24 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return true
     }
 
-    const result = mutateDiffComments(set, worktreeId, (current) => {
-      const idx = current.findIndex((c) => c.id === commentId)
-      if (idx === -1) {
-        return null
-      }
-      if (current[idx].body === trimmed) {
-        return null
-      }
-      const next = current.slice()
-      // Why: editing a sent note makes the agent's copy stale, so reset sentAt to re-queue it for the next Send.
-      next[idx] = { ...current[idx], body: trimmed, sentAt: undefined }
-      return next
-    })
+    const result = mutateDiffComments(
+      set,
+      worktreeId,
+      (current) => {
+        const idx = current.findIndex((c) => c.id === commentId)
+        if (idx === -1) {
+          return null
+        }
+        if (current[idx].body === trimmed) {
+          return null
+        }
+        const next = current.slice()
+        // Why: editing a sent note makes the agent's copy stale, so reset sentAt to re-queue it for the next Send.
+        next[idx] = { ...current[idx], body: trimmed, sentAt: undefined }
+        return next
+      },
+      [commentId]
+    )
     if (!result) {
       // Why: comment vanished or the same body was already written between pre-check and set; treat as success so the editor closes.
       return true
@@ -165,14 +154,19 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return true
     }
     const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
-    const result = mutateDiffComments(set, worktreeId, (existing) => {
-      const next = existing.filter((comment) => {
-        const snapshot = snapshotsById.get(comment.id)
-        // Why: delivery is async; a note edited after its snapshot was sent is a fresh pending note that must stay visible.
-        return !snapshot || !deliverySnapshotMatches(comment, snapshot)
-      })
-      return next.length === existing.length ? null : next
-    })
+    const result = mutateDiffComments(
+      set,
+      worktreeId,
+      (existing) => {
+        const next = existing.filter((comment) => {
+          const snapshot = snapshotsById.get(comment.id)
+          // Why: delivery is async; a note edited after its snapshot was sent is a fresh pending note that must stay visible.
+          return !snapshot || !deliverySnapshotMatches(comment, snapshot)
+        })
+        return next.length === existing.length ? null : next
+      },
+      snapshotsById.keys()
+    )
     if (!result) {
       return true
     }
@@ -191,17 +185,22 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return true
     }
     const ids = new Set(commentIds)
-    const result = mutateDiffComments(set, worktreeId, (existing) => {
-      let changed = false
-      const next = existing.map((comment) => {
-        if (!ids.has(comment.id) || comment.sentAt === sentAt) {
-          return comment
-        }
-        changed = true
-        return { ...comment, sentAt }
-      })
-      return changed ? next : null
-    })
+    const result = mutateDiffComments(
+      set,
+      worktreeId,
+      (existing) => {
+        let changed = false
+        const next = existing.map((comment) => {
+          if (!ids.has(comment.id) || comment.sentAt === sentAt) {
+            return comment
+          }
+          changed = true
+          return { ...comment, sentAt }
+        })
+        return changed ? next : null
+      },
+      ids
+    )
     if (!result) {
       return true
     }
@@ -216,10 +215,15 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   },
 
   deleteDiffComment: async (worktreeId, commentId) => {
-    const result = mutateDiffComments(set, worktreeId, (existing) => {
-      const next = existing.filter((c) => c.id !== commentId)
-      return next.length === existing.length ? null : next
-    })
+    const result = mutateDiffComments(
+      set,
+      worktreeId,
+      (existing) => {
+        const next = existing.filter((c) => c.id !== commentId)
+        return next.length === existing.length ? null : next
+      },
+      [commentId]
+    )
     if (!result) {
       return
     }

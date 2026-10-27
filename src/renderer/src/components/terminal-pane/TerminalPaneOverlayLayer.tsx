@@ -11,6 +11,7 @@ import { shouldMountBackgroundWorktreeTab } from '../terminal/background-termina
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
+import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
@@ -34,7 +35,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   shouldMeasureHiddenWorktree = false,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
   backgroundMountTabIds = null,
-  activationDeferredMountTabIds = null
+  activationDeferredMountTabIds = null,
+  ownsNativeChatToggleShortcut = true
 }: {
   worktreeId: string
   worktreePath: string
@@ -48,6 +50,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   backgroundMountTabIds?: ReadonlySet<string> | null
   /** Cold-activation deferred tabs receive immediate parked watcher coverage. */
   activationDeferredMountTabIds?: ReadonlySet<string> | null
+  /** Grant global keyboard chords to one workspace even when another overlay workspace remains visible. */
+  ownsNativeChatToggleShortcut?: boolean
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
@@ -59,21 +63,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
-  const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
-  const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
 
-  useNativeChatToggleShortcut(worktreeId, isWorktreeActive)
+  useNativeChatToggleShortcut(worktreeId, isWorktreeActive && ownsNativeChatToggleShortcut)
 
-  const leaveWorktreeIfEmpty = useCallback(() => {
-    const state = useAppStore.getState()
-    if (state.activeWorktreeId !== worktreeId) {
-      return
-    }
-    const { renderableTabCount } = reconcileWorktreeTabModel(worktreeId)
-    if (renderableTabCount === 0) {
-      setActiveWorktree(null)
-    }
-  }, [reconcileWorktreeTabModel, setActiveWorktree, worktreeId])
+  const captureEmptiedReaction = useCallback(
+    () => captureWorkspaceEmptiedReaction(worktreeId),
+    [worktreeId]
+  )
 
   const focusOwningGroup = useCallback(
     (groupId: string) => focusGroup(worktreeId, groupId),
@@ -138,8 +134,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
         const assignment = assignments.get(terminalTab.id)
         const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
         if (!shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)) {
-          // Why only the startup hold lands here visible: reveal admits every other visible
-          // deferred tab in the same render pass.
+          // Only startup holds remain visible here; other visible deferred tabs are admitted in this render.
           return isVisible ? (
             <RetainedPaneHost
               key={terminalTab.id}
@@ -171,10 +166,11 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isWorktreeActive={isWorktreeActive}
             isVisible={isVisible}
             isActive={isActive}
+            dimmed={groups.length > 1 && isVisible && !isActive}
             activityTerminalPortal={activityTerminalPortal}
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-            leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+            captureEmptiedReaction={captureEmptiedReaction}
           />
         )
       })}

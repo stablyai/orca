@@ -13,6 +13,7 @@ import {
   DISPATCH_REJECTED_PROVIDER_CLOSED
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
+import type { StructuredAttentionState } from '../../../shared/agent-session-attention'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
 
 const LOCATION = {
@@ -86,9 +87,9 @@ function harness(): {
   observe: () => void
   events: AgentSessionTurnCompletionEvent[]
   outcomes: () => [string, string][]
-  /** Whether each completion said the user is being asked something. */
   awaitingUser: () => boolean[]
-  listen: () => () => void
+  prompts: () => string[]
+  listen: (options?: { includePrompts?: boolean }) => () => void
 } {
   let items: AgentJournalRenderItem[] = []
   let submissions: AgentJournalSubmission[] = []
@@ -99,7 +100,6 @@ function harness(): {
   const feed = new StructuredAgentSessionTurnCompletionFeed({
     sessions,
     now: () => 1_700,
-    // The status feed's projection, computed as it computes it.
     readStatusState: () => projectStructuredAgentSessionStatusState(items, submissions, fence)
   })
   const events: AgentSessionTurnCompletionEvent[] = []
@@ -128,7 +128,14 @@ function harness(): {
       events.flatMap((event) =>
         event.type === 'completion' ? [event.completion.awaitingUser === true] : []
       ),
-    listen: () => feed.subscribe({ id: 'sub', emit: (event) => events.push(event) })
+    prompts: () =>
+      events.flatMap((event) => (event.type === 'prompt' ? [event.prompt.promptId] : [])),
+    listen: (options) =>
+      feed.subscribe({
+        id: 'sub',
+        emit: (event) => events.push(event),
+        ...(options?.includePrompts ? { includePrompts: true } : {})
+      })
   }
 }
 
@@ -142,7 +149,6 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
     h.setTurn(turn('turn-1', 'completed', 'success'))
     h.setCursor({ epoch: 'epoch-1', sequence: 2 })
     h.observe()
-    // Strict: an idle settle omits `awaitingUser` rather than sending it undefined.
     expect(h.events).toStrictEqual([
       {
         type: 'completion',
@@ -151,14 +157,15 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
           sessionId: 'session-1',
           turnId: 'turn-1',
           outcome: 'success',
-          completedAt: 1_700
+          completedAt: 1_700,
+          journalCursor: { epoch: 'epoch-1', sequence: 2 }
         }
       }
     ])
   })
 
   it('carries failure and cancellation verbatim rather than filtering them here', () => {
-    // The host reports what happened; deciding what lights up is the client's policy.
+    // The host reports outcomes; clients decide which ones alert.
     for (const outcome of ['failure', 'cancellation'] as const) {
       const h = harness()
       h.listen()
@@ -176,8 +183,7 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
   it.each(['completed', 'interrupted', 'unverifiable'] as const)(
     'emits nothing for a %s turn with no outcome, because absent means unknown',
     (state) => {
-      // `completed` is the one that matters: a provider reports its own API error as a finished
-      // turn, so reading "settled" as "succeeded" would light the dot on a failure.
+      // Providers may report API errors as completed turns; settled does not imply success.
       const h = harness()
       h.listen()
       h.setTurn(turn('turn-1', 'running'))
@@ -193,7 +199,6 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
   it('emits nothing on the first observation, so restore and restart stay silent', () => {
     const h = harness()
     h.listen()
-    // A session re-attached with history already settled: this is not news.
     h.setTurn(turn('turn-1', 'completed', 'success'))
     h.observe()
     h.observe()
@@ -247,8 +252,6 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
     expect(h.events).toEqual([])
   })
 
-  // LIVE-ONLY PIN. If a later refactor adds a retained snapshot or a replay arm to make a
-  // reconnecting client "catch up", these two tests are what fails.
   it('replays nothing to a subscriber that arrives after the completion', () => {
     const h = harness()
     h.setTurn(turn('turn-1', 'running'))
@@ -273,7 +276,6 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
     h.setCursor({ epoch: 'epoch-1', sequence: 2 })
     h.observe()
     h.listen()
-    // The host advanced its own mark with no subscriber to tell; nothing is queued for the next.
     h.observe()
     expect(h.events).toEqual([])
   })
@@ -320,7 +322,6 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
     h.observe()
     h.events.length = 0
 
-    // A rewind republishes an earlier settled turn in a new journal epoch.
     h.setTurn(turn('turn-old', 'completed', 'success'))
     h.setCursor({ epoch: 'epoch-2', sequence: 2 })
     h.observe()
@@ -385,7 +386,6 @@ describe('a request the agent or its start refused', () => {
   const M3 = agentJournalSubmissionKey('m3')
   const settledTurn = turnItem(turn('t1', 'completed', 'success'), 2)
 
-  /** A session whose first turn succeeded, as the feed saw it happen. */
   function afterSuccessfulTurn() {
     const h = harness()
     h.listen()
@@ -414,14 +414,14 @@ describe('a request the agent or its start refused', () => {
           sessionId: 'session-1',
           turnId: M1,
           outcome: 'failure',
-          completedAt: 1_700
+          completedAt: 1_700,
+          journalCursor: { epoch: 'epoch-1', sequence: 2 }
         }
       }
     ])
   })
 
   it('stays silent on a first observation of a send that had already failed', () => {
-    // A restart, reopen or re-attach: the failure is history, not news.
     const h = harness()
     h.listen()
     h.setJournal([userEntry('m1', 1)], [refused('m1')])
@@ -453,7 +453,6 @@ describe('a request the agent or its start refused', () => {
     alone.observe()
     expect(alone.events).toEqual([])
 
-    // The latest request falls back to the turn already announced, which must not announce again.
     const h = afterSuccessfulTurn()
     const accepted = sent('m1', { dispatchState: 'accepted' })
     h.setJournal([userEntry('m1', 1), settledTurn, userEntry('m2', 3)], [accepted, pending('m2')])
@@ -571,7 +570,6 @@ describe('a request the agent or its start refused', () => {
 describe('a request that settles while the user is asked something', () => {
   const M1 = agentJournalSubmissionKey('m1')
 
-  /** An approval the user has not answered; `agentId` makes it a subagent's. */
   function approval(
     itemId: string,
     sequence: number,
@@ -618,7 +616,6 @@ describe('a request that settles while the user is asked something', () => {
     expect(h.outcomes()).toEqual([['t1', 'success']])
     expect(h.awaitingUser()).toEqual([true])
 
-    // Answering the prompt settles the session idle on the request already announced.
     h.setJournal(
       [
         user,
@@ -646,16 +643,27 @@ describe('a request that settles while the user is asked something', () => {
     expect(h.outcomes()).toEqual([[M1, 'failure']])
   })
 
-  it('sends nothing while the main turn asks for permission, and one event when it settles', () => {
+  it('announces the main turn asking for permission once, and the settle once', () => {
     const h = harness()
-    h.listen()
+    h.listen({ includePrompts: true })
     const user = userEntry('m1', 1)
     const accepted = [sent('m1', { dispatchState: 'accepted' })]
     h.setJournal([user, turnItem(turn('t1', 'running'), 2)], accepted)
     h.observe()
     h.setJournal([user, turnItem(turn('t1', 'running'), 2), approval('a1', 3, 'pending')], accepted)
     h.observe()
-    expect(h.events).toEqual([])
+    expect(h.events).toEqual([
+      {
+        type: 'prompt',
+        prompt: {
+          scope: LOCATION,
+          sessionId: 'session-1',
+          promptId: 'a1',
+          raisedAt: 1_700,
+          journalCursor: { epoch: 'epoch-1', sequence: 2 }
+        }
+      }
+    ])
     h.setJournal(
       [user, turnItem(turn('t1', 'running'), 2), approval('a1', 3, 'resolved')],
       accepted
@@ -667,7 +675,6 @@ describe('a request that settles while the user is asked something', () => {
     )
     h.observe()
     expect(h.outcomes()).toEqual([['t1', 'success']])
-    // Idle when it settles: the prompt was already answered.
     expect(h.awaitingUser()).toEqual([false])
   })
 
@@ -691,5 +698,141 @@ describe('a request that settles while the user is asked something', () => {
     )
     h.observe()
     expect(h.events).toEqual([])
+  })
+  describe('a prompt raised mid-turn', () => {
+    const user = userEntry('m1', 1)
+    const accepted = [sent('m1', { dispatchState: 'accepted' })]
+    const running = turnItem(turn('t1', 'running'), 2)
+
+    it('reaches only a subscriber that asked for prompts', () => {
+      const h = harness()
+      h.listen()
+      h.setJournal([user, running], accepted)
+      h.observe()
+      h.setJournal([user, running, approval('a1', 3, 'pending')], accepted)
+      h.observe()
+      expect(h.events).toEqual([])
+    })
+
+    it('announces each prompt once, and a new one after the last was answered', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.setJournal([user, running], accepted)
+      h.observe()
+      const asked = approval('a1', 3, 'pending')
+      h.setJournal([user, running, asked], accepted)
+      h.observe()
+      h.setJournal([user, running, { ...asked, revision: 2 }], accepted)
+      h.observe()
+      h.setJournal([user, running, approval('a1', 3, 'resolved')], accepted)
+      h.observe()
+      h.setJournal(
+        [user, running, approval('a1', 3, 'resolved'), approval('a2', 4, 'pending')],
+        accepted
+      )
+      h.observe()
+      expect(h.prompts()).toEqual(['a1', 'a2'])
+    })
+
+    it('announces a subagent prompt raised beside a pending one', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.setJournal([user, running, approval('a1', 3, 'pending')], accepted)
+      h.observe()
+      h.setJournal(
+        [user, running, approval('a1', 3, 'pending'), approval('a2', 4, 'pending', 'child-1')],
+        accepted
+      )
+      h.observe()
+      expect(h.prompts()).toEqual(['a2'])
+    })
+
+    it('treats a prompt already pending at the first observation, or after a rewind, as history', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.setJournal([user, running, approval('a1', 3, 'pending')], accepted)
+      h.observe()
+      h.setCursor({ epoch: 'epoch-2', sequence: 1 })
+      h.setJournal([user, running, approval('b1', 3, 'pending')], accepted)
+      h.observe()
+      expect(h.events).toEqual([])
+    })
+
+    it('tells a prompt-aware subscriber once when a settle only restates the announced prompt', () => {
+      const legacy: AgentSessionTurnCompletionEvent[] = []
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.feed.subscribe({ id: 'legacy', emit: (event) => legacy.push(event) })
+      const asked = approval('a1', 3, 'pending', 'child-1')
+      h.setJournal([user, running], accepted)
+      h.observe()
+      h.setJournal([user, running, asked], accepted)
+      h.observe()
+      h.setJournal([user, turnItem(turn('t1', 'completed', 'success'), 2), asked], accepted)
+      h.observe()
+      expect(h.events.map((event) => event.type)).toEqual(['prompt'])
+      // Completion-only clients still need settlement after a prompt they never received.
+      expect(legacy).toEqual([
+        expect.objectContaining({
+          type: 'completion',
+          completion: expect.objectContaining({ turnId: 't1', awaitingUser: true })
+        })
+      ])
+    })
+
+    it('still tells a prompt-aware subscriber about a refused send while an announced prompt waits', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      const asked = approval('a1', 1, 'pending', 'child-1')
+      h.setJournal([userEntry('m1', 2)], [pending('m1')])
+      h.observe()
+      h.setJournal([asked, userEntry('m1', 2)], [pending('m1')])
+      h.observe()
+      h.setJournal([asked, userEntry('m1', 2)], [refused('m1')])
+      h.observe()
+      expect(h.events.map((event) => event.type)).toEqual(['prompt', 'completion'])
+      expect(h.outcomes()).toEqual([[agentJournalSubmissionKey('m1'), 'failure']])
+    })
+
+    it('publishes pending state on baseline, when a prompt ends, and on historical returns only', () => {
+      const states: StructuredAttentionState[] = []
+      const h = harness()
+      h.feed.subscribe({ id: 'host', emit: () => {}, onState: (state) => states.push(state) })
+      h.setJournal([user, running, approval('a1', 3, 'pending')], accepted)
+      h.observe()
+      h.observe()
+      h.setJournal(
+        [user, running, approval('a1', 3, 'pending'), approval('a2', 4, 'pending')],
+        accepted
+      )
+      h.observe()
+      h.setJournal(
+        [user, running, approval('a1', 3, 'resolved'), approval('a2', 4, 'pending')],
+        accepted
+      )
+      h.observe()
+      h.feed.observe('session-1', undefined, { historical: true })
+      expect(states.map((state) => state.pendingPromptIds)).toEqual([['a1'], ['a2'], ['a2']])
+      expect(states.every((state) => state.sessionId === 'session-1')).toBe(true)
+      expect(h.events).toEqual([])
+    })
+
+    it('announces a prompt under its own identity when the turn settles beside it', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.setJournal([user, running], accepted)
+      h.observe()
+      h.setJournal(
+        [
+          user,
+          turnItem(turn('t1', 'completed', 'success'), 2),
+          approval('a1', 3, 'pending', 'child-1')
+        ],
+        accepted
+      )
+      h.observe()
+      expect(h.prompts()).toEqual(['a1'])
+      expect(h.outcomes()).toEqual([])
+    })
   })
 })

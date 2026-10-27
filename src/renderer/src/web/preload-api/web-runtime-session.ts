@@ -10,10 +10,12 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { WebRuntimeClient } from '../web-runtime-client'
 import {
   clearStoredWebRuntimeEnvironment,
-  getPreferredWebPairingOffer,
+  getPreferredWebRuntimeConnection,
   readStoredWebRuntimeEnvironment,
+  replaceStoredTokenWithDeviceKey,
   updateStoredEnvironmentRuntimeId
 } from '../web-runtime-environment'
+import { webRuntimeCredentialFor } from './web-runtime-credentials'
 import type { StoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import { translate } from '@/i18n/i18n'
 
@@ -25,7 +27,6 @@ export const webRuntimeState: {
   worktreeVisibilityDefaultsRuntimeValue: WorktreeVisibilityDefaults | null
   activeClient: WebRuntimeClient | null
   activeClientEnvironmentId: string | null
-  cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
 } = {
   activeEnvironment: readStoredWebRuntimeEnvironment(),
@@ -35,7 +36,6 @@ export const webRuntimeState: {
   worktreeVisibilityDefaultsRuntimeValue: null,
   activeClient: null,
   activeClientEnvironmentId: null,
-  cachedWorktrees: null,
   cachedDetectedWorktrees: null
 }
 
@@ -64,8 +64,9 @@ export async function observeWebRuntimeStatus(
   if (existing) {
     return existing.refresh({ timeoutMs, observeOnly: true })
   }
-  const transient = new WebRuntimeClient(getPreferredWebPairingOffer(environment), {
-    reconnect: false
+  const transient = new WebRuntimeClient(getPreferredWebRuntimeConnection(environment), {
+    reconnect: false,
+    credential: credentialFor(environment)
   })
   try {
     return (await transient.call('status.get', undefined, {
@@ -81,7 +82,6 @@ export const manuallyDisconnectedEnvironmentIds = new Set<string>()
 export const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
 
 export function invalidateRuntimeWorktreeCaches(): void {
-  webRuntimeState.cachedWorktrees = null
   webRuntimeState.cachedDetectedWorktrees = null
 }
 
@@ -91,26 +91,55 @@ export function getClientForEnvironment(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     throw new Error('runtime_manually_disconnected')
   }
+  // Why: a request captured before a re-pair must not reopen a client with the replaced token.
+  if (!isActivePairing(environment)) {
+    throw new Error(PAIRING_CHANGED_MESSAGE)
+  }
   if (
     !webRuntimeState.activeClient ||
     webRuntimeState.activeClientEnvironmentId !== environment.id
   ) {
     webRuntimeState.activeClient?.close()
-    webRuntimeState.activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment), {
-      status: {
-        environmentId: environment.id,
-        pairingRevision: environment.pairingRevision ?? environment.createdAt,
-        publish: (snapshot) => {
-          for (const listener of statusListeners) {
-            listener(snapshot)
-          }
-        },
-        verified: (response) => updateEnvironmentFromResponse(environment, response)
+    webRuntimeState.activeClient = new WebRuntimeClient(
+      getPreferredWebRuntimeConnection(environment),
+      {
+        credential: credentialFor(environment),
+        allowKeyMigration: true,
+        status: {
+          environmentId: environment.id,
+          pairingRevision: environment.pairingRevision ?? environment.createdAt,
+          publish: (snapshot) => {
+            for (const listener of statusListeners) {
+              listener(snapshot)
+            }
+          },
+          verified: (response) => updateEnvironmentFromResponse(environment, response)
+        }
       }
-    })
+    )
     webRuntimeState.activeClientEnvironmentId = environment.id
   }
   return webRuntimeState.activeClient
+}
+
+function credentialFor(environment: StoredWebRuntimeEnvironment) {
+  return webRuntimeCredentialFor(environment, {
+    forgetStoredToken: (deviceId) => {
+      if (isActivePairing(environment) && webRuntimeState.activeEnvironment) {
+        webRuntimeState.activeEnvironment = replaceStoredTokenWithDeviceKey(
+          webRuntimeState.activeEnvironment,
+          deviceId
+        )
+      }
+    },
+    // Why not close clients here: the transport is mid-verdict and moves itself to auth-failed.
+    forgetPairing: () => {
+      if (isActivePairing(environment)) {
+        clearStoredWebRuntimeEnvironment()
+        webRuntimeState.activeEnvironment = null
+      }
+    }
+  })
 }
 
 export function closeActiveRuntimeClients(): void {
@@ -173,17 +202,32 @@ export function requireActiveEnvironmentOrNull(): StoredWebRuntimeEnvironment | 
   return webRuntimeState.activeEnvironment
 }
 
+const PAIRING_CHANGED_MESSAGE = 'The paired Orca server changed while the request was in progress.'
+
 export function assertActiveEnvironment(environmentId: string): void {
   if (requireActiveEnvironment().id !== environmentId) {
-    throw new Error('The paired Orca server changed while the request was in progress.')
+    throw new Error(PAIRING_CHANGED_MESSAGE)
   }
+}
+
+function pairingRevisionOf(environment: StoredWebRuntimeEnvironment): number {
+  return environment.pairingRevision ?? environment.createdAt
+}
+
+/** Re-pairing the same server keeps its id, so only the revision tells the pairings apart. */
+function isActivePairing(environment: StoredWebRuntimeEnvironment): boolean {
+  const active = webRuntimeState.activeEnvironment
+  return (
+    active?.id === environment.id && pairingRevisionOf(active) === pairingRevisionOf(environment)
+  )
 }
 
 export function updateEnvironmentFromResponse(
   environment: StoredWebRuntimeEnvironment,
   response: RuntimeRpcResponse<unknown>
 ): void {
-  if (webRuntimeState.activeEnvironment?.id !== environment.id) {
+  const active = webRuntimeState.activeEnvironment
+  if (!active || !isActivePairing(environment)) {
     return
   }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
@@ -194,8 +238,9 @@ export function updateEnvironmentFromResponse(
     typeof (response.result as { pairedDeviceId?: unknown }).pairedDeviceId === 'string'
       ? (response.result as { pairedDeviceId: string }).pairedDeviceId
       : undefined
+  // Why the active record: the captured one may predate another reply's update of this pairing.
   webRuntimeState.activeEnvironment = updateStoredEnvironmentRuntimeId(
-    environment,
+    active,
     runtimeId,
     pairedDeviceId
   )

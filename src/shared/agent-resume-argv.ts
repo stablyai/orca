@@ -1,8 +1,6 @@
 import type { AgentProviderSessionMetadata, ResumableTuiAgent } from './agent-session-resume'
 
-/** The argv that re-enters an existing session, per agent. Split from
- *  `agent-session-resume.ts` so adding an agent does not push that module past its line
- *  budget; type-only import back, so there is no runtime cycle. */
+/** Keep per-agent resume argv separate from session metadata; type-only imports avoid runtime cycles. */
 export function getAgentResumeArgv(
   agent: ResumableTuiAgent,
   providerSession: AgentProviderSessionMetadata,
@@ -13,7 +11,14 @@ export function getAgentResumeArgv(
     case 'codebuddy':
       return providerSession.key === 'session_id' ? ['codebuddy', '--resume', id] : null
     case 'claude':
-      return providerSession.key === 'session_id' ? ['claude', '--resume', id] : null
+      return providerSession.key === 'session_id'
+        ? [
+            'claude',
+            ...(providerSession.effort ? ['--effort', providerSession.effort] : []),
+            '--resume',
+            id
+          ]
+        : null
     case 'cursor':
       return providerSession.key === 'conversation_id' ? ['cursor-agent', '--resume', id] : null
     case 'codex':
@@ -31,9 +36,8 @@ export function getAgentResumeArgv(
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
     case 'opencode2':
-      return providerSession.key === 'session_id'
-        ? ['opencode2', '--standalone', '--session', id]
-        : null
+      // Why: the launch command owns standalone/shared mode, including user overrides.
+      return providerSession.key === 'session_id' ? ['opencode2', '--session', id] : null
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
@@ -58,9 +62,7 @@ export function getAgentResumeArgv(
             ompResumeFilePath?.trim() || providerSession.transcriptPath?.trim() || id
           ]
         : null
-    // Why: the joined form is the only one Copilot documents, and it matches the
-    // flag spelling buildAgentResumeInvocation bakes into persisted AI Vault
-    // resume commands, so local and remote resumes agree on one spelling.
+    // Use Copilot's documented joined spelling, matching persisted AI Vault commands across local/remote resumes.
     case 'copilot':
       return providerSession.key === 'session_id' ? ['copilot', `--resume=${id}`] : null
     // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
@@ -70,11 +72,49 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['muse', 'resume', id] : null
     case 'zcode':
       return providerSession.key === 'session_id' ? ['zcode', '--resume', id] : null
-    // Why: `dsh-tui --resume <id>` re-enters the session the launcher recorded for this
-    // workspace. DSH keys sessions by workspace path, so callers must keep the cwd.
+    // DSH resumes by workspace path; callers must preserve cwd.
     case 'dsh':
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
     case 'jcode':
       return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
+    case 'kiro':
+      return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
+    case 'hermes':
+      return providerSession.key === 'session_id' ? ['hermes', '--resume', id] : null
   }
+}
+
+/** CLI fork creates a new conversation ID so chat and terminal cannot write the same one. */
+const FORK_ARGV: Partial<
+  Record<ResumableTuiAgent, (providerSession: AgentProviderSessionMetadata) => string[] | null>
+> = {
+  claude: ({ id }) => ['claude', '--resume', id, '--fork-session'],
+  codex: ({ id }) => ['codex', 'fork', id],
+  grok: ({ id }) => ['grok', '--resume', id, '--fork-session'],
+  pi: ({ transcriptPath }) => (transcriptPath ? ['pi', '--fork', transcriptPath] : null)
+}
+
+/** OpenCode2.0.14/OMP17.0.5 fork through ACP session/fork then resume the copy. Refuse without host-advertised fork; OpenCode2 chats list as opencode2. */
+const FORKS_THROUGH_CHAT: ReadonlySet<string> = new Set<ResumableTuiAgent>([
+  'opencode',
+  'opencode2',
+  'omp'
+])
+
+/** Whether "Resume in New CLI" can open a copy of this agent's conversations at all. A row's own
+ *  gate (`aiVaultSessionCliForkWorktreeId`) also checks that its copy can be made. */
+export function agentForksConversations(agent: string): boolean {
+  return Object.hasOwn(FORK_ARGV, agent) || FORKS_THROUGH_CHAT.has(agent)
+}
+
+export function agentForksThroughChat(agent: string): boolean {
+  return FORKS_THROUGH_CHAT.has(agent)
+}
+
+export function getAgentForkArgv(
+  agent: ResumableTuiAgent,
+  providerSession: AgentProviderSessionMetadata
+): string[] | null {
+  const forkArgv = FORK_ARGV[agent]
+  return forkArgv && providerSession.key === 'session_id' ? forkArgv(providerSession) : null
 }

@@ -17,14 +17,22 @@ const BUILD_PREFIXES = [
   '.github/actions/prepare-orcad-prebuilds/'
 ]
 // A remote target's OS does not identify the client platform that builds its commands.
-const CROSS_HOST_PREFIXES = ['src/main/ssh/', 'src/main/providers/', 'src/relay/']
+const CROSS_HOST_PREFIXES = [
+  'src/main/ssh/',
+  'src/main/managed-server/',
+  'src/main/node-runtime/',
+  'src/main/orcad/orcad-artifact-materializer.ts',
+  'src/main/orcad/orcad-host-unavailable.ts',
+  'src/main/providers/',
+  'src/wsl-guest/'
+]
 const PLATFORM_PREFIXES = [
   'src/main/persistence/',
   'src/main/sqlite/',
   'src/main/orcad/',
   'src/main/daemon/',
   'src/main/wsl/',
-  'src/shared/child-process/'
+  'src/packages/process-host/'
 ]
 
 const PLATFORM_FAMILIES = [
@@ -37,7 +45,25 @@ export function nodeServerQualification(changedFiles, scope, { fullQualification
   const selected = new Set(['ubuntu-22.04'])
   let qualification = false
   let full = fullQualification || changedFiles.length === 0 || scope.graphUnavailable === true
-  for (const file of changedFiles) {
+  const matched = scope.matchedFiles
+  const qualificationFiles =
+    scope.graphResolved === true &&
+    scope.graphUnavailable !== true &&
+    scope.shouldRun === true &&
+    Array.isArray(matched) &&
+    matched.length > 0 &&
+    new Set(matched).size === matched.length &&
+    matched.every((file) => typeof file === 'string' && changedFiles.includes(file))
+      ? [
+          ...new Set([
+            ...matched,
+            ...changedFiles.filter((file) =>
+              PLATFORM_PREFIXES.some((prefix) => file.startsWith(prefix))
+            )
+          ])
+        ]
+      : changedFiles
+  for (const file of qualificationFiles) {
     // Build policy and native sources can change every slot, even with a platform in the name.
     if (
       !file.includes('/') ||

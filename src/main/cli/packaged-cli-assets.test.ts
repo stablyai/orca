@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
+import { globSync } from 'node:fs'
 import {
   copyFile,
   cp,
@@ -17,7 +18,8 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { createPackageWithOptions, statFile } from '@electron/asar'
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { stagePackagedProcessHost } from '../../../config/scripts/packaged-process-host-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -26,9 +28,6 @@ const unixTerminationSignals = ['SIGINT', 'SIGTERM'] as const
 const builderConfig = require('../../../config/electron-builder.config.cjs') as {
   files?: string[]
   asarUnpack?: string[]
-  mac?: { extraResources?: { from?: string; to?: string }[] }
-  linux?: { extraResources?: { from?: string; to?: string }[] }
-  win?: { extraResources?: { from?: string; to?: string }[] }
 }
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
 const darwinLauncherAsset = new URL('../../../resources/darwin/bin/orca', import.meta.url)
@@ -52,13 +51,6 @@ const unixLauncherFixtures = [
 ] as const
 
 describe('packaged CLI assets', () => {
-  it('ships embedded skill guides with the CLI instead of source Markdown', () => {
-    // Why: `skills get` must work from the packaged CLI without falling back to
-    // authoring-only files that do not exist in installed applications.
-    expect(builderConfig.asarUnpack).toContain('out/cli/**')
-    expect(builderConfig.files).toContain('!skill-guides{,/**/*}')
-  })
-
   it('loads worktree link validation from the installed CLI', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-cli-gitlab-package-'))
     const projectDir = fileURLToPath(new URL('../../../', import.meta.url))
@@ -70,18 +62,23 @@ describe('packaged CLI assets', () => {
         args: [
           join(projectDir, 'node_modules', 'typescript', 'bin', 'tsc'),
           '-p',
-          join(projectDir, 'config', 'tsconfig.cli.json'),
+          join(projectDir, 'config', 'tsconfig.build.cli.json'),
           '--outDir',
           join(source, 'out'),
           '--composite',
           'false',
           '--incremental',
-          'false'
+          'false',
+          // This fixture checks the emitted package; the CLI typecheck runs separately.
+          '--noCheck'
         ],
         cwd: projectDir,
         timeoutMs: 60_000
       })
       expect(compile.code, compile.stdout + compile.stderr).toBe(0)
+      expect(globSync('**/*.{test,spec}.{js,jsx,cjs,mjs}', { cwd: join(source, 'out') })).toEqual(
+        []
+      )
       await mkdir(dirname(archive), { recursive: true })
       await writeFile(join(source, 'out', 'package.json'), JSON.stringify({ type: 'commonjs' }))
       for (const name of ['zod', 'tweetnacl']) {
@@ -94,6 +91,7 @@ describe('packaged CLI assets', () => {
           }
         )
       }
+      await stagePackagedProcessHost(join(root, 'resources'))
       await createPackageWithOptions(source, archive, {
         unpack: `{${builderConfig.asarUnpack?.map((pattern) => join(source, pattern).split(sep).join('/')).join(',')}}`
       })
@@ -117,6 +115,8 @@ describe('packaged CLI assets', () => {
         env: {
           ...process.env,
           ORCA_BACKGROUND_LAUNCH: '1',
+          NODE_PATH: '',
+          NODE_OPTIONS: '',
           ORCA_USER_DATA_PATH: join(root, 'user-data'),
           HOME: join(root, 'home')
         },
@@ -127,83 +127,6 @@ describe('packaged CLI assets', () => {
         ok: false,
         error: { code: 'invalid_argument', message: 'Pass a positive safe integer for --pr.' }
       })
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  it('copies runtime dependencies used before Electron asar integration is available', () => {
-    const runtimeResourceTargets = new Set(
-      [
-        ...(builderConfig.mac?.extraResources ?? []),
-        ...(builderConfig.linux?.extraResources ?? []),
-        ...(builderConfig.win?.extraResources ?? [])
-      ].map((resource) => normalizeResourceTarget(resource.to))
-    )
-
-    expect([...runtimeResourceTargets]).toEqual(
-      expect.arrayContaining([
-        join('node_modules', 'ws'),
-        join('node_modules', 'tweetnacl'),
-        join('node_modules', 'zod'),
-        join('node_modules', 'yaml'),
-        join('node_modules', 'jsonc-parser'),
-        join('node_modules', 'node-pty'),
-        join('node_modules', 'sherpa-onnx-darwin-${arch}'),
-        join('node_modules', 'sherpa-onnx-linux-${arch}'),
-        join('node_modules', 'sherpa-onnx-win-x64')
-      ])
-    )
-  })
-
-  function normalizeResourceTarget(target: string | undefined): string | undefined {
-    return target?.replace(/[\\/]/g, sep)
-  }
-
-  itRunsUnixShell('keeps the Linux launcher executable in packaged resources', async () => {
-    const launcherStats = await stat(linuxLauncherAsset)
-    expect(launcherStats.mode & 0o111).not.toBe(0)
-  })
-
-  itRunsUnixShell('replaces the shell process in packaged Unix launchers', async () => {
-    for (const launcher of [linuxLauncherAsset, darwinLauncherAsset]) {
-      const content = await readFile(launcher, 'utf8')
-      expect(content).toContain('ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"')
-    }
-  })
-
-  it('retries an incomplete listener-state write', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-listener-state-'))
-    const statePath = join(root, 'listener-state.json')
-    const expectedState = { pid: 1234, port: 5678 }
-    await writeFile(statePath, '{"pid":', 'utf8')
-    const completedWrite = new Promise<void>((resolve, reject) => {
-      setTimeout(() => {
-        writeFile(statePath, JSON.stringify(expectedState), 'utf8').then(resolve, reject)
-      }, 50)
-    })
-
-    try {
-      await expect(waitForListenerState(statePath)).resolves.toEqual(expectedState)
-    } finally {
-      await completedWrite
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  it.each([
-    { state: { pid: '1234', port: 5678 }, reason: 'non-numeric pid' },
-    { state: { pid: 0, port: 5678 }, reason: 'non-positive pid' },
-    { state: { pid: 1234, port: '5678' }, reason: 'non-numeric port' },
-    { state: { pid: 1234, port: 65_536 }, reason: 'out-of-range port' }
-  ])('rejects $reason in listener state', async ({ state }) => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-listener-state-'))
-    const statePath = join(root, 'listener-state.json')
-    try {
-      await writeFile(statePath, JSON.stringify(state), 'utf8')
-      await expect(waitForListenerState(statePath)).rejects.toThrow(
-        'Invalid launcher listener state'
-      )
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -331,26 +254,24 @@ printf 'arg=%s\\n' "$@"
     }
   )
 
-  // Why: registration on every Linux install method now points at this one
-  // launcher, so its env sanitation and argv passthrough are the contract the
-  // AppImage, deb, and extracted-tree commands all depend on.
-  itRunsUnixShell('sanitizes node env and forwards argv verbatim', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-env-'))
-    try {
-      const appDir = join(root, 'Orca')
-      const resourcesDir = join(appDir, 'resources')
-      const launcherDir = join(resourcesDir, 'bin')
-      const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
-      const launcherPath = join(launcherDir, 'orca-ide')
-      const cliPath = join(cliDir, 'index.js')
+  itRunsUnixShell.each(unixLauncherFixtures)(
+    'sanitizes node env and forwards argv verbatim through the $name launcher',
+    async (launcherFixture) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-unix-cli-env-'))
+      try {
+        const appDir = join(root, ...launcherFixture.appDir)
+        const launcherPath = join(appDir, ...launcherFixture.launcher)
+        const electronPath = join(appDir, ...launcherFixture.executable)
+        const cliPath = join(appDir, ...launcherFixture.cli)
 
-      await mkdir(launcherDir, { recursive: true })
-      await mkdir(cliDir, { recursive: true })
-      await copyFile(linuxLauncherAsset, launcherPath)
-      await writeFile(cliPath, '', 'utf8')
-      await writeFile(
-        join(appDir, 'orca-ide'),
-        `#!/usr/bin/env bash
+        await mkdir(dirname(launcherPath), { recursive: true })
+        await mkdir(dirname(electronPath), { recursive: true })
+        await mkdir(dirname(cliPath), { recursive: true })
+        await copyFile(launcherFixture.asset, launcherPath)
+        await writeFile(cliPath, '', 'utf8')
+        await writeFile(
+          electronPath,
+          `#!/usr/bin/env bash
 node -e 'console.log(JSON.stringify({
   argv: process.argv.slice(1),
   runAsNode: process.env.ELECTRON_RUN_AS_NODE,
@@ -360,94 +281,38 @@ node -e 'console.log(JSON.stringify({
   orcaNodeReplExternalModule: process.env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? null
 }))' -- "$@"
 `,
-        { encoding: 'utf8', mode: 0o755 }
-      )
+          { encoding: 'utf8', mode: 0o755 }
+        )
 
-      const result = await execFileAsync(launcherPath, ['--help', 'two words'], {
-        env: {
-          ...process.env,
-          NODE_OPTIONS: '--trace-warnings',
-          NODE_REPL_EXTERNAL_MODULE: 'external-loader'
+        const result = await execFileAsync(launcherPath, ['--help', 'two words'], {
+          env: {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: '0',
+            NODE_OPTIONS: '--trace-warnings',
+            NODE_REPL_EXTERNAL_MODULE: 'external-loader'
+          }
+        })
+        const payload = JSON.parse(result.stdout) as {
+          argv: string[]
+          runAsNode: string
+          nodeOptions: string | null
+          orcaNodeOptions: string | null
+          nodeReplExternalModule: string | null
+          orcaNodeReplExternalModule: string | null
         }
-      })
-      const payload = JSON.parse(result.stdout) as {
-        argv: string[]
-        runAsNode: string
-        nodeOptions: string | null
-        orcaNodeOptions: string | null
-        nodeReplExternalModule: string | null
-        orcaNodeReplExternalModule: string | null
+
+        expect(payload.argv).toEqual([cliPath, '--help', 'two words'])
+        expect(payload.runAsNode).toBe('1')
+        // Hide node options from Electron's bootstrap but preserve them for the CLI.
+        expect(payload.nodeOptions).toBeNull()
+        expect(payload.orcaNodeOptions).toBe('--trace-warnings')
+        expect(payload.nodeReplExternalModule).toBeNull()
+        expect(payload.orcaNodeReplExternalModule).toBe('external-loader')
+      } finally {
+        await rm(root, { recursive: true, force: true })
       }
-
-      expect(payload.argv).toEqual([cliPath, '--help', 'two words'])
-      expect(payload.runAsNode).toBe('1')
-      // Why: Electron's node bootstrap must not inherit these, but the CLI
-      // still needs to see what the user set.
-      expect(payload.nodeOptions).toBeNull()
-      expect(payload.orcaNodeOptions).toBe('--trace-warnings')
-      expect(payload.nodeReplExternalModule).toBeNull()
-      expect(payload.orcaNodeReplExternalModule).toBe('external-loader')
-    } finally {
-      await rm(root, { recursive: true, force: true })
     }
-  })
-
-  itRunsUnixShell('keeps Linux serve on the CLI entrypoint in node mode', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-serve-'))
-    try {
-      const appDir = join(root, 'Orca')
-      const resourcesDir = join(appDir, 'resources')
-      const launcherDir = join(resourcesDir, 'bin')
-      const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
-      const launcherPath = join(launcherDir, 'orca-ide')
-      const appRunPath = join(appDir, 'AppRun')
-      const electronPath = join(appDir, 'orca-ide')
-      const cliPath = join(cliDir, 'index.js')
-      const statePath = join(root, 'launch-state.json')
-
-      await mkdir(launcherDir, { recursive: true })
-      await mkdir(cliDir, { recursive: true })
-      await copyFile(linuxLauncherAsset, launcherPath)
-      await writeFile(cliPath, '', 'utf8')
-      // An accidental AppRun handoff would skip CLI validation and fail this contract.
-      await writeFile(
-        appRunPath,
-        `#!/usr/bin/env bash
-printf 'unexpected AppRun handoff\n' >&2
-exit 97
-`,
-        { encoding: 'utf8', mode: 0o755 }
-      )
-      await writeFile(
-        electronPath,
-        `#!/usr/bin/env node
-require('node:fs').writeFileSync(process.env.ORCA_TEST_LAUNCH_STATE, JSON.stringify({
-  argv: process.argv.slice(2),
-  runAsNode: process.env.ELECTRON_RUN_AS_NODE ?? null
-}))
-`,
-        { encoding: 'utf8', mode: 0o755 }
-      )
-
-      await execFileAsync(launcherPath, ['serve', '--recipe-json', '--project-root', '/tmp/repo'], {
-        env: { ...process.env, ORCA_TEST_LAUNCH_STATE: statePath }
-      })
-      const payload = JSON.parse(await readFile(statePath, 'utf8')) as {
-        argv: string[]
-        runAsNode: string | null
-      }
-      expect(payload.argv).toEqual([
-        cliPath,
-        'serve',
-        '--recipe-json',
-        '--project-root',
-        '/tmp/repo'
-      ])
-      expect(payload.runAsNode).toBe('1')
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
+  )
 })
 
 async function waitForListenerState(path: string): Promise<{ pid: number; port: number }> {

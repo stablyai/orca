@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
+import { psLocaleEnvironment } from '../../shared/ps-locale-environment'
 import { parseLinuxBootTimeSeconds, parseLinuxProcStartTicks } from './daemon-process-start-time'
 import type {
   LinuxStatEvidence,
@@ -8,6 +9,11 @@ import type {
   ProcessSignalEvidence,
   WindowsProcessEvidence
 } from './daemon-incarnation-evidence-types'
+import {
+  readWindowsProcessCreationTime,
+  readWindowsProcessTableFresh,
+  type WindowsProcessRow
+} from '../windows/windows-process-table'
 
 const execFileAsync = promisify(execFile)
 
@@ -16,6 +22,7 @@ type InspectionCommandRunner = (file: string, args: string[], timeoutMs: number)
 export type DaemonProcessInspectionDependencies = {
   readTextFile?: (path: string) => Promise<string>
   runCommand?: InspectionCommandRunner
+  readProcessTable?: () => Promise<WindowsProcessRow[]>
 }
 
 export function inspectProcessSignal(pid: number): ProcessSignalEvidence {
@@ -31,6 +38,12 @@ export function inspectProcessSignal(pid: number): ProcessSignalEvidence {
     }
     return 'unavailable'
   }
+}
+
+/** EPERM counts as alive: it proves some process holds the PID. */
+export function isProcessAlive(pid: number): boolean {
+  const signal = inspectProcessSignal(pid)
+  return signal === 'occupied' || signal === 'permission_denied'
 }
 
 export function inspectProcessLiveness(pid: number): ProcessLivenessVerdict {
@@ -94,9 +107,7 @@ export async function readProcessCommandLine(
   }
 }
 
-// Why: Get-CimInstance errors (Winmgmt down, corrupt WMI repository, access denied) are
-// non-terminating and exit 0 with an empty $p, which is indistinguishable from "no such
-// process" — so the script reports query failure explicitly instead of asserting absence.
+// Only a table that was read and lacks the PID proves absence; the reader rejects a truncated one.
 export async function queryWindowsProcess(
   pid: number,
   dependencies: DaemonProcessInspectionDependencies = {}
@@ -104,50 +115,24 @@ export async function queryWindowsProcess(
   if (!Number.isSafeInteger(pid) || pid <= 0) {
     return { status: 'unavailable' }
   }
-  const runCommand = dependencies.runCommand ?? runInspectionCommand
+  let rows: WindowsProcessRow[]
   try {
-    const stdout = await runCommand(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `$ErrorActionPreference = 'Stop'; ` +
-          `try { $p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" } ` +
-          `catch { @{ status = 'query_failed' } | ConvertTo-Json -Compress; exit 0 }; ` +
-          `if (!$p) { @{ status = 'missing' } | ConvertTo-Json -Compress; exit 0 }; ` +
-          `$start = $null; if ($p.CreationDate) { ` +
-          `$start = [long]([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds() }; ` +
-          `@{ status = 'present'; cmd = $p.CommandLine; start = $start } | ConvertTo-Json -Compress`
-      ],
-      3_000
-    )
-    const parsed = JSON.parse(stdout.trim()) as {
-      status?: unknown
-      cmd?: unknown
-      start?: unknown
-    }
-    // Only a query that ran and found nothing proves absence; anything else stays indeterminate.
-    if (parsed.status === 'missing') {
-      return { status: 'missing' }
-    }
-    if (parsed.status !== 'present') {
-      return { status: 'unavailable' }
-    }
-    return {
-      status: 'present',
-      commandLine: typeof parsed.cmd === 'string' && parsed.cmd ? parsed.cmd : null,
-      startedAtMs:
-        typeof parsed.start === 'number' && Number.isFinite(parsed.start) ? parsed.start : null
-    }
+    rows = await (dependencies.readProcessTable ?? readWindowsProcessTableFresh)()
   } catch {
     return { status: 'unavailable' }
   }
+  const row = rows.find((candidate) => candidate.pid === pid)
+  if (!row) {
+    return { status: 'missing' }
+  }
+  return {
+    status: 'present',
+    commandLine: row.command || null,
+    startedAtMs: row.creationTimeMs ?? readWindowsProcessCreationTime(pid)
+  }
 }
 
-// Why: the sync procfs helper in daemon-process-start-time spawns getconf per call; CLK_TCK is fixed for
-// the kernel's lifetime, so cache one async spawn and only retry after a failure. The cache is
-// keyed by runner because CLK_TCK belongs to the host that executes the command, not the module.
+// Cache fixed CLK_TCK per host runner; retry failed reads.
 const clockTicksPerSecondByRunner = new WeakMap<InspectionCommandRunner, Promise<number | null>>()
 
 async function readClockTicksPerSecond(
@@ -171,8 +156,7 @@ async function readClockTicksPerSecond(
   return ticksPerSecond
 }
 
-// Why: same main-thread hazard as darwin — the sync linux helper does two readFileSync calls
-// plus a getconf spawn, and this audit-only probe runs in the Electron main process.
+// Read procfs and CLK_TCK asynchronously to keep Electron's main loop responsive.
 export async function readLinuxProcessStartedAtMs(
   pid: number,
   dependencies: DaemonProcessInspectionDependencies = {}
@@ -198,8 +182,7 @@ export async function readLinuxProcessStartedAtMs(
   }
 }
 
-// Why: `ps` is darwin's only start-time source and this audit-only probe runs in the
-// Electron main process, where the sync spawn blocks every IPC/UI turn for its duration.
+// macOS needs ps for start time; spawning synchronously would block Electron's main loop.
 export async function readMacosProcessStartedAtMs(
   pid: number,
   dependencies: DaemonProcessInspectionDependencies = {}
@@ -219,16 +202,15 @@ async function runInspectionCommand(
   args: string[],
   timeoutMs: number
 ): Promise<string> {
-  // powershell.exe is console-subsystem: without this it flashes a conhost and
-  // steals foreground on every inspection (#10488).
   const { stdout } = await execFileAsync(file, args, {
     encoding: 'utf8',
+    env: psLocaleEnvironment(),
     timeout: timeoutMs,
     windowsHide: true
   })
   return stdout
 }
 
-function hasErrorCode(error: unknown, code: string): boolean {
+export function hasErrorCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code
 }

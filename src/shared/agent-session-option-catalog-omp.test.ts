@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
-import { parseBuiltSessionOptionCommand } from './native-chat-session-option-commands'
-import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
+import { parseBuiltSessionOptionCommand } from './native-chat/input/native-chat-session-option-commands'
+import { parseOmpModelList } from './omp-model-list-probe'
 
 const LISTING = JSON.stringify({
   models: [
@@ -31,15 +30,38 @@ const LISTING = JSON.stringify({
 })
 
 describe('omp model list probe', () => {
-  it('asks omp for its machine-readable listing', () => {
-    expect(OMP_MODEL_LIST_ARGS).toEqual(['models', '--json'])
-  })
-
   it('parses selectors as ids, names as labels, and providers as descriptions', () => {
     expect(parseOmpModelList(LISTING)).toEqual([
       { id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'deepseek' },
       { id: 'minimax-cn/MiniMax-M3', label: 'MiniMax M3', description: 'minimax-cn' },
       { id: 'openai/gpt-5.5', label: 'Openai GPT 5.5', description: 'openai' }
+    ])
+  })
+
+  it('keeps the context window each row states', () => {
+    // Row shape as `omp models --json` prints it (OMP 17.0.5).
+    const listing = JSON.stringify({
+      models: [
+        {
+          provider: 'openai-codex',
+          id: 'gpt-5.5',
+          selector: 'openai-codex/gpt-5.5',
+          name: 'GPT-5.5',
+          contextWindow: 272000,
+          maxTokens: 128000
+        },
+        { provider: 'openai-codex', id: 'gpt-5.4', name: 'GPT-5.4', contextWindow: 1000000 },
+        { provider: 'zai', id: 'glm', name: 'GLM', contextWindow: 0 },
+        { provider: 'zai', id: 'glm-air', name: 'GLM Air', contextWindow: '128000' }
+      ]
+    })
+    expect(
+      parseOmpModelList(listing).map(({ id, contextWindowTokens }) => ({ id, contextWindowTokens }))
+    ).toEqual([
+      { id: 'openai-codex/gpt-5.5', contextWindowTokens: 272000 },
+      { id: 'openai-codex/gpt-5.4', contextWindowTokens: 1000000 },
+      { id: 'zai/glm', contextWindowTokens: undefined },
+      { id: 'zai/glm-air', contextWindowTokens: undefined }
     ])
   })
 
@@ -82,16 +104,6 @@ describe('omp model list probe', () => {
 })
 
 describe('omp session option catalog', () => {
-  it('is registered for the omp agent', () => {
-    expect(getAgentSessionOptionCatalog('omp')).toBe(OMP_SESSION_OPTION_CATALOG)
-  })
-
-  it('seeds no model because none is available on every install', () => {
-    expect(OMP_SESSION_OPTION_CATALOG.models).toEqual([])
-    expect(OMP_SESSION_OPTION_CATALOG.defaultModelIsCliDefault).toBeUndefined()
-    expect(OMP_SESSION_OPTION_CATALOG.discoveredModelsAreAuthoritative).toBe(true)
-  })
-
   it('discovers models through the same JSON listing the probe parses', () => {
     const listModels = OMP_SESSION_OPTION_CATALOG.listModels!
     expect(listModels.command).toBe('omp models --json')
@@ -128,7 +140,7 @@ describe('omp session option catalog', () => {
     ])
   })
 
-  it('switches mid-session with /orca-model <selector>, which omp resolves exactly', () => {
+  it('builds and parses /orca-model with the exact selector', () => {
     const midSession = OMP_SESSION_OPTION_CATALOG.modelApply.midSession
     expect(midSession).toMatchObject({ kind: 'command' })
     if (midSession?.kind !== 'command') {

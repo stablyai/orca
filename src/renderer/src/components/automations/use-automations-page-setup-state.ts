@@ -1,11 +1,15 @@
 import { useCallback, useMemo } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { getAutomationHostTargetFromKey, type AutomationHostTarget } from './automation-host-client'
 import { getAutomationCreateRepos } from './automation-create-projects'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
 import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
 import type { AutomationsPageListState } from './use-automations-page-list-state'
@@ -22,14 +26,15 @@ export function useAutomationsPageSetupState({
   local: AutomationsPageLocalState
   list: AutomationsPageListState
 }) {
-  const { repos, settings, projectHostSetups, worktreesByRepo } = store
+  const { repos, settings, projectHostSetups, worktreesByRepo, pendingAutomationRunNavigation } =
+    store
   const {
-    createTarget,
     automationYamlHooksByRepoKey,
     automationHookCheckPromisesRef,
     setAutomationYamlHooksByRepoKey,
     setupDecisionTouchedRef,
     selectedAutomationRuns,
+    runHistoryReloadToken,
     draft,
     automationHostTargetKey,
     selectedAutomationRunPageId
@@ -45,8 +50,7 @@ export function useAutomationsPageSetupState({
     (
       candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>
     ): AutomationDraft['setupDecision'] => {
-      // During an edit the selected destination, not the ambient repo-id lookup,
-      // owns setup policy. Repo ids can collide across runtime authorities.
+      // Derive edit setup from the selected destination; ambient repo-ID lookup can collide across authorities.
       const selectedEditEntry =
         local.editingAutomationId !== null && local.editingHostStableKey
           ? list.hostCatalog.entries.find((entry) => entry.stableKey === local.editingHostStableKey)
@@ -68,16 +72,8 @@ export function useAutomationsPageSetupState({
             (setup) => setup.repoId !== candidate.projectId || setup.hostId === setupHostId
           )
         : projectHostSetups
-      const settingsForRepo = setupHostId
-        ? {
-            ...settings,
-            activeRuntimeEnvironmentId:
-              selectedEditAuthority?.kind === 'runtime' ? selectedEditAuthority.environmentId : null
-          }
-        : getSettingsForRepoRuntimeOwner({ repos, settings }, candidate.projectId)
-      const hookKey = `${setupHostId ?? settingsForRepo.activeRuntimeEnvironmentId ?? 'local'}:${candidate.projectId}`
+      const hookKey = `${setupHostId ?? getRuntimeEnvironmentIdForRepo({ repos, settings }, candidate.projectId) ?? 'local'}:${candidate.projectId}`
       return getVisibleAutomationSetupDecision({
-        createTarget,
         workspaceMode: candidate.workspaceMode,
         repoId: candidate.projectId,
         repos: setupRepos,
@@ -87,7 +83,6 @@ export function useAutomationsPageSetupState({
     },
     [
       automationYamlHooksByRepoKey,
-      createTarget,
       list.hostCatalog.entries,
       local.editingAutomationId,
       local.editingHostStableKey,
@@ -101,8 +96,7 @@ export function useAutomationsPageSetupState({
       if (hostId) {
         return `${hostId}:${repoId}`
       }
-      const settingsForRepo = getSettingsForRepoRuntimeOwner({ repos, settings }, repoId)
-      return `${settingsForRepo.activeRuntimeEnvironmentId ?? 'local'}:${repoId}`
+      return `${getRuntimeEnvironmentIdForRepo({ repos, settings }, repoId) ?? 'local'}:${repoId}`
     },
     [repos, settings]
   )
@@ -116,8 +110,15 @@ export function useAutomationsPageSetupState({
       if (existingPromise) {
         return (await existingPromise).hooks
       }
-      const settingsForRepo = getSettingsForRepoRuntimeOwner({ repos, settings }, repoId)
-      const promise = checkRuntimeHooks(settingsForRepo, repoId, hostId)
+      // Why: a repo id on two hosts has no single owner to inspect; never let focus pick one.
+      const ownerRows = hostId ? [] : repos.filter((repo) => repo.id === repoId)
+      const ownerHostId =
+        hostId ?? (ownerRows.length === 1 ? getRepoExecutionHostId(ownerRows[0]) : null)
+      const promise = (
+        ownerHostId
+          ? checkRuntimeHooks(ownerHostId, repoId)
+          : Promise.reject(new Error('The project host is unknown.'))
+      )
         .then((result) => ({
           hooks: result.status === 'error' ? null : ((result.hooks as OrcaHooks | null) ?? null),
           ok: result.status !== 'error'
@@ -139,19 +140,17 @@ export function useAutomationsPageSetupState({
       automationYamlHooksByRepoKey,
       getAutomationHooksCacheKey,
       repos,
-      setAutomationYamlHooksByRepoKey,
-      settings
+      setAutomationYamlHooksByRepoKey
     ]
   )
   const getDraftSetupDecisionDefaultSignature = useCallback(
     (candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>): string =>
       [
-        createTarget,
         candidate.workspaceMode,
         candidate.projectId,
         getDraftSetupDecisionDefault(candidate) ?? 'none'
       ].join(':'),
-    [createTarget, getDraftSetupDecisionDefault]
+    [getDraftSetupDecisionDefault]
   )
   const markSetupDecisionTouched = useCallback((): void => {
     setupDecisionTouchedRef.current = true
@@ -162,7 +161,12 @@ export function useAutomationsPageSetupState({
     selectedAutomationRuns.rowKey === selectedRow.key &&
     selectedAutomationRuns.ownerKey ===
       capturedAutomationOwnerKey(capturedAutomationOwner(capturedAutomationOwners, selectedRow.key))
-  const selectedRunsNotice = selectedRunsMatchSelection ? selectedAutomationRuns.notice : null
+  const selectedRunsReady =
+    selectedRunsMatchSelection &&
+    selectedAutomationRuns.reloadToken === runHistoryReloadToken &&
+    (!pendingAutomationRunNavigation ||
+      selectedAutomationRuns.navigation === pendingAutomationRunNavigation)
+  const selectedRunsNotice = selectedRunsReady ? selectedAutomationRuns.notice : null
   const selectedRuns = useMemo(
     () =>
       selected && selectedRunsMatchSelection
@@ -189,6 +193,7 @@ export function useAutomationsPageSetupState({
     getDraftSetupDecisionDefaultSignature,
     markSetupDecisionTouched,
     selectedRuns,
+    selectedRunsReady,
     selectedRunsNotice,
     selectedAutomationRunPage,
     worktrees,

@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -51,6 +52,7 @@ describe('durable orchestration mutation ledger', () => {
       methods: [
         defineMethod({
           name: 'orchestration.send',
+          permission: 'workspace',
           params: Params,
           handler: ({ subject }) => ({ message: effect(subject) })
         })
@@ -155,6 +157,7 @@ describe('durable orchestration mutation ledger', () => {
       methods: [
         defineMethod({
           name: 'orchestration.send',
+          permission: 'workspace',
           params: Params,
           handler: effect
         })
@@ -268,6 +271,7 @@ describe('durable orchestration mutation ledger', () => {
       methods: [
         defineMethod({
           name: 'orchestration.workerRelease',
+          permission: 'workspace',
           params: z.object({ dispatch: z.string() }),
           handler: effect
         })
@@ -325,6 +329,7 @@ describe('durable orchestration mutation ledger', () => {
       methods: [
         defineMethod({
           name: 'orchestration.workerStart',
+          permission: 'workspace',
           params: z.object({ from: z.string(), task: z.string() }),
           handler: effect
         })

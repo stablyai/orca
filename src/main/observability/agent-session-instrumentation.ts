@@ -1,4 +1,4 @@
-import { withSpan, type ActiveSpan } from './tracer'
+import { startSpan, withSpan, type ActiveSpan } from './tracer'
 
 export type AgentSessionCreatePhase =
   | 'reconcile_leases'
@@ -19,9 +19,24 @@ export type AgentSessionCreatePhaseTiming = {
 
 export type AgentSessionCreatePhaseRecorder = (timing: AgentSessionCreatePhaseTiming) => void
 
-/** Wrap the rare user-created structured session; no sampling is needed for this event. */
 export async function withAgentSessionSpan<T>(fn: (span: ActiveSpan) => Promise<T>): Promise<T> {
   return withSpan('agentSession.create', fn, { attributes: { kind: 'agent-session' } })
+}
+
+/** Record startup timing with only agent ID and numeric measurements. */
+export function recordAgentSessionStartup(startup: {
+  agent: string
+  outcome: string
+  durationMs: number
+}): void {
+  startSpan('agentSession.startup', {
+    attributes: {
+      kind: 'agent-session',
+      'agent_session.agent': startup.agent,
+      'agent_session.startup.outcome': startup.outcome,
+      'agent_session.startup.spawn_to_outcome_ms': Math.round(startup.durationMs)
+    }
+  }).end()
 }
 
 export async function withAgentSessionCreatePhase<T>(
@@ -37,7 +52,7 @@ export async function withAgentSessionCreatePhase<T>(
   }
 }
 
-/** Records the closed create vocabulary without copying branch, path, prompt, or session content. */
+/** Closed phase vocabulary excludes branch, path, prompt and session content. */
 export function addAgentSessionCreatePhaseAttributes(
   span: ActiveSpan,
   timing: {

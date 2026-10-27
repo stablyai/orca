@@ -1,10 +1,4 @@
-/**
- * The reveal call itself, rather than the activation flow that injects it.
- *
- * What it has to get right is which host it negotiates against: the chat lives on the host that
- * owns the workspace, which for a paired workspace is not this process. Gating on the local build's
- * capabilities would pass unconditionally on desktop and say nothing about the host being called.
- */
+/** Negotiate reveal against the workspace’s answering host; local build capabilities say nothing about a paired host’s version. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,18 +8,14 @@ const mocks = vi.hoisted(() => ({
   environmentIdFor: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', async () => {
-  // The real target resolution is the thing under test; only the transport is stubbed.
-  const { getActiveRuntimeTarget } = await import('@/runtime/runtime-client-target')
-  return {
-    getActiveRuntimeTarget,
-    callRuntimeRpc: mocks.call,
-    runtimeEnvironmentSupportsCapability: mocks.supports
-  }
-})
+// The real target resolution is the thing under test; only the transport is stubbed.
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.call,
+  runtimeEnvironmentSupportsCapability: mocks.supports
+}))
 
 vi.mock('./worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.environmentIdFor
+  runtimeEnvironmentIdOrLocalUnlessTwin: mocks.environmentIdFor
 }))
 
 import { revealStructuredSession } from './activate-ai-vault-structured-session'
@@ -43,8 +33,7 @@ beforeEach(() => {
 
 describe('revealStructuredSession', () => {
   it('asks a local host without a capability round trip', async () => {
-    // The renderer and its local host are one build, so probing would only cost a round trip on a
-    // user's click to prove something already known.
+    // The local host shares this build; probing it would only add a round trip.
     await expect(revealStructuredSession(target)).resolves.toBe('revealed')
 
     expect(mocks.supports).not.toHaveBeenCalled()
@@ -74,9 +63,24 @@ describe('revealStructuredSession', () => {
     )
   })
 
+  it('keeps a known recipient target when the active workspace would resolve locally', async () => {
+    const host = { kind: 'environment', environmentId: 'recipient-host' } as const
+    await expect(revealStructuredSession({ ...target, target: host })).resolves.toBe('revealed')
+    expect(mocks.supports).toHaveBeenCalledWith(
+      'recipient-host',
+      STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+      expect.any(Number)
+    )
+    expect(mocks.call).toHaveBeenCalledWith(
+      host,
+      'agentSession.reveal',
+      { sessionId: 'session-1' },
+      expect.any(Object)
+    )
+  })
+
   it('reports a paired host that cannot open it rather than sending an unknown method', async () => {
-    // The regression this guards: an older paired host answers method_not_found, which is
-    // indistinguishable from a refusal, so the user is told the chat is gone when it is not.
+    // An old host’s method_not_found must request an update rather than claim the chat is gone.
     mocks.environmentIdFor.mockReturnValue('legacy-env')
     mocks.supports.mockResolvedValue(false)
 
@@ -96,8 +100,7 @@ describe('revealStructuredSession', () => {
   })
 
   it('gives up on a probe that never settles instead of hanging the row', async () => {
-    // The in-flight guard releases on settle, so a probe that never answers would otherwise hold
-    // this session's entry for the life of the process and leave the row permanently dead.
+    // A hung probe must not retain the session’s in-flight guard forever.
     vi.useFakeTimers()
     mocks.environmentIdFor.mockReturnValue('env-1')
     mocks.supports.mockReturnValue(new Promise(() => {}))
@@ -123,8 +126,7 @@ describe('revealStructuredSession', () => {
   })
 
   it('does not call a host-side refusal a missing chat', async () => {
-    // The host answers this when it holds the record but no adapter of its own can open it.
-    // Saying "gone" there tells someone their work is lost while it sits on disk.
+    // A host can retain the record without an adapter to open it; that does not mean the chat is gone.
     mocks.call.mockResolvedValue({
       ok: false,
       refusal: { code: 'structured_agent_session_unsupported' }

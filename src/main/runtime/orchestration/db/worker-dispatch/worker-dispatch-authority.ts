@@ -7,22 +7,21 @@ export function prepareStartingWorkerAuthority(
   params: {
     dispatchId: string
     handle: string
-    paneKey: string
-    processIncarnation: string
+    /** Both null for a chat, which its Orca session ID identifies instead. */
+    paneKey: string | null
+    processIncarnation: string | null
     launchTokenHash?: string
     worktreeId: string
     effects: unknown[]
     setupState: string
     hostScope?: string | null
-    // 'created': this worker-start operation created the agent terminal (agent-first worktree
-    // creation included; its pre-rename effects rows said 'reused_agent_terminal'). 'external':
-    // an explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
+    // Created terminals acquire custody; external reuse transfers only an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
   }
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    // Why: read inside the transaction so the guarded UPDATEs below cannot lose a race with a concurrent state change.
+    // Read under the transaction so guarded updates cannot race another state change.
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
     if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
@@ -41,7 +40,7 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} already has a different launch-token commitment.`
       )
     }
-    const existing = this.findActiveDispatchForAssignee(params.handle, params.paneKey)
+    const existing = this.findActiveDispatchForAssignee(params.handle, params.paneKey ?? undefined)
     if (existing && existing.id !== params.dispatchId) {
       throw new Error(
         `Terminal ${params.handle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
@@ -61,7 +60,10 @@ export function prepareStartingWorkerAuthority(
       .run(
         params.handle,
         params.paneKey,
-        dispatchAssigneeOrcaSessionId(params.processIncarnation),
+        dispatchAssigneeOrcaSessionId({
+          handle: params.handle,
+          processIncarnation: params.processIncarnation
+        }),
         params.processIncarnation,
         params.hostScope ?? null,
         params.launchTokenHash ?? null,
@@ -118,19 +120,24 @@ export function prepareStartingWorkerAuthority(
           ownership: 'owned'
         })
       } else {
-        const transferable = this.findTransferableWorkerTerminalResource({
-          terminalHandle: params.handle,
-          paneKey: params.paneKey,
-          processIncarnation: params.processIncarnation,
-          hostScope: params.hostScope ?? null
-        })
-        if (transferable) {
+        // A chat has no process to transfer and remains the user's external resource.
+        const exact =
+          params.paneKey && params.processIncarnation
+            ? { paneKey: params.paneKey, processIncarnation: params.processIncarnation }
+            : null
+        const transferable = exact
+          ? this.findTransferableWorkerTerminalResource({
+              terminalHandle: params.handle,
+              ...exact,
+              hostScope: params.hostScope ?? null
+            })
+          : undefined
+        if (exact && transferable) {
           this.transferWorkerTerminalResourceStatement({
             resourceId: transferable.id,
             toDispatchId: params.dispatchId,
             terminalHandle: params.handle,
-            paneKey: params.paneKey,
-            processIncarnation: params.processIncarnation,
+            ...exact,
             endpointId,
             endpointIncarnation: params.processIncarnation,
             hostScope: params.hostScope ?? null
@@ -157,15 +164,7 @@ export function prepareStartingWorkerAuthority(
   }
 }
 
-/**
- * Custody for an agent terminal this worker-start just created, recorded at creation instead of
- * after the agent boot wait. Until the row exists a keystroke into the booting pane finds no
- * ownership to flip, so the takeover is silently dropped and a later `worker-release` closes the
- * pane under the user.
- *
- * Ownership of a pane only; lifecycle authority stays behind the boot wait, because authority
- * must not be handed to a process that has not come up.
- */
+/** Record pane custody at creation so boot-time user input can relinquish it; lifecycle authority still waits for successful boot. */
 export function recordCreatedWorkerTerminalCustody(
   this: OrchestrationDb,
   params: {
@@ -179,8 +178,7 @@ export function recordCreatedWorkerTerminalCustody(
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    // Same guard as prepareStartingWorkerAuthority, read inside the transaction: a dispatch stopped
-    // while the terminal was being created must not acquire an owner.
+    // Recheck under the writer transaction: a Dispatch stopped during creation cannot acquire ownership.
     const dispatch = this.getDispatchContextById(params.dispatchId)
     const worker = this.getWorkerDispatch(params.dispatchId)
     if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {

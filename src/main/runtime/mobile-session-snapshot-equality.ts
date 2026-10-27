@@ -1,9 +1,6 @@
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 
-// Why: content equality for the hydrate's idempotence check — compares every
-// client-visible field EXCEPT publicationEpoch/snapshotVersion (both are
-// freshly minted on each rebuild and would defeat the comparison). Tab and
-// group objects are rebuilt each hydrate, so compare by value, not identity.
+// Compare rebuilt snapshots by value, excluding newly minted publicationEpoch/snapshotVersion.
 export function headlessMobileSnapshotContentUnchanged(
   existing: RuntimeMobileSessionTabsSnapshot,
   next: RuntimeMobileSessionTabsSnapshot
@@ -16,9 +13,7 @@ export function headlessMobileSnapshotContentUnchanged(
   ) {
     return false
   }
-  // Why: this runs per persisted worktree on EVERY graph sync whenever a
-  // serve PTY exists, so compare structurally instead of stable-stringifying
-  // both sides (which allocated six full serialized trees per worktree).
+  // Every graph sync visits persisted workspaces; avoid allocating serialized trees for equality.
   return (
     mobileSnapshotValueEqual(existing.tabs, next.tabs) &&
     mobileSnapshotValueEqual(existing.tabGroups ?? null, next.tabGroups ?? null) &&
@@ -26,8 +21,7 @@ export function headlessMobileSnapshotContentUnchanged(
   )
 }
 
-// Deep structural equality over plain snapshot JSON (objects/arrays/scalars).
-// Key order is irrelevant; a mismatch only costs a coalesced no-op emit.
+// Plain snapshot JSON equality ignores key order; false negatives cost only a coalesced no-op emit.
 export function mobileSnapshotValueEqual(a: unknown, b: unknown): boolean {
   if (a === b) {
     return true
@@ -58,4 +52,25 @@ export function mobileSnapshotValueEqual(a: unknown, b: unknown): boolean {
     return true
   }
   return false
+}
+
+export function isHeadlessBuiltPublication(publicationEpoch: string): boolean {
+  const base = publicationEpoch.split(':headless-merge:')[0] ?? publicationEpoch
+  return base.startsWith('headless:') || base.startsWith('headless-hydrated:')
+}
+
+/** Compare occupant/publication/retirement identity, retaining absent proofs; fresh host-built stamps count as one. */
+export function mobileSnapshotIdentityUnchanged(
+  existing: RuntimeMobileSessionTabsSnapshot,
+  next: RuntimeMobileSessionTabsSnapshot
+): boolean {
+  return (
+    (next.worktreeInstanceId === undefined ||
+      next.worktreeInstanceId === existing.worktreeInstanceId) &&
+    (existing.publicationEpoch === next.publicationEpoch ||
+      (isHeadlessBuiltPublication(existing.publicationEpoch) &&
+        isHeadlessBuiltPublication(next.publicationEpoch))) &&
+    (next.retiredTerminalSurfaces === undefined ||
+      mobileSnapshotValueEqual(next.retiredTerminalSurfaces, existing.retiredTerminalSurfaces))
+  )
 }

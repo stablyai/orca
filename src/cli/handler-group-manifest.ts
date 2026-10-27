@@ -1,21 +1,35 @@
 import type { CommandHandler } from './dispatch'
 import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
+import { JIRA_HANDLER_GROUP } from './jira-handler-group'
+import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
+import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 
 export type HandlerGroup = {
   name: string
-  // Why: eager string keys let dispatch build (and duplicate-check) the whole
-  // command table without loading any group's transitive module graph.
+  // Eager keys allow routing and duplicate checks without importing each handler graph.
   keys: readonly string[]
   load: () => Promise<Record<string, CommandHandler>>
 }
 
-// Why: `keys` mirrors each group's exported record and is verified against the
-// real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
+// handler-group-manifest.test.ts checks keys against the real exports to prevent drift.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
+  JIRA_HANDLER_GROUP,
+  LINEAR_HANDLER_GROUP,
+  REFERENCE_HANDLER_GROUP,
   {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
+  },
+  {
+    name: 'serve-restore',
+    keys: ['serve restore resume'],
+    load: async () => (await import('./handlers/serve-restore.js')).SERVE_RESTORE_HANDLERS
+  },
+  {
+    name: 'serve-service',
+    keys: ['serve service install', 'serve service status', 'serve service uninstall'],
+    load: async () => (await import('./handlers/serve-service.js')).SERVE_SERVICE_HANDLERS
   },
   {
     name: 'account',
@@ -99,6 +113,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'terminal wait',
       'terminal stop',
       'terminal rename',
+      'terminal set-pane-title',
       'terminal create',
       'terminal switch',
       'terminal close',
@@ -191,14 +206,37 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/agent-hooks.js')).AGENT_HOOK_HANDLERS
   },
   {
+    name: 'agent-launch',
+    keys: ['agent launch'],
+    load: async () => (await import('./handlers/agent-launch.js')).AGENT_LAUNCH_HANDLERS
+  },
+  {
+    name: 'connector',
+    keys: [
+      'connector start',
+      'connector send',
+      'connector prompt',
+      'connector answer',
+      'connector cancel',
+      'connector watch',
+      'connector reply'
+    ],
+    load: async () => (await import('./handlers/connector.js')).CONNECTOR_HANDLERS
+  },
+  {
     name: 'profile-state',
     keys: ['profile state exports', 'profile state rollback'],
     load: async () => (await import('./handlers/profile-state.js')).PROFILE_STATE_HANDLERS
   },
   {
     name: 'diagnostics',
-    keys: ['diagnostics memory'],
+    keys: ['diagnostics memory', 'terminal-daemon status', 'terminal-daemon restart'],
     load: async () => (await import('./handlers/diagnostics.js')).DIAGNOSTICS_HANDLERS
+  },
+  {
+    name: 'speech',
+    keys: ['speech openai-key status', 'speech openai-key set', 'speech openai-key clear'],
+    load: async () => (await import('./handlers/speech.js')).SPEECH_HANDLERS
   },
   {
     name: 'introspection',
@@ -218,37 +256,17 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
   },
   {
-    name: 'linear',
+    name: 'managed-server',
     keys: [
-      'linear save-issue',
-      'linear list-issues',
-      'linear relation add',
-      'linear relation remove',
-      'linear issue',
-      'linear search',
-      'linear team list',
-      'linear team members',
-      'linear team states',
-      'linear team labels',
-      'linear project list',
-      'linear list',
-      'linear status set',
-      'linear assignee set',
-      'linear assignee clear',
-      'linear priority set',
-      'linear priority clear',
-      'linear estimate set',
-      'linear estimate clear',
-      'linear due-date set',
-      'linear due-date clear',
-      'linear label add',
-      'linear label remove',
-      'linear label set',
-      'linear comment add',
-      'linear attach',
-      'linear create'
+      'environment status',
+      'environment update',
+      'environment rollback',
+      'environment recover',
+      'environment stop',
+      'environment cancel-stop',
+      'environment forget'
     ],
-    load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
+    load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
   },
   {
     name: 'vm',
@@ -269,5 +287,10 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'search',
     keys: ['search'],
     load: async () => (await import('./handlers/search.js')).SEARCH_HANDLERS
+  },
+  {
+    name: 'ports',
+    keys: ['ports'],
+    load: async () => (await import('./handlers/ports.js')).PORTS_HANDLERS
   }
 ]

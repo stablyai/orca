@@ -1,8 +1,3 @@
-// A Codex subagent's rows, through the real path a parent's surfaces read them:
-// translator → deferred sink → on-disk journal → snapshot → the shared readers.
-// Every reader here answers for the SESSION'S OWN agent, so a child's row must
-// never decide what it says; the transcript still renders every agent's rows.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,6 +17,7 @@ import { createCodexJournalTranslator } from './codex-structured-journal-transla
 import type { CodexThreadItem } from './codex-thread-item-identity'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-codex-children'
 const PARENT = 'thread-parent'
@@ -43,7 +39,7 @@ async function openJournal(root: string): Promise<AgentSessionJournal> {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: PARENT }
+      providerHandle: codexProviderHandle(PARENT)
     },
     database: openTestJournalHostDatabase(root),
     now: () => 1_000
@@ -91,9 +87,7 @@ async function session() {
   return {
     on,
     item,
-    /** Every live activity the host published to the session's clients. */
     activities,
-    /** The parent's turn is open and has spawned a running child. */
     spawnChild: () => {
       on(PARENT, 'turn/started', { turn: { id: PARENT_TURN } })
       const spawn = {
@@ -111,7 +105,6 @@ async function session() {
       await deferred.drained()
       return journal.snapshot().items
     },
-    /** Closes and reopens the journal file, so reads come from what was persisted. */
     reopen: async (): Promise<readonly AgentJournalRenderItem[]> => {
       await deferred.drained()
       deferred.unbind()
@@ -144,7 +137,6 @@ describe("a Codex subagent's rows on the parent's surfaces", () => {
     const named = statusStructuredAgentSessionToolCall(rows)
     expect(JSON.stringify(named)).toContain('git status')
     expect(JSON.stringify(named)).not.toContain('pnpm test')
-    // The transcript is unscoped: the child's command is still a row.
     expect(JSON.stringify(rows)).toContain('pnpm test')
   })
 
@@ -162,7 +154,7 @@ describe("a Codex subagent's rows on the parent's surfaces", () => {
       summary: ['Reading the diff']
     })
 
-    expect(isStructuredAgentSessionThinking(await items())).toBe(false)
+    expect(isStructuredAgentSessionThinking({ items: await items() })).toBe(false)
   })
 
   it("does not show the child's compaction as the parent's activity line", async () => {

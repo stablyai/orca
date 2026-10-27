@@ -130,9 +130,7 @@ describe('reconcileTransientPortScanFailures', () => {
     expect(state.has('flaky:all')).toBe(false)
   })
 
-  // Why: the popover publishes reason + last-good ports the moment its own scan
-  // fails. Counting that as a spent grace period would drop those ports on the
-  // very next poll, so the retention would never survive one poll interval.
+  // Popover failures already publish last-good ports; do not count that as spent grace or the next poll drops them immediately.
   it('still grants the grace period after a failure that retained its ports', () => {
     const { apply, publish } = createHarness()
     apply([{ key: 'h:all', result: good(['tcp:3000']) }])

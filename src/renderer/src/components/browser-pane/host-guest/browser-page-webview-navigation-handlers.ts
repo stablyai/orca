@@ -1,5 +1,4 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -8,6 +7,7 @@ import type { BrowserLoadError } from '../../../../../shared/browser-workspace-t
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
+import { consumeBrowserAnnotationViewportMessage } from '../annotate/browser-annotation-viewport-message'
 import {
   getBrowserDisplayTitle,
   isChromiumErrorPage,
@@ -54,6 +54,14 @@ export type BrowserPageWebviewNavigationHandlers = {
   handleAnnotationViewportMessage: (event: { message?: string }) => void
 }
 
+/** Observe main-document starts, including page-initiated navigation; did-start-loading also includes iframe loads. */
+export function isPageDocumentNavigationStart(event: {
+  isMainFrame: boolean
+  isInPlace: boolean
+}): boolean {
+  return event.isMainFrame && !event.isInPlace
+}
+
 export function createBrowserPageWebviewNavigationHandlers({
   webview,
   browserTabId,
@@ -79,8 +87,7 @@ export function createBrowserPageWebviewNavigationHandlers({
     }
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
-    // Why getURL() and not lastKnownWebviewUrlRef: Orca-driven navigations point that ref at the
-    // destination before assigning src, so it can't identify the document being left.
+    // Read the departing URL from the guest; Orca sets lastKnownWebviewUrlRef to the destination before assigning src.
     let committedUrl: string | null = null
     try {
       committedUrl = webview.getURL() || null
@@ -94,21 +101,20 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleDidStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
-    if (event.isMainFrame && event.url) {
-      invalidateBrowserAnnotationDocumentRef.current()
-    }
-    if (!event.isMainFrame || event.isInPlace || !event.url) {
+    if (!isPageDocumentNavigationStart(event) || !event.url) {
       return
     }
+    // Same-URL reloads replace the document too; in-place updates are judged once they commit.
+    invalidateBrowserAnnotationDocumentRef.current()
+    setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
+    onUpdatePageStateRef.current(browserTabId, { loading: true })
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
     if (pendingRecoveryNavigation?.targetUrl === startedUrl) {
       pendingRecoveryNavigation.started = true
     }
-    // Why here and not on did-start-loading: Chromium re-announces a favicon only when the icon URL
-    // list changes, so clearing on every load strands same-origin navigations with no icon and no
-    // event that would ever restore one.
+    // Clear only across origins; same-site loads may never reannounce an unchanged favicon list.
     clearFaviconIfOriginChanges(event)
   }
 
@@ -131,7 +137,8 @@ export function createBrowserPageWebviewNavigationHandlers({
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const normalizedBrowserModelUrl =
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
-    if (lastKnownWebviewUrlRef.current !== normalizedBrowserModelUrl) {
+    // In-place route changes swap content, but fragment-only updates (scroll spies, anchors) keep the layout.
+    if (lastKnownWebviewUrlRef.current?.split('#')[0] !== normalizedBrowserModelUrl.split('#')[0]) {
       invalidateBrowserAnnotationDocumentRef.current()
     }
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
@@ -184,29 +191,11 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleAnnotationViewportMessage = (event: { message?: string }): void => {
-    const message = typeof event.message === 'string' ? event.message : ''
-    const prefix = `${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}${annotationViewportBridgeTokenRef.current}:`
-    if (!message.startsWith(prefix)) {
-      return
-    }
-    try {
-      const next = JSON.parse(message.slice(prefix.length)) as {
-        scrollX?: unknown
-        scrollY?: unknown
-      }
-      const scrollX =
-        typeof next.scrollX === 'number' && Number.isFinite(next.scrollX) ? next.scrollX : 0
-      const scrollY =
-        typeof next.scrollY === 'number' && Number.isFinite(next.scrollY) ? next.scrollY : 0
-      setBrowserOverlayViewport((current) => {
-        if (current.scrollX === scrollX && current.scrollY === scrollY) {
-          return current.version === 0 ? { ...current, version: 1 } : current
-        }
-        return { scrollX, scrollY, version: current.version + 1 }
-      })
-    } catch {
-      // Ignore unrelated or malformed guest console output.
-    }
+    consumeBrowserAnnotationViewportMessage(
+      event,
+      annotationViewportBridgeTokenRef.current,
+      setBrowserOverlayViewport
+    )
   }
 
   return {

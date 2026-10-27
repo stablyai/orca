@@ -1,27 +1,5 @@
-/**
- * JOURNEY: quit the desktop app while remote terminals are live on the host, then reopen it.
- *
- * TOPOLOGY: the `orcaPage` app is the host (orca server); a separate real Orca desktop client
- * pairs to it, opens a host terminal, works in it, is force-quit, and relaunched on the same
- * profile — the pairing credential and the persisted session survive, as they do for a real
- * force-quit reopen.
- *
- * Why this exists: every paired restart spec in this suite restarts around a *browser* pane
- * (paired-client-hosted-browser-*.spec.ts). None of them restarts a client holding a live remote
- * *terminal*, which is the thing the user is actually mid-work in.
- *
- * The terminal is a fixture that appends one line per event to a file on disk. That sink is the
- * oracle nothing on the client can fake:
- *  - exactly one `READY` for the whole run means the host never re-spawned the process, so the
- *    user came back to their session rather than a fresh shell wearing its name;
- *  - a `LINE:` for input sent after the relaunch means the restored pane is wired to that same
- *    process, not merely painted with its scrollback.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-client-restart-survival.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Force-quit a paired desktop client and reopen its retained profile while the desktop host keeps the remote PTY alive.
+// One READY in the host sink proves no respawn; post-relaunch LINE entries prove restored input reaches that same process.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
@@ -39,6 +17,7 @@ import {
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 /** What a user would accept for "my terminal is back" after reopening the app. */
 const RESTORE_BUDGET_MS = 60_000
@@ -72,15 +51,11 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 function readSinkLines(sinkPath: string): string[] {
@@ -192,14 +167,8 @@ async function selectClientTab(page: Page, worktreeId: string, webTabId: string)
   )
 }
 
-/**
- * Types `marker` into the pane until the host-side process records it, or the budget ends.
- *
- * Why through `pane.terminal.input` and not `window.api.pty.write`: a mirrored pane's handle is
- * a `remote:` id that no local PTY answers to, so a direct write is silently swallowed. This is
- * the path a keystroke actually takes, and it is retried because a pane still reattaching can
- * replay-suppress a write (helpers/restored-terminal-input-readiness.ts polls for that reason).
- */
+// Use terminal.input through the real remote transport; direct local pty.write cannot route remote: ids.
+// Retry while reattach may replay-suppress input, as restored-terminal-input-readiness does.
 async function driveInputUntilProcessSees(
   client: PairedElectronClient,
   webTabId: string,
@@ -283,8 +252,7 @@ test('a relaunched client gets its live remote terminal back, still attached to 
       'the pane never painted the live terminal before the restart'
     ).not.toBeNull()
 
-    // The control. Without it, "input did not arrive after the restart" cannot be told apart
-    // from "this input path never worked in this topology".
+    // Prove input works before restart so harness failure cannot look like broken recovery.
     const ptyIdsBefore = await readTabPtyIds(client, webTabId)
     expect(ptyIdsBefore, 'the live pane had no PTY handle before the restart').not.toHaveLength(0)
     expect(
@@ -298,8 +266,6 @@ test('a relaunched client gets its live remote terminal back, still attached to 
       'input did not reach the host process even before the restart — the probe, not the product'
     ).toBe(true)
 
-    // ── The restart: force-quit and reopen on the same profile. ──
-    // Quit without disposing: the profile has to outlive the app, as it does for a real Cmd+Q.
     const quitting = client.app
     client = null
     await closeElectronAppForE2E(quitting)
@@ -332,7 +298,6 @@ test('a relaunched client gets its live remote terminal back, still attached to 
       }
     }
 
-    // Is the restored pane actually wired to the live process, or only painted with its past?
     const marker = `POST_RESTART_${randomUUID().slice(0, 8)}`
     const ptyIds = await readTabPtyIds(client, webTabId)
     console.error(`[client-restart] ptyBefore=${ptyIdsBefore[0]} ptyAfter=${ptyIds[0] ?? 'none'}`)
@@ -356,7 +321,6 @@ test('a relaunched client gets its live remote terminal back, still attached to 
       }
     }
 
-    // The sink is the fork oracle: a second READY means the host re-spawned the user's work.
     const readyCount = readSinkLines(sinkPath).filter((line) => line === 'READY').length
     console.error(`[client-restart] readyCount=${readyCount}`)
     if (readyCount !== 1) {

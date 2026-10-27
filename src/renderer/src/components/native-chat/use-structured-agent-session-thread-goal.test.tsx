@@ -44,7 +44,6 @@ function clearedRow(sequence: number): AgentJournalRenderItem {
 
 type MutateCall = (...args: unknown[]) => Promise<unknown>
 
-/** The hook reads only whether an answer is null, so a mock need not carry the generic. */
 function mutateWith(answer: MutateCall): {
   mutate: StructuredAgentSessionMutate
   calls: MutateCall
@@ -57,21 +56,40 @@ function mutateWith(answer: MutateCall): {
 function harness(options: {
   journalItems?: readonly AgentJournalRenderItem[]
   support?: { current: AgentJournalThreadGoal | null }
+  reported?: { current: AgentJournalThreadGoal }
   mutate?: StructuredAgentSessionMutate
+  send?: (text: string) => boolean | 'queued'
 }) {
   const mutate = options.mutate ?? mutateWith(async () => null).mutate
   return renderHook(() =>
     useStructuredAgentSessionThreadGoal({
       journalItems: options.journalItems ?? [],
       support: options.support,
-      mutate
+      reported: options.reported,
+      mutate,
+      send: options.send ?? (() => true)
     })
   )
 }
 
 describe('useStructuredAgentSessionThreadGoal', () => {
-  it('is absent until the host reports it can change this session goal', () => {
-    expect(harness({ journalItems: [goalRow(1, GOAL)] }).result.current).toBeNull()
+  it('does not show a persisted goal when the host advertises neither goal field', () => {
+    const fromWindow = harness({ journalItems: [goalRow(1, GOAL)] })
+    expect(fromWindow.result.current).toBeNull()
+  })
+
+  it('shows a goal only the agent changes, which clears by sending it /goal clear', async () => {
+    expect(harness({}).result.current).toBeNull()
+
+    const send = vi.fn(() => true)
+    const { mutate, calls } = mutateWith(async () => null)
+    const { result } = harness({ reported: { current: GOAL }, mutate, send })
+    expect(result.current).toMatchObject({ goal: GOAL, hostChanges: false, pending: false })
+    await act(async () => {
+      await expect(result.current!.change({ kind: 'clear' })).resolves.toBe(true)
+    })
+    expect(send).toHaveBeenCalledWith('/goal clear')
+    expect(calls).not.toHaveBeenCalled()
   })
 
   it('reads the goal off the loaded window, and off the host answer only when the window has none', () => {
@@ -82,33 +100,36 @@ describe('useStructuredAgentSessionThreadGoal', () => {
     const fromHost = harness({ support: { current: older } })
     expect(fromHost.result.current?.goal).toEqual(older)
 
-    // A clear in the window outranks a host answer read before it.
     const cleared = harness({ journalItems: [clearedRow(2)], support: { current: older } })
     expect(cleared.result.current?.goal).toBeNull()
   })
 
-  it('serializes changes: a second submit while one is unsettled is answered false, not sent', async () => {
-    let settle: (value: { change: 'set' } | null) => void = () => undefined
-    const { mutate, calls } = mutateWith(
-      () => new Promise<{ change: 'set' } | null>((resolve) => (settle = resolve))
-    )
-    const { result } = harness({ support: { current: null }, mutate })
-
-    let first: Promise<boolean> = Promise.resolve(false)
-    let second: Promise<boolean> = Promise.resolve(false)
+  it('admits Pause and Clear while Set is unsettled, keeping pending until all settle', async () => {
+    const set = Promise.withResolvers<unknown>()
+    const pause = Promise.withResolvers<unknown>()
+    const clear = Promise.withResolvers<unknown>()
+    const answers = [set, pause, clear]
+    const { mutate, calls } = mutateWith(() => answers.shift()!.promise)
+    const { result } = harness({ support: { current: GOAL }, mutate })
+    let changes: Promise<boolean>[] = []
     act(() => {
-      first = result.current!.change({ kind: 'set', objective: 'Ship the parser' })
-      second = result.current!.change({ kind: 'set', objective: 'Ship the parser' })
+      changes = [
+        result.current!.change({ kind: 'set', objective: 'New objective' }),
+        result.current!.change({ kind: 'status', status: 'paused' }),
+        result.current!.change({ kind: 'clear' })
+      ]
     })
-    await expect(second).resolves.toBe(false)
-    expect(calls).toHaveBeenCalledTimes(1)
-    expect(calls).toHaveBeenCalledWith('agentSession.threadGoal', 'agentSession.threadGoal', {
-      change: { kind: 'set', objective: 'Ship the parser' }
+    expect(calls).toHaveBeenCalledTimes(3)
+    expect(result.current?.pending).toBe(true)
+    await act(async () => {
+      clear.resolve({ change: 'clear' })
+      pause.resolve({ change: 'status' })
     })
     expect(result.current?.pending).toBe(true)
-
-    await act(async () => settle({ change: 'set' }))
-    await expect(first).resolves.toBe(true)
+    await act(async () => {
+      set.resolve({ change: 'set' })
+      await expect(Promise.all(changes)).resolves.toEqual([true, true, true])
+    })
     expect(result.current?.pending).toBe(false)
   })
 

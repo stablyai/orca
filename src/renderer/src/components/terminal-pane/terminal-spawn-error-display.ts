@@ -3,6 +3,7 @@ import {
   LEGACY_PTY_ALLOCATION_HINT,
   LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
   PTY_ALLOCATION_HINT,
+  TERMINAL_HOST_CAP_HINT,
   TERMINAL_PROCESS_LIMIT_HINT,
   TERMINAL_SPAWN_ISSUE_REQUEST
 } from '../../../../shared/terminal-spawn-error-copy'
@@ -17,12 +18,17 @@ export function localizeTerminalSpawnHints(error: string): string {
     'auto.components.terminal.pane.TerminalErrorToast.terminalProcessLimit',
     TERMINAL_PROCESS_LIMIT_HINT
   )
+  const hostCap = translate(
+    'auto.components.terminal.pane.TerminalErrorToast.hostTerminalCap',
+    TERMINAL_HOST_CAP_HINT
+  )
   // Why a replacer: a translation containing `$&` would otherwise be read as a substitution.
   return error
     .replaceAll(LEGACY_PTY_ALLOCATION_HINT, () => ptyAllocation)
     .replaceAll(PTY_ALLOCATION_HINT, () => ptyAllocation)
     .replaceAll(LEGACY_TERMINAL_PROCESS_LIMIT_HINT, () => processLimit)
     .replaceAll(TERMINAL_PROCESS_LIMIT_HINT, () => processLimit)
+    .replaceAll(TERMINAL_HOST_CAP_HINT, () => hostCap)
 }
 
 /** Drops the host's plain-text issue request where the toast renders its own linked one. */

@@ -47,7 +47,10 @@ type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
   > &
   Pick<ChecksPanelComposerState, 'prBase' | 'prBody' | 'prDraft' | 'prGenerating' | 'prTitle'> &
   Pick<ChecksPanelComposerState, 'handleGeneratePullRequestFields' | 'prAiGenerationEnabled'> &
-  Pick<ChecksPanelComposerState, 'prFieldsAreSeedPlaceholders'> &
+  Pick<
+    ChecksPanelComposerState,
+    'prFieldRevisions' | 'prFieldsAreSeedPlaceholders' | 'pullRequestFieldsInitialized'
+  > &
   Pick<ChecksPanelBranchActionsState, 'pushBeforeCreatePullRequest'>
 
 export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) {
@@ -73,9 +76,11 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     prBody,
     prCreationDefaults,
     prDraft,
+    prFieldRevisions,
     prFieldsAreSeedPlaceholders,
     prGenerating,
     prTitle,
+    pullRequestFieldsInitialized,
     pushBeforeCreatePullRequest,
     repo,
     setCreatePrError,
@@ -88,7 +93,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
   const createPullRequest = useCallback(
     async (stacked = false, generated?: PullRequestGenerationFields): Promise<void> => {
       const requestContextKey = panelContextKey
-      // Why: a click-owned run can reach here after the panel moved on; it still creates and links the clicked branch's review, and drives only the panel that still shows it.
+      // A late click-owned run still links its original branch, but may update only a panel still showing it.
       const panelShowsRequest = panelContextKeyRef.current === requestContextKey
       if (
         !repo ||
@@ -145,7 +150,12 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
         if (shouldPushBeforeCreate) {
           const ok = await pushBeforeCreatePullRequest()
           if (!ok) {
-            showCreateError('Push failed. Resolve the push error, then try again.')
+            showCreateError(
+              translate(
+                'sourceControl.createReviewFailure.pushFailed',
+                'Push failed. Resolve the push error, then try again.'
+              )
+            )
             return
           }
           pushed = true
@@ -164,7 +174,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
         const result = stacked
           ? await createStackedHostedReview(repo.path, createInput)
           : await createHostedReview(repo.path, createInput)
-        // Why: read before linking, which changes the panel's context key.
+        // Read before linking changes the panel context key.
         const panelShowsReview = model.mountedRef.current && isCurrentCreateRequest()
         if (result.ok) {
           const foreground = createdReviewIsForeground(activeWorktreeId, panelShowsReview)
@@ -222,9 +232,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             return
           }
         }
-        // Why: stacked creation can create the pull request and still fail to register
-        // the stack. Link the review that exists before surfacing the stack failure, or
-        // the workspace stays unaware of a PR the user can already see on GitHub.
+        // Stack registration can fail after PR creation; link the existing PR before reporting the stack error.
         if ('createdReview' in result && result.createdReview?.url) {
           const { number, url } = result.createdReview
           if (number) {
@@ -234,7 +242,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             )
           }
         }
-        showCreateError(formatCreateError(result, pushed, hostedReviewCreateCopy.shortLabel))
+        showCreateError(formatCreateError(result, pushed, hostedReviewCreateProvider))
       } catch (error) {
         showCreateError(
           error instanceof Error
@@ -265,7 +273,6 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       handlePullRequestCreated,
       hostedReviewCreateCopy.providerName,
       hostedReviewCreateCopy.reviewLabel,
-      hostedReviewCreateCopy.shortLabel,
       hostedReviewCreateCopy.titleLabel,
       hostedReviewCreateProvider,
       hostedReviewCreation?.blockedReason,
@@ -292,6 +299,9 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     aiGenerationEnabled: prAiGenerationEnabled,
     canCreate: createComposerOpen,
     createPullRequest,
+    fields: { base: prBase, title: prTitle, body: prBody, draft: prDraft },
+    fieldRevisions: prFieldRevisions,
+    fieldsInitialized: pullRequestFieldsInitialized,
     fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     generatePullRequestFields: handleGeneratePullRequestFields,
     generationKey: activePullRequestGenerationKey,

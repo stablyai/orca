@@ -31,9 +31,7 @@ describe('setOptIn()', () => {
     cleanupTelemetryClientTest(state.envStash)
   })
 
-  // Ordering invariant: the opt-out event is the one signal that transmits
-  // against the user's new preference. It must reach the SDK queue before
-  // posthog.optOut(), otherwise posthog-node drops it at enqueue time.
+  // Capture enqueues asynchronously; opt-out evidence must reach the SDK before optOut discards it.
   it('waits for telemetry_opted_out to enqueue before posthog.optOut()', async () => {
     const order: string[] = []
     mock.capture.mockImplementation((message: { event?: string; uuid?: string }) => {
@@ -53,7 +51,7 @@ describe('setOptIn()', () => {
     expect(order).toEqual(['capture called', 'sdk enqueue', 'optOut'])
   })
 
-  it('fires telemetry_opted_in after posthog.optIn without app_opened for settings opt-in', async () => {
+  it('fires app_opened and telemetry_opted_in after the SDK enables settings opt-in', async () => {
     state.settings.telemetry!.optedIn = false
     const order: string[] = []
     mock.optIn.mockImplementation(async () => order.push('optIn'))
@@ -61,7 +59,11 @@ describe('setOptIn()', () => {
       order.push(`capture:${message.event}`)
     })
     await setOptIn('settings', true)
-    expect(order).toEqual(['optIn', 'capture:telemetry_opted_in'])
+    expect(order).toEqual(['optIn', 'capture:app_opened', 'capture:telemetry_opted_in'])
+    expect(state.store.updateSettings).toHaveBeenCalledWith(
+      { telemetry: expect.objectContaining({ optedIn: true }) },
+      { notifyListeners: true }
+    )
   })
 
   it('drops telemetry_opted_in silently in non-official builds', async () => {
@@ -121,12 +123,14 @@ describe('persistBannerAcknowledgeWithoutEmitting()', () => {
 
     expect(order).toEqual(['optIn', 'capture:app_opened'])
     expect(state.settings.telemetry?.optedIn).toBe(true)
+    expect(state.store.updateSettings).toHaveBeenCalledWith(
+      { telemetry: expect.objectContaining({ optedIn: true }) },
+      { notifyListeners: true }
+    )
   })
 })
 
-// Pin the init-time SDK opt-out decision. The bug this prevents: if
-// initTelemetry flipped the SDK optedOut flag for pending_banner, the direct
-// posthog.capture(telemetry_opted_out) on the Turn-off path would be dropped.
+// pending_banner must not opt out the SDK before the banner Turn Off capture can enqueue.
 describe('shouldOptOutSdkAtInit()', () => {
   it('opts out the SDK for every disabled-reason', () => {
     for (const reason of ['user_opt_out', 'ci', 'do_not_track', 'orca_disabled'] as const) {

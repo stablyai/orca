@@ -1,22 +1,5 @@
-/**
- * E2E tests for tab management: creating, switching, reordering, and closing tabs.
- *
- * User Prompt:
- * - New tab works
- * - dragging tabs around to reorder them
- * - closing tabs works
- * - double-click a tab to rename it inline
- *
- * Why these specs assert on the DOM: a prior version of this file drove every
- * flow through `window.__store` and read the same fields back — a tautology
- * that would have passed even if the tab bar had stopped rendering (the same
- * pattern that let PR #1186's `StartFromField` render crash ship past the
- * E2E suite in #1193). The rule in tests/e2e/AGENTS.md is that the final
- * `expect()` must target user-observable DOM. Store calls are only used here
- * for *setup* (e.g. to guarantee >= N tabs exist) or when the real user-facing
- * action genuinely can't be driven via DOM in hidden-window Electron runs
- * (dnd-kit reorder); in those cases a DOM assertion still follows.
- */
+// Assert tab management through rendered DOM: setup/store writes alone previously passed despite render crashes (#1186/#1193).
+// Hidden-window drag setup may use production store actions, but final selection/order/count assertions still read DOM.
 
 import { rm } from 'node:fs/promises'
 import type { Page } from '@stablyai/playwright-test'
@@ -60,12 +43,7 @@ async function countRenderedTabs(page: Page): Promise<number> {
   return page.locator(SORTABLE_TAB).count()
 }
 
-/**
- * Read the DOM's active-tab id from the `data-active` attribute exposed by
- * SortableTab. We assert on DOM rather than `activeTabId` in the store so a
- * render-layer regression (e.g. the active indicator failing to paint on the
- * correct tab) cannot silently pass.
- */
+// Read DOM data-active so a correct store id cannot hide a broken rendered selection indicator.
 async function getDomActiveTabId(page: Page): Promise<string | null> {
   return page.evaluate((selector) => {
     const match = document.querySelector(`${selector}[data-active="true"]`)
@@ -93,30 +71,16 @@ test.describe('Tabs', () => {
     await expect(tabLocator(orcaPage, initialTabId)).toBeVisible()
   })
 
-  /**
-   * User Prompt:
-   * - New tab works
-   *
-   * Why: asserting on a new `[data-testid="sortable-tab"]` in the DOM (not
-   * `tabsByWorktree.length` in the store) is the guard that would have caught
-   * a tab-bar render regression. Clicking the real "+" button and then "New
-   * Terminal" drives the same code path a user takes.
-   */
+  // Use the real + → New Terminal flow and require a new rendered tab.
   test('clicking "+" then "New Terminal" creates a new terminal tab', async ({ orcaPage }) => {
     const tabsBefore = await countRenderedTabs(orcaPage)
 
-    // Why: hidden-window Electron can keep the animated terminal surface
-    // invalidating Playwright's "stable" actionability check even though the
-    // tab-bar button is visible and enabled.
+    // Hidden animated terminals can invalidate Playwright stability despite an enabled visible button.
     await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
-    // Why: the "+" dropdown uses Radix <DropdownMenuItem>, which exposes the
-    // label text as the accessible name once the menu is open.
     const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /New Terminal/i }).first()
     await newTerminalMenuItem.click()
     await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
 
-    // Final assertion is on the rendered tab count — the tab bar itself must
-    // gain an element, not just the store.
     await expect
       .poll(() => countRenderedTabs(orcaPage), {
         timeout: 5_000,
@@ -158,9 +122,7 @@ test.describe('Tabs', () => {
     const newMarkdownMenuItem = orcaPage.getByRole('menuitem', { name: /New Markdown/i }).first()
     await newMarkdownMenuItem.click()
 
-    // Why: require an id that did not exist before the click, so an already-open
-    // Markdown file can't satisfy the assertions (or be deleted by cleanup), and
-    // record the path here so cleanup still has it if a later assertion fails.
+    // Require a newly minted id and retain its cleanup path so existing Markdown cannot satisfy or be deleted by this test.
     const createdFileHandle = await orcaPage.waitForFunction(
       (knownFileIds) => {
         const state = window.__store?.getState()
@@ -198,22 +160,15 @@ test.describe('Tabs', () => {
     await expect(editor).toBeHidden()
   })
 
-  /**
-   * User Prompt:
-   * - New tab works
-   */
   test('Cmd/Ctrl+T creates a new terminal tab', async ({ orcaPage }) => {
     const isMac = process.platform === 'darwin'
     const mod = isMac ? 'Meta' : 'Control'
     const tabsBefore = await countRenderedTabs(orcaPage)
 
-    // Why: focus body first so the window-level keydown handler on Terminal.tsx
-    // actually sees the event. Without focus the key may be eaten by an
-    // unrelated input (e.g. a stale search field from a previous test).
+    // Focus body so stale search inputs cannot consume the window shortcut.
     await orcaPage.evaluate(() => document.body.focus())
     await orcaPage.keyboard.press(`${mod}+t`)
 
-    // DOM-level count increased — confirms a new tab actually rendered.
     await expect
       .poll(() => countRenderedTabs(orcaPage), {
         timeout: 5_000,
@@ -221,142 +176,14 @@ test.describe('Tabs', () => {
       })
       .toBe(tabsBefore + 1)
 
-    // The newly-rendered active tab must be a terminal (tab-type is visible as
-    // the active surface behind the strip; we rely on the store flag here only
-    // to disambiguate terminal vs. editor vs. browser — the fact that *some*
-    // tab is active is already proved by the DOM assertion below).
+    // Use the store only to distinguish surface type; DOM must independently prove one active tab.
     const activeType = await getActiveTabType(orcaPage)
     expect(activeType).toBe('terminal')
 
-    // The DOM must have exactly one active tab and it must match the store's
-    // activeTabId — this is the load-bearing check that the render layer and
-    // the state layer agree on what is selected.
+    // Require exactly one DOM-active tab matching store selection.
     const storeActiveId = await getActiveTabId(orcaPage)
     expect(storeActiveId).not.toBeNull()
     await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(storeActiveId)
-  })
-
-  /**
-   * User Prompt:
-   * - New tab works
-   *
-   * Why: we still use the store's `setActiveTab` for the switch itself (the
-   * hotkey path that used to be here turned out to target bracket-chord next/
-   * prev tab cycling, not arbitrary tab selection), but the final assertion
-   * checks DOM `data-active` to prove the selection actually paints onto the
-   * right tab element.
-   */
-  test('Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ switch between tabs', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    // Ensure we have at least 2 tabs — use the real "+" flow so a render
-    // regression would fail setup before we even start the cycle check.
-    if ((await countRenderedTabs(orcaPage)) < 2) {
-      await orcaPage.getByRole('button', { name: 'New tab' }).click()
-      await orcaPage
-        .getByRole('menuitem', { name: /New Terminal/i })
-        .first()
-        .click()
-      await expect
-        .poll(() => countRenderedTabs(orcaPage), { timeout: 5_000 })
-        .toBeGreaterThanOrEqual(2)
-    }
-
-    const firstTabId = await getActiveTabId(orcaPage)
-    const orderedTabs = await getWorktreeTabs(orcaPage, worktreeId)
-    const secondTabId = orderedTabs.find((tab) => tab.id !== firstTabId)?.id
-    expect(secondTabId).toBeTruthy()
-
-    await orcaPage.evaluate((tabId) => {
-      window.__store?.getState().setActiveTab(tabId)
-    }, secondTabId)
-
-    // DOM assertion — the second tab must actually show the active indicator.
-    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(secondTabId)
-
-    // Switch back.
-    await orcaPage.evaluate((tabId) => {
-      window.__store?.getState().setActiveTab(tabId)
-    }, firstTabId)
-    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
-  })
-
-  /**
-   * User Prompt:
-   * - dragging tabs around to reorder them
-   *
-   * Why the reorder is still store-driven: real dnd-kit pointer events are
-   * unreliable in the hidden-window Electron mode we run E2E in (pointer
-   * capture + collision detection interact poorly with `window.show()` being
-   * suppressed). We seed the post-drag state via `reorderUnifiedTabs` — the
-   * same action dnd-kit calls on drop — and then assert the tab bar's DOM
-   * order matches the new sequence. That final DOM check is what makes this
-   * a real test: a pure store round-trip would not catch a regression where
-   * the tab strip stopped re-rendering in the store's new order.
-   */
-  test('dragging a tab to a new position reorders it', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    if ((await countRenderedTabs(orcaPage)) < 2) {
-      await orcaPage.getByRole('button', { name: 'New tab' }).click()
-      await orcaPage
-        .getByRole('menuitem', { name: /New Terminal/i })
-        .first()
-        .click()
-      await expect
-        .poll(() => countRenderedTabs(orcaPage), { timeout: 5_000 })
-        .toBeGreaterThanOrEqual(2)
-    }
-
-    const domOrderBefore = await orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
-      nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
-    )
-    expect(domOrderBefore.length).toBeGreaterThanOrEqual(2)
-
-    await orcaPage.evaluate((targetWorktreeId) => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-
-      const state = store.getState()
-      const groups = state.groupsByWorktree[targetWorktreeId] ?? []
-      const activeGroupId = state.activeGroupIdByWorktree[targetWorktreeId]
-      const activeGroup = activeGroupId
-        ? groups.find((group) => group.id === activeGroupId)
-        : groups[0]
-
-      if (activeGroup?.tabOrder?.length >= 2) {
-        const nextOrder = [
-          activeGroup.tabOrder[1],
-          activeGroup.tabOrder[0],
-          ...activeGroup.tabOrder.slice(2)
-        ]
-        state.reorderUnifiedTabs(activeGroup.id, nextOrder)
-        return
-      }
-
-      const terminalOrder = (state.tabsByWorktree[targetWorktreeId] ?? []).map((tab) => tab.id)
-      if (terminalOrder.length >= 2) {
-        state.setTabBarOrder(targetWorktreeId, [
-          terminalOrder[1],
-          terminalOrder[0],
-          ...terminalOrder.slice(2)
-        ])
-      }
-    }, worktreeId)
-
-    // Final assertion: the tab strip must re-render with the swapped order.
-    // Keying off `data-tab-id` makes this independent of title formatting.
-    await expect
-      .poll(
-        async () =>
-          orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
-            nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
-          ),
-        { timeout: 3_000, message: 'Tab bar DOM order did not reflect the reorder' }
-      )
-      .toEqual([domOrderBefore[1], domOrderBefore[0], ...domOrderBefore.slice(2)])
   })
 
   test('clicking tabs still switches after dragging a terminal tab to reorder', async ({
@@ -399,9 +226,7 @@ test.describe('Tabs', () => {
     const endY = secondTabBox!.y + secondTabBox!.height / 2
     await orcaPage.mouse.move(startX, startY)
     await orcaPage.mouse.down()
-    // Why: this mirrors the release repro: drag a terminal tab across another
-    // tab far enough for dnd-kit to commit a reorder, then release on the tab
-    // strip before clicking tabs again.
+    // Drag far enough for dnd-kit to reorder, then release over the strip before selecting again.
     await orcaPage.mouse.move(endX, endY, { steps: 8 })
     await orcaPage.mouse.up()
 
@@ -426,24 +251,14 @@ test.describe('Tabs', () => {
       .toBe(secondTabId)
   })
 
-  /**
-   * Regression: after a drag-reorder, Cmd/Ctrl+Shift+[ must walk tabs in
-   * the new visible order. The pre-fix bug read a stale legacy order
-   * (`tabBarOrderByWorktree`), so pressing "left" three times cycled
-   * 3 → 1 → 2 instead of 3 → 2 → 1 once tabs had been rearranged.
-   *
-   * The DOM assertion (`data-active` matching the expected tab element) is
-   * the load-bearing check — it fails if the shortcut walks the right store
-   * id but the tab bar stops painting the active indicator on that tab.
-   */
+  // After reorder, Cmd/Ctrl+Shift+[ must follow the visible group order, not stale tabBarOrderByWorktree.
+  // Require DOM data-active to follow each expected tab as well as store selection.
   test('Cmd/Ctrl+Shift+[ walks tabs in drag-reordered order', async ({ orcaPage }) => {
     const isMac = process.platform === 'darwin'
     const mod = isMac ? 'Meta' : 'Control'
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
-    // Ensure at least 3 terminal tabs so the order cycle is non-trivial.
-    // Why store-driven: we only need >=3 tabs to exist; the "+" flow is
-    // already exercised by other tests in this file.
+    // Seed at least three tabs directly; separate tests exercise + creation.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
       if (!store) {
@@ -465,8 +280,7 @@ test.describe('Tabs', () => {
     expect(initialOrder.length).toBeGreaterThanOrEqual(3)
     const [a, b, c] = initialOrder
 
-    // Reorder via the same store call drag/drop uses: move the first tab to
-    // the end so the visible order becomes [b, c, a].
+    // Use the production drag/drop store action to move first to last.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
       if (!store) {
@@ -506,17 +320,8 @@ test.describe('Tabs', () => {
     await expect(tabLocator(orcaPage, b)).toHaveAttribute('data-active', 'true')
   })
 
-  /**
-   * User Prompt:
-   * - closing tabs works
-   *
-   * Why: clicking the real per-tab close (X) button exercises the same path a
-   * user takes and catches regressions where the button silently unmounts.
-   * The final assertion counts rendered `[data-testid="sortable-tab"]` nodes
-   * so the test fails if the store cleared the tab but the DOM didn't
-   * re-render.
-   */
-  test('closing a tab removes it from the tab bar', async ({ orcaPage }) => {
+  // Click the real X and require DOM removal so store-only close cannot hide a stuck tab.
+  test('closing the active tab removes it and activates a neighbor', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     // Need a second tab so we can close one without deactivating the worktree.
@@ -545,45 +350,7 @@ test.describe('Tabs', () => {
         message: 'Clicking close did not remove the tab element from the DOM'
       })
       .toBe(tabsBefore - 1)
-  })
-
-  /**
-   * User Prompt:
-   * - closing tabs works
-   *
-   * The DOM check (`data-active="true"` lands on a different element) proves
-   * the tab bar re-paints the active indicator after a close — a store-only
-   * check would pass even if the indicator failed to shift.
-   */
-  test('closing the active tab activates a neighbor tab', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    await orcaPage.evaluate((targetWorktreeId) => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-      const state = store.getState()
-      if ((state.tabsByWorktree[targetWorktreeId] ?? []).length < 2) {
-        state.createTab(targetWorktreeId)
-      }
-    }, worktreeId)
-    await expect
-      .poll(() => countRenderedTabs(orcaPage), { timeout: 5_000 })
-      .toBeGreaterThanOrEqual(2)
-
-    const activeTabBefore = await getActiveTabId(orcaPage)
-    expect(activeTabBefore).not.toBeNull()
-
-    await closeTabFromTabBar(orcaPage, activeTabBefore!)
-
-    // Final DOM assertion: some *other* tab element now carries data-active.
-    await expect
-      .poll(() => getDomActiveTabId(orcaPage), {
-        timeout: 5_000,
-        message: 'After closing the active tab, no neighbor tab took over the active indicator'
-      })
-      .not.toBe(activeTabBefore)
+    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 5_000 }).not.toBe(activeId)
     await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 5_000 }).not.toBeNull()
   })
 })

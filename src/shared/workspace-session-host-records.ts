@@ -6,7 +6,9 @@ export function isWorkspaceSessionRecord(value: unknown): value is WorkspaceSess
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-export function buildWorktreeIdByTabId(state: WorkspaceSessionState): Map<string, string> {
+export function buildWorktreeIdByTabId(
+  state: Partial<Pick<WorkspaceSessionState, 'tabsByWorktree' | 'unifiedTabs'>>
+): Map<string, string> {
   const byTab = new Map<string, string>()
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
@@ -30,9 +32,7 @@ export type WorkspaceTabOwnerCatalog = {
   unifiedTabsByWorktree?: Readonly<Record<string, readonly { id: string; worktreeId: string }[]>>
 }
 
-/** Fill tabs the payload never mentioned from the live catalogs. Payload rows win: main merges the
- *  payload's own `tabsByWorktree` into whichever partition it lands in, so a tab-keyed row has to
- *  follow the tab row in THIS write, not a newer store state the debounce has not emitted yet. */
+/** Payload tab rows outrank live catalogs: tab-keyed records must follow this debounced write’s rows, not newer store state. Fill only missing owners from live catalogs. */
 export function extendWorktreeIdByTabId(
   byTab: Map<string, string>,
   catalog: WorkspaceTabOwnerCatalog | undefined
@@ -54,8 +54,7 @@ export function extendWorktreeIdByTabId(
   return byTab
 }
 
-/** The workspace a pane key belongs to. A pane key is `<tabId>:<leafId>`; both the split and the
- *  stranded-partition adoption resolve it here so neither can parse it its own way. */
+/** Resolve <tabId>:<leafId> through one index shared by host splitting and stranded-partition adoption. */
 export function worktreeIdForPaneKey(
   worktreeIdByTabId: Map<string, string>,
   paneKey: string
@@ -64,7 +63,9 @@ export function worktreeIdForPaneKey(
   return separator > 0 ? worktreeIdByTabId.get(paneKey.slice(0, separator)) : undefined
 }
 
-export function buildWorktreeIdByFileId(state: WorkspaceSessionState): Map<string, string> {
+export function buildWorktreeIdByFileId(
+  state: Partial<Pick<WorkspaceSessionState, 'openFilesByWorktree'>>
+): Map<string, string> {
   const byFile = new Map<string, string>()
   for (const files of Object.values(state.openFilesByWorktree ?? {})) {
     for (const file of files) {

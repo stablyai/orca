@@ -20,6 +20,7 @@ import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault-sea
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
+import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
 
 type SearchIdentity = {
@@ -42,6 +43,7 @@ export function useAiVaultSearch(
   scope: ExecutionHostScope | null,
   policyKey: string
 ) {
+  const associations = useAiVaultAssociationObservation(request ? scope : null)
   const [page, setPage] = useState<SearchPage | null>(null)
   const [revision, setRevision] = useState(0)
   const loadPage = useRef<((cursor: string) => void) | null>(null)
@@ -57,29 +59,36 @@ export function useAiVaultSearch(
     }
     let cancelled = false
     let pending = false
-    async function run(cursor?: string) {
+    const search = (query: AiVaultSearchRequest, host: ExecutionHostScope) =>
+      window.api.aiVault.searchSessions(query, host, () => !cancelled)
+    let followUp = false
+    let started = false
+    async function run(cursor?: string, revalidate = false) {
       if (pending || cancelled || !request || !scope) {
         return
       }
       pending = true
+      started = true
+      const revision = associations.getSnapshot()
+      const isCurrent = () => !cancelled && revision === associations.getSnapshot()
       setPage((previous) => ({
         identity,
-        hits: cursor && previous?.identity === identity ? previous.hits : [],
+        hits: (cursor || revalidate) && previous?.identity === identity ? previous.hits : [],
         response: null,
         error: false,
         loading: true
       }))
       try {
-        let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
+        let response = await search({ ...request, cursor }, scope)
         let append = Boolean(cursor)
-        if (cancelled) {
+        if (!isCurrent()) {
           return
         }
         if (response.kind === 'stale-cursor') {
           append = false
-          response = await window.api.aiVault.searchSessions(request, scope)
+          response = await search(request, scope)
         }
-        if (cancelled) {
+        if (!isCurrent()) {
           return
         }
         setPage((previous) => ({
@@ -96,21 +105,37 @@ export function useAiVaultSearch(
           loading: false
         }))
       } catch {
-        if (!cancelled) {
+        if (isCurrent()) {
           setPage({ identity, hits: [], response: null, error: true, loading: false })
         }
       } finally {
         pending = false
+        if (followUp && !cancelled) {
+          followUp = false
+          void run(undefined, true)
+        }
       }
     }
     loadPage.current = (cursor) => void run(cursor)
-    const timer = setTimeout(() => void run(), 250)
+    const stop = associations.subscribe(() => {
+      if (!started) {
+        return
+      }
+      if (pending) {
+        followUp = true
+      } else {
+        void run(undefined, true)
+      }
+    })
+    const timer = setTimeout(() => void run(undefined, true), 250)
     return () => {
       cancelled = true
+      followUp = false
+      stop()
       loadPage.current = null
       clearTimeout(timer)
     }
-  }, [identity])
+  }, [identity, associations])
 
   const current = page?.identity === identity ? page : null
   return {
@@ -133,7 +158,10 @@ export function useAiVaultSearch(
   }
 }
 
-/** Under `all` every hit names its own host; a single-host answer belongs to the host we addressed. */
+// Answers that a retry from this client cannot change; `not-ready` can, so it keeps searching.
+const TITLE_ONLY_UNAVAILABLE_REASONS = new Set<string>(['disabled', 'no-service'])
+
+// All-host hits name their host; single-host responses belong to the addressed host.
 function hitExecutionHostId(hit: AiVaultSearchHit, host: ExecutionHostId | null): ExecutionHostId {
   return host ?? parseExecutionHostId(hit.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
 }
@@ -144,7 +172,8 @@ export function useAiVaultPanelSearch(
   /** Which scope the host resolves; undefined searches everything it has. */
   within: AiVaultSearchScopeIdentity | undefined,
   executionHostScope: ExecutionHostScope,
-  sort: AiVaultSearchSort
+  sort: AiVaultSearchSort,
+  canonicalProjectKey?: string
 ) {
   const settings = useAppStore((state) => state.settings?.aiVaultSearch)
   const policy = resolveAiVaultSearchSettings({ aiVaultSearch: settings })
@@ -155,23 +184,39 @@ export function useAiVaultPanelSearch(
   const hasQuery = trimmed.length > 0
   const needsLocalConsent =
     executionHostScope === 'local' && !isWebClientLocation() && !policy.enabled
-  // Until indexing is on the box is still the legacy title filter, not index search.
-  const searching = hasQuery && !needsLocalConsent
-  // `within` is memoized by the caller; a fresh object per render would restart
-  // the search on every render and never let one settle.
+  // A client cannot enable another host’s index; fall back to title filtering when it reports search off (#22453).
+  const [titleOnlyScope, setTitleOnlyScope] = useState<ExecutionHostScope | null>(null)
+  const titleOnly =
+    scope !== null && scope !== ALL_EXECUTION_HOSTS_SCOPE && titleOnlyScope === scope
+  const searching = hasQuery && !needsLocalConsent && !titleOnly
+  // Callers must memoize within; new objects restart the search before it can settle.
   const request = useMemo(
     () =>
       searching && scope && agents.length > 0
         ? {
             query: trimmed,
-            // Relevance is the host's own default, so only the other order travels.
             filters: { agents: [...agents], ...(sort === 'relevance' ? {} : { sort }) },
-            ...(within ? { within } : {})
+            ...(within
+              ? {
+                  within:
+                    within.kind === 'project' && canonicalProjectKey
+                      ? { ...within, canonicalProjectKey }
+                      : within
+                }
+              : {})
           }
         : null,
-    [searching, scope, agents, trimmed, within, sort]
+    [searching, scope, agents, trimmed, within, sort, canonicalProjectKey]
   )
   const search = useAiVaultSearch(request, scope, JSON.stringify(policy))
+  const hostSearchOff =
+    search.response?.kind === 'unavailable' &&
+    TITLE_ONLY_UNAVAILABLE_REASONS.has(search.response.reason)
+  useEffect(() => {
+    if (hostSearchOff && scope !== ALL_EXECUTION_HOSTS_SCOPE) {
+      setTitleOnlyScope(scope)
+    }
+  }, [hostSearchOff, scope])
   const sessions = useMemo(
     () => search.hits.map((hit) => aiVaultSearchHitToSession(hit, hitExecutionHostId(hit, host))),
     [search.hits, host]
@@ -193,6 +238,7 @@ export function useAiVaultPanelSearch(
     searching,
     hasQuery,
     needsLocalConsent,
+    titleOnly: hasQuery && titleOnly,
     host,
     resetKey: JSON.stringify([scope, request])
   }

@@ -46,7 +46,6 @@ export function useAutomationsPageListState({
     [hostCatalog.entries, hostCatalog.resolution]
   )
   const scopedExternal = useScopedExternalAutomations({
-    catalogEntries: hostCatalog.entries,
     scopeEntries: externalScopeEntries
   })
   const unscopedRows = useMemo(() => unscopedAutomationListRows(automations), [automations])
@@ -133,8 +132,7 @@ export function useAutomationsPageListState({
     () => externalAutomationUncheckedNotice(scopedExternal.failures, hostCatalog.entries),
     [hostCatalog.entries, scopedExternal.failures]
   )
-  // Why: a language switch changes collation without touching rows, so the locale
-  // has to reach the memo as a value.
+  // Pass locale into the sort memo because collation can change without row writes.
   const sortLocale = getIntlLocale()
   const sortedListItems = useMemo(
     () =>

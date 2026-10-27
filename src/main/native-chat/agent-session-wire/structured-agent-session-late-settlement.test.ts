@@ -30,6 +30,15 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
+
+import {
+  closeStructuredAgentSessionHandovers,
+  finalizingStructuredAgentSessionInput,
+  structuredAgentSessionHandingOver
+} from './structured-agent-session-handing-over'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -77,7 +86,6 @@ function journal(): AgentSessionJournal {
   ).sessions.get(SESSION)!.journal
 }
 
-/** A send is accepted first; this waits for the delivery loop to hand it to the provider. */
 async function handedOver(clientMessageId: string): Promise<void> {
   await vi.waitFor(async () => {
     expect(
@@ -96,31 +104,39 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
-      acquire: vi.fn(async ({ fence }) => ({
-        process: {
-          hostId: 'local',
-          pid: 4242,
-          processStartTimeMs: 1_700_000_000_000,
-          spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
-        },
-        link: {
-          linkId: `link-${fence}`,
-          handle: { provider: 'codex' as const, threadId: THREAD },
-          origin: 'created' as const,
-          mintedAtFence: fence,
-          observedAt: NOW
-        }
-      })),
-      releaseAcquisition: vi.fn(async () => true),
-      dispatch,
-      closeSession,
-      cancelTurn: vi.fn(async () => ({ cancelled: true })),
-      answerPrompt: vi.fn(async () => undefined),
-      setOption: vi.fn(async () => undefined)
-    },
+    adapter: startsWhenPublished(
+      {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
+        acquire: vi.fn(async ({ fence }) => ({
+          acquisitionGeneration: globalThis.crypto.randomUUID(),
+          process: {
+            hostId: 'local',
+            pid: 4242,
+            processStartTimeMs: 1_700_000_000_000,
+            spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+          },
+          link: {
+            linkId: `link-${fence}`,
+            handle: codexProviderHandle(THREAD),
+            origin: 'created' as const,
+            mintedAtFence: fence,
+            observedAt: NOW
+          }
+        })),
+        releaseAcquisition: vi.fn(async () => true),
+        dispatch,
+        closeSession,
+        cancelTurn: vi.fn(async () => ({ cancelled: true })),
+        answerPrompt: vi.fn(async () => undefined),
+        setOption: vi.fn(async () => undefined)
+      },
+      () => host
+    ),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
@@ -159,7 +175,14 @@ describe('settling a send the provider proves it received after the ack window',
         clientMessageId: params.envelope.clientOperationId,
         providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'early-echo' }
       })
-      expect(events.at(-1)).toMatchObject({
+      const accepted = events.findLast(
+        (event) =>
+          event.type === 'batch' &&
+          event.batch.submissions.some(
+            (entry) => entry.clientMessageId === params.envelope.clientOperationId
+          )
+      )
+      expect(accepted).toMatchObject({
         type: 'batch',
         batch: {
           submissions: [
@@ -172,7 +195,7 @@ describe('settling a send the provider proves it received after the ack window',
       unsubscribe()
     }
     await expect(pending).resolves.toMatchObject({ ok: true })
-    // The late `unknown` from the handover does not reopen the proven acceptance.
+    // Late uncertainty must not undo proven acceptance.
     await vi.waitFor(async () =>
       expect(await submissions()).toMatchObject([
         { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
@@ -184,6 +207,84 @@ describe('settling a send the provider proves it received after the ack window',
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
+
+  it.each(['N-first', 'O-first'] as const)(
+    'retains the original result owner with %s',
+    async (order) => {
+      const original = Promise.withResolvers<AgentSessionDispatchOutcome>()
+      const nested = Promise.withResolvers<void>()
+      const entered = Promise.withResolvers<void>()
+      dispatch.mockImplementationOnce(() => original.promise)
+      const held = journal()
+      const acceptLate = held.acceptLate.bind(held)
+      const acceptance = vi.spyOn(held, 'acceptLate').mockImplementation(async (input) => {
+        entered.resolve()
+        await nested.promise
+        return acceptLate(input)
+      })
+      const params = sendParams('overlapping result and receipt')
+      const id = params.envelope.clientOperationId
+      const sending = host.send(CALLER, params)
+      let settlement: Promise<void> | undefined
+      let observed: Promise<void> | undefined
+      let completed = 0
+      try {
+        await handedOver(id)
+        settlement = host.settleLateDispatch({
+          sessionId: SESSION,
+          clientMessageId: id,
+          providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'overlap-echo' }
+        })
+        void settlement.catch(() => undefined)
+        await entered.promise
+        const completion = closeStructuredAgentSessionHandovers(held)
+        expect(completion).toBeDefined()
+        observed = completion?.then(() => {
+          completed += 1
+        })
+        expect(finalizingStructuredAgentSessionInput(held, id)).toBe(true)
+        expect(structuredAgentSessionHandingOver(held).has(id)).toBe(true)
+
+        if (order === 'N-first') {
+          nested.resolve()
+          await settlement
+          expect(finalizingStructuredAgentSessionInput(held, id)).toBe(true)
+          expect(structuredAgentSessionHandingOver(held).has(id)).toBe(true)
+          await new Promise<void>((resolve) => setImmediate(resolve))
+          expect(completed).toBe(0)
+          original.resolve({ state: 'unknown', reason: 'ack timeout' })
+          await observed
+        } else {
+          original.resolve({ state: 'admitted' })
+          await observed
+          expect(finalizingStructuredAgentSessionInput(held, id)).toBe(false)
+          expect(completed).toBe(1)
+          expect(structuredAgentSessionHandingOver(held).has(id)).toBe(true)
+          expect(closeStructuredAgentSessionHandovers(held)).toBeUndefined()
+          nested.resolve()
+          await settlement
+        }
+
+        await expect(sending).resolves.toMatchObject({ ok: true })
+        await observed
+        expect(completed).toBe(1)
+        expect(finalizingStructuredAgentSessionInput(held, id)).toBe(false)
+        expect(structuredAgentSessionHandingOver(held).has(id)).toBe(false)
+        expect(held.submission(id)).toMatchObject({
+          clientMessageId: id,
+          dispatchState: 'accepted',
+          providerItemId: `claude:${THREAD}:overlap-echo`
+        })
+        expect(dispatch).toHaveBeenCalledTimes(1)
+        expect(acceptance).toHaveBeenCalledTimes(1)
+      } finally {
+        original.resolve({ state: 'unknown', reason: 'cleanup' })
+        nested.resolve()
+        await Promise.allSettled([sending, settlement, observed])
+        acceptance.mockRestore()
+      }
+    }
+  )
 
   it('persists an echo received while the provider is closing', async () => {
     dispatch.mockResolvedValueOnce({ state: 'unknown', reason: 'ack timeout' })
@@ -229,8 +330,7 @@ describe('settling a send the provider proves it received after the ack window',
     expect(await submissions()).toMatchObject([
       { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
     ])
-    // The point of the fix: the client stops rendering Retry, and Retry is what
-    // was delivering the message to the agent a second time.
+    // Retry previously redelivered; the settled send must remain single-dispatch.
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
@@ -246,6 +346,11 @@ describe('settling a send the provider proves it received after the ack window',
       state: 'rejected',
       ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
     })
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: params.envelope.clientOperationId,
+      providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'late-echo' }
+    })
 
     expect(await submissions()).toMatchObject([
       {
@@ -257,12 +362,61 @@ describe('settling a send the provider proves it received after the ack window',
     ])
   })
 
+  it('a receipt after Stop withdrew an unwritten send keeps it cancelled', async () => {
+    dispatch.mockImplementationOnce(
+      (input) =>
+        new Promise((_resolve, reject) => {
+          input.signal?.addEventListener('abort', () => reject(input.signal?.reason), {
+            once: true
+          })
+        })
+    )
+    const params = sendParams('stopped before its write')
+    await host.send(CALLER, params)
+    await handedOver(params.envelope.clientOperationId)
+    expect(dispatch.mock.calls[0]?.[0].signal).toBeDefined()
+
+    const stopped = await host.cancel(CALLER, {
+      envelope: {
+        sessionId: SESSION,
+        clientOperationId: hostTestOperationId(),
+        expectedRuntimeFence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.cancel',
+          sessionId: SESSION,
+          fields: {}
+        })
+      }
+    })
+    expect(stopped).toMatchObject({ ok: true })
+    await vi.waitFor(async () =>
+      expect(await submissions()).toMatchObject([{ dispatchState: 'rejected' }])
+    )
+    const before = journal().cursor()
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: params.envelope.clientOperationId,
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
+    })
+
+    const after = journal().readSince(before)
+    expect(after.ok && after.rows.filter((row) => row.kind === 'dispatch')).toEqual([])
+
+    expect(await submissions()).toMatchObject([
+      {
+        clientMessageId: params.envelope.clientOperationId,
+        dispatchState: 'rejected',
+        rejection: { kind: 'cancelled' }
+      }
+    ])
+  })
+
   it('accepts from the durable echo row when the direct settlement write fails', async () => {
     dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const params = sendParams('settle from provider echo')
     await host.send(CALLER, params)
     await handedOver(params.envelope.clientOperationId)
-    vi.spyOn(journal(), 'resolveDispatch').mockRejectedValueOnce(
+    vi.spyOn(journal(), 'acceptLate').mockRejectedValueOnce(
       new Error('direct settlement write failed')
     )
 
@@ -291,21 +445,25 @@ describe('settling a send the provider proves it received after the ack window',
     ])
   })
 
-  it('leaves an already accepted send alone', async () => {
+  it('leaves an already accepted send alone, adding no row', async () => {
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const params = sendParams('ordinary send')
     await host.send(CALLER, params)
-    await vi.waitFor(async () =>
-      expect(await submissions()).toMatchObject([{ dispatchState: 'accepted' }])
-    )
+    await handedOver(params.envelope.clientOperationId)
+    const before = journal().cursor()
+    const receipt = (uuid: string) =>
+      host.settleLateDispatch({
+        sessionId: SESSION,
+        clientMessageId: params.envelope.clientOperationId,
+        providerIdentity: { provider: 'claude', sessionId: THREAD, uuid }
+      })
 
-    await host.settleLateDispatch({
-      sessionId: SESSION,
-      clientMessageId: params.envelope.clientOperationId,
-      providerIdentity: { provider: 'claude', sessionId: THREAD, uuid: 'a-different-uuid' }
-    })
+    await Promise.all([receipt('echo-row'), receipt('echo-row')])
+    await receipt('a-different-uuid')
 
-    expect(await submissions()).toMatchObject([
-      { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
+    const after = journal().readSince(before)
+    expect(after.ok && after.rows.filter((row) => row.kind === 'dispatch')).toMatchObject([
+      { state: 'accepted', providerItemId: `claude:${THREAD}:echo-row` }
     ])
   })
 

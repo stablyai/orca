@@ -1,6 +1,6 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
-// A chat at rest, through the RPC surface a client actually calls: opening it starts nothing, what
-// it can answer without an agent it answers, and the first send is what starts one.
+// Exercise real chat RPC: reads at rest start nothing; the first message starts the agent.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
@@ -21,17 +21,18 @@ import {
   restTestSend,
   type RestTestRig
 } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import * as providerSupport from '../../../native-chat/agent-session-wire/structured-agent-session-provider-support'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
-import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
+import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
 import { discardStructuredWorkerSession } from './orchestration-structured-worker-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import {
+  liveTestJournalRows,
   openTestJournalHostDatabase,
   updateTestJournalRowJson
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 const CLIENT = {
   clientId: 'device-1',
@@ -79,9 +80,7 @@ beforeEach(async () => {
   vi.spyOn(runtime, 'getClientSettings').mockImplementation(
     () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC gate reads only this one setting.
-      ({ experimentalStructuredNativeChat: true }) as ReturnType<
-        OrcaRuntimeService['getClientSettings']
-      >
+      ({ experimentalNativeChat: true }) as ReturnType<OrcaRuntimeService['getClientSettings']>
   )
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
 })
@@ -124,7 +123,6 @@ describe('opening a chat at rest (P2-01)', () => {
     expect(held).toMatchObject({ ok: true, result: { held: true } })
   })
 
-  // Worktree activation asks this for every chat tab in the worktree.
   it('answers the owner check from the record without opening the chat', async () => {
     await restingChat()
 
@@ -150,7 +148,6 @@ describe('opening a chat at rest (P2-01)', () => {
 
 describe('the accessor', () => {
   it('opens a closed conversation once, however many readers arrive together (P2-02)', async () => {
-    // Written by the provider alone, so nothing but the readers below ever opens it here.
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
     expect(attached.ok).toBe(true)
     rig.adapter.acquire.mock.calls
@@ -218,22 +215,6 @@ describe('the accessor', () => {
         }
       }
     })
-
-    await restingChat()
-    vi.spyOn(providerSupport, 'adapterSupportsRecord').mockReturnValue(false)
-    const [unsupported] = await call('agentSession.history', {
-      sessionId: SESSION,
-      direction: 'tail'
-    })
-    expect(unsupported).toMatchObject({
-      ok: false,
-      error: {
-        // Not a passthrough code: released clients match the message, as before.
-        code: 'runtime_error',
-        message: 'structured_agent_session_unsupported',
-        data: { refusal: { details: { reason: 'hostUnsupported' } } }
-      }
-    })
   })
 
   it('refuses a read whose journal will not open with the classified reason, never the storage text', async () => {
@@ -270,7 +251,7 @@ describe('the accessor', () => {
         expect(reply).toMatchObject({
           ok: false,
           error: {
-            // Not a passthrough code: released clients read the message, which stays the code.
+            // Released clients still read this refusal code from the message, not passthrough code.
             code: 'runtime_error',
             message: 'agent_session_journal_unreadable',
             data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
@@ -311,19 +292,34 @@ describe('the accessor', () => {
     expect(logged()).toEqual([denied, exhausted])
   })
 
-  it('opens a corrupt journal through the recovering open and still accepts a send (P2-03)', async () => {
+  it('refuses a damaged journal as unloadable at subscribe and send, and keeps its rows (P2-03)', async () => {
     await foundRestTestChat(rig)
     await rig.host.flushAllStreamedEvents()
-    // A row that no longer parses: the recovering open keeps the readable prefix and rebuilds.
     updateTestJournalRowJson(openTestJournalHostDatabase(rig.root).db, SESSION, 2, '}{')
     await rig.restart()
     setStructuredAgentSessionHost(rig.host)
 
     const frames = await call('agentSession.subscribe', { sessionId: SESSION })
-    expect(frames.some((frame) => !frame.ok)).toBe(false)
-    expect(frames.find((frame) => frame.ok)).toMatchObject({ result: { type: 'snapshot' } })
+    expect(frames.find((frame) => !frame.ok)).toMatchObject({
+      error: {
+        data: {
+          refusal: {
+            code: 'agent_session_journal_unreadable',
+            details: { reason: 'journalCorrupt' }
+          }
+        }
+      }
+    })
     const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
-    expect((await rig.host.send(CALLER, restTestSend('after the repair', fence))).ok).toBe(true)
+    expect(await rig.host.send(CALLER, restTestSend('after the damage', fence))).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
+    })
+    expect(
+      liveTestJournalRows(openTestJournalHostDatabase(rig.root).db, SESSION).find(
+        (row) => row.seq === 2
+      )?.rowJson
+    ).toBe('}{')
   })
 
   it('subscribes an old mobile client that holds first even when no agent can start (P2-06)', async () => {
@@ -369,9 +365,8 @@ describe('options at rest', () => {
 
   it('answers the provider-level features of a chat at rest (P2-17)', async () => {
     await restingChat()
+    setStructuredAgentSessionHost(await rig.restart({ agents: claudeAndCodexDeclared() }))
     Object.assign(rig.host.deps.adapter, {
-      supportsThreadGoal: (_id: string, agent?: string) => agent === 'codex',
-      recordsContextUsage: (_id: string, agent?: string) => agent === 'claude',
       rewindSupport: (_id: string, agent?: string) =>
         agent === 'codex' ? { supported: true } : { supported: false, reason: 'unsupported' }
     })
@@ -419,7 +414,7 @@ describe('an agent exit', () => {
         { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     await rig.host.flushStreamedEvents(SESSION)
-    // The exit's own write and the retry recording the exit queues are both refused.
+    // Refuse both the exit write and its queued retry to test retained death evidence.
     vi.spyOn(open.journal, 'appendLifecycleBatch')
       .mockRejectedValueOnce(new Error('disk full'))
       .mockRejectedValueOnce(new Error('disk full'))
@@ -470,9 +465,8 @@ describe('every close withdraws what is queued (P2-29)', () => {
     ]
   ])('%s rejects a message accepted before any start, and starts nothing', async (_, close) => {
     await restingChat()
-    // The delivery loop has not reached its first start yet.
     const { loop } = rig.host.collaboratorsForTests().conversationDelivery
-    vi.spyOn(loop, 'wake').mockImplementation(() => undefined)
+    vi.spyOn(loop, 'wake').mockImplementation(() => Promise.resolve())
     const reader: unknown[] = []
     await rig.host.subscribe({
       id: 'reader',

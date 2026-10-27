@@ -1,4 +1,5 @@
 import type { ClassifiedError } from '../classified-error'
+import type { ExecutionHostId } from '../execution-host'
 import type { PRCheckDetail } from './check-types'
 import type { GitHubIssueTimelineItem, PRComment } from './comment-types'
 import type {
@@ -23,15 +24,11 @@ export type GitHubWorkItem = {
   labels: string[]
   updatedAt: string
   author: string | null
-  // Why: GHE user logins don't exist on github.com, so the github.com/{login}.png
-  // fallback 404s. Carry the API-provided avatar_url so github.com + Enterprise
-  // both render; absent on the gh-pr-view path (gh omits avatar), then the UI
-  // falls back to the login URL and finally an initials placeholder. See #8784.
+  // Use API avatars for GHE logins absent on github.com (#8784). gh-pr-view omits them; UI falls back through login URL to initials.
   authorAvatarUrl?: string
   branchName?: string
   baseRefName?: string
-  // Why: PR checks are keyed by head commit; carrying this lets task rows use
-  // the cached check-runs endpoint instead of one `gh pr checks` call per row.
+  // Head SHA enables cached check-run requests instead of per-row gh pr checks.
   headSha?: string
   prRepo?: GitHubRepositoryIdentity
   additions?: number
@@ -49,20 +46,16 @@ export type GitHubWorkItem = {
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
-  // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
-  // The Start-from picker passes this to resolvePrBase so fork heads use
-  // refs/pull/<N>/head for creation and a separate PR-head push target.
+  // Fork heads use refs/pull/<N>/head for creation and a separate push target in resolvePrBase.
   isCrossRepository?: boolean
-  /** Why: required because the cross-repo view merges items from every selected
-   *  repo — the table row's repo pill and the "open in browser" fallback need
-   *  to know which repo an item came from. Stamped by the renderer fetcher
-   *  (`fetchWorkItems`) and by optimistic stubs on the new-issue path. */
+  /** Renderer fetches/optimistic stubs stamp origin repo for cross-repo pills and open-in-browser routing. */
   repoId: string
+  /** Repo ids can repeat across hosts; stamp the producing host so actions cannot target a same-id twin. */
+  repoHostId?: ExecutionHostId
 }
 
 export type GitHubWorkItemDetails = {
-  // Why: main-process doesn't know Orca's Repo.id, so this inner item omits
-  // repoId. The renderer stamps it when routing the details through the store.
+  // Main lacks Orca Repo.id; renderer stamps it when storing details.
   item: Omit<GitHubWorkItem, 'repoId'>
   body: string
   comments: PRComment[]
@@ -83,47 +76,23 @@ export type GitHubWorkItemDetails = {
   assignees?: string[]
 }
 
-/**
- * Envelope for `gh:listWorkItems`. Carries resolved issue/PR sources so the
- * renderer can render the "Issues from owner/repo" indicator without an
- * extra IPC round-trip, and per-source classified errors so the UI can show
- * a retryable banner when (e.g.) a private upstream 403s.
- *
- * Why piggyback instead of adding `gh:resolveWorkItemSources`: the renderer
- * already round-trips this endpoint on every Tasks refresh, and the source
- * data is a 2-field-per-side metadata add — cheaper than another IPC call.
- *
- * Invariant: `items` always contains whatever succeeded; `errors.issues` indicates
- * the issues-side fetch failed, but any PR-side items that succeeded are still
- * present in `items`. Consumers should render `items` alongside the error banner.
- */
+/** Piggyback issue/PR sources on Tasks refresh to avoid another IPC round trip. Per-source failures preserve successful items;
+ * render items alongside error banners (e.g. private upstream 403), never discard the other side’s success. */
 export type ListWorkItemsResult<T> = {
   items: T[]
   sources: {
     issues: GitHubOwnerRepo | null
     prs: GitHubOwnerRepo | null
-    /** Raw `origin` remote resolved for this repo, independent of the
-     *  user's preference. Required-nullable so the renderer can compare raw
-     *  remote candidates without inferring origin from the effective PR
-     *  source. */
+    /** Raw origin independent of preferences; compare candidates without inferring from effective PR source. */
     originCandidate: GitHubOwnerRepo | null
-    /** Raw `upstream` remote resolved for this repo, independent of the
-     *  user's preference. Present so the renderer's issue-source selector
-     *  can always decide whether to render (upstream exists & differs from
-     *  origin) and show both slugs in its tooltips, even when the user has
-     *  picked 'origin' and `sources.issues` has collapsed onto origin. */
+    /** Raw upstream independent of preferences; selector visibility/tooltips need it even when effective issues source is origin. */
     upstreamCandidate: GitHubOwnerRepo | null
   }
   errors?: {
     issues?: ClassifiedError
     prs?: ClassifiedError
   }
-  /** True when the user's per-repo preference was `'upstream'` but no upstream
-   *  remote is configured, so the resolver fell back to origin. Renderer uses
-   *  this to surface a one-time-per-session toast. Omitted when absent so
-   *  existing consumers and test fixtures don't care about it.
-   *  Typed as `?: true` (not `?: boolean`) to encode the invariant "present
-   *  iff fell-back" — an explicit `false` write would be a bug, so make it a
-   *  compile error. */
+  /** Present only when requested upstream was missing and origin was used; renderer shows a once-per-session toast.
+   * Optional literal true preserves legacy consumers and forbids erroneous explicit false writes. */
   issueSourceFellBack?: true
 }

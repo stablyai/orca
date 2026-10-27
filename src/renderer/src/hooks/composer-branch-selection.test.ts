@@ -119,8 +119,7 @@ describe('resolveComposerBranchSelection', () => {
   })
 
   it('does not preserve a slash typed name outside branch mode (gate off)', () => {
-    // Why: only branch mode opts into slash preservation; every other mode keeps
-    // deriving the branch from the sanitized workspace name.
+    // Only branch mode preserves slashes; other modes sanitize the workspace name.
     expect(
       resolveComposerBranchNameOverrideForCreate({
         branchNameOverride: undefined,
@@ -133,8 +132,7 @@ describe('resolveComposerBranchSelection', () => {
   })
 
   it('keeps a resolver-provided override even in branch mode with a slash name', () => {
-    // Why: a picked branch (override set) wins over the typed slash name so the
-    // branch-mode gate never hijacks an explicit branch selection.
+    // Explicit picked-branch overrides must beat typed branch-mode names.
     expect(
       resolveComposerBranchNameOverrideForCreate({
         branchNameOverride: 'feature/picked',
@@ -249,8 +247,7 @@ describe('resolveComposerReuseOverride', () => {
   })
 
   it('keeps the override for a remote-only ref even if its local name is busy', () => {
-    // Why: a remote-only ref (ref !== local name) creates a fresh local tracking
-    // branch, so the busy check on the local name must not drop its override.
+    // Remote-only refs need fresh local tracking branches; local-name busy checks must preserve their override.
     expect(
       resolveComposerReuseOverride({
         refName: 'origin/feature-x',
@@ -263,6 +260,32 @@ describe('resolveComposerReuseOverride', () => {
 })
 
 describe('resolveComposerBranchReuse', () => {
+  it('reuses a qualified local selector but does not reuse a qualified remote selector', () => {
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'refs/heads/feature/加',
+        localBranchName: 'feature/加',
+        selectionProducedOverride: true,
+        branchCheckedOutElsewhere: false
+      })
+    ).toEqual({ reuseEligibleBranch: 'feature/加', defaultReuse: true })
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'refs/remotes/origin/feature/加',
+        localBranchName: 'feature/加',
+        selectionProducedOverride: true,
+        branchCheckedOutElsewhere: false
+      })
+    ).toEqual({ reuseEligibleBranch: null, defaultReuse: false })
+    expect(
+      resolveComposerReuseOverride({
+        refName: 'refs/heads/feature/加',
+        localBranchName: 'feature/加',
+        branchNameOverride: 'feature/加',
+        branchCheckedOutElsewhere: true
+      })
+    ).toBeUndefined()
+  })
   it('marks an existing local branch reusable and defaults reuse ON for an auto-derived name', () => {
     expect(
       resolveComposerBranchReuse({
@@ -298,8 +321,7 @@ describe('resolveComposerBranchReuse', () => {
   })
 
   it('keeps a local branch reuse-eligible but defaults reuse OFF when the user typed a custom name', () => {
-    // Why: no override means the user is branching off the ref with a custom
-    // worktree name; reuse stays opt-in (checkbox still shown via eligibility).
+    // Without an override, custom-name creation branches off the ref; reuse remains opt-in.
     expect(
       resolveComposerBranchReuse({
         refName: 'feature-x',

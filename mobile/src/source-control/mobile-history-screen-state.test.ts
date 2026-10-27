@@ -13,8 +13,7 @@ const row: MobileCommitRow = {
 
 describe('resolveMobileHistoryScreenView', () => {
   it('shows waiting (not an endless spinner) when disconnected with nothing loaded', () => {
-    // Regression (STA-1511): the load effect no-ops while disconnected, so
-    // rows stay null forever — the screen must offer a retry, not a spinner.
+    // Offline cold loads cannot run; show Retry instead of an endless spinner.
     expect(resolveMobileHistoryScreenView({ connected: false, rows: null, error: null })).toEqual({
       kind: 'waiting'
     })

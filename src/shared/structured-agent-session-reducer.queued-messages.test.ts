@@ -1,6 +1,4 @@
-// The `queuedMessages` claim: live frames own it, an omitted field means
-// "unchanged", history never replaces a newer live list, and absence stays
-// absence (an older host makes no claim at all).
+// Live lists own queue state: omission means unchanged, stale history cannot overwrite them, and older-host absence stays absent.
 
 import { describe, expect, it } from 'vitest'
 import type {
@@ -46,7 +44,8 @@ function page(queuedMessages?: AgentSessionQueuedMessage[] | null): AgentSession
 
 function snapshot(
   queuedMessages?: AgentSessionQueuedMessage[] | null,
-  queuePause?: AgentSessionQueuePause | null
+  queuePause?: AgentSessionQueuePause | null,
+  nextQueuedMessageId?: string | null
 ): AgentSessionSubscribeEvent {
   return {
     type: 'snapshot',
@@ -54,7 +53,8 @@ function snapshot(
     page: page(),
     fence: 1,
     ...(queuedMessages !== undefined ? { queuedMessages } : {}),
-    ...(queuePause !== undefined ? { queuePause } : {})
+    ...(queuePause !== undefined ? { queuePause } : {}),
+    ...(nextQueuedMessageId !== undefined ? { nextQueuedMessageId } : {})
   }
 }
 
@@ -173,6 +173,18 @@ describe('structured agent session reducer: queuedMessages', () => {
       event: batch(3, [queued('draft-1', 1)])
     })
     expect(resumed.queuePause).toBeNull()
+  })
+
+  it("keeps the queue's next card with the list it rode with, from a snapshot and a batch", () => {
+    const named = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: snapshot([queued('draft-1', 1)], null, 'draft-1')
+    })
+    expect(named.nextQueuedMessageId).toBe('draft-1')
+    const kept = reduceStructuredAgentSession(named, { type: 'event', event: batch(2) })
+    expect(kept.nextQueuedMessageId).toBe('draft-1')
+    const sent = reduceStructuredAgentSession(kept, { type: 'event', event: batch(3, []) })
+    expect(sent.nextQueuedMessageId).toBeNull()
   })
 
   it('changes state for a pause-only update at an unchanged cursor, journal and list', () => {

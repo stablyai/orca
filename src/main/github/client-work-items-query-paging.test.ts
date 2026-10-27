@@ -78,7 +78,6 @@ vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
   noteRateLimitSpend: noteRateLimitSpendMock,
   getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' })),
-  // Mirror production: shared-scope calls delegate to the global guard/spend.
   repositoryRateLimitGuard: repositoryRateLimitGuardMock,
   noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock,
   spendsSharedGitHubComQuota: spendsSharedGitHubComQuotaMock
@@ -88,8 +87,7 @@ vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
   return {
     ...actual,
-    // Why: these suites drive source resolution through the legacy gh-utils
-    // mocks; bridge the hosted seams onto the same mocks.
+    // Bridge hosted source resolution to the suite's gh-utils fixtures.
     resolveIssueGitHubApiRepositorySource: (
       repoPath: string,
       preference: unknown,
@@ -115,23 +113,17 @@ vi.mock('./github-api-repository', async (importOriginal) => {
   }
 })
 
-import {
-  countWorkItems,
-  listWorkItems,
-  _resetMergeQueueCacheForTests,
-  _resetOwnerRepoCache
-} from './client'
+import { countWorkItems } from './client/list/count-work-items'
+import { listWorkItems } from './client/list/list-work-items'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { _resetOwnerRepoCache } from './gh-utils'
 import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github/work-items-query-bounds'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
-// Why: split from client-work-items.test.ts to keep both suites under the
-// max-lines cap; this file owns query/paging request-shaping cases.
 describe('listWorkItems query paging', () => {
   beforeEach(() => {
     execFileAsyncMock.mockReset()
@@ -151,9 +143,7 @@ describe('listWorkItems query paging', () => {
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
-    // Why: preference-aware `listWorkItems` calls `resolveIssueSource`.
-    // Route through the same `getIssueOwnerRepoMock` so existing tests that
-    // only set up `getIssueOwnerRepoMock` continue to work.
+    // Preserve one source lookup through the preference-aware resolver.
     resolveIssueSourceMock.mockImplementation(async () => ({
       source: await getIssueOwnerRepoMock(),
       fellBack: false
@@ -273,7 +263,7 @@ describe('listWorkItems query paging', () => {
   it('lifts a swallowed PR-side failure onto errors.prs instead of reading as end-of-data', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    // Non-availability failure (plain 403): swallowed into [], must still surface.
+    // A forbidden source must remain distinguishable from an empty listing.
     ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403: Forbidden'))
 
     const envelope = await listWorkItems('/repo-root', 10, 'is:pr is:open', 2)

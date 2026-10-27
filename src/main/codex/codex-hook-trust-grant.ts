@@ -9,14 +9,13 @@ import {
   emitCodexTrustGrantTelemetry,
   type CodexTrustGrantErrorClass,
   type CodexTrustGrantFallbackReason,
-  type CodexTrustGrantTelemetryLane,
   type CodexTrustGrantVerifyClass
 } from './codex-trust-grant-telemetry'
 import {
   codexAppServerCapabilityCache,
   getCodexAppServerHostKey,
   type CodexAppServerHostKey
-} from './codex-app-server-capability-cache'
+} from './app-server/codex-app-server-capability-cache'
 import {
   writeCodexTrustGrantLedgerHome,
   type CodexTrustGrantBinaryStamp,
@@ -42,18 +41,11 @@ import {
   startCodexTrustGrantCooldown
 } from './codex-trust-grant-cooldown'
 
-export { CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS } from './codex-trust-grant-cooldown'
-
-// Why: a cold `codex app-server` on a loaded Mac took over 10 s; a background
-// grant blocks no launch, so it can wait for one. The session's own kill timer
-// bounds the whole grant: everything before it is synchronous on native.
-export const CODEX_BACKGROUND_TRUST_GRANT_TIMEOUT_MS = 30_000
-
-/** Ops escape hatch (not a setting): forces the fallback lane for every trust grant. */
+// Operational escape hatch, separate from settings, to force computed-trust fallback.
 const DISABLE_ENV_FLAG = 'ORCA_DISABLE_CODEX_TRUST_RPC'
 
 export type { CodexManagedTrustGrantPlan }
-export type { CodexTrustGrantFallbackReason, CodexTrustGrantTelemetryLane }
+export type { CodexTrustGrantFallbackReason }
 
 export type CodexManagedTrustGrantOutcome =
   | { lane: 'rpc'; entries: CodexTrustEntry[] }
@@ -78,9 +70,7 @@ type GrantSessionRunner = (
   request: CodexHookTrustGrantRequest
 ) => Promise<CodexHookTrustGrantSessionResult>
 
-// Why (#16441): the session runs in-process on the main thread's event loop.
-// It used to be forked through spawnSync purely to donate an event loop to a
-// deliberately-blocked parent, which froze the window for the whole deadline.
+// #16441: keep sessions async; spawnSync blocked the UI for the entire deadline.
 let runSession: GrantSessionRunner = runCodexHookTrustGrantSession
 
 function fallback(
@@ -102,7 +92,7 @@ function fallback(
   emitCodexTrustGrantTelemetry({
     outcome: reason === 'verify-failed' ? 'verify_failed' : 'fallback',
     hostKind: plan.host.kind,
-    lane: plan.telemetryLane,
+    lane: 'managed',
     reason,
     ...(errorClass !== undefined ? { errorClass } : {}),
     ...(verifyClass !== undefined ? { verifyClass } : {})
@@ -118,8 +108,6 @@ type GrantAttempt = {
   startedAtMs: number
 }
 
-/** Post-session verification, ledger persistence and telemetry. Never throws for
- *  a verify failure — every rejection is a fallback. */
 function completeGrant(
   attempt: GrantAttempt,
   result: CodexHookTrustGrantSessionResult
@@ -129,9 +117,7 @@ function completeGrant(
     detail: unknown,
     verifyClass: CodexTrustGrantVerifyClass
   ): CodexManagedTrustGrantOutcome => {
-    if (!plan.background) {
-      startCodexTrustGrantCooldown(hostKey)
-    }
+    startCodexTrustGrantCooldown(hostKey)
     return fallback(plan, 'verify-failed', detail, verifyClass)
   }
   if (result.outcome === 'verify-failed') {
@@ -167,7 +153,7 @@ function completeGrant(
       entries: ledgerRecord
     })
   } catch (error) {
-    // Why: a ledger write failure only costs an extra session next launch.
+    // Ledger persistence failure only costs another session next launch.
     console.warn('[codex-trust-grant] failed to persist grant ledger', error)
   }
   diagnostics.granted += 1
@@ -178,7 +164,7 @@ function completeGrant(
   emitCodexTrustGrantTelemetry({
     outcome: 'granted',
     hostKind: plan.host.kind,
-    lane: plan.telemetryLane
+    lane: 'managed'
   })
   return { lane: 'rpc', entries: grantedEntries }
 }
@@ -190,9 +176,7 @@ async function runGrantAttempt(
   hostKey: CodexAppServerHostKey,
   beforeSession: (() => void) | undefined
 ): Promise<CodexManagedTrustGrantOutcome> {
-  // Why no config.toml restore on failure: the session writes trust only at
-  // Orca's own keys, bound to Orca's command by its hash, and each caller settles
-  // those keys itself. A restore would undo anything saved meanwhile.
+  // Callers settle Orca's own hash-bound keys; restoring config would undo concurrent user saves.
   const attempt: GrantAttempt = {
     plan,
     expected,
@@ -201,13 +185,8 @@ async function runGrantAttempt(
     startedAtMs: Date.now()
   }
   let unsupportedError: unknown
-  // Why unshared: a launch's inline grant must not wait behind a background
-  // session that may take a cold app-server's full budget.
-  const runWithCapability = plan.background
-    ? codexAppServerCapabilityCache.runUnshared.bind(codexAppServerCapabilityCache)
-    : codexAppServerCapabilityCache.runWithFallback.bind(codexAppServerCapabilityCache)
   try {
-    return await runWithCapability(
+    return await codexAppServerCapabilityCache.runWithFallback(
       hostKey,
       async () => {
         beforeSession?.()
@@ -217,17 +196,14 @@ async function runGrantAttempt(
             resolvedHost.buildRequest({
               runtimeHomePath: plan.runtimeHomePath,
               managedCommand: plan.managedCommand,
-              expectedTrustKeys: expected.map(({ normalizedKey }) => normalizedKey),
-              useDefaultCodexHome: plan.useDefaultCodexHome,
-              ...(plan.background ? { timeoutMs: CODEX_BACKGROUND_TRUST_GRANT_TIMEOUT_MS } : {})
+              expectedTrustKeys: expected.map(({ normalizedKey }) => normalizedKey)
             })
           )
         )
       },
       async () => {
         if (unsupportedError === undefined) {
-          // Why: a concurrent launch's probe proved the surface missing while
-          // this one waited behind it.
+          // Another launch proved RPC support absent while this probe waited.
           return fallback(plan, 'unsupported-cached')
         }
         clearCodexTrustGrantCooldown(hostKey)
@@ -242,39 +218,14 @@ async function runGrantAttempt(
       }
     )
   } catch (error) {
-    if (!plan.background) {
-      startCodexTrustGrantCooldown(hostKey)
-    }
+    startCodexTrustGrantCooldown(hostKey)
     return fallback(plan, 'error', error)
   }
 }
 
 /**
- * The session-free half of a grant: Codex's recorded hashes for these entries
- * when the ledger shows they are still current, or null.
- */
-export async function findCurrentManagedCodexHookTrust(
-  plan: CodexManagedTrustGrantPlan
-): Promise<CodexTrustEntry[] | null> {
-  try {
-    if (process.env[DISABLE_ENV_FLAG] === '1' || plan.managedEntries.length === 0) {
-      return null
-    }
-    const resolvedHost = await resolveCodexTrustGrantHost(plan.host)
-    return findLedgerGrant(plan, buildExpectedEntries(plan), resolvedHost.binaryStamp)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Grants trust for Orca's managed Codex hooks through codex's own app-server
- * RPCs, verified by re-list. Returns the granted entries carrying Codex's
- * verbatim hashes, or a fallback marker — a managed-home caller then writes
- * computeTrustedHash trust, and the real-home caller withdraws its entry. Never
- * throws: any unexpected failure is a fallback, because hook install is
- * best-effort launch prep. `beforeSession` runs, under the caller's lane, only
- * when a session will run: never on a ledger hit, cooldown or cached fallback.
+ * Return verified Codex hashes or a fallback marker without throwing; callers compute fallback trust.
+ * beforeSession runs only for actual sessions, never ledger hits, cooldowns or cached fallbacks.
  */
 export async function grantManagedCodexHookTrust(
   plan: CodexManagedTrustGrantPlan,
@@ -295,8 +246,7 @@ export async function grantManagedCodexHookTrust(
       return { lane: 'rpc', entries: ledgerEntries }
     }
     if (readCodexStateDbBackfillPendingState(plan.runtimeHomePath) !== 'not-pending') {
-      // Why: a short trust RPC can refresh Codex's abandoned lease and strand every pane again;
-      // an unreadable index may be mid-backfill, so it takes the same fallback.
+      // Avoid refreshing abandoned backfill leases; unreadable indexes may also be mid-backfill.
       return fallback(plan, 'retry-cached')
     }
 
@@ -304,11 +254,10 @@ export async function grantManagedCodexHookTrust(
     if (!codexAppServerCapabilityCache.shouldTry(hostKey)) {
       return fallback(plan, 'unsupported-cached')
     }
-    if (!plan.background && isCodexTrustGrantCoolingDown(hostKey)) {
+    if (isCodexTrustGrantCoolingDown(hostKey)) {
       return fallback(plan, 'retry-cached')
     }
-    // Why no lane across the session: Codex writes its own records, and a held
-    // lane would queue every launch's config.toml write behind a cold app-server.
+    // Codex writes its own records; holding a config lane here would block launches behind cold startup.
     return await runGrantAttempt(plan, expected, resolvedHost, hostKey, beforeSession)
   } catch (error) {
     return fallback(plan, 'error', error)

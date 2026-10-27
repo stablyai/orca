@@ -1,29 +1,37 @@
-// The rail's tick set: one entry per user message in the conversation.
-//
-// Loaded messages come from slots rather than messages because the rail's whole
-// job is to point at a row, and a message that takes no slot has no row to point
-// at. Slot indexes are also what the virtualizer counts, so an entry can be
-// compared against a virtual item without a second lookup table. Messages older
-// than the loaded window come from the host's outline and have no slot yet.
+// Index loaded prompts by virtualizer slots; older outline prompts have no slot until paging loads them.
 
-import { nativeChatUserMessagePreview } from '../../../../shared/agent-session-conversation-outline'
+import {
+  nativeChatTurnReplyPreviews,
+  nativeChatUserMessagePreview
+} from '../../../../shared/agent-session/agent-session-conversation-outline'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
-/** Ticks past this are sampled away: a taller rail than the viewport cannot be
- *  read at a glance, which is the only thing the rail is for. */
-export const NATIVE_CHAT_RAIL_MAX_TICKS = 20
+/** Ticks up to this count sit at the roomy pitch; past it they pack tight. */
+export const NATIVE_CHAT_RAIL_ROOMY_TICKS = 20
+/** The tight pitch as the rail draws it: a 3px tick inside `py-0.5`. */
+const RAIL_TIGHT_PITCH_PX = 7
+const RAIL_VIEWPORT_SHARE = 0.7
 
-/** Below this a rail is noise — two ticks say nothing a scrollbar doesn't. */
-export const NATIVE_CHAT_RAIL_MIN_ITEMS = 3
+/** Fit ticks within the viewport share before sampling; never shrink below roomy capacity. */
+export function nativeChatRailTickCapacity(viewportHeight: number): number {
+  return Math.max(
+    NATIVE_CHAT_RAIL_ROOMY_TICKS,
+    Math.floor((viewportHeight * RAIL_VIEWPORT_SHARE) / RAIL_TIGHT_PITCH_PX)
+  )
+}
 
 export type NativeChatRailItem = {
   id: string
-  /** Index into the slot list, i.e. the virtualizer's own index. Null while the
-   *  message is known only from the outline: older history that is not loaded. */
+  /** Virtualizer slot index, or null for unloaded outline-only history. */
   slotIndex: number | null
   /** Preview prose, whitespace collapsed. Empty when the message is images only. */
   text: string
   hasImages: boolean
+  /** The host's preview of the agent's reply, on an outline item only. */
+  reply?: string
+  /** On an outline item that did not open its turn: the message that did. */
+  turnKey?: string
 }
 
 /** A user message older than the loaded window, oldest first. */
@@ -31,6 +39,31 @@ export type NativeChatRailOutlineEntry = {
   id: string
   text: string
   hasImages: boolean
+  reply?: string
+  turnKey?: string
+}
+
+/** Read turn rows before folding so hidden activity still supplies reply previews. */
+export type NativeChatRailTurnRows = {
+  messages: readonly NativeChatMessage[]
+  turnKeys: readonly (string | undefined)[]
+}
+
+/** Resolve replies only on preview to avoid rebuilding ticks on every stream frame; loaded turn tails outrank host previews. */
+export function nativeChatRailReplyPreview(
+  { messages, turnKeys }: NativeChatRailTurnRows,
+  items: readonly NativeChatRailItem[],
+  id: string
+): string {
+  const row = messages.findIndex((message) => message.id === id)
+  const item = items.find((candidate) => candidate.id === id)
+  // Unloaded prompts default to their own turn; steers use the host’s opener key.
+  const turnKey = row === -1 ? (item?.turnKey ?? id) : turnKeys[row]
+  const loaded =
+    turnKey === undefined
+      ? undefined
+      : nativeChatTurnReplyPreviews(messages, turnKeys, turnKey).get(turnKey)
+  return loaded ?? item?.reply ?? ''
 }
 
 export function buildNativeChatRailItems(
@@ -39,7 +72,13 @@ export function buildNativeChatRailItems(
 ): readonly NativeChatRailItem[] {
   const items: NativeChatRailItem[] = []
   for (const [slotIndex, slot] of slots.entries()) {
-    if (slot.kind !== 'message' || slot.message.role !== 'user') {
+    // Exclude withdrawn sends and subagent prompts so rail contents do not depend on section expansion.
+    if (
+      slot.kind !== 'message' ||
+      slot.depth !== 0 ||
+      slot.message.role !== 'user' ||
+      slot.message.stoppedBeforeStart === true
+    ) {
       continue
     }
     const preview = nativeChatUserMessagePreview(slot.message.blocks)
@@ -59,8 +98,7 @@ export function buildNativeChatRailItems(
     : items
 }
 
-/** Outline entries first, then the loaded items, so the rail maps the whole thread.
- *  A loaded item replaces its outline entry: it carries the slot a jump needs. */
+/** Merge outline then loaded items, replacing outline copies with jump-capable slot identities. */
 export function mergeNativeChatRailOutline(
   outline: readonly NativeChatRailOutlineEntry[] | null,
   loaded: readonly NativeChatRailItem[]
@@ -78,39 +116,44 @@ export function mergeNativeChatRailOutline(
   return unloaded.length === 0 ? loaded : [...unloaded, ...loaded]
 }
 
-/** Evenly spaced ticks across the whole thread, always including both ends and
- *  the active one. Keeping the ends fixed is what makes the rail read as a map
- *  of the conversation rather than a window onto part of it. */
+/** Sample evenly while keeping both ends, the active tick and every focused/previewed tick. */
 export function selectNativeChatRailTicks({
   items,
-  activeId
+  keepIds = [],
+  maxTicks = NATIVE_CHAT_RAIL_ROOMY_TICKS
 }: {
   items: readonly NativeChatRailItem[]
-  activeId: string | null
+  keepIds?: readonly (string | null)[]
+  maxTicks?: number
 }): readonly NativeChatRailItem[] {
-  if (items.length <= NATIVE_CHAT_RAIL_MAX_TICKS) {
+  if (items.length <= maxTicks) {
     return items
   }
 
   const maxIndex = items.length - 1
   const sampled = new Set<number>()
-  for (let slot = 0; slot < NATIVE_CHAT_RAIL_MAX_TICKS; slot += 1) {
-    sampled.add(Math.round((slot * maxIndex) / (NATIVE_CHAT_RAIL_MAX_TICKS - 1)))
+  for (let slot = 0; slot < maxTicks; slot += 1) {
+    sampled.add(Math.round((slot * maxIndex) / (maxTicks - 1)))
   }
 
-  const activeIndex = activeId === null ? -1 : items.findIndex((item) => item.id === activeId)
-  if (activeIndex >= 0 && !sampled.has(activeIndex)) {
-    sampled.add(activeIndex)
-    // Drop the neighbour nearest the active tick, never an end: losing an end
-    // would make the rail claim the thread starts or stops somewhere it doesn't.
+  const kept = new Set<number>([0, maxIndex])
+  for (const id of keepIds) {
+    const index = id === null ? -1 : items.findIndex((item) => item.id === id)
+    if (index >= 0) {
+      kept.add(index)
+    }
+  }
+  for (const keep of kept) {
+    if (sampled.has(keep)) {
+      continue
+    }
+    sampled.add(keep)
+    // Evict only unkept interior neighbors so sampling cannot imply a false thread start/end.
     let evict: number | null = null
     let evictDistance = Number.POSITIVE_INFINITY
     for (const index of sampled) {
-      if (index === activeIndex || index === 0 || index === maxIndex) {
-        continue
-      }
-      const distance = Math.abs(index - activeIndex)
-      if (distance < evictDistance) {
+      const distance = Math.abs(index - keep)
+      if (!kept.has(index) && distance < evictDistance) {
         evict = index
         evictDistance = distance
       }

@@ -1,3 +1,16 @@
+import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'
+import {
+  hostClockField,
+  replacePage,
+  mergeItems,
+  liveItemsWithinWindow
+} from './structured-agent-session-history-state'
+import {
+  currentRequestsAfterEvent,
+  currentRequestsState,
+  applyCurrentRequestsMarker,
+  type AgentSessionCurrentRequestsState
+} from './agent-session-current-requests'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
@@ -7,6 +20,7 @@ import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionHistoryPage,
+  AgentSessionLatestTurn,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause,
   AgentSessionSubscribeEvent,
@@ -15,15 +29,22 @@ import type {
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,
+  mergeSubmissions,
   ownItemCount,
   trimRetainedItems
 } from './structured-agent-session-item-retention'
-import { compareAgentJournalItems } from './agent-session-journal-position'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import { agentSessionHasOlderTranscript } from './agent-session-context-clear'
+import { queuePublicationField } from './structured-agent-session-queue-publication-field'
+import {
+  actionablePromptIdsAfterStructuredAgentSessionBatch,
+  hostWorkingAfterStructuredAgentSessionBatch,
+  latestTurnAfterStructuredAgentSessionBatch,
+  restatesStructuredAgentSessionHostWork
+} from './structured-agent-session-live-turn'
 import {
   foldStructuredAgentSubagentRoster,
   foldStructuredAgentSubagentRosterPage,
@@ -31,23 +52,21 @@ import {
   type StructuredAgentSubagentRoster
 } from './structured-agent-session-subagent-roster'
 
-/** The last host clock sample: `hostNow - receivedAt` is the client's skew from the host,
- *  which is what lets a client attaching mid-turn anchor its live counter on the real start. */
+/** Sample hostNow/receivedAt to convert host turn starts into client-clock anchors when attaching mid-turn. */
 export type StructuredAgentHostClock = {
   hostNow: number
   receivedAt: number
 }
 
-export type StructuredAgentSessionState = {
+export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   epoch: string | null
   cursor: AgentJournalCursor | null
   fence: number | null
   items: AgentJournalRenderItem[]
   submissions: AgentJournalSubmission[]
-  /** Head-trim floor, in the session's own rows; paging back raises it so a live batch cannot
-   *  undo the page. */
+  /** Own-row trim floor grows with paging so live batches cannot undo loaded history. */
   retainedOwnItemLimit: number
-  /** Head-trim ceiling on every agent's rows, the memory backstop; paging back raises it too. */
+  /** All-agent memory ceiling grows with paging too. */
   retainedItemCap: number
   hasOlder: boolean
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -60,26 +79,45 @@ export type StructuredAgentSessionState = {
   queuedMessages?: AgentSessionQueuedMessage[] | null
   /** The queue's pause, published with the list; null when it sends on its own. */
   queuePause?: AgentSessionQueuePause | null
+  /** Published with the list: the card the queue sends next once nothing runs, else null. */
+  nextQueuedMessageId?: string | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock
-  /** Every subagent a roster row this client received named, by agent id; not trimmed with
-   *  `items`. Absent until a page has been applied. */
+  /** Retain received roster entries by agent ID beyond the item window; absent until a page arrives. */
   subagentRoster?: StructuredAgentSubagentRoster
-  /** Bumped per live batch that leaves a turn row's newest revision outside the window
-   *  (dropped or trimmed), so a whole-journal answer derived from turn rows is asked for again. */
+  /** Whole-journal turn state; older hosts omit it and require loaded-item fallback. */
+  latestTurn?: AgentSessionLatestTurn | null
+  /** Host-actionable prompts; older hosts treat every pending item as waiting. */
+  actionablePromptIds?: string[]
+  /** Host main-agent work state; older hosts derive from items/submissions. */
+  working?: boolean
+  /** Bump when a live turn revision falls outside the window so whole-journal turn readers refresh. */
   unloadedTurnRevisions?: number
 }
 
 export type StructuredAgentSessionAction =
   | { type: 'loading' }
+  | { type: 'requests-marker'; marker: AgentSessionCurrentRequestsMarker }
+  | {
+      type: 'requests-complete'
+      marker: AgentSessionCurrentRequestsMarker
+      items: AgentJournalRenderItem[]
+    }
   | { type: 'error'; message: string; refusal?: AgentSessionRefusalReference }
-  | { type: 'event'; event: AgentSessionSubscribeEvent }
+  /** First subscription frame restates the roster even on cursor resume; an old host omitting it has no running children. */
+  | {
+      type: 'event'
+      event: AgentSessionSubscribeEvent
+      opensSubscription?: boolean
+    }
   | { type: 'history-page'; page: AgentSessionHistoryPage }
-  | { type: 'older-page'; requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }
-
-const MAX_RETAINED_SUBMISSIONS = 256
+  | {
+      type: 'older-page'
+      requestedCursor: AgentJournalCursor
+      page: AgentSessionHistoryPage
+    }
 
 export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   epoch: null,
@@ -93,132 +131,41 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   status: 'idle'
 }
 
-/** A frame without `hostNow` (older host) leaves the previous sample in place. */
-function hostClockField(
-  hostNow: number | undefined,
-  receivedAt: number,
-  previous: StructuredAgentHostClock | undefined
-): { hostClock?: StructuredAgentHostClock } {
-  const hostClock = hostNow !== undefined ? { hostNow, receivedAt } : previous
-  return hostClock ? { hostClock } : {}
-}
-
-type QueuePublication = Pick<StructuredAgentSessionState, 'queuedMessages' | 'queuePause'>
-
-/** First claim with a list wins, and its pause rides with it; no claim at all leaves both absent
- *  (older host). */
-function queuePublicationField(...claims: QueuePublication[]): QueuePublication {
-  for (const claim of claims) {
-    if (claim.queuedMessages !== undefined) {
-      return { queuedMessages: claim.queuedMessages, queuePause: claim.queuePause ?? null }
-    }
-  }
-  return {}
-}
-
-function replacePage(
-  page: AgentSessionHistoryPage,
-  fence: number | null,
-  backgroundTasks?: AgentSessionBackgroundTaskState | null,
-  activity?: AgentSessionTurnActivity | null
-): StructuredAgentSessionState {
-  return {
-    epoch: page.epoch,
-    cursor: page.liveCursor ?? page.window.nextCursor,
-    fence,
-    items: [...page.items].sort(compareAgentJournalItems),
-    submissions: page.submissions,
-    retainedOwnItemLimit: Math.max(MAX_RETAINED_OWN_ITEMS, ownItemCount(page.items)),
-    retainedItemCap: Math.max(MAX_RETAINED_ITEMS, page.items.length),
-    hasOlder: page.hasOlder,
-    status: 'ready',
-    subagentRoster: foldStructuredAgentSubagentRosterPage(undefined, page),
-    activity: activity ?? null,
-    ...(backgroundTasks !== undefined
-      ? { backgroundTasks }
-      : page.backgroundTasks !== undefined
-        ? { backgroundTasks: admitAgentSessionBackgroundTaskState(page.backgroundTasks) }
-        : {})
-  }
-}
-
-function mergeItems(
-  current: readonly AgentJournalRenderItem[],
-  incoming: readonly AgentJournalRenderItem[],
-  removedIds: readonly string[]
-): AgentJournalRenderItem[] {
-  const removed = new Set(removedIds)
-  const byId = new Map(
-    current.filter((item) => !removed.has(item.itemId)).map((item) => [item.itemId, item])
-  )
-  for (const item of incoming) {
-    const prior = byId.get(item.itemId)
-    if (!prior || item.revision >= prior.revision) {
-      byId.set(item.itemId, item)
-    }
-  }
-  return [...byId.values()].sort(compareAgentJournalItems)
-}
-
-/**
- * Live rows the loaded window can take. The window is a contiguous suffix of the
- * journal, and its oldest row is the load-older anchor. A revision of a row older
- * than the window keeps that row's original sequence, so admitting it would move
- * the anchor below the window and paging `before` it would skip every row between.
- * The journal keeps the revision; the page reader serves it once the window
- * reaches the row. With nothing older on the host the window is the whole journal
- * and a row below the head (a revived tombstone) leaves no hole, so it is admitted.
- */
-function liveItemsWithinWindow(
-  state: StructuredAgentSessionState,
-  incoming: readonly AgentJournalRenderItem[]
-): readonly AgentJournalRenderItem[] {
-  const head = state.items[0]
-  if (!head || !state.hasOlder) {
-    return incoming
-  }
-  return incoming.filter((item) => item.sequence >= head.sequence)
-}
-
-function mergeSubmissions(
-  current: readonly AgentJournalSubmission[],
-  incoming: readonly AgentJournalSubmission[],
-  items: readonly AgentJournalRenderItem[]
-): AgentJournalSubmission[] {
-  const byId = new Map(current.map((submission) => [submission.clientMessageId, submission]))
-  for (const submission of incoming) {
-    byId.set(submission.clientMessageId, submission)
-  }
-  const sorted = [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
-  const itemIds = new Set(
-    items
-      .filter((item) => item.body.kind === 'message' && item.body.role === 'user')
-      .map((item) => item.itemId)
-  )
-  // Loaded user messages need their provider alias for durable turn attribution.
-  return sorted.filter(
-    (submission, index) =>
-      index >= sorted.length - MAX_RETAINED_SUBMISSIONS ||
-      itemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-  )
-}
-
 /** `receivedAt` is the client clock at apply time; callers pass it so the reducer stays pure. */
 export function reduceStructuredAgentSession(
   state: StructuredAgentSessionState,
   action: StructuredAgentSessionAction,
   receivedAt: number = Date.now()
 ): StructuredAgentSessionState {
+  if (action.type === 'requests-marker') {
+    return { ...state, ...applyCurrentRequestsMarker(state, action.marker) }
+  }
+  if (action.type === 'requests-complete') {
+    return action.marker.version === state.requestMarker?.version
+      ? { ...state, currentRequests: action.items, requestAuthority: action.marker }
+      : state
+  }
   if (action.type === 'loading') {
     // Keep the last transcript visible while a reconnect rehydrates the stream.
-    return { ...state, status: 'loading', error: undefined, readRefusal: undefined }
+    return {
+      ...state,
+      status: 'loading',
+      error: undefined,
+      readRefusal: undefined
+    }
   }
   if (action.type === 'error') {
-    return { ...state, status: 'error', error: action.message, readRefusal: action.refusal }
+    return {
+      ...state,
+      status: 'error',
+      error: action.message,
+      readRefusal: action.refusal
+    }
   }
   if (action.type === 'history-page') {
     return {
       ...replacePage(action.page, action.page.fence ?? null, state.backgroundTasks, state.activity),
+      ...currentRequestsState(state),
       commands: state.commands,
       // Live subscription state stays authoritative over a possibly stale history answer.
       ...queuePublicationField(state, action.page),
@@ -231,9 +178,7 @@ export function reduceStructuredAgentSession(
       return state
     }
     const head = state.items[0]
-    // A live batch head-trimmed past the anchor while this read was in flight, so the
-    // page no longer abuts the retained window; merging it would leave a silent hole.
-    // The caller re-anchors on the new head and asks again.
+    // Head trim overtook the requested anchor; merging would leave a hole. Caller must retry from the new head.
     if (head && head.sequence > requested.sequence) {
       return state
     }
@@ -245,7 +190,7 @@ export function reduceStructuredAgentSession(
       retainedItemCap: Math.max(state.retainedItemCap, items.length),
       subagentRoster: foldStructuredAgentSubagentRosterPage(state.subagentRoster, action.page),
       submissions: mergeSubmissions(state.submissions, action.page.submissions, items),
-      hasOlder: action.page.hasOlder,
+      hasOlder: agentSessionHasOlderTranscript(items, action.page.hasOlder),
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -254,6 +199,7 @@ export function reduceStructuredAgentSession(
     return state
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
+    const requests = currentRequestsAfterEvent(state, event, true)
     return {
       ...replacePage(
         event.page,
@@ -261,6 +207,8 @@ export function reduceStructuredAgentSession(
         admitAgentSessionBackgroundTaskState(event.backgroundTasks),
         event.activity
       ),
+      ...requests,
+      status: 'ready',
       commands: event.commands,
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
       ...queuePublicationField(event, event.page, state),
@@ -273,13 +221,16 @@ export function reduceStructuredAgentSession(
   if (state.cursor && event.batch.cursor.sequence < state.cursor.sequence) {
     return state
   }
+  const requests = currentRequestsAfterEvent(state, event, action.opensSubscription === true)
   const backgroundTasks =
     event.backgroundTasks !== undefined
       ? admitAgentSessionBackgroundTaskState(event.backgroundTasks, state.backgroundTasks)
-      : state.backgroundTasks
+      : action.opensSubscription
+        ? undefined
+        : state.backgroundTasks
   const activity = event.activity !== undefined ? event.activity : state.activity
   const liveItems = liveItemsWithinWindow(state, event.batch.items)
-  // Every roster revision, the window's or not: a trimmed roster row keeps its sequence.
+  // Fold every roster revision even outside the window; trimmed rows retain their sequence.
   const subagentRoster = foldStructuredAgentSubagentRoster(
     state.subagentRoster ?? NO_STRUCTURED_AGENT_SUBAGENT_ROSTER,
     event.batch.items,
@@ -297,11 +248,17 @@ export function reduceStructuredAgentSession(
     (event.commands === undefined || event.commands === state.commands) &&
     (event.queuedMessages === undefined || event.queuedMessages === state.queuedMessages) &&
     (event.queuePause === undefined || event.queuePause === state.queuePause) &&
+    (event.nextQueuedMessageId === undefined ||
+      event.nextQueuedMessageId === state.nextQueuedMessageId) &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
+    restatesStructuredAgentSessionHostWork(event, state) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
     state.status === 'ready' &&
-    state.error === undefined
+    state.error === undefined &&
+    requests.currentRequests === state.currentRequests &&
+    requests.requestMarker === state.requestMarker &&
+    requests.requestAuthority === state.requestAuthority
   ) {
     return state
   }
@@ -318,12 +275,13 @@ export function reduceStructuredAgentSession(
   const lostTurnRow = outsideWindow.some((item) => readAgentJournalTurn(item.body) !== null)
   return {
     ...state,
+    ...requests,
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
     items,
     subagentRoster,
     // A trim leaves older items behind the cursor, so paging must stay offered.
-    hasOlder: items.length < merged.length ? true : state.hasOlder,
+    hasOlder: agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
     submissions:
       event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
         ? state.submissions
@@ -332,8 +290,14 @@ export function reduceStructuredAgentSession(
     error: undefined,
     readRefusal: undefined,
     commands: event.commands !== undefined ? event.commands : state.commands,
+    latestTurn: latestTurnAfterStructuredAgentSessionBatch(state.latestTurn, event),
+    actionablePromptIds: actionablePromptIdsAfterStructuredAgentSessionBatch(
+      state.actionablePromptIds,
+      event
+    ),
+    working: hostWorkingAfterStructuredAgentSessionBatch(state.working, event),
     ...queuePublicationField(event, state),
-    ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
+    backgroundTasks,
     ...(activity !== undefined ? { activity } : {}),
     ...(lostTurnRow ? { unloadedTurnRevisions: (state.unloadedTurnRevisions ?? 0) + 1 } : {}),
     ...hostClockField(event.hostNow, receivedAt, state.hostClock)

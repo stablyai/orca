@@ -8,20 +8,12 @@ import type {
   AgentSessionDeathEvidence,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
-import { assertFence, withLease } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import { assertFence, withLease } from './agent-session/ownership/agent-session-lease-transitions'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 
-/**
- * How the failed attempt's provider process was accounted for.
- * - `exit-proven`: cleanup observed the whole tree gone.
- * - `root-exit-observed`: the owner root's exit was observed first-hand, so the
- *   identity this lease is keyed on is dead, but its descendants were not proven
- *   gone. Releases the lease and says exactly that, claiming nothing more.
- * - `processless`: the attempt failed before a process existed.
- * - `unproven`: nothing about the process was observed. A recorded owner goes to recovery, which
- *   concludes about it; a reservation that recorded none is released, since the adapter already
- *   closed the stdio of anything it spawned.
- */
+/** Cleanup evidence: exit-proven follows provider tree-close proof (Windows may use stdin EOF/root exit or taskkill /T).
+ * root-exit-observed proves only the lease root died; processless means no process existed.
+ * unproven sends recorded owners to recovery; ownerless reservations release after adapter stdio cleanup. */
 export type AgentSessionAcquisitionExitProof =
   | 'exit-proven'
   | 'root-exit-observed'
@@ -42,7 +34,7 @@ export type AgentSessionFailedAcquisitionSettlement = {
 export type AgentSessionFailedPostAcquisitionAttachmentSettlement =
   AgentSessionFailedAcquisitionSettlement
 
-/** Liveness invariant: a settled attach never leaves its reservation in new-owner-proving. */
+/** Settled attaches must not strand reservations in new-owner-proving. */
 export function settleFailedAgentSessionAcquisition(
   state: AgentSessionStoreState,
   args: AgentSessionFailedAcquisitionSettlement
@@ -61,7 +53,7 @@ export function settleFailedAgentSessionAcquisition(
   return next
 }
 
-/** A proved native owner still is not publishable until its journal attaches. */
+/** Native-owner proof still needs journal attachment before publication. */
 export function settleFailedAgentSessionPostAcquisitionAttachment(
   state: AgentSessionStoreState,
   args: AgentSessionFailedPostAcquisitionAttachmentSettlement
@@ -79,8 +71,7 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
     record.lease.claimStatus !== 'live' ||
     record.lease.handoffStage !== null ||
     record.lease.ownerProcess?.spawnToken !== args.spawnToken ||
-    record.lease.reservedSpawnToken !== args.spawnToken ||
-    record.lease.provenHandleLinkId === null
+    record.lease.reservedSpawnToken !== args.spawnToken
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
@@ -132,13 +123,12 @@ function settleFailedLease(
     throw new Error('agent_session_ownership_unknown')
   }
   if (args.exitProof === 'unproven' && record.lease.ownerProcess) {
-    // Parking in recovery proves nothing alive, so `lastRenewedAt` keeps the spawn's proof.
+    // Recovery is not liveness proof; retain the spawn's last renewal.
     return {
       ...withLease(record, {
         ...record.lease,
         handoffStage: 'recovering',
-        // The operation is durably settled failed below; a lease still naming it would
-        // read as an in-flight transfer to every consumer that keys on the stage + id pair.
+        // Settlement ends the operation; clear its id so stage/id readers cannot mistake it for an in-flight transfer.
         handoffOperationId: null
       }),
       updatedAt: args.now
@@ -157,8 +147,7 @@ function settleFailedLease(
   })
 }
 
-/** Records only what was observed: never a tree claim the cleanup did not make, and nothing at all
- *  when nothing was. */
+/** Record only cleanup evidence actually observed; never upgrade root exit into tree death. */
 function acquisitionDeathEvidence(
   exitProof: AgentSessionAcquisitionExitProof,
   observedAt: number,
@@ -178,7 +167,7 @@ function acquisitionDeathEvidence(
       ...proof
     }
   }
-  // Cleanup proved no child of this attempt remains; it may never have spawned.
+  // Cleanup proved no attempt child remains, including attempts that never spawned.
   return {
     kind: 'exit-observed',
     detail: 'acquisition cleanup proved no provider child remains',

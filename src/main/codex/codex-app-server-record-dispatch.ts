@@ -1,13 +1,13 @@
 import type { NdjsonRejectedRecord } from '../../shared/main-process-ndjson-framer'
-import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection-types'
-import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
-import { isAppServerRecord } from './codex-app-server-jsonl'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import type { CodexAppServerConnectionHandlers } from './app-server/codex-app-server-connection-types'
+import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-frame-size-error'
+import { isProviderRecord } from '../provider-process/provider-json-record'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import {
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError
 } from './codex-app-server-session'
-import { classifyJsonRpcPrefix } from './codex-app-server-record-prefix'
+import { classifyJsonRpcPrefix } from '../../shared/json-rpc-record-prefix'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64
@@ -16,7 +16,9 @@ export type CodexPendingRequest = {
   method: string
   resolve: (result: unknown) => void
   reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
+  timer: ReturnType<typeof setTimeout> | undefined
+  /** Runs on reply/timeout before promise continuations; replies retain stdout notification order. */
+  onReply?: () => void
 }
 
 export function createCodexAppServerRecordDispatcher(input: {
@@ -40,6 +42,7 @@ export function createCodexAppServerRecordDispatcher(input: {
       return
     }
     pending.delete(id)
+    waiter.onReply?.()
     timedOutMethods.set(id, waiter.method)
     const oldest = timedOutMethods.keys().next()
     if (timedOutMethods.size > MAX_REMEMBERED_TIMEOUTS && !oldest.done) {
@@ -88,11 +91,10 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     const waiter = pending.get(message.id)
     if (!waiter) {
-      // Transport diagnostics, not conversation: only the request that gave up could have
-      // interpreted this reply, and it already reported its own outcome.
+      // Late/unmatched replies belong in diagnostics; no waiting call can interpret them.
       const timedOutMethod = timedOutMethods.get(message.id)
       timedOutMethods.delete(message.id)
-      const error = isAppServerRecord(message.error) ? message.error.message : undefined
+      const error = isProviderRecord(message.error) ? message.error.message : undefined
       console.warn(
         timedOutMethod
           ? `[codex-app-server] late reply to ${timedOutMethod} after timeout (id ${message.id})`
@@ -103,8 +105,9 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     pending.delete(message.id)
     clearTimeout(waiter.timer)
+    waiter.onReply?.()
     const error = message.error
-    if (isAppServerRecord(error)) {
+    if (isProviderRecord(error)) {
       const detail = typeof error.message === 'string' ? error.message : 'unknown error'
       waiter.reject(
         isCodexMethodNotFoundError(error)

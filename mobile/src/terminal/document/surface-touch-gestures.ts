@@ -1,7 +1,8 @@
+import { getCellHeight, getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
 import { touchesInRoot } from './document-host-seams'
-import { clampPan, getCellHeight } from './fit-scale'
+import { clampPan } from './fit-scale'
 import { notify } from './host-notify'
 import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
@@ -17,14 +18,14 @@ import {
   MIN_TEXT_SCALE,
   snapToTextScalePreset
 } from './text-scaling'
-import { getTotalScale, updateTransform } from './viewport-transform'
+import { updateTransform } from './viewport-transform'
 import { viewportPoint } from './viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
 
-/** A surface that has already been wired, so a re-mount does not stack handlers. */
+const RELEASE_VELOCITY_MAX_AGE_MS = 100
+
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
-/** The live touch gesture: the last point, the velocity, and the pinch it may be in. */
 export type TerminalTouchState = {
   lastX: number
   lastY: number
@@ -47,8 +48,7 @@ export function updateTouchVelocity(scope: TerminalDocumentScope, deltaY: number
   if (!Number.isFinite(instantVelocity)) {
     return
   }
-  // Why: touchmove cadence is uneven in WebView. Blend recent samples so
-  // momentum launch doesn't inherit a one-frame spike or stall.
+  // Smooth uneven WebView event cadence so momentum does not inherit a one-frame spike or pause.
   scope.touchGesture.velY =
     scope.touchGesture.velY === 0
       ? instantVelocity
@@ -61,7 +61,6 @@ export function getDistance(a: Touch, b: Touch) {
   return Math.sqrt(dx * dx + dy * dy)
 }
 
-/** The pinch's anchor, in the grid's frame: the point between the two fingers. */
 function pinchMidpoint(scope: TerminalDocumentScope, a: Touch, b: Touch) {
   return viewportPoint(scope, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2)
 }
@@ -74,8 +73,7 @@ export function attachSurfaceEventHandlers(
     return
   }
   targetSurface.__orcaSurfaceHandlersAttached = true
-  // Why: init() swaps in a new hidden surface to avoid flicker; each
-  // replacement needs gesture handlers or tab-switch replays stop scrolling.
+  // Each hidden replay replacement needs handlers; wiring only the first surface breaks scrolling after tab switches.
   targetSurface.addEventListener(
     'mousedown',
     function (e) {
@@ -99,17 +97,20 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchstart',
     function (e) {
-      if (dispatcherShouldBlockSurface(scope)) {
+      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (scope.touchGesture.momentumId) {
         cancelAnimationFrame(scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
+        // A touch that stopped momentum must not also fire a tap.
+        scope.tapCandidate = null
       }
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
+        stopSurfaceTouchGestures(scope)
+        resetSmoothScrollOffset(scope)
         scope.touchGesture.isPinching = true
-        scope.smoothScrollOffsetY = 0
         scope.touchGesture.pinchDist = getDistance(touches[0], touches[1])
         scope.touchGesture.pinchScale = scope.userScale
         const mid = pinchMidpoint(scope, touches[0], touches[1])
@@ -131,7 +132,7 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchmove',
     function (e) {
-      if (dispatcherShouldBlockSurface(scope)) {
+      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term) {
@@ -147,9 +148,7 @@ export function attachSurfaceEventHandlers(
         const mid = pinchMidpoint(scope, touches[0], touches[1])
 
         const ratio = dist / scope.touchGesture.pinchDist
-        // Why: userScale is a CSS multiplier on the current font size; bound it so
-        // the resulting apparent size (currentTextScale × userScale) stays within
-        // the preset range, since release snaps to one of those presets.
+        // Clamp apparent text size to presets while userScale adds transient CSS pinch zoom.
         const loScale = MIN_TEXT_SCALE / scope.currentTextScale
         const hiScale = MAX_TEXT_SCALE / scope.currentTextScale
         scope.userScale = Math.max(
@@ -167,11 +166,7 @@ export function attachSurfaceEventHandlers(
         const now = Date.now(),
           dt = now - scope.touchGesture.lastTime
 
-        // Why: pan horizontally only when content overflows the viewport (larger
-        // than fit) — same check clampPan() uses. Vertical always drives buffer
-        // scroll so scrollback stays reachable at any text size; calling the
-        // never-defined contentWiderThanViewport() here threw and killed all
-        // single-finger scrolling, scrollback included.
+        // Pan horizontally only on overflow; vertical gestures always drive buffer scroll to keep scrollback reachable.
         if (
           scope.term.element &&
           scope.term.element.scrollWidth * getTotalScale(scope) > scope.viewportRect().width + 1
@@ -192,6 +187,8 @@ export function attachSurfaceEventHandlers(
           if (lines !== 0) {
             scope.touchGesture.accumDelta -= lines * effectiveCellH
             routeScrollLines(scope, lines, x, y)
+            // Moving a row counts as scroll even inside tap slop.
+            scope.tapCandidate = null
           }
         } else {
           if (enqueueNormalBufferScrollDelta(scope, deltaY)) {
@@ -210,7 +207,7 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchend',
     function (e) {
-      if (dispatcherShouldBlockSurface(scope)) {
+      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term) {
@@ -220,10 +217,7 @@ export function attachSurfaceEventHandlers(
       const touches = touchesInRoot(scope.root, e.touches)
       if (scope.touchGesture.isPinching && touches.length < 2) {
         scope.touchGesture.isPinching = false
-        // Why: a finished pinch snaps to the nearest preset and becomes the new
-        // font size (reflowing the grid), so pinch-to-zoom IS the in-terminal way
-        // to set the text size. The CSS pinch zoom (userScale) is reset; the real
-        // size change reflows columns and RN persists + resizes the PTY to match.
+        // Commit pinch to a real font preset, reset transient zoom, and let native resize the PTY to the reflowed grid.
         const target = snapToTextScalePreset(scope.currentTextScale * scope.userScale)
         const changed = target !== scope.currentTextScale
         scope.userScale = 1
@@ -246,7 +240,9 @@ export function attachSurfaceEventHandlers(
       }
 
       if (touches.length === 0) {
-        let vel = scope.touchGesture.velY
+        // A finger resting after its last move has no remaining momentum to launch.
+        const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS
+        let vel = rested ? 0 : scope.touchGesture.velY
         const FRICTION = 0.972
         const MIN_VEL = 0.012
         let lastMomentumTime = performance.now()
@@ -283,16 +279,30 @@ export function attachSurfaceEventHandlers(
     },
     { capture: true, passive: true }
   )
+
+  targetSurface.addEventListener(
+    'touchcancel',
+    function () {
+      if (targetSurface !== scope.surface) {
+        return
+      }
+      stopSurfaceTouchGestures(scope)
+      resetSmoothScrollOffset(scope)
+    },
+    { capture: true, passive: true }
+  )
 }
 
 export function startSurfaceTouchGestures(scope: TerminalDocumentScope) {
   attachSurfaceEventHandlers(scope, scope.surface!)
 }
 
-/** Ruling 21: the momentum loop, which would keep scrolling into the terminal that replaced it. */
 export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
   if (scope.touchGesture.momentumId !== null) {
     cancelAnimationFrame(scope.touchGesture.momentumId)
     scope.touchGesture.momentumId = null
   }
+  scope.touchGesture.velY = 0
+  scope.touchGesture.accumDelta = 0
+  scope.touchGesture.isPinching = false
 }

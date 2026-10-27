@@ -8,12 +8,10 @@ import { translate } from '@/i18n/i18n'
 
 type MobileEmulatorAgentSetupGuideProps = {
   setup: ReturnType<typeof useMobileEmulatorAgentSetupState>
-  worktreeId: string
 }
 
 export function MobileEmulatorAgentSetupGuide({
-  setup,
-  worktreeId
+  setup
 }: MobileEmulatorAgentSetupGuideProps): React.JSX.Element {
   const dismissMobileEmulatorAgentSetup = useAppStore((s) => s.dismissMobileEmulatorAgentSetup)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -119,7 +117,7 @@ export function MobileEmulatorAgentSetupGuide({
 
       {expanded && !setup.setupComplete ? (
         <div className="scrollbar-sleek max-h-[min(36vh,16rem)] overflow-y-auto border-t border-border/60 px-3 pb-2">
-          <MobileEmulatorAgentSetupGuideSteps setup={setup} worktreeId={worktreeId} />
+          <MobileEmulatorAgentSetupGuideSteps setup={setup} />
           <div className="pb-1 pt-1">
             <button
               type="button"

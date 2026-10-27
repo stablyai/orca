@@ -1,14 +1,5 @@
-// Nothing before `attach` commits a session, so every failure in that span definitively created
-// nothing. Thrown, it reaches a remote client as a generic transport error, indistinguishable from
-// an answer that was lost on the way back — and a client that cannot tell those apart either
-// strands the user with no chat and no terminal, or spawns a sibling beside a session that may
-// already exist. So the whole span answers with a refusal envelope carrying a code, whatever it
-// failed on.
-//
-// Converting the span rather than each throw site is deliberate: alongside the throws that carry a
-// code there is a code-less class — an unresolvable worktree, a store that will not open, a host
-// that will not install — that no per-site list catches, and it is exactly the class that reaches
-// the user as nothing at all.
+// Convert the entire pre-attach span to coded no-effects refusal, including code-less failures such as unresolved workspace/store/host.
+// Transport-like throws cannot distinguish those failures from lost answers and invite stranded or duplicate chats.
 
 import {
   AGENT_SESSION_WIRE_REFUSAL_CODES,
@@ -18,12 +9,11 @@ import {
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
 } from '../../../../shared/agent-session-wire'
+import { isAgentSessionCreateAdmissionRefusal } from '../../../../shared/agent-session-definitive-refusal'
 
 export type StructuredCreateRefused = { refusal: AgentSessionWireRefusal }
 
-/** A pre-commit failure with no code of its own still proves the host could not serve a structured
- *  session for this request and did not create one, which is what `unsupported` says on the wire.
- *  A new code would say it more precisely, but only to clients new enough to know it. */
+/** Code-less pre-commit failure maps to the existing unsupported refusal; older clients would not understand a more specific new code. */
 const UNCODED_PRECOMMIT_REFUSAL_CODE: AgentSessionWireRefusalCode =
   'structured_agent_session_unsupported'
 
@@ -55,8 +45,7 @@ function precommitRefusal(error: unknown): AgentSessionWireRefusal {
     return refuseUnclassified(code, PRECOMMIT_REFUSAL_MESSAGE)
   }
   const message = error instanceof Error ? error.message : String(error)
-  // A code-less failure here is often a defect, not a policy answer; the refusal keeps the user
-  // moving, the log keeps the cause findable. Nothing names its situation, so it carries no reason.
+  // Log code-less faults while returning compatibility refusal; no structured situation means no reason field.
   console.warn('[agent-session] create refused before it committed anything', error)
   return refuseUnclassified(
     UNCODED_PRECOMMIT_REFUSAL_CODE,
@@ -64,17 +53,18 @@ function precommitRefusal(error: unknown): AgentSessionWireRefusal {
   )
 }
 
-/**
- * Runs the pre-commit half of a create. Anything it throws becomes a refusal; a refusal it returns
- * itself passes through. Must not wrap `attach` or anything after it — past that point a failure no
- * longer proves the session does not exist.
- */
+/** Convert throws only before attach; afterward failure cannot prove no session exists. Preserve explicit refusals unchanged. */
 export async function resolveUncommittedStructuredCreate<TPrepared>(
   prepare: () => Promise<TPrepared | StructuredCreateRefused>
 ): Promise<TPrepared | StructuredCreateRefused> {
   try {
     return await prepare()
   } catch (error) {
-    return { refusal: precommitRefusal(error) }
+    const refusal = precommitRefusal(error)
+    return {
+      refusal: isAgentSessionCreateAdmissionRefusal(refusal)
+        ? { ...refusal, createAttemptRefusedBeforeCommit: true }
+        : refusal
+    }
   }
 }

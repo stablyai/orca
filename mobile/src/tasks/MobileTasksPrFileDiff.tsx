@@ -10,7 +10,8 @@ import {
   MobileSyntaxSegments,
   TextInput,
   colors,
-  Pressable
+  Pressable,
+  useMobileColorScheme
 } from './mobile-tasks-dependencies'
 import { MAX_RENDERED_PR_DIFF_LINES } from './mobile-tasks-options'
 import type { GitHubPRFileContents } from './mobile-tasks-provider-detail-types'
@@ -45,6 +46,7 @@ export function GitHubPrFileDiff({
   onCommentDraftChange: (key: string, value: string) => void
   onSubmitComment: (line: number) => void
 }): ReactNode {
+  useMobileColorScheme()
   const diffPreview = useMemo(
     () =>
       buildGitHubPrFileDiffPreview(

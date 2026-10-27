@@ -23,3 +23,7 @@ export const LEGACY_TERMINAL_PROCESS_LIMIT_HINT = [
 ].join('\n')
 
 export const TERMINAL_SPAWN_ISSUE_REQUEST = 'If this persists, please file an issue.'
+
+/** The host refused a new terminal at its cap; no running terminal was touched. */
+export const TERMINAL_HOST_CAP_HINT =
+  'The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.'

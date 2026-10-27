@@ -3,17 +3,13 @@ import {
   closeLinkActionRequest,
   type LinkActionRequest
 } from '@/components/link-actions/link-action-request'
-import { httpLinkActionDestinationsFor } from '@/lib/http-link-destinations'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
 import { useAppStore } from '../../store'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import {
-  canNativeChatOpenOwnedBrowser,
-  resolveNativeChatHttpLinkSourceOwner
-} from './native-chat-http-link-source-owner'
+import { resolveNativeChatHttpLinkRouting } from './native-chat-link-target-actions'
 import { handleNativeChatWebLink } from './native-chat-web-link-actions'
-import { terminalLinkClickBehaviorFor } from '@/components/terminal-pane/terminal-link-click-behavior'
+import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 
 export type NativeChatLinkActions = {
@@ -22,15 +18,14 @@ export type NativeChatLinkActions = {
   closeLinkActions: (dismissed?: LinkActionRequest) => void
 }
 
-/** Transcript links: file targets open in Orca, http(s) targets offer the same
- *  destination popover the terminal shows. */
+/** Match terminal destination popovers: files open in Orca/default app, HTTP(S) links in a browser. */
 export function useNativeChatLinkActions(
   context: NativeChatFileLinkContext | null,
   rootRef: RefObject<HTMLElement | null>,
   scope: { sessionId: string | null; isVisible: boolean }
 ): NativeChatLinkActions {
-  const openFileLink = useNativeChatFileLinkClick(context)
   const [linkActionRequest, setLinkActionRequest] = useState<LinkActionRequest | null>(null)
+  const openFileLink = useNativeChatFileLinkClick(context, setLinkActionRequest, rootRef)
   const scopeKey = JSON.stringify([
     context?.worktreeId,
     context?.runtimeEnvironmentId,
@@ -55,28 +50,17 @@ export function useNativeChatLinkActions(
         openFileLink?.(event, href)
         return
       }
-      // mailto: and other schemes keep the anchor's default handling.
       if (route.kind !== 'web' || !/^https?:/i.test(route.url)) {
         return
       }
       // Read at click time: settings and workspace ownership must not re-render the transcript.
       const state = useAppStore.getState()
-      const sourceOwner = resolveNativeChatHttpLinkSourceOwner(state, context.worktreeId)
-      const plainClickBehavior =
-        state.settings?.terminalLinkClickBehavior === undefined
-          ? state.settings?.terminalLinkActionPopoverEnabled === false
-            ? 'open'
-            : 'actions'
-          : terminalLinkClickBehaviorFor(state.settings)
+      const plainClickBehavior = nativeChatPlainLinkClickBehavior(state.settings)
       const anchor = event.currentTarget
       handleNativeChatWebLink(event, route.url, {
         worktreeId: context.worktreeId,
-        sourceOwner,
-        destinations: httpLinkActionDestinationsFor(
-          state.settings,
-          sourceOwner,
-          canNativeChatOpenOwnedBrowser(state, context.worktreeId, sourceOwner)
-        ),
+        sourceTabId: context.sourceTabId,
+        ...resolveNativeChatHttpLinkRouting(state, context.worktreeId),
         actionsEnabled: plainClickBehavior === 'actions',
         plainClickBehavior,
         restoreFocus: () =>

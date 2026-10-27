@@ -1,25 +1,39 @@
-// Every agent-session store mutation: draft the published state, apply, check and write exactly the
-// changed rows in one journal transaction, then publish the draft. A throw anywhere discards the
-// draft, so memory never holds a change the database does not.
-//
-// Why a promise queue although the body is synchronous: a store call must never run its BEGIN in
-// the caller's frame. A caller inside an open journal transaction on the same connection would nest
-// a BEGIN, which `runJournalTransaction` does not support. The queue also keeps the FIFO order and
-// the async boundary every awaiting caller was written against.
-
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
 import { AgentSessionJournalError } from '../native-chat/agent-session-journal/journal-write-guards'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
-import { writeAgentSessionStoreRows } from './agent-session-record-rows'
+import {
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from './agent-session-store-state'
+import {
+  insertAgentSessionOperationRowsIfAbsent,
+  writeAgentSessionStoreRows
+} from './agent-session-record-rows'
+import { readCommandReceipt } from '../native-chat/agent-session-journal/command-receipt-table'
+import type { CommandReceiptScope } from '../native-chat/agent-session-journal/command-receipt-schema'
+import {
+  agentSessionRuntimeIncarnation,
+  attributeAgentSessionRuntime
+} from './agent-session-runtime-attribution'
+import {
+  beginAgentSessionRuntimeRecord,
+  readAgentSessionRuntimeEnds
+} from './agent-session-runtime-end-record'
+import {
+  agentSessionReplacedRuntimes,
+  type AgentSessionReplacedRuntime
+} from './agent-session/agent-session-replaced-runtime'
 import {
   agentSessionStoreDraftRowWrites,
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
 
-// Why: rows are diffed by identity, so a row changed in place would never be written. Tests and
-// development builds make that a TypeError; packaged builds skip the walk.
+// Commit validated draft rows atomically before publication; failures discard the draft.
+// The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
+
+// Identity-based diffs miss in-place edits; freeze rows in dev/tests to catch them.
 const FREEZE_ROWS = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
 
 function deepFreeze(value: unknown): void {
@@ -52,7 +66,6 @@ function freezeRows(
   }
 }
 
-/** What every write gets on a database a newer Orca wrote: the refusal clients print as "update". */
 function readOnlyStoreRefusal(): Error {
   return journalOpenRefusalError(
     new AgentSessionJournalError(
@@ -65,23 +78,41 @@ function readOnlyStoreRefusal(): Error {
 type StagedStoreTransaction<T> = {
   result: T
   writes: AgentSessionStoreRowWrites | null
-  /** Publishes the draft. Only once its rows have committed. */
+  /** Publish only after row commit. */
   adopt: () => void
 }
 
 export class AgentSessionStoreTransactions {
   private queue: Promise<unknown> = Promise.resolve()
+  // Reads/reopens do not admit work; a count survives handle eviction without replaying history.
+  private readonly admittedSends = new Map<string, number>()
+  readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   private published: AgentSessionStoreState
+  /** Loaded takeover evidence; immutable for this runtime. */
+  readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
   constructor(
     private readonly journalDatabase: JournalHostDatabase,
-    loaded: AgentSessionStoreState
+    loaded: AgentSessionStoreState,
+    hostId: string
   ) {
     freezeRows(loaded, null)
-    this.published = loaded
+    this.published = {
+      ...loaded,
+      runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
+    }
+    this.replacedRuntimes = agentSessionReplacedRuntimes(this.published, {
+      hostId,
+      incarnation: agentSessionRuntimeIncarnation()
+    })
+    // Before any owner this runtime records: a crash is concluded only from a recorded start.
+    beginAgentSessionRuntimeRecord(
+      journalDatabase.stateDirectory,
+      agentSessionRuntimeIncarnation(),
+      Date.now()
+    )
   }
 
-  /** The committed state. A transaction in flight never shows here until its rows have landed. */
   get state(): AgentSessionStoreState {
     return this.published
   }
@@ -90,16 +121,81 @@ export class AgentSessionStoreTransactions {
     return this.journalDatabase.readOnly
   }
 
-  /**
-   * `apply` changes only the draft it is given. On a database a newer Orca wrote every transaction
-   * is refused, except one marked `inMemoryWhenReadOnly`: it is published without a write, for a
-   * verdict re-derived at every start.
-   */
+  admittedSendCount = (sessionId: string): number => this.admittedSends.get(sessionId) ?? 0
+
+  readCommandReceipt(scope: CommandReceiptScope, operationId: string) {
+    return readCommandReceipt(this.journalDatabase.db, scope, operationId)
+  }
+
+  /** Mutate only the draft. Newer databases refuse writes; inMemoryWhenReadOnly permits startup-derived verdicts. */
   transact<T>(
     apply: (draft: AgentSessionStoreState) => T,
     options: { inMemoryWhenReadOnly?: boolean } = {}
   ): Promise<T> {
     const run = this.queue.then(() => this.commit(apply, options.inMemoryWhenReadOnly === true))
+    this.queue = run.catch(() => {})
+    return run
+  }
+
+  /** Co-write in the caller's journal transaction; write/committed must run synchronously to prevent interleaving. */
+  receipt(
+    apply: (draft: AgentSessionStoreState) => void,
+    options: { insertOperationsIfAbsent?: true; submissionSessionId?: string } = {}
+  ): JournalOperationReceipt {
+    let staged: StagedStoreTransaction<void> | null = null
+    let admitted: string | undefined
+    return {
+      write: (db, row) => {
+        if (this.journalDatabase.readOnly) {
+          throw readOnlyStoreRefusal()
+        }
+        admitted = row?.kind === 'submission' ? options.submissionSessionId : undefined
+        // The ledger and wake share one draft as well as one commit.
+        staged = this.stage((draft) => {
+          apply(draft)
+          const record = admitted ? requireWritableAgentSessionRecord(draft, admitted) : undefined
+          if (record?.sleptAt !== undefined) {
+            const { sleptAt: _sleptAt, ...awake } = record
+            draft.records.set(record.sessionId, {
+              ...awake,
+              updatedAt: row?.ts ?? record.updatedAt
+            })
+          }
+        })
+        const writes = staged.writes
+        if (writes) {
+          // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
+          if (options.insertOperationsIfAbsent) {
+            insertAgentSessionOperationRowsIfAbsent(db, writes.operations.upsert)
+          }
+          writeAgentSessionStoreRows(
+            db,
+            options.insertOperationsIfAbsent
+              ? { ...writes, operations: { ...writes.operations, upsert: [] } }
+              : writes
+          )
+        }
+      },
+      committed: () => {
+        staged?.adopt()
+        if (admitted) {
+          this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
+          for (const listener of this.acceptedSendListeners) {
+            listener(admitted)
+          }
+        }
+        staged = null
+        admitted = undefined
+      }
+    }
+  }
+
+  /** Commit a receipt separately when its command made no journal write. */
+  commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
+    const run = this.queue.then(() => {
+      this.journalDatabase.transaction((db) => receipt.write(db))
+      receipt.committed()
+    })
     this.queue = run.catch(() => {})
     return run
   }
@@ -122,6 +218,7 @@ export class AgentSessionStoreTransactions {
     const published = this.published
     const draft = draftAgentSessionStoreState(published)
     const result = apply(draft)
+    attributeAgentSessionRuntime(published, draft)
     const writes = agentSessionStoreDraftRowWrites(published, draft)
     return {
       result,

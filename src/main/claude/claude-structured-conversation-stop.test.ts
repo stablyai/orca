@@ -1,6 +1,3 @@
-// A Stop that names no turn, against the Claude adapter: the gap between writing a message and
-// Claude echoing it back is exactly where no turn id exists yet, and the interrupt must still land.
-
 import { describe, expect, it } from 'vitest'
 import { acquired, fakeClaude, USER_MESSAGE } from './claude-structured-session-test-support'
 
@@ -10,7 +7,6 @@ function interrupts(claude: ReturnType<typeof fakeClaude>): number {
 
 async function written(claude: ReturnType<typeof fakeClaude>) {
   const adapter = await acquired(claude)
-  // No replay: the message is written and Claude has not opened its turn.
   await expect(
     adapter.dispatch({
       sessionId: 'session-1',
@@ -18,7 +14,7 @@ async function written(claude: ReturnType<typeof fakeClaude>) {
       body: USER_MESSAGE,
       fence: 7
     })
-  ).resolves.toEqual({ state: 'admitted' })
+  ).resolves.toMatchObject({ state: 'admitted' })
   return adapter
 }
 
@@ -33,7 +29,7 @@ describe('Claude Stop that names no turn', () => {
     expect(interrupts(claude)).toBe(1)
   })
 
-  it('interrupts that gap the same way when the Stop names a turn that is not live', async () => {
+  it('interrupts that gap the same way when the Stop names a turn with no journal row yet', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const adapter = await written(claude)
 
@@ -76,7 +72,7 @@ describe('Claude Stop that names no turn', () => {
     const claude = fakeClaude({ replayUuid: null })
     const adapter = await written(claude)
     const connection = claude.connections[0]!
-    // The echo that opens the turn arrives after Orca wrote the interrupt, before Claude answers it.
+    // Deliver the echo between the interrupt write and its acknowledgement.
     claude.routes.interrupt = () => {
       connection.handlers.onMessage?.({ ...connection.sent[0]!, uuid: 'turn-late' })
       return undefined
@@ -95,7 +91,7 @@ describe('Claude Stop that names no turn', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(connection.sent).toHaveLength(2)
   })
 })

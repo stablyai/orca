@@ -74,7 +74,11 @@ describe.each(['runtime', 'relay'] as const)('missing search status over %s', (t
   it.each([{ supportedAgents: [] }, { supportedAgents: ['future-agent'] }])(
     'honors explicit narrow host vocabulary $supportedAgents',
     async ({ supportedAgents }) => {
-      const call = vi.fn(async () => ({ ...unavailableSessionSearchStatus(), supportedAgents }))
+      const call = vi.fn(async (method: string) =>
+        method === 'aiVault.searchStatus'
+          ? { ...unavailableSessionSearchStatus(), supportedAgents }
+          : searchResults()
+      )
       expect(
         await createSessionSearchClient(call, transport).searchSessions({
           query: 'needle',
@@ -123,6 +127,12 @@ describe.each(['runtime', 'relay'] as const)('missing search status over %s', (t
         filters: { agents: ['claude'] }
       })
     ).toEqual({ kind: 'unavailable', reason: 'no-service' })
-    expect(call.mock.calls.map(() => true)).toHaveLength(2)
+    expect(call.mock.calls).toEqual([
+      ['aiVault.searchStatus', {}],
+      [
+        'aiVault.searchSessions',
+        expect.objectContaining({ query: 'needle', filters: { agents: ['claude'] } })
+      ]
+    ])
   })
 })

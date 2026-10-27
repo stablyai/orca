@@ -1,24 +1,74 @@
-import type { AgentJournalMessageItem } from './agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalMessageItem,
+  AgentJournalSkillRef
+} from './agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+import type { z } from 'zod'
+import {
+  MAX_SKILL_REFS,
+  type SendBody
+} from './rpc-contract/structured-agent-session-message-params'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 
-export type StructuredAgentSessionSendMutation = {
-  envelope: AgentSessionMutationEnvelope
-  body: AgentJournalMessageItem
+/** Control fields affect the operation fingerprint, never the body hash used for provider echoes. */
+export type StructuredAgentSessionSendControl = {
   delivery?: 'queue-if-active'
+  options?: Readonly<Record<string, string>>
+  usageLimitContinuationOfTurnItemId?: string
 }
 
-/** The `agentSession.send` arguments for one message. Typed rather than wire-shaped so a host
- *  calling its own send path builds the same envelope a client would, fingerprint included. */
-export function structuredAgentSessionMessageSendMutation(message: {
-  sessionId: string
-  clientOperationId: string
-  expectedRuntimeFence: number
+export type StructuredAgentSessionSendMutation = StructuredAgentSessionSendControl & {
+  envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem
-  delivery?: 'queue-if-active'
-}): StructuredAgentSessionSendMutation {
-  // `delivery` joins the OPERATION fingerprint exactly as the host digests it; never the body's.
-  const fields = { body: message.body, ...(message.delivery ? { delivery: message.delivery } : {}) }
+}
+
+export function agentSessionSendControlFields(
+  send: StructuredAgentSessionSendControl
+): StructuredAgentSessionSendControl {
+  return {
+    ...(send.delivery ? { delivery: send.delivery } : {}),
+    ...(send.options ? { options: send.options } : {}),
+    ...(send.usageLimitContinuationOfTurnItemId
+      ? { usageLimitContinuationOfTurnItemId: send.usageLimitContinuationOfTurnItemId }
+      : {})
+  }
+}
+
+export function agentSessionSendFields(
+  send: StructuredAgentSessionSendControl & { body: AgentJournalMessageItem }
+): StructuredAgentSessionSendControl & { body: AgentJournalMessageItem } {
+  return { body: agentSessionMessagePayload(send.body), ...agentSessionSendControlFields(send) }
+}
+
+/** Exclude sender metadata because the provider never receives it; preserve body hashes for legacy messages and echo matching. */
+export function agentSessionMessagePayload(body: AgentJournalMessageItem): AgentJournalMessageItem {
+  const { from: _sender, ...payload } = body
+  return payload
+}
+
+/** The body-only hash a submission and a queued draft store, and a provider echo is matched by. */
+export function agentSessionSendBodyFingerprint(
+  sessionId: string,
+  body: AgentJournalItemBody
+): string {
+  return structuredAgentSessionPayloadFingerprint({
+    method: 'agentSession.send',
+    sessionId,
+    fields: { body: body.kind === 'message' ? agentSessionMessagePayload(body) : body }
+  })
+}
+
+/** Host-owned sends use the same typed envelope/fingerprint as clients. */
+export function structuredAgentSessionMessageSendMutation(
+  message: {
+    sessionId: string
+    clientOperationId: string
+    expectedRuntimeFence: number
+    body: AgentJournalMessageItem
+  } & StructuredAgentSessionSendControl
+): StructuredAgentSessionSendMutation {
+  const control = agentSessionSendControlFields(message)
   return {
     envelope: {
       sessionId: message.sessionId,
@@ -27,9 +77,65 @@ export function structuredAgentSessionMessageSendMutation(message: {
       payloadFingerprint: structuredAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
         sessionId: message.sessionId,
-        fields
+        fields: agentSessionSendFields(message)
       })
     },
-    ...fields
+    body: message.body,
+    ...control
   }
+}
+
+export type StructuredAgentSessionAttachment = {
+  path: string
+  previewUri: string
+  /** The SSH connection a remote image lives on; kept by the client, never sent. */
+  connectionId?: string
+}
+
+export class SkillRefLimitError extends Error {}
+
+/** Text then images, retaining only picked skills still mentioned by $name. */
+export function structuredAgentSessionSendBody(
+  text: string,
+  attachments: readonly StructuredAgentSessionAttachment[],
+  skills: readonly AgentJournalSkillRef[] = []
+): z.infer<typeof SendBody> {
+  const picked = pickedSkillsInText(text, skills)
+  if (picked.length > MAX_SKILL_REFS) {
+    throw new SkillRefLimitError()
+  }
+  return {
+    kind: 'message',
+    role: 'user',
+    blocks: [
+      ...(text.trim().length > 0 ? [{ type: 'text' as const, text: text.trimEnd() }] : []),
+      ...attachments.map((attachment) => ({ type: 'image-ref' as const, path: attachment.path }))
+    ],
+    ...(picked.length > 0 ? { skills: picked } : {})
+  }
+}
+
+export function pickedSkillsInText(
+  text: string,
+  skills: readonly AgentJournalSkillRef[]
+): AgentJournalSkillRef[] {
+  const seen = new Set<string>()
+  return skills.filter((skill) => {
+    if (seen.has(skill.path) || !textNamesSkill(text, skill.name)) {
+      return false
+    }
+    seen.add(skill.path)
+    return true
+  })
+}
+
+function textNamesSkill(text: string, name: string): boolean {
+  const token = `$${name}`
+  for (let at = text.indexOf(token); at !== -1; at = text.indexOf(token, at + 1)) {
+    // Match Codex mention boundaries: $review, ends at review.
+    if (!/[\w:-]/u.test(text.charAt(at + token.length))) {
+      return true
+    }
+  }
+  return false
 }

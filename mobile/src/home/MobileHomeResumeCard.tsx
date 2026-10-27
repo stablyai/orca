@@ -1,6 +1,8 @@
 import { ChevronRight, Terminal } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HomeResumeCard } from '../worktree/home-resume-card'
 
 const REPO_COLORS = ['#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4']
@@ -17,6 +19,7 @@ export function MobileHomeResumeCard(props: {
   card: HomeResumeCard
   onOpen: (card: HomeResumeCard) => void
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       disabled={!props.card.actionable}
@@ -53,7 +56,7 @@ export function MobileHomeResumeCard(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   resumeCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -81,4 +84,4 @@ const styles = StyleSheet.create({
   resumeSub: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
   repoDot: { width: 7, height: 7, borderRadius: 3.5 },
   resumeSubText: { fontSize: 12, color: colors.textSecondary, flex: 1 }
-})
+}))

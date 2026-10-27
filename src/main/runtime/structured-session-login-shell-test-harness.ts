@@ -1,15 +1,11 @@
-/**
- * A structured session's child env beside a HOME whose login profiles put a stand-in global `orca`
- * first, as `/usr/local/bin` often is. Shared by the bash suite (every lane) and the zsh suite
- * (the real-shell lane, which installs zsh).
- */
+/** Bash/zsh login profiles put a fake global Orca first; zsh runs only in the real-shell lane. */
 
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { runProcess } from '../../shared/child-process/run-process'
-import { structuredSessionChildIdentityEnv } from './structured-session-child-identity-env'
+import { runProcess } from '@orca/process-host'
+import { sealedChildEnv } from './structured-session-child-env.test-support'
 
 const SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
 
@@ -40,7 +36,7 @@ export function createLoginShellHarness(): LoginShellHarness {
   writeFileSync(join(home, '.zprofile'), prependGlobal)
   writeFileSync(join(home, '.bash_profile'), prependGlobal)
   installFakeAppEnvironment({ isPackaged: () => false, getPath: () => userData })
-  const env = structuredSessionChildIdentityEnv(SESSION_ID, { HOME: home, PATH: '/usr/bin:/bin' })
+  const env = sealedChildEnv(SESSION_ID, { HOME: home, PATH: '/usr/bin:/bin' })
   return {
     run: async (spec) => (await runProcess({ ...spec, env })).stdout,
     dispose: () => rmSync(root, { recursive: true, force: true })

@@ -11,7 +11,7 @@ import {
   type NativeChatTurnStatus
 } from '../../../../shared/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import {
   buildNativeChatTranscriptSlots,
@@ -67,8 +67,31 @@ function toolRun(id: string): NativeChatMessage {
 }
 
 describe('transcript slots', () => {
-  // The trailing run is the one still live while the turn works. Prose or a
-  // further run after it settles it; a reasoning aside leaves it live.
+  it('shows unresolved historical input without a timer or unanchored live attribution', () => {
+    const message = text('follow-up', 'keep this text', 'user')
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: message.id,
+        revision: 0,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: message.blocks },
+        turnScope: { kind: 'unknown' }
+      }
+    ]
+    const membership = nativeChatTurnMembership([message], { items, submissions: [] })
+    const slots = build([message], { ...membership, isWorking: true, lifecycleWorking: true })
+    expect(slots).toHaveLength(1)
+    expect(slots[0]).toMatchObject({
+      message,
+      drawsMessage: true,
+      activeTurnIsWorking: false,
+      turnFolds: false
+    })
+    expect(slots[0]?.turnKey).toBeUndefined()
+    expect(slots[0]?.status).toBeUndefined()
+  })
+  // Only newer speech/actions settle the trailing run; reasoning remains in the same batch.
   it('marks the last row that speaks or acts as the trailing run', () => {
     const trailing = (messages: NativeChatMessage[]) =>
       build(messages)
@@ -76,15 +99,14 @@ describe('transcript slots', () => {
         .map((slot) => slot.message.id)
 
     expect(trailing([text('u', 'go', 'user'), toolRun('a'), text('b', 'Done.')])).toEqual(['b'])
-    expect(trailing([text('u', 'go', 'user'), toolRun('a'), toolRun('b')])).toEqual(['b'])
+    expect(trailing([text('u', 'go', 'user'), toolRun('a'), toolRun('b')])).toEqual(['a'])
     expect(
       trailing([text('u', 'go', 'user'), toolRun('a'), text('r', 'hmm', 'reasoning')])
     ).toEqual(['a'])
     expect(trailing([toolRun('a'), text('u', 'again', 'user')])).toEqual(['a'])
   })
 
-  // Approving a call lets that call run, and it sits in the run above the
-  // receipt. A question's receipt blocks the agent on the reader, so it does not.
+  // Approval receipts leave the tool running above them; question receipts block on the reader.
   it('keeps the run above an approval receipt trailing, but not above a question', () => {
     const resolution = {
       state: 'resolved' as const,
@@ -107,11 +129,27 @@ describe('transcript slots', () => {
     expect(trailing('question')).toEqual(['question'])
   })
 
-  // A counted row that draws nothing is a gap in the transcript: it reserves
-  // estimated height for a bubble that never appears.
   it('gives no slot to a message with nothing to draw', () => {
     const slots = build([text('a', 'visible'), text('blank', ''), text('b', 'also visible')])
     expect(slots.map((slot) => slot.message.id)).toEqual(['a', 'b'])
+  })
+
+  it("marks a row as continuing its turn only when the agent's next step follows", () => {
+    const continuing = (messages: NativeChatMessage[]) =>
+      build(messages)
+        .filter((slot) => slot.continuesTurn)
+        .map((slot) => slot.message.id)
+
+    expect(continuing([text('u', 'go', 'user'), text('a', 'looking'), toolRun('b')])).toEqual([
+      'u',
+      'a'
+    ])
+    expect(
+      continuing([text('u', 'go', 'user'), text('answer', 'done'), text('n', 'notice', 'system')])
+    ).toEqual(['u'])
+    expect(
+      continuing([text('u', 'go', 'user'), text('answer', 'done'), text('u2', 'next', 'user')])
+    ).toEqual(['u'])
   })
 
   it('keeps a message whose only content is a turn status under it', () => {
@@ -173,9 +211,7 @@ describe('a send the host rejected', () => {
   const DIAGNOSTIC =
     'The provider stopped before it finished starting: claude stream-json exited (code 1): claude: not signed in.'
 
-  // The restarted child died before starting, so the send was rejected and the exit wrote why.
-  // The local clock had watched the send go pending and stop; that must not settle a turn that
-  // never ran and fold the one row naming the cause behind a "Worked for 0s".
+  // A rejected startup never ran a turn; do not fold its diagnostic behind a locally measured Worked for 0s.
   it('leaves the row naming the cause on screen', () => {
     const messages = [
       text('orca:first-start', DIAGNOSTIC, 'system'),
@@ -257,10 +293,49 @@ describe('a turn no message opened', () => {
     const slots = build(messages, {
       turnStatuses: { active: settled(3), completedByTurn: { u1: settled(3) } }
     })
-    // Folded rows take no slot; the error is the turn's visible end.
     expect(slots.map((slot) => [slot.message.id, slot.folded])).toEqual([
       ['u1', false],
       ['exit', false]
+    ])
+  })
+
+  // Legacy red Orca-stop rows are not agent failures and must stay visible.
+  it("keeps the row about Orca's stop on screen beside the reply it cut, which stays the answer", () => {
+    const orcaStop: NativeChatMessage = {
+      ...failure('orca-stop'),
+      blocks: [
+        {
+          type: 'text' as const,
+          text: 'Codex stopped while this response was in progress.',
+          tone: 'error',
+          presentation: 'orca-stop',
+          orcaStop: { cause: 'update' }
+        }
+      ]
+    }
+    const messages = [text('u1', 'go', 'user'), text('a1', 'Looking.'), toolRun('work'), orcaStop]
+    const slots = build(messages, {
+      turnStatuses: { active: settled(3), completedByTurn: { u1: settled(3) } }
+    })
+    expect(slots.map((slot) => [slot.message.id, slot.folded])).toEqual([
+      ['u1', false],
+      ['a1', false],
+      ['orca-stop', false]
+    ])
+    const neutral: NativeChatMessage = {
+      ...orcaStop,
+      blocks: orcaStop.blocks.map((block) =>
+        block.type === 'text' ? { ...block, tone: 'notice' } : block
+      )
+    }
+    expect(
+      build([...messages.slice(0, 3), neutral], {
+        turnStatuses: { active: settled(3), completedByTurn: { u1: settled(3) } }
+      }).map((slot) => [slot.message.id, slot.folded])
+    ).toEqual([
+      ['u1', false],
+      ['a1', false],
+      ['orca-stop', false]
     ])
   })
 
@@ -303,7 +378,6 @@ describe('the live turn', () => {
       turnScope
     )
 
-  /** "List three fruits", answered and settled; then a turn the provider opened on its own. */
   const messages = [
     text('u1', 'List three fruits', 'user'),
     text('a1', 'Apple, banana, cherry.'),
@@ -437,8 +511,7 @@ describe('the live turn', () => {
   })
 })
 
-// Rows belong to the turn the host says owns them, not to the nearest preceding
-// user bubble. The owned turn keys reshape the fold, the bar and liveness.
+// Host ownership, not nearest prompt position, controls turn folds, bars and liveness.
 describe('turn-owned grouping', () => {
   const settled: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 70 }
   // The #23621 shape: B lands mid-turn, three tool calls follow, one turn.
@@ -458,7 +531,6 @@ describe('turn-owned grouping', () => {
       turnKeys: ownedKeys,
       turnStatuses: { active: null, completedByTurn: { A: settled } }
     })
-    // All four tool rows fold; the steered bubble stays visible with no bar of its own.
     expect(slots.map((slot) => [slot.message.id, slot.status ?? null])).toEqual([
       ['A', settled],
       ['B', null],
@@ -467,21 +539,40 @@ describe('turn-owned grouping', () => {
     expect(slots[0]?.turnFolds).toBe(true)
   })
 
+  it('offers no disclosure when the only row besides the answer draws nothing', () => {
+    const wordless: NativeChatMessage = {
+      id: 'frame',
+      role: 'system',
+      blocks: [
+        {
+          type: 'text',
+          text: 'claude · message:system:memory_recall',
+          providerFrame: {
+            provider: 'claude',
+            kind: 'message:system:memory_recall',
+            payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+          }
+        }
+      ],
+      timestamp: 1,
+      source: 'transcript'
+    }
+    const slots = build([text('A', 'go', 'user'), wordless, text('answer', 'Done.')], {
+      turnKeys: ['A', 'A', 'A'],
+      turnStatuses: { active: null, completedByTurn: { A: settled } }
+    })
+    expect(slots.map((slot) => slot.message.id)).toEqual(['A', 'answer'])
+    expect(slots[0]?.turnFolds).toBe(false)
+  })
+
   it('returns every row of the turn when the reader opens it', () => {
     const slots = build(midTurn, {
       turnKeys: ownedKeys,
       turnStatuses: { active: null, completedByTurn: { A: settled } },
       expandedTurnKeys: new Set(['A'])
     })
-    expect(slots.map((slot) => slot.message.id)).toEqual([
-      'A',
-      't1',
-      'B',
-      't2',
-      't3',
-      't4',
-      'answer'
-    ])
+    expect(slots.map((slot) => slot.message.id)).toEqual(['A', 't1', 'B', 't2', 'answer'])
+    expect(slots[3]?.workRun?.map((message) => message.id)).toEqual(['t2', 't3', 't4'])
   })
 
   it("anchors a provider-opened turn's bar above its first row", () => {
@@ -541,5 +632,20 @@ describe('turn-owned grouping', () => {
       ['t1', true],
       ['C', false]
     ])
+  })
+
+  it('skips only the open reasoning the live line discloses, and only while it does', () => {
+    const reasoning = (id: string, state: 'running' | 'completed'): NativeChatMessage => ({
+      ...text(id, 'Weighing two approaches', 'reasoning'),
+      state
+    })
+    const live = { turnKeys: ['A', 'A', 'A'], liveTurnKey: 'A', isWorking: true }
+    const rows = [text('A', 'go', 'user'), reasoning('r-1', 'running'), reasoning('r-2', 'running')]
+    const ids = (overrides: Partial<Parameters<typeof build>[1]>) =>
+      build(rows, { ...live, ...overrides }).map((slot) => slot.message.id)
+    expect(ids({ liveReasoningId: 'r-2' })).toEqual(['A', 'r-1'])
+    // Nothing discloses it (a prompt took the line, or it says something else): it draws.
+    expect(ids({ liveReasoningId: null })).toEqual(['A', 'r-1', 'r-2'])
+    expect(ids({})).toEqual(['A', 'r-1', 'r-2'])
   })
 })

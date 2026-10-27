@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { runtimePathsExist } from './runtime-path-existence-batch'
-import { runtimePathExists } from './runtime-file-metadata-client'
+import { isMissingRuntimePathError, runtimePathExists } from './runtime-file-metadata-client'
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
@@ -33,7 +33,7 @@ for (const mode of ['scalar', 'batch'] as const) {
       error: { code: 'not_found', message: 'Worktree not found: id:folder-1' }
     })
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'owner' },
+      target: { kind: 'environment' as const, environmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }
@@ -67,7 +67,7 @@ for (const stage of ['status', 'operation'] as const) {
     )
     runtimeEnvironmentCall.mockImplementation(async () => failure())
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'owner' },
+      target: { kind: 'environment' as const, environmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }
@@ -77,3 +77,12 @@ for (const stage of ['status', 'operation'] as const) {
     }
   })
 }
+
+it('reads an older host ENOTDIR as missing, but not a file merely named after it', () => {
+  expect(
+    isMissingRuntimePathError(new Error("ENOTDIR: not a directory, stat '/r/a.txt/b.txt'"))
+  ).toBe(true)
+  expect(
+    isMissingRuntimePathError(new Error("EACCES: permission denied, stat '/r/enotdir-handling.ts'"))
+  ).toBe(false)
+})

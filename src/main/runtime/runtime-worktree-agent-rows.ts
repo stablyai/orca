@@ -1,8 +1,13 @@
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
+import { isAgentStatusFresh } from '../../shared/agent-status-freshness'
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
-import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
-import type { RuntimeWorkingTerminalEvidence } from './runtime-worktree-ps-activity'
+import {
+  resolveRuntimeWorktreeSidebarStatus,
+  terminalTitleEvidenceMatchesSource
+} from './runtime-worktree-sidebar-status'
+import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
+import type { RuntimeTerminalTitleEvidence } from './runtime-worktree-ps-activity'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 export type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
 
@@ -14,20 +19,10 @@ type OrchestrationDisplay = {
 
 export function attachRuntimeWorktreeAgentRows(args: {
   summaries: Map<string, RuntimeWorktreePsSummary>
-  pathIndex: RuntimeWorktreeSummaryPathIndex
-  missingWorktreeIds: Set<string>
   rowSources: ReadonlyMap<string, RuntimeWorktreeAgentSource>
-  workingTerminalEvidenceByWorktreeId: ReadonlyMap<
-    string,
-    readonly RuntimeWorkingTerminalEvidence[]
-  >
+  terminalTitleEvidenceByWorktreeId: ReadonlyMap<string, readonly RuntimeTerminalTitleEvidence[]>
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
-  getSummary: (
-    summaries: Map<string, RuntimeWorktreePsSummary>,
-    pathIndex: RuntimeWorktreeSummaryPathIndex,
-    missingWorktreeIds: Set<string>,
-    worktreeId: string
-  ) => RuntimeWorktreePsSummary | null
+  getSummary: RuntimeWorktreePsSummaryLookup
 }): void {
   const { rowSources } = args
   const now = Date.now()
@@ -37,12 +32,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
     if (!worktreeId) {
       continue
     }
-    const summary = args.getSummary(
-      args.summaries,
-      args.pathIndex,
-      args.missingWorktreeIds,
-      worktreeId
-    )
+    const summary = args.getSummary(worktreeId)
     if (!summary) {
       continue
     }
@@ -63,7 +53,14 @@ export function attachRuntimeWorktreeAgentRows(args: {
       ...(source.mainAgent ? { mainAgent: source.mainAgent } : {}),
       stateStartedAt: source.stateStartedAt,
       updatedAt: source.updatedAt,
-      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
+      ...(source.children !== undefined ? { children: source.children } : {}),
+      ...(source.subagents !== undefined ? { subagents: source.subagents } : {}),
+      ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {}),
+      ...(source.hasLivePty ? { hasLivePty: true as const } : {}),
+      ...(source.programStatus ? { programStatus: source.programStatus } : {})
+    }
+    if (source.children !== undefined || source.subagents !== undefined) {
+      row.subagentObservation = isAgentStatusFresh(row, now) ? 'live' : 'unverifiable'
     }
     const rows = rowsByWorktree.get(summary.worktreeId)
     if (rows) {
@@ -101,9 +98,11 @@ export function attachRuntimeWorktreeAgentRows(args: {
     }
     if (hasForegroundWorkingAgent || monitoringSources.length > 0) {
       const hasIndependentWorkingTerminal = (
-        args.workingTerminalEvidenceByWorktreeId.get(worktreeId) ?? []
-      ).some((evidence) =>
-        monitoringSources.every((source) => !workingTerminalEvidenceMatchesSource(evidence, source))
+        args.terminalTitleEvidenceByWorktreeId.get(worktreeId) ?? []
+      ).some(
+        (evidence) =>
+          evidence.status === 'working' &&
+          monitoringSources.every((source) => !terminalTitleEvidenceMatchesSource(evidence, source))
       )
       mergeWorktreeSummaryStatus(
         summary,
@@ -112,20 +111,12 @@ export function attachRuntimeWorktreeAgentRows(args: {
       )
     }
   }
-}
-
-function workingTerminalEvidenceMatchesSource(
-  evidence: RuntimeWorkingTerminalEvidence,
-  source: RuntimeWorktreeAgentSource
-): boolean {
-  if (evidence.paneKey) {
-    return (
-      evidence.paneKey === source.paneKey ||
-      Boolean(evidence.ptyId && source.ptyId && evidence.ptyId === source.ptyId)
+  for (const summary of args.summaries.values()) {
+    summary.sidebarStatus = resolveRuntimeWorktreeSidebarStatus(
+      summary,
+      now,
+      args.terminalTitleEvidenceByWorktreeId.get(summary.worktreeId) ?? [],
+      (paneKey) => rowSources.get(paneKey)
     )
   }
-  if (evidence.ptyId && source.ptyId) {
-    return evidence.ptyId === source.ptyId
-  }
-  return Boolean(evidence.tabId && evidence.tabId === source.tabId)
 }

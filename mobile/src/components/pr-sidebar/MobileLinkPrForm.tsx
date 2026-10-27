@@ -1,9 +1,14 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
-import { parseGitHubPrReference } from '../../source-control/github-pr-link-parse'
+import {
+  parseGitHubIssueOrPRLink,
+  parseGitHubIssueOrPRNumber
+} from '../../../../src/shared/github/links'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
 import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 
@@ -14,15 +19,23 @@ type Props = {
   onLinked: () => void
 }
 
-// Link-an-existing-PR form body (number or GitHub URL). Renders a plain View so
-// it can sit inline inside the PR sidebar's ScrollView, mirroring the compose
-// form fix — a BottomDrawer overlay nested in a ScrollView gets clipped.
+// Desktop's parser accepts any GitHub host (GHES included); an issue URL is not a PR link.
+function parsePrReference(input: string): number | null {
+  const link = parseGitHubIssueOrPRLink(input)
+  if (link) {
+    return link.type === 'pr' ? link.number : null
+  }
+  return parseGitHubIssueOrPRNumber(input)
+}
+
+// Use inline View inside sidebar ScrollView; nested BottomDrawer overlay clips, matching compose-form constraint.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
+  useMobileColorScheme()
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const parsed = parseGitHubPrReference(input)
+  const parsed = parsePrReference(input)
 
   const submit = useCallback(async () => {
     if (!client || submitting || parsed === null) {
@@ -89,7 +102,7 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -132,4 +145,4 @@ const styles = StyleSheet.create({
   submitDisabled: { opacity: 0.45 },
   submitPressed: { opacity: 0.8 },
   submitText: { color: colors.bgBase, fontSize: typography.bodySize, fontWeight: '600' }
-})
+}))

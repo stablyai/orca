@@ -2,49 +2,37 @@ import { gunzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { CMD_EXE_COMMAND_LINE_MAX_CHARS } from '../providers/windows-shell-args'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { tryStealInstallLockCommand } from './ssh-relay-install-lock-commands'
+import { tryStealInstallLockCommand } from '../managed-server/install/remote-install-lock-commands'
 import { decodeRemotePowerShellScript, powerShellCommand } from './ssh-remote-powershell'
 import {
   makeWindowsPublishStagedFileCommand,
   makeWindowsWriteFileCommand
-} from './system-ssh-windows-file-write'
-import {
-  cleanupOwnedRelayUploadStageCommand,
-  promoteOwnedRelayUploadStageCommand,
-  recoverOneStaleRelayUploadStageCommand,
-  reserveRelayUploadStageCommand,
-  type RelayUploadStageSlot
-} from './ssh-relay-upload-stage-commands'
+} from './system-transport/system-ssh-windows-file-write'
 
 const windows = getRemoteHostPlatform('win32-x64')
-const owner = '.sftp-namespace-123e4567e89b12d3a456426614174000'
-const pool = 'C:\\Users\\orca\\.orca-remote\\.upload-stages'
-const stage: RelayUploadStageSlot = {
-  poolDir: pool,
-  slotName: 'slot-0',
-  slotDir: `${pool}\\slot-0`,
-  claimDir: `${pool}\\claim-0`,
-  deleteDir: `${pool}\\delete-0`
-}
-
-// Why: sshd runs an exec request through its DefaultShell, which is cmd.exe on a
-// stock Windows OpenSSH install, and cmd.exe refuses a longer line with exit 1
-// and a localized "The command line is too long" — the whole connect dies there.
+// Stock sshd's cmd.exe DefaultShell rejects oversized exec lines with localized diagnostics.
 describe('Windows remote command line limit', () => {
   it.each([
-    ['recover stale upload stage', recoverOneStaleRelayUploadStageCommand(windows, pool)],
-    ['reserve upload stage', reserveRelayUploadStageCommand(windows, pool, owner)],
-    [
-      'promote upload stage',
-      promoteOwnedRelayUploadStageCommand(windows, stage, owner, 'C:\\Users\\orca\\.orca-remote')
-    ],
-    ['cleanup upload stage', cleanupOwnedRelayUploadStageCommand(windows, stage, owner)],
     [
       'steal stale install lock',
       tryStealInstallLockCommand(windows, 'C:\\Users\\orca\\.orca-remote\\relay', 1_200)
     ],
-    // F11 flagged these two as uncovered. They carry one path literal each, so they are the file
-    // commands whose length a caller can actually move.
+    [
+      'steal an exited holder\u2019s install lock',
+      tryStealInstallLockCommand(
+        windows,
+        'C:\\Users\\orca\\.orca-remote\\orcad-1.4.214+0123456789abcdef\\.install-lock',
+        1_200,
+        { fileName: '.orca-fence-owner', token: '123e4567-e89b-12d3-a456-426614174000' },
+        {
+          fileName: '.orca-fence-owner',
+          token: '123e4567-e89b-12d3-a456-426614174001',
+          quietSeconds: 180,
+          mutationLock: 'C:\\Users\\orca\\.orca-remote\\orcad-state-mutation.lock'
+        }
+      )
+    ],
+    // These file commands carry caller-controlled path literals and must stay within the same budget.
     ['write file', makeWindowsWriteFileCommand('C:\\Users\\orca\\.orca-remote\\relay.js')],
     [
       'publish staged file',
@@ -92,12 +80,7 @@ describe('Windows remote command line limit', () => {
   })
 })
 
-/**
- * F11 asked whether a pathological path could reach the budget, and what happens if it does.
- * Measured: the inline encoding crosses 8000 at roughly 2500 high-entropy path characters — an
- * order of magnitude past what Windows itself accepts — and the failure is a throw before any ssh
- * is spawned, never a hang.
- */
+/** Check headroom with compressible paths and pre-spawn refusal with high-entropy paths that exceed the budget. */
 describe('Windows file command budget headroom', () => {
   it('absorbs a path far longer than Windows will accept', () => {
     const deep = `C:\\Users\\orca\\${'segment\\'.repeat(30)}relay.js`

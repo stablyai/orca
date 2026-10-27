@@ -6,6 +6,7 @@ import zh from '@/i18n/locales/zh.json'
 import {
   AGENT_SESSION_ATTACHMENT_PROBLEM_REASONS,
   AGENT_SESSION_FAILURE_KINDS,
+  readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
 } from '../../../../shared/agent-session-failure'
 import {
@@ -20,7 +21,7 @@ import {
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session-write-notice-copy'
 import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
-import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 
@@ -36,16 +37,24 @@ const IDS = Object.keys(AGENT_SESSION_FAILURE_COPY).filter(
 const NOTICE_PIECES: readonly AgentSessionFailureCopyId[] = [
   'terminalAgentHoldsChat',
   'quitTerminalAgent',
-  'startNewChat'
+  'startNewChat',
+  'backgroundTasksRunning',
+  'waitForBackgroundTasks',
+  'agentStarting',
+  'waitForStart',
+  'agentStillWorking'
 ]
 // Kana, and kanji whose simplified Chinese form differs (続 is 续, 読 is 读, ...).
 const JAPANESE_ONLY = /[\u3040-\u30ff続読変済図気帰戻検択転権単圧応対発処実証覧関専]/u
 const VALUES = {
   agent: 'Claude',
+  loginCommand: 'agent login',
+  slashCommand: '/login',
   command: 'compact',
   detail: 'Image type .bmp',
   limit: '20',
-  size: '5'
+  size: '5',
+  option: '--remote'
 }
 
 function factsFor(kind: AgentSessionFailureFact['kind']): AgentSessionFailureFact[] {
@@ -80,6 +89,55 @@ afterEach(async () => {
 })
 
 describe('desktop words for a failure fact', () => {
+  it.each(['Claude', 'Codex'])(
+    'names %s in terminal refusals on every failure surface',
+    (agentName) => {
+      for (const surface of ['row', 'rejection', 'answer'] as const) {
+        expect(
+          agentSessionFailureSentence(
+            { kind: 'conversationOpenInTerminal' },
+            surface,
+            { agentName },
+            sayAgentSessionFailureTranslated
+          )
+        ).toBe(
+          `${agentName} is already running this conversation in another terminal. Quit ${agentName} there or close that terminal to continue here.`
+        )
+      }
+      expect(
+        agentSessionFailureSentence(
+          { kind: 'conversationOpenElsewhere' },
+          'row',
+          { agentName: 'Codex' },
+          sayAgentSessionFailureTranslated
+        )
+      ).toBe(
+        'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.'
+      )
+    }
+  )
+
+  it.each([
+    ['en', 'Then send your message again.'],
+    ['es', 'Después, envía tu mensaje de nuevo.'],
+    ['fr', 'Puis envoyez à nouveau votre message.'],
+    ['ja', 'その後、メッセージをもう一度送信してください。'],
+    ['ko', '그런 다음 메시지를 다시 보내세요.'],
+    ['zh', '然后再次发送消息。']
+  ])('keeps %s copy while separating an unpunctuated provider detail', async (locale, retry) => {
+    await i18n.changeLanguage(locale)
+    const fact = {
+      kind: 'notSignedIn',
+      detail: { text: 'See {{agent}} docs/models.md', audience: 'person' }
+    } as const
+    const context = { agentName: 'Pi' }
+    const row = agentSessionFailureSentence(fact, 'row', context, sayAgentSessionFailureTranslated)
+    expect(row.endsWith(fact.detail.text)).toBe(true)
+    expect(
+      agentSessionFailureSentence(fact, 'rejection', context, sayAgentSessionFailureTranslated)
+    ).toBe(`${row}. ${retry}`)
+  })
+
   it('has a key for every piece, whose English default is the shared sentence', () => {
     for (const id of IDS) {
       expect([id, sayAgentSessionFailureTranslated(id, VALUES)]).toEqual([
@@ -139,18 +197,18 @@ describe('desktop words for a failure fact', () => {
         agentSessionWriteNoticeParts(refused, 'send', { agentName: 'Claude' })
       )
     ).toBe(
-      "Votre message n'a pas été envoyé. Claude n'est pas connecté avec le compte sélectionné. Connectez-vous, puis renvoyez votre message."
+      "Votre message n'a pas été envoyé. Claude n’est pas connecté. Exécutez `claude auth login`, ou choisissez un compte dans les paramètres des Comptes Claude."
     )
     const detail = 'Uses {{agent}} $t(components.native-chat.failureWords.theAgent) <b>&</b>'
     const rejected = structuredAgentSessionRejectionParts(
-      `The provider did not accept this message: ${detail}.`,
+      `Codex didn't accept this message: ${detail}.`,
       'send',
       { kind: 'providerRejected', detail: { text: detail, audience: 'person' } },
       { agentName: 'Codex' }
     )
     // The provider's own words stay as written: placeholders, nesting and markup are not read.
     expect(agentSessionWriteNoticeText(rejected)).toBe(
-      `Le fournisseur n'a pas accepté ce message : ${detail}.`
+      `Codex n'a pas accepté ce message : ${detail}.`
     )
     expect(
       agentSessionWriteNoticeText(
@@ -172,7 +230,7 @@ describe('desktop words for a failure fact', () => {
       "Codex n'a pas pu redémarrer. Relancez /compact."
     )
     expect(sentence('notSignedIn', 'clear')).toBe(
-      "Codex n'est pas connecté avec le compte sélectionné. Connectez-vous, puis relancez /clear."
+      'Codex n’est pas connecté. Exécutez `codex login`. Relancez /clear.'
     )
     await i18n.changeLanguage('ja')
     expect(sentence('providerStartFailed', 'compact')).toBe(
@@ -180,6 +238,20 @@ describe('desktop words for a failure fact', () => {
     )
     expect(sentence('managedAccountUnsupported', 'compact')).toBe(
       'WSL に Claude アカウントが追加されている間、Claude チャットには Windows の Claude アカウントが必要です。Claude アカウントの設定で選択または追加してから、/compact をもう一度実行してください。'
+    )
+  })
+
+  it("says which request a start ran out of time on in the reader's language", async () => {
+    await i18n.changeLanguage('fr')
+    expect(
+      agentSessionFailureSentence(
+        { kind: 'startFailed', requestTimeout: { method: 'thread/start', timeoutMs: 30_000 } },
+        'row',
+        { agentName: 'Codex', retryControl: true },
+        sayAgentSessionFailureTranslated
+      )
+    ).toBe(
+      "Codex a mis trop de temps à démarrer (aucune réponse à thread/start après 30 s). Si cela se reproduit, l'ordinateur qui exécute ce chat est peut-être surchargé."
     )
   })
 
@@ -219,6 +291,22 @@ describe('desktop words for a failure fact', () => {
     expect(sentence('totalTooLarge', 20)).toBe(
       "Les images de ce message dépassent 20 Mo au total, le message n'a donc pas été envoyé."
     )
+  })
+
+  it('uses the host sentence if the argument detail is newer than this reader', () => {
+    const sentence = 'Codex could not start. Edit saved Arguments in Settings > Agents.'
+    expect(
+      agentSessionWriteNoticeText(
+        structuredAgentSessionRejectionParts(
+          sentence,
+          'send',
+          readWholeAgentSessionFailureFact({
+            kind: 'startFailed',
+            argumentProblem: { agent: 'Codex', option: '--remote', problem: 'futureProblem' }
+          })
+        )
+      )
+    ).toBe(sentence)
   })
 
   it('shows a host sentence with no fact beside it as written', async () => {

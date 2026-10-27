@@ -12,7 +12,7 @@ import { orcadNodeRuntimeRelativePath } from '../../src/shared/orcad-artifacts.t
 import { ORCAD_PREBUILDS_DIR } from './build-orcad-prebuilds.mjs'
 import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
 import { ensurePinnedNodeExecutable } from './pinned-node-downloads.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { currentTarget } from './server-build-target.mjs'
 
 const root = resolve(import.meta.dirname, '../..')

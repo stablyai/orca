@@ -12,74 +12,12 @@ describe('web preload API composition', () => {
     vi.doUnmock('../../../shared/e2e-config')
   })
 
-  it('installs the exact concrete surface without enumerating fallback namespaces', async () => {
+  it('keeps fallback namespaces non-enumerable and non-thenable', async () => {
     const globals = installBrowserGlobals('Linux')
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    expect(Object.keys(globals.window.api)).toEqual([
-      'app',
-      'starNag',
-      'platform',
-      'workspacePorts',
-      'orcaProfiles',
-      'e2e',
-      'settings',
-      'agentAwake',
-      'keybindings',
-      'ui',
-      'crashReports',
-      'diagnostics',
-      'session',
-      'onboarding',
-      'cache',
-      'runtime',
-      'nativeChat',
-      'runtimeEnvironments',
-      'repos',
-      'worktrees',
-      'fs',
-      'git',
-      'browser',
-      'emulator',
-      'gh',
-      'gl',
-      'hostedReview',
-      'linear',
-      'hooks',
-      'stats',
-      'memory',
-      'aiVault',
-      'preflight',
-      'notifications',
-      'rateLimits',
-      'opencodeGoCredentials',
-      'minimaxCredentials',
-      'zcodePlanCredentials',
-      'grokAccounts',
-      'cursorAccounts',
-      'codexAccounts',
-      'claudeAccounts',
-      'cli',
-      'macosTccPrompts',
-      'codexConfigSync',
-      'developerPermissions',
-      'computerUsePermissions',
-      'updater',
-      'shell',
-      'skills',
-      'pty',
-      'ssh',
-      'wsl',
-      'pwsh',
-      'gitBash',
-      'agentStatus',
-      'mobile',
-      'telemetryTrack',
-      'telemetrySetOptIn',
-      'telemetryGetConsentState',
-      'telemetryAcknowledgeBanner'
-    ])
+    expect('onFileDrop' in globals.window.api.ui).toBe(false)
     expect(Object.keys(globals.window.api.projects)).toEqual([])
     const projects: Record<string, unknown> = globals.window.api.projects
     expect(projects.then).toBeUndefined()

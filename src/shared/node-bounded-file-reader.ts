@@ -1,4 +1,4 @@
-import { closeSync, constants, fstatSync, openSync, readSync, type Stats } from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readSync, statSync, type Stats } from 'node:fs'
 import { open, stat, type FileHandle } from 'node:fs/promises'
 
 const MIN_GROWTH_BYTES = 64 * 1024
@@ -15,12 +15,23 @@ export class NodeFileReadTooLargeError extends Error {
   }
 }
 
+export class NodeFileNotRegularError extends Error {
+  constructor() {
+    super('Expected a regular file')
+    this.name = 'NodeFileNotRegularError'
+  }
+}
+
 export type BoundedNodeFileRead = {
   buffer: Buffer
   stats: Stats
 }
 
-type NodeFileReadOptions = { regularFileOnly?: boolean; signal?: AbortSignal }
+type NodeFileReadOptions = {
+  regularFileOnly?: boolean
+  signal?: AbortSignal
+  window?: { offset: number; length?: number }
+}
 
 function validateSize(size: number, maxBytes: number): void {
   if (!Number.isSafeInteger(size) || size < 0) {
@@ -38,7 +49,7 @@ export async function readNodeFileWithinLimit(
 ): Promise<BoundedNodeFileRead> {
   options.signal?.throwIfAborted()
   if (options.regularFileOnly && !(await stat(filePath)).isFile()) {
-    throw new Error('Expected a regular file')
+    throw new NodeFileNotRegularError()
   }
   options.signal?.throwIfAborted()
   // Nonblocking open fences replacement with a FIFO after the path check.
@@ -66,7 +77,35 @@ export async function readNodeFileHandleWithinLimit(
   const stats = await handle.stat()
   options.signal?.throwIfAborted()
   if (options.regularFileOnly && !stats.isFile()) {
-    throw new Error('Expected a regular file')
+    throw new NodeFileNotRegularError()
+  }
+  if (options.window) {
+    validateSize(stats.size, Number.MAX_SAFE_INTEGER)
+    const { offset, length = stats.size - options.window.offset } = options.window
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isSafeInteger(length) ||
+      length < 0
+    ) {
+      throw new RangeError('File read window must contain non-negative safe integers')
+    }
+    validateSize(length, maxBytes)
+    if (offset > stats.size || length > stats.size - offset) {
+      throw new Error('File is smaller than the requested window')
+    }
+    const buffer = Buffer.allocUnsafe(length)
+    let read = 0
+    while (read < length) {
+      options.signal?.throwIfAborted()
+      const { bytesRead } = await handle.read(buffer, read, length - read, offset + read)
+      options.signal?.throwIfAborted()
+      if (bytesRead === 0) {
+        throw new Error('File is smaller than the requested window')
+      }
+      read += bytesRead
+    }
+    return { buffer, stats }
   }
   validateSize(stats.size, maxBytes)
 
@@ -108,15 +147,26 @@ export async function readNodeFileHandleWithinLimit(
 
 export function readNodeFileSyncWithinLimit(
   filePath: string,
-  maxBytes: number
+  maxBytes: number,
+  options: { regularFileOnly?: boolean } = {}
 ): BoundedNodeFileRead {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
     throw new RangeError('File read limit must be a non-negative safe integer')
   }
 
-  const descriptor = openSync(filePath, 'r')
+  if (options.regularFileOnly && !statSync(filePath).isFile()) {
+    throw new NodeFileNotRegularError()
+  }
+  // Nonblocking open also fences replacement with a FIFO after the path check.
+  const flags = options.regularFileOnly
+    ? constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
+    : 'r'
+  const descriptor = openSync(filePath, flags)
   try {
     const stats = fstatSync(descriptor)
+    if (options.regularFileOnly && !stats.isFile()) {
+      throw new NodeFileNotRegularError()
+    }
     validateSize(stats.size, maxBytes)
 
     let buffer = Buffer.allocUnsafe(stats.size)

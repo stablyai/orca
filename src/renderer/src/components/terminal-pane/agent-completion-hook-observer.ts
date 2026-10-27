@@ -116,8 +116,7 @@ export function createAgentCompletionHookObserver({
         return
       }
       clearOriginStampedTail()
-      // Why: an exit identity names no turn, so kept past a new turn it matches (by agent) and
-      // swallows every later hook Done of that agent in this pane.
+      // Clear exit identity on a new turn or agent-only matching would swallow every later Done from that agent.
       clearProcessExitCompletion()
       recordWorkingBoundary(payload.stateStartedAt)
       clearPendingHookDone()
@@ -179,7 +178,8 @@ export function createAgentCompletionHookObserver({
       !state.workingStatusObserved &&
       state.lastCompletionSource === 'hook' &&
       state.lastCompletedTurn === state.currentTurn &&
-      Date.now() - state.lastCompletionAt >= 1_000
+      // Why: a new host turn-end stamp is a real end even right after a banner; replays restate it.
+      (Date.now() - state.lastCompletionAt >= 1_000 || payload.turnEndedAt !== undefined)
     ) {
       state.currentTurn += 1
     }

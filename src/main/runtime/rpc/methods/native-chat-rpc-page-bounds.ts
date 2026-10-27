@@ -15,6 +15,7 @@ function oversizedRow(message: NativeChatMessage): NativeChatMessage {
     blocks: [{ type: 'text', text, presentation }],
     timestamp: message.timestamp,
     source: message.source,
+    ...(message.transcriptOrder !== undefined ? { transcriptOrder: message.transcriptOrder } : {}),
     ...(message.transcriptOffset !== undefined
       ? { transcriptOffset: message.transcriptOffset }
       : {})

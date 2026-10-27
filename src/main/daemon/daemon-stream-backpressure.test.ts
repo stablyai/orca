@@ -142,7 +142,6 @@ describe('DaemonStreamBackpressure', () => {
     )
     pressure.setQueued('a', new Map([['flood', 2 * MiB]]))
     expect(paused.has('flood')).toBe(true)
-    // The un-pause the watchdog reaches back through.
     stallTimeouts.get('flood')?.()
     expect(paused.has('flood')).toBe(false)
     expect(pressure.isStallReleased('flood')).toBe(true)
@@ -156,7 +155,7 @@ describe('DaemonStreamBackpressure', () => {
     stallReleased.add('flood')
     pressure.releaseStalledSession('flood')
     expect(paused.size).toBe(0)
-    // Undroppable frames the keep-tail cannot shed must not drag the producer back under.
+    // Undroppable metadata must not pause a stall-released producer again.
     pressure.setQueued('a', new Map([['flood', 2 * MiB]]), new Map([['flood', 4 * MiB]]))
     expect(paused.size).toBe(0)
   })
@@ -188,7 +187,7 @@ describe('DaemonStreamBackpressure', () => {
   it('does not let an old refill callback flush a replacement connection', () => {
     const flush = vi.fn()
     const completions: (() => void)[] = []
-    const write = (_line: string, complete: () => void) => completions.push(complete)
+    const write = (_line: unknown, complete: () => void) => completions.push(complete)
     const refill = new DaemonStreamHeldRefill(flush)
     refill.arm('client', 'session', write)
     refill.clear('client')

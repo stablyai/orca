@@ -1,3 +1,4 @@
+import { endComposition } from '@/lib/ime-composition-event.test-support'
 import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
@@ -14,7 +15,7 @@ vi.mock('./NativeChatComposerActions', () => ({
 }))
 
 vi.mock('./NativeChatAutocompleteMenus', () => ({
-  NativeChatMentionHint: () => null,
+  NativeChatMentionMenu: () => null,
   NativeChatPickerMenu: () => null
 }))
 
@@ -35,7 +36,7 @@ function TestField(props: TestFieldProps): React.JSX.Element {
 
 function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
   return {
-    composerScopeKey: 'pane-test',
+    draftScopeKey: 'pane-test',
     textareaRef: createRef<HTMLTextAreaElement>(),
     draft: '',
     disabled: false,
@@ -43,7 +44,7 @@ function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
     canSend: true,
     autocomplete: { mode: 'none' },
     activeSuggestion: 0,
-    notice: null,
+    notices: [],
     imageAttachments: [],
     sendButtonDisabled: false,
     isWorking: false,
@@ -59,7 +60,8 @@ function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
     pickerListboxId: 'picker',
     onChoosePickerItem: vi.fn(),
     onRetrySkills: vi.fn(),
-    onAcceptMention: vi.fn(),
+    onChooseMentionFile: vi.fn(),
+    mentionFiles: { files: [], loading: false, failed: false },
     onRemoveImageAttachment: vi.fn(),
     onAttach: vi.fn(),
     onDictationToggle: vi.fn(),
@@ -76,15 +78,11 @@ function textarea(): HTMLTextAreaElement {
   return screen.getByRole('textbox') as HTMLTextAreaElement
 }
 
-describe('native chat composer drop-scope marker', () => {
-  // The drop pipeline stops walking at the drop-target marker, so a scope key on
-  // any other element would never reach the payload.
-  it('publishes the scope key on the same element as the drop-target marker', () => {
-    const view = render(<TestField {...fieldProps({ composerScopeKey: 'tab-7:pane-9' })} />)
-    const marker = view.container.querySelector('[data-native-file-drop-target="composer"]')
-    expect(marker).not.toBeNull()
-    expect(marker?.getAttribute('data-composer-scope-key')).toBe('tab-7:pane-9')
-    expect(view.container.querySelectorAll('[data-composer-scope-key]')).toHaveLength(1)
+describe('native chat composer drop ownership', () => {
+  it('keeps the conversation editor key without publishing drop routing markers', () => {
+    const view = render(<TestField {...fieldProps({ draftScopeKey: 'agent-session:session-9' })} />)
+    expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
+    expect(view.container.querySelector('.ProseMirror')).not.toBeNull()
   })
 })
 
@@ -154,14 +152,14 @@ describe('native chat composer composition ownership', () => {
     expect(settledValue).toBe('')
   })
 
-  it('uses the shared Enter gesture owner without swallowing the next deliberate Enter', () => {
+  it('swallows the Enter that confirms a Japanese candidate without eating the next one', () => {
     const onKeyDown = vi.fn()
-    render(<TestField {...fieldProps({ draft: '가', onKeyDown })} />)
+    render(<TestField {...fieldProps({ draft: '日本語', onKeyDown })} />)
     const input = textarea()
     fireEvent.compositionStart(input)
 
     fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: true })
-    fireEvent.compositionEnd(input, { data: '가' })
+    endComposition(input, '日本語')
     const redispatch = fireEvent.keyDown(input, {
       key: 'Enter',
       keyCode: 13,

@@ -1,22 +1,28 @@
 import type { RpcSendParams } from '../transport/rpc-params-contract'
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../src/shared/worktree/hosted-review-links'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import { worktreeLinkSet, worktreeSummaryRead } from './mobile-worktree-metadata-operations'
+import {
+  worktreeLinkSet,
+  worktreeSummaryRead,
+  type MobileWorktreeSummary
+} from './mobile-worktree-metadata-operations'
 
-// Link / unlink review metadata via worktree.set (the same path desktop uses).
-// GitHub's existing manual link flow writes linkedPR; hosted-review creation maps
-// each provider to its own linked* field so mobile follow-up reads get the same
-// authoritative hint as desktop.
+// Use the desktop worktree metadata fields so follow-up reads share authoritative review hints.
 
 export type MobilePrLinkOutcome = { ok: true } | { ok: false; error: string }
 
-// Pure param builder (unit-tested): the worktree selector + tri-state linkedPR.
-export function buildWorktreeSetLinkParams(
+function buildWorktreeSetLinkParams(
   worktreeId: string,
   linkedPR: number | null
 ): RpcSendParams<'worktree.set'> {
   return { worktree: `id:${worktreeId}`, linkedPR }
 }
+
+export type WorktreeGitHubPRLink = Pick<
+  MobileWorktreeSummary,
+  'linkedPR' | 'suppressedGitHubPR' | 'pushTarget'
+>
 
 export function buildWorktreeSetHostedReviewLinkParams(
   worktreeId: string,
@@ -40,16 +46,12 @@ export function buildWorktreeSetHostedReviewLinkParams(
       return { ...base, linkedAzureDevOpsPR: number }
     case 'gitea':
       return { ...base, linkedGiteaPR: number }
-    // 'unsupported', and any token this build does not know: no linked* field to write.
     default:
       return base
   }
 }
 
-/**
- * Two catches, because main had two paths: a refusal falls back to the screen's copy when the
- * host sent no message, while a transport drop surfaces its own message verbatim.
- */
+// Refusal without a message uses screen copy; transport errors retain their own message.
 async function setWorktreeReviewLink(
   client: RpcOperationSender,
   params: RpcSendParams<'worktree.set'>,
@@ -92,34 +94,65 @@ export async function linkMobileHostedReview(
   if (Object.keys(params).length === 1) {
     return { ok: true }
   }
-  // Why a distinct fallback: the review already exists, so callers surface this as a non-fatal
-  // refresh problem rather than losing the created URL.
+  // Link refresh failure is nonfatal: the review already exists, so keep its URL.
   return setWorktreeReviewLink(client, params, 'Failed to update linked review')
 }
 
+// Like desktop, suppress the unlinked PR so branch discovery does not bring it straight back.
 export function unlinkMobilePr(
   client: RpcOperationSender,
-  worktreeId: string
+  worktreeId: string,
+  prNumber: number
 ): Promise<MobilePrLinkOutcome> {
   return setWorktreeReviewLink(
     client,
-    buildWorktreeSetLinkParams(worktreeId, null),
+    { ...buildWorktreeSetLinkParams(worktreeId, null), suppressedGitHubPR: prNumber },
     'Failed to update linked pull request'
   )
 }
 
-// Reads the worktree's persisted linkedPR so the sidebar can surface a linked PR even when it's
-// closed/merged and the branch-based lookup returns nothing. Null when unset or on any failure.
-export async function fetchWorktreeLinkedPR(
+const NO_GITHUB_PR_LINK: WorktreeGitHubPRLink = {
+  linkedPR: null,
+  suppressedGitHubPR: null,
+  pushTarget: null
+}
+
+// Desktop's durable clear for a link the branch has moved past; a failed write only repeats the check next load.
+export async function clearMobileWorktreeReviewLink(
+  client: RpcOperationSender,
+  worktreeId: string,
+  shouldApply: (worktree: MobileWorktreeSummary) => boolean
+): Promise<void> {
+  // Like desktop, re-read the worktree so a link chosen after the lookup is never cleared.
+  const current = await readWorktreeSummary(client, worktreeId)
+  if (!current || !shouldApply(current)) {
+    return
+  }
+  await setWorktreeReviewLink(
+    client,
+    { worktree: `id:${worktreeId}`, ...CLEARED_HOSTED_REVIEW_SELECTION_UPDATES },
+    'Failed to update linked pull request'
+  )
+}
+
+// Persisted links recover closed/merged PRs that branch lookup no longer returns.
+export async function fetchWorktreeGitHubPRLink(
   client: RpcOperationSender,
   worktreeId: string
-): Promise<number | null> {
+): Promise<WorktreeGitHubPRLink> {
+  return (await readWorktreeSummary(client, worktreeId)) ?? NO_GITHUB_PR_LINK
+}
+
+async function readWorktreeSummary(
+  client: RpcOperationSender,
+  worktreeId: string
+): Promise<MobileWorktreeSummary | null> {
   try {
     const reply = await worktreeSummaryRead.request(client, { worktree: `id:${worktreeId}` })
     const summary = worktreeSummaryRead.interpret(reply)
-    return summary.accepted ? (summary.value?.linkedPR ?? null) : null
+    return summary.accepted ? summary.value : null
   } catch {
-    // Why: a fallback read — a transport drop is non-fatal, fall back to "no link".
+    // A failed fallback read is a missing hint, not a fatal error.
     return null
   }
 }

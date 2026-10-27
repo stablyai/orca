@@ -1,5 +1,4 @@
-// Bash's prompt and zsh's line-init marker are ready for input immediately.
-// Other shells retain the existing settling delay.
+// Line-editor-ready markers can flush immediately; earlier markers need a settling delay.
 export const POST_READY_FLUSH_DELAY_MS = 30
 export const POST_READY_FLUSH_FALLBACK_MS = 200
 
@@ -13,15 +12,12 @@ export class PostReadyFlushGate {
     private readonly markerIsLineEditorReady = false
   ) {}
 
-  /** True between arm() and the actual flush firing. Callers should treat
-   *  input as still-queued during this window to preserve ordering. */
+  /** Preserve input queuing until the actual flush, even after shell-ready is reported. */
   get isPending(): boolean {
     return this.awaitingPromptDraw || this.postDataTimer !== null || this.fallbackTimer !== null
   }
 
-  /** Arm the gate after observing the shell-ready marker. Starts the
-   *  wall-clock fallback unless the marker scan already observed post-marker
-   *  bytes, in which case the short post-data settle path is enough. */
+  /** Wait for post-marker output, with a bounded fallback if none arrives. */
   arm(postMarkerBytesObserved = false): void {
     if (this.markerIsLineEditorReady) {
       this.onFlush()
@@ -39,9 +35,7 @@ export class PostReadyFlushGate {
     }, POST_READY_FLUSH_FALLBACK_MS)
   }
 
-  /** Report a PTY data chunk observed after arm(). The first such call swaps
-   *  the wall-clock fallback for the short post-data delay so readline has
-   *  time to enable raw mode before the flush fires. */
+  /** Give the line editor time to enter raw mode after its first post-marker output. */
   notifyData(): void {
     if (!this.awaitingPromptDraw) {
       return
@@ -59,7 +53,6 @@ export class PostReadyFlushGate {
     }
   }
 
-  /** Cancel any pending flush. Call on session teardown. */
   clear(): void {
     this.awaitingPromptDraw = false
     if (this.postDataTimer) {

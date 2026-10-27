@@ -1,5 +1,6 @@
 import React from 'react'
 import { toast } from 'sonner'
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -35,7 +36,7 @@ const harness = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -78,6 +79,11 @@ vi.mock('@/store', () => ({
 
 vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
+}))
+
+vi.mock('@/runtime/structured-chat-name-observation', () => ({
+  useStructuredChatTabNames: () => new Map(),
+  getStructuredChatTabNames: () => new Map()
 }))
 
 vi.mock('@/lib/active-agent-note-send', () => ({
@@ -161,9 +167,9 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
 
-// Why: real sonner state, so tests see which toast type a settled toast ends up with.
-vi.mock('sonner', async () => {
-  const actual = await vi.importActual<typeof import('sonner')>('sonner') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+// Keep real Sonner state to verify a settled toast’s type.
+vi.mock(import('sonner'), async (importOriginal) => {
+  const actual = await importOriginal()
   const realMessage = actual.toast.message
   const message: typeof realMessage = (...args) => {
     harness.toastMessage(...args)
@@ -650,6 +656,7 @@ describe('ReviewNotesSendMenuContent', () => {
   it('sends notes to the chosen agent and tracks the send once it succeeds', async () => {
     const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
     const onPromptDelivered = vi.fn()
+    const onPromptHandedOff = vi.fn()
     setStore({
       tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
       terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
@@ -665,7 +672,7 @@ describe('ReviewNotesSendMenuContent', () => {
       }
     ]
 
-    const tree = render({ onPromptDelivered })
+    const tree = render({ onPromptDelivered, onPromptHandedOff })
     ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
     await flushMicrotasks()
 
@@ -680,6 +687,9 @@ describe('ReviewNotesSendMenuContent', () => {
       launch_source: 'notes_send',
       request_kind: 'followup'
     })
+    expect(onPromptHandedOff).toHaveBeenCalledOnce()
+    await onPromptHandedOff.mock.calls[0][0]
+    expect(onPromptDelivered).toHaveBeenCalledTimes(1)
   })
 
   it('keeps selected-target note failures undelivered and uses selected wording', async () => {
@@ -707,7 +717,7 @@ describe('ReviewNotesSendMenuContent', () => {
 
     expect(onPromptDelivered).not.toHaveBeenCalled()
     expect(harness.track).not.toHaveBeenCalled()
-    // Why: a failure must replace the 'Sending notes...' loading toast, not keep its spinner.
+    // Failure must settle the loading toast without leaving its spinner.
     const settled = toast
       .getToasts()
       .find((entry) => 'title' in entry && entry.title === 'selected:not-ready')
@@ -854,13 +864,23 @@ describe('ReviewNotesSendMenuContent', () => {
   })
 
   it('always offers the new-agent launcher', () => {
-    const tree = render()
+    const onPromptHandedOff = vi.fn()
+    const tree = render({ onPromptHandedOff })
 
     expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
       worktreeId: 'wt-1',
       groupId: 'group-1',
       prompt: 'my notes',
-      launchSource: 'notes_send'
+      launchSource: 'notes_send',
+      onPromptHandedOff
     })
+  })
+
+  // Notes held by other sends leave no prompt; do not launch an empty agent.
+  it('disables the new-agent launcher when there is nothing left to send', () => {
+    expect(findByType(render({ prompt: '' }), 'QuickLaunchAgentMenuItems').props.disabled).toBe(
+      true
+    )
+    expect(findByType(render(), 'QuickLaunchAgentMenuItems').props.disabled).toBe(false)
   })
 })

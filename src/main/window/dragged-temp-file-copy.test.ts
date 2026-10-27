@@ -2,7 +2,6 @@ import type * as NodeFs from 'node:fs'
 import { appendFileSync } from 'node:fs'
 import {
   chmod,
-  lstat,
   mkdir,
   mkdtemp,
   readdir,
@@ -10,13 +9,12 @@ import {
   rm,
   stat,
   symlink,
-  utimes,
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type * as RuntimeImportLimits from '../ipc/runtime-import-limits'
 
 const fsFaults: {
@@ -47,11 +45,8 @@ vi.mock('../ipc/runtime-import-limits', async (importOriginal) => ({
 }))
 
 import {
-  DRAG_TEMP_COPY_TTL_MS,
   materializeDragTempPaths,
   mayNeedDragTempCopy,
-  scheduleDragTempCopySweep,
-  sweepExpiredDragTempCopies,
   type DragTempCopyEnvironment
 } from './dragged-temp-file-copy'
 
@@ -292,19 +287,15 @@ describe('materializeDragTempPaths', () => {
     expect(await copyDirs()).toHaveLength(2)
   })
 
-  it('counts copies retained from earlier drops against the budget', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  it('never refuses a drop for copies earlier drops left behind', async () => {
     const first = await dragTempFile('a.png', '0123456789')
     const second = await dragTempFile('b.png', '0123456789')
-    const third = await dragTempFile('c.png', '012345')
 
     const [firstDrop] = await materializeDragTempPaths([first], env)
     const [secondDrop] = await materializeDragTempPaths([second], env)
-    const [thirdDrop] = await materializeDragTempPaths([third], env)
 
     expect(importedPath(firstDrop)).not.toBe(first)
-    expect(secondDrop).toMatchObject({ status: 'uncopied', reason: 'storage-full' })
-    expect(importedPath(thirdDrop)).not.toBe(third)
+    expect(importedPath(secondDrop)).not.toBe(second)
     expect(await copyDirs()).toHaveLength(2)
   })
 
@@ -423,54 +414,5 @@ describe('mayNeedDragTempCopy', () => {
     expect(mayNeedDragTempCopy(drag, 'linux')).toBe(false)
     expect(mayNeedDragTempCopy(dirname(drag), 'darwin')).toBe(false)
     expect(mayNeedDragTempCopy(join('/', 'Users', 'me', 'Desktop', 'a.png'), 'darwin')).toBe(false)
-  })
-})
-
-describe('sweepExpiredDragTempCopies', () => {
-  it('removes only expired orca-drop directories', async () => {
-    const source = await dragTempFile('shot.png', 'x')
-    const [oldCopy] = await materializeDragTempPaths([source], env)
-    const [freshCopy] = await materializeDragTempPaths([source], env)
-    const oldDir = dirname(importedPath(oldCopy))
-    const freshDir = dirname(importedPath(freshCopy))
-    const foreign = join(env.copyRoot, 'not-ours')
-    await mkdir(foreign)
-    const nowMs = Date.now()
-    const expired = new Date(nowMs - DRAG_TEMP_COPY_TTL_MS - 1000)
-    await utimes(oldDir, expired, expired)
-    await utimes(foreign, expired, expired)
-
-    await sweepExpiredDragTempCopies(env.copyRoot, nowMs)
-
-    await expect(lstat(oldDir)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect((await lstat(freshDir)).isDirectory()).toBe(true)
-    expect((await lstat(foreign)).isDirectory()).toBe(true)
-  })
-
-  it('does nothing when no copy root exists', async () => {
-    await expect(sweepExpiredDragTempCopies(join(root, 'nope'))).resolves.toBeUndefined()
-  })
-})
-
-describe('scheduleDragTempCopySweep', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('sweeps on macOS shortly after startup and then hourly, scheduling only once', async () => {
-    vi.useFakeTimers()
-    const getCopyRoot = vi.fn(() => join(root, 'nope'))
-
-    scheduleDragTempCopySweep(getCopyRoot, 'linux')
-    expect(vi.getTimerCount()).toBe(0)
-
-    scheduleDragTempCopySweep(getCopyRoot, 'darwin')
-    scheduleDragTempCopySweep(getCopyRoot, 'darwin')
-    expect(vi.getTimerCount()).toBe(2)
-
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(getCopyRoot).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
-    expect(getCopyRoot).toHaveBeenCalledTimes(2)
   })
 })

@@ -1,16 +1,4 @@
-// Which subagent sections a running scope holds open by default.
-//
-// A scope's live frontier is the newest row its agent produced, user rows aside, judged by
-// the newest call a folded tool run holds rather than where the run is drawn. A section opens
-// while that row is part of its agent's delegation: a call that spawns, waits on or messages
-// it (a call naming several delegates to the first), or the roster row that names it as the
-// agent most recently added. A spawn call naming no agent belongs to the roster announcing
-// it. Anything newer supersedes the delegation even while the agent still works; its roster
-// keeps showing that live state.
-// The session is the outer scope; a subagent still working is a scope of its own for the
-// sections it spawned, and a settled one closes its scope. A delegation naming only agents
-// one subagent spawned is that subagent's output, wherever the host journaled it. Derived
-// every render, with no latch; the reader's own choice outranks it.
+// Open the newest delegation’s section while its scope runs; newer output supersedes it, and explicit reader choices win.
 
 import { compareAgentJournalPositions } from '../../../../shared/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../shared/agent-session-journal-types'
@@ -18,14 +6,20 @@ import { normalizeSubagentState } from '../../../../shared/native-chat-subagent-
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { compareMessages } from './native-chat-session-assembler'
-import { nativeChatSubagentDelegation } from './native-chat-subagent-delegation'
+import {
+  isNativeChatCodexCollabCallFrameRow,
+  nativeChatSubagentDelegation
+} from './native-chat-subagent-delegation'
 import type { NativeChatSubagentSections } from './native-chat-subagent-sections'
 
 const NONE: ReadonlySet<string> = new Set()
 
-/** A row the reader sees the scope's agent produce. */
+/** A row the reader sees the scope's agent produce, or a collab call it made. */
 function isOutput(message: NativeChatMessage): boolean {
-  return message.role !== 'user' && nativeChatRowRendersContent(message.blocks)
+  return (
+    message.role !== 'user' &&
+    (nativeChatRowRendersContent(message.blocks) || isNativeChatCodexCollabCallFrameRow(message))
+  )
 }
 
 /** `scopeActive`: the session is running. */
@@ -96,9 +90,7 @@ export function nativeChatSubagentLiveSections(
   return live
 }
 
-/** Rows by their newest part, newest first. A tool run is drawn at the assistant row it
- *  folds into, so that row can hold calls newer than the roster rows drawn below it. No
- *  row above an assistant row reaches past it: a run folds only into the latest one. */
+/** Use each folded run’s newest part, not its drawn position above later rosters; runs fold only into the latest assistant row. */
 function* newestFirst(rows: readonly NativeChatMessage[]): Generator<NativeChatMessage> {
   let below: NativeChatMessage[] = []
   for (let index = rows.length - 1; index >= 0; index -= 1) {

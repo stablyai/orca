@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { AccountsPane } from './AccountsPane'
+import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
 
 const fake = vi.hoisted(() => ({
   query: '',
@@ -68,8 +69,8 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
     activeAccountId: null,
     activeAccountIdsByRuntime: { host: null, wsl: {} }
   }),
-  hasRemoteProviderAccountOwner: (settings: { activeRuntimeEnvironmentId?: string }) =>
-    Boolean(settings.activeRuntimeEnvironmentId),
+  getProviderAccountsOwnerKey: (target: { kind: string; environmentId?: string }) =>
+    target.environmentId ?? 'local',
   watchProviderAccounts: fake.watcher,
   selectClaudeProviderAccount: fake.write,
   selectCodexProviderAccount: fake.write,
@@ -122,12 +123,12 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
     const view = render(<AccountsPane {...props} />)
     await act(async () => {})
-    // The invariant is identity, not a magic number: the matched section keeps the same DOM
-    // node across every query edit, so editing the query cannot cost an extra read or watcher.
+    // Assert DOM identity across query edits so search cannot remount sections and add reads/watchers.
     const mountedHeading = screen.getByText('Grok (xAI)', { exact: true })
     const watchersAfterMount = fake.watcher.mock.calls.length
     const statusReadsAfterMount = fake.status.mock.calls.length
@@ -146,6 +147,7 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
     const view = render(<AccountsPane {...props} />)
@@ -176,7 +178,11 @@ it.each([false, true])(
 )
 it('preserves explicit Grok refresh and real hide/reopen status reads', async () => {
   fake.query = 'grok'
-  const props = { settings: getDefaultSettings('/synthetic'), updateSettings: fake.write }
+  const props = {
+    settings: getDefaultSettings('/synthetic'),
+    updateSettings: fake.write,
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE
+  }
   const view = render(<AccountsPane {...props} />)
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
@@ -194,7 +200,11 @@ it('preserves explicit Grok refresh and real hide/reopen status reads', async ()
 
 it('keeps usage-driven Grok status refreshes while the section stays mounted', async () => {
   fake.query = 'grok'
-  const props = { settings: getDefaultSettings('/synthetic'), updateSettings: fake.write }
+  const props = {
+    settings: getDefaultSettings('/synthetic'),
+    updateSettings: fake.write,
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE
+  }
   const view = render(<AccountsPane {...props} />)
   await act(async () => {})
   fake.grokUsage = { updatedAt: 10 }
@@ -209,7 +219,11 @@ it('keeps usage-driven Grok status refreshes while the section stays mounted', a
 })
 
 it('keeps the login subscription until Codex genuinely hides', async () => {
-  const props = { settings: getDefaultSettings('/synthetic'), updateSettings: fake.write }
+  const props = {
+    settings: getDefaultSettings('/synthetic'),
+    updateSettings: fake.write,
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE
+  }
   const view = render(<AccountsPane {...props} />)
   await act(async () => {})
   const unsubscribe = fake.subscribe.mock.results[0].value
@@ -232,6 +246,7 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
     const view = render(<AccountsPane {...props} />)
@@ -250,7 +265,11 @@ it.each([false, true])(
 
 it('keeps Cursor refresh driven by usage updates and genuine reopen', async () => {
   fake.query = 'cursor'
-  const props = { settings: getDefaultSettings('/synthetic'), updateSettings: fake.write }
+  const props = {
+    settings: getDefaultSettings('/synthetic'),
+    updateSettings: fake.write,
+    hostScope: LOCAL_SETTINGS_HOST_SCOPE
+  }
   const view = render(<AccountsPane {...props} />)
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))

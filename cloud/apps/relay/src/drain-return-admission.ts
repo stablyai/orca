@@ -26,12 +26,7 @@ type DrainReturnLane = Pick<
   'acquireDrainReturn' | 'queuedDrainReturns'
 >
 
-// Hosts whose home cell is isolated for a roll get their own admission budget,
-// so a drain's cohort never waits in (or starves) the sticky or placement queues.
-// When the lane is full the host is told when to come back: each deferral takes
-// the next free service slot after the work already promised, so a cohort larger
-// than the lane can serve returns at the rate the lane drains rather than on
-// every client's own 2 s retry.
+// Give roll-isolated hosts separate admission; overflow books future service slots so cohorts return at drain rate without starving sticky/placement queues.
 export class RelayDrainReturnAdmission {
   private serviceMs = DRAIN_RETURN_INITIAL_SERVICE_MS
   private nextReturnAt = 0
@@ -44,6 +39,8 @@ export class RelayDrainReturnAdmission {
       maxConcurrent: number
       maxRetryAfterSeconds: number
       now?: () => number
+      // The raw sample behind the EWMA, so the lane's service time is reported.
+      onServiceMs?: (durationMs: number) => void
     }
   ) {}
 
@@ -108,6 +105,7 @@ export class RelayDrainReturnAdmission {
   }
 
   private recordService(durationMs: number): void {
+    this.options.onServiceMs?.(durationMs)
     const sample = Math.min(SERVICE_MS_CEILING, Math.max(SERVICE_MS_FLOOR, durationMs))
     this.serviceMs += SERVICE_EWMA_WEIGHT * (sample - this.serviceMs)
   }

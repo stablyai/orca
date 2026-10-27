@@ -1,25 +1,29 @@
-import type { AgentJournalPlainStatusItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalPlainStatusItem,
+  AgentJournalTurnScope
+} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../shared/native-chat/native-chat-provider-frame-summary'
 import {
-  boundInlineText,
   boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
 import { codexGoalRowText, codexThreadGoalState } from '../../codex/codex-goal-journal-rows'
-import {
-  classifyProviderFrame,
-  hasTypedProviderFrameTranslator
-} from './provider-frame-disposition'
+import { isProviderRecord } from '../../provider-process/provider-json-record'
+import { classifyProviderFrame } from './provider-frame-disposition'
+import { hookOutcomeRowBody } from '../../../shared/agent-session-hook-outcome'
 
 export type UnhandledProviderFrameJournalItem = {
   body: AgentJournalPlainStatusItem
-  /** Why the frame surfaced. Error frames are exempt from generic-row caps. */
+  turnScope?: AgentJournalTurnScope
+  /** Failures/warnings/hook refusals bypass timeline row caps. */
   classification: 'timeline-substantive' | 'error-surface'
 }
 
 export type UnhandledProviderFrameJournalItemOptions = {
-  /** A typed translator accepted this exact frame, not merely this frame kind. */
-  coveredByTypedTranslator?: boolean
+  /** Translator-only facts decide failure, e.g. whether the user stopped a Claude result. */
+  reportsFailure?: boolean
 }
 
 function serializeProviderPayload(payload: unknown): string {
@@ -31,8 +35,7 @@ function serializeProviderPayload(payload: unknown): string {
   }
 }
 
-/** Fields providers use for the human-facing sentence on a frame, most specific
- *  first. Nested one level because warnings arrive wrapped as often as not. */
+/** Prefer specific human sentences, including one-level warning wrappers. */
 const MESSAGE_KEYS = [
   'message',
   'text',
@@ -40,9 +43,6 @@ const MESSAGE_KEYS = [
   'detail',
   'description',
   'reason',
-  // `error` is how a failed dependency reports itself — an MCP server that could not start says
-  // so here and nowhere else. Without it the row falls back to the bare method name, which is how
-  // "MCP server X failed to start: auth expired" reached users as `notification:mcpServer/...`.
   'error'
 ] as const
 
@@ -63,7 +63,6 @@ function directReadableMessage(payload: unknown): string | null {
   return null
 }
 
-/** The provider's own sentence for a frame, when it carries one. */
 export function readableProviderFrameText(payload: unknown): string | null {
   const direct = directReadableMessage(payload)
   if (direct || typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
@@ -79,26 +78,84 @@ export function readableProviderFrameText(payload: unknown): string | null {
   return null
 }
 
-/** Substantive adapter fallbacks become visible, bounded journal rows. */
+function hookText(value: unknown): string | null {
+  return typeof value === 'string' ? value.trim() || null : null
+}
+
+/** Prompt-hook refusals need rows; other hooks already surface through tool results. */
+function codexHookOutcomeRow(payload: unknown): AgentJournalPlainStatusItem | null {
+  const run = isProviderRecord(payload) && isProviderRecord(payload.run) ? payload.run : null
+  const status = run?.eventName === 'userPromptSubmit' ? run.status : null
+  const entries: unknown[] = Array.isArray(run?.entries) ? run.entries : []
+  const details = entries.flatMap((entry) => {
+    const text = isProviderRecord(entry) && entry.kind !== 'context' ? hookText(entry.text) : null
+    return text ? [text] : []
+  })
+  return status === 'blocked' || status === 'stopped' ? hookOutcomeRowBody(status, details) : null
+}
+
+function hookFailureFrameText(
+  provider: string,
+  kind: string,
+  payload: unknown,
+  fallback: string | null
+): string | null {
+  if (!isProviderRecord(payload)) {
+    return null
+  }
+  if (provider === 'codex' && kind === 'notification:hook/completed') {
+    const run = isProviderRecord(payload.run) ? payload.run : null
+    const event = hookText(run?.eventName)
+    const name = event ? ` ${event.charAt(0).toUpperCase()}${event.slice(1)}` : ''
+    const errors = Array.isArray(run?.entries)
+      ? run.entries.flatMap((entry: unknown) => {
+          const text =
+            isProviderRecord(entry) && entry.kind === 'error' ? hookText(entry.text) : null
+          return text ? [text] : []
+        })
+      : []
+    const detail = errors.join('\n') || fallback
+    return `Codex${name} hook failed${detail ? `: ${detail}` : '.'}`
+  }
+  if (provider === 'claude' && kind === 'message:system:hook_response') {
+    const name = hookText(payload.hook_name) ?? hookText(payload.hook_event)
+    const code = payload.exit_code
+    const exit =
+      typeof code === 'number' && Number.isSafeInteger(code) && code !== 0
+        ? ` (exit code ${code})`
+        : ''
+    const detail =
+      hookText(payload.stderr) ?? hookText(payload.output) ?? hookText(payload.stdout) ?? fallback
+    return `Claude${name ? ` ${name}` : ''} hook failed${exit}${detail ? `: ${detail}` : '.'}`
+  }
+  return null
+}
+
+/** Keep readable fallback text whole; clients render only frames carrying a sentence. */
 export function unhandledProviderFrameJournalItem(
   provider: string,
   kind: string,
   payload: unknown,
-  limits: JournalPayloadLimits = DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  limits: JournalPayloadLimits = PROVIDER_FRAME_PAYLOAD_LIMITS,
   options: UnhandledProviderFrameJournalItemOptions = {}
 ): UnhandledProviderFrameJournalItem | null {
-  // A kind a typed translator owns never degrades to its opcode here, in either
-  // direction: "no row" is that translator's decision, not a gap this fallback
-  // has to cover. Checked before classification, because the payload sniffer
-  // inside it promotes a covered frame that reports a failure and would
-  // otherwise print `${provider} · ${kind}` beside the typed row.
-  if (
-    options.coveredByTypedTranslator === true &&
-    hasTypedProviderFrameTranslator(provider, kind)
-  ) {
-    return null
+  // Match native warning rows: uncapped, without raw-frame disclosure.
+  const hook =
+    provider === 'codex' && kind === 'notification:hook/completed'
+      ? codexHookOutcomeRow(payload)
+      : null
+  if (hook) {
+    return {
+      body: hook,
+      classification: 'error-surface',
+      // Refused Codex prompts are never echoed, so no message can anchor this row.
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
   }
-  const classification = classifyProviderFrame(provider, kind, payload)
+  const classification =
+    options.reportsFailure === true
+      ? 'error-surface'
+      : classifyProviderFrame(provider, kind, payload)
   if (
     classification === 'stream-into-item' ||
     classification === 'status-chrome' ||
@@ -108,9 +165,7 @@ export function unhandledProviderFrameJournalItem(
   }
   const serialized = serializeProviderPayload(payload)
   const bounded = boundPayload(serialized, limits)
-  // Why: the opcode alone ("codex · notification:warning") tells the user nothing
-  // and reads as protocol noise. Lead with the provider's own sentence when it has
-  // one; the raw frame stays behind the row's disclosure either way.
+  // Lead with the provider sentence; raw opcodes are unreadable protocol noise.
   const method = kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
   const compaction =
     provider === 'codex' && (method === 'thread/compacted' || method === 'item:contextCompaction')
@@ -124,6 +179,9 @@ export function unhandledProviderFrameJournalItem(
       : undefined
   const tone = noticeTone ?? (classification === 'error-surface' ? 'error' : undefined)
   let message = readableProviderFrameText(payload)
+  if (classification === 'error-surface') {
+    message = hookFailureFrameText(provider, kind, payload, message) ?? message
+  }
   if (
     provider === 'codex' &&
     (method === 'configWarning' || method === 'deprecationNotice') &&
@@ -136,33 +194,23 @@ export function unhandledProviderFrameJournalItem(
         .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
         .join('\n\n') || message
   }
+  if (provider === 'claude' && kind === CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND) {
+    const content =
+      typeof payload === 'object' && payload !== null && 'content' in payload
+        ? payload.content
+        : null
+    message = typeof content === 'string' && content.trim() ? content.trim() : message
+  }
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
-  const display = message ? boundInlineText(message, limits) : null
-  const goalDisplay = goalText ? boundInlineText(goalText, limits) : null
   const threadGoal = provider === 'codex' ? codexThreadGoalState(method, payload) : null
   return {
     body: {
       kind: 'status',
-      text: compaction
-        ? 'Context compacted'
-        : (goalDisplay?.text ?? display?.text ?? `${provider} · ${kind}`),
+      text: compaction ? 'Context compacted' : goalText || message || `${provider} · ${kind}`,
       ...(compaction ? { presentation: 'compaction' } : {}),
       ...(tone ? { tone } : {}),
       providerFrame: { provider, kind, payload: bounded },
-      ...(threadGoal
-        ? {
-            threadGoal:
-              threadGoal.state === 'set'
-                ? {
-                    state: 'set' as const,
-                    goal: {
-                      ...threadGoal.goal,
-                      objective: boundInlineText(threadGoal.goal.objective, limits).text
-                    }
-                  }
-                : threadGoal
-          }
-        : {})
+      ...(threadGoal ? { threadGoal } : {})
     },
     classification: classification === 'error-surface' ? 'error-surface' : 'timeline-substantive'
   }
