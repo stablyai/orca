@@ -2,7 +2,12 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Components } from 'react-markdown'
 import type { editor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
+import {
+  computeEditorFontSize,
+  computeEditorLineHeight,
+  resolveEditorBaseFontSize,
+  resolveEditorFontStack
+} from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { syncContentUpdate } from './monaco-content-sync'
@@ -16,11 +21,11 @@ import { useMonacoColorizedLines } from './MonacoCodeExcerpt'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 const NO_MARKDOWN_COMPONENTS: Components = {}
-// Share preview/editor box metrics to avoid shifts on activation.
-const CODE_LAYOUT = { lineHeight: 20, paddingY: 4, paddingX: 12 } as const
+// Box metrics the preview and the live editor share (with `computeEditorLineHeight`), so
+// activating a cell never shifts it.
+const CODE_LAYOUT = { paddingY: 4, paddingX: 12 } as const
 // Fixed rows keep colorized blank lines one line tall; preflight gives <code> its own font.
 const CODE_ROW_STYLE = {
-  height: CODE_LAYOUT.lineHeight,
   paddingInline: CODE_LAYOUT.paddingX,
   fontFamily: 'inherit'
 } as const
@@ -115,13 +120,16 @@ function IpynbCodePreview({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
   const htmlLines = useMonacoColorizedLines(lines, language)
+  const fontSize = computeEditorFontSize(resolveEditorBaseFontSize(settings), editorFontZoomLevel)
+  const lineHeight = computeEditorLineHeight(fontSize)
+  const rowStyle = { ...CODE_ROW_STYLE, height: lineHeight }
   return (
     <div
       className="overflow-x-auto text-foreground"
       style={{
         fontFamily: resolveEditorFontStack(settings),
-        fontSize: computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel),
-        lineHeight: `${CODE_LAYOUT.lineHeight}px`,
+        fontSize,
+        lineHeight: `${lineHeight}px`,
         paddingBlock: CODE_LAYOUT.paddingY,
         // Monaco renders code without the app's body tracking.
         letterSpacing: 0
@@ -131,7 +139,8 @@ function IpynbCodePreview({
         <code
           key={index}
           className="block whitespace-pre"
-          style={CODE_ROW_STYLE}
+          style={rowStyle}
+          // Plain text shows until Monaco's async colorizer fills in token HTML.
           dangerouslySetInnerHTML={{ __html: htmlLines[index] || escapeHtml(line) }}
         />
       ))}
@@ -150,12 +159,15 @@ function IpynbSourceEditor({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const isDark = useDocumentDarkTheme()
   const fontFamily = resolveEditorFontStack(settings)
-  const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
+  const fontSize = computeEditorFontSize(resolveEditorBaseFontSize(settings), editorFontZoomLevel)
+  const lineHeight = computeEditorLineHeight(fontSize)
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const callbacksRef = useRef({ onChange, onDeactivate })
   const syncingSourceRef = useRef(false)
   const fitHeightRef = useRef<(() => void) | null>(null)
+  // Read by the mount-once height fit, so a font size change re-caps the cell at its new rows.
+  const lineHeightRef = useRef(lineHeight)
 
   useLayoutEffect(() => {
     callbacksRef.current = { onChange, onDeactivate }
@@ -171,7 +183,7 @@ function IpynbSourceEditor({
     if (!container) {
       return
     }
-    const { lineHeight, paddingX, paddingY } = CODE_LAYOUT
+    const { paddingX, paddingY } = CODE_LAYOUT
     const model = monaco.editor.createModel(source, cell.language)
     const editorInstance = monaco.editor.create(container, {
       dropIntoEditor: { enabled: false },
@@ -179,8 +191,8 @@ function IpynbSourceEditor({
       automaticLayout: true,
       fontFamily,
       fontSize,
-      // Match preview geometry; the decorations lane supplies the inset without a gutter.
-      lineHeight,
+      // Why: same box as the preview it replaces. No gutter, so the decorations lane is the inset.
+      lineHeight: lineHeightRef.current,
       padding: { top: paddingY, bottom: paddingY },
       lineNumbers: 'off',
       glyphMargin: false,
@@ -199,8 +211,8 @@ function IpynbSourceEditor({
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
     editorRef.current = editorInstance
-    const maxHeight = IPYNB_CODE_CELL_PREVIEW_MAX_LINES * lineHeight
     const fitHeight = (): void => {
+      const maxHeight = IPYNB_CODE_CELL_PREVIEW_MAX_LINES * lineHeightRef.current
       container.style.height = `${Math.min(editorInstance.getContentHeight(), maxHeight)}px`
       editorInstance.layout()
     }
@@ -246,9 +258,11 @@ function IpynbSourceEditor({
     if (model.getLanguageId() !== cell.language) {
       monaco.editor.setModelLanguage(model, cell.language)
     }
+    lineHeightRef.current = lineHeight
     editorInstance.updateOptions({
       fontFamily,
       fontSize,
+      lineHeight,
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
     syncingSourceRef.current = true
@@ -258,7 +272,7 @@ function IpynbSourceEditor({
       syncingSourceRef.current = false
     }
     fitHeightRef.current?.()
-  }, [source, cell.language, cell.kind, fontFamily, fontSize])
+  }, [source, cell.language, cell.kind, fontFamily, fontSize, lineHeight])
 
   return <div ref={containerRef} />
 }

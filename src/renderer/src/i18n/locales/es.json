@@ -10284,7 +10284,10 @@
             "confirm": "confirmar",
             "omp": "OMP",
             "nodeDistMirror": "espejo",
-            "nodeDistNodejs": "nodejs"
+            "nodeDistNodejs": "nodejs",
+            "editorFontSize": "Tamaño de fuente del editor",
+            "editorFontSizeDesc": "Tamaño de fuente utilizado por los editores de archivos y vistas de diferencias. Dejar vacío para seguir el tamaño de fuente de la terminal.",
+            "editorFontSizeKw": "tamaño de texto"
           }
         },
         "git": {
@@ -13169,6 +13172,9 @@
           "searchLabel": "Buscar compilaciones",
           "noMatches": "No hay compilaciones coincidentes.",
           "searchPlaceholder": "Buscar compilaciones…"
+        },
+        "EditorFontSizeSetting": {
+          "px": "px"
         },
         "notification": {
           "settings": {

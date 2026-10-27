@@ -10471,7 +10471,10 @@
             "close": "fermer",
             "omp": "OMP",
             "nodeDistMirror": "miroir",
-            "nodeDistNodejs": "nodejs"
+            "nodeDistNodejs": "nodejs",
+            "editorFontSize": "Taille de police de l'éditeur",
+            "editorFontSizeDesc": "Taille de police utilisée par les éditeurs de fichiers et les vues de diff. Laissez vide pour suivre la taille de police du terminal.",
+            "editorFontSizeKw": "taille du texte"
           }
         },
         "git": {
@@ -13314,6 +13317,9 @@
           "searchPlaceholder": "Rechercher des versions…",
           "searchLabel": "Rechercher des versions",
           "noMatches": "Aucune version correspondante."
+        },
+        "EditorFontSizeSetting": {
+          "px": "px"
         },
         "notification": {
           "settings": {

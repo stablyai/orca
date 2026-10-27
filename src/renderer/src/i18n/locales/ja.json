@@ -10290,7 +10290,10 @@
             "close": "近い",
             "omp": "OMP",
             "nodeDistMirror": "ミラー",
-            "nodeDistNodejs": "nodejs"
+            "nodeDistNodejs": "nodejs",
+            "editorFontSize": "エディターフォントサイズ",
+            "editorFontSizeDesc": "ファイルエディターと差分ビューで使用されるフォントサイズ。空の場合はターミナルのフォントサイズに従います。",
+            "editorFontSizeKw": "文字サイズ"
           }
         },
         "git": {
@@ -13153,6 +13156,9 @@
           "searchLabel": "ビルドの検索",
           "searchPlaceholder": "ビルドを検索…",
           "noMatches": "一致するビルドはありません。"
+        },
+        "EditorFontSizeSetting": {
+          "px": "ピクセル"
         },
         "notification": {
           "settings": {
