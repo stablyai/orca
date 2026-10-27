@@ -1,64 +1,77 @@
-import { describe, expect, it } from 'vitest'
-import { DEFAULT_SPAWN_ADMISSION_LIMITS } from '../../../../shared/host-spawn-admission'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUserResumeSpawnPacer } from './user-resume-spawn-pacer'
 
-function fakeClock() {
-  let time = 0
-  const sleeps: number[] = []
-  return {
-    now: () => time,
-    sleep: async (ms: number) => {
-      sleeps.push(ms)
-      time += ms
-    },
-    advance: (ms: number) => {
-      time += ms
-    },
-    sleeps
-  }
-}
-
 describe('user-resume spawn pacer', () => {
-  it("lets a burst through one short of the daemon's bucket, then waits for each refill", async () => {
-    const clock = fakeClock()
-    const pacer = createUserResumeSpawnPacer({ now: clock.now, sleep: clock.sleep })
-    const takenAt: number[] = []
+  beforeEach(() => vi.useFakeTimers({ now: 0 }))
+  afterEach(() => vi.useRealTimers())
 
-    await Promise.all(
-      Array.from({ length: 12 }, () => pacer.take().then(() => takenAt.push(clock.now())))
-    )
+  it('allows three starts, then waits for a settled spawn and a token', async () => {
+    const pacer = createUserResumeSpawnPacer()
+    const releases = await Promise.all(Array.from({ length: 3 }, () => pacer.take()))
+    let fourthStarted = false
+    const fourth = pacer.take().then((release) => {
+      fourthStarted = true
+      return release
+    })
 
-    const refillMs =
-      DEFAULT_SPAWN_ADMISSION_LIMITS.userResumeBucketWindowMs /
-      DEFAULT_SPAWN_ADMISSION_LIMITS.userResumeBucketCapacity
-    expect(takenAt.slice(0, 3)).toEqual([0, 0, 0])
-    expect(takenAt.slice(3)).toEqual(
-      Array.from({ length: 9 }, (_, index) => refillMs * (index + 1))
-    )
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(fourthStarted).toBe(false)
+    releases.forEach((release) => release())
+    await vi.advanceTimersByTimeAsync(2499)
+    expect(fourthStarted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fourthStarted).toBe(true)
+    ;(await fourth)()
   })
 
-  it('counts unpaced user resumes against the same bucket', async () => {
-    const clock = fakeClock()
-    const pacer = createUserResumeSpawnPacer({ now: clock.now, sleep: clock.sleep })
-    for (let i = 0; i < 3; i++) {
-      pacer.note()
-    }
-
-    await pacer.take()
-
-    expect(clock.sleeps.length).toBeGreaterThan(0)
+  it('does not create extra tokens when a release is repeated', async () => {
+    const pacer = createUserResumeSpawnPacer()
+    const first = await Promise.all(Array.from({ length: 3 }, () => pacer.take()))
+    first.forEach((release) => {
+      release()
+      release()
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    const second = await Promise.all(Array.from({ length: 3 }, () => pacer.take()))
+    let fourthStarted = false
+    const fourth = pacer.take().then((release) => {
+      fourthStarted = true
+      return release
+    })
+    second.forEach((release) => release())
+    await vi.advanceTimersByTimeAsync(2499)
+    expect(fourthStarted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fourthStarted).toBe(true)
+    ;(await fourth)()
   })
 
-  it('does not wait once the bucket has refilled', async () => {
-    const clock = fakeClock()
-    const pacer = createUserResumeSpawnPacer({ now: clock.now, sleep: clock.sleep })
-    for (let i = 0; i < 3; i++) {
-      await pacer.take()
-    }
-    clock.advance(DEFAULT_SPAWN_ADMISSION_LIMITS.userResumeBucketWindowMs)
+  it('does not strand later starts when a token waiter is canceled', async () => {
+    const pacer = createUserResumeSpawnPacer()
+    const releases = await Promise.all(Array.from({ length: 3 }, () => pacer.take()))
+    releases.forEach((release) => release())
+    const controller = new AbortController()
+    const canceled = pacer.take(controller.signal)
+    const rejected = expect(canceled).rejects.toThrow('canceled')
+    await vi.advanceTimersByTimeAsync(0)
+    controller.abort(new Error('canceled'))
+    const later = pacer.take()
+    await vi.advanceTimersByTimeAsync(2500)
+    await rejected
+    ;(await later)()
+  })
 
-    await pacer.take()
-
-    expect(clock.sleeps).toEqual([])
+  it('removes a canceled slot waiter without consuming the next slot', async () => {
+    const pacer = createUserResumeSpawnPacer()
+    const releases = await Promise.all(Array.from({ length: 3 }, () => pacer.take()))
+    const controller = new AbortController()
+    const canceled = pacer.take(controller.signal)
+    const rejected = expect(canceled).rejects.toThrow('canceled')
+    controller.abort(new Error('canceled'))
+    await rejected
+    releases.forEach((release) => release())
+    const later = pacer.take()
+    await vi.advanceTimersByTimeAsync(2500)
+    ;(await later)()
   })
 })

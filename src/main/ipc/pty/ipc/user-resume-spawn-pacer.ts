@@ -1,6 +1,3 @@
-// Why: the daemon defers a user resume only after this client's bucket is empty, when it is charged as automatic.
-// A replacement that waits here for a token is never deferred after main stopped the old PTY (#34419).
-
 import {
   DEFAULT_SPAWN_ADMISSION_LIMITS,
   refill,
@@ -8,12 +5,11 @@ import {
   type SpawnAdmissionLimits,
   type TokenBucket
 } from '../../../../shared/host-spawn-admission'
+import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
 
 export type UserResumeSpawnPacer = {
-  /** Waits until the daemon's bucket holds a user-resume token, then spends it. */
-  take(): Promise<void>
-  /** Spends a token for an unpaced user resume, as the daemon does, when one is left. */
-  note(): void
+  /** Release the reservation after the spawn settles, including failure. */
+  take(signal?: AbortSignal): Promise<() => void>
 }
 
 export function createUserResumeSpawnPacer(
@@ -28,42 +24,51 @@ export function createUserResumeSpawnPacer(
   const sleep =
     options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const tokensPerMs = userResumeTokensPerMs(limits)
-  // Why one short of the daemon: a spawn the user-resume concurrency limit holds is charged
-  // again when it resumes, and must still find a token after later spawns spent theirs.
   const capacity = Math.max(
     1,
     Math.min(limits.userResumeBucketCapacity - 1, limits.userResumeConcurrency)
   )
+  const slots = new PrioritySemaphore(capacity)
   let bucket: TokenBucket = { tokens: capacity, updatedAt: now() }
+  let reserved = 0
   let queue: Promise<void> = Promise.resolve()
 
   const current = (): TokenBucket => {
     bucket = refill(bucket, capacity, tokensPerMs, now())
     return bucket
   }
-  const spend = (): void => {
-    bucket = { tokens: Math.max(0, current().tokens - 1), updatedAt: bucket.updatedAt }
-  }
 
   return {
-    take: () => {
-      // Why serial: each waiter must see the token its predecessor spent.
-      const turn = queue.then(async () => {
-        while (current().tokens < 1) {
-          await sleep(Math.ceil((1 - bucket.tokens) / tokensPerMs))
+    take: async (signal) => {
+      const releaseSlot = await slots.acquire(0, signal)
+      try {
+        const turn = queue.then(async () => {
+          signal?.throwIfAborted()
+          while (current().tokens - reserved < 1) {
+            await sleep(Math.ceil((1 + reserved - bucket.tokens) / tokensPerMs))
+            signal?.throwIfAborted()
+          }
+          reserved += 1
+        })
+        queue = turn.catch(() => {})
+        await turn
+      } catch (error) {
+        releaseSlot()
+        throw error
+      }
+      let released = false
+      return () => {
+        if (released) {
+          return
         }
-        spend()
-      })
-      queue = turn
-      return turn
-    },
-    note: () => {
-      if (current().tokens >= 1) {
-        spend()
+        released = true
+        // Debit on settlement so preparation and daemon waits cannot mint replacement tokens.
+        bucket = { tokens: current().tokens - 1, updatedAt: bucket.updatedAt }
+        reserved -= 1
+        releaseSlot()
       }
     }
   }
 }
 
-/** One per main process: the daemon keys its bucket by this process's client connection. */
 export const userResumeSpawnPacer = createUserResumeSpawnPacer()

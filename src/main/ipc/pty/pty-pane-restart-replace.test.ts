@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import {
   installRestartHarness,
@@ -10,7 +10,10 @@ import {
   worktreeId
 } from '../pty-pane-owner-swap.test-fixture'
 
-const pacer = vi.hoisted(() => ({ take: vi.fn(async () => {}), note: vi.fn() }))
+const pacer = vi.hoisted(() => {
+  const release = vi.fn()
+  return { take: vi.fn<() => Promise<() => void>>(async () => release), release }
+})
 vi.mock('./ipc/user-resume-spawn-pacer', () => ({ userResumeSpawnPacer: pacer }))
 vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -59,6 +62,11 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
 describe('pty:spawn replacing a pane owner', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
+  beforeEach(() => {
+    pacer.take.mockReset().mockResolvedValue(pacer.release)
+    pacer.release.mockClear()
+  })
+
   function exitPayloads(id: string): Record<string, unknown>[] {
     return mainWindow.webContents.send.mock.calls
       .filter(([channel, payload]) => channel === 'pty:exit' && payload?.id === id)
@@ -69,9 +77,13 @@ describe('pty:spawn replacing a pane owner', () => {
     const { providerSpawn, store, runtime } = installRestartHarness()
     registerWithFakes(mainWindow, runtime, store)
 
-    const spawned = await handlers.get('pty:spawn')!(null, restartSpawnArgs())
+    const spawned = await handlers.get('pty:spawn')!(null, {
+      ...restartSpawnArgs(),
+      spawnIntent: 'user-resume'
+    })
 
     expect(spawned).toMatchObject({ id: 'pty-old', isReattach: true })
+    expect(pacer.take).not.toHaveBeenCalled()
     expect(providerSpawn).toHaveBeenCalledTimes(1)
   })
 
@@ -97,8 +109,8 @@ describe('pty:spawn replacing a pane owner', () => {
   it("keeps a user-resume restart's old owner running until the pacer has a token", async () => {
     const { providerSpawn, shutdown, store, runtime } = installRestartHarness()
     registerWithFakes(mainWindow, runtime, store)
-    let grant!: () => void
-    pacer.take.mockImplementationOnce(() => new Promise<void>((resolve) => (grant = resolve)))
+    let grant!: (release: () => void) => void
+    pacer.take.mockImplementationOnce(() => new Promise<() => void>((resolve) => (grant = resolve)))
 
     const spawned = handlers.get('pty:spawn')!(null, {
       ...restartSpawnArgs({ replacesPtyId: 'pty-old' }),
@@ -106,11 +118,57 @@ describe('pty:spawn replacing a pane owner', () => {
     })
     await vi.waitFor(() => expect(pacer.take).toHaveBeenCalledTimes(1))
     expect(shutdown).not.toHaveBeenCalled()
-    grant()
+    grant(pacer.release)
 
     await expect(spawned).resolves.toMatchObject({ id: 'pty-new' })
+    expect(pacer.take).toHaveBeenCalledTimes(1)
+    expect(pacer.release).toHaveBeenCalledTimes(1)
     expect(shutdown).toHaveBeenCalledWith('pty-old', expect.objectContaining({ immediate: true }))
     expect(providerSpawn.mock.calls.some(([options]) => !options.attachOnly)).toBe(true)
+  })
+
+  it('holds the reservation until the provider finishes starting the replacement', async () => {
+    const { providerSpawn, store, runtime } = installRestartHarness()
+    registerWithFakes(mainWindow, runtime, store)
+    const spawn = providerSpawn.getMockImplementation()
+    if (!spawn) {
+      throw new Error('missing test provider')
+    }
+    let finishFork!: () => void
+    const fork = new Promise<void>((resolve) => (finishFork = resolve))
+    providerSpawn.mockImplementationOnce(async (options) => {
+      await fork
+      return spawn(options)
+    })
+
+    const pending = handlers.get('pty:spawn')!(null, {
+      ...restartSpawnArgs({ replacesPtyId: 'pty-old' }),
+      spawnIntent: 'user-resume'
+    })
+    try {
+      await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledTimes(1))
+      expect(pacer.release).not.toHaveBeenCalled()
+    } finally {
+      finishFork()
+      await pending
+    }
+
+    await expect(pending).resolves.toMatchObject({ id: 'pty-new' })
+    expect(pacer.release).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the reservation when the replacement fails', async () => {
+    const { providerSpawn, store, runtime } = installRestartHarness()
+    registerWithFakes(mainWindow, runtime, store)
+    providerSpawn.mockRejectedValueOnce(new Error('spawn failed'))
+
+    await expect(
+      handlers.get('pty:spawn')!(null, {
+        ...restartSpawnArgs({ replacesPtyId: 'pty-old' }),
+        spawnIntent: 'user-resume'
+      })
+    ).rejects.toThrow('spawn failed')
+    expect(pacer.release).toHaveBeenCalledTimes(1)
   })
 
   it('labels the replaced owner exit so the renderer keeps the pane', async () => {
