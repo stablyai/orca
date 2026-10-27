@@ -86,7 +86,7 @@ export function AutomationRunDetailsPage({
         onBack={onBack}
       >
         {/* Why: saved terminal output otherwise hides why the run failed. */}
-        {run.error && content !== run.error ? (
+        {run.status === 'dispatch_failed' && run.error && content !== run.error ? (
           <AutomationRunErrorNotice
             className="mb-4"
             label={translate('auto.components.automations.AutomationsPage.runError', 'Error:')}

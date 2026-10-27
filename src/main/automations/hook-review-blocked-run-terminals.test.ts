@@ -20,7 +20,9 @@ function makeRun(id: string, dispatchedAt: number): AutomationRun {
 
 describe('closeEarlierHookReviewRunTerminals', () => {
   it('closes earlier tabs still on the hook review and keeps the newest one to answer in', async () => {
-    const runs = ['stuck', 'typed', 'answered', 'latest'].map((id, index) => makeRun(id, index))
+    const runs = ['stuck', 'typed', 'restored', 'unknown', 'answered', 'latest'].map((id, index) =>
+      makeRun(id, index)
+    )
     const closed: string[] = []
     const cleared: AutomationDispatchResult[] = []
 
@@ -29,7 +31,11 @@ describe('closeEarlierHookReviewRunTerminals', () => {
         store: { listAutomationRuns: () => runs },
         runtime: {
           getTerminalHandleForPaneKey: (paneKey) => paneKey.replace(/^tab-|:1$/g, ''),
-          readTerminalClientUse: (ptyId) => (ptyId === 'pty-typed' ? 'used' : 'unused'),
+          // A cold restore put a new process in the 'restored' pane.
+          getTerminalPtyIdForHandle: (handle) =>
+            handle === 'restored' ? 'pty-restored-new' : `pty-${handle}`,
+          readTerminalClientUse: (ptyId) =>
+            ptyId === 'pty-typed' ? 'used' : ptyId === 'pty-unknown' ? 'unknown' : 'unused',
           waitForTerminal: async (handle) =>
             handle === 'answered'
               ? { satisfied: true }
@@ -43,7 +49,7 @@ describe('closeEarlierHookReviewRunTerminals', () => {
           return runs[0]
         }
       },
-      runs[3]
+      runs[5]
     )
 
     expect(closed).toEqual(['stuck'])

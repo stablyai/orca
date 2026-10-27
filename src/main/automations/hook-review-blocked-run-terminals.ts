@@ -1,6 +1,7 @@
 import type { AutomationDispatchResult, AutomationRun } from '../../shared/automations-types'
 import { automationRunRecency } from '../../shared/automation-session-reuse'
 import type { Store } from '../persistence'
+import { runOwnHandle } from './headless-automation-agent-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   type AutomationRunTerminalHost
@@ -10,6 +11,7 @@ type HookReviewTerminalHost = Pick<
   AutomationRunTerminalHost,
   'getTerminalHandleForPaneKey' | 'waitForTerminal'
 > & {
+  getTerminalPtyIdForHandle(handle: string): string | null
   readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown'
   closeTerminal(handle: string): Promise<unknown>
 }
@@ -44,13 +46,12 @@ export async function closeEarlierHookReviewRunTerminals(
         automationRunRecency(run) < automationRunRecency(latest)
     )
   for (const run of stale) {
-    const handle = run.terminalPaneKey
-      ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
-      : null
-    // Leave a pane someone typed into or that moved past the prompt.
+    // Leave a pane that now holds another process, may have been used, or moved past the prompt.
+    const handle = runOwnHandle(runtime, run)
     if (
       !handle ||
-      (run.terminalPtyId && runtime.readTerminalClientUse(run.terminalPtyId) === 'used') ||
+      !run.terminalPtyId ||
+      runtime.readTerminalClientUse(run.terminalPtyId) !== 'unused' ||
       !(await isStillOnHookReview(runtime, handle))
     ) {
       continue

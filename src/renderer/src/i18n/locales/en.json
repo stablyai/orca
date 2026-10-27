@@ -17633,7 +17633,8 @@
           "51a470b966": "ssh",
           "b09b2384fd": "Paused",
           "eaa02014f8": "Enabled",
-          "29baf8f4c2": "Source"
+          "29baf8f4c2": "Source",
+          "lastRunFailed": "Last run failed."
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -17822,7 +17823,8 @@
           "tableLastRun": "Last run",
           "noListMatches": "No automations match.",
           "destinationProjectUnavailable": "Choose a project owned by the selected automation destination.",
-          "ownerChanged": "This automation changed hosts. Refresh and try again."
+          "ownerChanged": "This automation changed hosts. Refresh and try again.",
+          "runError": "Error:"
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "Loading automations"

@@ -51,7 +51,9 @@ export function createRuntimeAutomationService(input: {
           void closeEarlierHookReviewRunTerminals(
             { store, runtime, markDispatchResult },
             options.run
-          )
+          ).catch((error: unknown) => {
+            console.warn('[automations] hook-review tab cleanup failed:', error)
+          })
         }
         return observation
       }
