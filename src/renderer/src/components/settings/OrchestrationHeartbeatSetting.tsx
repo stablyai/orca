@@ -35,18 +35,21 @@ export function OrchestrationHeartbeatSetting({
         }}
       />
       {enabled ? (
-        <NumberField
-          label={getOrchestrationHeartbeatIntervalTitle()}
-          description={getOrchestrationHeartbeatIntervalDescription()}
-          value={resolveOrchestrationHeartbeatInterval(settings)}
-          min={ORCHESTRATION_HEARTBEAT_INTERVAL_MIN_MINUTES}
-          max={ORCHESTRATION_HEARTBEAT_INTERVAL_MAX_MINUTES}
-          integer
-          suffix={getOrchestrationHeartbeatIntervalSuffix()}
-          onChange={(orchestrationHeartbeatIntervalMinutes) => {
-            void updateSettings({ orchestrationHeartbeatIntervalMinutes })
-          }}
-        />
+        // Indented under the switch because it only applies while heartbeats are on.
+        <div className="ml-4 border-l border-border pl-4">
+          <NumberField
+            label={getOrchestrationHeartbeatIntervalTitle()}
+            description={getOrchestrationHeartbeatIntervalDescription()}
+            value={resolveOrchestrationHeartbeatInterval(settings)}
+            min={ORCHESTRATION_HEARTBEAT_INTERVAL_MIN_MINUTES}
+            max={ORCHESTRATION_HEARTBEAT_INTERVAL_MAX_MINUTES}
+            integer
+            suffix={getOrchestrationHeartbeatIntervalSuffix()}
+            onChange={(orchestrationHeartbeatIntervalMinutes) => {
+              void updateSettings({ orchestrationHeartbeatIntervalMinutes })
+            }}
+          />
+        </div>
       ) : null}
     </>
   )
