@@ -1,7 +1,14 @@
 import type { AgentMainAgentStatus } from '../agent-status-types'
-import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
+import type {
+  ClaudeLeadTurnState,
+  CodexLeadTurnState,
+  GrokActiveTurn,
+  HermesPaneTurn,
+  JcodeTurnAdmission
+} from './main-agent-turn-state'
 
 export type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
+export type { GrokActiveTurn, HermesPaneTurn, JcodeTurnAdmission } from './main-agent-turn-state'
 import {
   AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
   createAgentStatusLegacyAdapter,
@@ -42,6 +49,9 @@ export type HookListenerState = {
   antigravitySubagentParentByPaneKey: Map<string, string>
   /** Journal-backed prompt for each jcode pane's current turn; see readJcodeTurnPrompt. */
   jcodeTurnPromptByPaneKey: Map<string, JcodeUserPromptEvidence | null>
+  jcodeTurnByPaneKey: Map<string, JcodeTurnAdmission>
+  /** Shared by copied listener views; survives all pane/cache teardown. */
+  jcodeTurnRevision: { current: number }
   ampCompletedCacheKeys: Set<string>
   /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
@@ -83,25 +93,12 @@ export type HookListenerState = {
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
 }
 
-export type HermesPaneTurn = {
-  ended: boolean
-  /** `delegate_task` children run their own turns, under their own session ids, inside the parent's. */
-  childSessionIds: Set<string>
-  /** The pane's own session, which its children's hooks must not replace. */
-  sessionId: string
-}
-
 export type MusePaneState = {
   /** Internal reminder/subagent sessions; their hooks inherit the pane env and fire even after Stop. */
   childSessionIds: Set<string>
   log?: MuseSessionLogState
   /** Muse emits PermissionRequest for auto-approved calls too; only Notification confirms a visible prompt. */
   pendingApproval?: { toolName?: string; toolInput?: unknown }
-}
-
-export type GrokActiveTurn = {
-  promptId?: string
-  sessionId?: string
 }
 
 const legacyStatusAdapterByState = new WeakMap<HookListenerState, AgentStatusLegacyAdapter>()
@@ -127,6 +124,8 @@ export function createHookListenerState(
     antigravityCompletedTranscriptByPaneKey: new Map(),
     antigravitySubagentParentByPaneKey: new Map(),
     jcodeTurnPromptByPaneKey: new Map(),
+    jcodeTurnByPaneKey: new Map(),
+    jcodeTurnRevision: { current: 0 },
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
@@ -215,6 +214,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.jcodeTurnPromptByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.jcodeTurnByPaneKey, paneKey)
   deleteLegacyAgentStatus(state, paneKey)
   for (const key of state.lastStatusByPaneKey.keys()) {
     if (key.startsWith(`${paneKey}\0`)) {
@@ -249,6 +249,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
 export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
   return (
     state.lastStatusByPaneKey.has(paneKey) ||
+    state.jcodeTurnByPaneKey.get(paneKey)?.active === true ||
     state.claudeSubagentRosterByPaneKey.has(paneKey) ||
     state.claudeLeadStateByPaneKey.has(paneKey) ||
     state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
@@ -274,6 +275,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.antigravitySubagentParentByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.jcodeTurnPromptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.jcodeTurnByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
@@ -302,6 +304,7 @@ export function clearPaneTurnCacheState(state: HookListenerState, paneKey: strin
   state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
   state.antigravitySubagentParentByPaneKey.delete(paneKey)
   state.jcodeTurnPromptByPaneKey.delete(paneKey)
+  state.jcodeTurnByPaneKey.delete(paneKey)
   state.ampCompletedCacheKeys.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
@@ -314,6 +317,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.antigravityCompletedTranscriptByPaneKey.clear()
   state.antigravitySubagentParentByPaneKey.clear()
   state.jcodeTurnPromptByPaneKey.clear()
+  state.jcodeTurnByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()
   state.claudeConsumedCompactPromptIdByPaneKey.clear()
   state.warnedVersions.clear()

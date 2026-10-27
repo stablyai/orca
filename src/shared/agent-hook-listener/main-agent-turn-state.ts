@@ -1,6 +1,26 @@
 import type { AgentStatusState } from '../agent-status-types'
 import type { AgentTurnOutcome } from '../agent-turn-outcome'
 
+export type JcodeTurnAdmission = {
+  sessionId: string
+  revision: number
+  active: boolean
+  lastActivityAt: number
+}
+
+export type GrokActiveTurn = {
+  promptId?: string
+  sessionId?: string
+}
+
+export type HermesPaneTurn = {
+  ended: boolean
+  /** `delegate_task` children run their own turns, under their own session ids, inside the parent's. */
+  childSessionIds: Set<string>
+  /** The pane's own session, which its children's hooks must not replace. */
+  sessionId: string
+}
+
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
 export type ClaudeLeadTurnState = {
   state: AgentStatusState

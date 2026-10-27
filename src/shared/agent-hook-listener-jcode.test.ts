@@ -3,7 +3,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  clearAllListenerCaches,
+  clearPaneCacheState,
+  clearPaneTurnCacheState,
   createHookListenerState,
+  movePaneCacheState,
+  paneHasStateClaims,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
@@ -16,6 +21,10 @@ function ingest(state: HookListenerState, payload: Record<string, unknown>) {
     { paneKey: PANE_KEY, payload: { hook_event_name: payload.event, ...payload } },
     'production'
   )
+}
+
+function cacheSnapshot(state: HookListenerState) {
+  return structuredClone({ ...state, lastStatusByPaneKey: new Map(state.lastStatusByPaneKey) })
 }
 
 describe('shared agent-hook-listener: jcode', () => {
@@ -49,6 +58,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('reports the live tool from pre_tool, before the tool has finished', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_1' })
     const event = ingest(state, {
       event: 'pre_tool',
       session_id: 'session_jc_1',
@@ -64,6 +74,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('falls back to the tool intent when no tool-specific key matches', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_1' })
     const event = ingest(state, {
       event: 'pre_tool',
       session_id: 'session_jc_1',
@@ -74,6 +85,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('keeps the pre_tool input visible when post_tool reports completion', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_1' })
     ingest(state, {
       event: 'pre_tool',
       session_id: 'session_jc_1',
@@ -96,6 +108,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('maps a pending request_permission to waiting with the full question', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_2' })
     const event = ingest(state, {
       event: 'pre_tool',
       session_id: 'session_jc_2',
@@ -114,6 +127,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('does not re-open a question on post_tool, which fires after the answer', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_2' })
     const pending = ingest(state, {
       event: 'pre_tool',
       session_id: 'session_jc_2',
@@ -133,6 +147,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('leaves unrelated tool names working even when they read like a question', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_2' })
     const event = ingest(state, {
       event: 'pre_tool',
       session_id: 'session_jc_2',
@@ -143,6 +158,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('maps turn_end to done with the last assistant text', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_3' })
     const event = ingest(state, {
       event: 'turn_end',
       session_id: 'session_jc_3',
@@ -166,6 +182,7 @@ describe('shared agent-hook-listener: jcode', () => {
       last_assistant_text: 'Stale reply.'
     })
     expect(previous?.payload.lastAssistantMessage).toBe('Stale reply.')
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_3' })
     const event = ingest(state, {
       event: 'turn_end',
       session_id: 'session_jc_3',
@@ -203,6 +220,7 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('clears the previous turn tool when a new turn starts', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_4' })
     const previous = ingest(state, {
       event: 'pre_tool',
       session_id: 'session_jc_4',
@@ -247,13 +265,94 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('does not count a direct jcode prompt without journal evidence as explicit', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_8' })
     // Hook prompt fields lack journal backing and must not imply explicit submission.
     const event = ingest(state, {
       event: 'post_tool',
+      session_id: 'session_jc_8',
       tool_name: 'read',
       prompt: 'fix the bug'
     })
     expect(event?.payload).toMatchObject({ agentType: 'jcode', state: 'working' })
     expect(event?.hasExplicitPrompt).toBeFalsy()
+  })
+
+  it.each(['pre_tool', 'post_tool'])('drops orphan %s before touching caches', (event) => {
+    const baseline = cacheSnapshot(state)
+    expect(
+      ingest(state, {
+        event,
+        session_id: 'orphan',
+        prompt: 'wrong',
+        model: 'wrong',
+        tool_name: 'bash',
+        tool_input: '{"command":"sleep 60"}'
+      })
+    ).toBeNull()
+    expect(cacheSnapshot(state)).toEqual(baseline)
+  })
+
+  it('admits permission answers only during their matching turn', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_2' })
+    const permission = {
+      event: 'pre_tool',
+      session_id: 'session_jc_2',
+      tool_name: 'request_permission',
+      tool_input: '{"action":"delete the staging bucket"}'
+    }
+    expect(ingest(state, permission)?.payload.state).toBe('waiting')
+    expect(ingest(state, { ...permission, event: 'post_tool' })?.payload.state).toBe('working')
+    ingest(state, { event: 'turn_end', session_id: 'session_jc_2' })
+    expect(ingest(state, { ...permission, event: 'post_tool' })).toBeNull()
+  })
+
+  it('moves admission with the pane and clears it on every teardown path', () => {
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_1' })
+    expect(paneHasStateClaims(state, PANE_KEY)).toBe(true)
+    movePaneCacheState(state, PANE_KEY, 'tab-2:22222222-2222-4222-8222-222222222222')
+    expect(state.jcodeTurnByPaneKey.has(PANE_KEY)).toBe(false)
+    expect(paneHasStateClaims(state, PANE_KEY)).toBe(false)
+    expect(paneHasStateClaims(state, 'tab-2:22222222-2222-4222-8222-222222222222')).toBe(true)
+    expect(ingest(state, { event: 'post_tool', session_id: 'session_jc_1' })).toBeNull()
+    expect(
+      normalizeHookPayload(
+        state,
+        'jcode',
+        {
+          paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+          payload: {
+            event: 'post_tool',
+            session_id: 'session_jc_1',
+            tool_name: 'read'
+          }
+        },
+        'production'
+      )?.payload.state
+    ).toBe('working')
+    clearPaneCacheState(state, 'tab-2:22222222-2222-4222-8222-222222222222')
+    expect(state.jcodeTurnByPaneKey.size).toBe(0)
+    expect(paneHasStateClaims(state, 'tab-2:22222222-2222-4222-8222-222222222222')).toBe(false)
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_1' })
+    clearPaneTurnCacheState(state, PANE_KEY)
+    expect(state.jcodeTurnByPaneKey.size).toBe(0)
+    ingest(state, { event: 'turn_start', session_id: 'session_jc_1' })
+    clearAllListenerCaches(state)
+    expect(state.jcodeTurnByPaneKey.size).toBe(0)
+    expect(ingest(state, { event: 'post_tool', session_id: 'session_jc_1' })).toBeNull()
+  })
+
+  it('drops turn_start without session_id before changing admission or caches', () => {
+    // Jcode 0.99.0 always sends session_id; a fenced turn requires that owner.
+    const baseline = cacheSnapshot(state)
+    expect(ingest(state, { event: 'turn_start', model: 'claude-opus-5-5' })).toBeNull()
+    expect(cacheSnapshot(state)).toEqual(baseline)
+  })
+
+  it('keeps revisions unique through copied listener views', () => {
+    ingest({ ...state }, { event: 'turn_start', session_id: 'session_jc_1' })
+    const first = state.jcodeTurnByPaneKey.get(PANE_KEY)?.revision
+    clearPaneCacheState(state, PANE_KEY)
+    ingest({ ...state }, { event: 'turn_start', session_id: 'session_jc_1' })
+    expect(state.jcodeTurnByPaneKey.get(PANE_KEY)?.revision).toBeGreaterThan(first ?? 0)
   })
 })

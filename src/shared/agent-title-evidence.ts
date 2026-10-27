@@ -15,6 +15,7 @@ import {
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
+import { getJcodeTitleIdentity } from './jcode-terminal-title'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
 import {
@@ -275,7 +276,7 @@ function collectAnchoredNames(
     const withoutSigil = segment.startsWith(`${CLAUDE_IDLE} `)
       ? segment.slice(CLAUDE_IDLE.length)
       : segment
-    const bare = agentForWholeTitle(withoutSigil)
+    const bare = agentForWholeTitle(withoutSigil) ?? getJcodeTitleIdentity(segment)
     if (bare) {
       anchored.add(bare)
     }

@@ -3,6 +3,9 @@ import {
   normalizeCompatibleAgentTitleForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
+import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
+import { getJcodeTerminalTitleStatus } from '../../shared/jcode-terminal-title'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
   agentStatusAuthorityObservedAt,
   pickHostTurnEnd,
@@ -47,15 +50,6 @@ export function buildRuntimeMobileAgentStatus(
   // Only full hook payload carries provider session identity; headless has no renderer tab.agentStatus, so native chat needs this path.
   const hookRows = getHookRowsForPane(paneKey)
   const hookRow = selectRuntimeHookAgentRowForPane(hookRows)
-  // Check hook evidence even without PTY status: headless hook-only agents may never publish recognized titles.
-  if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
-    return {}
-  }
-  const providerSession = hookRow.providerSession
-    ? { providerSession: hookRow.providerSession }
-    : retained?.providerSession
-      ? { providerSession: retained.providerSession }
-      : {}
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)
   const titleCandidate = pty
@@ -82,9 +76,35 @@ export function buildRuntimeMobileAgentStatus(
         )
       : null
   const ptyTitle = titleCandidate?.title?.trim() || null
+  const publishedOwner = resolvePublishedPaneAgentIdentity({
+    hookAgent: isTuiAgent(hookRow.agentType) ? hookRow.agentType : null,
+    hookIsLive: hookRow.agentIsLive,
+    foregroundAgent: pty?.foregroundAgent,
+    launchAgent: tab.launchAgent ?? pty?.launchAgent,
+    title: ptyTitle
+  })
+  const jcodeOwner = publishedOwner === 'jcode'
+  if (jcodeOwner && retained?.payload.agentType !== 'jcode') {
+    retained = null
+  }
+  // Headless hook-only agents may never publish recognized titles.
+  if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
+    return {}
+  }
+  const providerSession =
+    hookRow.providerSession && (!jcodeOwner || hookRow.providerSessionAgentType === 'jcode')
+      ? { providerSession: hookRow.providerSession }
+      : retained?.providerSession
+        ? { providerSession: retained.providerSession }
+        : {}
+  const jcodeHookOwner = jcodeOwner && hookRow.live?.payload.agentType === 'jcode'
+  const liveJcodeEvidence =
+    pty?.foregroundAgent === 'jcode' ||
+    (hookRow.agentIsLive && hookRow.agentType === 'jcode') ||
+    getJcodeTerminalTitleStatus(ptyTitle ?? '') !== null
   const ptyTitleClassification = classifyAgentTitle(ptyTitle)
   const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
-  if (nonAgentTitle) {
+  if (nonAgentTitle && !(jcodeOwner && liveJcodeEvidence)) {
     // Shell titles clear stuck spinners unless a live hook still proves agent activity (#1437).
     const hasLiveHookSignal =
       retained?.payload.interactivePrompt != null ||
@@ -108,7 +128,8 @@ export function buildRuntimeMobileAgentStatus(
     launchAgent: tab.launchAgent ?? pty?.launchAgent ?? null,
     hookAgent: retained?.payload.agentType ?? hookRow.agentType
   })
-  const ownerAgent = ownerRecord?.agent ?? pty?.foregroundAgent ?? null
+  const ownerAgent =
+    (jcodeOwner ? publishedOwner : null) ?? ownerRecord?.agent ?? pty?.foregroundAgent ?? null
   const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
   const terminalTitle = normalizeCompatibleAgentTitleForOwner(
     trackerOnlyTitle ?? (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
@@ -175,7 +196,11 @@ export function buildRuntimeMobileAgentStatus(
     return identityOnly(processStartedAt, shownSegment)
   }
   // Prefer OSC 9999 state/prompt/agent so hook-only transitions surface (#7970).
-  const liveRow = retained ?? resolveRuntimeHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
+  const liveRow =
+    retained ??
+    (jcodeHookOwner
+      ? hookRow.live
+      : resolveRuntimeHookLiveAgentRow(hookRow.live, pty, nonAgentTitle))
   if (liveRow) {
     const liveStatus = normalizeCompatibleAgentStatusEntryForOwner(
       {
@@ -200,6 +225,10 @@ export function buildRuntimeMobileAgentStatus(
       ownerAgent,
       ownerOptions
     )
+    // Jcode's native tail cannot complete or reopen a hook-owned turn.
+    if (jcodeHookOwner) {
+      return { agentStatus: liveStatus }
+    }
     // A live question outranks only the shell title that currently obscures it.
     const renewedStatus = renewRuntimeMobileAgentStatusFromPtyTitle(liveStatus, pty, {
       preserveQuestionUnderShellTitle: true

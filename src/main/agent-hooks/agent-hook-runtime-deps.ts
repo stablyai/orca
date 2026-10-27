@@ -16,6 +16,7 @@ export function agentHookRuntimeDeps(
     onTerminalProgramStatusFacet: (event) => server.ingestProgramStatusFacet(event),
     onClaudeTerminalEvidence: (paneKey, evidence) =>
       server.observeClaudeTerminalEvidence(paneKey, evidence),
+    onJcodeTerminalTitle: (paneKey, title) => server.observeJcodeTerminalTitle(paneKey, title),
     getAgentStatusSnapshot: () =>
       server.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),

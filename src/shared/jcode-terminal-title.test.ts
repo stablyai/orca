@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { isJcodeIdentityTerminalTitle, stripJcodeTitleStatus } from './jcode-terminal-title'
+import {
+  getJcodeTerminalTitleActivity,
+  getJcodeTerminalTitleStatus,
+  isJcodeIdentityTerminalTitle,
+  stripJcodeTitleStatus
+} from './jcode-terminal-title'
+import { detectAgentStatusFromTitle } from './agent-title-status'
 
 // Real jcode 0.87.1 titles; capture provenance: docs/reference/jcode-hook-events.md.
 const CAPTURED_TITLES = [
@@ -39,5 +45,62 @@ describe('jcode terminal titles', () => {
   it('ignores empty input', () => {
     expect(isJcodeIdentityTerminalTitle('')).toBe(false)
     expect(isJcodeIdentityTerminalTitle(undefined)).toBe(false)
+  })
+
+  it.each([
+    ['🐾 jcode/desert Pawprint', 'idle', null],
+    ['🐾 jcode/desert Pawprint · work ~1s', 'working', 'work'],
+    ['🌐 jcode/desert Pawprint · last ~3s', 'idle', 'last'],
+    ['🌐 jcode/meadow Hippo · work ~1m34s', 'working', 'work'],
+    ['🦨 jcode/castle Skunk', 'idle', null],
+    ['🌐 jcode/castle Skunk · +2 -1 · work ~10s', 'working', 'work'],
+    ['🌐 jcode/castle Skunk · +2 -1 · last ~10s', 'idle', 'last'],
+    ['🐽 jcode/castle Piglet', 'idle', null],
+    ['🌐 jcode/castle Piglet · work ~13s', 'working', 'work'],
+    ['🌐 jcode/castle Skunk · work ~1d2h', 'working', 'work'],
+    ['🌐 jcode/castle Skunk · last ~1.5s', 'idle', 'last']
+  ] as const)('reads native activity from %j', (title, status, activity) => {
+    expect(getJcodeTerminalTitleActivity(title)).toBe(activity)
+    expect(getJcodeTerminalTitleStatus(title)).toBe(status)
+    expect(detectAgentStatusFromTitle(title)).toBe(status)
+  })
+
+  it('parses conversation activity without granting title-only identity', () => {
+    const title = '🌐 Fix the caiea bw-scheduler cache permission EPER… · +436 -46 · work ~53m15s'
+    expect(getJcodeTerminalTitleActivity(title)).toBe('work')
+    expect(getJcodeTerminalTitleStatus(title)).toBe('working')
+    expect(isJcodeIdentityTerminalTitle(title)).toBe(false)
+    expect(detectAgentStatusFromTitle(title)).toBeNull()
+  })
+
+  it.each(['✳', '✋', '⏲', '✦', '◇'])(
+    'rejects foreign status glyph %s even with a capitalized codename',
+    (glyph) => {
+      expect(isJcodeIdentityTerminalTitle(`${glyph} jcode Pawprint`)).toBe(false)
+    }
+  )
+
+  it.each([
+    'jcode-something-else',
+    'jcode-something-else · work ~10s',
+    'jcode/castle Skunk · work ~oops',
+    'jcode/castle Skunk · work ~',
+    'jcode/castle Skunk · work 10s',
+    'jcode/castle Skunk · work ~10s · renamed',
+    'jcode/castle Skunk · last ~10s · +2 -1',
+    'jcode/castle Skunk · +2 -1 · work ~10s trailing'
+  ])('does not grant identity to malformed or nonterminal decoration in %j', (title) => {
+    expect(isJcodeIdentityTerminalTitle(title)).toBe(false)
+  })
+
+  it.each([
+    '',
+    'Fix jcode hooks',
+    'Fix jcode hooks · work ~oops',
+    'Fix jcode hooks · work ~10s · renamed',
+    'Fix jcode hooks · last ~10s · +2 -1'
+  ])('declines activity without a final native duration in %j', (title) => {
+    expect(getJcodeTerminalTitleActivity(title)).toBeNull()
+    expect(getJcodeTerminalTitleStatus(title)).toBeNull()
   })
 })

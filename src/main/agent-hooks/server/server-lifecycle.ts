@@ -249,6 +249,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
     this.claudeAgentViews.clear()
+    this.clearJcodeTitleInference()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
       this.flushStatusPersistSync()

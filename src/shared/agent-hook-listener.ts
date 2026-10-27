@@ -1,13 +1,13 @@
 import { readHookAgentProcess } from './agent-process-presence'
-import { resolveAgentStatusIdentity } from './agent-status-identity'
-import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
-import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
+import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
 } from './claude-compact-completion'
+import type { HookNormalizationOptions } from './agent-hook-listener/hook-normalization-options'
+import { inheritsActiveHookPaneIdentity } from './agent-hook-listener/hook-pane-identity'
 import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
@@ -20,6 +20,10 @@ import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
+import {
+  settleJcodeRootTurn,
+  shouldIgnoreJcodeEvent
+} from './agent-hook-listener/providers/jcode-events'
 import {
   isOpenCodeSharedServerPost,
   resolveOpenCodeSharedServerEnvelope,
@@ -42,16 +46,7 @@ export function normalizeHookPayload(
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: {
-    deferCompactOwnershipToClient?: boolean
-    previousOpenCodeMainAgent?: AgentMainAgentStatus
-    admitOpenCodeTui?: (
-      identity: Pick<
-        AgentHookEventPayload,
-        'paneKey' | 'launchToken' | 'hookEventName' | 'hasExplicitPrompt'
-      >
-    ) => boolean | 'preserve-poster'
-  } = {}
+  options: HookNormalizationOptions = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
   if (!envelope) {
@@ -75,6 +70,12 @@ export function normalizeHookPayload(
     // Only jcode posts lifecycle under event; other providers may use that field for unrelated data.
     (source === 'jcode' ? hookPayloadRecord.event : undefined)
   const providerSession = readPaneProviderSession(state, source, stampedPaneKey, hookPayloadRecord)
+  if (
+    source === 'jcode' &&
+    shouldIgnoreJcodeEvent(state, eventName, stampedPaneKey, providerSession?.id)
+  ) {
+    return null
+  }
   if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
     return null
   }
@@ -143,34 +144,22 @@ export function normalizeHookPayload(
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
   const agentProcess = readHookAgentProcess(source, record.agentProcess)
-  const previousReceivedAt =
-    previousStatus &&
-    'receivedAt' in previousStatus &&
-    typeof previousStatus.receivedAt === 'number'
-      ? previousStatus.receivedAt
-      : previousStatus?.hostEvidenceObservedAt
   // Reject before provider folds mutate the pane's prompt, tool and child caches.
   if (
-    previousStatus &&
-    previousReceivedAt !== undefined &&
-    sameAgentStatusTerminalOwner(
-      { connectionId: previousStatus.connectionId ?? null, worktreeId: previousStatus.worktreeId },
-      { connectionId: null, worktreeId }
-    ) &&
-    resolveAgentStatusIdentity({
-      existing: {
-        agentType: previousStatus.payload.agentType,
-        state: previousStatus.payload.state,
-        updatedAt: previousReceivedAt,
-        restoredUnconfirmed: previousStatus.restoredUnconfirmed,
-        agentPresence: previousStatus.providerSessionOnly ? undefined : previousStatus.agentPresence
-      },
-      incoming: source,
-      incomingProcess: agentProcess,
-      incomingSession: providerSession?.id,
-      now: Date.now()
-    }).inheritedFromActivePane
+    inheritsActiveHookPaneIdentity(
+      previousStatus,
+      source,
+      worktreeId,
+      agentProcess,
+      providerSession?.id
+    )
   ) {
+    if (source === 'jcode' && eventName === 'session_end' && providerSession) {
+      const turn = state.jcodeTurnByPaneKey.get(paneKey)
+      if (turn) {
+        settleJcodeRootTurn(state, paneKey, providerSession.id, turn.revision)
+      }
+    }
     return null
   }
   // Only manual PostCompact clears a turn; auto compaction must not consume its ownership slot.
