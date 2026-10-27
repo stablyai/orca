@@ -22,7 +22,6 @@ import {
 } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import { AGENT_HOOKS_REVIEW_BLOCKED_ERROR } from './runtime-terminal-run-observer'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
@@ -45,9 +44,6 @@ import type {
 } from '../../shared/runtime-client-events'
 
 const DEFAULT_TICK_MS = 60 * 1000
-
-export const AGENT_HOOKS_REVIEW_PAUSED_ERROR =
-  "Orca paused this automation because its agent is waiting for someone to review new or changed hooks. Trust or remove them in this run's terminal (Codex: /hooks), then turn the automation back on."
 
 export class AutomationService {
   private readonly store: Store
@@ -196,7 +192,7 @@ export class AutomationService {
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
-    const run = await this.runs.updateRun(await this.pauseScheduleBlockedOnHookReview(result))
+    const run = await this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
       if (run.status === 'dispatched') {
@@ -216,32 +212,6 @@ export class AutomationService {
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
     })
-  }
-
-  /** Only a person can answer a hook review; later occurrences would block on the same prompt. */
-  private async pauseScheduleBlockedOnHookReview(
-    result: AutomationDispatchResult
-  ): Promise<AutomationDispatchResult> {
-    if (result.status !== 'dispatch_failed' || result.error !== AGENT_HOOKS_REVIEW_BLOCKED_ERROR) {
-      return result
-    }
-    const run = this.store.listAutomationRuns().find((entry) => entry.id === result.runId)
-    const automation = this.store
-      .listAutomations()
-      .find((entry) => entry.id === run?.automationId)
-    if (run?.trigger !== 'scheduled' || !automation?.enabled) {
-      return result
-    }
-    try {
-      this.store.updateAutomation(automation.id, { enabled: false })
-      await this.store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-    } catch (error) {
-      console.warn('[automations] could not pause an automation blocked on hook review:', error)
-      return result
-    }
-    const selector = this.store.automationChangeSelector(automation.id)
-    this.publish?.({ reason: 'definition', ...(selector ? { selector } : {}) })
-    return { ...result, error: AGENT_HOOKS_REVIEW_PAUSED_ERROR }
   }
 
   private async evaluateDueRuns(): Promise<void> {

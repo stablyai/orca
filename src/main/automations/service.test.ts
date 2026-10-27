@@ -11,8 +11,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
-import { AGENT_HOOKS_REVIEW_PAUSED_ERROR, AutomationService } from './service'
-import { AGENT_HOOKS_REVIEW_BLOCKED_ERROR } from './runtime-terminal-run-observer'
+import { AutomationService } from './service'
 
 vi.mock('electron', () => ({
   app: {
@@ -641,37 +640,6 @@ describe('AutomationService', () => {
 
     expect(updated.usage?.status).toBe('unavailable')
     expect(updated.usage?.unavailableReason).toBe('provider_unsupported')
-  })
-
-  it('pauses a schedule whose run is blocked on hook review, but not for a manual run', async () => {
-    vi.setSystemTime(new Date('2026-05-13T10:00:00'))
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const automation = store.createAutomation({
-      name: 'Hourly check',
-      prompt: 'Check the repo',
-      agentId: 'codex',
-      projectId: 'r1',
-      workspaceMode: 'existing',
-      workspaceId: 'wt1',
-      timezone: 'UTC',
-      rrule: 'FREQ=HOURLY',
-      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
-    })
-    const service = new AutomationService(store, { tickMs: 60_000 })
-    const blocked = { status: 'dispatch_failed' as const, error: AGENT_HOOKS_REVIEW_BLOCKED_ERROR }
-    const isEnabled = (): boolean | undefined =>
-      store.listAutomations().find((entry) => entry.id === automation.id)?.enabled
-
-    const manual = store.createAutomationRun(automation, Date.now(), 'manual')
-    const manualResult = await service.markDispatchResult({ runId: manual.id, ...blocked })
-    expect(manualResult.error).toBe(AGENT_HOOKS_REVIEW_BLOCKED_ERROR)
-    expect(isEnabled()).toBe(true)
-
-    const scheduled = store.createAutomationRun(automation, Date.now() - 60_000)
-    const scheduledResult = await service.markDispatchResult({ runId: scheduled.id, ...blocked })
-    expect(scheduledResult.error).toBe(AGENT_HOOKS_REVIEW_PAUSED_ERROR)
-    expect(isEnabled()).toBe(false)
   })
 
   // Name sorting evaluates the poison record before the healthy one.
