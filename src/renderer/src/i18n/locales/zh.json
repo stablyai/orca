@@ -21108,7 +21108,9 @@
       "chooseTransition": "选择状态更改：",
       "cancel": "取消",
       "noTransition": "{{key}} 没有可转到 {{column}} 的状态更改。",
-      "queryTooLong": "Jira 查询过长。请缩短查询或清除筛选条件。"
+      "queryTooLong": "Jira 查询过长。请缩短查询或清除筛选条件。",
+      "reorderColumn": "重新排列 {{column}}",
+      "reorderColumnHint": "此列中的议题：{{count}}。使用左右方向键移动此列。"
     },
     "favourites": {
       "activeLabel": "Jira 收藏夹：{{name}}",

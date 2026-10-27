@@ -67,6 +67,52 @@ describe('buildJiraBoardSections', () => {
     expect(sections[1].statusIds).toEqual(['3'])
   })
 
+  it('keeps a column key stable when Jira inserts a column before it', () => {
+    const before = buildJiraBoardSections([], {
+      statusIdsByColumn: [['1'], ['3']],
+      columns: [
+        { name: 'To Do', statusIds: ['1'] },
+        { name: 'Done', statusIds: ['3'] }
+      ]
+    })
+    const after = buildJiraBoardSections([], {
+      statusIdsByColumn: [['9'], ['1'], ['3']],
+      columns: [
+        { name: 'Triage', statusIds: ['9'] },
+        { name: 'To Do', statusIds: ['1'] },
+        { name: 'Done', statusIds: ['3'] }
+      ]
+    })
+
+    expect(after.map((section) => section.key)).toContain(before[0].key)
+    expect(after.map((section) => section.key)).toContain(before[1].key)
+  })
+
+  it('keeps a key stable when a column is renamed and its statuses are not', () => {
+    const [before] = buildJiraBoardSections([], {
+      statusIdsByColumn: [['1']],
+      columns: [{ name: 'To Do', statusIds: ['1'] }]
+    })
+    const [after] = buildJiraBoardSections([], {
+      statusIdsByColumn: [['1']],
+      columns: [{ name: 'Backlog', statusIds: ['1'] }]
+    })
+
+    expect(after.key).toBe(before.key)
+  })
+
+  it('gives empty columns distinct keys', () => {
+    const sections = buildJiraBoardSections([], {
+      statusIdsByColumn: [[], []],
+      columns: [
+        { name: 'Parked', statusIds: [] },
+        { name: 'Later', statusIds: [] }
+      ]
+    })
+
+    expect(new Set(sections.map((section) => section.key)).size).toBe(2)
+  })
+
   it('reverses lanes for descending status direction', () => {
     const sections = buildJiraBoardSections(
       [issue('STA-1', todo)],

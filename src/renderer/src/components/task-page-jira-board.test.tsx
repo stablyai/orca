@@ -39,6 +39,7 @@ describe('TaskPageJiraBoard', () => {
   ): string {
     return renderToStaticMarkup(
       <TaskPageJiraBoard
+        columnOrderScopeKey="board-test"
         formatUpdatedAt={() => '2d'}
         getStatusTone={() => 'tone-class'}
         issues={issues}
@@ -59,7 +60,19 @@ describe('TaskPageJiraBoard', () => {
     expect(markup).toContain('Done')
     expect(markup).toContain('Title for STA-1')
     expect(markup).toContain('Title for STA-3')
-    expect((markup.match(/draggable="true"/g) ?? []).length).toBe(3)
+    expect((markup.match(/group\/card/g) ?? []).length).toBe(3)
+    // Three cards plus the two column headers, which drag to reorder the lanes.
+    expect((markup.match(/draggable="true"/g) ?? []).length).toBe(5)
+  })
+
+  it('offers each column header as a drag handle with a keyboard equivalent', () => {
+    const markup = renderBoard([issue('STA-1', todo), issue('STA-2', done)])
+    expect(markup).toContain('aria-label="Reorder To Do"')
+    expect(markup).toContain('aria-label="Reorder Done"')
+    // The label replaces the visible header, so the count must still reach screen readers.
+    expect(markup).toContain(
+      'aria-description="Issues in this lane: 1. Use the Left and Right arrow keys to move it."'
+    )
   })
 
   it('lays lanes out on one horizontally scrollable row', () => {
@@ -91,6 +104,7 @@ describe('TaskPageJiraBoard', () => {
     const updating = issue('STA-9', todo)
     const markup = renderToStaticMarkup(
       <TaskPageJiraBoard
+        columnOrderScopeKey="board-test"
         formatUpdatedAt={() => '2d'}
         getStatusTone={() => 'tone-class'}
         issues={[updating]}

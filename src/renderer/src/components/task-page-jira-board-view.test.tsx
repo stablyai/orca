@@ -63,6 +63,7 @@ function mount(
   return render(
     <TooltipProvider>
       <TaskPageJiraBoardView
+        columnOrderScopeKey="board-test"
         issues={[issue]}
         loading={loading}
         selectedIssue={null}

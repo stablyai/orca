@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  JIRA_BOARD_DRAG_COLUMN_MIME,
   JIRA_BOARD_DRAG_ISSUE_MIME,
   JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES,
+  readJiraBoardColumnDragData,
   readJiraBoardIssueDragData,
+  writeJiraBoardColumnDragData,
   writeJiraBoardIssueDragData
 } from './jira-board-drag-payload'
 
@@ -78,5 +81,42 @@ describe('jira board drag payload', () => {
       transfer.setData(JIRA_BOARD_DRAG_ISSUE_MIME, payload)
       expect(readJiraBoardIssueDragData(transfer).status).toBe('rejected')
     }
+  })
+
+  it('round-trips a board column key', () => {
+    const transfer = createDataTransfer()
+    expect(writeJiraBoardColumnDragData(transfer, 'column:1:In Progress')).toBe(true)
+    expect(transfer.effectAllowed).toBe('move')
+    expect(readJiraBoardColumnDragData(transfer)).toEqual({
+      status: 'column',
+      key: 'column:1:In Progress'
+    })
+  })
+
+  it('keeps a column drag out of the issue payload and the other way round', () => {
+    const column = createDataTransfer()
+    writeJiraBoardColumnDragData(column, 'column:0:To Do')
+    expect(readJiraBoardIssueDragData(column)).toEqual({ status: 'missing' })
+
+    const issue = createDataTransfer()
+    writeJiraBoardIssueDragData(issue, { key: 'STA-42' })
+    expect(readJiraBoardColumnDragData(issue)).toEqual({ status: 'missing' })
+  })
+
+  it('rejects writing an empty or oversized column key', () => {
+    const empty = createDataTransfer()
+    expect(writeJiraBoardColumnDragData(empty, '')).toBe(false)
+    expect(empty.types).toEqual([])
+
+    const oversized = createDataTransfer()
+    expect(
+      writeJiraBoardColumnDragData(oversized, 'K'.repeat(JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES + 1))
+    ).toBe(false)
+  })
+
+  it('reports hidden while a column payload is unreadable during dragover', () => {
+    const transfer = createDataTransfer()
+    transfer.setData(JIRA_BOARD_DRAG_COLUMN_MIME, '')
+    expect(readJiraBoardColumnDragData(transfer)).toEqual({ status: 'hidden' })
   })
 })

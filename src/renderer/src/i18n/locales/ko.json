@@ -21107,7 +21107,9 @@
       "chooseTransition": "상태 변경을 선택하세요:",
       "cancel": "취소",
       "noTransition": "{{key}}에 대해 {{column}}(으)로 가는 상태 변경을 사용할 수 없습니다.",
-      "queryTooLong": "Jira 쿼리가 너무 깁니다. 쿼리를 줄이거나 필터를 지우세요."
+      "queryTooLong": "Jira 쿼리가 너무 깁니다. 쿼리를 줄이거나 필터를 지우세요.",
+      "reorderColumn": "{{column}} 순서 변경",
+      "reorderColumnHint": "이 레인의 이슈: {{count}}개. 왼쪽 및 오른쪽 화살표 키로 이동할 수 있습니다."
     },
     "favourites": {
       "activeLabel": "Jira 즐겨찾기: {{name}}",
