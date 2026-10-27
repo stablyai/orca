@@ -38,6 +38,7 @@ async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryE
   }))
 }
 
+/** Classifies the selected folder and lists the git repos nested under it (bounded by depth and limit). */
 export async function scanNestedRepos(args: {
   path: string
   options?: unknown
