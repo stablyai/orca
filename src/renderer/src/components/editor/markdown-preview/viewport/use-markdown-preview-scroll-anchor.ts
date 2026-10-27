@@ -21,7 +21,7 @@ export const markdownPreviewScrollAnchorKey = (block: MarkdownPreviewBlock): str
     ? `source:${block.sourceLine}:${block.sourceColumn}`
     : `index:${block.index}`
 
-/** Re-point an anchor at its block when only blocks before or after it changed; source lines shift on edits above. */
+/** Re-point an anchor at its block after a re-parse when its source position moved; source lines shift on edits above. */
 export function followMarkdownPreviewAnchor(
   anchor: NonNullable<VirtualizedScrollAnchor>,
   previous: readonly MarkdownPreviewBlock[],
@@ -47,17 +47,38 @@ export function followMarkdownPreviewAnchor(
   const nextSignatureByKey = new Map(
     next.map((block) => [markdownPreviewScrollAnchorKey(block), block.contentSignature])
   )
-  // Keep the key inside the edited span, or while it still names the same text; identical text can't be told apart.
+  // Inside the edited span a block follows only when its text occurs once on each side.
+  const previousSpanCounts = new Map<string, number>()
+  for (let index = start; index < previous.length - end; index += 1) {
+    const signature = previous[index].contentSignature
+    previousSpanCounts.set(signature, (previousSpanCounts.get(signature) ?? 0) + 1)
+  }
+  const nextSpanIndexes = new Map<string, number | null>()
+  for (let index = start; index < next.length - end; index += 1) {
+    const signature = next[index].contentSignature
+    nextSpanIndexes.set(signature, nextSpanIndexes.has(signature) ? null : index)
+  }
+  const nextIndexOf = (index: number): number | null => {
+    if (index < start) {
+      return index
+    }
+    if (index >= previous.length - end) {
+      return index + next.length - previous.length
+    }
+    const signature = previous[index].contentSignature
+    return previousSpanCounts.get(signature) === 1 ? (nextSpanIndexes.get(signature) ?? null) : null
+  }
+  // Keep the key when the block can't be followed, or while it still names the same text; identical text can't be told apart.
   const follow = (key: string): string => {
     const index = previousIndexByKey.get(key)
+    const nextIndex = index === undefined ? null : nextIndexOf(index)
     if (
       index === undefined ||
-      (index >= start && index < previous.length - end) ||
+      nextIndex === null ||
       nextSignatureByKey.get(key) === previous[index].contentSignature
     ) {
       return key
     }
-    const nextIndex = index < start ? index : index + next.length - previous.length
     return markdownPreviewScrollAnchorKey(next[nextIndex])
   }
   return { ...anchor, key: follow(anchor.key), fallbackKeys: anchor.fallbackKeys?.map(follow) }

@@ -125,6 +125,13 @@ describe('large Markdown preview documents', () => {
       1,
       2
     ],
+    [
+      'blocks change on both sides of it',
+      'A.\n\nRead.\n\nT.\n',
+      'A.\n\nNew.\n\nRead.\n\nT changed.\n',
+      1,
+      2
+    ],
     // `costarring` and `liquid` share a 32-bit FNV-1a hash.
     [
       'a block with a colliding hash is inserted above it',
