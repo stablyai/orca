@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchPRCheckDetails, type GitHubPrRepoSlug } from '../../session/github-pr-rpc'
@@ -59,6 +60,7 @@ export function PRChecksSection({
   actions,
   triage
 }: Props) {
+  useMobileColorScheme()
   const sorted = sortChecksBySeverity(checks)
   // Desktop gates Fix and Rerun on the checks the host reruns and the prompt lists.
   const brokenCount = getBrokenChecks(checks).length

@@ -7,7 +7,7 @@ import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 
 type ClaudeEventDelivery = {
   session: ClaudeSession | null

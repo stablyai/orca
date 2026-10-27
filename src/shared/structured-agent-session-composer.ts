@@ -3,7 +3,10 @@ import {
   getTextDrivenNativeChatCommands
 } from './native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
-import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionValue
+} from './native-chat/input/native-chat-session-options'
 import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion

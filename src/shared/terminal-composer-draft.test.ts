@@ -380,6 +380,25 @@ describe('detectTerminalComposerDraft', () => {
     ).toMatchObject({ text: 'first line\n\nsecond line', endRow: 10 })
   })
 
+  it('keeps a model-like Claude paragraph above the bottom composer frame', () => {
+    expect(
+      detectTerminalComposerDraft({
+        rows: ['────────', '❯ compare models'],
+        typedRows: ['────────', '❯ compare models'],
+        promptGlyphBoldRows: [false, false],
+        rowsWrapped: [false, false],
+        rowsBelow: ['', 'gpt-5 · verify', '────────'],
+        typedRowsBelow: ['', 'gpt-5 · verify', '────────'],
+        rowsBelowWrapped: [false, false, false],
+        beforeCursor: '❯ ',
+        afterCursor: 'compare models',
+        rawAfterCursor: 'compare models',
+        cursorHidden: false,
+        cursorViewportRow: 8
+      })?.text
+    ).toBe('compare models\n\ngpt-5 · verify')
+  })
+
   it('stops before a blank row that only precedes the composer frame', () => {
     expect(
       detectTerminalComposerDraft({

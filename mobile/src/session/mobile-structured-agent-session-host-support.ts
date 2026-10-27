@@ -12,12 +12,16 @@ import {
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
-import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-session-create-capabilities'
 import {
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session-permission-modes-capability'
 import { AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-runtime-capabilities'
+import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../src/shared/skill-install-capability'
 
 export type StructuredAgentSessionHostSupport = {
   coherentModelCatalog?: boolean
@@ -36,6 +40,10 @@ export type StructuredAgentSessionHostSupport = {
   statusFeed: boolean
   quietRepeatedStop: boolean
   sendOptions: boolean
+  /** Older hosts refuse a send body carrying picked skill paths. */
+  sendSkills?: boolean
+  /** Older hosts need the workspace folder to scan skills, which the phone does not know. */
+  discoverWorkspaceSkills?: boolean
   /** A Stop naming no turn stops what the chat has in flight; an older host needs the turn. */
   conversationStop: boolean
   /** The host applies each chat's permission mode; 1.4.225–1.4.226 do without advertising it. */
@@ -64,6 +72,8 @@ export function structuredAgentSessionHostSupport(
     statusFeed: capabilities.includes(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY),
     quietRepeatedStop: capabilities.includes(AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY),
     sendOptions: capabilities.includes(AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY),
+    sendSkills: capabilities.includes(AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY),
+    discoverWorkspaceSkills: capabilities.includes(SKILL_DISCOVER_WORKSPACE_CAPABILITY),
     conversationStop: capabilities.includes(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY),
     permissionOwn: capabilities.includes(AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY),
     permissionModes: capabilities.includes(AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY),

@@ -42,7 +42,16 @@ export function useWorktreeCardLinkedDetails({
       ? {
           number: worktree.linkedIssue,
           // Why: linked metadata persists immediately but GitHub details arrive async; show the link number so it doesn't look unlinked.
-          title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
+          title:
+            issue === null
+              ? translate(
+                  'auto.components.sidebar.useWorktreeCardLinkedDetails.issueUnavailable',
+                  'Issue details unavailable'
+                )
+              : translate(
+                  'auto.components.sidebar.useWorktreeCardLinkedDetails.loadingIssue',
+                  'Loading issue...'
+                )
         }
       : null)
   const linearIssue: LinearIssue | null | undefined = worktree.linkedLinearIssue
@@ -70,8 +79,14 @@ export function useWorktreeCardLinkedDetails({
           identifier: worktree.linkedLinearIssue,
           title:
             linearIssueEntry || linearIssueFallbackEntry
-              ? 'Linear issue details unavailable'
-              : 'Loading Linear issue...',
+              ? translate(
+                  'auto.components.sidebar.useWorktreeCardLinkedDetails.linearIssueUnavailable',
+                  'Linear issue details unavailable'
+                )
+              : translate(
+                  'auto.components.sidebar.useWorktreeCardLinkedDetails.loadingLinearIssue',
+                  'Loading Linear issue...'
+                ),
           url: linearIssueUrlFallback
         }
     : null
@@ -79,9 +94,10 @@ export function useWorktreeCardLinkedDetails({
   const cardTitleDisplay = getWorktreeCardTitleDisplay({
     storedDisplayName: worktree.displayName,
     branchName: branch,
-    linearIssueTitle: linearIssueDisplay?.title,
+    // Fetched titles only: display fallbacks hold localized loading/unavailable placeholders.
+    linearIssueTitle: linearIssue?.title,
     jiraIssueTitle: jiraIssueDisplay?.title,
-    issueTitle: issueDisplay?.title,
+    issueTitle: issue?.title,
     reviewTitle: prDisplay?.title
   })
   const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName)

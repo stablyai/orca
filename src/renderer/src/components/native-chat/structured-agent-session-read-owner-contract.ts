@@ -16,6 +16,7 @@ export type StructuredAgentSessionReadSnapshot = {
 export type StructuredAgentSessionReadOwner = {
   publishCreated: (page: AgentSessionHistoryPage) => void
   activate: () => () => void
+  resync?: () => void
   dispose: () => void
   getSnapshot: () => StructuredAgentSessionReadSnapshot
   loadOlder: () => Promise<NativeChatOlderPageResult>

@@ -64,6 +64,8 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.setupCommand).toContain(
       'mv -f /repo/.git/orca/setup-runner.sh.nonce-123.done.tmp'
     )
+    // Pair-inserting line editors (zsh-autopair) corrupt typed brackets (#18059).
+    expect(result.setupCommand).not.toMatch(/[()[\]{}]/)
     const startupScript = result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
     expect(result.startupCommand).toBe(
       `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`

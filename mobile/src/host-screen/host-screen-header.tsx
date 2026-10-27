@@ -18,6 +18,7 @@ import { StatusDot } from '../components/StatusDot'
 import { isConnectionOutage, type ConnectionVerdict } from '../transport/connection-health'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 
@@ -26,6 +27,7 @@ function isErrorVerdict(v: ConnectionVerdict): boolean {
 }
 
 export function HostScreenHeader({ controller }: { controller: HostScreenController }) {
+  useMobileColorScheme()
   const {
     actions,
     connectionVerdict,

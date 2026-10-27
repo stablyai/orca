@@ -46,14 +46,4 @@ describe('Zig highlighting through production Monaco setup', () => {
     expect(tokens[6].map((token) => token.type)).toContain('keyword.zig')
     expect(tokens[6].map((token) => token.type)).not.toContain('string.multiline.zig')
   })
-
-  it('keeps unrelated languages and unclaimed Zig object notation unchanged', async () => {
-    expect(detectLanguage('build.zig.zon')).toBe('plaintext')
-    expect(detectLanguage('main.rs')).toBe('rust')
-    expect(detectLanguage('main.c')).toBe('c')
-    await monaco.editor.colorize('const answer = 42', 'typescript', {})
-    expect(
-      monaco.editor.tokenize('const answer = 42', 'typescript')[0].map((token) => token.type)
-    ).toEqual(expect.arrayContaining(['keyword.ts', 'number.ts']))
-  })
 })

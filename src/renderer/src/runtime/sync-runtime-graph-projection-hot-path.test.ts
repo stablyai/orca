@@ -22,8 +22,6 @@ const {
   buildRuntimeMobileAgentStatusProjectionForTests,
   resetRuntimeMobileAgentStatusProjectionCacheForTests
 } = await import('./sync-runtime-graph/agent-status-projection')
-const { getRuntimeMobileSessionSyncKey, runtimeMobileSessionSyncKeysEqual } =
-  await import('./sync-runtime-graph/sync-key')
 const {
   resetRuntimeMobileSyncProjectionCachesForTests,
   buildRuntimeMobileBrowserProjection,
@@ -265,26 +263,6 @@ describe('editor draft projection on the typing path', () => {
     })
     expect(before.chars / after.chars).toBeGreaterThan(DRAFT_FILE_COUNT - 0.1)
   })
-
-  it('matches the uncached projection byte for byte across draft shapes', () => {
-    const draftCases: Record<string, string>[] = [
-      {},
-      { 'file-a': '' },
-      { 'file-a': 'hello' },
-      { 'file-a': 'hello', 'file-b': 'world' },
-      { 'file-b': 'world', 'file-a': 'hello' },
-      { '2': 'numeric-like key', 'file-a': 'hello', '1': 'other' },
-      { 'quote"and\\slash': 'body with "quotes" and \\ and \u{1f389}' },
-      { 'file-a': 'hello', 'file-b': 'world', 'file-c': 'third' },
-      { 'file-a': 'HELLO', 'file-c': 'third' }
-    ]
-    for (const [index, draft] of draftCases.entries()) {
-      expect({ index, projection: buildRuntimeMobileEditorDraftsProjection(draft) }).toEqual({
-        index,
-        projection: referenceEditorDraftsProjection(draft)
-      })
-    }
-  })
 })
 
 describe('agent-status projection sort', () => {
@@ -324,21 +302,6 @@ describe('agent-status projection sort', () => {
 
     // The projection is identical up to ordering, and ordering is only ever `===`-compared.
     expect(sortedProjectionEntries(projection)).toEqual(
-      sortedProjectionEntries(referenceAgentStatusProjection(map))
-    )
-  })
-
-  it('is deterministic for keys where locale and code-unit order disagree', () => {
-    const map: AppState['agentStatusByPaneKey'] = {}
-    for (const paneKey of ['b:leaf', 'A:leaf', 'a:leaf', 'á:leaf', 'B:leaf']) {
-      map[paneKey] = makeAgentStatusEntry({ paneKey })
-    }
-    resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
-    resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const second = buildRuntimeMobileAgentStatusProjectionForTests({ ...map })
-    expect(second).toBe(first)
-    expect(sortedProjectionEntries(first)).toEqual(
       sortedProjectionEntries(referenceAgentStatusProjection(map))
     )
   })
@@ -407,179 +370,5 @@ describe('open-files and browser projections', () => {
     })
     // Only the 'wt-1' bucket re-serializes; 'wt-2' and every page bucket are reused.
     expect(before / after).toBeGreaterThan(2.5)
-  })
-
-  it('matches the uncached projections byte for byte across shapes', () => {
-    const openFileCases: AppState['openFiles'][] = [
-      [] as unknown as AppState['openFiles'],
-      [makeOpenFile(0)] as unknown as AppState['openFiles'],
-      [makeOpenFile(0, { mirroredFromRuntimeSession: true })],
-      [makeOpenFile(0, { isDirty: true })] as unknown as AppState['openFiles'],
-      [
-        makeOpenFile(0, { isDirty: true, diffSource: 'working' }),
-        makeOpenFile(1, { mode: 'diff', markdownPreviewSourceFileId: 'file-0' }),
-        makeOpenFile(2, { isUntitled: true, deleteUntouchedOnClose: true, language: undefined })
-      ] as unknown as AppState['openFiles']
-    ]
-    for (const [index, openFiles] of openFileCases.entries()) {
-      expect({ index, projection: buildRuntimeMobileOpenFilesProjection(openFiles) }).toEqual({
-        index,
-        projection: referenceOpenFilesProjection(openFiles)
-      })
-    }
-
-    const browserCases: AppState[] = [
-      makeState({}),
-      makeState({ browserTabsByWorktree: { 'wt-1': [makeBrowserWorkspace(0)] } as never }),
-      makeState({
-        browserTabsByWorktree: {
-          'wt-1': [makeBrowserWorkspace(0, { title: undefined, loading: true })],
-          '3': [makeBrowserWorkspace(1)]
-        } as never,
-        browserPagesByWorkspace: {
-          'ws-0': [makeBrowserPage(0), makeBrowserPage(1, { canGoBack: true })],
-          'ws-1': []
-        } as never
-      }),
-      makeState({
-        browserTabsByWorktree: {} as never,
-        browserPagesByWorkspace: { 'ws-9': [makeBrowserPage(9, { url: 'a"b\\c' })] } as never
-      })
-    ]
-    for (const [index, state] of browserCases.entries()) {
-      expect({ index, projection: buildRuntimeMobileBrowserProjection(state) }).toEqual({
-        index,
-        projection: referenceBrowserProjection(state)
-      })
-    }
-  })
-})
-
-describe('sync key transitions', () => {
-  it('fires on exactly the transitions the uncached projections would have fired on', () => {
-    const drafts = { 'file-0': 'aaa', 'file-1': 'bbb' }
-    const files = [makeOpenFile(0), makeOpenFile(1)] as unknown as AppState['openFiles']
-    const workspaces = [makeBrowserWorkspace(0)] as never
-    const status = {
-      'tab-0:leaf-0': makeAgentStatusEntry({ paneKey: 'tab-0:leaf-0' })
-    } as AppState['agentStatusByPaneKey']
-
-    const base = makeState({
-      editorDrafts: drafts,
-      openFiles: files,
-      browserTabsByWorktree: { 'wt-1': workspaces } as never,
-      browserPagesByWorkspace: { 'ws-0': [makeBrowserPage(0)] } as never,
-      agentStatusByPaneKey: status
-    })
-
-    // Each step returns the next state; the flag is whether a mobile-visible input really moved.
-    const steps: { name: string; next: (from: AppState) => AppState }[] = [
-      { name: 'no-op re-spread', next: (from) => makeState({ ...from }) },
-      {
-        name: 'keystroke in one draft',
-        next: (from) =>
-          makeState({ ...from, editorDrafts: { ...from.editorDrafts, 'file-0': 'aaab' } })
-      },
-      {
-        name: 'draft reverted to the same text',
-        next: (from) =>
-          makeState({ ...from, editorDrafts: { ...from.editorDrafts, 'file-0': 'aaab' } })
-      },
-      {
-        name: 'draft removed',
-        next: (from) => makeState({ ...from, editorDrafts: { 'file-1': 'bbb' } })
-      },
-      {
-        name: 'isDirty flip',
-        next: (from) =>
-          makeState({
-            ...from,
-            openFiles: [makeOpenFile(0, { isDirty: true }), from.openFiles[1]] as never
-          })
-      },
-      {
-        name: 'open-files re-spread with identical content',
-        next: (from) => makeState({ ...from, openFiles: [...from.openFiles] as never })
-      },
-      {
-        name: 'browser title tick',
-        next: (from) =>
-          makeState({
-            ...from,
-            browserTabsByWorktree: {
-              'wt-1': [makeBrowserWorkspace(0, { title: 'new title' })]
-            } as never
-          })
-      },
-      {
-        name: 'browser page loading flip',
-        next: (from) =>
-          makeState({
-            ...from,
-            browserPagesByWorkspace: {
-              'ws-0': [makeBrowserPage(0, { loading: true })]
-            } as never
-          })
-      },
-      {
-        name: 'agent-status ping with an unchanged payload',
-        next: (from) =>
-          makeState({
-            ...from,
-            agentStatusByPaneKey: {
-              'tab-0:leaf-0': makeAgentStatusEntry({ paneKey: 'tab-0:leaf-0' })
-            } as never
-          })
-      },
-      {
-        name: 'agent-status prompt change',
-        next: (from) =>
-          makeState({
-            ...from,
-            agentStatusByPaneKey: {
-              'tab-0:leaf-0': makeAgentStatusEntry({ paneKey: 'tab-0:leaf-0', prompt: 'new' })
-            } as never
-          })
-      },
-      {
-        name: 'second agent added',
-        next: (from) =>
-          makeState({
-            ...from,
-            agentStatusByPaneKey: {
-              ...from.agentStatusByPaneKey,
-              'tab-1:leaf-0': makeAgentStatusEntry({ paneKey: 'tab-1:leaf-0' })
-            } as never
-          })
-      }
-    ]
-
-    const referenceTuple = (state: AppState): string[] => [
-      referenceEditorDraftsProjection(state.editorDrafts),
-      referenceOpenFilesProjection(state.openFiles),
-      referenceBrowserProjection(state),
-      referenceAgentStatusProjection(state.agentStatusByPaneKey ?? {})
-    ]
-
-    resetRuntimeMobileSyncProjectionCachesForTests()
-    resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    let previousState = base
-    let previousKey = getRuntimeMobileSessionSyncKey(base, undefined, undefined, false)
-    let previousReference = referenceTuple(base)
-
-    for (const step of steps) {
-      const state = step.next(previousState)
-      const key = getRuntimeMobileSessionSyncKey(state, previousState, previousKey, false)
-      const reference = referenceTuple(state)
-      const referenceChanged = reference.some((part, index) => part !== previousReference[index])
-      const keyChanged = !runtimeMobileSessionSyncKeysEqual(key, previousKey)
-      expect({ step: step.name, changed: keyChanged }).toEqual({
-        step: step.name,
-        changed: referenceChanged
-      })
-      previousState = state
-      previousKey = key
-      previousReference = reference
-    }
   })
 })

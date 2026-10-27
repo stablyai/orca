@@ -2,6 +2,7 @@ import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync 
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import { firstWindowsPathEnvKey, isNativeExecutable } from './cli-runtime-pairing-inputs'
+import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
 import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
 
 type ResolveCommandOptions = {
@@ -93,7 +94,7 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   const directories = [
     join(homePath, '.volta', 'bin'),
     join(homePath, '.asdf', 'shims'),
-    join(homePath, '.fnm', 'aliases', 'default', 'bin'),
+    ...getFnmDefaultAliasDirectories(platform, homePath),
     join(homePath, '.local', 'share', 'mise', 'shims')
   ]
 

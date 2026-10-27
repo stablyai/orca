@@ -400,7 +400,7 @@
         {
           "files": [
             "src/renderer/src/components/task-page/github/use-task-page-github-issue-draft.ts",
-            "src/renderer/src/components/use-task-page-jira-creation-state.ts"
+            "src/renderer/src/components/task-page/jira/use-task-page-jira-creation-state.ts"
           ],
           "rules": [
             "react-doctor/no-adjust-state-on-prop-change"

@@ -16,6 +16,8 @@ export const TERMINAL_SEND_COMMAND_SPEC: CommandSpec = {
     'retry-request'
   ],
   notes: [
+    "Without --enter, --text is written to the PTY verbatim, so control bytes pass through (Bash/Zsh: --text $'\\x1b' for Escape, $'\\x15' for Ctrl+U).",
+    'With --enter and without --interrupt, a prompt to a recognized running agent is bracketed-pasted and embedded Escape bytes are made inert.',
     'For a text-plus-Enter agent prompt, the result separates input acceptance from observed submission and turn start.',
     '--wait-submit only observes the accepted prompt for the requested duration; timeout returns the queued/input-accepted receipt and never resends.',
     'After an ambiguous transport failure, reissue the exact command with the reported --retry-request ID. The ID is bound to the prompt payload and exact terminal process incarnation.',

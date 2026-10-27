@@ -227,7 +227,7 @@ export class WslOrcadLivenessSupervisor {
     if (isWatchOrHolderExit(trigger) && confirmsRunning(running, entry.key)) {
       // Stopping distros can still appear running; wait before exec accidentally boots them again.
       await new Promise<void>((resolve) => this.schedule(EXIT_SETTLE_MS, resolve))
-      running = await this.deps.readRunning()
+      running = await this.deps.readRunning({ distro: entry.distro, exitedAt: entry.lastExitMs })
       if (entry.generation !== generation) {
         return
       }

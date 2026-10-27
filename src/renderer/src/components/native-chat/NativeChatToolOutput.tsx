@@ -1,32 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { formatBytes } from '@/components/status-bar/workspace-space-format'
 import {
   readStructuredAgentSessionItem,
   supportsStructuredAgentSessionItemDetail
 } from '@/runtime/structured-agent-session-client'
-import type {
-  AgentJournalBoundedPayload,
-  AgentJournalItemBody
-} from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalBoundedPayload } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatToolResultBlock } from '../../../../shared/native-chat-types'
+import { truncateToolDetail } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 import {
-  MAX_TOOL_DETAIL_LENGTH,
-  truncateToolDetail
-} from '../../../../shared/native-chat/tools/native-chat-tool-summary'
+  isNativeChatToolOutputClipped,
+  NATIVE_CHAT_TOOL_OUTPUT_COPY,
+  nativeChatToolFullPayload,
+  nativeChatToolOutputPartialSizes
+} from '../../../../shared/native-chat/tools/native-chat-tool-output'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
-
-/** A partial detail response retains its original byte count. */
-type FullOutput = { text: string; partial: { shown: number; total: number } | null }
-
-function fullPayload(body: AgentJournalItemBody): AgentJournalBoundedPayload | null {
-  if (body.kind === 'tool-call') {
-    return body.output ?? null
-  }
-  return body.kind === 'diff' ? body.patch : null
-}
 
 /** Read full output from its owning host on request; keep expansion state independent of live revisions. */
 export function NativeChatToolOutput({
@@ -39,7 +28,7 @@ export function NativeChatToolOutput({
   const [detail, setDetail] = useState<{
     body: NativeChatToolResultBlock
     owner: typeof owner
-    full?: FullOutput
+    full?: AgentJournalBoundedPayload
     loading?: boolean
     failed?: boolean
   } | null>(null)
@@ -51,10 +40,8 @@ export function NativeChatToolOutput({
   const full = current?.full
   const loading = current?.loading === true
   const failed = current?.failed === true
-  const clipped =
-    !full &&
-    (body.fullOutputItemId !== undefined ||
-      (!expanded && body.output.length > MAX_TOOL_DETAIL_LENGTH))
+  const clipped = isNativeChatToolOutputClipped(body, { expanded, fullLoaded: Boolean(full) })
+  const partial = useMemo(() => (full ? nativeChatToolOutputPartialSizes(full) : null), [full])
 
   const showFull = async (): Promise<void> => {
     const itemId = body.fullOutputItemId
@@ -63,7 +50,7 @@ export function NativeChatToolOutput({
       return
     }
     setDetail({ body, owner, loading: true })
-    const finish = (result: { full?: FullOutput; failed?: boolean }): void => {
+    const finish = (result: { full?: AgentJournalBoundedPayload; failed?: boolean }): void => {
       setDetail((held) =>
         held?.body === body && held.owner === owner ? { body, owner, ...result } : held
       )
@@ -75,21 +62,11 @@ export function NativeChatToolOutput({
         return
       }
       const item = await readStructuredAgentSessionItem(owner.target, owner.sessionId, itemId)
-      const payload = item?.itemId === itemId ? fullPayload(item.body) : null
+      const payload = item?.itemId === itemId ? nativeChatToolFullPayload(item.body) : null
       if (!payload) {
         throw new Error('Output is unavailable')
       }
-      finish({
-        full: {
-          text: payload.head,
-          partial: payload.truncated
-            ? {
-                shown: new TextEncoder().encode(payload.head).length,
-                total: payload.byteLength
-              }
-            : null
-        }
-      })
+      finish({ full: payload })
     } catch {
       finish({ failed: true })
     }
@@ -104,14 +81,14 @@ export function NativeChatToolOutput({
           body.isError ? 'text-destructive' : 'text-chat-foreground'
         )}
       >
-        {full ? full.text : expanded ? body.output : truncateToolDetail(body.output)}
+        {full ? full.head : expanded ? body.output : truncateToolDetail(body.output)}
       </pre>
-      {full?.partial ? (
+      {partial ? (
         <p className="text-xs text-chat-foreground-faint">
           {translate(
             'components.native-chat.tool.fullOutputPartial',
-            'Showing {{shown}} of {{total}}.',
-            { shown: formatBytes(full.partial.shown), total: formatBytes(full.partial.total) }
+            NATIVE_CHAT_TOOL_OUTPUT_COPY.partial,
+            partial
           )}
         </p>
       ) : null}

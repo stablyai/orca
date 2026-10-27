@@ -8,9 +8,11 @@ import {
 } from '../../../src/shared/native-chat-resolution-receipt'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
-import { scaledType } from './mobile-native-chat-message-styles'
-import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
+import { MobileNativeChatAwaitingInputRow } from './native-chat/transcript/MobileNativeChatAwaitingInputRow'
+import { scaledType } from './native-chat/transcript/mobile-native-chat-message-styles'
+import { MobileNativeChatMessageTime } from './native-chat/transcript/MobileNativeChatMessageTime'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatResolutionReceipt({
   body,
@@ -22,6 +24,7 @@ export function MobileNativeChatResolutionReceipt({
   awaiting?: boolean
   fontScale: number
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   const subject = nativeChatReceiptSubject(body)
   if (body.resolution.state === 'pending') {
     return body.kind === 'question' ? (
@@ -89,7 +92,7 @@ export function MobileNativeChatResolutionReceipt({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   receipt: {
     gap: spacing.xs,
     paddingLeft: spacing.md,
@@ -108,4 +111,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm
   }
-})
+}))

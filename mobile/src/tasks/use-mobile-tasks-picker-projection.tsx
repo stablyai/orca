@@ -1,5 +1,5 @@
 import type { DetailCommentRenderersModel } from './use-mobile-tasks-detail-comment-renderers'
-import { type PickerOption, View, useMemo } from './mobile-tasks-dependencies'
+import { type PickerOption, View, useMemo, useMobileColorScheme } from './mobile-tasks-dependencies'
 import {
   type GitHubRepoSources,
   type LinearTeam,
@@ -20,6 +20,7 @@ import { PROVIDER_LABELS } from './mobile-task-view-options'
 import { jiraSiteLabel } from './jira-mobile-connection'
 
 export function useMobileTasksPickerProjection(model: DetailCommentRenderersModel) {
+  const colorScheme = useMobileColorScheme()
   const {
     createRepoId,
     createTeamId,
@@ -161,7 +162,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
       entries.push({ type: 'item', key: item.key, item })
     }
     return entries
-  }, [reposById, sortedItems, taskSort])
+  }, [colorScheme, reposById, sortedItems, taskSort])
   const sortLabel = SORT_OPTIONS.find((option) => option.value === taskSort)?.label ?? 'Updated'
   const githubProjectFields = githubProjectTable?.selectedView.fields ?? []
   const githubProjectViewSort = githubProjectTable?.selectedView.sortByFields?.[0] ?? null

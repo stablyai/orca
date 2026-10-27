@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
 
 /** Round controls on the action row: the attach button, the mic and Send/Stop. */
 const COMPOSER_CONTROL_SIZE = 38
@@ -14,7 +15,7 @@ const roundControl = {
   justifyContent: 'center'
 } as const
 
-export const mobileNativeChatComposerStyles = StyleSheet.create({
+export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
   composerInset: {
     paddingHorizontal: 10,
     paddingTop: COMPOSER_INSET_TOP,
@@ -60,4 +61,4 @@ export const mobileNativeChatComposerStyles = StyleSheet.create({
   pressed: {
     opacity: 0.7
   }
-})
+}))

@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react-native'
 import type { RefObject } from 'react'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileDiffReviewLine } from './MobileDiffReviewLine'
 import type {
   ReviewDiffLine,
@@ -39,6 +40,7 @@ export function MobileDiffReviewBody({
   onEditNote,
   onRetry
 }: Props) {
+  useMobileColorScheme()
   if (screenState.kind === 'loading') {
     return <CenteredState text="Loading review..." busy />
   }
@@ -139,6 +141,7 @@ function CenteredState({
   text: string
   onRetry?: () => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.state}>
       {busy ? (

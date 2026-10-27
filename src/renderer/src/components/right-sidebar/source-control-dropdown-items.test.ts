@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import { PSEUDO_LOCALIZATION_LOCALE } from '@/i18n/pseudo-localization'
 import { resolveDropdownItems } from './source-control-dropdown-items'
-import type { DropdownActionInputs, DropdownItem } from './source-control-dropdown-item-types'
+import type {
+  DropdownActionInputs,
+  DropdownItem
+} from '../../../../shared/source-control-dropdown-item-types'
 import {
   hasUsableHostedReviewPushTarget,
   resolveHostedReviewActionUpstreamStatus

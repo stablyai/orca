@@ -276,39 +276,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     binding.dispose()
   })
 
-  it("declares a hidden pane's restart that replaces its live PTY as a user resume, so the live cap cannot defer it", async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport(null)
-    transport.connect.mockImplementation(async () => 'new-pty')
-    transportFactoryQueue.push(transport)
-    const pane = createPane(1)
-    const deps = createDeps({
-      isVisibleRef: { current: false },
-      replacesPtyId: 'old-pty',
-      startup: {
-        command: "claude '--resume' 'provider-session-1'",
-        launchAgent: 'claude',
-        resumeProviderSession: RESUME
-      }
-    })
-
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
-    await flushAsyncTicks(20)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      binding.dispose()
-      return
-    }
-
-    expect(freshSpawns(transport)).toEqual([
-      expect.objectContaining({
-        resumeSpawnIntent: 'user-resume',
-        claimReplacedPtyId: expect.any(Function)
-      })
-    ])
-    binding.dispose()
-  })
-
-  it("keeps a deferred restart's retry a user resume after the replaced PTY was claimed", async () => {
+  it("declares a hidden pane's restart and its deferred retry as user resumes, so the live cap cannot defer them", async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport(null)
     // Main takes the replaced PTY with the first request, as the IPC spawn does, then defers it.

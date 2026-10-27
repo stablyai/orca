@@ -344,7 +344,6 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       expect(transport.connect).toHaveBeenCalledTimes(2)
       expect(transport.connect.mock.calls[1]?.[0]).not.toHaveProperty('claimReplacedPtyId')
-      // Why: only the restart and its deferred retries are the user's; a later wake stays capped.
       expect(transport.connect.mock.calls[1]?.[0]).toMatchObject({
         resumeSpawnIntent: 'automatic-restore'
       })

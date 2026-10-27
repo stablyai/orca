@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { View, StyleSheet, PanResponder, Platform } from 'react-native'
+import { View, PanResponder, Platform } from 'react-native'
 import { useGlobalSearchParams, usePathname } from 'expo-router'
 import { colors } from '../../src/theme/mobile-theme'
+import { themedStyleSheet } from '../../src/theme/themed-styles'
+import { useMobileColorScheme } from '../../src/theme/use-mobile-color-scheme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
 import {
   HOST_SIDEBAR_DEFAULT_WIDTH,
@@ -32,6 +34,7 @@ function clampSidebarToWindow(width: number, windowWidth: number): number {
 }
 
 export default function HostGroupLayout() {
+  useMobileColorScheme()
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
   const { hostId } = useGlobalSearchParams<{ hostId?: string }>()
@@ -135,7 +138,7 @@ export default function HostGroupLayout() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flex: 1,
     flexDirection: 'row',
@@ -162,4 +165,4 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   }
-})
+}))

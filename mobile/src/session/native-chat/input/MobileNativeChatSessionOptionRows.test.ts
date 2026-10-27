@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { DescriptorRows } from './MobileNativeChatSessionOptionRows'
 import {
   findAllByHostType,

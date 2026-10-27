@@ -411,9 +411,9 @@ describe('MobileNativeChatComposer', () => {
       act(async () => renderer!.root.findByProps({ accessibilityLabel: label }).props.onPress())
     expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
     await act(async () => field().props.onFocus())
-    await press('Model, Model effort')
+    await press('Model, Model')
     await act(async () => field().props.onBlur())
-    await press('effort, Not set')
+    await press('Effort, Not set')
     await press('Back to models')
     await press('Close picker')
     await act(async () => findByHostType(renderer!.root, 'BottomDrawer').props.onHidden())
@@ -510,6 +510,35 @@ describe('MobileNativeChatComposer', () => {
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 7 } } })
     )
     expect(input().props.selection).toBeUndefined()
+  })
+
+  it.each([
+    ['then /cl', '/clear', 'then /clear '],
+    ['see @do', 'docs/my notes.md', 'see @"docs/my notes.md" ']
+  ])('completes the mid-prompt token in %j like desktop', async (value, label, expected) => {
+    const onChangeText = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value,
+          onChangeText,
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          filePaths: ['docs/my notes.md']
+        })
+      )
+    })
+    const input = findByHostType(renderer!.root, 'TextInput')
+    await act(async () =>
+      input.props.onSelectionChange({ nativeEvent: { selection: { end: value.length } } })
+    )
+    const row = renderer!.root.find(
+      (node) => node.props.accessibilityLabel === label && node.props.onPress !== undefined
+    )
+    await act(async () => row.props.onPress())
+    expect(onChangeText).toHaveBeenCalledWith(expected)
   })
 
   it('serves the active agent’s shared command catalog with descriptions', async () => {

@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
-export const smartWorkspaceSourceDrawerStyles = StyleSheet.create({
+export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   root: {
     flex: 1,
     minHeight: 0
@@ -176,4 +177,4 @@ export const smartWorkspaceSourceDrawerStyles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13
   }
-})
+}))

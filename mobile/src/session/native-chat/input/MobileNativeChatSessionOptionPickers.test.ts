@@ -8,7 +8,7 @@ import { createStructuredAgentSessionOptionState } from '../../../../../src/shar
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice
-} from '../../../../../src/shared/native-chat-session-options'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatPickerPresentation

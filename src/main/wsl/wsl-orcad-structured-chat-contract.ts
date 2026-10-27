@@ -13,7 +13,7 @@ import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime/remote-runtime-client'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { packagedClaudeChatScenario } from '../orcad/orcad-structured-chat-scenario'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'

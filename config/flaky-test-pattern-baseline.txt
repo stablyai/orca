@@ -278,7 +278,6 @@
 1 test-no-real-time-wait:src/main/claude/claude-subagent-permission-request.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-supervised-stop-real-cli.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-supervised-stop.integration.test.ts
-3 test-no-real-time-wait:src/main/cli/appimage-serve-preparation.test.ts
 3 test-no-real-time-wait:src/main/cli/packaged-cli-assets.test.ts
 1 test-no-real-time-wait:src/main/codex-usage/scanner-file-generation.test.ts
 1 test-no-real-time-wait:src/main/codex/codex-hook-hash-lookup.test.ts
@@ -366,7 +365,7 @@
 1 test-no-real-time-wait:src/main/managed-server/lifecycle/orcad-managed-tunnel-local-port.test.ts
 1 test-no-real-time-wait:src/main/managed-server/lifecycle/orcad-stdio-bridge-provider.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-accept-then-deliver.test.ts
-4 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-at-rest-commands.test.ts
+3 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-at-rest-commands.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-echo-working.test.ts
 2 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-subagent-row.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-owed-work-release.test.ts
@@ -761,10 +760,9 @@
 1 test-no-wall-clock:mobile/src/components/MobileHostCard-truthful-status.test.tsx
 1 test-no-wall-clock:mobile/src/components/MobileHostCard.test.ts
 1 test-no-wall-clock:mobile/src/components/pr-sidebar/pr-comment-card-web-avatar.test.tsx
-1 test-no-wall-clock:mobile/src/session/native-chat/mobile-native-chat-pending-echo.test.ts
 1 test-no-wall-clock:mobile/src/session/mobile-structured-send-new-action.test.ts
 2 test-no-wall-clock:mobile/src/session/native-chat/composer/use-mobile-native-chat-message-send-draft-lifetime.test.ts
-1 test-no-wall-clock:mobile/src/session/use-mobile-native-chat-message-send.test.ts
+1 test-no-wall-clock:mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts
 1 test-no-wall-clock:mobile/src/source-control/MobileGitHistoryList.test.tsx
 1 test-no-wall-clock:mobile/src/tasks/worktree-create-launch-operation.test.ts
 1 test-no-wall-clock:mobile/src/transport/host-store.test.ts
@@ -825,7 +823,6 @@
 5 test-no-wall-clock:src/main/claude/claude-supervised-stop-real-cli.test.ts
 6 test-no-wall-clock:src/main/claude/claude-supervised-stop.integration.test.ts
 1 test-no-wall-clock:src/main/cli/appimage-generation-lease.test.ts
-2 test-no-wall-clock:src/main/cli/appimage-serve-preparation.test.ts
 6 test-no-wall-clock:src/main/cli/packaged-cli-assets.test.ts
 1 test-no-wall-clock:src/main/cli/wsl-cli-registration-registry.test.ts
 1 test-no-wall-clock:src/main/codex-accounts/legacy-wsl-runtime-auth-drain-rollback-script.test.ts
@@ -1120,7 +1117,6 @@
 1 test-no-wall-clock:src/renderer/src/components/sidebar/SidebarToolbar.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/sidebar/use-workspace-reference-details.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-agent-rows-subscriptions.bench.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-card-agent-summary.test.ts
 4 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.compact-hover.test.tsx
 13 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.pr-display.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.single-reference-details.test.tsx

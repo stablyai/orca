@@ -3,8 +3,8 @@ import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-r
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatWorkRunEntries } from '../../../src/shared/native-chat-work-run'
 import { nativeChatAskRunBlocks } from '../../../src/shared/native-chat/input/native-chat-ask-row'
-import type { MobileNativeChatWorkRuns } from './use-mobile-native-chat-transcript-rows'
-import type { MobileNativeChatRowSources } from './mobile-native-chat-row-keys'
+import type { MobileNativeChatWorkRuns } from './native-chat/transcript/use-mobile-native-chat-transcript-rows'
+import type { MobileNativeChatRowSources } from './native-chat/transcript/mobile-native-chat-row-keys'
 
 export type MobileNativeChatRunPresentation = {
   rows: readonly NativeChatMessage[]

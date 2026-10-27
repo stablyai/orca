@@ -1,7 +1,7 @@
 import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
-import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   getVersionManagerBinPaths,
   withCliRuntimeOnPath,
@@ -318,6 +318,33 @@ describe('getVersionManagerBinPaths', () => {
 
     expect(paths).toContain(join(root, '.local', 'bin'))
     expect(paths).toContain(join(root, 'AppData', 'Roaming', 'npm'))
+  })
+
+  it('uses the Windows fnm default alias layout, honoring FNM_DIR (stablyai/orca#11356)', () => {
+    const root = makeCommandFixture('orca-vm-paths-')
+    const appDataAlias = join(root, 'AppData', 'Roaming', 'fnm', 'aliases', 'default')
+    vi.stubEnv('FNM_DIR', '')
+    vi.stubEnv('APPDATA', '')
+    onTestFinished(() => {
+      vi.unstubAllEnvs()
+    })
+
+    const paths = getVersionManagerBinPaths({ platform: 'win32', homePath: root })
+    expect(paths).toContain(appDataAlias)
+    expect(paths).not.toContain(join(root, '.fnm', 'aliases', 'default', 'bin'))
+
+    const redirectedAppData = join(root, 'redirected')
+    const redirectedAlias = join(redirectedAppData, 'fnm', 'aliases', 'default')
+    vi.stubEnv('APPDATA', redirectedAppData)
+    expect(getVersionManagerBinPaths({ platform: 'win32', homePath: root })).toContain(
+      redirectedAlias
+    )
+
+    const fnmDir = join(root, 'custom-fnm')
+    vi.stubEnv('FNM_DIR', fnmDir)
+    const overridden = getVersionManagerBinPaths({ platform: 'win32', homePath: root })
+    expect(overridden).toContain(join(fnmDir, 'aliases', 'default'))
+    expect(overridden).not.toContain(redirectedAlias)
   })
 })
 

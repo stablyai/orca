@@ -12,8 +12,8 @@ import type {
   ClaudeDispatchWaiter,
   ClaudeLateDispatchOutcome,
   ClaudeSession
-} from './claude-structured-session-state'
-import { readClaudeFrameString } from './claude-structured-init-proof'
+} from './structured/claude-structured-session-state'
+import { readClaudeFrameString } from './structured/claude-structured-init-proof'
 import { claudeDispatchContentKey } from './claude-structured-dispatch-content'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */

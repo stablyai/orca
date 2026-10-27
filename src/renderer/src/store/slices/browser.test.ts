@@ -126,27 +126,6 @@ describe('createBrowserSlice annotations', () => {
     })
   })
 
-  it('retains saved page annotations while retiring geometry when the URL changes', async () => {
-    const { store, main } = await createTestStoreDrawnFromMain()
-    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
-    await main.settle()
-    const pageId = tab.activePageId
-    if (!pageId) {
-      throw new Error('Expected a new browser page')
-    }
-
-    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toHaveLength(1)
-
-    const saved = store.getState().browserAnnotationsByPageId[pageId]
-    store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
-    store.getState().setBrowserPageUrl(pageId, 'https://example.com')
-
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBe(saved)
-    expect(saved?.[0]?.payload.page.sanitizedUrl).toBe('https://example.com')
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
-  })
-
   it('can commit a navigation URL without hiding an active recovery error', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')

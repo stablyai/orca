@@ -5,9 +5,10 @@ import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
 import { colors } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
-import type { MobileQueuePause } from '../../mobile-structured-queued-message-feed'
+import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session-wire'
 import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
 import type { MobileQueuedMessageInlineEditor } from '../../use-mobile-structured-queued-edit'
 import { MobileQueuedMessageCardRow } from '../../MobileQueuedMessageCardRow'
@@ -28,7 +29,7 @@ export type MobileNativeChatQueuedMessagesProps = {
   onEdit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
   onMove?: (move: DragReorderMove) => Promise<boolean>
-  pause?: MobileQueuePause
+  pause?: AgentSessionQueuePause | null
   onResume?: () => Promise<boolean>
   steerHeld?: boolean
 }
@@ -45,6 +46,7 @@ export function MobileNativeChatQueuedMessages({
   onResume,
   steerHeld = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
+  useMobileColorScheme()
   // Use a ref to block duplicate actions before disabled state renders.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
   const inFlightRef = useRef(new Set<string>())
@@ -212,7 +214,7 @@ export function MobileNativeChatQueuedMessages({
       </View>
       <ActionSheetModal
         visible={menuCard !== undefined}
-        title={menuCard?.text}
+        title={menuCard?.line}
         actions={[
           {
             label: 'Edit message',

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Code, Eye } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
 import { useHtmlPreviewLinkGrant } from './use-html-preview-link-grant'
 
@@ -23,6 +25,7 @@ export const MOBILE_HTML_PREVIEW_SEALED_SANDBOX = ''
 // Inherited img/font/connect/script policies still constrain artifact; https images can report view through fixed author URL, but scripts cannot add dynamic data.
 // Shell Referrer-Policy:no-referrer is required: WebKit ignores iframe referrerPolicy for srcdoc images, unlike Chromium.
 export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
+  useMobileColorScheme()
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
   // Read immutable session grants once after init, before page mounts.
   const linksOpen = useHtmlPreviewLinkGrant()
@@ -68,6 +71,7 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
 
 // Use DOM iframe: RN has no primitive. Set srcdoc attribute to parse untrusted content only inside sealed frame.
 function PreviewFrame({ html, linksOpen }: { html: string; linksOpen: boolean }) {
+  useMobileColorScheme()
   return (
     <View style={styles.frame}>
       <iframe
@@ -91,7 +95,7 @@ const IFRAME_STYLE = {
   backgroundColor: '#ffffff'
 } as const
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: { flex: 1 },
   toolbar: {
     flexDirection: 'row',
@@ -117,4 +121,4 @@ const styles = StyleSheet.create({
   },
   toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
   frame: { flex: 1, backgroundColor: '#ffffff' }
-})
+}))

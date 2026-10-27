@@ -1,8 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { KeyRound } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   loadPendingHostCredentialCleanup,
   subscribePendingHostCredentialCleanup
@@ -10,6 +12,7 @@ import {
 import { retryPendingHostCredentialCleanup } from '../transport/host-store'
 
 export function PendingCredentialCleanupCard() {
+  useMobileColorScheme()
   const [pendingCredentialIds, setPendingCredentialIds] = useState<string[]>([])
   const [credentialStorageUnreadable, setCredentialStorageUnreadable] = useState(false)
   const [retryingCredentialCleanup, setRetryingCredentialCleanup] = useState(false)
@@ -107,7 +110,7 @@ export function PendingCredentialCleanupCard() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
     borderRadius: 12,
@@ -153,4 +156,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary
   }
-})
+}))

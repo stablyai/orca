@@ -102,9 +102,11 @@ function createClaudeAdapter(
 ): StructuredAgentRuntimeAdapter {
   const { deps, store, followUps, host } = context
   const overlay = claudeLaunchEnvOverlay(deps).resolveEnv
+  const resolveAccountHome = deps.resolveAgentAccountHome
   return createStructuredClaudeRuntimeAdapter({
     store,
     resolveWorkspacePath: deps.resolveWorkspacePath,
+    ...(resolveAccountHome ? { resolveAccountHome: () => resolveAccountHome('claude') } : {}),
     resolveLaunch: composeStructuredLaunch(
       CLAUDE_STRUCTURED_AGENT,
       structuredAgentLaunchSources(context),

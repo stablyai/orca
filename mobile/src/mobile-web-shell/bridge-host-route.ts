@@ -1,4 +1,8 @@
-import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/bridge-envelope'
+import {
+  BridgeInitRouteSchema,
+  type BridgeColorScheme,
+  type BridgeInitRoute
+} from './bridge/bridge-envelope'
 import { readBridgeRouteUpdate } from './bridge/bridge-route-update'
 import {
   sameSafeAreaInsets,
@@ -16,6 +20,8 @@ export type BridgeHostRoute = {
   readonly publishSafeAreaInsets: (next: BridgeSafeAreaInsets, deliverable: boolean) => void
   readonly keyboardInset: () => number
   readonly publishKeyboardInset: (next: number, deliverable: boolean) => void
+  readonly colorScheme: () => BridgeColorScheme
+  readonly publishColorScheme: (next: BridgeColorScheme, deliverable: boolean) => void
 }
 
 // Parse against the page’s route schema before init; interpolated host ids with query/hash/whitespace/dot segments could otherwise leave a blank page asking forever.
@@ -27,11 +33,13 @@ export function createBridgeHostRoute(args: {
   onRefused: (issue: string) => void
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  colorScheme?: BridgeColorScheme
 }): BridgeHostRoute {
   const parsed = BridgeInitRouteSchema.safeParse(args.opened)
   let route = parsed.success && !args.refused ? parsed.data : null
   let insets = args.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS
   let keyboard = args.keyboardInset ?? 0
+  let scheme = args.colorScheme ?? 'dark'
   return {
     current: () => route,
     openIssue: () => (parsed.success ? 'unknown' : (parsed.error.issues[0]?.message ?? 'unknown')),
@@ -62,6 +70,16 @@ export function createBridgeHostRoute(args: {
         return
       }
       keyboard = next
+      if (deliverable) {
+        args.sendInit()
+      }
+    },
+    colorScheme: () => scheme,
+    publishColorScheme: (next, deliverable) => {
+      if (scheme === next) {
+        return
+      }
+      scheme = next
       if (deliverable) {
         args.sendInit()
       }

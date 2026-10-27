@@ -9,6 +9,7 @@ import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import {
   getVersionManagerBinPaths,
   resolveCliCommand,
@@ -55,7 +56,9 @@ function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const existing = new Set(currentEntries)
   const missing = getVersionManagerBinPaths().filter((entry) => !existing.has(entry))
   if (missing.length > 0) {
-    env[pathKey] = [...missing, ...currentEntries].join(delimiter)
+    const append = missing.filter(isWindowsFnmDefaultAliasDir)
+    const prepend = missing.filter((entry) => !append.includes(entry))
+    env[pathKey] = [...prepend, ...currentEntries, ...append].join(delimiter)
   }
   return env
 }

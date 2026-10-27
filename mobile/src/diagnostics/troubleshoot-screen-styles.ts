@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const troubleshootScreenStyles = StyleSheet.create({
+export const troubleshootScreenStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -131,4 +132,4 @@ export const troubleshootScreenStyles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18
   }
-})
+}))

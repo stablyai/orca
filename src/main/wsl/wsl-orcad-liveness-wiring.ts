@@ -9,14 +9,15 @@ import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
 import { subscribeSystemPowerLifecycle } from '../system-power-lifecycle'
 import {
   deferUntilWslDistroRunning,
-  readConfirmedRunningWslDistros
+  readConfirmedRunningWslDistros,
+  readSettledConfirmedRunningWslDistros
 } from '../wsl-background-distro-gate'
 import type { WslDistroHolder } from './wsl-distro-holder'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { readWslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection, WslOrcadConnectionManager } from './wsl-orcad-connection'
 import { defaultWslOrcadEnvironmentId } from './wsl-orcad-deploy'
-import { confirmsRunning } from './wsl-orcad-liveness-evidence'
+import { confirmsRunning, EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { openWslOrcadWatch } from './wsl-orcad-watch'
@@ -42,7 +43,13 @@ export function createWslOrcadLivenessSupervisor(options: {
 }): WslOrcadLivenessSupervisor {
   return new WslOrcadLivenessSupervisor({
     manager: options.manager,
-    readRunning: readConfirmedRunningWslDistros,
+    readRunning: (afterExit) =>
+      afterExit
+        ? readSettledConfirmedRunningWslDistros(
+            afterExit.distro,
+            afterExit.exitedAt === null ? undefined : afterExit.exitedAt + EXIT_SETTLE_MS
+          )
+        : readConfirmedRunningWslDistros(),
     readIdentity: (distro, orcadPid) => readWslGuestIdentity(transportFor(distro), orcadPid),
     openWatch: (connection) =>
       openWslOrcadWatch(

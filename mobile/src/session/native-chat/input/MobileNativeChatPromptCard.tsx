@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
@@ -44,6 +46,7 @@ export function MobileNativeChatPromptCard({
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   const card =
     ask && requiresTerminal ? (
       <View style={styles.terminalCard}>
@@ -117,7 +120,7 @@ export function MobileNativeChatPromptCard({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   collapsed: { display: 'none' },
   terminalCard: {
     backgroundColor: colors.bgPanel,
@@ -140,4 +143,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

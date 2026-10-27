@@ -22,7 +22,7 @@ vi.mock('../../store', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
-vi.mock('./native-chat-pty-session-options', () => ({
+vi.mock('../../../../shared/native-chat-pty-session-options', () => ({
   createNativeChatPtySessionOptions: mocks.createNativeChatPtySessionOptions
 }))
 

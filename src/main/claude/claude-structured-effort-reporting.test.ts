@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import { readClaudeSettingsEffort } from './claude-structured-session-options'
-import type { ClaudeSession } from './claude-structured-session-state'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
+import type {
+  ClaudeSession,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
+
 import { USER_MESSAGE, acquired, fakeClaude } from './claude-structured-session-test-support'
 
 /** Verbatim from Claude Code 2.1.258's get_settings response. */

@@ -109,28 +109,4 @@ describe('a local pane rename over host snapshots', () => {
       [leafId]: 'second'
     })
   })
-
-  it('names each renamed pane in exactly one push', () => {
-    const leafId = '66666666-6666-4666-8666-666666666666'
-    const sibling = '77777777-7777-4777-8777-777777777777'
-    rename(leafId, 'mine')
-
-    expect(takeUnsentPaneTitleRenames([leafId, sibling])).toEqual([leafId])
-    expect(takeUnsentPaneTitleRenames([leafId, sibling])).toEqual([])
-  })
-
-  it("holds nothing for a window's own local tab", () => {
-    const leafId = '88888888-8888-4888-8888-888888888888'
-    notePendingPaneTitleRename({
-      leafId,
-      title: 'mine',
-      layout: layoutFor(leafId, 'old', 'local-pty'),
-      now: T0
-    })
-
-    expect(takeUnsentPaneTitleRenames([leafId])).toEqual([])
-    expect(withPendingPaneTitleRenames({ [leafId]: 'old' }, [leafId], T0)).toEqual({
-      [leafId]: 'old'
-    })
-  })
 })

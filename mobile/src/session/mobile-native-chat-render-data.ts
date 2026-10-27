@@ -19,7 +19,6 @@ import {
   type AgentType,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
-import { isImageSourceUserTurn } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 export function mobileNativeChatEmptyState(
@@ -48,8 +47,6 @@ export type MobileNativeChatPendingItem = {
   id: string
   text: string
   images?: string[]
-  // Anchor unmatched echoes after their captured tail so later turns cannot reorder them.
-  baselineTailMessageId?: string | null
   sentAt?: number
 }
 
@@ -76,14 +73,11 @@ export function foldMobileNativeChatMessages(
 }
 
 export function buildMobileNativeChatTransientData({
-  messages,
   folded,
   streaming,
   pending,
   imagePreviewsByMessageId
 }: {
-  /** Raw transcript rows, used to project folded-away send boundaries. */
-  messages: NativeChatMessage[]
   folded: NativeChatMessage[]
   streaming: string | null
   pending: MobileNativeChatPendingItem[]
@@ -109,45 +103,13 @@ export function buildMobileNativeChatTransientData({
     }
     return { ...message, blocks }
   })
-  // Keep echoes at their send boundary: some TUIs never record a matching user row, so appending would move them below every later turn.
-  const anchoredPending = new Map<string, NativeChatMessage[]>()
-  const leadingPending: NativeChatMessage[] = []
-  const trailingPending: NativeChatMessage[] = []
-  const foldedIds = new Set(renderedFolded.map((message) => message.id))
-  const missingBaselineIds = new Set<string>()
-  for (const item of pending) {
-    const baselineId = item.baselineTailMessageId
-    if (baselineId && !foldedIds.has(baselineId)) {
-      missingBaselineIds.add(baselineId)
-    }
-  }
-  const foldedAnchorByRawId = new Map<string, string>()
-  const leadingBaselineIds = new Set<string>()
-  if (missingBaselineIds.size > 0) {
-    let lastVisibleId: string | null = null
-    const forwardImageBaselineIds: string[] = []
-    for (const message of messages) {
-      if (foldedIds.has(message.id)) {
-        for (const baselineId of forwardImageBaselineIds) {
-          foldedAnchorByRawId.set(baselineId, message.id)
-        }
-        forwardImageBaselineIds.length = 0
-        lastVisibleId = message.id
-      }
-      if (!missingBaselineIds.has(message.id)) {
-        continue
-      }
-      if (isImageSourceUserTurn(message)) {
-        forwardImageBaselineIds.push(message.id)
-      } else if (lastVisibleId) {
-        foldedAnchorByRawId.set(message.id, lastVisibleId)
-      } else {
-        leadingBaselineIds.add(message.id)
-      }
-    }
+  // Desktop order: transcript rows, then the streaming preview, then unmatched echoes in send order.
+  const data: NativeChatMessage[] = [...renderedFolded]
+  if (streaming) {
+    data.push(nativeChatStreamingMessage(streaming))
   }
   for (const item of pending) {
-    const bubble: NativeChatMessage = {
+    data.push({
       id: item.id,
       role: 'user',
       blocks: [
@@ -156,41 +118,7 @@ export function buildMobileNativeChatTransientData({
       ],
       timestamp: item.sentAt ?? null,
       source: 'transcript'
-    }
-    // Tool/noise rows fold backward; image-source rows fold into their following prompt.
-    const baselineId = item.baselineTailMessageId
-    if (baselineId && leadingBaselineIds.has(baselineId)) {
-      leadingPending.push(bubble)
-      continue
-    }
-    const anchor = baselineId
-      ? foldedIds.has(baselineId)
-        ? baselineId
-        : foldedAnchorByRawId.get(baselineId)
-      : undefined
-    if (!anchor || !foldedIds.has(anchor)) {
-      trailingPending.push(bubble)
-      continue
-    }
-    const siblings = anchoredPending.get(anchor)
-    if (siblings) {
-      siblings.push(bubble)
-    } else {
-      anchoredPending.set(anchor, [bubble])
-    }
+    })
   }
-
-  const data: NativeChatMessage[] = [...leadingPending]
-  for (const message of renderedFolded) {
-    data.push(message)
-    const attached = anchoredPending.get(message.id)
-    if (attached) {
-      data.push(...attached)
-    }
-  }
-  if (streaming) {
-    data.push(nativeChatStreamingMessage(streaming))
-  }
-  data.push(...trailingPending)
   return { folded: renderedFolded, streaming, data }
 }

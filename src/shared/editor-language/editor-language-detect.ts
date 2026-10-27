@@ -86,6 +86,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.proto': 'proto',
   '.lua': 'lua',
   '.r': 'r',
+  '.make': 'makefile',
   '.scala': 'scala',
   '.dart': 'dart',
   '.ex': 'elixir',

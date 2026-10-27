@@ -1,5 +1,7 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 type ContentProps = {
@@ -33,6 +35,7 @@ export function ConfirmContent({
   onConfirm,
   onCancel
 }: ContentProps) {
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.content}>
@@ -68,7 +71,7 @@ export function ConfirmContent({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   content: {
     paddingBottom: spacing.lg
   },
@@ -120,4 +123,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff'
   }
-})
+}))

@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { Check, Copy, FileWarning, Sparkles } from 'lucide-react-native'
 import { useClipboardWriter } from '../../platform/clipboard'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import { PRSection } from './PRSection'
 import { resolveConflictDisplay } from './pr-conflict-presentation'
@@ -32,6 +33,7 @@ type Props = {
 
 // Show hosted conflicts as paths or missing-list fallback, matching desktop conflict/notice components.
 export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: Props) {
+  useMobileColorScheme()
   // Use clipboard seam: iOS custom scheme lacks page secure context, while Android https provides one.
   const clipboard = useClipboardWriter()
   // Track idle/success/failure: dropping pasteboard refusal used to look like successful copy, unlike Tasks error reporting.

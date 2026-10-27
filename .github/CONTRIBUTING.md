@@ -21,6 +21,27 @@ Install Node 24, pnpm, and the Bun version in [`config/.bun-version`](../config/
 native PTYs, socket liveness, and V8 memory behavior. `pnpm test:node` runs the same suites
 entirely on Node. Builds and dependency installation still use Node and pnpm.
 
+Use the pnpm version in `packageManager` in [`package.json`](../package.json): `corepack enable`
+needs Corepack 0.34.5 or newer to start the pinned pnpm (`npm install -g corepack@latest`). On
+Windows it writes shims next to `node.exe` and fails with `EPERM` outside an elevated shell when
+Node is in `C:\Program Files\nodejs`; run `npm install -g pnpm@<that version>` instead.
+
+`pnpm install` compiles native modules such as `node-pty` with `node-gyp` and loads them in
+Electron, so a fresh machine also needs:
+
+- **macOS**: Xcode Command Line Tools (`xcode-select --install`).
+- **Windows**: Python 3 and Visual Studio Build Tools with the "Desktop development with C++"
+  workload.
+- **Linux**: a C++ toolchain, Python 3, and the libraries Electron loads even on a headless
+  machine, plus `xvfb`, which the `*.electron.test.ts` files in `pnpm test` use when `DISPLAY` is
+  unset. On Ubuntu 24.04+ and Debian 13+:
+
+  ```bash
+  sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb libgtk-3-0 libnss3 libgbm1 libasound2t64
+  ```
+
+  Older releases name the last package `libasound2`.
+
 ```bash
 pnpm install
 pnpm dev

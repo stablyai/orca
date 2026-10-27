@@ -16,7 +16,8 @@ import {
   getHostedReviewSignalTone,
   getHostedReviewLabel,
   getHostedChecksLabel,
-  getHostedMergeLabel
+  getHostedMergeLabel,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles, getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
 import {
@@ -29,7 +30,10 @@ import {
   getGitHubMergeLabel
 } from './mobile-tasks-legacy-foundation'
 
-export function renderMobileTasksProviderItemList(model: ConnectionPresentationModel) {
+export function renderMobileTasksProviderItemList(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme
+) {
   const {
     displayedEntries,
     emptyLabel,
@@ -64,6 +68,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
   ) : (
     <FlatList
       data={displayedEntries}
+      extraData={colorScheme}
       keyExtractor={(entry) => entry.key}
       ItemSeparatorComponent={({ leadingItem, trailingItem }) =>
         leadingItem?.type === 'section' || trailingItem?.type === 'section' ? null : (

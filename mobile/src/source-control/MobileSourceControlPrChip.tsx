@@ -9,6 +9,7 @@ import {
   X
 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { statusColor } from '../components/pr-sidebar/pr-sidebar-status-color'
 import { hubStyles } from './mobile-source-control-hub-styles'
 import type { MobilePrChipRollup, MobilePrChipSummary } from './mobile-pr-chip-summary'
@@ -19,6 +20,7 @@ type Props = {
 }
 
 export function MobileSourceControlPrChip({ summary, onPress }: Props) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={({ pressed }) => [hubStyles.chip, pressed && hubStyles.chipPressed]}
@@ -73,6 +75,7 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
 }
 
 function ChipRollup({ rollup }: { rollup: MobilePrChipRollup }) {
+  useMobileColorScheme()
   const color = statusColor(rollup.token)
   return (
     <View style={hubStyles.rollup}>

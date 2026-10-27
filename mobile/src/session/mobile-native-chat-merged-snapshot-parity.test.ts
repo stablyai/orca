@@ -27,7 +27,7 @@ import {
   stopJournal,
   type StopJournal
 } from './mobile-native-chat-stop-journal.test-fixture'
-import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { useMobileNativeChatTurnDisclosure } from './native-chat/transcript/use-mobile-native-chat-turn-disclosure'
 
 const STOP_ROW = `stopped-before-start:orca:${NEVER_OPENED}`
 
@@ -58,7 +58,6 @@ function drawn(state: StructuredAgentSessionState): Drawn {
   const { items, messages } = phoneTranscript(state)
   const folded = foldMobileNativeChatMessages(messages, 'claude')
   const { data } = buildMobileNativeChatTransientData({
-    messages,
     folded,
     streaming: null,
     pending: []
@@ -86,7 +85,6 @@ function listed(state: StructuredAgentSessionState): string[] {
   const { items, messages } = phoneTranscript(state)
   const folded = foldMobileNativeChatMessages(messages, 'claude')
   const { data } = buildMobileNativeChatTransientData({
-    messages,
     folded,
     streaming: null,
     pending: []

@@ -4,6 +4,7 @@ import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate
 import { deferAppKitSceneMutation } from '../appkit-scene-mutation'
 import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
+import { quitAndStopAllSessionsMenuText } from '../menu/app-menu-quit-item'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
 import { stampTrayDevBadge } from './tray-dev-badge'
 
@@ -22,6 +23,8 @@ export type SystemTrayOptions = {
   onCheckForUpdates: () => void
   /** Caller must mark quit intent; serve-mode user Quit may close only desktop windows. */
   onQuit: () => void
+  /** Confirm, then quit with every terminal session stopped; omitted where the item must not show (serve mode). */
+  onQuitAndStopAllSessions?: () => void
 }
 
 // Keep a live reference or Electron GC removes the tray icon.
@@ -263,6 +266,14 @@ function buildTrayMenu(opts: SystemTrayOptions): Menu {
             click: safeMenuAction(() => opts.onCheckForUpdates())
           },
           { type: 'separator' }
+        ] satisfies Electron.MenuItemConstructorOptions[])
+      : []),
+    ...(opts.onQuitAndStopAllSessions
+      ? ([
+          {
+            ...quitAndStopAllSessionsMenuText(),
+            click: safeMenuAction(opts.onQuitAndStopAllSessions)
+          }
         ] satisfies Electron.MenuItemConstructorOptions[])
       : []),
     { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, Text, View } from 'react-native'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -9,6 +9,8 @@ import {
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type {
@@ -67,6 +69,7 @@ function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
 }
 
 function Centered({ children }: { children: ReactNode }) {
+  useMobileColorScheme()
   return <View style={styles.centered}>{children}</View>
 }
 
@@ -85,6 +88,7 @@ function Failed({
   state: Extract<MobileWebShellSessionState, { kind: 'failed' }>
   onRetry: () => void
 }) {
+  useMobileColorScheme()
   // Retry cannot change a settled isolation gate or give an unsupported WebView the missing fence.
   const retryable = state.reason !== 'isolation-unavailable' && state.reason !== 'status-unreadable'
   return (
@@ -126,6 +130,7 @@ export function MobileWebShellScreen({
   onOverlayLoad,
   runtime
 }: MobileWebShellScreenProps) {
+  const colorScheme = useMobileColorScheme()
   const insets = useSafeAreaInsets()
   const overlay = onOverlayLoad !== undefined
   const router = useRouter()
@@ -191,6 +196,7 @@ export function MobileWebShellScreen({
     route,
     safeAreaInsets: pageInsets,
     keyboardInset,
+    colorScheme,
     pageRoutes,
     pageRouteGrants,
     routeGrants,
@@ -223,8 +229,8 @@ export function MobileWebShellScreen({
       console.warn('[web-shell] refused to open this screen', issue)
       reportShellFailure('document-load-failed')
     },
-    // Push so Back reveals the mounted page without downloading or handshaking again.
-    onNavigate: (href: string) => {
+    // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
+    onNavigate: (href: string, replace: boolean) => {
       if (overlay) {
         return void router.replace(href)
       }
@@ -248,7 +254,7 @@ export function MobileWebShellScreen({
         router.dismissTo(href)
         return
       }
-      router.push(href)
+      return void (replace ? router.replace(href) : router.push(href))
     },
     serveNativeVerb,
     onExternalLink: openUrlForPage,
@@ -388,7 +394,7 @@ export function MobileWebShellScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   shellRoot: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -432,4 +438,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7
   }
-})
+}))

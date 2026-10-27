@@ -110,10 +110,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
       ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
-      // Why: a restart swaps one live session for one; the live cap must not defer it after main stopped the old PTY.
+      // Why: a restart swaps one live session for one, and main stops the old PTY before admission.
       resumeSpawnIntent:
         visibleAtSpawn || session.userRestart ? 'user-resume' : 'automatic-restore',
-      // A deferred retry's claim returns null: main already stopped the replaced PTY.
       ...(session.userRestart ? { claimReplacedPtyId: session.claimPendingReplacedPtyId } : {}),
       shouldContinue: () =>
         !session.disposed &&
@@ -152,7 +151,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           session.enterSpawnDeferredSleep(deferral, startupOverride, options, visibleAtSpawn)
           return null
         }
-        // Why: only a deferred restart's retry is still the user's restart; a later wake is automatic again.
+        // Only the restart's deferred retries are the user's; a later wake is automatic again.
         session.userRestart = false
         const connectResult =
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId

@@ -277,7 +277,6 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const actionSheetRunners = useMobileSourceControlActionSheetRunners({
     client,
-    worktreeId,
     sendGitRequest,
     runGitWorkflow,
     runGitSequence,

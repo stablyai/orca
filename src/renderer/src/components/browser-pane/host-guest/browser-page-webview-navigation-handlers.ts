@@ -101,14 +101,12 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleDidStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
-    // Main-frame starts include same-URL reloads; did-start-loading also fires for iframe loads.
-    if (event.isMainFrame && event.url) {
-      invalidateBrowserAnnotationDocumentRef.current()
-      setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
-    }
     if (!isPageDocumentNavigationStart(event) || !event.url) {
       return
     }
+    // Same-URL reloads replace the document too; in-place updates are judged once they commit.
+    invalidateBrowserAnnotationDocumentRef.current()
+    setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
     onUpdatePageStateRef.current(browserTabId, { loading: true })
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
@@ -139,7 +137,8 @@ export function createBrowserPageWebviewNavigationHandlers({
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const normalizedBrowserModelUrl =
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
-    if (lastKnownWebviewUrlRef.current !== normalizedBrowserModelUrl) {
+    // In-place route changes swap content, but fragment-only updates (scroll spies, anchors) keep the layout.
+    if (lastKnownWebviewUrlRef.current?.split('#')[0] !== normalizedBrowserModelUrl.split('#')[0]) {
       invalidateBrowserAnnotationDocumentRef.current()
     }
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl

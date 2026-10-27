@@ -350,7 +350,9 @@
     "help": "Ayuda",
     "paste": "Pegar",
     "copy": "Copiar",
-    "selectAll": "Seleccionar todo"
+    "selectAll": "Seleccionar todo",
+    "quitAndStopAllSessions": "Salir por completo...",
+    "quitAndStopAllSessionsTooltip": "También detiene todas las sesiones de terminal, incluidos los agentes en ejecución. Salir sin más las mantiene activas para que Orca se vuelva a conectar en el próximo inicio."
   },
   "tray": {
     "openOrca": "Abrir Orca",
@@ -5555,9 +5557,10 @@
           "b2bc47c080": "más ubicaciones",
           "b47ba1a9d2": "Vista previa de {{value0}}",
           "2251d41ebb": "Grupos de worktrees ocultos",
-          "f54f2bec5d": "{{value0}} worktrees ocultos para {{value1}}",
           "5a9688802a": "Mostrar {{value0}} más",
-          "294de4aeb2": "Mostrar menos"
+          "294de4aeb2": "Mostrar menos",
+          "collapseAriaLabel": "Contraer worktrees ocultos de {{repo}}",
+          "expandAriaLabel": "Expandir worktrees ocultos de {{repo}}"
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "Abrir como carpeta",
@@ -16830,6 +16833,99 @@
                     }
                   }
                 }
+              },
+              "step": {
+                "copy": {
+                  "workspace": {
+                    "board": {
+                      "plan": {
+                        "title": "Planifica el trabajo en el tablero",
+                        "body": "Usa el tablero cuando quieras ver los espacios de trabajo por estado en lugar de por proyecto."
+                      },
+                      "lanes": {
+                        "title": "Mueve el trabajo entre carriles",
+                        "body": "Arrastra los espacios de trabajo entre carriles a medida que cambia su estado."
+                      }
+                    },
+                    "creation": {
+                      "project": {
+                        "title": "Elige un proyecto",
+                        "body": "Orca aísla cada tarea en su propio worktree, creado a partir de tu rama base."
+                      },
+                      "name": {
+                        "title": "Ponle nombre o usa un elemento de trabajo existente",
+                        "body": "Parte de una tarea vinculada para usar un nombre corto de incidencia o PR. O déjalo en blanco para nombrarlo automáticamente a partir de tu primer mensaje al agente."
+                      },
+                      "agent": {
+                        "title": "Elige qué agente empieza el trabajo",
+                        "body": "Elige el agente que debe abrirse cuando se cree este worktree."
+                      }
+                    }
+                  },
+                  "agent": {
+                    "sessions": {
+                      "split": {
+                        "title": "Divide un panel de terminal",
+                        "body": "Abre un segundo panel de terminal con {terminal.splitRight} o haz clic derecho en el panel para ver las opciones de división.",
+                        "action": "Dividir terminal"
+                      },
+                      "parallel": {
+                        "title": "Empieza otra tarea en paralelo",
+                        "body": "Cada worktree tiene su propia rama, así que el trabajo en paralelo se mantiene separado."
+                      }
+                    }
+                  },
+                  "browser": {
+                    "grab": {
+                      "title": "Captura el contexto de la página para los agentes",
+                      "body": "Usa la herramienta de captura para copiar el contexto de un elemento de la página para los agentes."
+                    },
+                    "annotate": {
+                      "title": "Marca el feedback de diseño sobre la página",
+                      "body": "Anota elementos y envía esas notas a un agente."
+                    },
+                    "logins": {
+                      "title": "Mantén la sesión iniciada",
+                      "body": "Lleva tus inicios de sesión existentes a Orca para seguir conectado de inmediato."
+                    }
+                  },
+                  "tasks": {
+                    "source": {
+                      "title": "Elige el origen del trabajo",
+                      "body": "Cambia entre proveedores conectados y filtros de proyecto sin cambiar de página."
+                    },
+                    "filter": {
+                      "title": "Filtra hasta el trabajo que necesitas",
+                      "body": "Usa los preajustes y la búsqueda para acotar incidencias, revisiones, merge requests o tareas."
+                    },
+                    "start": {
+                      "title": "Empieza desde los elementos de trabajo",
+                      "body": "Usa Iniciar o Abrir en una tarea, incidencia, revisión o merge request para llevar su contexto a un espacio de trabajo."
+                    }
+                  },
+                  "floating": {
+                    "workspace": {
+                      "repos": {
+                        "title": "Ejecuta un agente en todos los repositorios",
+                        "body": "Los agentes de aquí se ejecutan en la carpeta que elijas. Apunta uno al directorio superior a tus servicios para trabajar en todos tus repositorios a la vez."
+                      },
+                      "scratchpad": {
+                        "title": "O úsalo como bloc de notas",
+                        "body": "Abre agentes, terminales temporales, notas y pestañas del navegador sin saturar el worktree en el que estás concentrado."
+                      }
+                    }
+                  },
+                  "client": {
+                    "hosted": {
+                      "browser": {
+                        "intro": {
+                          "action": "Entendido",
+                          "secondaryAction": "Configuración del navegador"
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -18871,7 +18967,8 @@
         "clearAfterRetry": "Reintente su mensaje anterior y luego ejecute /clear.",
         "compactAfterRetry": "Reintente su mensaje anterior y luego ejecute /compact.",
         "clearAfterSending": "Su mensaje anterior todavía se está enviando. Ejecute /clear cuando se haya enviado.",
-        "compactAfterSending": "Su mensaje anterior todavía se está enviando. Ejecute /compact cuando se haya enviado."
+        "compactAfterSending": "Su mensaje anterior todavía se está enviando. Ejecute /compact cuando se haya enviado.",
+        "pendingWork": "Espera a que terminen el trabajo y los mensajes pendientes antes de usar este comando."
       },
       "composer": {
         "imageUnavailable": "Vista previa no disponible",
@@ -19372,9 +19469,6 @@
         "awaitingUnnamed": "Esperando entrada del usuario",
         "asked": "Preguntó:",
         "questionCount": "{{value0}} preguntas"
-      },
-      "conversationCommand": {
-        "pendingWork": "Espera a que terminen el trabajo y los mensajes pendientes antes de usar este comando."
       },
       "drop": {
         "messageTitle": "Suelta para adjuntar a este mensaje",
@@ -20292,6 +20386,31 @@
       "stopped": "detenido",
       "failed": "fallido",
       "finished": "finalizado"
+    },
+    "bell": {
+      "attentionRequested": "Se solicita atención",
+      "title": "Campana en {{worktree}}"
+    },
+    "test": {
+      "title": "Las notificaciones de Orca están activadas",
+      "body": "Esta es una notificación de prueba de Orca."
+    },
+    "workspaceFallback": "espacio de trabajo",
+    "agentTool": {
+      "usingWithInput": "Usando {{tool}}: {{input}}",
+      "using": "Usando {{tool}}",
+      "input": "Entrada de la herramienta: {{input}}"
+    },
+    "taskComplete": {
+      "title": "Tarea completada en {{worktree}}",
+      "body": "Un agente de programación terminó de trabajar."
+    },
+    "permissionProbe": {
+      "body": "Orca te avisará cuando los agentes terminen o los terminales necesiten atención."
+    },
+    "startupRegistration": {
+      "title": "Orca está listo para enviarte notificaciones",
+      "body": "Permite las notificaciones para que Orca te avise cuando los agentes terminen o los terminales necesiten atención."
     }
   },
   "featureTips": {
@@ -20524,6 +20643,8 @@
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",
       "nextLaunch": "{{value0}} → {{value1}}. El próximo Claude que inicies la usará. Las sesiones en ejecución conservan su cuenta.",
       "profileSwitching": "El cambio se aplica al próximo Claude que inicies en cualquier pestaña. Las sesiones en ejecución conservan su cuenta.",
+      "systemDefault": "Predeterminado del sistema",
+      "unnamedAccount": "Cuenta de Claude",
       "systemDefaultNamed": "Predeterminado del sistema: {{value0}}",
       "systemDefaultIsSaved": "Predeterminado del sistema ha iniciado sesión como {{value0}}, que también es una cuenta guardada. Puede que una versión anterior de Orca haya copiado ese inicio de sesión allí. Si no es tu propio inicio de sesión, selecciona Predeterminado del sistema y ejecuta claude /login.",
       "systemDefaultIsSavedDismiss": "Descartar",
@@ -20836,6 +20957,36 @@
     },
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculada"
+    },
+    "createReviewFailure": {
+      "authRequiredCommand": "{{providerName}} no está autenticado. Siguiente paso: ejecuta {{command}} en este entorno.",
+      "authRequiredVariable": "{{providerName}} no está autenticado. Siguiente paso: define {{variable}} en este entorno.",
+      "authRequiredBitbucket": "Bitbucket no está autenticado. Siguiente paso: conecta Bitbucket en Ajustes > Integraciones o define ORCA_BITBUCKET_* en este entorno.",
+      "signInHintCommand": "Ejecuta {{command}} en este entorno",
+      "signInHintVariable": "Define {{variable}} en este entorno",
+      "signInHintBitbucket": "Conecta Bitbucket en Ajustes > Integraciones",
+      "dirty": "haz commit de los cambios locales o descártalos antes de crear {{reviewLabel}}.",
+      "detachedHead": "cambia a una rama antes de crear {{reviewLabel}}.",
+      "defaultBranch": "elige una rama de características antes de crear {{reviewLabel}}.",
+      "noUpstream": "publica esta rama antes de crear {{reviewLabel}}.",
+      "needsPush": "haz push de esta rama antes de crear {{reviewLabel}}.",
+      "needsSync": "sincroniza esta rama antes de crear {{reviewLabel}}.",
+      "refreshStatus": "actualiza el estado del control de código fuente y vuelve a intentarlo.",
+      "namedBaseNotOnRemote": "la rama base \"{{base}}\" no se ha enviado al remoto. Elige una base que ya esté en el remoto o haz push de ella primero.",
+      "baseNotOnRemote": "la rama base no se ha enviado al remoto. Elige una base que ya esté en el remoto o haz push de ella primero.",
+      "branchChanged": "vuelve a la rama seleccionada antes de crear {{reviewLabel}}.",
+      "branchStatusUnverified": "no se pudo verificar el estado de la rama. Actualiza el control de código fuente y vuelve a intentarlo.",
+      "reviewLookupUnavailable": "Orca no pudo confirmar si esta rama ya tiene {{reviewLabel}}. Reintenta cuando la consulta a {{providerName}} funcione.",
+      "sameBaseBranch": "elige otra rama base antes de crear {{reviewLabel}}.",
+      "rejected": "{{providerName}} rechazó la creación de {{reviewLabel}}. Comprueba la rama base y el estado de la rama, y vuelve a intentarlo.",
+      "repositoryNotFound": "{{providerName}} no encontró el repositorio. Comprueba que la credencial tenga acceso de escritura a él.",
+      "createFailed": "{{providerName}} no pudo crear {{reviewLabel}}. Vuelve a intentarlo en un momento.",
+      "unsupportedProvider": "Para crear {{reviewLabel}} se necesita un remoto alojado en {{providerName}}.",
+      "providerNotSupported": "Todavía no se admite crear revisiones para este proveedor.",
+      "existingReview": "Esta rama ya tiene {{reviewLabel}}.",
+      "creationUnconfirmed": "Puede que la creación de {{shortLabel}} se haya completado. Actualizando el estado de revisión de la rama...",
+      "withDetail": "No se pudo crear {{shortLabel}}: {{detail}}",
+      "pushFailed": "El push falló. Resuelve el error de push y vuelve a intentarlo."
     }
   },
   "aiVault": {
@@ -21300,5 +21451,17 @@
   },
   "browserTab": {
     "agentDriving": "Un agente está usando esta página"
+  },
+  "quitAndStopAllSessions": {
+    "title": "Salir por completo",
+    "message": "¿Detener todas las sesiones de terminal y salir de Orca?",
+    "detail": "Orca cierra todas las pestañas de terminal y detiene sus sesiones, incluidos los agentes que se ejecutan en terminales, y luego se cierra. Salir sin más las mantiene activas para que Orca se vuelva a conectar en el próximo inicio. Las sesiones de terminal en hosts remotos pueden seguir ejecutándose allí. Se pierde el trabajo de terminal no guardado y las pestañas cerradas no vuelven en el próximo inicio. Esta acción no se puede deshacer.",
+    "confirm": "Detener sesiones y salir",
+    "cancel": "Cancelar",
+    "failed": "No se pudieron detener todas las sesiones de terminal, así que Orca sigue abierto.",
+    "stopping": "Deteniendo las sesiones de terminal y saliendo…",
+    "ok": "Aceptar",
+    "unavailableMessage": "Orca no puede detener todas las sesiones de terminal en este momento.",
+    "unavailableDetail": "No se detuvo nada. Vuelve a intentarlo cuando se hayan abierto tus terminales. Si una terminal indica que se abrió en una versión más reciente de Orca, vuelve a abrirla primero. Si tus terminales ya están abiertas, cierra Orca, vuelve a abrirlo y vuelve a intentarlo."
   }
 }

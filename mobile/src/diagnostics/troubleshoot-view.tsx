@@ -12,6 +12,7 @@ import {
   AlertTriangle
 } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
@@ -23,6 +24,7 @@ export type CheckResult = {
 }
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
+  useMobileColorScheme()
   switch (status) {
     case 'pass':
       return <CheckCircle2 size={14} color={colors.statusGreen} />
@@ -51,6 +53,7 @@ export function TroubleshootView({
   /** Developer and shell rows the route fills in. */
   developerRow?: ReactNode
 }) {
+  useMobileColorScheme()
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const toggleSection = useCallback(
@@ -142,7 +145,7 @@ export function TroubleshootView({
                 style={({ pressed }) => [styles.accordionHeader, pressed && styles.rowPressed]}
                 onPress={() => toggleSection(section.id)}
               >
-                {section.icon}
+                <section.icon size={16} color={colors.textSecondary} />
                 <Text style={styles.accordionTitle}>{section.title}</Text>
                 {expandedId === section.id ? (
                   <ChevronUp size={16} color={colors.textMuted} />

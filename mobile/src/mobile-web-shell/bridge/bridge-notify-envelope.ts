@@ -38,7 +38,9 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal('navigate'),
-    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
+    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN),
+    // Older shells strip this key and push, which is what every navigate did before it existed.
+    replace: z.literal(true).optional()
   }),
   // Back carries no target; only the native stack knows what screen it will reveal.
   z.object({

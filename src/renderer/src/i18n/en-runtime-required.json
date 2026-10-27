@@ -2115,7 +2115,9 @@
           "07729cc155": "expired"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk."
+          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk.",
+          "changeCount_one": "1 uncommitted or untracked change",
+          "changeCount_other": "{{count}} uncommitted or untracked changes"
         },
         "FolderWorkspaceComposerDialog": {
           "chooseSourceProject": "Choose task source",
@@ -2126,6 +2128,14 @@
         },
         "HostSectionHeaderMenu": {
           "63f36455cc": "Reconnect"
+        },
+        "ImportedWorktreesVisibilityLine": {
+          "hidingInRepo_one": "Hiding 1 discovered worktree in {{repo}}",
+          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
+          "hiding_one": "Hiding 1 discovered worktree",
+          "hiding_other": "Hiding {{count}} discovered worktrees",
+          "keepHiddenAriaLabel_one": "Keep 1 discovered worktree hidden for {{repo}}; recover from the project menu",
+          "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu"
         },
         "LinearAgentSkillSetupPrompt": {
           "missingBoth": "Orca CLI and Linear agent skill are missing.",
@@ -2151,7 +2161,9 @@
           "e8c1f4a2b9": "in workspace options."
         },
         "SetupScriptPromptCard": {
-          "dcaa645da5": "ok"
+          "dcaa645da5": "ok",
+          "savedWithSkippedFields_one": "1 unsupported field skipped. Saved the setup command.",
+          "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command."
         },
         "SidebarHeader": {
           "49f62c5665": "Workspace board",
@@ -2301,6 +2313,12 @@
               }
             }
           }
+        },
+        "workspaceBatchActionLabels": {
+          "deleteCount_one": "Delete 1 Workspace",
+          "deleteCount_other": "Delete {{count}} Workspaces",
+          "sleepCount_one": "Sleep 1 Workspace",
+          "sleepCount_other": "Sleep {{count}} Workspaces"
         },
         "worktree": {
           "card": {
@@ -3254,14 +3272,27 @@
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
-        "plan": "Plan"
+        "plan": "Plan",
+        "stoppedBeforeStart": "Stopped manually",
+        "orcaStopCanContinue": "You can continue in this conversation.",
+        "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
+        "orcaStopQuit": "Orca on {{machine}} was closed while this response was in progress.",
+        "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
+        "orcaStopUnnamedServer": "the remote server",
+        "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress."
       },
       "question": {
         "other": "Other…"
       },
       "queuedMessages": {
         "imageCount_one": "{{count}} image",
-        "imageCount_other": "{{count}} images"
+        "imageCount_other": "{{count}} images",
+        "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
+        "editChangedNotSaved": "This message changed while you were editing. Your edit wasn't saved.",
+        "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
+        "editFailed": "This message can't be edited.",
+        "editGone": "This message was already sent or removed. Your edit is in the chat box.",
+        "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent."
       },
       "receipt": {
         "cancelled": "Cancelled",
@@ -3340,7 +3371,9 @@
         "runningNamedPreview": "Running {{toolName}} {{preview}}",
         "runningPreview": "Running {{preview}}",
         "usedManySummary": "Used {{toolCount}} tools",
-        "usedOneSummary": "Used 1 tool"
+        "usedOneSummary": "Used 1 tool",
+        "fullOutputPartial": "Showing {{shown}} of {{total}}.",
+        "result": "Result"
       },
       "writeNotice": {
         "agentRefused": "The agent turned this down.",
@@ -3416,7 +3449,8 @@
         "waitForCommand": "Wait for the /compact or /clear to finish.",
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
-        "waitMoment": "Wait a moment."
+        "waitMoment": "Wait a moment.",
+        "pendingWork": "Wait for pending work and messages to finish before using this command."
       }
     },
     "onboarding": {

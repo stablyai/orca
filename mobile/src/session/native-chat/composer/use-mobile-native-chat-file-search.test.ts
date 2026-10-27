@@ -92,7 +92,7 @@ describe('useMobileNativeChatFileSearch', () => {
     })
     expect(state?.nativeChatFilePaths).toEqual(['src/apple.ts'])
 
-    act(() => state?.loadNativeChatFiles('readme'))
+    act(() => state?.loadNativeChatFiles('drm'))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120)
     })

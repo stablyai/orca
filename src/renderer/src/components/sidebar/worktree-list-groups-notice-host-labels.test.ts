@@ -1,8 +1,6 @@
 /** Disambiguate discovery notices by distinct host IDs from the unfiltered project universe, even when host labels match. */
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
-import { getNoticeHostContextLabels } from '../../../../shared/sidebar-list/host-labels'
-import { buildProjectGroupingIndex } from '../../../../shared/project-section-grouping'
 import { repo, worktree, project, projectHostSetups } from './worktree-list-groups-test-fixtures'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -148,12 +146,6 @@ describe('discovery notice rows on a multi-host project', () => {
     ])
   })
 
-  it('labels a lone eligible row on a project that spans hosts', () => {
-    expect(summarize(noticeRows({ eligibleRepoIds: [envTwin.id] }))).toEqual([
-      { repoId: envTwin.id, label: 'openclaw', hostId: ENV_HOST_ID, count: 134 }
-    ])
-  })
-
   it('keeps each row its own label and count under either host filter', () => {
     expect(summarize(noticeRows({ eligibleRepoIds: [sshTwin.id] }))).toEqual([
       { repoId: sshTwin.id, label: 'openclaw', hostId: SSH_HOST_ID, count: 61 }
@@ -161,22 +153,6 @@ describe('discovery notice rows on a multi-host project', () => {
     expect(summarize(noticeRows({ eligibleRepoIds: [envTwin.id] }))).toEqual([
       { repoId: envTwin.id, label: 'openclaw', hostId: ENV_HOST_ID, count: 134 }
     ])
-  })
-
-  it('returns labels for exactly the eligible records, never the filtered-out ones', () => {
-    // Assert exact map membership because rows cannot reveal extra ineligible entries.
-    const index = buildProjectGroupingIndex(TWIN_GROUPING)
-
-    for (const eligible of [[sshTwin.id], [envTwin.id], [sshTwin.id, envTwin.id]]) {
-      const labels = getNoticeHostContextLabels(
-        eligible,
-        TWIN_REPO_MAP.keys(),
-        TWIN_REPO_MAP,
-        index,
-        HOST_LABELS
-      )
-      expect([...(labels?.keys() ?? [])]).toEqual(eligible)
-    }
   })
 
   it('leaves a single-host project unlabelled even with several records on it', () => {

@@ -1,4 +1,5 @@
 import {
+  themedStyleSheet,
   StyleSheet,
   Platform,
   colors,
@@ -7,7 +8,7 @@ import {
   typography
 } from './mobile-tasks-dependencies'
 
-export const mobileTasksProjectPickerStyles = StyleSheet.create({
+export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
   boardContainer: {
     gap: spacing.md,
     padding: spacing.md
@@ -225,4 +226,4 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   }
-})
+}))

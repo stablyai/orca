@@ -20,6 +20,7 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import {
@@ -70,6 +71,7 @@ export function MountedBottomDrawer({
   zIndex = 1000,
   scrollResetKey = null
 }: MountedBottomDrawerProps) {
+  useMobileColorScheme()
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)

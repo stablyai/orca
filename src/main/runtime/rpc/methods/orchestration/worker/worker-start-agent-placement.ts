@@ -20,7 +20,7 @@ import {
   type WorkerEffect,
   type WorkerSetupReceipt
 } from './worker-topology'
-import { createWorkerWorktree } from './worker-worktree-creation'
+import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worker-worktree-creation'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
 type PlacedWorktree = { id: string; repoId: string }
@@ -43,8 +43,8 @@ type WorkerAgentPlacementArgs = {
   taskId: string
   params: WorkerStartInput
   requestedWorktree: string
-  /** The coordinator's worktree, present only when this start creates one. */
-  creationWorktree: PlacedWorktree | undefined
+  /** Present only when this start creates a worktree. */
+  creationTarget: WorkerWorktreeCreationTarget | undefined
   /** The already-resolved placement, present only when this start does not create one. */
   resolvedWorktree: PlacedWorktree | undefined
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
@@ -69,7 +69,7 @@ export const EXISTING_WORKTREE_SETUP: WorkerSetupReceipt = {
 export async function placeWorkerAgent(
   args: WorkerAgentPlacementArgs
 ): Promise<WorkerAgentPlacement> {
-  const existing = args.creationWorktree ? undefined : requireWorktree(args.resolvedWorktree)
+  const existing = args.creationTarget ? undefined : requirePlacement(args.resolvedWorktree)
   if (existing && args.params.terminal) {
     args.effects.push({
       kind: 'terminal',
@@ -130,7 +130,7 @@ async function launchWorkerAgent(
             db: args.db,
             dispatchId: args.dispatchId,
             requestedWorktree: args.requestedWorktree,
-            coordinatorWorktree: requireWorktree(args.creationWorktree),
+            target: requirePlacement(args.creationTarget),
             params: args.params,
             agent,
             // The executor withholds the startup agent exactly when the worker is to be a session.
@@ -161,7 +161,7 @@ async function launchWorkerAgent(
   }
   return {
     mode: launched.receipt,
-    worktree: existing ?? requireWorktree(created?.worktree),
+    worktree: existing ?? requirePlacement(created?.worktree),
     terminalHandle: launched.outcome.handle,
     structuredSession,
     setupReceipt: created?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
@@ -216,11 +216,11 @@ function workerSurfaceFactory(
   }
 }
 
-function requireWorktree(worktree: PlacedWorktree | undefined): PlacedWorktree {
-  if (!worktree) {
-    throw new Error('Worker topology did not resolve a worktree.')
+function requirePlacement<T>(placement: T | undefined): T {
+  if (!placement) {
+    throw new Error('Worker topology did not resolve a placement.')
   }
-  return worktree
+  return placement
 }
 
 function requireAgent(agent: TuiAgent | undefined): TuiAgent {

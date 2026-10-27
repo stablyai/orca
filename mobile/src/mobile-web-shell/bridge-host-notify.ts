@@ -51,7 +51,7 @@ export function createBridgeNotifyForwarder(args: {
       return
     }
     if (message.name === 'navigate') {
-      options.onNavigate(message.href)
+      options.onNavigate(message.href, message.replace === true)
       return
     }
     if (message.name === BRIDGE_NAVIGATE_BACK_NOTIFY) {

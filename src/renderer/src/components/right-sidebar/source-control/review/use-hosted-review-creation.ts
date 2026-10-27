@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
 import { resolveBlockedCreateReviewNoticeMessage } from '../../source-control-create-review-blocked-action'
+import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
 import type { SourceControlAi } from '../ai/use-ai'
 import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
@@ -222,7 +223,7 @@ export function useSourceControlHostedReviewCreation({
 
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
           tone: 'destructive',
-          message: result.error
+          message: localizedCreateFailure(result, hostedReviewCreateProvider)
         })
       } catch (error) {
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {

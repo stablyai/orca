@@ -25,6 +25,18 @@ export function isStoppedBeforeStartBlock(block: NativeChatBlock): boolean {
   )
 }
 
+/** The row's blocks with that notice as plain words, so prose readers draw and copy it. */
+export function nativeChatBlocksInOwnWords(
+  blocks: NativeChatBlock[],
+  stoppedLabel: string = NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
+): NativeChatBlock[] {
+  return blocks.some(isStoppedBeforeStartBlock)
+    ? blocks.map((block) =>
+        isStoppedBeforeStartBlock(block) ? { type: 'text', text: stoppedLabel } : block
+      )
+    : blocks
+}
+
 /** opensTurn identifies its interrupted turn; position overrides where its own row draws. */
 export type StoppedSendPlace = { opensTurn: boolean; position?: AgentJournalPosition }
 

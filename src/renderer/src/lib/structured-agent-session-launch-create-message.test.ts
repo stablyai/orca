@@ -85,7 +85,7 @@ import {
   getStructuredAgentSessionPendingSends,
   getStructuredAgentSessionSendNotice
 } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { structuredAgentSessionStopControl } from '@/components/native-chat/structured-agent-session-stop-control'
+import { structuredAgentSessionStopControl } from '../../../shared/structured-agent-session-stop-control'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache,

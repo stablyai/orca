@@ -28,7 +28,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
 
 import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
-import type { SessionOptionDescriptor } from '../../src/shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../src/shared/native-chat/input/native-chat-session-options'
 import { createClaudeModelCatalogProbe } from '../../src/main/claude/claude-model-catalog-probe'
 import { createAgentModelCatalogFilePersistence } from '../../src/main/native-chat/agent-model-catalog/agent-model-catalog-persistence'
 import { createAgentModelCatalogService } from '../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'

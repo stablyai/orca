@@ -1,15 +1,17 @@
 import { Activity } from 'lucide-react-native'
-import { Animated, StyleSheet, View } from 'react-native'
+import { Animated, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useWorkingRingRotation } from './use-working-ring-rotation'
 
 // Match desktop per-agent vocabulary: working yellow spinner, done emerald, attention red, interrupted muted, unconfirmed amber, idle neutral.
 // Separate from AgentSpinner’s five-state worktree rollup.
-const DOT_COLORS: Record<
+const dotColors = (): Record<
   Exclude<AgentDotState, 'working' | 'monitoring' | 'unverifiable'>,
   string
-> = {
+> => ({
   done: '#10b981',
   blocked: '#ef4444',
   waiting: '#ef4444',
@@ -17,12 +19,13 @@ const DOT_COLORS: Record<
   failed: '#ef4444',
   unconfirmed: colors.statusAmber,
   idle: 'rgba(115,115,115,0.4)'
-}
+})
 export const AGENT_WORKING_COLOR = '#eab308'
 
 /** `unverifiable` is a child row's lost contact: desktop's dashed amber ring, a missing-evidence
  *  mark rather than a state claim. */
 export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable' }) {
+  useMobileColorScheme()
   const rotate = useWorkingRingRotation(state === 'working')
 
   if (state === 'working') {
@@ -51,12 +54,12 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
 
   return (
     <View style={styles.wrapper}>
-      <View style={[styles.dot, { backgroundColor: DOT_COLORS[state] }]} />
+      <View style={[styles.dot, { backgroundColor: dotColors()[state] }]} />
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   wrapper: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dashedRing: {
@@ -75,4 +78,4 @@ const styles = StyleSheet.create({
     borderColor: AGENT_WORKING_COLOR,
     borderTopColor: 'transparent'
   }
-})
+}))

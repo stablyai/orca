@@ -1,5 +1,5 @@
 import {
-  StyleSheet,
+  themedStyleSheet,
   Platform,
   colors,
   radii,
@@ -7,7 +7,7 @@ import {
   typography
 } from './mobile-tasks-dependencies'
 
-export const mobileTasksComposerActionStyles = StyleSheet.create({
+export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
   createForm: {
     gap: spacing.sm
   },
@@ -239,4 +239,4 @@ export const mobileTasksComposerActionStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '700'
   }
-})
+}))

@@ -68,9 +68,10 @@ export type BridgeRpcClient = RpcClient & {
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
   onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
+  onColorSchemeUpdate: (listener: (scheme: BridgeShellSession['colorScheme']) => void) => () => void
   getShellSession: () => BridgeShellSession | null
   // False without navigate lets tap handlers fall back safely instead of throwing into uncaught UI callbacks.
-  notifyNavigate: (href: string) => boolean
+  notifyNavigate: (href: string, replace?: boolean) => boolean
   // The page owns no native history; ask the shell to pop. Missing grant returns false; older shells may also drop the new notify, so callers retain their router fallback.
   notifyNavigateBack: () => boolean
   // False means missing externalLink grant or refused URL; callers must offer another outcome for the tap.
@@ -341,6 +342,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     onRouteUpdate: shellSession.onRouteUpdate,
     onSafeAreaInsetsUpdate: shellSession.onSafeAreaInsetsUpdate,
     onKeyboardInsetUpdate: shellSession.onKeyboardInsetUpdate,
+    onColorSchemeUpdate: shellSession.onColorSchemeUpdate,
     getShellSession: shellSession.current,
     clearRouteParam: (param, value) =>
       posted({

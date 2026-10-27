@@ -28,7 +28,7 @@ it.each([
   ['ubuntu-24.04-arm', 'blacksmith-8vcpu-ubuntu-2404-arm'],
   ['macos-15', 'blacksmith-6vcpu-macos-15'],
   ['macos-15-intel', 'macos-15-intel'],
-  ['windows-2022', 'blacksmith-8vcpu-windows-2025'],
+  ['windows-2022', 'windows-2022'],
   ['windows-11-arm', 'windows-11-arm']
 ])('preserves the qualification architecture for %s', (os, fastRunner) => {
   expect(runnerFor(workflow.jobs.persistence, os, false)).toBe(os)

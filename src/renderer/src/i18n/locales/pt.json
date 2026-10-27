@@ -25,6 +25,36 @@
       "unstagedChangesDescription": "Isso reverterá as alterações não preparadas neste arquivo. Essa ação não pode ser desfeita.",
       "unstagedSelectionIncludingUntrackedDescription": "Isso reverterá as alterações não preparadas e excluirá permanentemente quaisquer arquivos não rastreados nesta seleção. Essa ação não pode ser desfeita.",
       "unstagedFilesIncludingUntrackedDescription": "Isso reverterá as alterações não preparadas e excluirá permanentemente quaisquer arquivos não rastreados entre estes {{count}} arquivos. Essa ação não pode ser desfeita."
+    },
+    "createReviewFailure": {
+      "authRequiredCommand": "{{providerName}} não está autenticado. Próximo passo: execute {{command}} neste ambiente.",
+      "authRequiredVariable": "{{providerName}} não está autenticado. Próximo passo: defina {{variable}} neste ambiente.",
+      "authRequiredBitbucket": "Bitbucket não está autenticado. Próximo passo: conecte o Bitbucket em Configurações > Integrações ou defina ORCA_BITBUCKET_* neste ambiente.",
+      "signInHintCommand": "Execute {{command}} neste ambiente",
+      "signInHintVariable": "Defina {{variable}} neste ambiente",
+      "signInHintBitbucket": "Conecte o Bitbucket em Configurações > Integrações",
+      "dirty": "faça commit das alterações locais ou descarte-as antes de criar um(a) {{reviewLabel}}.",
+      "detachedHead": "mude para uma branch antes de criar um(a) {{reviewLabel}}.",
+      "defaultBranch": "escolha uma branch de funcionalidade antes de criar um(a) {{reviewLabel}}.",
+      "noUpstream": "publique esta branch antes de criar um(a) {{reviewLabel}}.",
+      "needsPush": "faça push desta branch antes de criar um(a) {{reviewLabel}}.",
+      "needsSync": "sincronize esta branch antes de criar um(a) {{reviewLabel}}.",
+      "refreshStatus": "atualize o status do controle de código-fonte e tente novamente.",
+      "namedBaseNotOnRemote": "a branch base \"{{base}}\" ainda não foi enviada para o remoto. Escolha uma base que já esteja no remoto ou faça push dela primeiro.",
+      "baseNotOnRemote": "a branch base ainda não foi enviada para o remoto. Escolha uma base que já esteja no remoto ou faça push dela primeiro.",
+      "branchChanged": "volte para a branch selecionada antes de criar um(a) {{reviewLabel}}.",
+      "branchStatusUnverified": "não foi possível verificar o status da branch. Atualize o controle de código-fonte e tente novamente.",
+      "reviewLookupUnavailable": "O Orca não conseguiu confirmar se esta branch já tem um(a) {{reviewLabel}}. Tente novamente quando a consulta ao {{providerName}} funcionar.",
+      "sameBaseBranch": "escolha outra branch base antes de criar um(a) {{reviewLabel}}.",
+      "rejected": "{{providerName}} rejeitou o(a) {{reviewLabel}}. Verifique a branch base e o estado da branch e tente novamente.",
+      "repositoryNotFound": "{{providerName}} não encontrou o repositório. Verifique se a credencial tem acesso de escrita a ele.",
+      "createFailed": "{{providerName}} não conseguiu criar o(a) {{reviewLabel}}. Tente novamente em instantes.",
+      "unsupportedProvider": "Para criar um(a) {{reviewLabel}}, é preciso um remoto hospedado no {{providerName}}.",
+      "providerNotSupported": "Ainda não há suporte para criar revisões neste provedor.",
+      "existingReview": "Já existe um(a) {{reviewLabel}} para esta branch.",
+      "creationUnconfirmed": "A criação do(a) {{shortLabel}} pode ter sido concluída. Atualizando o estado de revisão da branch...",
+      "withDetail": "Falha ao criar {{shortLabel}}: {{detail}}",
+      "pushFailed": "O push falhou. Resolva o erro de push e tente novamente."
     }
   },
   "githubChecks": {
@@ -84,6 +114,31 @@
       "stopped": "parado",
       "finished": "concluído",
       "failed": "falhou"
+    },
+    "bell": {
+      "attentionRequested": "Atenção solicitada",
+      "title": "Sinal sonoro em {{worktree}}"
+    },
+    "test": {
+      "title": "As notificações do Orca estão ativadas",
+      "body": "Esta é uma notificação de teste do Orca."
+    },
+    "workspaceFallback": "espaço de trabalho",
+    "agentTool": {
+      "usingWithInput": "Usando {{tool}}: {{input}}",
+      "using": "Usando {{tool}}",
+      "input": "Entrada da ferramenta: {{input}}"
+    },
+    "taskComplete": {
+      "title": "Tarefa concluída em {{worktree}}",
+      "body": "Um agente de programação terminou o trabalho."
+    },
+    "permissionProbe": {
+      "body": "O Orca avisará você quando os agentes terminarem ou os terminais precisarem de atenção."
+    },
+    "startupRegistration": {
+      "title": "O Orca está pronto para enviar notificações",
+      "body": "Permita as notificações para que o Orca avise você quando os agentes terminarem ou os terminais precisarem de atenção."
     }
   },
   "app": {
@@ -311,7 +366,9 @@
     "paste": "Colar",
     "copy": "Copiar",
     "selectAll": "Selecionar Tudo",
-    "quitApp": "Sair do {{appName}}"
+    "quitApp": "Sair do {{appName}}",
+    "quitAndStopAllSessions": "Sair Completamente...",
+    "quitAndStopAllSessionsTooltip": "Também encerra todas as sessões de terminal, incluindo agentes em execução. Sair normalmente as mantém em execução para que o Orca se reconecte na próxima abertura."
   },
   "sessionHistory": {
     "status": {
@@ -11477,9 +11534,10 @@
           "b2bc47c080": "mais locais",
           "b47ba1a9d2": "Pré-visualização de {{value0}}",
           "2251d41ebb": "Grupos de worktrees ocultas",
-          "f54f2bec5d": "{{value0}} worktrees ocultas para {{value1}}",
           "5a9688802a": "Mostrar mais {{value0}}",
-          "294de4aeb2": "Mostrar menos"
+          "294de4aeb2": "Mostrar menos",
+          "collapseAriaLabel": "Recolher worktrees ocultas de {{repo}}",
+          "expandAriaLabel": "Expandir worktrees ocultas de {{repo}}"
         },
         "WorkspaceKanbanSettingsMenu": {
           "79eb990aa4": "Adicionar status",
@@ -18493,6 +18551,99 @@
                     }
                   }
                 }
+              },
+              "step": {
+                "copy": {
+                  "workspace": {
+                    "board": {
+                      "plan": {
+                        "title": "Planeje o trabalho no quadro",
+                        "body": "Use o quadro quando quiser ver os espaços de trabalho por status em vez de por projeto."
+                      },
+                      "lanes": {
+                        "title": "Mova o trabalho entre as colunas",
+                        "body": "Arraste os espaços de trabalho entre as colunas conforme o status deles muda."
+                      }
+                    },
+                    "creation": {
+                      "project": {
+                        "title": "Escolha um projeto",
+                        "body": "O Orca isola cada tarefa em seu próprio worktree, criado a partir da sua branch base."
+                      },
+                      "name": {
+                        "title": "Dê um nome ou comece de um trabalho existente",
+                        "body": "Comece de uma tarefa vinculada para usar um nome curto de issue ou PR. Ou deixe em branco para nomeá-lo automaticamente a partir da sua primeira mensagem ao agente."
+                      },
+                      "agent": {
+                        "title": "Escolha qual agente inicia o trabalho",
+                        "body": "Escolha o agente que deve ser aberto quando este worktree for criado."
+                      }
+                    }
+                  },
+                  "agent": {
+                    "sessions": {
+                      "split": {
+                        "title": "Divida um painel de terminal",
+                        "body": "Abra um segundo painel de terminal com {terminal.splitRight} ou clique com o botão direito no painel para ver as opções de divisão.",
+                        "action": "Dividir terminal"
+                      },
+                      "parallel": {
+                        "title": "Comece outra tarefa em paralelo",
+                        "body": "Cada worktree tem sua própria branch, então o trabalho em paralelo fica separado."
+                      }
+                    }
+                  },
+                  "browser": {
+                    "grab": {
+                      "title": "Capture o contexto da página para os agentes",
+                      "body": "Use a ferramenta de captura para copiar o contexto de um elemento da página para os agentes."
+                    },
+                    "annotate": {
+                      "title": "Marque o feedback de design no lugar",
+                      "body": "Anote elementos e envie essas notas para um agente."
+                    },
+                    "logins": {
+                      "title": "Continue conectado",
+                      "body": "Traga seus logins existentes para o Orca e continue conectado imediatamente."
+                    }
+                  },
+                  "tasks": {
+                    "source": {
+                      "title": "Escolha a origem do trabalho",
+                      "body": "Alterne entre provedores conectados e filtros de projeto sem mudar de página."
+                    },
+                    "filter": {
+                      "title": "Filtre o trabalho de que você precisa",
+                      "body": "Use predefinições e a busca para restringir issues, revisões, merge requests ou tarefas."
+                    },
+                    "start": {
+                      "title": "Comece a partir dos itens de trabalho",
+                      "body": "Use Iniciar ou Abrir em uma tarefa, issue, revisão ou merge request para levar o contexto dela a um espaço de trabalho."
+                    }
+                  },
+                  "floating": {
+                    "workspace": {
+                      "repos": {
+                        "title": "Execute um agente em todos os repositórios",
+                        "body": "Os agentes aqui são executados em qualquer pasta que você escolher. Aponte um para o diretório acima dos seus serviços para trabalhar em todos os seus repositórios de uma vez."
+                      },
+                      "scratchpad": {
+                        "title": "Ou use como rascunho",
+                        "body": "Abra agentes, terminais temporários, notas e abas do navegador sem bagunçar o worktree em que você está focado."
+                      }
+                    }
+                  },
+                  "client": {
+                    "hosted": {
+                      "browser": {
+                        "intro": {
+                          "action": "Entendi",
+                          "secondaryAction": "Configurações do navegador"
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -19639,9 +19790,6 @@
         "tokens": "{{value0}} tokens",
         "unnamed": "Subagente"
       },
-      "conversationCommand": {
-        "pendingWork": "Aguarde a conclusão do trabalho e das mensagens pendentes antes de usar este comando."
-      },
       "drop": {
         "title": "Solte para anexar a este chat",
         "subtitle": "Os arquivos são adicionados à sua mensagem como caminhos que o agente pode ler.",
@@ -19831,7 +19979,8 @@
         "clearAfterRetry": "Tente enviar sua mensagem anterior novamente e execute /clear.",
         "compactAfterRetry": "Tente enviar sua mensagem anterior novamente e execute /compact.",
         "clearAfterSending": "Sua mensagem anterior ainda está sendo enviada. Execute /clear após o envio.",
-        "compactAfterSending": "Sua mensagem anterior ainda está sendo enviada. Execute /compact após o envio."
+        "compactAfterSending": "Sua mensagem anterior ainda está sendo enviada. Execute /compact após o envio.",
+        "pendingWork": "Aguarde a conclusão do trabalho e das mensagens pendentes antes de usar este comando."
       },
       "newRowsAnnouncement": "Novas mensagens chegaram enquanto você estava ausente",
       "newRowsMarker": "Novas",
@@ -20786,6 +20935,8 @@
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
       "nextLaunch": "{{value0}} → {{value1}}. O próximo Claude que você iniciar usará essa conta. Sessões em execução mantêm suas contas.",
       "profileSwitching": "A troca se aplica ao próximo Claude que você iniciar em qualquer aba.",
+      "systemDefault": "Padrão do sistema",
+      "unnamedAccount": "Conta do Claude",
       "systemDefaultNamed": "Padrão do sistema: {{value0}}",
       "systemDefaultIsSaved": "O Padrão do sistema está conectado como {{value0}}, que também é uma conta salva. Uma versão anterior do Orca pode ter copiado esse login para lá. Se não for seu próprio login, selecione Padrão do sistema e execute claude /login.",
       "systemDefaultIsSavedDismiss": "Dispensar",
@@ -21284,5 +21435,17 @@
   },
   "browserTab": {
     "agentDriving": "Um agente está usando esta página"
+  },
+  "quitAndStopAllSessions": {
+    "title": "Sair Completamente",
+    "message": "Encerrar todas as sessões de terminal e sair do Orca?",
+    "detail": "O Orca fecha todas as abas de terminal e encerra suas sessões, incluindo os agentes em execução nos terminais, e depois sai. Sair normalmente as mantém em execução para que o Orca se reconecte na próxima abertura. As sessões de terminal em hosts remotos podem continuar em execução neles. O trabalho de terminal não salvo é perdido, e as abas fechadas não voltam na próxima inicialização. Isso não pode ser desfeito.",
+    "confirm": "Encerrar sessões e sair",
+    "cancel": "Cancelar",
+    "failed": "Não foi possível encerrar todas as sessões de terminal, então o Orca continuou aberto.",
+    "stopping": "Encerrando as sessões de terminal e saindo…",
+    "ok": "OK",
+    "unavailableMessage": "O Orca não consegue encerrar todas as sessões de terminal agora.",
+    "unavailableDetail": "Nada foi encerrado. Tente novamente depois que seus terminais abrirem. Se um terminal indicar que foi aberto em uma versão mais recente do Orca, reabra-o primeiro. Se seus terminais já estiverem abertos, saia do Orca, abra-o novamente e tente outra vez."
   }
 }

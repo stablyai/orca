@@ -34,7 +34,7 @@ import { Input } from '@/components/ui/input'
 import {
   getJiraCreateAllowedValueLabel,
   isJiraScalarUserCreateField
-} from '@/components/task-page-jira-create-fields'
+} from '@/components/task-page/jira/task-page-jira-create-fields'
 import { TaskPageJiraIssueAssigneeField } from './IssueAssigneeField'
 import { TaskPageJiraIssueUserField } from './IssueUserField'
 export function TaskPageJiraIssueDialog({

@@ -16,7 +16,7 @@ import type {
   ClaudeSessionExit,
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 
 export type ClaudeExitLifecycle = {
   sessions: Map<string, ClaudeSession>

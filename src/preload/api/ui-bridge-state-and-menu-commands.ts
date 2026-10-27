@@ -29,6 +29,15 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingOpenSettings: (): Promise<boolean> =>
     ipcRenderer.invoke('ui:consumePendingOpenSettings'),
+  onQuitAndStopAllSessions: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:quitAndStopAllSessions', listener)
+    return () => ipcRenderer.removeListener('ui:quitAndStopAllSessions', listener)
+  },
+  consumePendingQuitAndStopAllSessions: (): Promise<boolean> =>
+    ipcRenderer.invoke('ui:consumePendingQuitAndStopAllSessions'),
+  quitAfterStoppingAllSessions: (): Promise<boolean> =>
+    ipcRenderer.invoke('ui:quitAfterStoppingAllSessions'),
   onOpenSkillShare: (callback: (shareId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, shareId: string): void => callback(shareId)
     ipcRenderer.on('ui:openSkillShare', listener)

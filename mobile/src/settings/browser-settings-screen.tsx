@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Globe } from 'lucide-react-native'
@@ -10,6 +10,8 @@ import {
   type MobileTerminalLinkOpenMode
 } from '../storage/preferences'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const LINK_MODE_OPTIONS: PickerOption<MobileTerminalLinkOpenMode>[] = [
   {
@@ -35,6 +37,7 @@ export default function BrowserSettingsScreen({
 }: {
   onBack?: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
@@ -143,7 +146,7 @@ export default function BrowserSettingsScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -217,4 +220,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2
   }
-})
+}))

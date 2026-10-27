@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import {
   runningStructuredAgentSessionTurnId,
-  structuredAgentSessionHostSaysWorking
+  structuredAgentSessionHostSaysWorking,
+  structuredAgentSessionQueueSendsNext
 } from '../../../../shared/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../shared/structured-agent-session-main-agent-working'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
@@ -43,9 +44,10 @@ export function useStructuredAgentSessionTransportState(
   const isWorking = structuredAgentSessionHostSaysWorking(hostWorking, () =>
     isStructuredAgentSessionMainAgentWorking(turnId, current.submissions, fence)
   )
-  const nextQueuedMessageId = (enabled ? state.nextQueuedMessageId : null) ?? null
-  // Keep working through the gap between turn-end/Resume and the host’s next queued-send update.
-  const queueSendsNext = nextQueuedMessageId !== null && !isWorking
+  const queueSendsNext = structuredAgentSessionQueueSendsNext(
+    enabled ? state.nextQueuedMessageId : null,
+    isWorking
+  )
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
     [enabled, journalItems, state.activity, turnId]
