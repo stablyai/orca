@@ -177,6 +177,7 @@ type FixtureStatus = {
   contentApis?: Record<string, unknown>
   frame?: Record<string, unknown>
   webFrame?: Record<string, unknown>
+  sandbox?: Record<string, unknown>
   webPageCall?: unknown
 }
 
@@ -223,6 +224,7 @@ beforeAll(async () => {
         extension_pages: "script-src 'self'; object-src 'self'; connect-src https://vault.invalid"
       },
       options_ui: { page: 'page.html' },
+      sandbox: { pages: ['sandboxed.html'] },
       web_accessible_resources: [
         { resources: ['frame.html', 'frame.js'], matches: ['http://127.0.0.1/*'] }
       ]
@@ -237,6 +239,21 @@ beforeAll(async () => {
   )
   writeFileSync(join(extensionDir, 'frame.js'), FRAME_SCRIPT)
   writeFileSync(join(extensionDir, 'frame.html'), '<!doctype html><script src="frame.js"></script>')
+  // Chrome removes extension APIs from manifest sandbox pages; Orca's bridge must not restore them.
+  writeFileSync(
+    join(extensionDir, 'sandboxed.js'),
+    `const getAll = globalThis.chrome?.windows?.getAll
+    const report = (outcome) => console.log('ORCA_EXT_SANDBOX ' + JSON.stringify({ origin: self.origin, getAll: typeof getAll, outcome }))
+    if (typeof getAll === 'function') {
+      Promise.resolve(getAll({ populate: true })).then((windows) => report('answered ' + windows.length), (error) => report('refused ' + String(error)))
+    } else {
+      report('unavailable')
+    }`
+  )
+  writeFileSync(
+    join(extensionDir, 'sandboxed.html'),
+    '<!doctype html><script src="sandboxed.js"></script>'
+  )
 
   // The product resolves the preload next to its main bundle, so both land in `root`.
   await buildBundle(
@@ -393,6 +410,15 @@ describe('browser extension APIs in a real Electron session', () => {
       shadowRoot: true,
       managed: {},
       managedBytes: 0
+    })
+  })
+
+  it('gives a manifest sandbox page none of the extension APIs, as Chrome does', async () => {
+    await expect.poll(() => readStatus().sandbox).toBeDefined()
+    expect(readStatus().sandbox).toEqual({
+      origin: 'null',
+      getAll: 'undefined',
+      outcome: 'unavailable'
     })
   })
 

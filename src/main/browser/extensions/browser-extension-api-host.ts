@@ -3,7 +3,10 @@ import {
   BROWSER_EXTENSION_INVOKE_CHANNEL,
   type BrowserExtensionInvokeResult
 } from '../../../shared/browser-extension-channels'
-import { parseChromeExtensionUrl } from '../../../shared/browser-extension-url'
+import {
+  getChromeExtensionOrigin,
+  parseChromeExtensionUrl
+} from '../../../shared/browser-extension-url'
 import { BROWSER_EXTENSION_API_SCHEME } from '../../../shared/browser-extension-worker-api'
 import type { BrowserExtensionCaller } from './browser-extension-namespace-registry'
 import { detachWorkerEventStream } from './browser-extension-worker-event-stream'
@@ -33,9 +36,13 @@ function resolveFrameCaller(event: Electron.IpcMainInvokeEvent): {
     return null
   }
   const parsed = parseChromeExtensionUrl(frame.url)
+  // Why origin, not URL: a manifest sandbox page keeps its extension URL but has an opaque origin.
+  if (!parsed || frame.origin !== getChromeExtensionOrigin(parsed.extensionId)) {
+    return null
+  }
   const sess = event.sender.session
   const state = getHostSessionState(sess)
-  const extension = parsed && state ? sess.extensions.getExtension(parsed.extensionId) : null
+  const extension = state ? sess.extensions.getExtension(parsed.extensionId) : null
   if (!extension || !state) {
     return null
   }

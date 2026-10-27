@@ -815,6 +815,7 @@ async function listenFrame(extensionId: string, namespace: string, event: string
   const routingId = nextRoutingId++
   const frame = {
     url: `chrome-extension://${extensionId}/page.html`,
+    origin: `chrome-extension://${extensionId}`,
     processId: 3,
     routingId,
     isDestroyed: () => false,

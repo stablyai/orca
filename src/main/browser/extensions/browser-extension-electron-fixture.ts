@@ -58,7 +58,8 @@ function captureResult(message: string): void {
     ['ORCA_EXT_SYNC_CONTENT ', 'syncContent'],
     ['ORCA_EXT_CONTENT_APIS ', 'contentApis'],
     ['ORCA_EXT_FRAME ', 'frame'],
-    ['ORCA_EXT_WEB_FRAME ', 'webFrame']
+    ['ORCA_EXT_WEB_FRAME ', 'webFrame'],
+    ['ORCA_EXT_SANDBOX ', 'sandbox']
   ] as const) {
     if (message.startsWith(prefix)) {
       const result: unknown = JSON.parse(message.slice(prefix.length))
@@ -133,6 +134,12 @@ async function run(): Promise<void> {
 
   // A page can reach the scheme but has no token, so main must refuse it.
   const guest = webContents.fromId(Number(status.guestId))
+  const extensionId = extensionSession.extensions.getAllExtensions()[0]?.id
+  const sandboxPage = new BrowserWindow({
+    show: false,
+    webPreferences: { partition: ORCA_BROWSER_PARTITION, sandbox: true }
+  })
+  void sandboxPage.loadURL(`chrome-extension://${extensionId}/sandboxed.html`)
   status.webPageCall = await guest?.executeJavaScript(
     `fetch('orca-extension-api://api/call', { method: 'POST', body: JSON.stringify({ token: 'guess', request: { type: 'call', namespace: 'windows', method: 'getAll', args: [] } }) }).then((r) => r.status, () => 'failed')`
   )

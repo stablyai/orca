@@ -77,8 +77,15 @@ const extensionSession = {
 }
 const handled: unknown[][] = []
 
-function frameEvent(url: string, sess: unknown = extensionSession, processId = 4, routingId = 9) {
-  const frame = { url, processId, routingId, isDestroyed: () => false, send: vi.fn() }
+function frameEvent(
+  url: string,
+  sess: unknown = extensionSession,
+  processId = 4,
+  routingId = 9,
+  // Node reports "null" for chrome-extension: URLs; Chromium reports the real extension origin.
+  origin = url.split('/').slice(0, 3).join('/')
+) {
+  const frame = { url, origin, processId, routingId, isDestroyed: () => false, send: vi.fn() }
   mocks.frames.set(`${processId}:${routingId}`, frame)
   return {
     frame,
@@ -174,6 +181,19 @@ describe('extension API host', () => {
     )
     await expect(
       invoke(frameEvent(`chrome-extension://${'c'.repeat(32)}/x.html`).event, request)
+    ).resolves.toEqual(notExtension)
+    // A manifest sandbox page: its extension URL stays, but Chromium gives it an opaque origin.
+    await expect(
+      invoke(
+        frameEvent(
+          `chrome-extension://${EXTENSION_ID}/sandboxed.html`,
+          extensionSession,
+          4,
+          9,
+          'null'
+        ).event,
+        request
+      )
     ).resolves.toEqual(notExtension)
     await expect(
       invoke(
