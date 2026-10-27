@@ -165,6 +165,9 @@ export type ManagedPaneInternal = {
   imageAddon: ImageAddon | null
   // Enabled but waiting for the lazy addon; onLoaded drains these panes.
   imageAttachmentDeferred?: boolean
+  // Why optional: attached only while imageAddon is live; null/absent before
+  // attach or after detach. Stored so detachInlineImages can unsubscribe.
+  imageCursorAdvanceDisposable?: IDisposable | null
   fitResizeObserver: ResizeObserver | null
   // Last successful fit’s host pixels distinguish real hidden-time resizes from cell-metric wobble.
   lastFitClientSize?: { width: number; height: number }
