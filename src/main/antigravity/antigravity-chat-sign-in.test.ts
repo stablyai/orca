@@ -491,9 +491,7 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
 
 it('fails without downloading anything while the server is not installed', async () => {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
-  const dataDirectory = await mkdtemp(
-    process.platform === 'win32' ? join(tmpdir(), 'orca-agy-sign-in-') : '/tmp/o'
-  )
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
   folders.push(dataDirectory)
   const connect = vi.fn<ConnectAcpAgent<AcpAgentConnection>>()
   const { flowId } = startAntigravityChatSignIn(

@@ -2,9 +2,8 @@
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { acpTempRoot } from '../acp/acp-private-temp'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
@@ -626,11 +625,6 @@ beforeEach(() => {
 
 afterAll(async () => {
   process.env = savedEnv
-  // Antigravity's run folder may live in /tmp/oacp-<uid>/<hash>, outside root.
-  await rm(acpTempRoot(join(root, 'state', 'acp-temp', 'antigravity')), {
-    recursive: true,
-    force: true
-  })
   await rm(root, { recursive: true, force: true })
 })
 
@@ -700,6 +694,10 @@ describe.skipIf(process.platform === 'win32')('native-chat launch parity', () =>
       } finally {
         structuredWorkerIdentities.forget(workerHandle)
         await adapter.closeAll().catch(() => {})
+        const temp = capture.spawns[0]?.spec.env?.TMPDIR
+        if (temp?.startsWith(`/tmp/oacp-${process.getuid?.()}/`)) {
+          await rm(dirname(temp), { recursive: true, force: true })
+        }
       }
     }
   )

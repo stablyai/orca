@@ -41,7 +41,7 @@ export async function acpRunFolder(
 }
 
 /** The data root, or a private /tmp folder when a socket under a run folder would overflow sun_path. */
-export function acpTempRoot(dataRoot: string, logger?: StructuredAgentSessionLogger): string {
+function acpTempRoot(dataRoot: string, logger?: StructuredAgentSessionLogger): string {
   const uid = process.getuid?.()
   const os = process.platform === 'darwin' ? 'darwin' : 'linux'
   if (uid === undefined || unixSocketPathFits(dataRoot + SOCKET_UNDER_RUN_FOLDER, os)) {
