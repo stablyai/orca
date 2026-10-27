@@ -1,3 +1,5 @@
+import { registerQuitTask } from './quit-task-registry'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import type { BrowserWindow } from 'electron'
 import type {
   LinuxPackageInstallInstructions,
@@ -96,5 +98,22 @@ export function setupAutoUpdater(
   mainWindow: BrowserWindow | null,
   opts?: UpdaterSetupOptions
 ): void {
+  registerQuitTask('before-quit-update', 'updater-diagnostics', () => {
+    if (isQuittingForUpdate()) {
+      recordUpdaterLifecycle('before_quit_allowed', undefined, {
+        message: 'before-quit allowed for update install'
+      })
+    }
+  })
+  registerQuitTask('will-quit-update', 'updater-diagnostics', (context) => {
+    context.isUpdate = isQuittingForUpdate()
+    if (context.isUpdate) {
+      recordUpdaterLifecycle(
+        'will_quit_cleanup_started',
+        { daemonTeardown: 'disconnect' },
+        { message: 'will-quit cleanup for update install; daemonTeardown=disconnect' }
+      )
+    }
+  })
   updater.setupAutoUpdater(mainWindow, opts)
 }

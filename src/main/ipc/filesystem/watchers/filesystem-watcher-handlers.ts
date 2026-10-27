@@ -1,3 +1,5 @@
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerQuitTask } from '../../../quit-task-registry'
 import { ipcMain } from 'electron'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
@@ -6,6 +8,8 @@ import {
 } from './filesystem-watcher-local-subscription'
 
 export function registerFilesystemWatcherHandlers(): void {
+  registerQuitTask('filesystem-watchers', 'filesystem-watchers', closeAllWatchers)
+
   ipcMain.handle(
     'fs:watchWorktree',
     async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {

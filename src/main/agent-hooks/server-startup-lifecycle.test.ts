@@ -1,3 +1,5 @@
+import { runQuitTasks } from '../quit-task-registry'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { afterEach, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -137,3 +139,40 @@ it.each(['main', 'relay'] as const)(
     expect(existsSync(server.endpoint)).toBe(false)
   }
 )
+
+it('retains hook status for chat teardown when the initialized server quits', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'hook-quit-'))
+  directories.push(directory)
+  const server = new AgentHookServer()
+  servers.push(server)
+  drain.mockResolvedValue(0)
+  await server.start({ env: 'production', userDataPath: directory })
+  const subject = makeStructuredAgentStatusSubject(
+    {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'folder-workspace',
+      workspaceKind: 'folder'
+    },
+    'chat-session'
+  )
+  server.ingestStructuredStatus(
+    {
+      sessionId: subject.sessionId,
+      workspaceId: subject.workspaceId,
+      agent: 'codex',
+      status: 'working',
+      hostExecutionOwned: true,
+      latestPrompt: 'keep resumable background work',
+      updatedAt: 100
+    },
+    subject
+  )
+  const statuses = server.getStatusSnapshot()
+  expect(statuses).toHaveLength(1)
+  await runQuitTasks('hook-server', { isUpdate: false, shutdownDaemon: false })
+  expect(server.buildPtyEnv().ORCA_AGENT_HOOK_PORT).toBeUndefined()
+  expect(server.getStatusSnapshot()).toEqual(statuses)
+  server.stop()
+  expect(server.getStatusSnapshot()).toEqual([])
+})

@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 // Keep diagnostics isolated from product telemetry, including duplicated CI detection.
 // DNT/ORCA_TELEMETRY_DISABLED disable uploads but retain local logs;
 // ORCA_DIAGNOSTICS_DISABLED and CI disable both.
@@ -112,6 +113,8 @@ function installLocalSink(filePath: string): void {
 
 /** Override for another process’s trace; desktop traces remain the bundle default. */
 export function initObservability(options?: { traceFilePath?: string }): ObservabilityConsent {
+  registerQuitTask('observability', 'observability', shutdownObservability)
+
   const c = resolveObservabilityConsent()
   consent = c
   if (!c.localFileEnabled) {

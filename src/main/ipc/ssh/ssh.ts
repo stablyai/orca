@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../../quit-task-registry'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence'
 import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
@@ -57,7 +58,7 @@ import { recordForwardFailure } from './ssh-port-forward-unrestored'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
 import { setSshHostServedListener } from '../../ssh/ssh-host-server-status'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
-import { resetSshShutdownDrain } from './ssh-shutdown-drain'
+import { beginSshShutdown, resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
 import { targetLifecycleInFlight } from './ssh-target-lifecycle-queue'
 import { disposeOrcadManagedTunnels } from '../../managed-server/lifecycle/orcad-managed-tunnel'
@@ -99,6 +100,8 @@ export function registerSshHandlers(
   getMainWindow: () => BrowserWindow | null,
   runtime?: OrcaRuntimeService
 ): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
+  registerQuitTask('ssh', 'ssh', beginSshShutdown)
+
   initializeSshConnectionGenerationSession()
   // macOS window recreation re-registers handlers; remove old channels to avoid duplicate registration.
   for (const ch of SSH_IPC_CHANNELS) {

@@ -1,3 +1,5 @@
+import { registerQuitTask } from '../quit-task-registry'
+import { settleWithinMs } from '../quit-teardown-deadline'
 import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import {
   getManagedAgentHookTarget,
@@ -132,6 +134,7 @@ export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  registerQuitTask('grok-hooks', 'grok-hooks', cleanupGrokHooksOnQuit)
   await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
@@ -266,4 +269,23 @@ export async function applyAgentStatusHooksEnabled(
     ])
   )
   return installed.map((status) => removed.get(status.agent) ?? status)
+}
+
+// Bound config deletion because GROK_HOME can be a stalled network mount.
+async function cleanupGrokHooksOnQuit(): Promise<void> {
+  if (process.platform !== 'win32') {
+    return
+  }
+  const settled = await settleWithinMs(removeManagedAgentHooksAsync({ agents: ['grok'] }), 2_000)
+  if (settled.outcome === 'timed-out') {
+    console.warn('[agent-hooks] Grok hook cleanup on quit timed out')
+    return
+  }
+  if (settled.outcome === 'failed') {
+    console.warn('[agent-hooks] Grok hook cleanup on quit failed:', settled.error)
+    return
+  }
+  for (const status of settled.value.filter((entry) => entry.detail)) {
+    console.warn(`[agent-hooks] ${status.agent} hook cleanup on quit: ${status.detail}`)
+  }
 }

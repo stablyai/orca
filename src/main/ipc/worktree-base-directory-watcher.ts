@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import {
@@ -158,6 +159,12 @@ export async function syncWorktreeBaseDirectoryWatchers(
   mainWindow: BrowserWindow
 ): Promise<void> {
   const generation = ++syncGeneration
+  registerQuitTask(
+    'base-directory-watchers',
+    'base-directory-watchers',
+    disposeWorktreeBaseDirectoryWatchers
+  )
+
   const targets = await buildWorktreeBaseDirectoryWatchTargets(store)
   if (generation !== syncGeneration) {
     return
@@ -189,6 +196,11 @@ export function setWorktreeBaseDirectoryWatcherSyncContext(
   mainWindow: BrowserWindow
 ): void {
   latestSyncContext = { store, mainWindow }
+  registerQuitTask(
+    'base-directory-watchers',
+    'base-directory-watchers',
+    disposeWorktreeBaseDirectoryWatchers
+  )
   // Real windows release retained sync context on close; lean test windows may lack event methods.
   if (typeof mainWindow.once === 'function') {
     mainWindow.once('closed', () => {
@@ -203,6 +215,11 @@ export function scheduleWorktreeBaseDirectoryWatcherSync(
   store: Store,
   mainWindow: BrowserWindow
 ): void {
+  registerQuitTask(
+    'base-directory-watchers',
+    'base-directory-watchers',
+    disposeWorktreeBaseDirectoryWatchers
+  )
   if (scheduledSync) {
     clearTimeout(scheduledSync)
   }

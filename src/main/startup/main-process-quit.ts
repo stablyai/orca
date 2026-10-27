@@ -1,59 +1,28 @@
 import { app, type Event } from 'electron'
-import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'
-import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
-import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
-import { killAllPty } from '../ipc/pty/kill-all'
-import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-provider-state'
-import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
-import { agentHookServer } from '../agent-hooks/server'
-import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
-import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
-import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/structured-agent-session-runtime-teardown'
-import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
-import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
-import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
-import { disposeDesktopBrowserBridge } from '../ipc/desktop-browser-bridge-wiring'
-import { browserManager } from '../browser/browser-manager'
-import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
-import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
-import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
-import { stopBackgroundWorktreeRemovals } from '../worktree-background-removal'
 import { settleTeardownWithinDeadline, settleWithinMs } from '../quit-teardown-deadline'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
-import { setUnreadDockBadgeCount } from '../dock/unread-badge'
-import { destroySystemTray } from '../tray/system-tray'
-import { shutdownTelemetry } from '../telemetry/client'
-import { shutdownObservability } from '../observability'
-import { isQuittingForUpdate } from '../updater'
-import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
-import { stopTccPromptNotice } from '../macos-tcc-prompt-notice'
-import { cancelHistoryGc } from '../terminal-history-gc'
 import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
-import { isDevParentShutdownRequested } from './configure-process'
-import { getCanonicalUserDataPath } from '../persistence'
-import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
+import { devParentShutdownState } from './dev-parent-shutdown-state'
+import { runQuitTasks, type QuitTaskContext } from '../quit-task-registry'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
 let watcherShutdownPromise: Promise<void> | null = null
-// Config deletion is best effort, not durable state.
-const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
 // Allow pack-refs time to terminate and unlink its lock.
 const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
 
-function shutdownWatchersOnce(): Promise<void> {
+function shutdownWatchersOnce(context: QuitTaskContext): Promise<void> {
   if (state.watcherShutdownDone) {
     return Promise.resolve()
   }
   if (!watcherShutdownPromise) {
     // Await native watcher unsubscribe before Node environment teardown.
-    stopFolderRepoGitUpgradeWatch()
+    runQuitTasks('folder-watchers', context)
     watcherShutdownPromise = Promise.allSettled([
-      closeAllWatchers(),
-      disposeWorktreeBaseDirectoryWatchers()
+      runQuitTasks('filesystem-watchers', context),
+      runQuitTasks('base-directory-watchers', context)
     ])
       .then((results) => {
         for (const result of results) {
@@ -74,13 +43,10 @@ function installBeforeQuitHandler(): void {
     if (event.defaultPrevented) {
       return
     }
-    if (isQuittingForUpdate()) {
-      recordUpdaterLifecycle('before_quit_allowed', undefined, {
-        message: 'before-quit allowed for update install'
-      })
-    }
+    const context: QuitTaskContext = { isUpdate: false, shutdownDaemon: false }
+    runQuitTasks('before-quit-update', context)
     state.isQuitting = true
-    flushUnsavedCloudSessions()
+    runQuitTasks('cloud-sessions', context)
     state.desktopRelayService?.fenceAndCloseNow()
     desktopConnectorCloud()?.fence()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
@@ -89,11 +55,11 @@ function installBeforeQuitHandler(): void {
     state.agentAwakeService?.dispose()
     state.agentAwakeService = null
     // Beforeunload may veto; wait for ref locks now but uninstall only after committed quit. isQuitting already blocks new attempts.
-    state.repoMaintenanceShutdown = awaitPackedRefsLockRelease()
+    state.repoMaintenanceShutdown = runQuitTasks('ref-maintenance', context)
     // Delay PTY cleanup until scrollback capture; exit events otherwise unmount the renderer callbacks.
     state.rateLimits?.stop()
     // History GC is idempotent and rescheduled next launch; a vetoed quit costs only a deferred sweep.
-    cancelHistoryGc()
+    runQuitTasks('history-gc', context)
   })
 }
 
@@ -107,6 +73,10 @@ function installWillQuitHandler(): void {
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
+    const context: QuitTaskContext = {
+      isUpdate: false,
+      shutdownDaemon: devParentShutdownState.requested
+    }
     // Include pane grids still inside their write burst in final save.
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
     // A renderer can veto before-quit; push must survive until quit is committed.
@@ -116,17 +86,10 @@ function installWillQuitHandler(): void {
     state.stopDesktopPresenceReporter?.()
     state.stopDesktopPresenceReporter = null
     // Keep log-stream diagnostics alive through renderer quit vetoes.
-    stopTccPromptNotice()
-    const updateQuitInProgress = isQuittingForUpdate()
-    if (updateQuitInProgress) {
-      recordUpdaterLifecycle(
-        'will_quit_cleanup_started',
-        { daemonTeardown: 'disconnect' },
-        { message: 'will-quit cleanup for update install; daemonTeardown=disconnect' }
-      )
-    }
+    runQuitTasks('tcc-notice', context)
+    runQuitTasks('will-quit-update', context)
     // Remove the Windows tray icon only after renderer vetoes are past.
-    destroySystemTray()
+    runQuitTasks('tray', context)
     // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
     state.starNag?.stop()
     state.automations?.stop()
@@ -135,13 +98,14 @@ function installWillQuitHandler(): void {
     state.pluginMarketplaceService = null
     state.pluginMarketplaceInstaller = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
-    const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
-    stopCodexAccountSessionBridges()
+    const codexBackfillRecoveryShutdown = runQuitTasks('codex-backfill', context)
+    runQuitTasks('codex-bridges', context)
     // Stamp resume reasons before stopping sessions; an update restart was not a user quit.
-    setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
-    const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
+    const structuredAgentSessionShutdown = runQuitTasks('structured-sessions', context).then(() =>
+      runQuitTasks('structured-record-store', context)
+    )
     state.pluginService = null
-    setUnreadDockBadgeCount(0)
+    runQuitTasks('dock', context)
     // Wait briefly for ref maintenance instead of killing mid-prune and stranding its lock; an orphan can finish safely.
     const refMaintenanceShutdown = settleWithinMs(
       Promise.all([state.repoMaintenanceShutdown, state.uninstallRepoMaintenanceIdleGate?.()]).then(
@@ -151,32 +115,12 @@ function installWillQuitHandler(): void {
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
     // Deletes may take minutes; stop now and let durable records resume them next launch.
-    stopBackgroundWorktreeRemovals()
+    runQuitTasks('worktree-removals', context)
     // Chat teardown reads background work afterward; clearing status loses subagent/command-only resume offers.
-    agentHookServer.stop({ keepStatus: true })
-    // Windows bare hook paths lack POSIX ORCA_PANE_KEY guards, so remove Grok hooks on quit; bound cleanup because GROK_HOME can be a stalled network mount.
-    const grokHookCleanup =
-      process.platform === 'win32'
-        ? settleWithinMs(
-            removeManagedAgentHooksAsync({ agents: ['grok'] }),
-            GROK_HOOK_CLEANUP_DEADLINE_MS
-          ).then((settled) => {
-            if (settled.outcome === 'timed-out') {
-              console.warn('[agent-hooks] Grok hook cleanup on quit timed out')
-              return
-            }
-            if (settled.outcome === 'failed') {
-              console.warn('[agent-hooks] Grok hook cleanup on quit failed:', settled.error)
-              return
-            }
-            // Removal failures can be fulfilled status results; inspect their detail too.
-            for (const status of settled.value.filter((entry) => entry.detail)) {
-              console.warn(`[agent-hooks] ${status.agent} hook cleanup on quit: ${status.detail}`)
-            }
-          })
-        : Promise.resolve()
+    runQuitTasks('hook-server', context)
+    const grokHookCleanup = runQuitTasks('grok-hooks', context)
     // Dispose relay timers and wsl.exe children explicitly rather than rely on pipe teardown.
-    wslHookRelayManager.disposeAll()
+    runQuitTasks('wsl-relays', context)
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {
@@ -184,18 +128,16 @@ function installWillQuitHandler(): void {
       await state.runtime?.getAgentBrowserBridge()?.destroyAllSessions()
     })()
     // Local SSH browser routes own loopback listeners and ssh -N -D children that must not outlive the app (P2-4).
-    const localSshRouteShutdown = import('../browser/local-ssh-browser-route')
-      .then((routes) => routes.closeAllLocalSshBrowserRoutes())
-      .catch(() => {})
-    browserManager.setBrowserGuestStateChangedListener(null)
+    const localSshRouteShutdown = runQuitTasks('local-ssh-browser-routes', context)
+    runQuitTasks('browser-guests', context)
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
     const finalStore = state.store
     const beginSshShutdownAndFinalSave = () => {
       // Mark SSH leases detached synchronously immediately before final flush; no await may separate mutation from save.
-      const sshShutdown = beginSshShutdown()
-      killAllPty()
-      const watcherShutdown = shutdownWatchersOnce()
+      const sshShutdown = runQuitTasks('ssh', context)
+      runQuitTasks('pty', context)
+      const watcherShutdown = shutdownWatchersOnce(context)
       const storeFlush = (async () => {
         if (!finalStore) {
           return
@@ -225,22 +167,13 @@ function installWillQuitHandler(): void {
       state.openCodeUsage?.flush(),
       state.museUsage?.flush()
     ]).then(() => {})
-    disposeDesktopBrowserBridge()
-    const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
+    runQuitTasks('desktop-browser-bridge', context)
+    const browserClientHostShutdown = runQuitTasks('browser-client-hosts', context)
     const skillUploadShutdown = state.runtime?.disposeSkillUploadSessions() ?? Promise.resolve()
-    // Capture ownership before awaits let other teardown paths clear runtime state.
-    const ownedPid = process.pid
-    const ownedRuntimeId = state.runtime?.getRuntimeId()
     const rpcStopAndClear = state.runtimeRpc
       ? state.runtimeRpc
           .stop()
-          .then(() => awaitRuntimeFileWatcherUnsubscribes())
-          .then(() => {
-            if (ownedRuntimeId) {
-              // Match the runtime writer's canonical metadata path, not late app.getPath.
-              clearRuntimeMetadataIfOwned(getCanonicalUserDataPath(), ownedPid, ownedRuntimeId)
-            }
-          })
+          .then(() => runQuitTasks('runtime-rpc-stopped', context))
           .catch((error) => console.error('[runtime] Failed to stop local RPC transport:', error))
       : Promise.resolve()
     // After session and RPC teardown, which can still retire notifications; will-quit is past every veto.
@@ -249,7 +182,7 @@ function installWillQuitHandler(): void {
       rpcStopAndClear
     ]).then(() => state.runtime?.closeNotificationDismissals())
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
-    const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+    const daemonTeardown = runQuitTasks('daemon', context)
     // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
     settleTeardownWithinDeadline([
       { name: 'daemon', promise: daemonTeardown },
@@ -276,8 +209,8 @@ function installWillQuitHandler(): void {
           console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
         }
       })
-      .then(() => shutdownTelemetry())
-      .then(() => shutdownObservability())
+      .then(() => runQuitTasks('telemetry', context))
+      .then(() => runQuitTasks('observability', context))
       .catch(() => {
         /* swallow — telemetry must never prevent app.quit() */
       })
@@ -304,8 +237,6 @@ function installWindowAllClosedHandler(): void {
 }
 
 export function installMainProcessQuitHandlers(): void {
-  // app.exit skips Electron quit events; stop the log child on forced exits too.
-  process.once('exit', stopTccPromptNotice)
   installBeforeQuitHandler()
   installWillQuitHandler()
   installWindowAllClosedHandler()

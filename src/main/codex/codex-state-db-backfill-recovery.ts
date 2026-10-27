@@ -1,3 +1,4 @@
+import { hasQuitTaskPhaseStarted, registerQuitTask } from '../quit-task-registry'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -238,6 +239,9 @@ export function startCodexStateDbBackfillRecoveryInBackground(
   codexHomePath: string,
   dependenciesOverride: Partial<RecoveryCoordinatorDependencies> = {}
 ): Promise<CodexStateDbBackfillRecoverySummary | null> {
+  stopping ||= hasQuitTaskPhaseStarted('codex-backfill')
+  registerQuitTask('codex-backfill', 'codex-backfill-recovery', stopCodexStateDbBackfillRecoveries)
+
   const dependencies = { ...defaultCoordinatorDependencies, ...dependenciesOverride }
   const key = normalizeRuntimePathForComparison(codexHomePath)
   const existing = activeRecoveries.get(key)

@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 // Install lazily after Electron finalizes the profile path; runtimes without structured requests need no store. Journal-open failures install a refusal.
 
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
@@ -7,6 +8,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
 import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
 import {
+  setStructuredAgentSessionTeardownTrigger,
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,
   type InstalledRuntime
@@ -116,6 +118,11 @@ const pendingTeardown = new Set<InstalledRuntime>()
 export function ensureStructuredAgentSessionHost(
   deps: StructuredAgentSessionRuntimeDeps
 ): Promise<StructuredAgentSessionHost> {
+  registerQuitTask('structured-sessions', 'structured-agent-sessions', ({ isUpdate }) => {
+    setStructuredAgentSessionTeardownTrigger(isUpdate ? 'update' : 'quit')
+    return stopStructuredAgentSessionRuntime()
+  })
+
   // A failed open must not poison the slot forever — the next call retries.
   installing ??= install(deps).catch((error) => {
     installing = null

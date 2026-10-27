@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 // All main/IPC telemetry shares shutdown → burst cap → consent → validation → capture ordering. Cap before settings reads to bound renderer flood cost; disable person profiles per capture because the Node SDK lacks an init-time equivalent.
 
 import { randomUUID } from 'node:crypto'
@@ -44,6 +45,8 @@ let appOpenedTrackedThisSession = false
 const trackedDashboardActiveDays = new Map<AgentDashboardSurface, number>()
 
 export function initTelemetry(store: Store): void {
+  registerQuitTask('telemetry', 'telemetry', shutdownTelemetry)
+
   // Retain Store even for contributor builds so opt-out persists.
   storeRef = store
   resetBurstCapsForSession()

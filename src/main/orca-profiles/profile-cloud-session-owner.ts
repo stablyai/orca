@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -39,6 +40,8 @@ export type CloudSessionServerReply = {
 const owners = new Map<string, SessionOwnerState>()
 
 function ownerOf(profileId: string, userDataPath: string): SessionOwnerState {
+  registerQuitTask('cloud-sessions', 'cloud-sessions', flushUnsavedCloudSessions)
+
   const key = orcaCloudSessionKey(profileId, userDataPath)
   let owner = owners.get(key)
   if (!owner) {

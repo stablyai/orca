@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import { setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { setLocalDaemonPidReader } from '../memory/local-daemon-pid'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
@@ -28,6 +29,9 @@ export function installDaemonProvider(
   newAdapter: DaemonProvider
 ): void {
   spawner = newSpawner
+  registerQuitTask('daemon', 'terminal-daemon', ({ shutdownDaemon: shutdown }) =>
+    shutdown ? shutdownDaemon() : disconnectDaemon()
+  )
   replaceDaemonProvider(newAdapter)
   setLocalDaemonPidReader(() => readDaemonPidRecord()?.pid ?? null)
 }

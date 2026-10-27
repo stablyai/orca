@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import { BrowserGrabSessionController } from './browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
 import type { BrowserSiteDisplayController } from './browser-site-display-controller'
@@ -175,6 +176,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   }
 
   setBrowserGuestStateChangedListener(listener: ((worktreeId: string) => void) | null): void {
+    registerQuitTask('browser-guests', 'browser-guest-listener', () =>
+      this.setBrowserGuestStateChangedListener(null)
+    )
+
     this.browserGuestStateChangedListener = listener
   }
 

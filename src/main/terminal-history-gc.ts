@@ -1,3 +1,4 @@
+import { registerQuitTask } from './quit-task-registry'
 import { join } from 'node:path'
 import type { Dirent } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
@@ -179,6 +180,8 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
 }
 
 export function runHistoryGc(liveWorktreeIds: Set<string>): Promise<void> {
+  registerQuitTask('history-gc', 'terminal-history-gc', cancelHistoryGc)
+
   // Concurrent passes would race each other's tombstone renames.
   if (activeHistoryGc) {
     return activeHistoryGc
@@ -204,6 +207,7 @@ export function cancelHistoryGc(): void {
 
 /** Use already-known worktree IDs; do not probe repo paths. */
 export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>): void {
+  registerQuitTask('history-gc', 'terminal-history-gc', cancelHistoryGc)
   if (scheduledHistoryGcTimer !== null || historyGcStarting || activeHistoryGc !== null) {
     return
   }

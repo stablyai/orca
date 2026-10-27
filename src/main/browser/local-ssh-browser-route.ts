@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import type { Duplex } from 'node:stream'
 import type { BrowserNetworkExecutionRouteResolver } from './browser-network-execution-route'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
@@ -178,6 +179,12 @@ export async function retainLocalSshBrowserRoute(
   targetId: string,
   dependencies?: LocalSshBrowserRouteDependencies
 ): Promise<{ host: '127.0.0.1'; port: number }> {
+  registerQuitTask(
+    'local-ssh-browser-routes',
+    'local-ssh-browser-routes',
+    closeAllLocalSshBrowserRoutes
+  )
+
   let route = routesByTargetId.get(targetId)
   if (!route) {
     route = new LocalSshBrowserRoute(targetId, dependencies ?? (await defaultDependencies()))

@@ -1,3 +1,4 @@
+import { registerQuitTask } from './quit-task-registry'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
@@ -198,6 +199,11 @@ function runBackgroundWorktreeRemoval(
   job: BackgroundWorktreeRemovalJob,
   recorded: Promise<void>
 ): void {
+  registerQuitTask(
+    'worktree-removals',
+    'background-worktree-removals',
+    stopBackgroundWorktreeRemovals
+  )
   const controller = new AbortController()
   stopControllers.add(controller)
   const settled: Promise<void> = settleBackgroundWorktreeRemoval(

@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 // Launch admission opens the single-writer store before chat-host installation; both must reuse this instance.
 // Quit-only edge: failed host teardown can leave its connection open after releasing the slot; a post-stop open lasts until exit.
 
@@ -32,6 +33,10 @@ let opening: RecordStoreSlot | null = null
 export function openAgentSessionRecordStoreOnce(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
+  registerQuitTask('structured-record-store', 'agent-session-record-store', async () => {
+    const opened = await releaseAgentSessionRecordStore()
+    opened?.journalDatabase.close()
+  })
   if (opening) {
     // One process serves one profile; refuse location changes instead of opening a divergent second writer.
     if (opening.stateDirectory !== location.stateDirectory) {

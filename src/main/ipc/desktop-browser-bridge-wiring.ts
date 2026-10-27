@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 /** Route eligible SSH hosts through their paired orcad connection to this desktop's browser bridge. */
 import { randomUUID } from 'node:crypto'
 import { webContents, type BrowserWindow } from 'electron'
@@ -88,6 +89,8 @@ export function installDesktopBrowserBridge(options: {
   getMainWindow: () => BrowserWindow | null
   getConnectionManager: () => Pick<SshConnectionManager, 'getState'> | null
 }): void {
+  registerQuitTask('desktop-browser-bridge', 'desktop-browser-bridge', disposeDesktopBrowserBridge)
+
   if (manager) {
     manager.reconcile()
     return

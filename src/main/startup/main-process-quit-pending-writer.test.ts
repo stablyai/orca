@@ -4,64 +4,16 @@ import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
-const stopAgentHookServer = idle()
 const stopStructuredAgentSessionRuntime = settled()
 const beginSshShutdown = settled()
 const killAllPty = idle()
 /** Final-save calls seen by the first microtask after the SSH shutdown began. */
 let flushesByNextMicrotask = -1
 
-// Every teardown member settles except the profile store, so only the writer can hold quit.
-const dependencies: Record<string, Record<string, unknown>> = {
-  '../ipc/filesystem-watcher': { closeAllWatchers: settled() },
-  '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
-  '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
-  '../ipc/pty/kill-all': { killAllPty },
-  '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
-  '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
-  './main-process-connector-startup': { desktopConnectorCloud: () => null },
-  '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
-  '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
-  '../agent-hooks/managed-agent-hook-controls': {
-    removeManagedAgentHooksAsync: vi.fn(async () => [])
-  },
-  '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
-  '../runtime/agent-session/structured-agent-session-runtime-teardown': {
-    setStructuredAgentSessionTeardownTrigger: idle()
-  },
-  '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
-  '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
-  '../browser/paired-runtime-browser-client-host-runtime': {
-    shutdownPairedRuntimeBrowserClientHosts: settled()
-  },
-  '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
-  '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
-  '../browser/browser-manager': { browserManager: { setBrowserGuestStateChangedListener: idle() } },
-  '../browser/browser-session-registry': { browserSessionRegistry: {} },
-  '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
-  '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
-  '../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },
-  '../git/local-repo-ref-maintenance': { awaitPackedRefsLockRelease: settled() },
-  '../worktree-background-removal': { stopBackgroundWorktreeRemovals: idle() },
-  '../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
-  '../tray/system-tray': { destroySystemTray: idle() },
-  '../telemetry/client': { shutdownTelemetry: settled() },
-  '../observability': { shutdownObservability: settled() },
-  '../updater': { isQuittingForUpdate: vi.fn(() => false) },
-  '../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
-  '../macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
-  '../terminal-history-gc': { cancelHistoryGc: idle() },
-  './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
-  './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },
-  '../persistence': { getCanonicalUserDataPath: vi.fn(() => '/unused') }
-}
-
 afterEach(() => {
   vi.doUnmock('electron')
   vi.doUnmock('./main-process-state')
-  for (const moduleName of Object.keys(dependencies)) {
-    vi.doUnmock(moduleName)
-  }
+  vi.doUnmock('./main-process-connector-startup')
   vi.restoreAllMocks()
   vi.useRealTimers()
   vi.resetModules()
@@ -97,9 +49,11 @@ async function startQuit(
   }
   vi.doMock('electron', () => ({ app }))
   vi.doMock('./main-process-state', () => ({ mainProcessState: state }))
-  for (const [moduleName, exports] of Object.entries(dependencies)) {
-    vi.doMock(moduleName, () => exports)
-  }
+  vi.doMock('./main-process-connector-startup', () => ({ desktopConnectorCloud: () => null }))
+  const { registerQuitTask } = await import('../quit-task-registry')
+  registerQuitTask('ssh', 'ssh', beginSshShutdown)
+  registerQuitTask('pty', 'pty', killAllPty)
+  registerQuitTask('structured-sessions', 'structured-sessions', stopStructuredAgentSessionRuntime)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const { installMainProcessQuitHandlers } = await import('./main-process-quit')
   const { quitTeardownStartGate } = await import('../quit-teardown-start-gate')
@@ -173,12 +127,6 @@ it('starts the SSH shutdown and the final save at once when no pane grid waits',
   expect(flushesByNextMicrotask).toBe(1)
 })
 
-// Chat teardown reads hook status after server stop; retain it for background-only session resume offers.
-it('stops the hook server without clearing the status store the chat teardown reads', async () => {
-  await startQuit(async () => {})
-  expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })
-})
-
 it.each([
   ['chat teardown', 'RPC stop'],
   ['RPC stop', 'chat teardown']
@@ -220,3 +168,104 @@ it.each([
     expect(app.quit).toHaveBeenCalledOnce()
   }
 )
+
+it('does not restart cleanup while pending or after the final quit pass', async () => {
+  const writer = Promise.withResolvers<void>()
+  const { app, store } = await startQuit(() => writer.promise)
+  const pendingQuit = { preventDefault: vi.fn() }
+  app.emit('will-quit', pendingQuit)
+  expect(pendingQuit.preventDefault).toHaveBeenCalledOnce()
+  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
+  writer.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  const finalQuit = { preventDefault: vi.fn() }
+  app.emit('will-quit', finalQuit)
+  expect(finalQuit.preventDefault).not.toHaveBeenCalled()
+  expect(beginSshShutdown).toHaveBeenCalledOnce()
+  expect(app.quit).toHaveBeenCalledOnce()
+})
+
+it('starts critical phases in shutdown order even when owners initialized in reverse order', async () => {
+  const { app } = await startQuit(async () => {})
+  // The first run is complete before installing a fresh handler/registry below.
+  await vi.advanceTimersByTimeAsync(0)
+  expect(app.quit).toHaveBeenCalledOnce()
+  vi.resetModules()
+  const { registerQuitTask } = await import('../quit-task-registry')
+  const trace: string[] = []
+  registerQuitTask('daemon', 'daemon', () => {
+    trace.push('daemon')
+  })
+  registerQuitTask('base-directory-watchers', 'base-directory-watchers', () => {
+    trace.push('base-watchers')
+  })
+  registerQuitTask('filesystem-watchers', 'filesystem-watchers', () => {
+    trace.push('filesystem-watchers')
+  })
+  registerQuitTask('folder-watchers', 'folder-watchers', () => {
+    trace.push('folder-watchers')
+  })
+  registerQuitTask('pty', 'pty', () => {
+    trace.push('pty')
+  })
+  registerQuitTask('ssh', 'ssh', () => {
+    trace.push('ssh')
+  })
+  registerQuitTask('hook-server', 'hook-server', () => {
+    trace.push('hooks')
+  })
+  registerQuitTask('structured-sessions', 'structured-sessions', () => {
+    trace.push('sessions')
+  })
+  registerQuitTask('codex-bridges', 'codex-bridges', () => {
+    trace.push('codex-bridges')
+  })
+  registerQuitTask('codex-backfill', 'codex-backfill', () => {
+    trace.push('codex-backfill')
+  })
+  const store = {
+    flushFinalOrThrowAsync: async () => {
+      trace.push('save')
+    },
+    freezeWritesAsync: settled()
+  }
+  vi.doMock('./main-process-state', () => ({ mainProcessState: { store } }))
+  const { installMainProcessQuitHandlers } = await import('./main-process-quit')
+  app.removeAllListeners()
+  installMainProcessQuitHandlers()
+  app.emit('will-quit', { preventDefault: vi.fn() })
+  expect(trace).toEqual([
+    'codex-backfill',
+    'codex-bridges',
+    'sessions',
+    'hooks',
+    'ssh',
+    'pty',
+    'folder-watchers',
+    'filesystem-watchers',
+    'base-watchers',
+    'save',
+    'daemon'
+  ])
+})
+
+it('finishes notifications and quits after session and RPC shutdown failures', async () => {
+  const failure = new Error('transport failed')
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  stopStructuredAgentSessionRuntime.mockImplementationOnce(() => Promise.reject(failure))
+  const closeNotificationDismissals = settled()
+  const { app } = await startQuit(async () => {}, {
+    runtime: {
+      getOffscreenBrowserBackend: () => null,
+      getAgentBrowserBridge: () => null,
+      getEmulatorBridge: () => null,
+      disposeSkillUploadSessions: settled(),
+      closeNotificationDismissals,
+      flushPaneGrids: () => null
+    },
+    runtimeRpc: { setMobileRelayPairingProvider: idle(), stop: () => Promise.reject(failure) }
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(closeNotificationDismissals).toHaveBeenCalledOnce()
+  expect(app.quit).toHaveBeenCalledOnce()
+})

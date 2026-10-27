@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../../quit-task-registry'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import type { SshTarget } from '../../../shared/ssh-types'
@@ -60,6 +61,7 @@ export async function ensureOrcadManagedTunnel(
   userDataPath: string,
   selector: string
 ): Promise<KnownRuntimeEnvironment> {
+  registerQuitTask('ssh', 'managed-orcad-tunnels', shutdownOrcadManagedTunnels)
   const { id } = resolveEnvironment(userDataPath, selector)
   await buildOnBindableLocalPort(userDataPath, id, () =>
     buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
@@ -73,6 +75,7 @@ export async function rebuildOrcadManagedTunnel(
   userDataPath: string,
   selector: string
 ): Promise<'built' | 'repaired'> {
+  registerQuitTask('ssh', 'managed-orcad-tunnels', shutdownOrcadManagedTunnels)
   const { id } = resolveEnvironment(userDataPath, selector)
   return buildOnBindableLocalPort(userDataPath, id, () =>
     buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
@@ -136,6 +139,7 @@ export function recoverOrcadManagedTunnelsAfterHostResume(
   userDataPath: string,
   options: { attempts: number; timeoutMs: number }
 ): Promise<void> {
+  registerQuitTask('ssh', 'managed-orcad-tunnels', shutdownOrcadManagedTunnels)
   return managedTunnels.recoverAfterHostResume({
     ...options,
     resolveEnvironment: (environmentId) => resolveEnvironmentOrNull(userDataPath, environmentId)
@@ -149,6 +153,7 @@ export function startOrcadManagedTunnel(
   remotePort: number,
   checks?: OrcadTunnelStartChecks
 ): Promise<number> {
+  registerQuitTask('ssh', 'managed-orcad-tunnels', shutdownOrcadManagedTunnels)
   return managedTunnels.start(environmentId, target, connection, remotePort, checks)
 }
 

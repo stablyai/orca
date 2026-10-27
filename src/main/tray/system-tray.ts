@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import { Menu, Tray, nativeImage, nativeTheme, type NativeImage } from 'electron'
 import menuBarIconPath from '../../../resources/tray/orca-menu-barTemplate.png?asset&asarUnpack'
 import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate@2x.png?asset&asarUnpack'
@@ -195,6 +196,8 @@ function safeMenuAction(action: () => void): () => void {
 
 /** Create at most one Windows/macOS tray; Linux has none. */
 export function createSystemTray(opts: SystemTrayOptions): Tray | null {
+  registerQuitTask('tray', 'system-tray', destroySystemTray)
+
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
     return null
   }

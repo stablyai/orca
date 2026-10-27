@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import { app } from 'electron'
 
 let unreadCount = 0
@@ -12,6 +13,8 @@ function applyDockBadge(): void {
 }
 
 export function setUnreadDockBadgeCount(count: number): void {
+  registerQuitTask('dock', 'unread-dock-badge', () => setUnreadDockBadgeCount(0))
+
   if (process.platform !== 'darwin') {
     return
   }

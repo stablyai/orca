@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { RepoRefMaintenance } from '../../shared/repo-ref-maintenance'
@@ -68,6 +69,8 @@ function localMaintenanceOptions(): RepoRefMaintenanceOptions {
 }
 
 export function getLocalRepoRefMaintenance(): RepoRefMaintenance {
+  registerQuitTask('ref-maintenance', 'repo-ref-maintenance', awaitPackedRefsLockRelease)
+
   shared ??= new RepoRefMaintenance(localMaintenanceOptions())
   return shared
 }

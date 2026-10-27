@@ -1,3 +1,4 @@
+import { registerQuitTask } from './quit-task-registry'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
@@ -217,6 +218,10 @@ export function initTccPromptNotice(
   if (process.platform !== 'darwin') {
     return
   }
+  registerQuitTask('tcc-notice', 'tcc-prompt-notice', stopTccPromptNotice)
+  process.removeListener('exit', stopTccPromptNotice)
+  process.once('exit', stopTccPromptNotice)
+
   if (!orphanReclaimScheduled) {
     orphanReclaimScheduled = true
     // Legacy orphan cleanup remains necessary after the notice is dismissed.

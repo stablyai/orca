@@ -1,3 +1,6 @@
+import { registerQuitTask } from '../quit-task-registry'
+import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
+import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { app, type BrowserWindow } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
@@ -105,6 +108,12 @@ function installRuntimeRpc(
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc
+  const ownedPid = process.pid
+  const ownedRuntimeId = runtime.getRuntimeId()
+  registerQuitTask('runtime-rpc-stopped', 'runtime-rpc-metadata', async () => {
+    await awaitRuntimeFileWatcherUnsubscribes()
+    clearRuntimeMetadataIfOwned(getCanonicalUserDataPath(), ownedPid, ownedRuntimeId)
+  })
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,

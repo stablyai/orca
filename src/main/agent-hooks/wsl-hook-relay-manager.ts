@@ -1,3 +1,4 @@
+import { hasQuitTaskPhaseStarted, registerQuitTask } from '../quit-task-registry'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   runWslRelayGuestInstall,
@@ -66,6 +67,9 @@ export class WslHookRelayManager {
     codexHomePath?: string | null,
     launchKind?: 'pi' | 'omp'
   ): Promise<void> {
+    this.disposed ||= hasQuitTaskPhaseStarted('wsl-relays')
+    registerQuitTask('wsl-relays', 'wsl-hook-relays', () => this.disposeAll())
+
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
     }

@@ -1,3 +1,4 @@
+import { devParentShutdownState } from './dev-parent-shutdown-state'
 import { app } from 'electron'
 import { quitProcess } from './process-quit-request'
 import { mkdirSync } from 'node:fs'
@@ -20,7 +21,6 @@ const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
-let devParentShutdownRequested = false
 
 type NetworkCompatibilityOptions = {
   env?: NodeJS.ProcessEnv
@@ -100,7 +100,7 @@ function getProcessPathDelimiter(): string {
 }
 
 function requestDevParentShutdown(): void {
-  devParentShutdownRequested = true
+  devParentShutdownState.requested = true
   quitProcess()
 
   const forceExitTimer = setTimeout(() => {
@@ -112,11 +112,11 @@ function requestDevParentShutdown(): void {
 }
 
 export function isDevParentShutdownRequested(): boolean {
-  return devParentShutdownRequested
+  return devParentShutdownState.requested
 }
 
 export function resetDevParentShutdownRequestForTests(): void {
-  devParentShutdownRequested = false
+  devParentShutdownState.requested = false
 }
 
 export function patchPackagedProcessPath(): void {

@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../quit-task-registry'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
@@ -203,6 +204,8 @@ export function startFolderRepoGitUpgradeWatch(
   if (mainWindow.isDestroyed()) {
     return
   }
+  registerQuitTask('folder-watchers', 'folder-repo-upgrade', stopFolderRepoGitUpgradeWatch)
+
   if (activeWatch) {
     activeWatch.store = store
     activeWatch.mainWindow = mainWindow

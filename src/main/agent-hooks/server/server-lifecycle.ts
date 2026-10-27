@@ -1,3 +1,4 @@
+import { registerQuitTask } from '../../quit-task-registry'
 import { AgentHookStartup, listenForAgentHooks } from '../../../shared/agent-hook-startup'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -30,6 +31,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   private readonly startup = new AgentHookStartup()
 
   start(options?: HookServerStartOptions): Promise<void> {
+    registerQuitTask('hook-server', 'agent-hook-server', () => this.stop({ keepStatus: true }))
+
     return this.startup.start((isCurrent) => this.startListener(options, isCurrent))
   }
 

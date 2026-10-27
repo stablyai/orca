@@ -1,3 +1,5 @@
+import { killAllPty } from './kill-all'
+import { registerQuitTask } from '../../quit-task-registry'
 import { settledDaemonRestart } from '../../daemon/daemon-restart-state'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -78,6 +80,7 @@ export function registerPtyHandlers(
   store?: Store,
   options?: PtyIpcSessionOptions
 ): void {
+  registerQuitTask('pty', 'in-process-ptys', killAllPty)
   if (process.platform === 'linux') {
     const appEnvironment = getAppEnvironment()
     if (appEnvironment.isPackaged()) {
