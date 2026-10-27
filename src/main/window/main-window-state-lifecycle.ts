@@ -1,4 +1,4 @@
-import { app, type BrowserWindow, type Event } from 'electron'
+import { app, autoUpdater, type BrowserWindow, type Event } from 'electron'
 import type { Store } from '../persistence'
 import { uiZoomFactorFromLevel } from '../../shared/ui-zoom-level'
 import {
@@ -114,7 +114,6 @@ export function installMainWindowStateLifecycle(args: {
   mainWindow.on('resize', saveBounds)
   mainWindow.on('move', saveBounds)
 
-  // Updater removes close listeners; before-quit must also freeze bounds.
   const freezeBoundsOnQuit = (event?: Event): void => {
     if (event?.defaultPrevented) {
       return
@@ -127,6 +126,10 @@ export function installMainWindowStateLifecycle(args: {
     windowClosing = true
   }
   app.on('before-quit', freezeBoundsOnQuit)
+  // Native updates close windows before app's before-quit, after removing window close listeners.
+  const nativeUpdater =
+    process.platform === 'darwin' || process.platform === 'win32' ? autoUpdater : null
+  nativeUpdater?.on('before-quit-for-update', freezeBoundsOnQuit)
 
   mainWindow.on('maximize', () => {
     if (windowClosing) {
@@ -162,7 +165,10 @@ export function installMainWindowStateLifecycle(args: {
   }
   return {
     clearInitialRevealFallbackTimer,
-    dispose: () => app.removeListener('before-quit', freezeBoundsOnQuit),
+    dispose: () => {
+      app.removeListener('before-quit', freezeBoundsOnQuit)
+      nativeUpdater?.removeListener('before-quit-for-update', freezeBoundsOnQuit)
+    },
     freezeBoundsOnQuit,
     isWindowClosing: () => windowClosing,
     resumeBoundsPersistence

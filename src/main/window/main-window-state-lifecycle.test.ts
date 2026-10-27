@@ -1,11 +1,11 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const { appMock } = await vi.hoisted(async () => {
+const { appMock, autoUpdaterMock } = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
-  return { appMock: new EventEmitter() }
+  return { appMock: new EventEmitter(), autoUpdaterMock: new EventEmitter() }
 })
-vi.mock('electron', () => ({ app: appMock }))
+vi.mock('electron', () => ({ app: appMock, autoUpdater: autoUpdaterMock }))
 vi.mock('./foreground-activation-policy', () => ({
   isBackgroundLaunch: () => true,
   isWindowlessLaunch: () => true,
@@ -18,10 +18,12 @@ vi.mock('./main-window-visual-lifecycle', () => ({
 }))
 
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
+import { withPlatform } from './createMainWindow-test-harness'
 
 beforeEach(() => {
   vi.useFakeTimers()
   appMock.removeAllListeners()
+  autoUpdaterMock.removeAllListeners()
 })
 afterEach(() => vi.useRealTimers())
 
@@ -48,6 +50,41 @@ function createStateFixture() {
   })
   return { mainWindow, updateUI, lifecycle, bounds }
 }
+
+it.each(['darwin', 'win32'] as const)(
+  'saves pending bounds before native update closes windows ahead of before-quit on %s',
+  (platform) =>
+    withPlatform(platform, () => {
+      const { mainWindow, updateUI, lifecycle, bounds } = createStateFixture()
+      mainWindow.emit('resize')
+      autoUpdaterMock.emit('before-quit-for-update')
+      Object.assign(mainWindow, { isDestroyed: () => true })
+      appMock.emit('before-quit', { defaultPrevented: false })
+      vi.advanceTimersByTime(500)
+      expect(updateUI).toHaveBeenCalledExactlyOnceWith({
+        windowMaximized: false,
+        windowBounds: bounds
+      })
+      lifecycle.dispose()
+      expect(autoUpdaterMock.listenerCount('before-quit-for-update')).toBe(0)
+    })
+)
+
+it('freezes native-update fullscreen state before teardown emits leave-full-screen', () => {
+  withPlatform('darwin', () => {
+    const { mainWindow, updateUI, lifecycle } = createStateFixture()
+    mainWindow.isFullScreen.mockReturnValue(true)
+    mainWindow.emit('enter-full-screen')
+    autoUpdaterMock.emit('before-quit-for-update')
+    updateUI.mockClear()
+    mainWindow.isFullScreen.mockReturnValue(false)
+    mainWindow.emit('leave-full-screen')
+    Object.assign(mainWindow, { isDestroyed: () => true })
+    appMock.emit('before-quit', { defaultPrevented: false })
+    expect(updateUI).not.toHaveBeenCalled()
+    lifecycle.dispose()
+  })
+})
 
 it('keeps maximized restore bounds on the original monitor through update teardown', () => {
   const { mainWindow, updateUI, lifecycle, bounds } = createStateFixture()
