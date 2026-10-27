@@ -16,6 +16,8 @@ export function ResourcePtyList({
   unverifiable,
   ending,
   errors,
+  selected,
+  onSelect,
   onEnd,
   onNavigate
 }: {
@@ -25,6 +27,8 @@ export function ResourcePtyList({
   unverifiable: boolean
   ending: ReadonlySet<string>
   errors: ReadonlyMap<string, string>
+  selected: ReadonlySet<string>
+  onSelect: (row: PtyRow) => void
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
@@ -93,6 +97,8 @@ export function ResourcePtyList({
                 unverifiable={unverifiable}
                 ending={!!item.row.session.exiting || ending.has(item.row.identity)}
                 error={errors.get(item.row.identity)}
+                selected={selected.has(item.row.identity)}
+                onSelect={onSelect}
                 onEnd={onEnd}
                 onNavigate={onNavigate}
               />

@@ -52,11 +52,17 @@ function setup() {
   )
 }
 
-it('always confirms even absent/unbound sessions, and retains the identity seen before replacement', async () => {
+it('starts immediately and retains the identity seen before replacement', async () => {
   const { result } = setup()
   await act(async () => {})
-  act(() => result.current.actions.confirm(row(session())))
-  expect(kill).not.toHaveBeenCalled()
+  let finish!: (value: PtyFencedTerminationOutcome) => void
+  kill.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve
+    })
+  )
+  act(() => result.current.actions.end(row(session())))
+  expect(kill).toHaveBeenCalledTimes(1)
   list.mockResolvedValue([session('B')])
   act(() => {
     void result.current.inventory.refreshSessions()
@@ -64,8 +70,7 @@ it('always confirms even absent/unbound sessions, and retains the identity seen 
   await act(async () => {
     await vi.advanceTimersByTimeAsync(100)
   })
-  kill.mockResolvedValue({ outcome: 'refused', reason: 'replaced' })
-  await act(async () => result.current.actions.endConfirmed())
+  await act(async () => finish({ outcome: 'refused', reason: 'replaced' }))
   expect(kill).toHaveBeenCalledWith({
     id: 'one',
     expectedIncarnationId: 'A',
@@ -80,11 +85,10 @@ it.each(['attached', 'claimed', 'unverifiable', 'unsupported'] as const)(
   async (reason) => {
     const { result, rerender } = setup()
     await act(async () => {})
-    act(() => result.current.actions.confirm(row(session())))
     rerender({ active: false })
     const before = list.mock.calls.length
     kill.mockResolvedValue({ outcome: 'refused', reason })
-    await act(async () => result.current.actions.endConfirmed())
+    await act(async () => result.current.actions.endMany([row(session())]))
     expect(result.current.inventory.sessionInventory.count).toBe(1)
     expect(result.current.actions.errors.size).toBe(1)
     await act(async () => {
@@ -103,11 +107,10 @@ it('marks Ending once, allows an accepted action to finish while hidden, and per
   )
   const { result, rerender } = setup()
   await act(async () => {})
-  act(() => result.current.actions.confirm(row(session())))
   let pending: Promise<void> = Promise.resolve()
   act(() => {
-    pending = result.current.actions.endConfirmed()
-    void result.current.actions.endConfirmed()
+    pending = result.current.actions.endMany([row(session())])
+    void result.current.actions.endMany([row(session())])
   })
   expect(kill).toHaveBeenCalledTimes(1)
   expect(result.current.actions.ending.size).toBe(1)
@@ -120,4 +123,71 @@ it('marks Ending once, allows an accepted action to finish while hidden, and per
   expect(result.current.inventory.sessionInventory.count).toBe(0)
   expect(result.current.actions.ending.size).toBe(0)
   expect(list).toHaveBeenCalledTimes(before)
+})
+
+it('continues a batch after refusals and failures, and skips unsupported or exiting sessions', async () => {
+  const sessions = Array.from({ length: 7 }, (_, index) => ({
+    ...session(),
+    id: `pty-${index}`,
+    fencedTermination: index !== 5,
+    ...(index === 6 ? { exiting: true as const } : {})
+  }))
+  list.mockResolvedValue(sessions)
+  kill.mockImplementation(async ({ id }) => {
+    if (id === 'pty-1') {
+      return { outcome: 'refused', reason: 'claimed' }
+    }
+    if (id === 'pty-2') {
+      throw new Error('Disconnected')
+    }
+    return { outcome: 'ended' }
+  })
+  const { result, rerender } = setup()
+  await act(async () => {})
+  rerender({ active: false })
+  await act(async () => result.current.actions.endMany(sessions.map(row)))
+  expect(kill.mock.calls.map(([request]) => request.id)).toEqual([
+    'pty-0',
+    'pty-1',
+    'pty-2',
+    'pty-3',
+    'pty-4'
+  ])
+  expect(result.current.inventory.sessionInventory.sessions.map(({ id }) => id)).toEqual([
+    'pty-1',
+    'pty-2',
+    'pty-5',
+    'pty-6'
+  ])
+  expect(result.current.actions.errors.size).toBe(2)
+  expect(result.current.actions.ending.size).toBe(0)
+})
+
+it('reserves queued targets immediately and limits concurrent termination requests', async () => {
+  const sessions = Array.from({ length: 6 }, (_, index) => ({ ...session(), id: `pty-${index}` }))
+  list.mockResolvedValue(sessions)
+  const finishes: (() => void)[] = []
+  kill.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishes.push(() => resolve({ outcome: 'ended' }))
+      })
+  )
+  const { result, rerender } = setup()
+  await act(async () => {})
+  rerender({ active: false })
+  let pending = Promise.resolve()
+  act(() => {
+    pending = result.current.actions.endMany(sessions.map(row))
+    result.current.actions.end(row(sessions[5]!))
+  })
+  expect(kill).toHaveBeenCalledTimes(4)
+  expect(result.current.actions.ending.size).toBe(6)
+  await act(async () => finishes.splice(0).forEach((finish) => finish()))
+  expect(kill).toHaveBeenCalledTimes(6)
+  await act(async () => {
+    finishes.forEach((finish) => finish())
+    await pending
+  })
+  expect(result.current.actions.ending.size).toBe(0)
 })

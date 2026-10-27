@@ -76,12 +76,10 @@ function panelProps(count: number): ComponentProps<typeof ResourcePtyPanel> {
       removeSessions: () => {}
     },
     actions: {
-      confirmation: null,
-      setConfirmation: () => {},
       ending: new Set(),
       errors: new Map(),
-      confirm: () => {},
-      endConfirmed: async () => {}
+      end: () => {},
+      endMany: async () => {}
     },
     onNavigate: () => {},
     bindings: { tabsByWorktree: {}, ptyIdsByTabId: {}, workspaceSessionReady: true },
@@ -153,4 +151,51 @@ it('skips joins and sorting on scrolling or action updates, and does no model wo
   expect(join).toHaveBeenCalledTimes(joined)
   expect(sort).toHaveBeenCalledTimes(inactiveSorts)
   expect(view.container.querySelectorAll('[data-resource-pty-row]')).toHaveLength(0)
+})
+
+it('selects across virtualized rows, excludes unavailable PTYs, and drops replaced identities', () => {
+  const props = panelProps(1_000)
+  props.inventory.sessionInventory.sessions[1]!.fencedTermination = false
+  props.inventory.sessionInventory.sessions[2]!.exiting = true
+  props.actions.ending = new Set([JSON.stringify(['pty-00003', 'A'])])
+  const endMany = vi.fn()
+  props.actions.endMany = endMany
+  const panel = (value: typeof props) => (
+    <TooltipProvider>
+      <ResourcePtyPanel {...value} />
+    </TooltipProvider>
+  )
+  const view = render(panel(props))
+  const selectAll = view.getByRole('checkbox', { name: 'Select all terminals' })
+  const first = view.getByRole('checkbox', { name: 'Select Terminal 0' })
+  expect(view.getByRole('checkbox', { name: 'Select Terminal 1' }).hasAttribute('disabled')).toBe(
+    true
+  )
+  expect(view.getByRole('checkbox', { name: 'Select Terminal 2' }).hasAttribute('disabled')).toBe(
+    true
+  )
+  fireEvent.click(first)
+  expect(selectAll.getAttribute('aria-checked')).toBe('mixed')
+  fireEvent.click(selectAll)
+  fireEvent.click(view.getByRole('button', { name: 'End selected (997)' }))
+  expect(endMany).toHaveBeenCalledTimes(1)
+  expect(endMany.mock.calls[0]![0]).toHaveLength(997)
+  fireEvent.click(selectAll)
+  fireEvent.click(first)
+  view.rerender(
+    panel({
+      ...props,
+      inventory: {
+        ...props.inventory,
+        sessionInventory: {
+          ...props.inventory.sessionInventory,
+          sessions: props.inventory.sessionInventory.sessions.map((session) => ({
+            ...session,
+            incarnationId: 'B'
+          }))
+        }
+      }
+    })
+  )
+  expect(view.getByRole('button', { name: 'End selected (0)' }).hasAttribute('disabled')).toBe(true)
 })

@@ -22346,7 +22346,11 @@
       "endHint": "End this terminal and its child processes.",
       "claimed": "An agent now owns this terminal. Refresh before trying again.",
       "attached": "A client is now attached to this terminal. Refresh before trying again.",
-      "unverifiableEnd": "Unverifiable: the host could not confirm the result. The terminal may still be running."
+      "unverifiableEnd": "Unverifiable: the host could not confirm the result. The terminal may still be running.",
+      "selectAll": "Select all terminals",
+      "selectAllShort": "Select all",
+      "endSelected": "End selected ({{count}})",
+      "selectNamed": "Select {{terminal}}"
     },
     "resources": "Resources",
     "ptys": "PTYs",
