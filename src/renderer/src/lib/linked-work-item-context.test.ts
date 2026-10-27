@@ -38,6 +38,38 @@ describe('task start prompt templates', () => {
     expect(getLinkedWorkItemPromptTemplate({ settings: null, projects: [] })).toBeUndefined()
   })
 
+  it('selects the project on the requested host when repo IDs collide', () => {
+    const state = {
+      settings: { linkedWorkItemPromptTemplate: '/global {{url}}' },
+      projects: [
+        { ...project, id: 'github:acme/local', sourceRepoIds: ['same-repo'] },
+        {
+          ...project,
+          id: 'github:acme/remote',
+          sourceRepoIds: ['same-repo'],
+          linkedWorkItemPromptTemplate: '{{url}} /remote'
+        }
+      ],
+      setups: [
+        { projectId: 'github:acme/local', repoId: 'same-repo', hostId: 'local' as const },
+        {
+          projectId: 'github:acme/remote',
+          repoId: 'same-repo',
+          hostId: 'runtime:remote' as const
+        }
+      ]
+    }
+    expect(getLinkedWorkItemPromptTemplate(state, 'same-repo', 'runtime:remote')).toBe(
+      '{{url}} /remote'
+    )
+    expect(getLinkedWorkItemPromptTemplate(state, 'same-repo', 'local')).toBe(
+      '{{url}} /project-work'
+    )
+    expect(getLinkedWorkItemPromptTemplate(state, 'same-repo', 'runtime:missing')).toBe(
+      '/global {{url}}'
+    )
+  })
+
   it('uses the same URL template for Jira, Linear, GitHub and GitLab without ticket prose', () => {
     const template = '{{url}} /ticket-engineer\nCheck {{url}} before editing.'
     const items = [

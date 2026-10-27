@@ -42,7 +42,7 @@ import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { ComposerCreateHandoff } from '@/lib/composer-create-handoff'
 import { translate } from '@/i18n/i18n'
 import {
-  getLinkedWorkItemPromptTemplate,
+  getDesktopLinkedWorkItemPromptTemplate,
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import { buildQuickComposerStartup } from './quick-startup-plan'
@@ -131,7 +131,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         resolveQuickCreateLinkedWorkItemPrompt(
           promptLinkedWorkItem,
           trimmedNote,
-          getLinkedWorkItemPromptTemplate(useAppStore.getState(), repoId)
+          getDesktopLinkedWorkItemPromptTemplate(
+            useAppStore.getState(),
+            repoId,
+            selectedRepoExecutionHostId ?? undefined
+          )
         )
 
       const {

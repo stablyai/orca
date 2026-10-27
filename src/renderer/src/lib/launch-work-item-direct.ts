@@ -20,7 +20,7 @@ import {
   getDirectWorkItemDraftContent,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/launch-work-item-direct-draft'
-import { getLinkedWorkItemPromptTemplate } from '@/lib/linked-work-item-context'
+import { getDesktopLinkedWorkItemPromptTemplate } from '@/lib/linked-work-item-context'
 import {
   resolveDirectPrStartPoint,
   resolveDirectLaunchOwnerRow,
@@ -152,7 +152,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const draftContent = await getDirectWorkItemDraftContent(
     item,
     repoConnectionId,
-    getLinkedWorkItemPromptTemplate(store, repoId)
+    getDesktopLinkedWorkItemPromptTemplate(store, repoId, repoOwnerHostId)
   )
   const preflightPlan = await planDirectWorkItemLaunch({
     requestId,
