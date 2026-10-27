@@ -49,9 +49,21 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
   return normalized.length > 0 ? normalized : [...TASK_PROVIDERS]
 }
 
+export type TaskProviderConnections = Partial<Record<TaskProvider, boolean>>
+
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  /** Settled sign-in state per provider; an omitted provider is still checking and keeps the legacy rule. */
+  connected?: TaskProviderConnections
+}
+
+/** Whether every listed provider has a settled, disconnected sign-in state. */
+export function areAllTaskProvidersDisconnected(
+  providers: readonly TaskProvider[],
+  connected: TaskProviderConnections
+): boolean {
+  return providers.every((provider) => connected[provider] === false)
 }
 
 export function filterAvailableTaskProviders(
@@ -90,13 +102,17 @@ function isTaskProviderAvailable(
   provider: TaskProvider,
   availability: TaskProviderAvailability
 ): boolean {
+  const connected = availability.connected?.[provider]
+  if (connected !== undefined) {
+    return connected
+  }
   if (provider === 'github') {
     return true
   }
   if (provider === 'gitlab') {
     return availability.gitlabInstalled
   }
-  // Disconnected Jira must remain visible as its own first-time setup entry point.
+  // Why: without a settled status (e.g. mobile callers), keep Jira reachable as a first-time setup entry point.
   if (provider === 'jira') {
     return true
   }
