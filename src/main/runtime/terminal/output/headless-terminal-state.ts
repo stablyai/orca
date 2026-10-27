@@ -55,7 +55,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
           if (!this.shouldForwardTerminalQueryReply(ptyId, reply)) {
             return
           }
-          // Daemon writes queue until the shell-ready marker or 15s timeout, preserving spawn-time replies.
+          // Query replies reach the current PTY reader while automatic startup commands wait for readiness.
           this.ptyController?.write(ptyId, reply, 'query-reply')
         }
       }

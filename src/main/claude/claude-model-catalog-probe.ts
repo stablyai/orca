@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN
@@ -53,11 +54,15 @@ export async function runClaudeListing(
   }
 ): Promise<string> {
   // Explicitly pinning the default directory changes the CLI's Keychain identity.
-  const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
-    ...base,
-    ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
-  }))
+  const { command, env } = await waitForPromiseWithSignal(
+    resolveClaudeStructuredInvocation({ ...deps, signal: request.signal }, (base) => ({
+      ...base,
+      ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
+    })),
+    request.signal
+  )
   const run = (args: readonly string[]) => {
+    request.signal?.throwIfAborted()
     if (request.isCurrent && !request.isCurrent()) {
       throw new Error('Listing context retired')
     }

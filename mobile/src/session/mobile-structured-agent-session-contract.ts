@@ -11,6 +11,7 @@ import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-r
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
 import type {
   MobileNativeChatCommandRefusalCauses,
   MobileNativeChatSendErrorReporter
@@ -22,13 +23,16 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
     session: MobileNativeChatSession
     isWorking: boolean
+    /** Desktop's Stop rule: a running turn, or conversation Stop while working or sending. */
+    canStop: boolean
     turnId: string | null
     turnIndicator: NativeChatLiveTurnIndicator
     sendWithOutcome: (
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      skills?: readonly AgentJournalSkillRef[]
     ) => Promise<MobileNativeChatSendOutcome>
     cancel: () => void
     receipts: ReadonlyMap<string, NativeChatResolvedPrompt>

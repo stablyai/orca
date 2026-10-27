@@ -1248,6 +1248,10 @@
             "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation."
           }
         },
+        "GeneralPane": {
+          "confirm_running_terminal_close": "Confirm before closing running terminals",
+          "confirm_running_terminal_close_description": "Ask before stopping a running agent or command when closing a terminal."
+        },
         "GeneralRemoteServerUpdates": {
           "reviewUpdateOne": "1 update available",
           "reviewUpdates": "{{value0}} updates available"
@@ -3060,6 +3064,8 @@
       "popupBlocked": "Popup blocked: {{origin}}"
     },
     "loadFailure": {
+      "blockedDescription": "An extension blocked this page. To open it, allow this site in the extension, then retry.",
+      "blockedTitle": "{{host}} is blocked",
       "cantLoadPage": "Can't load this page",
       "dnsDescription": "Check the address for typos.",
       "dnsTitle": "Couldn't find {{host}}",
@@ -3273,14 +3279,26 @@
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "plan": "Plan",
-        "stoppedBeforeStart": "Stopped manually"
+        "stoppedBeforeStart": "Stopped manually",
+        "orcaStopCanContinue": "You can continue in this conversation.",
+        "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
+        "orcaStopQuit": "Orca on {{machine}} was closed while this response was in progress.",
+        "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
+        "orcaStopUnnamedServer": "the remote server",
+        "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress."
       },
       "question": {
         "other": "Other…"
       },
       "queuedMessages": {
         "imageCount_one": "{{count}} image",
-        "imageCount_other": "{{count}} images"
+        "imageCount_other": "{{count}} images",
+        "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
+        "editChangedNotSaved": "This message changed while you were editing. Your edit wasn't saved.",
+        "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
+        "editFailed": "This message can't be edited.",
+        "editGone": "This message was already sent or removed. Your edit is in the chat box.",
+        "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent."
       },
       "receipt": {
         "cancelled": "Cancelled",
@@ -3437,7 +3455,8 @@
         "waitForCommand": "Wait for the /compact or /clear to finish.",
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
-        "waitMoment": "Wait a moment."
+        "waitMoment": "Wait a moment.",
+        "pendingWork": "Wait for pending work and messages to finish before using this command."
       }
     },
     "onboarding": {

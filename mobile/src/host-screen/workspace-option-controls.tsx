@@ -22,6 +22,7 @@ import {
 } from '../../../src/shared/workspace-view/workspace-host-visibility'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { WorktreeCardProperty } from '../../../src/shared/ui-chrome-types'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import {
   phoneCardPropertyChoices,
@@ -74,6 +75,7 @@ function hostsValue({ controller, hosts }: WorkspaceOptionProps): string {
 }
 
 function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
+  useMobileColorScheme()
   const { settings, state } = controller
   const visible = state.view.filters.visibleHostIds
   const checked = new Set(visible ? getCheckedHostRows(hosts, visible).map((host) => host.id) : [])
@@ -122,6 +124,7 @@ function projectsValue({ controller }: WorkspaceOptionProps): string {
 }
 
 function ProjectsPage({ controller }: WorkspaceOptionProps) {
+  useMobileColorScheme()
   const { settings, state } = controller
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
@@ -186,6 +189,7 @@ function CardPropertyRows(props: {
   controller: HostScreenController
   choices: readonly WorkspaceViewChoice<WorktreeCardProperty>[]
 }) {
+  useMobileColorScheme()
   const { settings, state } = props.controller
   return (
     <View style={styles.filterGroup}>

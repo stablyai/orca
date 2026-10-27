@@ -2,7 +2,7 @@ import { beginClaudeOptionMutation } from './claude-structured-execution-observa
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 
 /** Retire only a still-selected launch model after a root model_not_found reply; preserve saved picks. */
 export function retireClaudeLaunchedModel(

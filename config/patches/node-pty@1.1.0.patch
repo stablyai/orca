@@ -1039,7 +1039,7 @@ index 7b286d3d64..5239ba4e40 100644
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -544,29 +677,229 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,29 +677,239 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -1232,7 +1232,7 @@ index 7b286d3d64..5239ba4e40 100644
 + * The handle is deliberately never closed: it must outlive every caller, and
 + * process teardown is what releases it.
 + */
-+static Napi::Value PtyAssignCurrentProcessToJob(const Napi::CallbackInfo& info) {
++static Napi::Value AssignCurrentProcessToJob(const Napi::CallbackInfo& info, bool allowBreakaway) {
 +  Napi::Env env(info.Env());
 +  Napi::HandleScope scope(env);
 +
@@ -1242,9 +1242,10 @@ index 7b286d3d64..5239ba4e40 100644
 +  // thread with its own N-API env shares these statics, so "only JS calls it"
 +  // is not a guarantee.
 +  static HANDLE hHostJob = nullptr;
++  static bool hostJobAllowsBreakaway = true;
 +  std::lock_guard<std::mutex> guard(ptyJobMutex);
 +  if (hHostJob != nullptr) {
-+    return Napi::Boolean::New(env, true);
++    return Napi::Boolean::New(env, allowBreakaway || !hostJobAllowsBreakaway);
 +  }
 +
 +  HANDLE job = CreateJobObjectW(nullptr, nullptr);
@@ -1252,18 +1253,27 @@ index 7b286d3d64..5239ba4e40 100644
 +    return Napi::Boolean::New(env, false);
 +  }
 +  JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-+  // BREAKAWAY_OK for the same reason as the per-pty job: without it a child
-+  // asking for CREATE_BREAKAWAY_FROM_JOB is refused outright.
++  // Terminal hosts permit breakaway; native messaging supervisors retain
++  // ownership of every helper, including those requesting breakaway.
 +  limits.BasicLimitInformation.LimitFlags =
-+      JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
++      JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | (allowBreakaway ? JOB_OBJECT_LIMIT_BREAKAWAY_OK : 0);
 +  if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)) ||
 +      !AssignProcessToJobObject(job, GetCurrentProcess())) {
-+    // An outer job that forbids nesting refuses this; the caller degrades.
++    // Incompatible outer jobs refuse ownership; strict callers fail closed.
 +    CloseHandle(job);
 +    return Napi::Boolean::New(env, false);
 +  }
 +  hHostJob = job;
++  hostJobAllowsBreakaway = allowBreakaway;
 +  return Napi::Boolean::New(env, true);
++}
++
++static Napi::Value PtyAssignCurrentProcessToJob(const Napi::CallbackInfo& info) {
++  return AssignCurrentProcessToJob(info, true);
++}
++
++static Napi::Value PtyAssignCurrentProcessToStrictJob(const Napi::CallbackInfo& info) {
++  return AssignCurrentProcessToJob(info, false);
 +}
 +
 +/**
@@ -1283,13 +1293,14 @@ index 7b286d3d64..5239ba4e40 100644
  /**
  * Init
  */
-@@ -577,6 +910,10 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +920,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
 +  exports.Set("terminateJob", Napi::Function::New(env, PtyTerminateJob));
 +  exports.Set("listJobProcessIds", Napi::Function::New(env, PtyListJobProcessIds));
 +  exports.Set("assignCurrentProcessToJob", Napi::Function::New(env, PtyAssignCurrentProcessToJob));
++  exports.Set("assignCurrentProcessToStrictJob", Napi::Function::New(env, PtyAssignCurrentProcessToStrictJob));
 +  exports.Set("setActiveProcessLimit", Napi::Function::New(env, PtySetActiveProcessLimit));
    return exports;
  };

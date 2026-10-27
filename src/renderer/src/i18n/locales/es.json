@@ -3347,6 +3347,7 @@
             "78b79d854d": "¿Cerrar terminal?",
             "stop_agent_title": "¿Detener este agente?",
             "stop_command_title": "¿Detener comando en ejecución?",
+            "stop_chat_description": "Al cerrar este chat, se detendrá el trabajo actual del agente.",
             "stop_agent_description": "Al cerrar esta terminal, se detendrá el trabajo actual del agente.",
             "stop_command_description": "Al cerrar esta terminal, se detendrá el comando que se está ejecutando en ella.",
             "dont_ask_again": "No volver a preguntar para terminales en ejecución",
@@ -7686,6 +7687,8 @@
           "projectRuntimeDescription": "Runtime predeterminado para proyectos locales de Windows que no lo sobrescriben.",
           "editor_preview_tabs": "Reutilice una pestaña de vista previa al explorar archivos",
           "editor_preview_tabs_description": "Al hacer un solo clic en un archivo en el Explorador o al seguir un enlace en la fuente de Markdown, se reutiliza una pestaña de vista previa en cursiva por grupo en lugar de abrir una nueva. Editar, hacer doble clic o fijar mantiene esa pestaña abierta. Desactívelo para darle a cada archivo su propia pestaña.",
+          "confirm_running_work_close": "Confirmar antes de cerrar chats o terminales activos",
+          "confirm_running_work_close_description": "Preguntar antes de detener un agente o comando activo al cerrar su chat o terminal.",
           "confirm_running_terminal_close": "Confirmar antes de cerrar terminales en funcionamiento",
           "confirm_running_terminal_close_description": "Pregunte antes de detener un agente o comando en ejecución al cerrar una terminal."
         },
@@ -18967,7 +18970,8 @@
         "clearAfterRetry": "Reintente su mensaje anterior y luego ejecute /clear.",
         "compactAfterRetry": "Reintente su mensaje anterior y luego ejecute /compact.",
         "clearAfterSending": "Su mensaje anterior todavía se está enviando. Ejecute /clear cuando se haya enviado.",
-        "compactAfterSending": "Su mensaje anterior todavía se está enviando. Ejecute /compact cuando se haya enviado."
+        "compactAfterSending": "Su mensaje anterior todavía se está enviando. Ejecute /compact cuando se haya enviado.",
+        "pendingWork": "Espera a que terminen el trabajo y los mensajes pendientes antes de usar este comando."
       },
       "composer": {
         "imageUnavailable": "Vista previa no disponible",
@@ -19469,9 +19473,6 @@
         "asked": "Preguntó:",
         "questionCount": "{{value0}} preguntas"
       },
-      "conversationCommand": {
-        "pendingWork": "Espera a que terminen el trabajo y los mensajes pendientes antes de usar este comando."
-      },
       "drop": {
         "messageTitle": "Suelta para adjuntar a este mensaje",
         "title": "Suelta para adjuntar a este chat",
@@ -19883,6 +19884,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "Preparando el contexto guardado del chat…",
       "handOffToAnotherAgent": "Pasar a otro agente",
       "dialogTitle": "Pasar a otro agente",
       "dialogDescription": "Inicia una sesión nueva del agente desde este punto. La sesión original no cambia.",
@@ -19896,6 +19898,8 @@
       "context": "Contexto",
       "modeFocused": "Traspaso enfocado (recomendado)",
       "modeFocusedDescription": "Usa el estado más reciente y el espacio de trabajo actual, y consulta detalles anteriores solo cuando hacen falta.",
+      "modeLoadedDescription": "Usa los mensajes recientes cargados en este chat y el espacio de trabajo actual.",
+      "modeCapturedDescription": "Usa el texto capturado y el espacio de trabajo actual.",
       "modeFull": "Transcripción completa de la sesión",
       "modeFullDescription": "Pide al nuevo agente que lea toda la sesión guardada antes de continuar. Puede tardar más y consumir una cantidad considerable de contexto, uso del plan o créditos de API.",
       "startsIn": "Se inicia en:",
@@ -20645,6 +20649,8 @@
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",
       "nextLaunch": "{{value0}} → {{value1}}. El próximo Claude que inicies la usará. Las sesiones en ejecución conservan su cuenta.",
       "profileSwitching": "El cambio se aplica al próximo Claude que inicies en cualquier pestaña. Las sesiones en ejecución conservan su cuenta.",
+      "systemDefault": "Predeterminado del sistema",
+      "unnamedAccount": "Cuenta de Claude",
       "systemDefaultNamed": "Predeterminado del sistema: {{value0}}",
       "systemDefaultIsSaved": "Predeterminado del sistema ha iniciado sesión como {{value0}}, que también es una cuenta guardada. Puede que una versión anterior de Orca haya copiado ese inicio de sesión allí. Si no es tu propio inicio de sesión, selecciona Predeterminado del sistema y ejecuta claude /login.",
       "systemDefaultIsSavedDismiss": "Descartar",

@@ -3492,6 +3492,7 @@
             "78b79d854d": "Fermer le terminal ?",
             "stop_agent_title": "Arrêter cet agent ?",
             "stop_command_title": "Arrêter la commande en cours ?",
+            "stop_chat_description": "Fermer cette conversation interrompra le travail en cours de l'agent.",
             "stop_agent_description": "Fermer ce terminal interrompra le travail en cours de l'agent.",
             "stop_command_description": "Fermer ce terminal interrompra la commande qui s'y exécute.",
             "dont_ask_again": "Ne plus demander pour les terminaux en cours d'exécution",
@@ -7831,6 +7832,8 @@
           "projectRuntimeDescription": "Runtime par défaut pour les projets Windows locaux qui ne le remplacent pas.",
           "editor_preview_tabs": "Réutiliser un onglet d'aperçu lors de la navigation dans les fichiers",
           "editor_preview_tabs_description": "Un simple clic sur un fichier dans l'Explorateur ou en suivant un lien dans la source Markdown réutilise un onglet d'aperçu en italique par groupe au lieu d'en ouvrir un nouveau. La modification, le double-clic ou l’épinglage maintiennent cet onglet ouvert. Désactivez cette option pour donner à chaque fichier son propre onglet.",
+          "confirm_running_work_close": "Confirmer avant de fermer des conversations ou terminaux actifs",
+          "confirm_running_work_close_description": "Demander avant d'arrêter un agent ou une commande en cours lors de la fermeture de sa conversation ou de son terminal.",
           "confirm_running_terminal_close": "Confirmer avant de fermer les terminaux en cours d'exécution",
           "confirm_running_terminal_close_description": "Demandez avant d'arrêter un agent ou une commande en cours d'exécution lors de la fermeture d'un terminal."
         },
@@ -19108,7 +19111,8 @@
         "clearAfterRetry": "Réessayez votre message précédent, puis lancez /clear.",
         "compactAfterRetry": "Réessayez votre message précédent, puis lancez /compact.",
         "clearAfterSending": "Votre message précédent est encore en cours d'envoi. Lancez /clear une fois qu'il est parti.",
-        "compactAfterSending": "Votre message précédent est encore en cours d'envoi. Lancez /compact une fois qu'il est parti."
+        "compactAfterSending": "Votre message précédent est encore en cours d'envoi. Lancez /compact une fois qu'il est parti.",
+        "pendingWork": "Attendez la fin du travail et des messages en attente avant d'utiliser cette commande."
       },
       "composer": {
         "imageUnavailable": "Aperçu indisponible",
@@ -19549,9 +19553,6 @@
         "ranN": "A exécuté {{value0}} sous-agents",
         "tokens": "Jetons {{value0}}",
         "unnamed": "Sous-agent"
-      },
-      "conversationCommand": {
-        "pendingWork": "Attendez la fin du travail et des messages en attente avant d'utiliser cette commande."
       },
       "drop": {
         "messageTitle": "Déposez pour joindre à ce message",
@@ -20024,6 +20025,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "Préparation du contexte enregistré du chat…",
       "handOffToAnotherAgent": "Transférer à un autre Agent",
       "dialogTitle": "Transférer à un autre Agent",
       "dialogDescription": "Démarrez une nouvelle session d'Agent depuis ce point d'arrêt. La session d'origine reste inchangée.",
@@ -20037,6 +20039,8 @@
       "context": "Contexte",
       "modeFocused": "Transfert ciblé (recommandé)",
       "modeFocusedDescription": "Utilise le statut le plus récent et l'espace de travail actuel, en ne lisant les détails anciens de la transcription qu'en cas de besoin.",
+      "modeLoadedDescription": "Utilise les messages récents chargés dans cette conversation et l’espace de travail actuel.",
+      "modeCapturedDescription": "Utilise le texte capturé et l’espace de travail actuel.",
       "modeFull": "Transcription complète de la session",
       "modeFullDescription": "Demande au nouvel Agent de lire la session sauvegardée complète avant de continuer. Cela peut prendre plus de temps et consommer beaucoup de contexte, d'utilisation du plan ou de crédits API.",
       "startsIn": "Démarre dans :",
@@ -20826,6 +20830,8 @@
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",
       "nextLaunch": "{{value0}} → {{value1}}. Le prochain Claude que vous démarrez l'utilise. Les sessions en cours conservent leur compte.",
       "profileSwitching": "Le changement s'applique au prochain Claude que vous démarrez dans n'importe quel onglet. Les sessions en cours conservent leur compte.",
+      "systemDefault": "Valeur par défaut du système",
+      "unnamedAccount": "Compte Claude",
       "systemDefaultNamed": "Système par défaut : {{value0}}",
       "systemDefaultIsSaved": "Système par défaut est connecté en tant que {{value0}}, qui est aussi un compte enregistré. Une version antérieure d'Orca a peut-être copié cette connexion à cet endroit. S'il ne s'agit pas de votre propre connexion, sélectionnez Système par défaut et exécutez claude /login.",
       "systemDefaultIsSavedDismiss": "Ignorer",

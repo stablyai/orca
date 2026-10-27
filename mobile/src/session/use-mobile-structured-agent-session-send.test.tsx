@@ -12,7 +12,10 @@ import {
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-session-create-capabilities'
 import {
   structuredAgentSessionHostSupport,
   type StructuredAgentSessionHostSupport
@@ -446,6 +449,29 @@ describe('mobile structured send actions', () => {
       }
     })
   })
+
+  it.each([true, false])(
+    'sends the picked skill path only to a host that takes it: %s',
+    async (takesSkills) => {
+      hostSupport = structuredAgentSessionHostSupport(
+        takesSkills ? [AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY] : []
+      )
+      sendRequest.mockImplementation(async (method) =>
+        method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
+      )
+      await mountSession()
+      const review = { name: 'review', path: '/repo/.agents/skills/review/SKILL.md' }
+      await act(async () => {
+        await hook!.sendWithOutcome('$review this', undefined, undefined, [], [review])
+      })
+      expect(fieldsOf(calls()[0]?.[1]).body).toEqual({
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '$review this' }],
+        ...(takesSkills ? { skills: [review] } : {})
+      })
+    }
+  )
 
   it('sends an attached file as a reference after the text, and only images as image blocks', async () => {
     sendRequest.mockImplementation(async (method) =>

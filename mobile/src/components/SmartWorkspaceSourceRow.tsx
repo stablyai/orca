@@ -1,7 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { CaseSensitive, GitBranch, Sparkles } from 'lucide-react-native'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TaskProviderLogo } from './TaskProviderLogo'
 
 type Props = {
@@ -70,6 +72,7 @@ function resolveRowContent(row: SourceRow): RowContent {
 }
 
 export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
+  useMobileColorScheme()
   const content = resolveRowContent(row)
   return (
     <Pressable
@@ -98,7 +101,7 @@ export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -138,4 +141,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textTransform: 'capitalize'
   }
-})
+}))

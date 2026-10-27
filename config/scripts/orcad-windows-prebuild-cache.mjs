@@ -174,6 +174,7 @@ export function validateWindowsPrebuildCache({
   const addon = join(slotDir, 'conpty.node')
   ownership.assertRebuiltConptyMatchesArch(addon, arch)
   ownership.assertCygwinBreakawayDenied(addon, { dir: slotDir })
+  ownership.assertNativeHostJobOwnership(addon)
   return slot
 }
 

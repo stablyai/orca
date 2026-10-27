@@ -31,7 +31,7 @@ import {
   type NativeChatSubagentEntriesSlot,
   type NativeChatSubagentSectionSlot
 } from './native-chat-subagent-section-slots'
-import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat-trailing-run'
+import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
 import { nativeChatTranscriptWorkRuns } from './native-chat-transcript-work-runs'
 
 export type NativeChatTranscriptSlot =

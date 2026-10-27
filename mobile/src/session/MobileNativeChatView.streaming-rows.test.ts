@@ -230,7 +230,7 @@ function Harness({
     nativeChatSession: { messages, status: 'ready' },
     nativeChatAgent: 'claude',
     nativeChatStructured: true,
-    nativeChatAgentWorking: true,
+    nativeChatTurnActive: true,
     nativeChatItemSource: source,
     nativeChatVisualSource: source,
     nativeChatSettledTurns: timing.settledTurns,
@@ -264,7 +264,8 @@ function Harness({
     sendSurfaceId: source?.sessionId ?? stable.sendSurfaceId,
     sessionId: source?.sessionId ?? 'session',
     getSendCompletionGeneration: stable.getSendCompletionGeneration,
-    keyboardInset: 0
+    keyboardInset: 0,
+    hostName: null
   })
 }
 

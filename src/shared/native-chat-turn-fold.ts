@@ -5,8 +5,8 @@ import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from './agent-session-c
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from './agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from './agent-session-turn-notice'
 import { nativeChatRowRendersContent } from './native-chat-row-content'
-import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
-import { nativeChatRowRendersProse } from './native-chat-trailing-run'
+import { isStoppedBeforeStartBlock } from './native-chat/native-chat-stopped-before-start'
+import { nativeChatRowRendersProse } from './native-chat/native-chat-trailing-run'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,

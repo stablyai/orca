@@ -32,6 +32,7 @@ import {
 } from '../../../skills/skill-discovery-target'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../../../shared/skill-install-capability'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   AgentSkillShareRequestSchema,
@@ -57,6 +58,21 @@ export function resolveDiscoveryTarget(
   return resolveSkillDiscoveryTarget(target)
 }
 
+// A caller naming only the workspace gets its folder from the host, which refuses SSH workspaces like desktop.
+async function withWorkspaceCwd(
+  params: z.infer<typeof SkillsDiscoverParams>,
+  runtime: Pick<OrcaRuntimeService, 'resolveRuntimeFileTarget'>
+): Promise<z.infer<typeof SkillsDiscoverParams>> {
+  if (params.cwd?.trim() || !params.worktreeId) {
+    return params
+  }
+  const target = await runtime.resolveRuntimeFileTarget(`id:${params.worktreeId}`)
+  if (parseExecutionHostId(target.executionHostId)?.kind === 'ssh') {
+    throw new Error('Skill discovery is unavailable for SSH hosts.')
+  }
+  return { ...params, cwd: target.worktree.path }
+}
+
 function skillDeleteDependencies(
   runtime: Pick<OrcaRuntimeService, 'listRepos' | 'resolveSkillDiscoveryProviderRoots'>
 ): SkillDeleteRequestDependencies {
@@ -74,7 +90,10 @@ export const SKILL_METHODS = [
     params: SkillsDiscoverParams,
     handler: async (params, { runtime }) => {
       // Resolve WSL preferences on the executing host; remote clients provide workspace identity, not trusted runtime absence.
-      const resolvedTarget = await resolveDiscoveryTarget(params, runtime)
+      const resolvedTarget = await resolveDiscoveryTarget(
+        await withWorkspaceCwd(params, runtime),
+        runtime
+      )
       return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
         providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
         refresh: params.refresh === true

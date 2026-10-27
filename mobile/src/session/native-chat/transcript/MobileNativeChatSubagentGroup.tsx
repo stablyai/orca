@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
+import { Pressable, Text, View, type ViewStyle } from 'react-native'
 import { Bot, ChevronRight } from 'lucide-react-native'
 import {
   formatSubagentTokens,
@@ -14,6 +14,8 @@ import type {
 } from '../../../../../src/shared/native-chat-types'
 import { useNow } from '../../../hooks/use-now'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 function stateDotStyle(state: NativeChatSubagentState): ViewStyle {
   switch (state) {
@@ -57,6 +59,7 @@ export function MobileNativeChatSubagentGroup({
   open: boolean
   onToggle?: (groupId: string) => void
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   const header = nativeChatSubagentGroupHeader(block.agents, say)
   if (header.total === 0) {
     return null
@@ -133,7 +136,7 @@ export function MobileNativeChatSubagentGroup({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   group: {
     paddingVertical: spacing.xs
   },
@@ -191,4 +194,4 @@ const styles = StyleSheet.create({
   entryLabelIdle: {
     color: colors.textMuted
   }
-})
+}))

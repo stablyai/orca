@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   USER_MESSAGE,

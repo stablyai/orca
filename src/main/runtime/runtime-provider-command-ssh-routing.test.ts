@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 
-const { getIssueMock, listTodosMock } = vi.hoisted(() => ({
-  getIssueMock: vi.fn(),
-  listTodosMock: vi.fn()
-}))
+const { getIssueMock, listTodosMock, listMergeRequestsMock, listWorkItemsMock } = vi.hoisted(
+  () => ({
+    getIssueMock: vi.fn(),
+    listTodosMock: vi.fn(),
+    listMergeRequestsMock: vi.fn(),
+    listWorkItemsMock: vi.fn()
+  })
+)
 vi.mock('../github/client', () => ({
   getIssue: getIssueMock,
   getPRCheckDetails: vi.fn(),
@@ -14,7 +18,9 @@ vi.mock('../github/client', () => ({
 vi.mock('../github/work-item-details', () => ({ getPRFileContents: vi.fn() }))
 vi.mock('../gitlab/client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listTodos: listTodosMock
+  listTodos: listTodosMock,
+  listMergeRequests: listMergeRequestsMock,
+  listWorkItems: listWorkItemsMock
 }))
 
 import { RuntimeGitHubReviewQueryCommands } from './runtime-github-review-query-commands'
@@ -37,6 +43,8 @@ describe('runtime provider commands route an SSH project to its host', () => {
   beforeEach(() => {
     getIssueMock.mockReset().mockResolvedValue(null)
     listTodosMock.mockReset().mockResolvedValue([])
+    listMergeRequestsMock.mockReset()
+    listWorkItemsMock.mockReset()
   })
 
   it.each([
@@ -67,5 +75,27 @@ describe('runtime provider commands route an SSH project to its host', () => {
     await commands.listGitLabRepoTodos('id:repo-1')
 
     expect(listTodosMock).toHaveBeenCalledWith('/srv/project', expected)
+  })
+
+  it('preserves unknown-total list envelopes through the GitLab runtime commands', async () => {
+    const result = {
+      items: [{ id: 'mr-7', type: 'mr', number: 7 }],
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
+    }
+    listMergeRequestsMock.mockResolvedValue(result)
+    listWorkItemsMock.mockResolvedValue(result)
+    const commands = new RuntimeGitLabQueryCommands({
+      resolveRepo: async () => repoOn({ executionHostId: 'ssh:gpu' }),
+      getLocalGitArgs: () => [],
+      recordProjectRecent: () => {}
+    })
+
+    await expect(commands.listGitLabRepoMRs('id:repo-1', 'opened', 3, 1)).resolves.toEqual(result)
+    await expect(commands.listGitLabRepoWorkItems('id:repo-1', 'opened', 3, 1)).resolves.toEqual(
+      result
+    )
   })
 })

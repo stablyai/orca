@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native'
 import { ArrowDown } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
 
 export function MobileNativeChatFloatingControls({
@@ -10,6 +11,7 @@ export function MobileNativeChatFloatingControls({
   showJumpToTail: boolean
   onJumpToTail: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View pointerEvents="box-none" style={styles.floatingControls}>
       {showJumpToTail ? (

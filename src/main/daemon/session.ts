@@ -87,7 +87,6 @@ export class Session {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
-    this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => {
       if (!this._disposed) {
         this.shellReady.ingestSubprocessData(data)
@@ -139,16 +138,17 @@ export class Session {
   }
 
   write(data: string): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
+    // Human input must reach rc-file readers while automatic startup commands wait for readiness.
+    if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
+      this.subprocess.write(data)
     }
+  }
 
-    // Contain cooked query echoes and preserve input order through the post-ready flush window.
-    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data)) {
-      return
+  /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
+  writeStartupCommand(data: string): void {
+    if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
+      this.subprocess.write(data)
     }
-
-    this.subprocess.write(data)
   }
 
   resize(cols: number, rows: number): void {
@@ -345,7 +345,6 @@ export class Session {
     }
 
     this.shellReady.releaseDeviceAttributes()
-    this.shellReady.disposePromptReadinessProbe()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
     // Flush after ingress drains so prompts held mid-proof reach clients and history before the exit event.

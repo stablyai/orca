@@ -1,5 +1,4 @@
 import { startStructuredAgentSessionLiveRead } from '../../../../shared/structured-agent-session-live-read'
-import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   callStructuredAgentSession,
@@ -9,7 +8,7 @@ import {
 type LiveReadArgs = Parameters<typeof startStructuredAgentSessionLiveRead>[0]
 
 export function startStructuredAgentSessionReadTransport(
-  args: Omit<LiveReadArgs, 'readCurrentRequests' | 'subscribe' | 'subscribeRetryNow'> & {
+  args: Omit<LiveReadArgs, 'readCurrentRequests' | 'subscribe'> & {
     target: RuntimeClientTarget
   }
 ): ReturnType<typeof startStructuredAgentSessionLiveRead> {
@@ -19,10 +18,6 @@ export function startStructuredAgentSessionReadTransport(
     readCurrentRequests: (request) =>
       callStructuredAgentSession(target, 'agentSession.currentRequests', request),
     subscribe: (params, onEvent, onError, onClose) =>
-      subscribeStructuredAgentSession(target, params, onEvent, onError, onClose),
-    subscribeRetryNow: (retryNow) =>
-      target.kind === 'environment'
-        ? subscribeRuntimeHostContactRegained(target.environmentId, retryNow)
-        : () => {}
+      subscribeStructuredAgentSession(target, params, onEvent, onError, onClose)
   })
 }

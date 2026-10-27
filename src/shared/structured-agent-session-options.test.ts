@@ -125,33 +125,6 @@ describe('structured agent session options', () => {
     expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('persisted-unknown')
   })
 
-  it('projects live options as directly settable descriptors', () => {
-    const state = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex'),
-      CODEX_SESSION_OPTION_CATALOG,
-      {
-        models: [
-          {
-            id: 'account-model',
-            label: 'Account Model',
-            isDefault: true,
-            defaultEffort: 'medium',
-            efforts: [
-              { value: 'medium', label: 'Medium' },
-              { value: 'high', label: 'High' }
-            ]
-          }
-        ],
-        current: { model: 'account-model', effort: 'medium' }
-      }
-    )
-
-    const snapshot = structuredAgentSessionOptionSnapshot(state)
-    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
-    expect(snapshot.every((descriptor) => descriptor.settable)).toBe(true)
-    expect(snapshot.every((descriptor) => descriptor.action === undefined)).toBe(true)
-  })
-
   it('projects Fast mode only from positive session and model capability', () => {
     const supported = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex'),

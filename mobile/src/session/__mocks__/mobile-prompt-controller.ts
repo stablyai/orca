@@ -77,9 +77,6 @@ vi.mock('../native-chat/composer/use-mobile-native-chat-composer-tray', () => ({
   NO_COMPOSER_TRAY: {},
   useMobileNativeChatComposerTray: () => ({})
 }))
-vi.mock('../native-chat/use-mobile-native-chat-streaming-bubble', () => ({
-  useMobileNativeChatStreamingBubble: () => null
-}))
 
 let tree: ReactTestRenderer | null = null
 let controller: MobileNativeChatController
@@ -166,7 +163,8 @@ function Harness(props: HarnessProps) {
     sendSurfaceId: 'surface',
     sessionId: null,
     getSendCompletionGeneration: () => 0,
-    keyboardInset: 0
+    keyboardInset: 0,
+    hostName: null
   })
 }
 export async function render(props: HarnessProps = lastProps ?? {}) {

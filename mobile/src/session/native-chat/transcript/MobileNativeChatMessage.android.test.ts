@@ -232,7 +232,7 @@ describe('MobileNativeChatMessage on Android', () => {
     })
     const [markdown, ...others] = byType('MobileMarkdown')
     expect(others).toHaveLength(0)
-    expect(markdown?.props).toMatchObject({ rangeSelectable: true, tone: 'onBright' })
+    expect(markdown?.props).toMatchObject({ rangeSelectable: true, tone: 'userMessage' })
     expect(markdown?.props.onLongPress).toEqual(expect.any(Function))
     expect(
       byType('Pressable').filter((node) => node.props.accessibilityLabel === 'Copy message')

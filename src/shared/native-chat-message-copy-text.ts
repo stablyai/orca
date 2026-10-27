@@ -1,6 +1,6 @@
 import type { NativeChatMessage } from './native-chat-types'
 import { deriveNativeChatRowContent } from './native-chat-row-content'
-import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start'
+import { nativeChatBlocksInOwnWords } from './native-chat/native-chat-stopped-before-start'
 import { withoutNativeChatVisualDirectiveLines } from './native-chat/native-chat-visual-directive'
 
 /** What a message's Copy action copies: its words, less any agent visual lines. */

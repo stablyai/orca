@@ -185,9 +185,10 @@ runs:
         key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
 
     # Producers can refresh access and publish misses without downloading existing archives.
+    # Not on GitHub-hosted runners: nothing restores that store, and direct installs beat restoring it.
     - name: Keep pnpm download store without restoring
       id: pnpm-store-lookup
-      if: steps.pnpm-store-mode.outputs.lookup-only == 'true'
+      if: steps.pnpm-store-mode.outputs.lookup-only == 'true' && runner.environment != 'github-hosted'
       uses: actions/cache@v5
       with:
         # Twice-nested composite cleanup loses internal step outputs.

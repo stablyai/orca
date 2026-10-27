@@ -1,6 +1,7 @@
 import type {
   GitHubProjectFieldValue,
   GitHubProjectLabel,
+  GitHubProjectLinkedPullRequests,
   GitHubProjectRow,
   GitHubProjectRowItemType,
   GitHubProjectUser
@@ -10,6 +11,7 @@ import { driftError } from './project-error-classification'
 import {
   normalizeFieldValue,
   normalizeLabel,
+  normalizeLinkedPullRequests,
   normalizeUser,
   type RawFieldValue,
   type RawLabel,
@@ -30,6 +32,7 @@ type RawContent = {
   assignees?: { nodes?: RawUser[] }
   labels?: { nodes?: RawLabel[] }
   parent?: { number?: number; title?: string; url?: string } | null
+  subIssuesSummary?: { completed?: number; total?: number; percentCompleted?: number }
   issueType?: {
     id?: string
     name?: string
@@ -44,7 +47,7 @@ export type RawItem = {
   updatedAt?: string
   content?: RawContent | null
   fieldValues?: {
-    nodes?: RawFieldValue[]
+    nodes?: (RawFieldValue | null)[]
     pageInfo?: { hasNextPage?: boolean }
   }
 }
@@ -100,6 +103,17 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
     typeof content.parent.url === 'string'
       ? { number: content.parent.number, title: content.parent.title, url: content.parent.url }
       : null
+  const subIssuesSummary = content?.subIssuesSummary
+  const subIssuesProgress =
+    typeof subIssuesSummary?.completed === 'number' &&
+    typeof subIssuesSummary.total === 'number' &&
+    typeof subIssuesSummary.percentCompleted === 'number'
+      ? {
+          completed: subIssuesSummary.completed,
+          total: subIssuesSummary.total,
+          percentCompleted: subIssuesSummary.percentCompleted
+        }
+      : null
   const issueType =
     content?.issueType &&
     typeof content.issueType.id === 'string' &&
@@ -112,8 +126,13 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
             typeof content.issueType.description === 'string' ? content.issueType.description : null
         }
       : null
+  let linkedPullRequests: GitHubProjectLinkedPullRequests | null = null
   const fieldValuesByFieldId: Record<string, GitHubProjectFieldValue> = {}
   for (const fv of raw.fieldValues?.nodes ?? []) {
+    if (fv?.__typename === 'ProjectV2ItemFieldPullRequestValue') {
+      linkedPullRequests = normalizeLinkedPullRequests(fv)
+      continue
+    }
     const normalized = normalizeFieldValue(fv)
     if (normalized) {
       fieldValuesByFieldId[normalized.fieldId] = normalized
@@ -143,6 +162,8 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
       assignees,
       labels,
       parentIssue,
+      linkedPullRequests,
+      subIssuesProgress,
       issueType
     },
     fieldValuesByFieldId,

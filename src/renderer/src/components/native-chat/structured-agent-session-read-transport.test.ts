@@ -90,6 +90,7 @@ describe('structured agent-session read transport generations', () => {
     applyError = vi.fn()
   ) {
     return startStructuredAgentSessionReadTransport({
+      subscribeRetryNow: () => () => {},
       applyEvent,
       applyError,
       getCursor: () => null,
@@ -106,6 +107,7 @@ describe('structured agent-session read transport generations', () => {
     try {
       let state = EMPTY_STRUCTURED_AGENT_SESSION
       const transport = startStructuredAgentSessionReadTransport({
+        subscribeRetryNow: () => () => {},
         applyEvent: (event) => {
           state = reduceStructuredAgentSession(state, { type: 'event', event })
         },
@@ -308,6 +310,7 @@ describe('structured agent-session read transport unattached refusals', () => {
     applyEvent = vi.fn()
   ) {
     return startStructuredAgentSessionReadTransport({
+      subscribeRetryNow: () => () => {},
       applyEvent,
       applyError,
       getCursor: () => null,
@@ -656,7 +659,8 @@ describe('structured agent-session read transport unattached refusals', () => {
         onHistoryReadInvalidated: () => undefined,
         hydrate: async () => undefined,
         sessionId: 'session-a',
-        target: { kind: 'environment', environmentId: 'env-a' }
+        target: { kind: 'environment', environmentId: 'env-a' },
+        subscribeRetryNow: (retry) => mocks.watchHostContact('env-a', retry)
       })
       expect(mocks.watchHostContact).toHaveBeenCalledWith('env-a', expect.any(Function))
       await flushPromises()

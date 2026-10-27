@@ -28,6 +28,7 @@ import {
 import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
@@ -67,6 +68,7 @@ export function SmartWorkspaceSourceDrawer({
   onRepoChange,
   onClose
 }: Props) {
+  useMobileColorScheme()
   const availableModes = useMemo(() => resolveAvailableSmartModes(availability), [availability])
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')

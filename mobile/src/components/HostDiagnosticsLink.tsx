@@ -1,8 +1,11 @@
 import { ChevronRight } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text } from 'react-native'
+import { Pressable, Text } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function HostDiagnosticsLink({ onPress }: { onPress: () => void }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <Pressable
       style={styles.link}
@@ -16,7 +19,7 @@ export function HostDiagnosticsLink({ onPress }: { onPress: () => void }): React
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   link: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
@@ -35,4 +38,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

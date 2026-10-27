@@ -60,7 +60,6 @@ vi.mock('../theme/mobile-theme', async (original) => ({
   colors: {}
 }))
 vi.mock('../storage/preferences', () => ({
-  HOST_SIDEBAR_DEFAULT_WIDTH: 320,
   HOST_SIDEBAR_MAX_WIDTH: 480,
   HOST_SIDEBAR_MIN_WIDTH: 240,
   loadHostSidebarWidth: async () => 320,

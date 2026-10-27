@@ -171,6 +171,8 @@ export function sessionScreenReadMountAdapters(
             enabled,
             handleRef: { current: HANDLE },
             deviceTokenRef: { current: DEVICE_TOKEN },
+            // OpenCode is the agent whose Stop sends the paced second Escape these recordings pin.
+            agentRef: { current: 'opencode' },
             streamIdentity: 'stream-1',
             cancelPending: () => effect('cancel-pending', {}),
             onSendError: (message: string) => errors.push(message)

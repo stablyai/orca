@@ -37,6 +37,11 @@ export function retirePurgedTabLaunches(
   for (const tab of unifiedTabs) {
     if (tab.contentType === 'agent-session') {
       forgetUnlistedCreatedChat(worktreeId, tab.entityId)
+      retireStructuredAgentSessionReadOwner(
+        tab.entityId,
+        structuredAgentSessionTargetForHost(tab.executionHostId),
+        tab.executionHostId ?? ''
+      )
       const target = structuredAgentSessionTargetForTab(s, tab)
       if (target) {
         retireStructuredAgentSessionReadOwner(tab.entityId, target)

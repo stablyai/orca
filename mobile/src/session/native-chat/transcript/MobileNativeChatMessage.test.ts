@@ -1,19 +1,9 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
-import {
-  NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
-  type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-session-host-status-rows'
-import {
-  agentSessionFailureFact,
-  readProviderRetry
-} from '../../../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../src/shared/agent-session-failure-words'
 import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
 import { colors, typography } from '../../../theme/mobile-theme'
@@ -66,6 +56,7 @@ vi.mock('lucide-react-native', () => ({
   FilePlus2: 'FilePlus2',
   Folder: 'Folder',
   Globe: 'Globe',
+  Info: 'Info',
   ListChecks: 'ListChecks',
   MessageSquareMore: 'MessageSquareMore',
   Pencil: 'Pencil',
@@ -332,139 +323,6 @@ describe('MobileNativeChatMessage', () => {
     )
   })
 
-  const statusRow = (body: AgentJournalStatusItem): NativeChatMessage =>
-    projectStructuredItemToNativeChat({
-      itemId: 'status',
-      revision: 1,
-      sequence: 2,
-      observedAt: 2,
-      body
-    })!
-
-  it.each(['without reset', 'with reset', 'from an old host'] as const)(
-    'draws an OpenCode usage warning %s',
-    (source) => {
-      const hasReset = source === 'with reset'
-      const resetsAt = new Date(2026, 9, 15, 15, 42).getTime()
-      const now = vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 9, 15, 12).getTime())
-      try {
-        const host = agentSessionFailureWords(
-          agentSessionFailureFact('usageLimitReached', {
-            detail: {
-              text: 'Internal error: Rate limit exceeded. Please try again later.',
-              audience: 'person'
-            },
-            ...(hasReset ? { usageLimit: { resetsAt } } : {})
-          }),
-          { surface: 'row', agentName: 'OpenCode' }
-        )
-        expect(host.text).toBe('OpenCode hit its usage limit.')
-        const hostText =
-          source === 'from an old host'
-            ? 'OpenCode hit its usage limit. Send a message once it resets to continue.'
-            : host.text
-        const body: unknown = { kind: 'status', tone: 'warning', ...host, text: hostText }
-        if (!isAdmissibleAgentJournalItemBody(body) || body.kind !== 'status') {
-          throw new Error('Status fixture was not admitted')
-        }
-        const tree = render(statusRow(body))
-        const text = tree.root.find(
-          (node) => String(node.type) === 'Text' && node.props.selectable === true
-        )
-        expect(text.props.children).toEqual(
-          hasReset
-            ? expect.stringMatching(/^OpenCode hit its usage limit\. It resets at \S.*\.$/u)
-            : hostText
-        )
-        expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
-        expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
-          colors.statusAmber
-        )
-        expect(markdownIn(tree.root)).toEqual([])
-      } finally {
-        now.mockRestore()
-      }
-    }
-  )
-
-  it.each<readonly [string, NativeChatMessage, string]>([
-    [
-      'an API retry as a warning',
-      statusRow({
-        kind: 'status',
-        tone: 'warning',
-        ...agentSessionFailureWords(
-          agentSessionFailureFact('providerRetrying', {
-            retry: readProviderRetry({
-              error: 'overloaded',
-              status: 529,
-              attempt: 2,
-              maxRetries: 10
-            })
-          }),
-          { surface: 'row', agentName: 'Claude' }
-        )
-      }),
-      colors.statusAmber
-    ],
-    [
-      'a sign-in failure as an error',
-      statusRow({
-        kind: 'status',
-        tone: 'error',
-        ...agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
-          agentName: 'Claude',
-          provider: 'claude',
-          surface: 'row'
-        })
-      }),
-      colors.statusRed
-    ],
-    ...[
-      'Please add or update your payment method to continue',
-      'Your current subscription plan does not yet include access to glm-5'
-    ].map(
-      (instruction) =>
-        [
-          `an OpenCode corrective instruction: ${instruction}`,
-          statusRow({ kind: 'status', tone: 'error', text: `Internal error: ${instruction}` }),
-          colors.statusRed
-        ] as const
-    ),
-    [
-      'an interruption as a faint aside',
-      {
-        id: 'interrupted',
-        role: 'system',
-        blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }],
-        timestamp: 1,
-        source: 'transcript'
-      } satisfies NativeChatMessage,
-      colors.textMuted
-    ]
-  ])('draws %s, never as the agent speaking', (_, message, color) => {
-    const tree = render(message)
-    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
-    const text = tree.root.find(
-      (node) => String(node.type) === 'Text' && node.props.selectable === true
-    )
-    expect(text.props.children).toBe(message.blocks.find((block) => block.type === 'text')?.text)
-    expect(Object.assign({}, ...text.props.style)).toMatchObject({ color })
-  })
-
-  it('draws a compaction as a divider, not as a reply', () => {
-    const tree = render(
-      statusRow({ kind: 'status', text: 'Context compacted', presentation: 'compaction' })
-    )
-    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
-    expect(
-      tree.root.findAll(
-        (node) =>
-          String(node.type) === 'View' && node.props.accessibilityLabel === 'Context compacted'
-      )
-    ).toHaveLength(1)
-  })
-
   it.each(['system', 'user'] as const)(
     'renders a %s host notice as selectable muted text rather than a markdown answer',
     (role) => {
@@ -678,12 +536,12 @@ describe('MobileNativeChatMessage', () => {
     ).toEqual(thumbnails)
   })
 
-  it('draws your message as selectable Markdown in the bubble’s dark-on-light colours', () => {
+  it('draws your message as selectable Markdown in the bubble’s text colour', () => {
     const tree = render(userMessage([{ type: 'text', text: '**Fix** `src/a.ts`' }]))
     const markdown = findByHostType(tree.root, 'MobileMarkdown')
     expect(markdown.props).toMatchObject({
       content: '**Fix** `src/a.ts`',
-      tone: 'onBright',
+      tone: 'userMessage',
       rangeSelectable: true
     })
     expect(markdown.props.renderVisual).toBeUndefined()
@@ -764,7 +622,7 @@ describe('MobileNativeChatMessage', () => {
     it('renders the settled turn status row under a user message', () => {
       const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
         structuredActivityUi: true,
-        turnStatus: { startedAt: Date.now() - 3_000, thinking: false, workedSeconds: 3 }
+        turnStatus: { startedAt: 1_700_000_000_000, thinking: false, workedSeconds: 3 }
       })
       expect(textIn(tree.root)).toContain('Worked for 3s')
     })

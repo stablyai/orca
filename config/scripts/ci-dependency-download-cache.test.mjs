@@ -81,7 +81,9 @@ describe('CI dependency download caches', () => {
     const restore = action.runs.steps.find((step) => step.id === 'pnpm-store-restore')
     expect(action.inputs['cache-pnpm-store-lookup-only'].default).toBe('auto')
     expect(lookup.uses).toBe('actions/cache@v5')
-    expect(lookup.if).toBe("steps.pnpm-store-mode.outputs.lookup-only == 'true'")
+    expect(lookup.if).toBe(
+      "steps.pnpm-store-mode.outputs.lookup-only == 'true' && runner.environment != 'github-hosted'"
+    )
     expect(lookup.with).toEqual({
       path: '${{ env.ORCA_PNPM_STORE_CACHE_PATH }}',
       key: restore.with.key,
@@ -397,7 +399,13 @@ describe('CI dependency download caches', () => {
     expect(warm['runs-on']).toBe('${{ matrix.runner }}')
     expect(warm.strategy.matrix.runner).toEqual([
       'blacksmith-4vcpu-ubuntu-2404-arm',
-      pr.jobs.test.with.runner
+      pr.jobs.test.with.runner,
+      'ubuntu-24.04-arm',
+      'ubuntu-22.04'
+    ])
+    expect(workflow('ci-cache-warmup').jobs.warm.strategy.matrix.runner).toEqual([
+      'blacksmith-4vcpu-ubuntu-2404',
+      'ubuntu-24.04'
     ])
     expect(pr.jobs.preflight['runs-on']).toBe('blacksmith-8vcpu-ubuntu-2404')
     expect(pr.jobs.test.with.runner).toBe('blacksmith-8vcpu-ubuntu-2404')
@@ -409,8 +417,9 @@ describe('CI dependency download caches', () => {
     expect(unitInstall.with['native-runtime']).toBe(warmInstall.with['native-runtime'])
     expect(warmInstall.with['node-version']).toBe('24')
     expect(unitInstall.with['node-version']).toBe('${{ matrix.node }}')
-    expect(unitInstall.with['cache-electron-package']).toBe(
-      warmInstall.with['cache-electron-package']
+    expect(unitInstall.with['cache-electron-package']).toBe('true')
+    expect(warmInstall.with['cache-electron-package']).toBe(
+      "${{ startsWith(matrix.runner, 'blacksmith-') }}"
     )
     const preflightInstalls = pr.jobs.preflight.steps.filter((step) => step.uses === installer)
     expect(preflightInstalls.map((step) => step.if)).toEqual([
@@ -490,7 +499,7 @@ describe('CI dependency download caches', () => {
     )
     const linux = release.strategy.matrix.include.find((entry) => entry.platform === 'linux-x64')
 
-    expect([linux.os, 'blacksmith-4vcpu-ubuntu-2404']).toContain(packaging['runs-on'])
+    expect([linux.os, 'ubuntu-24.04']).toContain(packaging['runs-on'])
     expect(writer.if).toBe("matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'")
     expect(writer.uses).toBe('actions/cache@v5')
     expect(writer.with.path).toBe(consumer.with.path)

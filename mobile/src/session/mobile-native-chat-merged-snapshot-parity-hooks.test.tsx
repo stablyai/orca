@@ -212,20 +212,18 @@ async function mountPhone(): Promise<Phone> {
       transcriptSettled: session.session.status === 'ready'
     })
     latest = drafts
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every member the list's rows, bars and footer read comes from the two hooks above, as the controller passes them; showNativeChat, nativeChatAgent, nativeChatCanStop, nativeChatStructured and the scope key are constants; the overlay's other members stay undefined: the composer's and Stop's handlers, files and options never reach the list, the streaming text is undefined on a structured tab too, and the prompts, which would hide the live status, are absent in this flow.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every member the list's rows, bars and footer read comes from the two hooks above, as the controller passes them; showNativeChat, nativeChatAgent, nativeChatCanStop, nativeChatStructured are constants; the overlay's other members stay undefined: the composer's and Stop's handlers, files and options never reach the list, the streaming text is undefined on a structured tab too, and the prompts, which would hide the live status, are absent in this flow.
     const controller = {
       showNativeChat: true,
       nativeChatSession: session.session,
       nativeChatAgent: 'codex',
-      nativeChatAgentWorking: session.isWorking,
       nativeChatCanStop: false,
       nativeChatStructured: true,
       nativeChatTurnIndicator: session.turnIndicator,
       nativeChatWorkingStartedAt: session.workingStartedAt,
       nativeChatSettledTurns: session.settledTurns,
       nativeChatTurnJournal: session.turnJournal,
-      nativeChatStreamLive: session.isWorking,
-      nativeChatStreamScopeKey: 'host\0workspace\0tab',
+      nativeChatTurnActive: session.isWorking,
       chatPending: drafts.pending,
       chatImagePreviewsByMessageId: drafts.imagePreviewsByMessageId,
       chatDraftKey: drafts.draftKey,
@@ -248,7 +246,8 @@ async function mountPhone(): Promise<Phone> {
       sendSurfaceId: 'host\0workspace\0tab',
       sessionId: null,
       getSendCompletionGeneration: () => 0,
-      keyboardInset: 0
+      keyboardInset: 0,
+      hostName: null
     })
   }
   let renderer: ReactTestRenderer | null = null

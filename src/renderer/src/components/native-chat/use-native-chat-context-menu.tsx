@@ -64,6 +64,9 @@ type UseNativeChatContextMenuArgs = {
   enabled?: boolean
   /** Bridge-only escape hatch; structured sessions have no terminal view. */
   onSwitchToTerminal?: () => void
+  /** Hand off a standalone structured chat; terminal panes supply their own action. */
+  onHandOff?: () => void
+  handOffDisabled?: boolean
   actions: NativeChatContextMenuActions
   showTerminalPaneActions?: boolean
   splitShortcutLabels?: { right: string; down: string }
@@ -131,6 +134,8 @@ export function useNativeChatContextMenu({
   composerRef,
   enabled = true,
   onSwitchToTerminal,
+  onHandOff,
+  handOffDisabled,
   actions,
   showTerminalPaneActions = true,
   splitShortcutLabels,
@@ -164,7 +169,7 @@ export function useNativeChatContextMenu({
     state.canPaste ||
     Boolean(target.quoteText ?? target.link ?? target.codeText ?? target.messageText) ||
     (target.rewindItemId !== null && rewind !== undefined)
-  const hasSessionItems = onFind !== undefined || showTerminalPaneActions
+  const hasSessionItems = onFind !== undefined || onHandOff !== undefined || showTerminalPaneActions
   const hasItems =
     hasEditItems || hasSessionItems || chatPane !== undefined || resolveOrcaSessionId !== undefined
 
@@ -283,6 +288,9 @@ export function useNativeChatContextMenu({
           ) : null}
           {hasEditItems && hasSessionItems ? <DropdownMenuSeparator /> : null}
           {onFind ? <NativeChatFindMenuItem onSelect={() => onFind(state.returnFocusTo)} /> : null}
+          {onHandOff ? (
+            <AgentSessionContinuationMenuItem disabled={handOffDisabled} onSelect={onHandOff} />
+          ) : null}
           {showTerminalPaneActions ? (
             <>
               {onSwitchToTerminal ? (

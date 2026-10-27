@@ -64,9 +64,7 @@ import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
 import { transcriptTailRow } from './native-chat-transcript-tail-row'
-
-/** shown prompts have a card in this pane; unshown prompts require input in the agent’s terminal. */
-export type NativeChatAwaitingInput = 'shown' | 'unshown'
+import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 type NavigationRequest =
   | { kind: 'diff'; target: NativeChatDiffReveal }

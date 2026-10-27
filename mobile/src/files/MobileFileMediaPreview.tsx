@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { PDF_MIME_TYPE, type MobileFileMedia } from './mobile-file-media'
 import { downloadMobileFileMedia, type MobileMediaSink } from './mobile-file-media-download'
@@ -25,6 +26,7 @@ export function MobileFileMediaPreview(props: Props) {
 }
 
 function MediaDownload({ media, client, title }: Props) {
+  useMobileColorScheme()
   const { worktreeId, relativePath, mimeType } = media
   const [state, setState] = useState<State>({ bytes: 0, total: 0 })
   const [attempt, setAttempt] = useState(0)

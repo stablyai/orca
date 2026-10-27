@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatSkillDiscovery } from './use-native-chat-skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { isSkillPickerTriggered } from './native-chat-composer-state'
+import { isSkillPickerTriggered } from '../../../../shared/native-chat-composer-autocomplete'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),

@@ -11,7 +11,7 @@ import {
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   claudeStructuredPermissionOptions
 } from './claude-structured-launch-resolution'
-import { readClaudeInit } from './claude-structured-init-proof'
+import { readClaudeInit } from './structured/claude-structured-init-proof'
 import {
   realClaudeAuthenticated,
   realClaudeAuthStatus,
@@ -20,12 +20,16 @@ import {
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type {
+  ClaudeStructuredSessionEvent,
+  ClaudeStructuredSessionAdapterDeps
+} from './structured/claude-structured-session-state'
+
 import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
-import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
-import { claudeOpened, claudeStartupSettled } from './claude-structured-session-test-support'
+  claudeOpened,
+  claudeStartupSettled
+} from './claude-structured-startup-settled-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const command = realClaudeCommand

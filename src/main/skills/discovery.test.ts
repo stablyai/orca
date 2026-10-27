@@ -9,7 +9,8 @@ import {
   LAST_KNOWN_ROOT_SCAN_RETENTION_MS
 } from './discovery'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import type * as SkillRootFileWalk from './skill-root-file-walk'
+import * as Plugins from './claude-plugin-skill-sources'
+import * as SkillRootFileWalk from './skill-root-file-walk'
 import type { Repo } from '../../shared/repo-types'
 
 let unavailableRootPath: string | null = null
@@ -59,6 +60,18 @@ afterEach(() => {
 })
 
 describe('skill discovery', () => {
+  it('starts no root walks after a cancelled metadata wait completes late', async () => {
+    const pending = Promise.withResolvers<[]>()
+    vi.spyOn(Plugins, 'discoverClaudePluginSkillSources').mockReturnValueOnce(pending.promise)
+    const walks = vi.spyOn(SkillRootFileWalk, 'findSkillFiles')
+    const stop = new AbortController()
+    const reading = discoverSkills({ homeDir: '/h', cwd: '/w', signal: stop.signal })
+    stop.abort()
+    await expect(reading).rejects.toThrow()
+    pending.resolve([])
+    await Promise.resolve()
+    expect(walks).not.toHaveBeenCalled()
+  })
   // An abandoned root must not empty the picker for healthy roots.
   it('keeps every healthy root when one root walk is aborted', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))

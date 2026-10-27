@@ -221,6 +221,27 @@ describe('browserManager', () => {
     )
   })
 
+  it("saves under an extension's requested filename, flattened into Downloads", () => {
+    const item = createDownloadItem()
+    webContentsFromIdMock.mockReturnValue(null)
+
+    browserManager.requestDownloadFilename(item, 'exports/summary.csv')
+    browserManager.handleGuestWillDownload({ guestWebContentsId: 412, item })
+
+    expect(item.setSavePath).toHaveBeenCalledWith(join('/downloads', 'summary.csv'))
+  })
+
+  it('saves exactly where the user chose in the save dialog, outside Downloads', () => {
+    const item = createDownloadItem()
+    webContentsFromIdMock.mockReturnValue(null)
+    const chosen = join('/elsewhere', 'backup.json')
+
+    browserManager.requestDownloadSavePath(item, chosen)
+    browserManager.handleGuestWillDownload({ guestWebContentsId: 413, item })
+
+    expect(item.setSavePath).toHaveBeenCalledWith(chosen)
+  })
+
   it('flushes started and terminal snapshots for downloads that finish before registration', () => {
     const rendererSendMock = vi.fn()
     const guest = {

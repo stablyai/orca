@@ -321,6 +321,78 @@ function noFreshSelectorResultRule(sourceCode) {
   })
 }
 
+// Host observations replace this map on every meaningful change (runtime-status.ts).
+const HOT_STORE_FIELDS = new Set(['runtimeStatusByEnvironmentId'])
+
+function selectorLocalConstant(variable, selector) {
+  const definition = variable?.defs[0]
+  const declaration = definition?.node
+  if (definition?.type !== 'Variable' || declaration.parent.kind !== 'const') {
+    return null
+  }
+  for (let parent = declaration.parent; parent; parent = parent.parent) {
+    if (parent === selector) {
+      return declaration
+    }
+  }
+  return null
+}
+
+// Resolve only the selector parameter and its local const aliases, never a same-named outer value.
+function selectorValue(expression, selector, state, seen = new Set()) {
+  if (expression?.type === 'MemberExpression') {
+    const field = propertyName(expression)
+    return HOT_STORE_FIELDS.has(field) &&
+      selectorValue(expression.object, selector, state, seen) === 'state'
+      ? field
+      : null
+  }
+  const variable = variableFor(expression, state)
+  if (!variable || seen.has(variable)) {
+    return null
+  }
+  seen.add(variable)
+  const parameter = selector.params[0]
+  if (parameter?.type === 'Identifier' && variableFor(parameter, state) === variable) {
+    return 'state'
+  }
+  const declaration = selectorLocalConstant(variable, selector)
+  const pattern = declaration?.id ?? parameter
+  if (pattern?.type === 'ObjectPattern') {
+    const property = pattern.properties.find(
+      (entry) => entry.type === 'Property' && variable.identifiers.includes(entry.value)
+    )
+    const field = property && !property.computed ? identifierName(property.key) : null
+    if (
+      HOT_STORE_FIELDS.has(field) &&
+      (pattern === parameter || selectorValue(declaration.init, selector, state, seen) === 'state')
+    ) {
+      return field
+    }
+  }
+  return declaration?.id.type === 'Identifier'
+    ? selectorValue(declaration.init, selector, state, seen)
+    : null
+}
+
+function noWholeHotMapSelectorRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector, state }) => {
+    if (!selector) {
+      return null
+    }
+    const result = returnedExpressions(selector).find((expression) =>
+      HOT_STORE_FIELDS.has(selectorValue(expression, selector, state))
+    )
+    return result
+      ? {
+          node: result,
+          message:
+            'This whole host-status map changes for every host. Select the derived answer for your own host/item with a stable result (see paired-runtime-parking-capabilities.ts), or add a disable comment with a reason if this consumer needs every host.'
+        }
+      : null
+  })
+}
+
 /** useShallow compares one level deep, so a fresh reference nested inside its result never matches. */
 function nestedFreshValues(expression) {
   if (expression?.type === 'ObjectExpression') {
@@ -389,6 +461,12 @@ function bindContext(createVisitors) {
     ) {
       return {}
     }
+    if (
+      createVisitors === noWholeHotMapSelectorRule &&
+      /\.(?:test|spec)\.[^/\\]+$/.test(context.filename)
+    ) {
+      return {}
+    }
     const visitors = createVisitors(context.sourceCode)
     for (const [nodeType, visit] of Object.entries(visitors)) {
       visitors[nodeType] = visit.bind(context)
@@ -404,6 +482,7 @@ export default {
     'no-raw-project-catalog-computed': { create: bindContext(noRawProjectCatalogComputedRule) },
     'no-identity-selector': { create: bindContext(noIdentitySelectorRule) },
     'no-fresh-selector-result': { create: bindContext(noFreshSelectorResultRule) },
+    'no-whole-hot-map-selector': { create: bindContext(noWholeHotMapSelectorRule) },
     'no-nested-fresh-under-shallow': { create: bindContext(noNestedFreshUnderShallowRule) }
   }
 }

@@ -12,7 +12,7 @@ import type {
 import {
   NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION,
   NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
-} from './native-chat-stopped-before-start'
+} from './native-chat/native-chat-stopped-before-start'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED

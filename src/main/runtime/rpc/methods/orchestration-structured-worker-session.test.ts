@@ -34,7 +34,7 @@ function installHost(
   }
 ) {
   const dispose = vi.fn()
-  const subscribe = vi.fn(async () => dispose)
+  const observeJournalPublications = vi.fn(() => dispose)
   hostRef.current = {
     setSessionTabVisibility: async () => {},
     close: async () => {},
@@ -44,9 +44,9 @@ function installHost(
           agentSessionRecordFixture({ sessionId, location })
       }
     },
-    subscribe
+    observeJournalPublications
   }
-  return { subscribe, dispose }
+  return { observeJournalPublications, dispose }
 }
 
 describe('structured worker session', () => {
@@ -59,8 +59,8 @@ describe('structured worker session', () => {
     }))
   })
 
-  it('binds only a redrive subscription at start, and settlement drops it', async () => {
-    const { subscribe, dispose } = installHost()
+  it('binds only a journal observer at start, and settlement drops it', async () => {
+    const { observeJournalPublications, dispose } = installHost()
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
@@ -70,8 +70,9 @@ describe('structured worker session', () => {
     })
     // No hold: while the dispatch is open the idle sweep reads it from the orchestration database.
     expect(hostRef.current).not.toHaveProperty('hold')
-    expect(subscribe).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: created.identity.sessionId })
+    expect(observeJournalPublications).toHaveBeenCalledWith(
+      created.identity.sessionId,
+      expect.any(Function)
     )
     expect(dispose).not.toHaveBeenCalled()
 

@@ -3332,6 +3332,7 @@
             "78b79d854d": "ターミナルを閉じますか?",
             "stop_agent_title": "この Agent を停止しますか?",
             "stop_command_title": "実行中のコマンドを停止しますか?",
+            "stop_chat_description": "このチャットを閉じると、Agent の現在の作業が停止します。",
             "stop_agent_description": "このターミナルを閉じると、Agent の現在の作業が停止します。",
             "stop_command_description": "このターミナルを閉じると、その中で実行中のコマンドが停止します。",
             "dont_ask_again": "実行中のターミナルでは今後確認しない",
@@ -7717,6 +7718,8 @@
           "projectRuntimeDescription": "個別に指定していないローカル Windows プロジェクトの既定のランタイム。",
           "editor_preview_tabs": "ファイルを参照するときにプレビュータブを再利用する",
           "editor_preview_tabs_description": "エクスプローラーでファイルをシングルクリックするか、Markdown ソースのリンクをたどると、新規タブを開くのではなく、グループごとに 1 つの斜体のプレビュータブが再利用されます。編集、ダブルクリック、または固定すると、そのタブは開いたままになります。これをオフにすると、すべてのファイルに独自のタブが与えられます。",
+          "confirm_running_work_close": "実行中のチャットやターミナルを閉じる前に確認する",
+          "confirm_running_work_close_description": "チャットやターミナルを閉じる際、実行中の Agent やコマンドを停止する前に確認します。",
           "confirm_running_terminal_close": "実行中のターミナルを閉じる前に確認してください",
           "confirm_running_terminal_close_description": "ターミナルを閉じるときに、実行中の Agent またはコマンドを停止する前に確認してください。"
         },
@@ -19059,7 +19062,8 @@
         "clearAfterRetry": "以前のメッセージを再試行してから、/clear を実行してください。",
         "compactAfterRetry": "以前のメッセージを再試行してから、/compact を実行してください。",
         "clearAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /clear を実行してください。",
-        "compactAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /compact を実行してください。"
+        "compactAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /compact を実行してください。",
+        "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージが完了するまで待ってください。"
       },
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",
@@ -19501,9 +19505,6 @@
         "ranN": "{{value0}} 個のサブ Agent を実行しました",
         "tokens": "{{value0}} トークン",
         "unnamed": "サブ Agent"
-      },
-      "conversationCommand": {
-        "pendingWork": "このコマンドを使用する前に、保留中の作業とメッセージが完了するまで待ってください。"
       },
       "drop": {
         "messageTitle": "ドロップしてこのメッセージに添付",
@@ -19980,6 +19981,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "保存されたチャットのコンテキストを準備中…",
       "handOffToAnotherAgent": "別の Agent に引き継ぐ",
       "dialogTitle": "別の Agent に引き継ぐ",
       "dialogDescription": "この時点から新しい Agent セッションを開始します。元のセッションは変更されません。",
@@ -19993,6 +19995,8 @@
       "context": "コンテキスト",
       "modeFocused": "要点を引き継ぐ（推奨）",
       "modeFocusedDescription": "最新の状態と現在のワークスペースを使い、必要な場合だけ過去の詳細を読みます。",
+      "modeLoadedDescription": "このチャットに読み込まれている最近のメッセージと現在のワークスペースを使います。",
+      "modeCapturedDescription": "キャプチャしたテキストと現在のワークスペースを使います。",
       "modeFull": "セッション全文",
       "modeFullDescription": "続行前に、保存されたセッション全体を新規 Agent に読ませます。時間がかかり、多くのコンテキスト、プラン使用量、またはAPIクレジットを消費する可能性があります。",
       "startsIn": "開始場所:",
@@ -20888,6 +20892,8 @@
       "added": "アカウントを追加しました。次に起動する Claude で使用するには、これを選択してください。",
       "nextLaunch": "{{value0}} → {{value1}}。次に起動する Claude はこれを使用します。実行中のセッションはそれぞれのアカウントを維持します。",
       "profileSwitching": "切り替えは、任意のタブで次に起動する Claude に適用されます。実行中のセッションはそれぞれのアカウントを維持します。",
+      "systemDefault": "システムのデフォルト",
+      "unnamedAccount": "Claude アカウント",
       "systemDefaultNamed": "システムのデフォルト: {{value0}}",
       "systemDefaultIsSaved": "システムのデフォルトは {{value0}} としてサインインしており、これは保存済みのアカウントでもあります。以前のバージョンの Orca がそのログインをここにコピーした可能性があります。自分のログインでない場合は、システムのデフォルトを選択して claude /login を実行してください。",
       "systemDefaultIsSavedDismiss": "閉じる",

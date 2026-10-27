@@ -1,3 +1,4 @@
+import { useContext } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-session-host-status-rows'
@@ -6,18 +7,50 @@ import {
   nativeChatNoticeBlock,
   nativeChatNoticeLook,
   type NativeChatNoticeTone
-} from '../../../../../src/shared/native-chat-notice'
-import { isTextBlock, type NativeChatBlock } from '../../../../../src/shared/native-chat-types'
-import { usageLimitLineText } from '../../../../../src/shared/agent-session-usage-limit-words'
+} from '../../../../../src/shared/native-chat/native-chat-notice'
+import {
+  isTextBlock,
+  type NativeChatBlock,
+  type NativeChatTextBlock
+} from '../../../../../src/shared/native-chat-types'
+import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session-failure-words'
+import { formatUsageLimitResetClock } from '../../../../../src/shared/agent-session-usage-limit'
+import {
+  nativeChatOrcaStopRowText,
+  sayNativeChatOrcaStopEnglish
+} from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
+import {
+  MobileNativeChatNoticeContext,
+  type MobileNativeChatNoticeNames
+} from '../../mobile-native-chat-notice-context'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 
-const TONE_COLOR: Record<NativeChatNoticeTone, string> = {
-  warning: colors.statusAmber,
-  error: colors.statusRed,
-  notice: colors.textMuted
+function toneColor(tone: NativeChatNoticeTone): string {
+  return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
+}
+
+// Desktop's no-Continue wording; the phone always reads its Orca host as remote.
+function noticeLineText(notice: NativeChatTextBlock, names: MobileNativeChatNoticeNames): string {
+  if (notice.orcaStop) {
+    return nativeChatOrcaStopRowText(
+      notice.orcaStop.cause,
+      names.hostName ?? sayNativeChatOrcaStopEnglish('unnamedServer'),
+      { continueAvailable: false, remoteHost: true }
+    )
+  }
+  const failure = readWholeAgentSessionFailureFact(notice.failure)
+  return failure?.kind === 'usageLimitReached'
+    ? agentSessionFailureSentence(failure, 'row', {
+        ...(names.agentName ? { agentName: names.agentName } : {}),
+        usageLimitReset: formatUsageLimitResetClock
+      })
+    : notice.text
 }
 
 // Render system notices separately so they cannot read as the agent’s own prose.
@@ -32,6 +65,8 @@ export function MobileNativeChatNoticeRow({
   onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element | null {
+  useMobileColorScheme()
+  const names = useContext(MobileNativeChatNoticeContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
   if (!notice) {
@@ -95,11 +130,11 @@ export function MobileNativeChatNoticeRow({
         </Text>
       )
     case 'line': {
-      const lineText = usageLimitLineText(notice)
+      const lineText = noticeLineText(notice, names)
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
-        look.tone && { color: TONE_COLOR[look.tone] }
+        look.tone && { color: toneColor(look.tone) }
       ]
       if (!look.tone) {
         return (
@@ -114,7 +149,7 @@ export function MobileNativeChatNoticeRow({
         <View style={[styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
-            color={TONE_COLOR[look.tone]}
+            color={toneColor(look.tone)}
             strokeWidth={2}
             style={styles.toneIcon}
           />
@@ -127,7 +162,7 @@ export function MobileNativeChatNoticeRow({
   }
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -176,4 +211,4 @@ const styles = StyleSheet.create({
   toneText: {
     flex: 1
   }
-})
+}))

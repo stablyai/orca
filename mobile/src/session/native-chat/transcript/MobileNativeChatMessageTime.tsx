@@ -1,10 +1,12 @@
 import { memo } from 'react'
-import { StyleSheet, Text } from 'react-native'
+import { Text } from 'react-native'
 import {
   NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT,
   NATIVE_CHAT_MESSAGE_TIME_FORMAT
 } from '../../../../../src/shared/native-chat-message-time'
 import { colors, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
 
 let formatters: { time: Intl.DateTimeFormat; full: Intl.DateTimeFormat } | null = null
@@ -16,6 +18,7 @@ export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessage
   timestamp: number | null | undefined
   fontScale: number
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   const date = timestamp == null ? null : new Date(timestamp)
   if (!date || Number.isNaN(date.getTime())) {
     return null
@@ -34,9 +37,9 @@ export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessage
   )
 })
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   time: {
     color: colors.textMuted,
     fontVariant: ['tabular-nums']
   }
-})
+}))

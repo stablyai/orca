@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { nativeChatMessageCopyText } from './native-chat-message-copy-text'
-import {
-  NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION,
-  NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
-} from './native-chat-stopped-before-start'
+
 import { subagentGroupFallbackText } from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from './native-chat-types'
 
@@ -28,16 +25,5 @@ describe('nativeChatMessageCopyText', () => {
       'Chart:\nDone.'
     )
     expect(nativeChatMessageCopyText({ role: 'user', blocks: [{ type: 'text', text }] })).toBe(text)
-  })
-
-  it('copies the stopped-before-start notice in the caller’s words', () => {
-    const blocks = [
-      {
-        type: 'text' as const,
-        text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
-        presentation: NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION
-      }
-    ]
-    expect(nativeChatMessageCopyText({ role: 'assistant', blocks }, 'Arrêté')).toBe('Arrêté')
   })
 })

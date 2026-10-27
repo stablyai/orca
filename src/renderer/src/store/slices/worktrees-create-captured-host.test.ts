@@ -96,6 +96,42 @@ describe('background creation host capture', () => {
     })
   })
 
+  // #34433: the dispatch token lives in this desktop's main process, so a runtime host can only reject it.
+  it.each<ExecutionHostId>(['local', 'runtime:env-1'])(
+    'sends the automation provenance request only to this desktop for %s',
+    async (executionHostId) => {
+      const store = createTestStore()
+      const worktree = makeWorktree({ id: 'repo1::/path/feature', repoId: 'repo1' })
+      mockApi.worktrees.create.mockResolvedValue({ worktree })
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'create',
+        ok: true,
+        result: { worktree },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+      store.setState({ repos: [], worktreesByRepo: { repo1: [] } })
+      const automationProvenanceRequest = {
+        automationId: 'automation-1',
+        automationRunId: 'run-1',
+        dispatchToken: 'token-1',
+        createRequestId: 'create-1'
+      }
+      const createWorktree = store.getState().createWorktree
+      const args: Parameters<typeof createWorktree> = ['repo1', 'feature']
+      args[25] = { executionHostId, automationProvenanceRequest }
+      await createWorktree(...args)
+      if (executionHostId === 'local') {
+        expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+          expect.objectContaining({ automationProvenanceRequest })
+        )
+      } else {
+        const hostParams = runtimeEnvironmentCall.mock.calls[0]?.[0]?.params
+        expect(hostParams).toMatchObject({ repo: 'repo1' })
+        expect(hostParams).not.toHaveProperty('automationProvenanceRequest')
+      }
+    }
+  )
+
   // #18097: the unresolved-owner sentinel must not ride the direct-SSH fallback onto this machine.
   it('refuses a create whose captured owner is the unresolved-owner sentinel', async () => {
     const store = createTestStore()

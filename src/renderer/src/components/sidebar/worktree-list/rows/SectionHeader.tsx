@@ -4,7 +4,6 @@ import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeade
 import type { ProjectHeaderHostContext } from './project-header-host-context'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
-import type { RepoSshGateResolver } from '@/hooks/use-repo-ssh-gate-resolver'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
@@ -25,7 +24,6 @@ import { getWorkspaceStatusFromGroupKey } from '../../workspace-status'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from '../../project-header-color'
-import { getRepoHeaderCreateState } from '../../repo-header-create-state'
 import { ProjectHeaderActions } from '../../ProjectHeaderActions'
 import {
   getProjectGroupHeaderPaddingLeft,
@@ -55,7 +53,6 @@ export type SectionHeaderRowContext = {
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectGroups: readonly ProjectGroup[]
-  getRepoSshGate: RepoSshGateResolver
   highlightedRevealRowKey: string | null
   dragOverStatus: WorkspaceStatus | null
   pinDragOver: boolean
@@ -160,13 +157,6 @@ export function renderWorktreeSectionHeaderRow(args: {
     headerKey: row.key,
     badgeColor: row.repo?.badgeColor
   })
-  const createState = row.repo
-    ? getRepoHeaderCreateState({
-        repo: row.repo,
-        label,
-        sshGate: ctx.getRepoSshGate(row.repo)
-      })
-    : null
   const folderBackedProjectGroup =
     isProjectGroupHeader &&
     !row.repo &&
@@ -397,9 +387,9 @@ export function renderWorktreeSectionHeaderRow(args: {
 
             {row.repo && ctx.groupBy === 'repo' ? (
               <RepoHeaderCreateWorkspaceButton
+                key={`${row.repo.executionHostId ?? 'local'}:${row.repo.connectionId ?? ''}`}
                 repo={row.repo}
                 label={label}
-                createState={createState}
                 onCreateForRepo={ctx.projectActions.onCreateForRepo}
               />
             ) : null}

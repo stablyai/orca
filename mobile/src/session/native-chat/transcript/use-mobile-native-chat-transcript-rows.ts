@@ -10,13 +10,13 @@ import {
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
-} from '../../../../../src/shared/native-chat-trailing-run'
+} from '../../../../../src/shared/native-chat/native-chat-trailing-run'
 import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat-turn-status'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import {
   nativeChatWorkRunMember,
   nativeChatWorkRunSpans
-} from '../../../../../src/shared/native-chat-work-run'
+} from '../../../../../src/shared/native-chat/native-chat-work-run'
 
 type TranscriptRows = {
   rows: readonly NativeChatMessage[]

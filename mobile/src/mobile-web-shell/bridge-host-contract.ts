@@ -2,7 +2,7 @@ import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-termina
 import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeRefusal } from './bridge/bridge-caps'
-import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeColorScheme, BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
@@ -69,13 +69,15 @@ export type BridgeHostOptions = {
   safeAreaInsets?: BridgeSafeAreaInsets
   // Default to zero; publishKeyboardInset moves native keyboard height later.
   keyboardInset?: number
+  // Default to dark; publishColorScheme moves the app's resolved scheme later.
+  colorScheme?: BridgeColorScheme
   // Read identity at forward time because this host outlives renders; replace the page placeholder as init promised or the desktop refuses spoofed sends.
   readClientIdentity: () => string | null
   // Read allowlisted storage synchronously for every init so document reloads include writes made since mount.
   readStorage: () => PageStorageForInit
   onStorageWrite: (key: string, value: string | null) => void
-  // Required to honor navigate grants: open targets the page cannot render.
-  onNavigate: (href: string) => void
+  // Required to honor navigate grants: open targets the page cannot render, replacing this screen when asked.
+  onNavigate: (href: string, replace: boolean) => void
   // Serve native verbs only on-device; rejection becomes the page’s request error and never reaches the desktop.
   serveNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   // The envelope already checked URL schemes. Never throw from native frame handling; report device-open failure locally because notify has no reply.
@@ -91,6 +93,8 @@ export type BridgeHostOptions = {
   onPagePainted: () => void
   // Required for native interception: only a live claim owns Back. Document-ending paths publish false so callers need not infer staleness.
   onPageBackClaim: (claimed: boolean) => void
+  // Where a host-area page navigated inside its own document; the native route never moves for those hops.
+  onPageLocation: (href: string) => void
   // Clear a consumed one-shot param only if its value still matches; a newer tap may already have replaced it (ruling 34).
   onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   // Escalate invalid shell routes visibly; a page-only console warning would leave a blank document retrying forever.

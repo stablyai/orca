@@ -1,3 +1,6 @@
+import { createCodexAtRestSkillCatalog } from '../../codex/codex-at-rest-skills-probe'
+import { refreshAtRestCommandContext } from './at-rest-command-context'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -195,16 +198,15 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
         'deploy'
       ])
       const success = Promise.withResolvers<string>()
-      const failure = Promise.withResolvers<string>()
       answer = success.promise
       clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
       host.readCommands(SESSION)
       await vi.waitFor(() => expect(asked).toHaveLength(2))
-      // Start overlapping scans before the newer result falls back.
-      answer = failure.promise
+      // A slow refresh is joined, not doubled, however long it runs.
       clock += 30_000
       host.readCommands(SESSION)
-      await vi.waitFor(() => expect(asked).toHaveLength(3))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(asked).toHaveLength(2)
       success.resolve(listed)
       await vi.waitFor(() => expect(commandNames()).toContain('goal'))
       const claudeList = catalog.read(record())
@@ -214,23 +216,25 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
       })
       expect(asked[0]?.[0]).toMatchObject({ cwd: workspace })
       expect(asked[0]?.[1].inheritedEnv?.CLAUDE_CONFIG_DIR).toBe(account)
-      failure.resolve(failed)
-      await vi.waitFor(() => expect(warned).toHaveBeenCalledTimes(2))
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      expect(catalog.read(record())).toEqual(claudeList)
       // Failed refresh must retain the provider list over folder fallback.
       answer = failed
       clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
       host.readCommands(SESSION)
-      await vi.waitFor(() => expect(asked).toHaveLength(4))
+      await vi.waitFor(() => expect(warned).toHaveBeenCalledTimes(2))
       await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(asked).toHaveLength(3)
       expect(catalog.read(record())).toEqual(claudeList)
+      // The folder answer still counts as this TTL's scan.
+      clock += CLAUDE_AT_REST_COMMANDS_TTL_MS - 1
+      host.readCommands(SESSION)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(asked).toHaveLength(3)
     } finally {
       warned.mockRestore()
     }
   })
-
-  it('does not let a rejected fallback discard an overlapping Claude refresh', async () => {
+  it('cancels source preparation, fallback and close before any late work', async () => {
+    vi.useFakeTimers()
     const listed = (name: string) =>
       `${JSON.stringify({
         type: 'control_response',
@@ -240,69 +244,112 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
           response: { commands: [{ name, description: name, argumentHint: '', builtin: true }] }
         }
       })}\n`
-    const pending = Promise.withResolvers<string>()
-    const fallback = Promise.withResolvers<void>()
-    const fallbackDone = Promise.withResolvers<void>()
-    let fallbackStarted = false
-    let answers: (string | Promise<string>)[] = [listed('first'), pending.promise, 'bad']
-    const asked: ListingCall[] = []
+    let pending = Promise.withResolvers<string>()
+    let fallback = Promise.withResolvers<void>(),
+      entered = Promise.withResolvers<void>()
+    let stage = '',
+      blocked = false
+    const block = async <T>(at: string, value: T): Promise<T> => {
+      if (stage.endsWith(at) && !blocked) {
+        blocked = true
+        entered.resolve()
+        await pending.promise
+      }
+      return value
+    }
+    const asked: unknown[][] = []
     const probe = createClaudeCommandCatalogProbe({
       resolveCommand: () => 'claude',
-      resolveInheritedEnv: async () => ({ PATH: '/bin' }),
+      resolveInheritedEnv: () => block('environment', { PATH: '/bin' }),
       resolveAuthPolicy: () => ({ account: 'system' }),
       runListing: async (...call) => {
         asked.push(call)
-        return answers.shift() ?? 'bad'
+        if (stage.endsWith('fallback') && !blocked) {
+          throw new Error('CLI failed')
+        }
+        if (stage.endsWith('close') && !blocked) {
+          entered.resolve()
+          try {
+            await waitForPromiseWithSignal(pending.promise, call[1].signal)
+          } finally {
+            await fallback.promise
+          }
+        }
+        return listed('recovered')
       }
     })
-    const catalog = new ClaudeAtRestCommandCatalog({
+    const emptyDiscovery = { skills: [], sources: [], scannedAt: 0 }
+    const claude = new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: async () => workspace,
-      now: () => clock,
       probe,
-      discover: async (args) => {
-        if (answers.length === 0) {
-          fallbackStarted = true
-          await fallback.promise
-        }
-        const { discoverSkills } = await import('../../skills/discovery')
-        const result = await discoverSkills({
-          ...args,
-          homeDir: join(directory, 'home'),
-          refresh: true
+      discover: async (args) =>
+        waitForPromiseWithSignal(block('fallback', emptyDiscovery), args.signal)
+    })
+    const codex = createCodexAtRestSkillCatalog({
+      resolveWorkspacePath: () => block('workspace', workspace),
+      resolveEnvironment: () => block('environment', { PATH: '/bin' }),
+      resolveLaunchArgs: () => block('arguments', []),
+      resolveCommand: () => '/bin/codex',
+      runSession: async (invocation, body) => {
+        asked.push([invocation])
+        return body({
+          request: async () => ({ data: [{ cwd: workspace, skills: [] }] }),
+          notify: () => {}
         })
-        if (fallbackStarted) {
-          fallbackDone.resolve()
-        }
-        return result
       }
     })
     const record = store.getRecord(SESSION)!
-    const commandNames = () => namesOf(catalog.read(record) ?? null, 'command')
-    catalog.read(record)
-    await vi.waitFor(() => expect(commandNames()).toContain('first'))
-    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
-    catalog.read(record)
-    await vi.waitFor(() => expect(asked).toHaveLength(2))
-    clock += 30_000
-    catalog.read(record)
-    await vi.waitFor(() => expect(asked).toHaveLength(3))
-    await vi.waitFor(() => expect(fallbackStarted).toBe(true))
-    clock -= 30_000
-    fallback.resolve()
-    await fallbackDone.promise
-    expect(commandNames()).toContain('first')
-    pending.resolve(listed('second'))
-    await vi.waitFor(() => expect(commandNames()).toContain('second'))
-
-    const settledCalls = asked.length
-    answers = ['bad']
-    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
-    catalog.read(record)
-    await vi.waitFor(() => expect(asked).toHaveLength(settledCalls + 1))
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS - 1
-    catalog.read(record)
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(asked).toHaveLength(settledCalls + 1)
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      for (stage of [
+        'codex/readiness',
+        'codex/workspace',
+        'codex/environment',
+        'codex/arguments',
+        'claude/environment',
+        'claude/fallback',
+        'claude/close'
+      ]) {
+        pending = Promise.withResolvers<string>()
+        fallback = Promise.withResolvers<void>()
+        entered = Promise.withResolvers<void>()
+        blocked = false
+        const provider = stage.startsWith('codex') ? ('codex' as const) : ('claude' as const)
+        const catalog = provider === 'codex' ? codex : claude
+        const chat = { ...record, provider }
+        const ready = stage.endsWith('readiness')
+          ? refreshAtRestCommandContext(() => block('readiness', undefined))
+          : Promise.resolve()
+        catalog.retireContext()
+        const starting = asked.length
+        catalog.read(chat)
+        await entered.promise
+        if (stage.endsWith('close')) {
+          for (const workspaceId of ['two', 'three']) {
+            catalog.read({ ...chat, location: { ...chat.location, workspaceId } })
+          }
+          await vi.waitFor(() => expect(asked).toHaveLength(starting + 2))
+        }
+        await vi.advanceTimersByTimeAsync(300_000)
+        const before = asked.length
+        blocked = true
+        pending.resolve(listed('late'))
+        fallback.resolve()
+        await ready
+        await vi.advanceTimersByTimeAsync(0)
+        expect(asked).toHaveLength(before)
+        expect(catalog.read(chat)).toBeUndefined()
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(await catalog.settled(chat, 1_000)).toBeDefined()
+        expect(asked).toHaveLength(before + 1)
+      }
+      expect(warned).toHaveBeenCalledTimes(10)
+    } finally {
+      fallback.resolve()
+      codex.dispose()
+      claude.dispose()
+      warned.mockRestore()
+      vi.useRealTimers()
+    }
   })
 })

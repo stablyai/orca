@@ -138,7 +138,6 @@
 1 src/renderer/src/components/sidebar/worktree-filter-visibility.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-filters.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-section-rows.ts
-1 src/renderer/src/components/sidebar/worktree-list/listing/use-window-list-model.ts
 1 src/renderer/src/components/sidebar/worktree-list/rows/ProjectGroupDialogs.tsx
 1 src/renderer/src/components/sidebar/worktree-visibility-host-target.ts
 1 src/renderer/src/components/sidebar/WorktreeList.tsx

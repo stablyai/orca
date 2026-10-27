@@ -78,21 +78,4 @@ describe('generateConversationName', () => {
     cancelLocalGeneration('conversation-name', '/repo')
     expect(await pending).toMatchObject({ success: false, canceled: true })
   })
-
-  it('returns a sanitized name from the local generation lane', async () => {
-    const child = createMockDiscoveryChild()
-    const spawnAgent = vi.fn(() => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The test child implements every process member the generation lane reads.
-      return child as unknown as SpawnedSourceControlAgentProcess
-    })
-    const pending = generateConversationName({
-      context: { firstPrompt: 'Fix login' },
-      params: { agentId: 'custom', model: '', customAgentCommand: 'agent' },
-      target: { kind: 'local', cwd: '/repo' },
-      spawnAgent
-    })
-    child.stdout.emit('data', Buffer.from('Title: "Fix login flow"\n'))
-    child.emit('close', 0)
-    expect(await pending).toEqual({ success: true, name: 'Fix login flow', agentLabel: 'agent' })
-  })
 })

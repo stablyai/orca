@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { buildNativeChatVisualDocument } from '../../../../../src/shared/native-chat/native-chat-visual-shell'
 import type { MobileNativeChatVisualHostMode } from './mobile-native-chat-visual-host-document'
 import { MOBILE_NATIVE_CHAT_VISUAL_THEME } from './mobile-native-chat-visual-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 export type MobileNativeChatVisualFrameProps = {
   html: string
@@ -20,6 +21,7 @@ export const MobileNativeChatVisualFrame = memo(function MobileNativeChatVisualF
   title,
   mode
 }: MobileNativeChatVisualFrameProps) {
+  const colorScheme = useMobileColorScheme()
   const document = useMemo(
     () =>
       buildNativeChatVisualDocument({
@@ -27,7 +29,8 @@ export const MobileNativeChatVisualFrame = memo(function MobileNativeChatVisualF
         channel: 'sealed',
         theme: MOBILE_NATIVE_CHAT_VISUAL_THEME
       }),
-    [html]
+    // Sealed frames run no script, so a scheme rebuild loses no state.
+    [html, colorScheme]
   )
   return (
     <View style={mode === 'inline' ? styles.inline : styles.fullscreen}>

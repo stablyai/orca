@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { sanitizeOnboardingUpdate, type Store } from '../persistence'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
-import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat-upgrade-tip-audience'
+import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat/native-chat-upgrade-tip-audience'
 
 export function registerOnboardingHandlers(store: Store): void {
   ipcMain.removeHandler('onboarding:get')

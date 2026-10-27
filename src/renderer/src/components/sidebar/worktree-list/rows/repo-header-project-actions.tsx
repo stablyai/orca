@@ -1,4 +1,5 @@
 import React from 'react'
+import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
   CircleX,
   Ellipsis,
@@ -38,7 +39,7 @@ import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
   REPO_HEADER_ACTION_REVEAL_CLASS
 } from '../../repo-header-action-button-class'
-import type { getRepoHeaderCreateState } from '../../repo-header-create-state'
+import { getRepoHeaderCreateState } from '../../repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -186,14 +187,14 @@ export function RepoHeaderProjectActionsMenu({
 export function RepoHeaderCreateWorkspaceButton({
   repo,
   label,
-  createState,
   onCreateForRepo
 }: {
   repo: Repo
   label: string
-  createState: ReturnType<typeof getRepoHeaderCreateState> | null
   onCreateForRepo: (projectId: string) => void
 }): React.JSX.Element {
+  const sshGate = useRepoSshGate(repo)
+  const createState = getRepoHeaderCreateState({ repo, label, sshGate })
   const fallbackLabel = translate(
     'auto.components.sidebar.WorktreeList.bb85cd86ba',
     'Create workspace for {{value0}}',

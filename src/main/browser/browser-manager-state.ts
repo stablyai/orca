@@ -194,6 +194,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.certificateTrustController?.removeSessionRequestGuard(session)
   }
 
+  /** Orca's shortcut overrides; extension commands yield to every Orca shortcut. */
+  getKeybindingOverrides(): KeybindingOverrides | undefined {
+    return this.settingsResolver?.().keybindings
+  }
+
   setSettingsResolver(
     resolver: () => {
       keybindings?: KeybindingOverrides

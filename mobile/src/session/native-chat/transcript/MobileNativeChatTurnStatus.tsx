@@ -8,6 +8,8 @@ import {
 } from '../../../../../src/shared/native-chat-turn-status'
 import type { AgentTurnOutcome } from '../../../../../src/shared/agent-turn-outcome'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 // Stop ticking settled turns so old transcripts retain no timers.
 function useElapsedSeconds(startedAt: number | null, counting: boolean): number {
@@ -38,6 +40,7 @@ export function MobileNativeChatTurnStatus({
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const settled = workedSeconds != null
   const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
   const label = formatNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict })
@@ -69,7 +72,7 @@ export function MobileNativeChatTurnStatus({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -92,4 +95,4 @@ const styles = StyleSheet.create({
   caretOpen: {
     transform: [{ rotate: '90deg' }]
   }
-})
+}))

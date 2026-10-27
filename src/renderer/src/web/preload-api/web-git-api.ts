@@ -273,12 +273,13 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         await mutateGitPath('git.discard', worktreePath, filePath)
       }
     },
-    remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
+    remoteFileUrl: async ({ worktreePath, relativePath, line, endLine }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.remoteFileUrl', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
-        line
+        line,
+        endLine
       })
     },
     remoteCommitUrl: async ({ worktreePath, sha }) => {

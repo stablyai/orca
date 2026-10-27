@@ -15,10 +15,11 @@ import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook
-} from '../../../../shared/native-chat-notice'
+} from '../../../../shared/native-chat/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedContinue'
-import { nativeChatOrcaStopRowText } from './native-chat-orca-stop-words'
+import { nativeChatOrcaStopRowText } from '../../../../shared/native-chat/native-chat-orca-stop-words'
+import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import { Button } from '@/components/ui/button'
 import {
@@ -140,10 +141,7 @@ export function NativeChatNoticeRow({
   const { hostLabel, remoteHost, continueAvailable } = orcaStopView
   // A paired server with no name to show is still a remote server; its id is not a name.
   const machine =
-    hostLabel ??
-    (remoteHost
-      ? translate('components.native-chat.notices.orcaStopUnnamedServer', 'the remote server')
-      : null)
+    hostLabel ?? (remoteHost ? sayNativeChatOrcaStopTranslated('unnamedServer') : null)
   const named = orcaStop !== undefined && machine !== null
   const continueOffered =
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
@@ -157,7 +155,12 @@ export function NativeChatNoticeRow({
         )
       : undefined
   const text = named
-    ? nativeChatOrcaStopRowText(orcaStop.cause, machine, { continueAvailable, remoteHost })
+    ? nativeChatOrcaStopRowText(
+        orcaStop.cause,
+        machine,
+        { continueAvailable, remoteHost },
+        sayNativeChatOrcaStopTranslated
+      )
     : failure?.kind === 'usageLimitReached'
       ? agentSessionFailureSentence(
           failure,

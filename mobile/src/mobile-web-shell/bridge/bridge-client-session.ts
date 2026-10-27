@@ -1,4 +1,5 @@
 import type {
+  BridgeColorScheme,
   BridgeGrants,
   BridgeHostMessage,
   BridgeInitHost,
@@ -16,6 +17,8 @@ export type BridgeShellSession = {
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[] | null
   safeAreaInsets: BridgeSafeAreaInsets
   keyboardInset: number
+  // Older shells omit this and paint dark native chrome, so absent means dark.
+  colorScheme: BridgeColorScheme
   host: BridgeInitHost | null
   storage: Readonly<Record<string, string>>
   // Oversize keys are withheld from storage and reject writes locally; older shells omit this additive field (ruling 33.6).
@@ -36,6 +39,7 @@ export function readShellSession(
     pageRouteGrants: message.pageRouteGrants ?? null,
     safeAreaInsets: message.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS,
     keyboardInset: message.keyboardInset ?? 0,
+    colorScheme: message.colorScheme ?? 'dark',
     host: message.host ?? null,
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],

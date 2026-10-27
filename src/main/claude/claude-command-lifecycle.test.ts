@@ -14,14 +14,14 @@ import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
 import { claudeDispatchRejection } from './claude-structured-dispatch-content'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
-import type { ClaudeLateDispatchOutcome } from './claude-structured-session-state'
+import type { ClaudeLateDispatchOutcome } from './structured/claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  type FakeConnection,
-  claudeStartupSettled
+  type FakeConnection
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 
 type CapturedEvent =
   | { kind: 'meta'; providerSessionId: string }

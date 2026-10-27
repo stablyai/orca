@@ -1,3 +1,5 @@
+import { buildAgentSessionContinuationPrompt } from './agent-session-continuation'
+import { trimAgentSessionContext } from '../../../shared/agent-session-context-budget'
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildAgentSessionForkPrompt,
@@ -90,4 +92,41 @@ describe('agent session fork context', () => {
     expect(prompt).toContain('````text\nAssistant output:')
     expect(prompt).toContain('\n````\n\nAcknowledge')
   })
+})
+
+it('delivers a budgeted saved-chat starter and complete file without changing terminal or history prompts', () => {
+  const capturedText = trimAgentSessionContext(
+    `${'earlier '.repeat(6000)}LATEST_SAVED_TASK`,
+    'saved chat messages'
+  )
+  const source = {
+    sourceKind: 'chat' as const,
+    sourceAgent: 'codex' as const,
+    capturedText,
+    transcriptPath: '/tmp/chat.txt'
+  }
+  expect(capturedText.length).toBeLessThanOrEqual(36_000)
+  for (const mode of ['focused', 'full'] as const) {
+    const prompt = buildAgentSessionContinuationPrompt(source, mode)
+    expect(prompt).toContain('LATEST_SAVED_TASK')
+    expect(prompt).toContain('Earlier saved chat messages omitted')
+    expect(prompt).toContain('/tmp/chat.txt')
+    expect(prompt).toContain(
+      mode === 'full'
+        ? 'Read the complete saved chat record'
+        : 'Read it to recover details omitted above'
+    )
+  }
+  const terminal = {
+    sourceAgent: 'codex' as const,
+    capturedText: 'terminal capture',
+    transcriptPath: '/provider.jsonl'
+  }
+  expect(buildAgentSessionContinuationPrompt(terminal, 'full')).toContain(
+    'complete original session transcript'
+  )
+  expect(buildAgentSessionContinuationPrompt(terminal, 'focused')).not.toContain('terminal capture')
+  expect(
+    buildAgentSessionContinuationPrompt({ ...terminal, transcriptPath: null }, 'focused')
+  ).toContain('bounded recent terminal capture')
 })

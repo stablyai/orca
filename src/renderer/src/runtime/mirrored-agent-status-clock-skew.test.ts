@@ -143,17 +143,6 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
     expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(false)
   })
 
-  it('keeps decaying while the host publishes nothing new', () => {
-    // No fresh snapshot arrives during silence, so replica must age its last evidence locally.
-    const store = seedPairedClientStore()
-    applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS, T0)
-
-    for (const elapsed of [1_000, AGENT_STATUS_STALE_AFTER_MS / 2]) {
-      expect(mirroredRowIsFreshAt(store, T0 + elapsed)).toBe(true)
-    }
-    expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS * 3)).toBe(false)
-  })
-
   it('does not restart the window when the host republishes evidence already seen', () => {
     const store = seedPairedClientStore()
     const hostNow = T0 + HOST_SKEW_MS

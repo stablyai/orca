@@ -6,6 +6,7 @@ import {
   type MobileRichMarkdownEditorHandle
 } from '../components/MobileRichMarkdownEditor'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   resolveMarkdownFloatingActionsBottom,
   shouldShowMarkdownFloatingActions
@@ -35,6 +36,7 @@ export function MobileMarkdownReader({
   onDiscard,
   keyboardLift
 }: Props) {
+  useMobileColorScheme()
   const editorRef = useRef<MobileRichMarkdownEditorHandle>(null)
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)

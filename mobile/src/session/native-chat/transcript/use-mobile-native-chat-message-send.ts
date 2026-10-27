@@ -7,10 +7,11 @@ import {
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
 } from '../mobile-native-chat-send'
-import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session-option-catalog-types'
+import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session-option-catalog'
 import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from '../mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from '../mobile-native-chat-send-classification'
+import { readMobileNativeChatSkillOrigin } from '../composer/mobile-native-chat-draft-store'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
@@ -109,12 +110,14 @@ export function useMobileNativeChatMessageSend(args: {
         onSendError('Message not sent')
         return 'rejected'
       }
+      // A picked skill leading the draft is chat, as on desktop; read it before the clear forgets it.
+      const skillOrigin = readMobileNativeChatSkillOrigin(origin.draftKey)
       // Clear optimistically before slow/lost acknowledgements; only definite rejection restores the draft.
       if (syncComposer) {
         clearDraftForSend(origin, draftText)
       }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
-      const classification = classifyMobileNativeChatSend(agent, text)
+      const classification = classifyMobileNativeChatSend(agent, text, skillOrigin)
       const typesCodexCommand =
         agent === 'codex' &&
         classification !== 'chat' &&

@@ -5,7 +5,7 @@ import type * as DndKitCore from '@dnd-kit/core'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { NativeChatQueuedMessageRows } from './NativeChatQueuedMessageRows'
-import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 
 const completion = vi.hoisted(() => ({ deferred: false }))
 vi.mock('@dnd-kit/core', async (importOriginal) => {

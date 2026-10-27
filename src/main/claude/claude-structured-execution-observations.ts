@@ -1,4 +1,4 @@
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 
 /** Provider observations only; requested choices and picker defaults cannot vouch for a run. */
 export function claudeExecutionObservations(session: ClaudeSession): Record<string, string> {

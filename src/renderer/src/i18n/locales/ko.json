@@ -3332,6 +3332,7 @@
             "78b79d854d": "Terminal을 닫으시겠습니까?",
             "stop_agent_title": "이 agent를 중지할까요?",
             "stop_command_title": "실행 중인 명령을 중지할까요?",
+            "stop_chat_description": "이 채팅을 닫으면 에이전트의 현재 작업이 중지됩니다.",
             "stop_agent_description": "이 terminal을 닫으면 agent의 현재 작업이 중지됩니다.",
             "stop_command_description": "이 terminal을 닫으면 내부에서 실행 중인 명령이 중지됩니다.",
             "dont_ask_again": "실행 중인 terminals에 대해 다시 묻지 않기",
@@ -7655,6 +7656,8 @@
           "projectRuntimeDescription": "별도로 재정의하지 않은 로컬 Windows 프로젝트의 기본 런타임입니다.",
           "editor_preview_tabs": "파일 탐색 시 미리보기 탭 재사용",
           "editor_preview_tabs_description": "탐색기에서 파일을 한 번 클릭하거나 Markdown 소스의 링크를 따라가면 새 탭을 여는 대신 그룹당 하나의 기울임꼴 미리 보기 탭을 재사용합니다. 편집하거나 두 번 클릭하거나 고정하면 해당 탭이 열린 상태로 유지됩니다. 모든 파일에 자체 탭을 제공하려면 이 기능을 끄십시오.",
+          "confirm_running_work_close": "실행 중인 채팅이나 터미널을 닫기 전에 확인",
+          "confirm_running_work_close_description": "채팅이나 터미널을 닫을 때 실행 중인 에이전트나 명령을 중지하기 전에 확인합니다.",
           "confirm_running_terminal_close": "실행 중인 터미널을 닫기 전에 확인하세요.",
           "confirm_running_terminal_close_description": "터미널을 닫을 때 실행 중인 에이전트나 명령을 중지하기 전에 묻습니다."
         },
@@ -18997,7 +19000,8 @@
         "clearAfterRetry": "이전 메시지를 다시 시도한 다음 /clear를 실행하세요.",
         "compactAfterRetry": "이전 메시지를 다시 시도한 다음 /compact를 실행하세요.",
         "clearAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /clear를 실행하세요.",
-        "compactAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /compact를 실행하세요."
+        "compactAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /compact를 실행하세요.",
+        "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오."
       },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
@@ -19438,9 +19442,6 @@
         "ranN": "{{value0}} 하위 에이전트를 실행했습니다.",
         "tokens": "{{value0}} 토큰",
         "unnamed": "하위 에이전트"
-      },
-      "conversationCommand": {
-        "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오."
       },
       "drop": {
         "messageTitle": "놓아서 이 메시지에 첨부",
@@ -19917,6 +19918,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "저장된 채팅 컨텍스트 준비 중…",
       "handOffToAnotherAgent": "다른 에이전트에게 인계",
       "dialogTitle": "다른 에이전트에게 인계",
       "dialogDescription": "이 지점부터 새 에이전트 세션을 시작합니다. 원래 세션은 변경되지 않습니다.",
@@ -19930,6 +19932,8 @@
       "context": "컨텍스트",
       "modeFocused": "핵심 컨텍스트 전달(권장)",
       "modeFocusedDescription": "최신 상태와 현재 워크스페이스를 사용하고 필요한 경우에만 이전 세부 정보를 읽습니다.",
+      "modeLoadedDescription": "이 채팅에 현재 로드된 최근 메시지와 현재 워크스페이스를 사용합니다.",
+      "modeCapturedDescription": "캡처한 텍스트와 현재 워크스페이스를 사용합니다.",
       "modeFull": "전체 세션 기록",
       "modeFullDescription": "계속하기 전에 새 에이전트가 저장된 전체 세션을 읽도록 합니다. 시간이 더 오래 걸리고 상당한 컨텍스트, 요금제 사용량 또는 API 크레딧을 소모할 수 있습니다.",
       "startsIn": "시작 위치:",
@@ -20825,6 +20829,8 @@
       "added": "계정이 추가되었습니다. 다음에 시작하는 Claude에 사용하려면 이 계정을 선택하세요.",
       "nextLaunch": "{{value0}} → {{value1}}. 다음에 시작하는 Claude가 이를 사용합니다. 실행 중인 세션은 해당 계정을 유지합니다.",
       "profileSwitching": "전환은 모든 탭에서 다음에 시작하는 Claude에 적용됩니다. 실행 중인 세션은 해당 계정을 유지합니다.",
+      "systemDefault": "시스템 기본값",
+      "unnamedAccount": "Claude 계정",
       "systemDefaultNamed": "시스템 기본값: {{value0}}",
       "systemDefaultIsSaved": "시스템 기본값은 {{value0}}(으)로 로그인되어 있으며, 이는 저장된 계정이기도 합니다. 이전 Orca 버전에서 해당 로그인을 여기에 복사했을 수 있습니다. 본인의 로그인이 아니라면 시스템 기본값을 선택하고 claude /login을 실행하세요.",
       "systemDefaultIsSavedDismiss": "닫기",

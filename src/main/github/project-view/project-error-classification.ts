@@ -1,3 +1,4 @@
+import type { OptionalProjectItemField } from './project-view-cache'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
 import { githubProjectHost } from '../../../shared/github/project-identity'
 
@@ -5,7 +6,7 @@ export type GhGraphqlError = {
   type?: string
   message?: string
   path?: (string | number)[]
-  extensions?: { code?: string }
+  extensions?: { code?: string; fieldName?: string; typeName?: string }
 }
 
 export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlError[] {
@@ -27,25 +28,43 @@ export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlE
   return []
 }
 
-export function errorsIndicateParentField(errors: GhGraphqlError[], stderr: string): boolean {
-  const lower = stderr.toLowerCase()
-  if (lower.includes('preview') && lower.includes('parent')) {
-    return true
+export function unsupportedItemFieldsFromErrors(
+  errors: GhGraphqlError[],
+  stderr: string
+): OptionalProjectItemField[] {
+  const unsupported = new Set<OptionalProjectItemField>()
+  if (/preview/i.test(stderr) && /\bparent\b/i.test(stderr)) {
+    unsupported.add('parent')
   }
-  return errors.some((e) => {
-    const type = (e.type ?? '').toUpperCase()
-    if (type === 'FIELD_NOT_FOUND' || type === 'UNDEFINED_FIELD' || type === 'FIELD_ERRORS') {
-      const tail = e.path?.at(-1)
-      if (tail === 'parent') {
-        return true
-      }
-      // FIELD_ERRORS often omits `path`; match on message for the parent field.
-      if ((e.message ?? '').toLowerCase().includes('parent')) {
-        return true
+  for (const error of errors) {
+    const code = (error.type ?? error.extensions?.code ?? '').replace(/_/g, '').toUpperCase()
+    const message = error.message ?? ''
+    const missing =
+      /doesn't exist|does not exist|cannot query field|unknown field|undefined field|no such type/i.test(
+        message
+      )
+    if (
+      !['FIELDNOTFOUND', 'UNDEFINEDFIELD', 'FIELDERRORS', 'UNDEFINEDTYPE'].includes(code) &&
+      !(code === '' && missing)
+    ) {
+      continue
+    }
+    for (const field of ['parent', 'subIssuesSummary', 'linkedPullRequests'] as const) {
+      const name = field === 'linkedPullRequests' ? 'ProjectV2ItemFieldPullRequestValue' : field
+      if (
+        error.path?.at(-1) === name ||
+        error.extensions?.fieldName === name ||
+        error.extensions?.typeName === name ||
+        message
+          .toLowerCase()
+          .split(/[^a-z0-9_]+/)
+          .includes(name.toLowerCase())
+      ) {
+        unsupported.add(field)
       }
     }
-    return false
-  })
+  }
+  return [...unsupported]
 }
 
 export function classifyProjectError(

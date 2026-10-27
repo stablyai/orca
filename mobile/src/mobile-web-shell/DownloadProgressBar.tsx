@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { downloadFraction, type DownloadProgressFeed } from './download-progress-feed'
 
 const FILL_EASE_MS = 100
@@ -31,6 +33,7 @@ export function DownloadProgressBar({
   accessibilityLabel: string
   testID?: string
 }) {
+  useMobileColorScheme()
   const [fill] = useState(() => new Animated.Value(feed.current()))
   // Default unread motion preference to allowed; read via ref so its delayed commit cannot resubscribe mid-download.
   const reducedMotion = useReducedMotionEnabled() === true
@@ -95,7 +98,7 @@ export function DownloadProgressBar({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   track: {
     width: 180,
     height: 4,
@@ -108,4 +111,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textSecondary,
     transformOrigin: 'left'
   }
-})
+}))

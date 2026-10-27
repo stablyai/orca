@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import {
@@ -28,6 +30,7 @@ function parsePrReference(input: string): number | null {
 
 // Use inline View inside sidebar ScrollView; nested BottomDrawer overlay clips, matching compose-form constraint.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
+  useMobileColorScheme()
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -99,7 +102,7 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -142,4 +145,4 @@ const styles = StyleSheet.create({
   submitDisabled: { opacity: 0.45 },
   submitPressed: { opacity: 0.8 },
   submitText: { color: colors.bgBase, fontSize: typography.bodySize, fontWeight: '600' }
-})
+}))

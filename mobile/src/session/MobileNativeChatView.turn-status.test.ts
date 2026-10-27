@@ -4,7 +4,6 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
-import { styles } from './mobile-native-chat-view-styles'
 
 const scrollToEnd = vi.hoisted(() => vi.fn())
 const scrollToOffset = vi.hoisted(() => vi.fn())
@@ -315,16 +314,13 @@ describe('MobileNativeChatView', () => {
       expect(footerProps()).toMatchObject({ activityText: 'Running pnpm test' })
     })
 
-    it('gives the bridge lane the same live Working line, with no turn status', async () => {
+    it('gives the bridge lane the same turn status and live Working line', async () => {
       const folded = [userTurn('u1', 'go')]
       await render({ messages: folded, folded, agentWorking: true })
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(false)
-      expect(props.turnStatus).toBeNull()
-      expect(props.activeTurnIsWorking).toBe(false)
+      expect(props.turnStatus).toMatchObject({ workedSeconds: null })
       expect(footerProps()).toEqual({ thinking: false, activityText: null, stopping: false })
-      const list = renderer!.root.find((node) => String(node.type) === 'FlatList')
-      expect(list.props.contentContainerStyle).toBe(styles.listContent)
     })
 
     it('settles the finished turn to a tappable duration', async () => {

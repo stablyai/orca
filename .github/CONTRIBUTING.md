@@ -21,6 +21,12 @@ Install Node 24, pnpm, and the Bun version in [`config/.bun-version`](../config/
 native PTYs, socket liveness, and V8 memory behavior. `pnpm test:node` runs the same suites
 entirely on Node. Builds and dependency installation still use Node and pnpm.
 
+The server, its workers and its packaged dependencies target Node 24. The compatibility
+launcher and CLI still target Node 18; the launcher hands off to bundled Node 24 before
+loading server code. WSL guest programs and host discovery retain their Node 18 minimum.
+Keep Node 24 APIs and server imports out of these host compatibility paths. Running an
+unpackaged server directly requires Node 24 or newer.
+
 Use the pnpm version in `packageManager` in [`package.json`](../package.json): `corepack enable`
 needs Corepack 0.34.5 or newer to start the pinned pnpm (`npm install -g corepack@latest`). On
 Windows it writes shims next to `node.exe` and fails with `EPERM` outside an elevated shell when

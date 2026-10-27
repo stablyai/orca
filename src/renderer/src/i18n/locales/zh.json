@@ -3332,6 +3332,7 @@
             "78b79d854d": "关闭终端？",
             "stop_agent_title": "停止此智能体？",
             "stop_command_title": "停止运行中的命令？",
+            "stop_chat_description": "关闭此聊天将停止智能体当前任务。",
             "stop_agent_description": "关闭此终端将停止智能体当前任务。",
             "stop_command_description": "关闭此终端将停止其中正在运行的命令。",
             "dont_ask_again": "对有运行中进程的终端不再询问",
@@ -7655,6 +7656,8 @@
           "projectRuntimeDescription": "不覆盖此项的本地 Windows 项目的默认运行时。",
           "editor_preview_tabs": "浏览文件时重复使用预览选项卡",
           "editor_preview_tabs_description": "单击资源管理器中的文件，或点击 Markdown 源中的链接，可以重复使用每组一个斜体预览选项卡，而不是打开一个新选项卡。编辑、双击或固定可以使该选项卡保持打开状态。关闭此选项可为每个文件提供自己的选项卡。",
+          "confirm_running_work_close": "关闭活动聊天或终端前确认",
+          "confirm_running_work_close_description": "关闭聊天或终端时，在停止正在运行的智能体或命令前询问。",
           "confirm_running_terminal_close": "关闭运行终端前确认",
           "confirm_running_terminal_close_description": "关闭终端时，在停止正在运行的智能体或命令之前询问。"
         },
@@ -18962,7 +18965,8 @@
         "clearAfterRetry": "请先重试您之前的消息，然后再运行 /clear。",
         "compactAfterRetry": "请先重试您之前的消息，然后再运行 /compact。",
         "clearAfterSending": "您之前的消息仍在发送中。发送完成后再运行 /clear。",
-        "compactAfterSending": "您之前的消息仍在发送中。发送完成后再运行 /compact。"
+        "compactAfterSending": "您之前的消息仍在发送中。发送完成后再运行 /compact。",
+        "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。"
       },
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",
@@ -19408,9 +19412,6 @@
         "ranN": "已运行 {{value0}} 个子智能体",
         "tokens": "{{value0}} 代币",
         "unnamed": "子智能体"
-      },
-      "conversationCommand": {
-        "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。"
       },
       "drop": {
         "messageTitle": "拖放以附加到此消息",
@@ -19883,6 +19884,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "正在准备已保存的聊天上下文…",
       "handOffToAnotherAgent": "移交给另一个智能体",
       "dialogTitle": "移交给另一个智能体",
       "dialogDescription": "从当前进度启动一个新的智能体会话，原会话保持不变。",
@@ -19896,6 +19898,8 @@
       "context": "上下文",
       "modeFocused": "聚焦交接（推荐）",
       "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
+      "modeLoadedDescription": "使用此聊天中当前已加载的最近消息和当前工作区。",
+      "modeCapturedDescription": "使用捕获的文本和当前工作区。",
       "modeFull": "完整会话记录",
       "modeFullDescription": "让新智能体在继续前读取完整的已保存会话。这可能需要更长时间，并消耗大量上下文、套餐用量或 API 额度。",
       "startsIn": "启动目录：",
@@ -20826,6 +20830,8 @@
       "added": "已添加账户。选择它即可将其用于您下次启动的 Claude。",
       "nextLaunch": "{{value0}} → {{value1}}。您下次启动的 Claude 将使用它。正在运行的会话会保留其账户。",
       "profileSwitching": "切换会应用于您在任何标签页中下次启动的 Claude。正在运行的会话会保留其账户。",
+      "systemDefault": "系统默认",
+      "unnamedAccount": "Claude 账户",
       "systemDefaultNamed": "系统默认：{{value0}}",
       "systemDefaultIsSaved": "系统默认已登录为 {{value0}}，它同时也是一个已保存的账户。较早版本的 Orca 可能已将那个登录信息复制到那里。如果它不是您自己的登录信息，请选择系统默认并运行 claude /login。",
       "systemDefaultIsSavedDismiss": "关闭",

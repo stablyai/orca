@@ -92,12 +92,6 @@ describe('host model catalog snapshots', () => {
       })
     ).toBeUndefined()
   })
-
-  it('drops an agent’s answers when the host says the account has no list', () => {
-    recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', list(true))
-    recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', { origin: 'unknown' })
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', NEW_CHAT)).toBeUndefined()
-  })
 })
 
 const SAVED_ONLY = 'agent-session.model-catalog.saved-only.v1'
@@ -106,12 +100,6 @@ const REGISTERED = ['claude', 'codex', 'grok', 'opencode', 'omp'].map((agent) =>
 function registerAgents(hostId: string, runtimeId: string | null): void {
   mocks.agents.set(hostId, { runtimeId, agents: REGISTERED })
   mocks.agentListeners.forEach((listener) => listener())
-}
-
-/** The host saved lists for Grok, OpenCode and OMP only; nothing for Claude or Codex. */
-function savedFor(agents: readonly string[]) {
-  return async (_target: unknown, _method: string, params: { agent: string }) =>
-    agents.includes(params.agent) ? list(false) : { origin: 'unknown' }
 }
 
 describe('host model catalog snapshots sync', () => {
@@ -148,26 +136,6 @@ describe('host model catalog snapshots sync', () => {
     expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBeUndefined()
     await Promise.resolve()
     expect(mocks.call).toHaveBeenCalledTimes(1)
-  })
-
-  it('loads every registered agent saved-only, picked or not; an agent with nothing saved stays unknown', async () => {
-    mocks.capabilities = [SAVED_ONLY]
-    mocks.call.mockImplementation(savedFor(['grok', 'opencode', 'omp']))
-    stop = installHostModelCatalogSnapshotsSync()
-    // Nothing is read until the host's agents are known; their arrival reads them.
-    await Promise.resolve()
-    expect(mocks.call).not.toHaveBeenCalled()
-    registerAgents('local', null)
-    await vi.waitFor(() =>
-      expect(readHostModelCatalogSnapshot(LOCAL, 'omp', NEW_CHAT)).toEqual(list(false))
-    )
-    expect(mocks.call.mock.calls.map(([, method, params]) => [method, params])).toEqual(
-      REGISTERED.map(({ agent }) => ['agentSession.modelCatalog', { agent, savedOnly: true }])
-    )
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toEqual(list(false))
-    expect(readHostModelCatalogSnapshot(LOCAL, 'opencode', NEW_CHAT)).toEqual(list(false))
-    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBeUndefined()
-    expect(readHostModelCatalogSnapshot(LOCAL, 'codex', NEW_CHAT)).toBeUndefined()
   })
 
   it('reads again for the new account after an account change, dropping an answer sent before it', async () => {

@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
 
 export const TEXT_SIZE = 17
 export const CHAT_PROSE_SCALE = 1.25
@@ -10,7 +11,7 @@ export function scaledType(size: number, fontScale: number, leading = 6) {
 }
 export const MONO_SIZE = 12
 
-export const styles = StyleSheet.create({
+export const styles = themedStyleSheet(() => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm
@@ -24,7 +25,9 @@ export const styles = StyleSheet.create({
   },
   userBubble: {
     maxWidth: '88%',
-    backgroundColor: colors.textPrimary,
+    backgroundColor: colors.chatUserSurface,
+    borderWidth: 1,
+    borderColor: colors.chatUserBorder,
     borderRadius: radii.card,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
@@ -99,4 +102,4 @@ export const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   }
-})
+}))

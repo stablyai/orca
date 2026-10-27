@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { UserPlus, X } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
@@ -20,6 +21,7 @@ type Props = {
 
 // Requested reviewers/latest verdicts with optimistic request/remove picker.
 export function PRReviewersSection({ details, actions, client, worktreeId }: Props) {
+  useMobileColorScheme()
   // Null details means heavy phase 2 still loading; synthetic placeholder means failure, neither means no reviewers.
   const loadingDetails = details === null
   const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
