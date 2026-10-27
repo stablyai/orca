@@ -112,7 +112,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
       // Why: a restart swaps one live session for one; the live cap must not defer it after main stopped the old PTY.
-      resumeSpawnIntent: visibleAtSpawn || replacesPty ? 'user-resume' : 'automatic-restore',
+      resumeSpawnIntent:
+        visibleAtSpawn || session.restartReplacesPty ? 'user-resume' : 'automatic-restore',
       ...(replacesPty ? { claimReplacedPtyId: session.claimPendingReplacedPtyId } : {}),
       shouldContinue: () =>
         !session.disposed &&
