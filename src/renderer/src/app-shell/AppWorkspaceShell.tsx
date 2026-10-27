@@ -64,6 +64,32 @@ function WorktreeSidebar({
   )
 }
 
+function ToolsSidebar({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
+  return (
+    <RecoverableRenderErrorBoundary
+      boundaryId="right-sidebar"
+      surface="right-sidebar"
+      resetKey={
+        layout.rightSidebarTab === 'explorer'
+          ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
+          : layout.rightSidebarTab
+      }
+      title={translate('auto.App.ed6b168d00', 'The tools sidebar hit an error.')}
+      description={translate(
+        'auto.App.8d1e160ed1',
+        'Retry the sidebar or switch tabs to reload this surface.'
+      )}
+    >
+      <RightSidebar
+        side={layout.toolsSidebarOnLeft ? 'left' : 'right'}
+        reserveTitlebarSpace={
+          layout.toolsSidebarOnLeft && layout.leftTitlebarChromeLayout.isFloating
+        }
+      />
+    </RecoverableRenderErrorBoundary>
+  )
+}
+
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, activeWorktreeId, activePendingCreationId, creationLayoutActive } = layout
   return (
@@ -87,6 +113,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
   )
 }
 
+/** Workspace navigation, movable tools sidebar, and page/workbench content. */
 export function AppWorkspaceShell(props: {
   layout: AppChromeLayout
   floatingWorkspace: FloatingWorkspacePanelState
@@ -153,6 +180,9 @@ export function AppWorkspaceShell(props: {
                 <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
               )
             ) : null}
+            {layout.showRightSidebarControls && layout.toolsSidebarOnLeft ? (
+              <ToolsSidebar layout={layout} />
+            ) : null}
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
               {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
               {layout.stackedSidebarOpen &&
@@ -161,21 +191,23 @@ export function AppWorkspaceShell(props: {
                 <div className="titlebar">{titlebarMainStrip}</div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-                {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
-                {layout.workspaceChromeActive && !layout.rightSidebarOpen && (
-                  <div
-                    className="absolute top-0 z-10 flex items-center h-[36px]"
-                    style={
-                      {
-                        // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
-                        right: 'var(--window-controls-width)',
-                        WebkitAppRegion: 'no-drag'
-                      } as React.CSSProperties
-                    }
-                  >
-                    {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
-                  </div>
-                )}
+                {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
+                {layout.workspaceChromeActive &&
+                  !layout.toolsSidebarOnLeft &&
+                  !layout.rightSidebarOpen && (
+                    <div
+                      className="absolute top-0 z-10 flex items-center h-[36px]"
+                      style={
+                        {
+                          // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
+                          right: 'var(--window-controls-width)',
+                          WebkitAppRegion: 'no-drag'
+                        } as React.CSSProperties
+                      }
+                    >
+                      {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
+                    </div>
+                  )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                   {layout.shouldMountTerminalWorkbench ? (
                     <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
@@ -223,24 +255,8 @@ export function AppWorkspaceShell(props: {
             </div>
           </div>
         </div>
-        {/* Retain the shell for stable layout while heavy panels disconnect; tasks can unmount it. */}
-        {layout.showRightSidebarControls ? (
-          <RecoverableRenderErrorBoundary
-            boundaryId="right-sidebar"
-            surface="right-sidebar"
-            resetKey={
-              layout.rightSidebarTab === 'explorer'
-                ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
-                : layout.rightSidebarTab
-            }
-            title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
-            description={translate(
-              'auto.App.8d1e160ed1',
-              'Retry the sidebar or switch tabs to reload this surface.'
-            )}
-          >
-            <RightSidebar />
-          </RecoverableRenderErrorBoundary>
+        {layout.showRightSidebarControls && !layout.toolsSidebarOnLeft ? (
+          <ToolsSidebar layout={layout} />
         ) : null}
       </div>
     </RecoverableRenderErrorBoundary>

@@ -25,6 +25,7 @@ export function useAppChromeLayout() {
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const toolsSidebarOnLeft = settings?.toolsSidebarPosition === 'left'
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
   // Pending creation owns the tab strip immediately; a delayed loader gate swaps it mid-create.
   const activePendingCreationExists = useAppStore(
@@ -90,7 +91,7 @@ export function useAppChromeLayout() {
   // Fit terminals before paint in the width-change frame to avoid transient wrong sizes.
   useLayoutEffect(() => {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
-  }, [sidebarOpen, rightSidebarOpen])
+  }, [sidebarOpen, rightSidebarOpen, toolsSidebarOnLeft])
 
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
@@ -142,6 +143,7 @@ export function useAppChromeLayout() {
     // Retained workbench panes need a separate visibility condition.
     terminalWorkbenchVisible: workspaceChromeActive,
     titlebarLeftControlsRef,
+    toolsSidebarOnLeft,
     workspaceChromeActive
   }
 }

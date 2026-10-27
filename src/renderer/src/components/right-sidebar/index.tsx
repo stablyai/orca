@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { PanelRight } from 'lucide-react'
+import { PanelLeft, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -30,7 +30,15 @@ import { useWindowWidth } from './use-window-width'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
-function RightSidebarInner(): React.JSX.Element {
+function RightSidebarInner({
+  side = 'right',
+  reserveTitlebarSpace = false
+}: {
+  side?: 'left' | 'right'
+  reserveTitlebarSpace?: boolean
+}): React.JSX.Element {
+  const onLeft = side === 'left'
+  const ToggleIcon = onLeft ? PanelLeft : PanelRight
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
     platform: getRendererAppPlatform(),
     isWebClient: isPairedWebClientWindow()
@@ -72,7 +80,7 @@ function RightSidebarInner(): React.JSX.Element {
     width: renderedRightSidebarWidth,
     minWidth: RIGHT_SIDEBAR_MIN_WIDTH,
     maxWidth,
-    deltaSign: -1,
+    deltaSign: onLeft ? 1 : -1,
     renderedExtraWidth: activityBarSideWidth,
     setWidth: setRightSidebarWidth
   })
@@ -97,6 +105,7 @@ function RightSidebarInner(): React.JSX.Element {
       active={effectiveTab === item.id}
       onClick={() => selectActivityTab(item.id)}
       layout="side"
+      sidebarSide={side}
       statusIndicator={item.id === 'checks' ? checksStatus : null}
     />
   ))
@@ -113,7 +122,7 @@ function RightSidebarInner(): React.JSX.Element {
             'Toggle right sidebar'
           )}
         >
-          <PanelRight size={16} />
+          <ToggleIcon size={16} />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
@@ -129,21 +138,29 @@ function RightSidebarInner(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
+      data-tools-sidebar-side={side}
       className={cn(
         'relative flex-shrink-0 flex flex-row',
-        // Allow the open resize handle to overflow; at width zero, clip mounted content and icons.
+        reserveTitlebarSpace && 'pt-9 bg-sidebar',
+        // Why: overflow-visible is needed when open so the resize handle
+        // on the outer edge remains interactive.  When closed (width 0),
+        // switch to overflow-hidden so the activity bar icons and panel
+        // content don't leak past the 0-width boundary (the component
+        // stays mounted for performance — see App.tsx).
         rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
       )}
     >
       <div
         className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
         style={{
-          borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
+          borderLeft: !onLeft && rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none',
+          borderRight: onLeft && rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
         }}
       >
         {activityBarPosition === 'top' ? (
           <RightSidebarTopActivityBar
-            hasDesktopWindowChrome={hasDesktopWindowChrome}
+            hasDesktopWindowChrome={hasDesktopWindowChrome && !onLeft}
+            atWindowEdge={!onLeft}
             topActivityStripRef={topActivityStripRef}
             topActivityLayout={topActivityLayout}
             effectiveTab={effectiveTab}
@@ -154,8 +171,13 @@ function RightSidebarInner(): React.JSX.Element {
             onChangeActivityBarPosition={setActivityBarPosition}
           />
         ) : (
-          /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
-          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
+          /* ── Side layout: static title header ── */
+          <div
+            className={cn(
+              'flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-drag',
+              !onLeft && 'right-sidebar-header-side-inset'
+            )}
+          >
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
@@ -167,16 +189,27 @@ function RightSidebarInner(): React.JSX.Element {
 
         {panelContent}
 
+        {/* Resize from the edge facing the workbench. */}
         <div
-          className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
+          data-tools-sidebar-resize=""
+          className={cn(
+            'absolute top-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10',
+            onLeft ? 'right-0' : 'left-0'
+          )}
           onMouseDown={onResizeStart}
         />
       </div>
 
+      {/* Keep the activity strip on the outside edge in either layout. */}
       {activityBarPosition === 'side' && (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
+            <div
+              className={cn(
+                'flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-border',
+                onLeft ? 'order-first border-r' : 'border-l side-activity-bar-windows-inset'
+              )}
+            >
               <TooltipProvider delayDuration={400}>{sideActivityBarIcons}</TooltipProvider>
             </div>
           </ContextMenuTrigger>
