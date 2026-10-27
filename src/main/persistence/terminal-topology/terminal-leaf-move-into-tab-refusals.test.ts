@@ -135,9 +135,19 @@ describe('a join into an existing tab refuses', () => {
     })
   })
 
-  it('target_is_chat when the target tab shows its chat view', () => {
+  it('target_is_chat for a chat-view target tab and for a target chat leaf', () => {
     const session = withTabRow(intoTabSession(), TARGET, { viewMode: 'chat' })
     expect(refusalOf(localPartition(session))).toEqual({
+      status: 'refused',
+      reason: 'target_is_chat'
+    })
+    // A chat tab made by createTab has no viewMode on its row; its layout still names the chat leaf.
+    const chatLeaf = intoTabSession()
+    chatLeaf.terminalLayoutsByTabId[TARGET] = {
+      ...chatLeaf.terminalLayoutsByTabId[TARGET]!,
+      chatLeafId: B
+    }
+    expect(refusalOf(localPartition(chatLeaf))).toEqual({
       status: 'refused',
       reason: 'target_is_chat'
     })

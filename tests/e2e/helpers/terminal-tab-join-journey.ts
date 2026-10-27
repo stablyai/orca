@@ -9,6 +9,7 @@ import { createTerminalTabFromMenu, SORTABLE_TAB } from './terminal-tab-menu'
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './terminal'
 import { readLeafPane, readLeafShellPid } from './terminal-leaf-pane-probes'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
+import { resolveTerminalTabTitle } from '../../../src/shared/tab-title-resolution'
 
 export type TabJoinSetup = {
   targetTabId: string
@@ -60,13 +61,18 @@ async function waitForMainToHold(page: Page, tabIds: string[]): Promise<void> {
     .toBe(true)
 }
 
+/** The tab's name as the Move Into Tab menu lists it. */
 export async function tabTitle(page: Page, tabId: string): Promise<string> {
-  return page.evaluate((tabId) => {
-    const tab = Object.values(window.__store?.getState().tabsByWorktree ?? {})
-      .flat()
-      .find((candidate) => candidate.id === tabId)
-    return tab ? (tab.customTitle ?? tab.title) : ''
+  const { tab, generatedTitlesEnabled } = await page.evaluate((tabId) => {
+    const state = window.__store?.getState()
+    return {
+      tab: Object.values(state?.tabsByWorktree ?? {})
+        .flat()
+        .find((candidate) => candidate.id === tabId),
+      generatedTitlesEnabled: state?.settings?.tabAutoGenerateTitle === true
+    }
   }, tabId)
+  return tab ? resolveTerminalTabTitle(tab, generatedTitlesEnabled, tab.title) : ''
 }
 
 /** A target tab T (the first terminal) and a source tab S (a new terminal), each with one bound pane. */

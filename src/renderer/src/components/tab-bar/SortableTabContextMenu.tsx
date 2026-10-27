@@ -170,7 +170,7 @@ export function SortableTabContextMenu({
           splitDownShortcut={splitDownShortcut}
           showTerminalSplit={canSplitTerminal}
         />
-        {!ORCA_LAYOUT_OWNER_IS_MAIN && !isChatView ? (
+        {!ORCA_LAYOUT_OWNER_IS_MAIN && !isChatView && canSplitTerminal ? (
           <TerminalTabMoveIntoTabMenuSection tabId={tab.id} worktreeId={tab.worktreeId} />
         ) : null}
         {showTerminalViewSwitch ? (
