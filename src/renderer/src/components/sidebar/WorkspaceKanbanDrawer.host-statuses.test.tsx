@@ -175,6 +175,21 @@ describe('WorkspaceKanbanDrawer paired host columns', () => {
     expect(updateWorktreeMeta.mock.calls.map(([id]) => id)).toEqual([localCard.id])
   })
 
+  it('never rewrites a host card whose own host still defines the removed column id', () => {
+    const hostTodoCard = { ...hostCard, id: 'repo-r::/repo-r/todo', workspaceStatus: 'todo' }
+    useAppStore.setState({
+      worktreesByRepo: {
+        'repo-r': [hostTodoCard],
+        'repo-l': [{ ...localCard, workspaceStatus: 'todo' }]
+      }
+    })
+    renderDrawer()
+
+    act(() => headerState.current?.onRemoveStatus('todo'))
+
+    expect(updateWorktreeMeta.mock.calls.map(([id]) => id)).toEqual([localCard.id])
+  })
+
   it("gives a new local column an id no paired host's column already uses", () => {
     useAppStore.setState({
       workspaceStatuses: [{ id: 'in-progress', label: 'In progress' }],

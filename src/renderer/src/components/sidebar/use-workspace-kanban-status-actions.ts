@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { getWorkspaceStatus } from './workspace-status'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 
 type WorkspaceStatuses = ReturnType<typeof useAppStore.getState>['workspaceStatuses']
@@ -90,7 +91,16 @@ export function useWorkspaceKanbanStatusActions(args: {
       const fallbackStatus = next[Math.min(index, next.length - 1)]?.id ?? next[0]!.id
       args.setWorkspaceStatuses(next)
       recordInteraction()
+      const hostStatuses = useAppStore.getState().hostWorkspaceStatuses ?? {}
       for (const worktree of args.allWorktrees) {
+        const host = parseExecutionHostId(worktree.hostId)
+        // A host that still defines this id owns the card's column; rewriting it would change host data.
+        if (
+          host?.kind === 'runtime' &&
+          hostStatuses[host.environmentId]?.some((status) => status.id === statusId)
+        ) {
+          continue
+        }
         if (getWorkspaceStatus(worktree, args.boardStatuses) === statusId) {
           void args.updateWorktreeMeta(
             worktree.id,
