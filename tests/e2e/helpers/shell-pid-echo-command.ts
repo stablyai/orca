@@ -7,7 +7,8 @@ import type { AgentStartupShell } from '../../../src/shared/tui-agent-startup-sh
 export function shellPidEchoCommand(marker: string, shell: AgentStartupShell): string {
   switch (shell) {
     case 'posix':
-      return `echo "${marker}""$$"`
+      // fish has no `$$`; a child sh reports the pane shell as its parent in every Unix shell.
+      return `sh -c 'echo "${marker}$PPID"'`
     case 'powershell':
       // PowerShell's `$$` is the previous line's last token; its own pid is `$PID`.
       return `echo ('${marker}' + $PID)`
