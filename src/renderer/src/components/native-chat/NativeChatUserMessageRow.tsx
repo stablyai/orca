@@ -126,7 +126,7 @@ export function NativeChatUserMessageRow({
                 content={markdown}
                 variant="document"
                 className="text-sm"
-                renderCodeBlock={NativeChatCodeBlock}
+                renderCodeBlock={(props) => <NativeChatCodeBlock {...props} editable={false} />}
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
               />

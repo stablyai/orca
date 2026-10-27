@@ -12,6 +12,7 @@ import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
+import { appendPromptDocumentText } from './native-chat-prompt-document-text'
 import { clearNativeChatPendingAttachmentsForTests } from './native-chat-pending-attachment-cache'
 
 export function readNativeChatDraftCache(scopeKey: string): string {
@@ -56,6 +57,25 @@ export function appendNativeChatDraftCache(
     appendListeners.get(scopeKey)?.forEach((listener) => listener(text, previous))
   }
   return durable
+}
+
+/** Append a user-initiated block verbatim: always lands, even over a duplicate or a lone /clear.
+ *  No journal, so crash replay of returned text cannot duplicate it. */
+export function appendNativeChatDraftCacheManual(scopeKey: string, text: string): void {
+  if (text === '') {
+    return
+  }
+  // Keep a structured draft's picked nodes (a selected skill, image chips) instead of dropping
+  // them: only the text grows, so the document can grow with it.
+  const current = readNativeChatComposerDraft(scopeKey)
+  const previous = current.text
+  const appended = previous === '' ? text : `${previous}\n\n${text}`
+  updateNativeChatComposerDraft(
+    scopeKey,
+    { text: appended, document: appendPromptDocumentText(current.document, previous, appended) },
+    'immediate'
+  )
+  appendListeners.get(scopeKey)?.forEach((listener) => listener(text, previous))
 }
 
 export function subscribeToNativeChatDraftAppend(

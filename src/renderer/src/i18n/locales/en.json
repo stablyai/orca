@@ -19948,6 +19948,10 @@
       "copyCode": "Copy code",
       "wrapLines": "Wrap lines",
       "disableLineWrap": "Disable line wrap",
+      "editCode": "Edit",
+      "editCodeField": "Edited code",
+      "cancelCodeEdit": "Cancel",
+      "addCodeEditToMessage": "Add to message",
       "context": {
         "unavailable": "Context usage is not known yet. It becomes available after the agent next responds.",
         "summary": "Context: {{used}} / {{window}} tokens ({{percent}}%), estimated from the last response.",

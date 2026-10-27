@@ -20030,6 +20030,10 @@
       },
       "wrapLines": "Quebrar linhas",
       "disableLineWrap": "Desativar quebra de linha",
+      "editCode": "Editar",
+      "editCodeField": "Código editado",
+      "cancelCodeEdit": "Cancelar",
+      "addCodeEditToMessage": "Adicionar à mensagem",
       "context": {
         "unavailable": "O uso de contexto ainda não é conhecido. Ele fica disponível após a próxima resposta do agente.",
         "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}}%), estimado a partir da última resposta.",

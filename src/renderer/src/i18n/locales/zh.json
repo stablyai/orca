@@ -19421,6 +19421,10 @@
       "copyCode": "复制代码",
       "wrapLines": "自动换行",
       "disableLineWrap": "关闭自动换行",
+      "editCode": "编辑",
+      "editCodeField": "编辑后的代码",
+      "cancelCodeEdit": "取消",
+      "addCodeEditToMessage": "放入消息",
       "context": {
         "unavailable": "上下文用量暂时未知，将在智能体下次响应后提供。",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根据上一次响应的估算值。",
