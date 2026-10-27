@@ -230,6 +230,7 @@ export type UiCommandEventApi = {
       paneRuntimeId: number
       direction: 'horizontal' | 'vertical'
       command?: string
+      env?: Record<string, string>
       worktreeId?: string
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource

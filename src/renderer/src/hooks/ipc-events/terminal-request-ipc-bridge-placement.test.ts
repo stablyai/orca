@@ -36,12 +36,7 @@ const { registerTerminalRequestIpcBridge } = await import('./terminal-request-ip
 
 const WT = 'repo1::/tmp/feature'
 
-type CreateRequest = {
-  requestId: string
-  worktreeId: string
-  targetGroupId?: string
-  presentation?: 'focused' | 'background'
-}
+type CreateRequest = Parameters<Parameters<typeof window.api.ui.onRequestTerminalCreate>[0]>[0]
 
 let request!: (data: CreateRequest) => void
 const replyTerminalCreate = vi.fn()
@@ -70,6 +65,27 @@ beforeEach(() => {
 })
 
 describe("a host's focused terminal create into a requested group", () => {
+  it.each([undefined, 'printf ready'])(
+    'retains one-shot environment overrides with command %j',
+    (command) => {
+      const env = { ORCA_TEST_ENV: 'two words=ok', EMPTY: '' }
+      request({ requestId: 'env-only', worktreeId: WT, presentation: 'focused', env, command })
+
+      const tabId: unknown = replyTerminalCreate.mock.calls[0]?.[0]?.tabId
+      expect(typeof tabId).toBe('string')
+      if (typeof tabId !== 'string') {
+        throw new Error('Terminal creation did not return a tab')
+      }
+      expect(store.getState().consumeTabStartupCommand(tabId)).toEqual({
+        command: command ?? '',
+        env
+      })
+      expect(store.getState().consumeTabStartupCommand(tabId)).toBeNull()
+      const nextTab = store.getState().createTab(WT)
+      expect(store.getState().consumeTabStartupCommand(nextTab.id)).toBeNull()
+    }
+  )
+
   // Activating a workspace with a live tab prunes its empty groups; the requested one must survive.
   it('lands in a just-created empty split beside a live terminal', () => {
     store.getState().createTab(WT)

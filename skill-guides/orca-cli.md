@@ -206,8 +206,10 @@ ORCA terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 ORCA terminal create --json
 ORCA terminal create --title "Worker" --json
 ORCA terminal create --worktree active --command "pnpm dev" --json
+ORCA terminal create --worktree active --env APP_MODE=test --env LABEL="two words" --command "pnpm dev" --json
 ORCA terminal split --terminal <handle> --direction vertical --json
 ORCA terminal split --terminal <handle> --direction horizontal --command "npm test" --json
+ORCA terminal split --terminal <handle> --env APP_MODE=test --command "npm test" --json
 ORCA terminal rename --terminal <handle> --title "New Name" --json
 ORCA terminal set-pane-title --terminal <handle> --title "REVIEWER" --json
 ORCA terminal switch --terminal <handle> --json
@@ -217,6 +219,7 @@ ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json
 
 Terminal rules:
 
+- `terminal create/split --env KEY=VALUE` overrides only the new terminal, with or without `--command`. Repeat the flag for multiple variables; update the execution host if it reports that `--env` is unsupported.
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
 - Use `terminal close --terminal <handle>` to close one terminal. Use `terminal close --worktree <selector> --all` to stop every terminal process in exactly that workspace and durably remove its terminal tabs, layouts, and agent-resume records.
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.

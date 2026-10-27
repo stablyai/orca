@@ -115,4 +115,27 @@ describe('a split main asked for, mounted in a layout-owner build', () => {
     expect(sendLayoutApply).not.toHaveBeenCalled()
     uninstall()
   })
+
+  it.each([
+    { env: { TEST_VALUE: 'two words=ok', EMPTY: '' } },
+    { command: 'make test', env: { TEST_VALUE: 'two words=ok', EMPTY: '' } }
+  ])('mounts the requested pane with one-shot environment overrides %j', (startup) => {
+    const ptyDeps: { startup?: unknown } = {}
+    const { manager, splitPane, startups } = mountedTab(ptyDeps)
+    const uninstall = install(manager, ptyDeps)
+    dispatchTerminalPaneSplitRequest({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      paneRuntimeId: 1,
+      sourceLeafId: SOURCE,
+      direction: 'vertical',
+      newLeafId: NEW,
+      ...startup
+    })
+    expect(splitPane).toHaveBeenCalledWith(1, 'vertical', { leafId: NEW })
+    expect(startups).toEqual([{ command: startup.command ?? '', ...startup }])
+    expect(ptyDeps.startup).toBeNull()
+    expect(sendLayoutApply).not.toHaveBeenCalled()
+    uninstall()
+  })
 })

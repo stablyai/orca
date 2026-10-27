@@ -58,9 +58,14 @@ export function installTerminalPaneMountEvents(args: {
         ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
       }
-      if (detail.command) {
-        const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
-          mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
+      if (detail.command || detail.env) {
+        const createdPane = splitPaneWithOneShotStartup(
+          ptyDeps,
+          {
+            command: detail.command ?? '',
+            ...(detail.env !== undefined ? { env: detail.env } : {})
+          },
+          () => mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
         recordRuntimeCreatedTerminalPaneSplit(createdPane, {
           source: detail.telemetrySource ?? 'command',
