@@ -15,7 +15,6 @@ import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls
 import { ActivityThreadHoverCard } from '../thread-preview/activity-thread-hover-card'
 import {
   activityThreadRowCopy,
-  activityThreadStatusId,
   activityThreadRowIdentity
 } from '../threads/activity-thread-presentation'
 import { ProjectChip } from '@/components/repo/project-chip'
@@ -111,7 +110,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   const showMarkdownStatus = statusKind === 'message'
   const agentLabel = formatAgentTypeLabel(thread.agentType)
   const showProjectPrefix =
-    activityThreadStatusId(thread) === 'working' &&
     Boolean(projectPrefix) &&
     projectPrefix?.toLowerCase() !== projectGroupLabel?.trim().toLowerCase()
   const accessibleTitle = showProjectPrefix ? `${projectPrefix}: ${taskTitle}` : taskTitle
