@@ -248,10 +248,7 @@ export function FileExplorerRowContextMenu({
       {showOpenInDefaultAppAction && (
         <ContextMenuItem onSelect={handleOpenInDefaultApp}>
           <AppWindow />
-          {translate(
-            'auto.components.right.sidebar.FileExplorerRow.288a8e8081',
-            'Open in Default App'
-          )}
+          {translate('fileExplorer.openInDefaultApp.label', 'Open in Default App')}
           {openInDefaultAppShortcutLabel !== 'Unassigned' ? (
             <ContextMenuShortcut>{openInDefaultAppShortcutLabel}</ContextMenuShortcut>
           ) : null}

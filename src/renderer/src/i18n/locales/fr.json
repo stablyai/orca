@@ -20082,6 +20082,10 @@
       "findInFolder": "Rechercher dans {{path}}",
       "folderLoadError": "Impossible de charger ce dossier :",
       "emptyFolder": "Aucun fichier dans ce dossier"
+    },
+    "openInDefaultApp": {
+      "label": "Ouvrir dans l’application par défaut",
+      "failure": "Impossible d’ouvrir « {{fileName}} » dans l’application par défaut."
     }
   },
   "sparsePreset": {

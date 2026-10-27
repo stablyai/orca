@@ -13081,8 +13081,6 @@
             "3161c4e425": "carpeta",
             "e887fa4b2e": "Abrir en terminal",
             "1d8e182c32": "Ver archivo",
-            "d40c3303f4": "No se pudo abrir '{{value0}}' en la aplicación predeterminada.",
-            "288a8e8081": "Abrir en la aplicación predeterminada",
             "revealInFinder": "Revelar en Finder",
             "openContainingFolder": "Abrir carpeta contenedora",
             "revealInFileExplorer": "Revelar en el Explorador de archivos",
@@ -19906,6 +19904,10 @@
       "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
+    },
+    "openInDefaultApp": {
+      "label": "Abrir en la aplicación predeterminada",
+      "failure": "No se pudo abrir '{{fileName}}' en la aplicación predeterminada."
     }
   },
   "sparsePreset": {

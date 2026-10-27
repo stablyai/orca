@@ -124,9 +124,9 @@ export async function openFileInDefaultApp(
     return
   }
   const failureMessage = translate(
-    'auto.components.right.sidebar.FileExplorerRow.d40c3303f4',
-    "Could not open '{{value0}}' in the default app.",
-    { value0: node.name }
+    'fileExplorer.openInDefaultApp.failure',
+    "Could not open '{{fileName}}' in the default app.",
+    { fileName: node.name }
   )
   try {
     const opened = await window.api.shell.openFilePath(node.path, LOCAL_EXECUTION_HOST_ID)
