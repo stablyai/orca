@@ -127,7 +127,13 @@ function BrowserPasswordFillList({
       key={suggestion.entryId}
       value={suggestion.entryId}
       selection="palette"
-      onMouseDown={(event) => event.preventDefault()}
+      onMouseDown={(event) => {
+        event.preventDefault()
+        // Why on press: pressing Orca's UI blurs the page field, which closes this list before the click.
+        if (event.button === 0) {
+          choose(suggestion)
+        }
+      }}
       onSelect={() => choose(suggestion)}
     >
       <KeyRound className="size-3.5 shrink-0 text-muted-foreground" />
