@@ -190,7 +190,10 @@ export async function listReleaseBuilds(
     throw new UpdaterCodedError('releaseListUnreadable', { channel })
   }
   const builds = payload
-    .map((entry) => parseReleaseEntry(entry as GitHubReleaseEntry, repo, platform, arch))
+    .map((entry) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: parseReleaseEntry reads every field defensively and drops malformed entries.
+      parseReleaseEntry(entry as GitHubReleaseEntry, repo, platform, arch)
+    )
     .filter((build): build is ReleaseBuild => build !== null)
     .filter((build) => build.channel === channel)
   return sortReleaseBuildsNewestFirst(builds)

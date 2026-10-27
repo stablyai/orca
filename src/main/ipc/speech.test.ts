@@ -46,6 +46,7 @@ vi.mock('../speech/speech-model-deletion', () => ({
   deleteLocalSpeechModel: deleteLocalSpeechModelMock
 }))
 
+import type { Store } from '../persistence/loading-store/store'
 import { reconcileUnsupportedSpeechSettings, registerSpeechHandlers } from './speech'
 
 type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string) => Promise<void>
@@ -58,12 +59,11 @@ function getHandler(channel: string): SpeechDownloadHandler {
   return call[1] as SpeechDownloadHandler
 }
 
-function makeStore(sttModel = '') {
-  const voice = { sttModel }
-  return {
-    getSettings: vi.fn(() => ({ voice })),
-    updateSettings: vi.fn()
-  }
+function makeStore(sttModel = ''): { store: Store; updateSettings: ReturnType<typeof vi.fn> } {
+  const updateSettings = vi.fn()
+  const store = { getSettings: () => ({ voice: { sttModel } }), updateSettings }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: speech handlers only read voice settings and call updateSettings.
+  return { store: store as unknown as Store, updateSettings }
 }
 
 describe('registerSpeechHandlers', () => {
@@ -98,7 +98,7 @@ describe('registerSpeechHandlers', () => {
     }
     getSpeechModelManagerMock.mockReturnValue(manager)
     fromWebContentsMock.mockReturnValue(window)
-    registerSpeechHandlers(makeStore() as never)
+    registerSpeechHandlers(makeStore().store)
 
     const pending = getHandler('speech:downloadModel')({ sender: { id: 7 } }, 'model-1')
     closeHandlers[0]?.()
@@ -110,19 +110,19 @@ describe('registerSpeechHandlers', () => {
   })
 
   it('clears a persisted local model selection on Windows ARM64', () => {
-    const store = makeStore('local-model')
+    const { store, updateSettings } = makeStore('local-model')
 
-    expect(reconcileUnsupportedSpeechSettings(store as never, 'win32', 'arm64')).toBe(true)
-    expect(store.updateSettings).toHaveBeenCalledWith(
+    expect(reconcileUnsupportedSpeechSettings(store, 'win32', 'arm64')).toBe(true)
+    expect(updateSettings).toHaveBeenCalledWith(
       { voice: { sttModel: '' } },
       { notifyListeners: true }
     )
   })
 
   it('preserves a supported cloud model selection on Windows ARM64', () => {
-    const store = makeStore('cloud-model')
+    const { store, updateSettings } = makeStore('cloud-model')
 
-    expect(reconcileUnsupportedSpeechSettings(store as never, 'win32', 'arm64')).toBe(false)
-    expect(store.updateSettings).not.toHaveBeenCalled()
+    expect(reconcileUnsupportedSpeechSettings(store, 'win32', 'arm64')).toBe(false)
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 })

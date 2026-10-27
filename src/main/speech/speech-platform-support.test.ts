@@ -6,12 +6,15 @@ import {
   getSupportedSpeechModels,
   supportsLocalSpeechRecognition
 } from './speech-platform-support'
+import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { LOCAL_SPEECH_UNAVAILABLE_ERROR } from '../../shared/speech-types'
 
-const models = [
-  { id: 'local', provider: 'local' },
-  { id: 'cloud', provider: 'openai' }
-] as SpeechModelManifest[]
+const localModel = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'local')
+const cloudModel = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'openai')
+if (!localModel || !cloudModel) {
+  throw new Error('catalog needs a local and a cloud model')
+}
+const models: SpeechModelManifest[] = [localModel, cloudModel]
 
 describe('Windows ARM64 speech support', () => {
   it('does not advertise local speech models without a native addon', () => {
