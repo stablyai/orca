@@ -64,12 +64,16 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     host.style.pointerEvents = 'none';
     var el = document.elementFromPoint(e.clientX, e.clientY);
     // Document hit-testing stops at a shadow host; closed roots stay opaque.
-    while (el && el.shadowRoot) {
-      var inner = el.shadowRoot.elementFromPoint(e.clientX, e.clientY);
-      if (!inner || inner === el) break;
-      el = inner;
+    // Page code can override shadowRoot, so the overlay must get its pointer events back regardless.
+    try {
+      while (el && el.shadowRoot) {
+        var inner = el.shadowRoot.elementFromPoint(e.clientX, e.clientY);
+        if (!inner || inner === el) break;
+        el = inner;
+      }
+    } finally {
+      host.style.pointerEvents = 'all';
     }
-    host.style.pointerEvents = 'all';
     if (el) {
       requestAnimationFrame(function() { updateHighlight(el); });
     }

@@ -26,7 +26,8 @@ async function createGuest(placement: 'body' | 'root' | 'shadow' | 'slotted' = '
   const document = window.document
   const scroller = document.createElement('div')
   const target = placement === 'root' ? document.documentElement : document.createElement('section')
-  const shadowHost = document.body.appendChild(document.createElement('div'))
+  const shadowHost = document.createElement('div')
+  document.body.appendChild(shadowHost)
   if (placement === 'body' || placement === 'shadow') {
     scroller.appendChild(target)
     const container =

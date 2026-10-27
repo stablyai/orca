@@ -37,7 +37,7 @@ async function armGuest(previousMarker?: string, inShadowRoot = false) {
   if (inShadowRoot) {
     const pageRoot = shadowHost.attachShadow({ mode: 'open' })
     pageRoot.appendChild(scroller)
-    pageRoot.elementFromPoint = () => target
+    Object.defineProperty(pageRoot, 'elementFromPoint', { value: () => target })
   }
   let targetRect: Rect = { x: 40, y: 300, width: 120, height: 30 }
   const contentSize = { width: 120, height: 30 }
