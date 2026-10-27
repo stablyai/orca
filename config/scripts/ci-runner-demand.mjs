@@ -20,6 +20,29 @@ async function api(path, env) {
   return response.json()
 }
 
+// The runs API serves at most 1000 results per query, so busy intervals are halved until each fits.
+async function collectRuns(sinceMs, untilMs, request) {
+  const range = `${new Date(sinceMs).toISOString()}..${new Date(untilMs).toISOString()}`
+  const path = `actions/runs?per_page=100&created=${encodeURIComponent(range)}`
+  const first = await request(path)
+  if (first.total_count > 1000) {
+    const seconds = (untilMs - sinceMs) / 1000 + 1
+    if (seconds < 2) {
+      throw new Error('Run inventory exceeds API limit within one second')
+    }
+    const middle = sinceMs + Math.floor(seconds / 2) * 1000
+    return [
+      ...(await collectRuns(sinceMs, middle - 1000, request)),
+      ...(await collectRuns(middle, untilMs, request))
+    ]
+  }
+  const runs = [...first.workflow_runs]
+  for (let page = 2; page <= Math.ceil(first.total_count / 100); page++) {
+    runs.push(...(await request(`${path}&page=${page}`)).workflow_runs)
+  }
+  return runs
+}
+
 export async function collectRunnerDemand(env = process.env, request = (path) => api(path, env)) {
   const end = new Date(env.CI_METRICS_END ?? Date.now())
   end.setUTCMinutes(0, 0, 0)
@@ -28,18 +51,8 @@ export async function collectRunnerDemand(env = process.env, request = (path) =>
   }
   const runs = []
   for (let hour = 0; hour < 24; hour++) {
-    const until = new Date(end.getTime() - hour * 3_600_000 - 1000)
-    const since = new Date(end.getTime() - (hour + 1) * 3_600_000)
-    const range = `${since.toISOString()}..${until.toISOString()}`
-    const path = `actions/runs?per_page=100&created=${encodeURIComponent(range)}`
-    const first = await request(path)
-    if (first.total_count > 1000) {
-      throw new Error('Hourly run inventory exceeds API limit; split the interval')
-    }
-    runs.push(...first.workflow_runs)
-    for (let page = 2; page <= Math.ceil(first.total_count / 100); page++) {
-      runs.push(...(await request(`${path}&page=${page}`)).workflow_runs)
-    }
+    const until = end.getTime() - hour * 3_600_000 - 1000
+    runs.push(...(await collectRuns(until - 3_599_000, until, request)))
   }
   const samples = sampleWorkflowRuns(runs)
   // Bound API concurrency and preserve every selected observation, including zero-job runs.
