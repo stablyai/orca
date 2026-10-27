@@ -20555,6 +20555,10 @@
       "findInFolder": "{{path}} 内を検索",
       "folderLoadError": "このフォルダーを読み込めませんでした：",
       "emptyFolder": "このフォルダーにはファイルがありません"
+    },
+    "openInDefaultApp": {
+      "label": "デフォルトアプリで開く",
+      "failure": "'{{fileName}}' をデフォルトアプリで開けませんでした。"
     }
   },
   "sparsePreset": {

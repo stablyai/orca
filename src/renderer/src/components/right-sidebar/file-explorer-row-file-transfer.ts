@@ -1,3 +1,8 @@
+import {
+  isLocalPathOpenBlocked,
+  showLocalPathOpenBlockedToast,
+  type LocalPathOpenOwner
+} from '@/lib/local-path-open-guard'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -103,6 +108,29 @@ export async function copyFileToOsClipboard(
     )
     if (!result.ok) {
       toast.error(result.reason === 'staging-unavailable' ? stagingFailureMessage : failureMessage)
+    }
+  } catch (error) {
+    toast.error(extractIpcErrorMessage(error, failureMessage))
+  }
+}
+
+export async function openFileInDefaultApp(
+  node: TreeNode,
+  owner: LocalPathOpenOwner
+): Promise<void> {
+  if (isLocalPathOpenBlocked(owner)) {
+    showLocalPathOpenBlockedToast()
+    return
+  }
+  const failureMessage = translate(
+    'fileExplorer.openInDefaultApp.failure',
+    "Could not open '{{fileName}}' in the default app.",
+    { fileName: node.name }
+  )
+  try {
+    const opened = await window.api.shell.openFilePath(node.path, LOCAL_EXECUTION_HOST_ID)
+    if (!opened) {
+      toast.error(failureMessage)
     }
   } catch (error) {
     toast.error(extractIpcErrorMessage(error, failureMessage))

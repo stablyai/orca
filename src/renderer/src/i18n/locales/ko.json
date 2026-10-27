@@ -20554,6 +20554,10 @@
       "findInFolder": "{{path}}에서 찾기",
       "folderLoadError": "이 폴더를 불러오지 못했습니다:",
       "emptyFolder": "이 폴더에 파일이 없습니다"
+    },
+    "openInDefaultApp": {
+      "label": "기본 앱에서 열기",
+      "failure": "기본 앱에서 '{{fileName}}'을(를) 열 수 없습니다."
     }
   },
   "sparsePreset": {

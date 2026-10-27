@@ -20384,6 +20384,10 @@
       "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
+    },
+    "openInDefaultApp": {
+      "label": "Abrir en la aplicación predeterminada",
+      "failure": "No se pudo abrir '{{fileName}}' en la aplicación predeterminada."
     }
   },
   "sparsePreset": {

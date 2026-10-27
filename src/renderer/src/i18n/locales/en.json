@@ -20893,6 +20893,10 @@
       "findInFolder": "Find in {{path}}",
       "folderLoadError": "Could not load this folder:",
       "emptyFolder": "No files in this folder"
+    },
+    "openInDefaultApp": {
+      "label": "Open in Default App",
+      "failure": "Could not open '{{fileName}}' in the default app."
     }
   },
   "sparsePreset": {

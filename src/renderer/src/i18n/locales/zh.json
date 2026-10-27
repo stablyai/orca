@@ -20555,6 +20555,10 @@
       "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
+    },
+    "openInDefaultApp": {
+      "label": "在默认应用中打开",
+      "failure": "无法在默认应用中打开“{{fileName}}”。"
     }
   },
   "sparsePreset": {
