@@ -1,5 +1,5 @@
 import { normalizeAgentNativeChatPermissionModes } from '../../../shared/agent-chat-permission-mode'
-import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
+import { applyNativeChatSettingsUpdate } from './native-chat-settings-update'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
@@ -90,11 +90,7 @@ export function updateSettings(
       updates.agentNativeChatPermissionModes
     )
   }
-  if ('nativeChatAppearance' in updates) {
-    sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
-      updates.nativeChatAppearance
-    )
-  }
+  applyNativeChatSettingsUpdate(sanitizedUpdates, updates)
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
   }

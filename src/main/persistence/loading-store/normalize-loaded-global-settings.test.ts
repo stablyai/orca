@@ -125,6 +125,17 @@ describe('machine name setting', () => {
   })
 })
 
+describe('chat speech settings', () => {
+  it('drops default speech settings and keeps a saved neural voice', () => {
+    expect(normalizeLegacyProfile({}).nativeChatSpeech).toBeUndefined()
+    expect(
+      normalizeLegacyProfile({
+        nativeChatSpeech: { enabled: true, engine: 'edge', rate: 9, voice: 'nope' }
+      }).nativeChatSpeech
+    ).toEqual({ engine: 'edge', rate: 2 })
+  })
+})
+
 describe('chat appearance settings', () => {
   it('normalizes old and malformed profiles on load', () => {
     expect(normalizeLegacyProfile({}).nativeChatAppearance).toBeUndefined()

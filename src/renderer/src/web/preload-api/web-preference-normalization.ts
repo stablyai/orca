@@ -3,6 +3,7 @@ import {
   normalizeAgentNativeChatPermissionModes
 } from '../../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { normalizeNativeChatSpeechSettings } from '../../../../shared/native-chat-speech'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
   getDefaultSettings,
@@ -183,6 +184,9 @@ export function mergeSettings(
       Object.hasOwn(updates, 'nativeChatAppearance')
         ? updates.nativeChatAppearance
         : base.nativeChatAppearance
+    ),
+    nativeChatSpeech: normalizeNativeChatSpeechSettings(
+      Object.hasOwn(updates, 'nativeChatSpeech') ? updates.nativeChatSpeech : base.nativeChatSpeech
     ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }

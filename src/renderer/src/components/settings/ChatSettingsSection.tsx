@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { AppearanceChatSection } from './AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
+import { ChatSpeechSetting } from './ChatSpeechSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
 import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
@@ -14,6 +15,7 @@ import { useAppStore } from '../../store'
 import { Card, CardContent } from '../ui/card'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatBehaviorTitle } from './chat-behavior-search'
+import { getChatSpeechSearchEntries } from './chat-speech-search'
 
 export function ChatSettingsSection({
   settings,
@@ -88,6 +90,15 @@ export function ChatSettingsSection({
               forceVisible={matchesSettingsSearch(query, [{ title }])}
             />
           ) : null}
+          <ChatSpeechSetting
+            settings={settings}
+            updateSettings={updateSettings}
+            showEngine={showDesktopOnlySettings}
+            forceVisible={matchesSettingsSearch(query, [
+              { title },
+              ...getChatSpeechSearchEntries()
+            ])}
+          />
           <ChatBehaviorSetting
             settings={settings}
             updateSettings={updateSettings}

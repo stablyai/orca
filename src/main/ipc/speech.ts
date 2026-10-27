@@ -12,8 +12,11 @@ import {
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
+import { registerSpeechTtsHandlers } from './speech-tts'
 
 export function registerSpeechHandlers(store: Store): void {
+  registerSpeechTtsHandlers()
+
   ipcMain.handle('speech:getCatalog', () => {
     return SPEECH_MODEL_CATALOG
   })

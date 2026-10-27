@@ -266,7 +266,8 @@ describe('NativeChatResolvedView right-click targets', () => {
     )
 
     fireEvent.contextMenu(screen.getByText('Run the build:'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy message' }))
+    expect(await screen.findByRole('menuitem', { name: 'Speak message' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy message' }))
     expect(mocks.writeClipboardText).toHaveBeenLastCalledWith(
       'Run the build:\n\n```sh\npnpm build\n```'
     )
@@ -279,7 +280,9 @@ describe('NativeChatResolvedView right-click targets', () => {
     expect(hoverCopy).toEqual(['pnpm build\n'])
 
     fireEvent.contextMenu(screen.getByText('Fix the build'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy message' }))
+    expect(await screen.findByRole('menuitem', { name: 'Copy message' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Speak message' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy message' }))
     expect(mocks.writeClipboardText).toHaveBeenLastCalledWith('Fix the build')
   })
 
@@ -300,5 +303,6 @@ describe('NativeChatResolvedView right-click targets', () => {
     fireEvent.contextMenu(screen.getByText('Working on it'))
     await screen.findByRole('menu')
     expect(screen.queryByRole('menuitem', { name: 'Copy message' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Speak message' })).toBeNull()
   })
 })

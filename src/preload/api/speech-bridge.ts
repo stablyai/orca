@@ -1,3 +1,4 @@
+import type { NativeChatEdgeSpeechRequest } from '../../shared/native-chat-speech'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { ipcRenderer } from 'electron'
 import type {
@@ -41,6 +42,9 @@ export const speechApi = {
     ),
   stopDictation: (sessionId = 'desktop'): Promise<void> =>
     ipcRenderer.invoke('speech:stopDictation', sessionId),
+  synthesize: (request: NativeChatEdgeSpeechRequest): Promise<{ audioBase64: string }> =>
+    ipcRenderer.invoke('speech:synthesize', request),
+  cancelSynthesis: (): Promise<void> => ipcRenderer.invoke('speech:cancelSynthesis'),
 
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>

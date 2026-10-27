@@ -1,3 +1,4 @@
+import type { NativeChatEdgeSpeechRequest } from '../../shared/native-chat-speech'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
   SpeechErrorEvent,
@@ -26,6 +27,8 @@ export type SpeechApi = {
   ) => Promise<void>
   feedAudio: (samples: Float32Array, sampleRate: number, sessionId?: string) => Promise<void>
   stopDictation: (sessionId?: string) => Promise<void>
+  synthesize: (request: NativeChatEdgeSpeechRequest) => Promise<{ audioBase64: string }>
+  cancelSynthesis: () => Promise<void>
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onDownloadProgress: (

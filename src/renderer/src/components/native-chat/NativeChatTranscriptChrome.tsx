@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatSpeakButton } from './NativeChatSpeakButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-provider-frame-summary'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat-visual-directive'
@@ -261,11 +262,13 @@ export function NativeChatImageAttachments({
 }
 
 export function NativeChatAgentControls({
+  messageId,
   markdown,
   timestamp,
   onScrollToTop,
   className
 }: {
+  messageId: string
   markdown: string
   timestamp: number | null
   onScrollToTop: () => void
@@ -274,6 +277,7 @@ export function NativeChatAgentControls({
   return (
     // Hover-only row chrome: find skips it rather than counting what the mouse happens to show.
     <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
+      <NativeChatSpeakButton messageId={messageId} markdown={markdown} />
       {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. */}
       <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
       <button

@@ -1,3 +1,4 @@
+import type { NativeChatSpeechSettings } from './native-chat-speech'
 import type { TuiAgent } from './tui-agent'
 
 export type NativeChatAppearanceSettings = {
@@ -19,6 +20,8 @@ export type NativeChatGlobalSettings = {
   nativeChatAutoName?: boolean
   /** Explicit chat provider choices; unlisted agents retain the chat launch default. */
   nativeChatProviders?: Partial<Record<TuiAgent, boolean>>
+  /** How assistant replies are read aloud. Absent keeps the Speak button on the system voice. */
+  nativeChatSpeech?: NativeChatSpeechSettings
 }
 
 export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 14

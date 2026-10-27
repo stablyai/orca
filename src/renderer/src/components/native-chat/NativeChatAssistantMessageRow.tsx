@@ -7,6 +7,7 @@ import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCodeBlock, NativeChatPlainCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatAgentControls, NativeChatImageAttachments } from './NativeChatTranscriptChrome'
+import { useNativeChatAutoSpeech } from './use-native-chat-auto-speech'
 import type { useNativeChatWorkRun } from './use-native-chat-work-run'
 
 function messageIsStreaming(
@@ -50,6 +51,15 @@ export function NativeChatAssistantMessageRow({
   const isSystem = message.role === 'system'
   // A thought heading a run reads inside it, so the row has no words of its own.
   const words = message.role === 'reasoning' ? '' : markdown
+  useNativeChatAutoSpeech({
+    messageId: message.id,
+    markdown: words,
+    live:
+      message.role === 'assistant' &&
+      trailingRun === true &&
+      activeTurnIsWorking === true &&
+      words.length > 0
+  })
   // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
   // A working turn's last row is only its frontier: more can still land under it.
   const showControls =
@@ -58,8 +68,9 @@ export function NativeChatAssistantMessageRow({
   return (
     <div
       ref={rowRef}
-      // The context menu offers Copy message only where the hover controls offer it.
+      // The context menu offers Copy and Speak only where these hover controls offer them.
       data-native-chat-message-id={showControls ? message.id : undefined}
+      data-native-chat-speakable={showControls ? '' : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
@@ -91,6 +102,7 @@ export function NativeChatAssistantMessageRow({
       {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
       {showControls ? (
         <NativeChatAgentControls
+          messageId={message.id}
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}

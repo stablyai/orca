@@ -1,6 +1,7 @@
 import { getAppearancePaneSearchEntries } from '@/components/settings/appearance-search'
 import { getChatAppearanceSearchEntries } from '@/components/settings/chat-appearance-search'
 import { getChatBehaviorSearchEntries } from '@/components/settings/chat-behavior-search'
+import { getChatSpeechSearchEntries } from '@/components/settings/chat-speech-search'
 import { getChatNamingSearchEntry } from '@/components/settings/chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat-inline-visuals-search'
 import { getChatPermissionSearchEntry } from '@/components/settings/chat-permission-search'
@@ -53,6 +54,9 @@ export function buildInterfaceSettingsSections({
             searchEntries: [
               getChatPermissionSearchEntry(),
               ...getChatAppearanceSearchEntries(),
+              ...getChatSpeechSearchEntries().filter(
+                (entry) => showDesktopOnlySettings || entry.targetSectionId !== 'chat-speech-engine'
+              ),
               ...getChatBehaviorSearchEntries().filter(
                 (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
               ),

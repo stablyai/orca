@@ -1,4 +1,5 @@
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { normalizeNativeChatSpeechSettings } from '../../../../shared/native-chat-speech'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -102,6 +103,9 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
       updates.nativeChatAppearance
     )
+  }
+  if ('nativeChatSpeech' in updates) {
+    sanitizedUpdates.nativeChatSpeech = normalizeNativeChatSpeechSettings(updates.nativeChatSpeech)
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)

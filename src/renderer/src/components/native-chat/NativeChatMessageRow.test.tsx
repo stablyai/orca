@@ -168,7 +168,7 @@ describe('MessageRow control visibility', () => {
     renderMessage(role, null)
     expect(screen.queryByRole('time')).toBeNull()
     expect(screen.getByText('Message text')).toBeInTheDocument()
-    expect(screen.queryAllByRole('button')).toHaveLength(role === 'assistant' ? 2 : 1)
+    expect(screen.queryAllByRole('button')).toHaveLength(role === 'assistant' ? 3 : 1)
   })
 
   it.each(['reasoning', 'system'] as const)(
@@ -207,6 +207,7 @@ describe('MessageRow control visibility', () => {
     expect(screen.queryByRole('time')).toBeNull()
 
     rerender(row(false))
+    expect(screen.getByRole('button', { name: 'Speak message' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Scroll this message to top' })).toBeInTheDocument()
     expect(screen.getByRole('time')).toBeInTheDocument()
