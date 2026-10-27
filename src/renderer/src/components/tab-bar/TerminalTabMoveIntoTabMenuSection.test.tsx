@@ -265,6 +265,22 @@ describe('TerminalTabMoveIntoTabMenuSection', () => {
     expect(labels.some((text) => text?.startsWith('zsh') || text?.startsWith('claude'))).toBe(false)
   })
 
+  it('leaves generated titles out while that setting is off', () => {
+    seedState({
+      tabsByWorktree: {
+        [WT]: [
+          terminalTab(SOURCE, 'pty-a', { title: 'build' }),
+          terminalTab(OTHER, 'pty-o', { title: 'claude', generatedTitle: 'Fix login bug' })
+        ]
+      }
+    })
+    const container = render()
+
+    const labels = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
+    expect(labels).toContain('claude')
+    expect(labels).not.toContain('Fix login bug')
+  })
+
   it('disables only the target that fails its own check', () => {
     seedState({
       tabsByWorktree: {

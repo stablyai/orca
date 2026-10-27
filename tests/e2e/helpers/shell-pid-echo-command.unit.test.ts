@@ -10,9 +10,8 @@ describe('shellPidEchoCommand', () => {
   })
 
   it('reads the pid through $PID in PowerShell, where $$ is the last token', () => {
-    const command = shellPidEchoCommand(MARKER, 'powershell')
-    expect(command).toContain('$PID')
-    expect(command).not.toContain('$$')
+    // Inside the single-quoted marker PowerShell would print '$PID' literally.
+    expect(shellPidEchoCommand(MARKER, 'powershell')).toBe(`echo ('${MARKER}' + $PID)`)
   })
 
   it.each(['posix', 'powershell'] as const)(

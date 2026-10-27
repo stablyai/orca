@@ -38,7 +38,7 @@ export async function readLeafPaneText(page: Page, tabId: string, leafId: string
   )
 }
 
-/** The shell a pane runs: POSIX off Windows; on Windows, read from the pane (PowerShell by default). */
+/** The shell a pane runs: POSIX off Windows; on Windows, the shell the pane's process reports. */
 async function readPaneShell(page: Page, ptyId: string): Promise<AgentStartupShell> {
   if (process.platform !== 'win32') {
     return 'posix'
