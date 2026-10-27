@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import {
-  redactString,
-  redactAttributes,
-  redactValue,
-  redactSpan,
-  type RedactableSpan
-} from './redactor'
+import { redactString } from '../../shared/secret-redaction'
+import { redactAttributes, redactValue, redactSpan, type RedactableSpan } from './redactor'
 
 const SECRETS = {
   anthropic: 'sk-ant-api03-aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789ABCDEFGHIJKLMNOP',

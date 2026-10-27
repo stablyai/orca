@@ -1,3 +1,5 @@
+import { redactString } from './secret-redaction'
+
 /** jcode's `run --json` envelope, narrowed to the field the answer lives in. */
 type JcodeJsonResult = { text?: unknown }
 
@@ -140,10 +142,10 @@ function isCommitFenceInfoCharacter(code: number): boolean {
 export function stripAnsiControlSequences(value: string): string {
   const esc = String.fromCharCode(27)
   const bel = String.fromCharCode(7)
-  // Raw CLI failures can contain both CSI colors/cursor and OSC titles/hyperlinks.
+  // CLI failures mix CSI colors/cursor, OSC titles/hyperlinks, and short escapes like tput sgr0's ESC(B.
   return value.replace(
     new RegExp(
-      `${esc}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${bel}${esc}\\r\\n]*(?:${bel}|${esc}\\\\))`,
+      `${esc}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${bel}${esc}\\r\\n]*(?:${bel}|${esc}\\\\)|[ -/]*[0-~])`,
       'g'
     ),
     ''
@@ -162,10 +164,10 @@ const FAILURE_EXCERPT_HEAD_BUDGET = 100
 const FAILURE_EXCERPT_TAIL_BUDGET = 130
 const FAILURE_EXCERPT_SINGLE_BUDGET = 240
 
-// CLI error formats drift; excerpt first/last lines without interpreting vendor wording. Callers must sanitize before display/persistence.
+// Redact intact lines and tokens before excerpting; callers still sanitize paths before display.
 export function excerptAgentFailureOutput(stdout: string, stderr: string): string | null {
   // Prefer stderr diagnostics; stdout is fallback and may echo the prompt.
-  const source = /\S/.test(stderr) ? stderr : stdout
+  const source = redactString(stripAnsiIfPresent(/\S/.test(stderr) ? stderr : stdout))
   if (!/\S/.test(source)) {
     return null
   }
@@ -242,7 +244,7 @@ function collectExcerptLines(text: string, max: number): string[] {
   const lines = text.split(/\r\n|\r|\n/)
   const collected: string[] = []
   for (let index = 0; index < lines.length && collected.length < max; index += 1) {
-    const line = stripAnsiIfPresent(lines[index]).trim()
+    const line = lines[index].trim()
     if (line.length > 0) {
       collected.push(line)
     }
@@ -254,7 +256,7 @@ function collectExcerptLinesFromEnd(text: string, max: number): string[] {
   const lines = text.split(/\r\n|\r|\n/)
   const collected: string[] = []
   for (let index = lines.length - 1; index >= 0 && collected.length < max; index -= 1) {
-    const line = stripAnsiIfPresent(lines[index]).trim()
+    const line = lines[index].trim()
     if (line.length > 0) {
       collected.push(line)
     }

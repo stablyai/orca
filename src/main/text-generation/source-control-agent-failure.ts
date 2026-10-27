@@ -82,7 +82,9 @@ export function finalizeFromAgentOutput(args: {
   if (parsed && !parsed.ok) {
     return {
       success: false,
-      error: sanitizeAgentFailureDetail(parsed.error) ?? `${label} reported an error.`,
+      error:
+        sanitizeAgentFailureDetail(excerptAgentFailureOutput('', parsed.error)) ??
+        `${label} reported an error.`,
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }

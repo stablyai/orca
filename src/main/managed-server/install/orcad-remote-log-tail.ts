@@ -1,5 +1,5 @@
 // Decorate logged errors with a bounded redacted host tail, never telemetry; missing host evidence preserves the original failure.
-import { redactString } from '../../observability/redactor'
+import { redactString } from '../../../shared/secret-redaction'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { ORCAD_LOG_FILENAME } from './orcad-remote-host-support'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'

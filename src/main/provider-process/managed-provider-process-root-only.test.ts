@@ -88,14 +88,13 @@ describe('root-only managed provider close', () => {
     expect(fixture.child.kill).not.toHaveBeenCalled()
   })
 
-  it('drains stderr into a bounded tail', async () => {
+  it('keeps credentials out of the bounded stderr tail', async () => {
     const fixture = fakeChild()
     const managed = rootOnly(fixture)
-    fixture.child.stderr.write('x'.repeat(9000))
-    fixture.child.stderr.write('provider: not signed in')
+    fixture.child.stderr.write(`MY_CREDENTIAL=${'s'.repeat(9000)}`)
+    fixture.child.stderr.write('more-secret-bytes\nMY_TOKEN=abc123\nprovider: not signed in')
     await new Promise((resolve) => setImmediate(resolve))
-    expect(managed.stderrTail()).toMatch(/provider: not signed in$/)
-    expect(managed.stderrTail()).toHaveLength(8192)
+    expect(managed.stderrTail()).toBe('MY_TOKEN=[redacted:env-value]\nprovider: not signed in')
   })
 })
 

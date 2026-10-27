@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { redactString } from './redactor'
+import { redactString } from './secret-redaction'
 
 const originalEnvLine = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/gm
 const original = (input: string): string =>

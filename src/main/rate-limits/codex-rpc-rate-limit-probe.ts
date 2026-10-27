@@ -5,7 +5,7 @@ import {
   sanitizeAgentFailureDetail
 } from '../../shared/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
-import { redactString } from '../observability/redactor'
+import { createProviderStderrTail } from '../provider-process/provider-stderr-tail'
 import {
   classifyCodexRateLimitWindows,
   CODEX_SESSION_WINDOW_MINUTES,
@@ -22,7 +22,7 @@ import {
   type RpcRateLimitResetCredits
 } from './codex-reset-credit-client'
 
-const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
+const MAX_DIAGNOSTIC_OUTPUT_BYTES = 100_000
 
 type RpcResponse = {
   id: number
@@ -78,7 +78,7 @@ export function readCodexRateLimitsViaRpc(
   return new Promise<ProviderRateLimits>((resolve) => {
     const { child, codexCommand, fetchOptions } = options
     let buffer = ''
-    let stderr = ''
+    const stderr = createProviderStderrTail(MAX_DIAGNOSTIC_OUTPUT_BYTES)
     let resolved = false
     let rpcId = 0
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -154,10 +154,7 @@ export function readCodexRateLimitsViaRpc(
     }
 
     function onStderrData(chunk: Buffer): void {
-      stderr += chunk.toString()
-      if (stderr.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
-        stderr = stderr.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
-      }
+      stderr.write(chunk)
     }
 
     function onError(error: Error): void {
@@ -173,7 +170,7 @@ export function readCodexRateLimitsViaRpc(
             ? isBareCommand
               ? 'Codex CLI not found'
               : 'Codex CLI found but could not run — Node.js may not be in your PATH'
-            : withMacTailscaleDnsHint(error.message, stderr),
+            : withMacTailscaleDnsHint(error.message, stderr.text()),
           status: isEnoent && isBareCommand ? 'unavailable' : 'error'
         },
         { kill: true }
@@ -194,7 +191,7 @@ export function readCodexRateLimitsViaRpc(
         session: null,
         weekly: null,
         updatedAt: Date.now(),
-        error: describeCodexRpcExit(code, signal, stderr),
+        error: describeCodexRpcExit(code, signal, stderr.text()),
         status: 'error'
       })
     }
@@ -237,7 +234,7 @@ export function readCodexRateLimitsViaRpc(
                 session: null,
                 weekly: null,
                 updatedAt: Date.now(),
-                error: withMacTailscaleDnsHint(message.error.message, stderr),
+                error: withMacTailscaleDnsHint(message.error.message, stderr.text()),
                 status: 'error',
                 ...(failureKind ? { usageMetadata: { failureKind } } : {})
               },
@@ -295,9 +292,7 @@ function describeCodexRpcExit(
   }
   const reason =
     code !== null ? `exit code ${code}` : signal ? `signal ${signal}` : 'no exit status'
-  const detail = sanitizeAgentFailureDetail(
-    redactString(excerptAgentFailureOutput('', stderr) ?? '')
-  )
+  const detail = sanitizeAgentFailureDetail(excerptAgentFailureOutput('', stderr))
   return withMacTailscaleDnsHint(
     detail
       ? `Codex RPC process exited (${reason}): ${detail}`

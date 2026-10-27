@@ -243,6 +243,16 @@ describe('excerptAgentFailureOutput', () => {
     expect(excerptAgentFailureOutput('', 'one\ntwo\nthree\n')).toBe('one two three')
   })
 
+  it.each([
+    [
+      `MY_CREDENTIAL=${'s'.repeat(9000)}\nFailed to start`,
+      'MY_CREDENTIAL=[redacted:env-value] Failed to start'
+    ],
+    ['Failed to start\n-----BEGIN PRIVATE KEY-----\nkey-material', 'Failed to start [redacted:pem]']
+  ])('redacts intact credentials before joining or shortening output', (source, expected) => {
+    expect(excerptAgentFailureOutput('', source)).toBe(expected)
+  })
+
   it('does not parse or unwrap JSON payloads', () => {
     expect(excerptAgentFailureOutput('', '401: {"message":"Invalid API key provided"}')).toBe(
       '401: {"message":"Invalid API key provided"}'

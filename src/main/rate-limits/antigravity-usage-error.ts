@@ -1,6 +1,6 @@
 import type { UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 import { stripTerminalControl } from '../../shared/terminal-control-stripping'
-import { redactString } from '../observability/redactor'
+import { redactString } from '../../shared/secret-redaction'
 
 const AGY_ERROR_PREFIX = 'AGY_ERROR:'
 

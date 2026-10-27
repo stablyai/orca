@@ -15,6 +15,7 @@ import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { isMissingProviderExecutable } from './provider-executable-missing'
 import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
+import { createProviderStderrTail } from './provider-stderr-tail'
 import {
   acceptProviderRootExit,
   closeProviderProcess,
@@ -24,7 +25,7 @@ import {
   type ProviderProcessTree
 } from './provider-process-close'
 
-const STDERR_TAIL_MAX_CHARS = 8192
+const STDERR_TAIL_MAX_BYTES = 8192
 
 export type ProviderProcessExit = {
   code: number | null
@@ -66,7 +67,7 @@ export type ManagedProviderProcess = {
   readonly exitPromise: Promise<void>
   /** Direct or supervisor-reported ENOENT for the provider executable. */
   readonly executableMissing: boolean
-  /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
+  /** Up to 8 KiB of redacted stderr, omitting a first line whose prefix was truncated. */
   stderrTail(): string
   onExit(listener: (exit: ProviderProcessExit) => void): void
   terminateTree(): Promise<ProviderProcessTeardownVerdict>
@@ -105,14 +106,14 @@ export function spawnManagedProviderProcess(
   let spawnError: unknown = null
   let lastCloseResult: ProviderProcessCloseResult | null = null
   const exitProof = new RetryableProcessExitProof(options.acceptClose ?? acceptProviderRootExit)
-  let stderrTail = ''
+  const stderrTail = createProviderStderrTail(STDERR_TAIL_MAX_BYTES)
   let stderrLine = ''
   let lineCut = false
-  const lineMaxChars = options.stderrLineMaxChars ?? STDERR_TAIL_MAX_CHARS
+  const lineMaxChars = options.stderrLineMaxChars ?? STDERR_TAIL_MAX_BYTES
   // Drop truncated lines: an unclassified suffix may contain a private sign-in URL.
   const retainLine = (line: string, cut: boolean): void => {
     if (line && !options.onStderrLine?.(line, cut) && !cut) {
-      stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_MAX_CHARS)
+      stderrTail.write(`${line}\n`)
     }
   }
   // Drain stderr so a full pipe cannot block the child.
@@ -125,7 +126,7 @@ export function spawnManagedProviderProcess(
       lineCut = (lines.length === 0 && lineCut) || pending.length > lineMaxChars
       stderrLine = pending.slice(0, lineMaxChars)
     } else {
-      stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS)
+      stderrTail.write(chunk)
     }
     options.onOutput?.()
   })
@@ -183,10 +184,10 @@ export function spawnManagedProviderProcess(
     get executableMissing() {
       const failure =
         spawnError ??
-        (observed ? supervisedProviderSpawnFailure(observed.code, stderrTail)?.error : null)
+        (observed ? supervisedProviderSpawnFailure(observed.code, stderrTail.text())?.error : null)
       return isMissingProviderExecutable(failure, launch.command)
     },
-    stderrTail: () => stderrTail,
+    stderrTail: stderrTail.text,
     get lastCloseResult() {
       return lastCloseResult
     },

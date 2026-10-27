@@ -2,13 +2,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { stripTypeScriptTypes } from 'node:module'
 import { performance } from 'node:perf_hooks'
-import { redactString } from '../../src/main/observability/redactor.ts'
+import { redactString } from '../../src/shared/secret-redaction.ts'
 
-// Supply an unchanged redactor.ts snapshot to measure the actual previous production function.
+// Supply an unchanged secret-redaction.ts snapshot to measure the actual previous production function.
 const baselinePath = process.argv[2]
 if (!baselinePath) {
   throw new Error(
-    'Usage: node config/scripts/redactor-environment-lines-benchmark.mjs <baseline-redactor.ts>'
+    'Usage: node config/scripts/redactor-environment-lines-benchmark.mjs <baseline-secret-redaction.ts>'
   )
 }
 const baselineSource = stripTypeScriptTypes(readFileSync(baselinePath, 'utf8'))

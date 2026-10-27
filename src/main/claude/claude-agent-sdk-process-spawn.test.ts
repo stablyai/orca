@@ -154,12 +154,12 @@ describe('claude agent SDK process spawn', () => {
     const spawn = createClaudeCodeProcessSpawn(process.spawnImpl)
     spawn.spawn(sdkOptions())
 
-    process.child.stderr.write('x'.repeat(9000))
+    process.child.stderr.write(`${'x'.repeat(9000)}\n`)
     process.child.stderr.write('claude: not signed in')
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(spawn.managed?.stderrTail()).toMatch(/claude: not signed in$/)
-    expect(spawn.managed?.stderrTail().length).toBe(8192)
+    expect(spawn.managed?.stderrTail().length).toBeLessThanOrEqual(8192)
   })
 
   it('preserves a Windows .cmd shim and its arguments for the host spawner', () => {
