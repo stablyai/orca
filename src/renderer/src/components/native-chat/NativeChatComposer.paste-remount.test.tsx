@@ -89,6 +89,7 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   prepareNativeChatSessionAttachmentUpload: mocks.prepare
 }))
 
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { NativeChatComposer } from './NativeChatComposer'
 import {
   clearNativeChatDraftCacheForTests,
@@ -430,7 +431,10 @@ import { nativeChatPastedTextOperations } from './native-chat-pasted-text-refere
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import { promptTextContent } from './native-chat-prompt-document'
 
-function renderTerminalBackedChat(handle: RefObject<NativeChatComposerHandle | null>): void {
+function renderTerminalBackedChat(
+  handle: RefObject<NativeChatComposerHandle | null>,
+  agent: 'claude' | 'codex' = 'claude'
+): void {
   writeNativeChatDraftCache(PANE, 'keep this draft')
   render(
     <NativeChatComposer
@@ -438,7 +442,7 @@ function renderTerminalBackedChat(handle: RefObject<NativeChatComposerHandle | n
       terminalTabId="tab-1"
       paneKey={PANE}
       targetPtyId="test-pty"
-      agent="claude"
+      agent={agent}
     />
   )
 }
@@ -494,6 +498,34 @@ describe('a large paste in a terminal-backed chat', () => {
     renderTerminalBackedChat(handle)
     await act(async () => handle.current?.pasteFromClipboard())
     expect(promptValue(screen.getByRole('textbox'))).toContain(text.slice(0, 1000))
+  })
+})
+
+describe('sending from a terminal-backed chat while a pasted text is still being saved', () => {
+  it('waits for the file and then sends its path, never the placeholder', async () => {
+    mocks.state.owner = { kind: 'local' }
+    const handle = createRef<NativeChatComposerHandle>()
+    const saved = Promise.withResolvers<string>()
+    installPreloadApi({
+      readClipboardText: async () => 'x'.repeat(1024 * 1024),
+      readClipboardFilePaths: async () => [],
+      clipboardHasImage: async () => false,
+      savePastedTextAsFile: () => saved.promise
+    })
+    renderTerminalBackedChat(handle, 'codex')
+    await act(async () => handle.current?.pasteFromClipboard())
+    vi.mocked(sendRuntimePtyInput).mockClear()
+    vi.useFakeTimers()
+    // Enter while the file is still being written
+    act(() => mocks.state.fieldProps?.onSend())
+    await act(async () => vi.advanceTimersByTimeAsync(2000))
+    expect(vi.mocked(sendRuntimePtyInput)).not.toHaveBeenCalled()
+    expect(promptValue(screen.getByRole('textbox'))).toContain('keep this draft')
+    await act(async () => saved.resolve('/tmp/pasted.txt'))
+    act(() => mocks.state.fieldProps?.onSend())
+    await act(async () => vi.advanceTimersByTimeAsync(2000))
+    const written = vi.mocked(sendRuntimePtyInput).mock.calls.map(([, data]) => String(data))
+    expect(written.join('')).toContain('@/tmp/pasted.txt')
   })
 })
 
