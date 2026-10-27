@@ -174,6 +174,32 @@ describe('mapMRInfo', () => {
     expect(info.mergeStateStatus).toBe('conflict')
   })
 
+  it('settles a manual pipeline only when GitLab reports the MR mergeable', () => {
+    const mr = (status: string, detailed_merge_status: string) =>
+      mapMRInfo(
+        { iid: 1, title: 't', state: 'opened', head_pipeline: { status }, detailed_merge_status },
+        derivePipelineStatus({ status })
+      ).pipelineStatus
+    expect(mr('manual', 'mergeable')).toBe('success')
+    // Why: with "Pipelines must succeed" GitLab reports ci_must_pass, so the manual job blocks.
+    expect(mr('manual', 'ci_must_pass')).toBe('pending')
+    expect(mr('manual', 'draft_status')).toBe('pending')
+    expect(mr('running', 'mergeable')).toBe('pending')
+    expect(mr('failed', 'mergeable')).toBe('failure')
+    expect(
+      mapMRInfo(
+        {
+          iid: 1,
+          title: 't',
+          state: 'opened',
+          pipeline: { status: 'manual' },
+          detailed_merge_status: 'mergeable'
+        },
+        'pending'
+      ).pipelineStatus
+    ).toBe('success')
+  })
+
   it('marks UNKNOWN when detailed_merge_status is non-mergeable but not a conflict', () => {
     const info = mapMRInfo(
       { iid: 1, title: 't', state: 'opened', detailed_merge_status: 'checking' },
