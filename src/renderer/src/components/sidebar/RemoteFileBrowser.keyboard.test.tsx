@@ -67,6 +67,10 @@ async function settlePathResolve(): Promise<void> {
   })
 }
 
+function rows(container: HTMLElement): (string | null)[] {
+  return [...container.querySelectorAll('[role="option"]')].map((row) => row.textContent)
+}
+
 function selectedRow(container: HTMLElement): string | null | undefined {
   return container.querySelector('[role="option"][aria-selected="true"]')?.textContent
 }
@@ -106,6 +110,35 @@ describe('RemoteFileBrowser keyboard navigation', () => {
     // Modified arrows stay with the input (selection, caret jumps).
     await press(input, 'ArrowDown', { shiftKey: true })
     expect(selectedRow(container)).toBe('src')
+
+    await act(async () => root.unmount())
+  })
+
+  it('opens the highlighted folder with Right and goes back up with Left', async () => {
+    const { container, input, root } = await render()
+    await press(input, 'ArrowDown')
+    browseDir.mockImplementationOnce(async () => ({
+      entries: [{ name: 'lib', isDirectory: true }],
+      resolvedPath: '/home/alice/src',
+      pathFlavor: 'posix' as const
+    }))
+
+    await press(input, 'ArrowRight')
+    expect(selectedRow(container)).toBe('lib')
+
+    await press(input, 'ArrowLeft')
+    expect(rows(container)).toEqual(['docs', 'src', 'README.md'])
+
+    // Right with the caret before the end of the filter, or on a file, does not navigate.
+    browseDir.mockClear()
+    await type(input, 'do')
+    input.setSelectionRange(0, 0)
+    await press(input, 'ArrowRight')
+    await type(input, '')
+    await press(input, 'ArrowDown')
+    await press(input, 'ArrowDown')
+    await press(input, 'ArrowRight')
+    expect(browseDir).not.toHaveBeenCalled()
 
     await act(async () => root.unmount())
   })
