@@ -67,6 +67,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
   beforeEach(() => {
     seedAgentStatus(null)
     projectRuntimeContext = undefined
+    useAppStore.setState({ settings: getDefaultSettings('/home/dev') })
   })
 
   it('names the session so the relaunch continues the conversation', () => {
@@ -96,11 +97,22 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
     expect(startup.startupCommandDelivery).toBe('shell-ready')
   })
 
-  it('falls back to a bare relaunch when the pane has no Codex session to name', () => {
-    const startup = build()
+  it('relaunches the configured command without adding defaults when no session is recorded', () => {
+    const command = String.raw`& 'C:\Program Files\Codex\codex.exe'`
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentCmdOverrides: { codex: command },
+        agentDefaultArgs: { codex: '--search' },
+        agentDefaultEnv: { codex: { CODEX_DEFAULT_ONLY: '1' } }
+      }
+    })
 
-    expect(startup.command).toBe('codex')
-    expect(startup.resumeProviderSession).toBeUndefined()
+    expect(build()).toEqual({
+      command,
+      startupCommandDelivery: 'shell-ready',
+      launchAgent: 'codex'
+    })
   })
 
   it('uses the persisted record when the live status entry is gone', () => {
@@ -126,7 +138,13 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
     expect(startup.resumeProviderSession?.id).toBe(SESSION_ID)
   })
 
-  it('keeps the bare relaunch for a resolved WSL runtime', () => {
+  it('keeps the configured fresh relaunch for a resolved WSL runtime', () => {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentCmdOverrides: { codex: 'codex-wrapper' }
+      }
+    })
     seedAgentStatus({
       agentType: 'codex',
       state: 'done',
@@ -146,7 +164,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
 
     const startup = build()
 
-    expect(startup.command).toBe('codex')
+    expect(startup.command).toBe('codex-wrapper')
     expect(startup.resumeProviderSession).toBeUndefined()
   })
 

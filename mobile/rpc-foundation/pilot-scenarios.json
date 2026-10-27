@@ -4281,7 +4281,8 @@
           "complete": "worktree.set#2",
           "params": {
             "worktree": "id:repo42::/p",
-            "linkedPR": null
+            "linkedPR": null,
+            "suppressedGitHubPR": 12
           },
           "reply": {
             "ok": true,
@@ -8359,7 +8360,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8608,7 +8611,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8631,7 +8636,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8656,7 +8663,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8709,7 +8718,7 @@
             "ok": true,
             "result": {
               "worktree": {
-                "linkedPR": 12
+                "linkedPR": null
               }
             }
           }
@@ -8722,8 +8731,11 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": 12
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
           },
+          "paramsFollowDivergence": true,
           "reply": {
             "ok": true,
             "result": {
@@ -8808,7 +8820,7 @@
             "ok": true,
             "result": {
               "worktree": {
-                "linkedPR": 12
+                "linkedPR": null
               }
             }
           }
@@ -8821,8 +8833,11 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": 12
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
           },
+          "paramsFollowDivergence": true,
           "reply": {
             "ok": true,
             "result": {
@@ -16656,7 +16671,9 @@
       "id": "native-chat-session-option-pick-written",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -16692,7 +16709,9 @@
       "id": "native-chat-session-option-pick-refused",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -16729,7 +16748,9 @@
       "id": "native-chat-session-option-pick-empty",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -21122,7 +21143,8 @@
             "limit": 40,
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
-              "transcriptPending": 1
+              "transcriptPending": 1,
+              "transcriptSourceOrder": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21178,6 +21200,9 @@
             "agent": "claude",
             "sessionId": "session-1",
             "limit": 60,
+            "capabilities": {
+              "transcriptSourceOrder": 1
+            },
             "beforeOffset": 1200,
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21233,7 +21258,8 @@
             "limit": 40,
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
-              "transcriptPending": 1
+              "transcriptPending": 1,
+              "transcriptSourceOrder": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },

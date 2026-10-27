@@ -7,7 +7,7 @@ import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-deliver
 import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { forgetNativeChatPromptDismissalsForTab } from '@/components/native-chat/native-chat-prompt-dismissals'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
-import './agent-status'
+import './agent-status/agent-status'
 import {
   buildAgentStatusTabPrefixDropPatch,
   type AgentStatusTabPrefixDropState

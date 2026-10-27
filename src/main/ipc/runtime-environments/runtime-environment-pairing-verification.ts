@@ -14,8 +14,8 @@ import {
   type RemotePairingFailure,
   type VerifyAndAddRuntimeEnvironmentResult
 } from '../../../shared/remote-pairing-verification'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairingOffer,

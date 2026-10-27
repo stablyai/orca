@@ -1,3 +1,6 @@
+import { createSessionSearchClient } from '../../../../shared/ai-vault-search-client'
+import { AiVaultSearchRequestSchema } from '../../../../shared/ai-vault-search-contract'
+import type * as StoreModule from '@/store'
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -13,11 +16,17 @@ import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-w
 import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'
 
 const mockSettings: { aiVaultSearch?: { enabled: boolean } } = {}
-vi.mock('@/store', () => ({
-  useAppStore: (
-    select: (state: { settings: typeof mockSettings; runtimeEnvironments: never[] }) => unknown
-  ) => select({ settings: mockSettings, runtimeEnvironments: [] })
-}))
+vi.mock('@/store', async (importOriginal) => {
+  const actual = await importOriginal<typeof StoreModule>()
+  return {
+    useAppStore: Object.assign(
+      (
+        select: (state: { settings: typeof mockSettings; runtimeEnvironments: never[] }) => unknown
+      ) => select({ settings: mockSettings, runtimeEnvironments: [] }),
+      { getState: actual.useAppStore.getState, setState: actual.useAppStore.setState }
+    )
+  }
+})
 
 const feeds = vi.hoisted(() => ({
   subscribe: vi.fn(),
@@ -86,7 +95,8 @@ it('debounces, skips empty/disabled requests, and never substitutes local for an
   await debounce()
   expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
     { query: 'latest', cursor: undefined },
-    'ssh:remote'
+    'ssh:remote',
+    expect.any(Function)
   )
   unmount()
 })
@@ -132,8 +142,12 @@ it('restarts page one after stale cursors without looping on a changing index', 
     .mockResolvedValueOnce({ kind: 'stale-cursor', generation: 3 })
   act(() => result.current.loadMore())
   await debounce()
-  expect(searchSessions.mock.calls[1]).toEqual([{ ...request, cursor: 'page-2' }, 'runtime:owner'])
-  expect(searchSessions.mock.calls[2]).toEqual([request, 'runtime:owner'])
+  expect(searchSessions.mock.calls[1]).toEqual([
+    { ...request, cursor: 'page-2' },
+    'runtime:owner',
+    expect.any(Function)
+  ])
+  expect(searchSessions.mock.calls[2]).toEqual([request, 'runtime:owner', expect.any(Function)])
   expect(searchSessions).toHaveBeenCalledTimes(3)
   expect(result.current.response?.kind).toBe('stale-cursor')
   unmount()
@@ -183,7 +197,11 @@ it('discards pagination when a host is left and revisited, and replaces stale pa
   await debounce()
   rerender({ host: 'local' })
   await debounce()
-  expect(searchSessions.mock.calls.at(-1)).toEqual([{ ...request, cursor: undefined }, 'local'])
+  expect(searchSessions.mock.calls.at(-1)).toEqual([
+    { ...request, cursor: undefined },
+    'local',
+    expect.any(Function)
+  ])
   unmount()
 })
 
@@ -229,7 +247,11 @@ it('does not revive old results or cursors before debounce when returning from a
   act(() => result.current.loadMore())
   expect(searchSessions).toHaveBeenCalledTimes(1)
   await debounce()
-  expect(searchSessions.mock.calls.at(-1)).toEqual([{ ...request, cursor: undefined }, 'local'])
+  expect(searchSessions.mock.calls.at(-1)).toEqual([
+    { ...request, cursor: undefined },
+    'local',
+    expect.any(Function)
+  ])
   unmount()
 })
 
@@ -264,7 +286,8 @@ it('searches every computer at once and keeps each hit on the computer that owns
   await debounce()
   expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
     { ...ALL_REQUEST, cursor: undefined },
-    'all'
+    'all',
+    expect.any(Function)
   )
   expect(result.current.sessions.map((session) => session.executionHostId)).toEqual([
     'ssh:build-box',
@@ -310,8 +333,12 @@ it('restarts page one under the all scope when the merged cursor goes stale', as
     .mockResolvedValueOnce({ ...searchResults(), generation: 0 })
   act(() => result.current.loadMore())
   await debounce()
-  expect(searchSessions.mock.calls[1]).toEqual([{ ...ALL_REQUEST, cursor: 'merged' }, 'all'])
-  expect(searchSessions.mock.calls[2]).toEqual([ALL_REQUEST, 'all'])
+  expect(searchSessions.mock.calls[1]).toEqual([
+    { ...ALL_REQUEST, cursor: 'merged' },
+    'all',
+    expect.any(Function)
+  ])
+  expect(searchSessions.mock.calls[2]).toEqual([ALL_REQUEST, 'all', expect.any(Function)])
   expect(result.current.sessions.map((session) => session.executionHostId)).toEqual(['local'])
   unmount()
 })
@@ -338,7 +365,8 @@ it('searches the local index with the same query once consent is on', async () =
   await debounce()
   expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
     { ...ALL_REQUEST, cursor: undefined },
-    'local'
+    'local',
+    expect.any(Function)
   )
   expect(result.current.searching).toBe(true)
   expect(result.current.hasQuery).toBe(true)
@@ -388,6 +416,33 @@ it('keeps full-text search for a host that is merely not ready', async () => {
   await debounce()
   expect(result.current.searching).toBe(true)
   expect(result.current.titleOnly).toBe(false)
+  unmount()
+})
+
+// The real client parses before transport; top-level intent would disappear here.
+it('carries both Project identities through the actual panel parser and continuation', async () => {
+  const requests: AiVaultSearchRequest[] = []
+  const client = createSessionSearchClient(async (_method, params) => {
+    requests.push(AiVaultSearchRequestSchema.parse(params))
+    return {
+      ...empty,
+      page: { cursor: requests.length === 1 ? 'next' : null, hasMore: requests.length === 1 }
+    }
+  }, 'ipc')
+  searchSessions.mockImplementation((request) => client.searchSessions(request))
+  const within = { kind: 'project', projectKey: 'project:shared' } as const
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, within, 'all', 'relevance', 'repo:b')
+  )
+  await debounce()
+  act(() => result.current.loadMore())
+  await debounce()
+  expect(requests.map((request) => request.within)).toEqual([
+    { ...within, canonicalProjectKey: 'repo:b' },
+    { ...within, canonicalProjectKey: 'repo:b' }
+  ])
+  expect(requests.map((request) => request.cursor)).toEqual([undefined, 'next'])
+  expect(within).toEqual({ kind: 'project', projectKey: 'project:shared' })
   unmount()
 })
 

@@ -28,7 +28,7 @@ export function restoredCodexSessionOptions(
   return new Map(Object.entries(options ?? {}).filter(([key]) => isCodexTurnOptionKey(key)))
 }
 
-/** Startup reports the thread's defaults together with the saved next-turn intent. */
+/** Report current child evidence together with the saved next-turn intent. */
 export function reportedCodexSessionOptions(
   session: CodexSession
 ): AgentSessionOptionsResult['current'] {

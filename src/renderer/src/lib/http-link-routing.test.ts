@@ -3,11 +3,14 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
   openHttpLink,
+  openOwnedHttpLink,
   registerHttpLinkStoreAccessor,
   registerWorkspaceHttpLinkBrowserOpener,
   resolveLocalhostHttpLinkDisplayUrl
 } from './http-link-routing'
 
+import type { Repo } from '../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
@@ -29,6 +32,9 @@ function noActiveWorkspace(): {
   return { activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
 }
 
+const endpointProjects: Project[] = []
+const endpointProjectHostSetups: ProjectHostSetup[] = []
+
 type LinkTestSettings = {
   openLinksInApp?: boolean
   openLinksInAppModifierInverts?: boolean
@@ -47,8 +53,9 @@ const storeState = {
   setActiveView: setActiveViewMock,
   ...noActiveWorkspace(),
   createBrowserTab: createBrowserTabMock,
-  repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
-  projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
+  repos: [] as Repo[],
+  endpointProjects,
+  endpointProjectHostSetups,
   worktreesByRepo: {} as Record<
     string,
     { id: string; projectId?: string; repoId?: string; displayName?: string }[]
@@ -87,6 +94,37 @@ afterEach(() => {
 })
 
 describe('openHttpLink', () => {
+  it.each([
+    { kind: 'local' },
+    { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+    { kind: 'ssh', connectionId: 'ssh-1' }
+  ] as const)('opens required owner %j without reading Active Server', (sourceOwner) => {
+    storeState.settings = {
+      openLinksInApp: true,
+      localhostWorktreeLabelsEnabled: true,
+      get activeRuntimeEnvironmentId(): never {
+        throw new Error('An owned link must not read Active Server')
+      }
+    }
+    openOwnedHttpLink('http://localhost:5180/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner
+    })
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: 'wt-1',
+      url: 'http://localhost:5180/',
+      intent: { kind: 'url' },
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) }),
+      ...(sourceOwner.kind === 'runtime'
+        ? { expectedRuntimeEnvironmentId: 'env-1' }
+        : sourceOwner.kind === 'ssh'
+          ? { expectedSshConnectionId: 'ssh-1' }
+          : {})
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
   it('keeps the selected host of the active workspace a link opens in', () => {
     registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
@@ -358,8 +396,8 @@ describe('openHttpLink', () => {
       localhostWorktreeLabelsEnabled: true
     }
     storeState.repos = [
-      { id: 'repo-local', displayName: 'Local' },
-      { id: 'repo-remote', displayName: 'Remote' }
+      { id: 'repo-local', displayName: 'Local', path: '/local', badgeColor: '', addedAt: 0 },
+      { id: 'repo-remote', displayName: 'Remote', path: '/remote', badgeColor: '', addedAt: 0 }
     ]
     storeState.worktreesByRepo = {
       'repo-local': [{ id: 'wt-local', projectId: 'repo-local' }],
@@ -443,6 +481,8 @@ describe('openHttpLink', () => {
     storeState.repos = [
       {
         id: 'repo-1',
+        path: '/repo',
+        addedAt: 0,
         displayName: 'snapstudio',
         repoIcon: null,
         badgeColor: '#f97316'
@@ -505,6 +545,8 @@ describe('openHttpLink', () => {
     storeState.repos = [
       {
         id: 'repo-1',
+        path: '/repo',
+        addedAt: 0,
         displayName: 'snapstudio',
         repoIcon: null,
         badgeColor: '#f97316'
@@ -596,7 +638,9 @@ describe('openHttpLink', () => {
       localhostWorktreeLabelsEnabled: true,
       activeRuntimeEnvironmentId: null
     }
-    storeState.repos = [{ id: 'repo-1', displayName: 'snapstudio' }]
+    storeState.repos = [
+      { id: 'repo-1', path: '/repo', addedAt: 0, badgeColor: '', displayName: 'snapstudio' }
+    ]
     storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-main', projectId: 'repo-1' }] }
     storeState.workspacePortScan = {
       result: {
@@ -634,7 +678,9 @@ describe('openHttpLink', () => {
       localhostWorktreeLabelsEnabled: true,
       activeRuntimeEnvironmentId: 'env-other'
     }
-    storeState.repos = [{ id: 'repo-1', displayName: 'snapstudio' }]
+    storeState.repos = [
+      { id: 'repo-1', path: '/repo', addedAt: 0, badgeColor: '', displayName: 'snapstudio' }
+    ]
     storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-main', projectId: 'repo-1' }] }
     storeState.workspacePortScansByKey = {
       'local:all': {

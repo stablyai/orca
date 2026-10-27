@@ -54,6 +54,9 @@ beforeEach(() => {
     }
   })
   registerHttpLinkStoreAccessor(() => ({
+    repos: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     settings: routing.settings,
     setActiveWorktree: vi.fn(),
     createBrowserTab

@@ -51,6 +51,14 @@ run — and once more immediately before `worker_done`, so a redirect or a
 cancellation lands before the Task settles. `check` names its caller with
 `--terminal`, never `--from`. Stop checking after `worker_done`.
 
+Process every message in the batch, then acknowledge it with the returned
+`deliveryId`, which also reads the next batch; repeat until `count` is 0. An
+unacknowledged batch replays and hides newer mail:
+
+```text
+ORCA orchestration check --terminal <worker_handle> --ack <delivery_id> --json
+```
+
 Do not use `run-use` to check your Dispatch's mail or bind the Run you work for.
 You may resume a separate Run when your coordinator directs a handoff, but you
 cannot use `--takeover-legacy`. Plain `check` returns your Dispatch's mail

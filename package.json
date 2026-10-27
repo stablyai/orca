@@ -26,6 +26,7 @@
     "check:code-quality:changed": "node config/scripts/check-changed-code-quality.mjs",
     "lint:js-plugins": "oxlint --config config/oxlint-js-plugins.json src config tests mobile native .github",
     "lint:ast-grep": "ast-grep scan --config config/sgconfig.yml --min-severity warning src config tests mobile",
+    "lint:ast-grep-gates": "node config/scripts/ast-grep-gates.mjs",
     "lint:ast-grep:flaky-tests": "ast-grep scan --config config/sgconfig.yml --filter \"^test-\" src config tests mobile",
     "test:ast-grep": "ast-grep test --config config/sgconfig.yml --skip-snapshot-tests",
     "check:dead-classes": "oxlint --config config/oxlint-dead-classes.json src/renderer",
@@ -109,6 +110,7 @@
     "build:wsl-guest": "pnpm run build:packages && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/build-wsl-guest.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",
     "build:keyboard-layout-macos": "node config/scripts/build-keyboard-layout-macos.mjs",
+    "build:process-footprint-macos": "node config/scripts/build-process-footprint-macos.mjs",
     "build:notification-status-macos": "node config/scripts/build-notification-status-macos.mjs",
     "build:native": "node config/scripts/build-native-for-platform.mjs",
     "smoke:computer": "node config/scripts/computer-use-smoke.mjs",
@@ -149,8 +151,8 @@
     "build:unpack": "pnpm run build && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",
-    "build:mac": "pnpm run build:desktop && pnpm run build:computer-macos && pnpm run build:keyboard-layout-macos && pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && node config/scripts/build-mac-local.mjs",
-    "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && ORCA_MAC_RELEASE=1 pnpm run build:keyboard-layout-macos && ORCA_MAC_RELEASE=1 pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
+    "build:mac": "pnpm run build:desktop && pnpm run build:computer-macos && pnpm run build:keyboard-layout-macos && pnpm run build:process-footprint-macos && pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && node config/scripts/build-mac-local.mjs",
+    "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && ORCA_MAC_RELEASE=1 pnpm run build:keyboard-layout-macos && ORCA_MAC_RELEASE=1 pnpm run build:process-footprint-macos && ORCA_MAC_RELEASE=1 pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
     "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && node config/scripts/build-linux-local.mjs",
     "test:e2e": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project=electron-headless",
     "test:e2e:workspace-session-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-quit-relaunch-session.spec.ts tests/e2e/golden-terminal-file-link.spec.ts tests/e2e/golden-worktree-create-switch.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -201,12 +203,13 @@
     "test:e2e:remote-bulk-open-freeze": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/remote-session-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "repro:live-remote-bulk-open-freeze": "node config/scripts/live-remote-bulk-open-freeze-repro.mjs",
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs",
-    "audit:anti-slop": "node config/scripts/sync-anti-slop-plugin.mjs && oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
+    "audit:anti-slop": "node config/scripts/sync-anti-slop-plugin.mjs && bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
     "sync:anti-slop-plugin": "node config/scripts/sync-anti-slop-plugin.mjs",
     "build:packages": "node config/scripts/build-workspace-packages.mjs",
     "check:process-host-imports": "node config/scripts/check-process-host-imports.mjs",
     "check:main-sync-spawn-ratchet": "node config/scripts/check-main-sync-spawn-ratchet.mjs",
-    "check:compat-boundary-imports": "node config/scripts/check-compat-boundary-imports.mjs"
+    "check:compat-boundary-imports": "node config/scripts/check-compat-boundary-imports.mjs",
+    "check:import-boundaries": "bun config/scripts/check-import-boundaries.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.284",
@@ -416,7 +419,9 @@
       ]
     },
     "rules": {
-      "react-doctor/js-combine-iterations": "off"
+      "react-doctor/js-combine-iterations": "off",
+      "react-doctor/no-initialize-state": "off",
+      "react-doctor/no-unstable-nested-components": "off"
     }
   }
 }

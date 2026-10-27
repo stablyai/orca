@@ -4,7 +4,7 @@ import {
   formatQuestionAnswer,
   formatQuestionFreeTextAnswer,
   mobileChatQuestionKey
-} from './mobile-native-chat-question'
+} from './native-chat/input/mobile-native-chat-question'
 import {
   advanceGroupedQuestion,
   groupedQuestionPromptKey,

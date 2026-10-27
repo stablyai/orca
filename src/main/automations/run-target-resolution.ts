@@ -13,6 +13,8 @@ import {
   buildWorkspaceRunContext,
   type WorkspaceRunContext
 } from '../../shared/task-source-context'
+import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
+import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 
 export type AutomationRunTargetResult =
   | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
@@ -120,6 +122,10 @@ export function captureLegacyRunTarget(
   automation: Automation,
   allowRemoteHostScheduling: boolean
 ): Automation {
+  // The scheduler's first write; a fenced row must stay as the move exported it.
+  if (isOrcadFencedAutomation(store, automation)) {
+    throw new AutomationDispatchCancelledError(ORCAD_FENCED_AUTOMATION)
+  }
   const runContext = findLegacyAutomationRunContextStamp(store, automation, {
     allowRemoteHostScheduling
   })

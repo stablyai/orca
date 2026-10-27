@@ -417,7 +417,8 @@ describe('Codex WSL runtime hook install', () => {
           ORCA_AGENT_HOOK_PORT: '1',
           ORCA_AGENT_HOOK_TOKEN: 'stale-token',
           ORCA_PANE_KEY: 'pane-1',
-          ORCA_TEST_CAPTURE: capturePath
+          ORCA_TEST_CAPTURE: capturePath,
+          CLAUDE_JOB_DIR: ''
         }
       })
 
@@ -460,7 +461,8 @@ describe('Codex WSL runtime hook install', () => {
           ORCA_AGENT_HOOK_PORT: '43210',
           ORCA_AGENT_HOOK_TOKEN: 'token',
           ORCA_PANE_KEY: 'pane-1',
-          ORCA_TEST_CAPTURE: capturePath
+          ORCA_TEST_CAPTURE: capturePath,
+          CLAUDE_JOB_DIR: ''
         }
       })
 

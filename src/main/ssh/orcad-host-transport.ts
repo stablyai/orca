@@ -15,7 +15,12 @@ export type OrcadHostTransport = RemoteInstallTransport & {
   /** Absent on SSH, which detaches with nohup. */
   readonly orcadLaunchDetach?: OrcadLaunchDetach
   /** Pass client-only host facts at launch; SSH adds none. */
-  readonly orcadLaunchEnv?: () => Promise<readonly OrcadLaunchEnvEntry[]>
+  readonly orcadLaunchEnv?: (
+    launch: OrcadLaunchEnvRequest
+  ) => Promise<readonly OrcadLaunchEnvEntry[]>
 }
+
+/** The slot being launched; entries only its own build understands must check the version. */
+export type OrcadLaunchEnvRequest = { readonly fullVersion: string }
 
 export type OrcadLaunchEnvEntry = readonly [name: string, value: string]

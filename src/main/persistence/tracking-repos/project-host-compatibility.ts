@@ -53,7 +53,8 @@ export function mergeProjectHostSetupCompatibilityState(
   const projection = projectHostSetupProjectionFromRepos(repos)
   const succession = carryProjectStateThroughIdentityChange(
     projection.projects,
-    state.projects ?? []
+    state.projects ?? [],
+    { previous: state.projectHostSetups ?? [], current: projection.setups }
   )
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))

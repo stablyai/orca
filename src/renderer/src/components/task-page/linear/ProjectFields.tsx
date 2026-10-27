@@ -117,16 +117,16 @@ export function TaskPageLinearProjectFields({
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-1">
-            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <PopoverContent align="start" className="w-64" wheelScroll>
+            <div className="mx-1 mt-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {translate('auto.components.TaskPage.34da8ac06c', 'Lead')}
             </div>
             {newLinearProjectMembers.loading ? (
-              <div className="flex items-center justify-center p-4">
+              <div className="mx-1 mb-1 flex items-center justify-center p-4">
                 <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+              <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
                 <button
                   type="button"
                   onClick={() => setNewLinearProjectLeadId(null)}
@@ -200,16 +200,16 @@ export function TaskPageLinearProjectFields({
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-1">
-            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <PopoverContent align="start" className="w-64" wheelScroll>
+            <div className="mx-1 mt-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {translate('auto.components.TaskPage.d6cda23ef1', 'Members')}
             </div>
             {newLinearProjectMembers.loading ? (
-              <div className="flex items-center justify-center p-4">
+              <div className="mx-1 mb-1 flex items-center justify-center p-4">
                 <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+              <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
                 {newLinearProjectMembers.data.map((member) => {
                   const selected = newLinearProjectMemberIds.includes(member.id)
                   return (
@@ -268,16 +268,16 @@ export function TaskPageLinearProjectFields({
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-1">
-            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <PopoverContent align="start" className="w-64" wheelScroll>
+            <div className="mx-1 mt-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
             </div>
             {newLinearProjectLabels.loading ? (
-              <div className="flex items-center justify-center p-4">
+              <div className="mx-1 mb-1 flex items-center justify-center p-4">
                 <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+              <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
                 {newLinearProjectLabels.data.length === 0 ? (
                   <div className="px-2 py-2 text-xs text-muted-foreground">
                     {translate('auto.components.TaskPage.af9e877f30', 'No labels')}

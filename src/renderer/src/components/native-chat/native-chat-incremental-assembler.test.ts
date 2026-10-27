@@ -188,3 +188,53 @@ describe('incremental assembler — oracle differential', () => {
     ])
   })
 })
+
+it('bounds new canonical append decision work by the incoming batch at N and 10N, including null clocks', () => {
+  const counts = [100, 1000].map((size) => {
+    let reads = 0
+    const base = Array.from({ length: size }, (_, i) => ({
+      ...msg({ id: `file-${i}`, timestamp: null }),
+      get transcriptOrder() {
+        reads += 1
+        return i
+      }
+    }))
+    const assembler = createIncrementalAssembler()
+    reset(assembler, base)
+    reads = 0
+    applyAppends(assembler, [{ ...msg({ id: 'next', timestamp: null }), transcriptOrder: size }])
+    expect(assembler.messages.at(-1)?.id).toBe('next')
+    expect(reads).toBeLessThan(20)
+    return reads
+  })
+  expect(counts[1]).toBeLessThanOrEqual(counts[0] + 1)
+})
+
+it('matches a rebuild when supplementals or image units cross a canonical batch boundary', () => {
+  const first = { ...msg({ id: 'first', timestamp: 100 }), transcriptOrder: 0 }
+  const last = { ...msg({ id: 'last', timestamp: 0 }), transcriptOrder: 10 }
+  const supplemental = msg({ id: 'middle', source: 'hook', timestamp: 50 })
+  const source = {
+    ...msg({
+      id: 'source',
+      role: 'user',
+      blocks: [{ type: 'text', text: '[Image: source: /tmp/one.png]' }]
+    }),
+    transcriptOrder: 0
+  }
+  const prompt = {
+    ...msg({ id: 'prompt', role: 'user', blocks: [{ type: 'text', text: 'look [Image #1]' }] }),
+    transcriptOrder: 10
+  }
+  const companion = { ...source, id: 'next-source', transcriptOrder: 20 }
+  for (const [base, incoming] of [
+    [[first, last], [supplemental]],
+    [[source], [prompt, companion]]
+  ]) {
+    const assembler = createIncrementalAssembler()
+    reset(assembler, base)
+    expect(normalizeImageTranscriptMessages(applyAppends(assembler, incoming))).toEqual(
+      fullRebuild([...base, ...incoming])
+    )
+  }
+})

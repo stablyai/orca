@@ -3,7 +3,8 @@ import {
   projectHostSetupProjectionFromRepos,
   type ProjectHostSetupProjection
 } from '../../../shared/project-host-setup-projection'
-import { resolveProjectHostSetupProjection } from '../../../shared/project-host-setup-hydration'
+import { resolveProjectHostSetupProjection } from '../../../shared/project-catalog-canonical-projection'
+import { resolveProjectHostSetupProjection as resolveCompatibility } from '../../../shared/project-host-setup-hydration'
 import type { AppState } from './types'
 
 const derivedProjectionByRepos = new WeakMap<AppState['repos'], ProjectHostSetupProjection>()
@@ -23,14 +24,21 @@ function getDerivedProjection(repos: AppState['repos']): ProjectHostSetupProject
   return projection
 }
 
-// Object.is selector results must be stable per repos/projects/setups identities or every render retriggers.
+export type ProjectCatalogReadState = Pick<AppState, 'repos'> &
+  (
+    | { projectHostSetupProjection: ProjectHostSetupProjection }
+    | Pick<AppState, 'endpointProjects' | 'endpointProjectHostSetups'>
+  )
+
+// Why: this is a zustand selector compared with Object.is, so the result must be
+// reference-stable per (repos, projects, setups) input or every render re-renders.
 export function getProjectHostSetupProjectionFromState(
-  state: Pick<AppState, 'repos'> & Partial<Pick<AppState, 'projects' | 'projectHostSetups'>>
+  state: ProjectCatalogReadState
 ): ProjectHostSetupProjection {
-  const { repos, projects, projectHostSetups: setups } = state
-  if (!projects || !setups) {
-    return getDerivedProjection(repos)
+  if ('projectHostSetupProjection' in state) {
+    return state.projectHostSetupProjection
   }
+  const { repos, endpointProjects: projects, endpointProjectHostSetups: setups } = state
   let byProjects = resolvedProjectionByCatalog.get(repos)
   if (!byProjects) {
     byProjects = new WeakMap()
@@ -53,4 +61,36 @@ export function getProjectHostSetupProjectionFromState(
   )
   bySetups.set(setups, projection)
   return projection
+}
+
+export const selectCanonicalProjects = (
+  state: Parameters<typeof getProjectHostSetupProjectionFromState>[0]
+) => getProjectHostSetupProjectionFromState(state).projects
+
+export const selectCanonicalProjectHostSetups = (
+  state: Parameters<typeof getProjectHostSetupProjectionFromState>[0]
+) => getProjectHostSetupProjectionFromState(state).setups
+
+const compatibilityByCanonical = new WeakMap<
+  ProjectHostSetupProjection,
+  ProjectHostSetupProjection
+>()
+export function getProjectHostSetupCompatibilityFromState(
+  state: Pick<AppState, 'repos' | 'endpointProjects' | 'endpointProjectHostSetups'>
+): ProjectHostSetupProjection {
+  const canonical = getProjectHostSetupProjectionFromState({
+    repos: state.repos,
+    endpointProjects: state.endpointProjects,
+    endpointProjectHostSetups: state.endpointProjectHostSetups
+  })
+  let compatibility = compatibilityByCanonical.get(canonical)
+  if (!compatibility) {
+    compatibility = resolveCompatibility(
+      state.repos,
+      state.endpointProjects,
+      state.endpointProjectHostSetups
+    )
+    compatibilityByCanonical.set(canonical, compatibility)
+  }
+  return compatibility
 }

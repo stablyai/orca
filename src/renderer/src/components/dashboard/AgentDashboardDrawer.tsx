@@ -4,6 +4,7 @@ import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-acti
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
+import { isXtermHelperTextarea } from '../terminal-pane/regular-terminal-focus-ownership'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
   isWorkspaceBoardKeepOpenTarget,
@@ -132,6 +133,10 @@ export function AgentDashboardDrawer({
         return
       }
       event.preventDefault()
+      // xterm ignores defaultPrevented; stop only its Escape so other targets keep theirs (rename/drag cancel).
+      if (isXtermHelperTextarea(event.target)) {
+        event.stopPropagation()
+      }
       close()
     }
     // The non-modal drawer must hear Escape even when focus is outside it.

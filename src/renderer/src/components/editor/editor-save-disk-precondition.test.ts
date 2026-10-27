@@ -160,6 +160,31 @@ describe('editor saves guarded by the disk precondition', () => {
     }
   })
 
+  // Why: a granted host path must never become a write of this computer's same path.
+  it('refuses to save a host-granted tab whose owner resolves to this computer', async () => {
+    const disk = stubGuardedDisk({ [PATH]: 'original' })
+    const store = createEditorStore()
+    storeRef.current = store
+    openFile(store, { baseline: 'original', draft: 'user edit' })
+    store.getState().openFile({
+      filePath: PATH,
+      relativePath: PATH,
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit',
+      terminalArtifactGrantId: 'g-1'
+    })
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await expect(requestEditorFileSave({ fileId: PATH })).rejects.toThrow(/no longer this tab/)
+      expect(disk.writeFile).not.toHaveBeenCalled()
+      expect(disk.files.get(PATH)).toBe('original')
+    } finally {
+      cleanup()
+    }
+  })
+
   it('rebaselines to what the write left on disk, so the next save passes', async () => {
     // UTF-8 encodes lone surrogates as U+FFFD; the baseline must match those written bytes.
     const draft = 'a\uD800b'

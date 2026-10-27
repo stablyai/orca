@@ -21,6 +21,7 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'
+import { isAgentTerminalPreviewTarget } from './dashboard-popout/agent-terminal-preview-target'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
 import {
@@ -191,7 +192,9 @@ export function handleTerminalWorkspaceKeyDown(
     void handleNewFile()
     return
   }
+  const previewOwnsClose = isAgentTerminalPreviewTarget(event.target)
   if (
+    !previewOwnsClose &&
     handleEmptyFloatingWorkspacePanelCloseShortcut(
       useAppStore.getState(),
       event,
@@ -204,7 +207,7 @@ export function handleTerminalWorkspaceKeyDown(
   if (!event.repeat && matchShortcut('tab.close')) {
     const floatingPanelOwnsEvent =
       isEventTargetInsideFloatingWorkspacePanel(event.target) || floatingWorkspaceFocused
-    if (floatingPanelOwnsEvent) {
+    if (previewOwnsClose || floatingPanelOwnsEvent) {
       return
     }
     if (dispatchWorkspaceTabCommand({ type: 'close', context })) {

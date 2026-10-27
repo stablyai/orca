@@ -1,6 +1,8 @@
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionLease } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -27,7 +29,9 @@ const {
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const RUNNING: RunningStructuredSession = {
   sessionId: SESSION_ID,
-  record: agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION_ID })),
+  record: agentSessionConversationView(
+    agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION_ID }))
+  ),
   lineage: [SESSION_ID]
 }
 
@@ -58,23 +62,34 @@ function transcript(count: number): AgentJournalRenderItem[] {
 
 function installHost(options: {
   items?: AgentJournalRenderItem[]
-  lease?: { runtimeKind: string; claimStatus: string }
+  lease?: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'>
   hasSession?: boolean
   tabListed?: boolean
 }): void {
-  const lease = options.lease ?? { runtimeKind: 'native', claimStatus: 'live' }
+  const lease = options.lease ?? { runtimeKind: 'native' as const, claimStatus: 'live' as const }
   hostRef.current = {
     deps: {
       store: {
         // No committed /clear: each session is its own lineage's root.
-        listRecords: () => [],
-        getRecord: (sessionId: string) =>
-          ({
-            sessionId,
+        listConversations: () => [],
+        getVisibleSessionTabIndex: () => ({
+          present: true,
+          sessionIds: options.tabListed ? [SESSION_ID] : []
+        }),
+        getConversation: (sessionId: string) => {
+          const base = agentSessionRecordFixture(
+            agentSessionLeaseFixture({ sessionId, ...lease, runtimeFence: 1 })
+          )
+          return agentSessionConversationView({
+            ...base,
             provider: 'codex',
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-          }) as unknown as AgentSessionRecord
+            accountHome: { variable: 'CODEX_HOME', path: '/tmp/codex-home' },
+            providerHandleChain: base.providerHandleChain.map((link) => ({
+              ...link,
+              handle: codexProviderHandle('worker')
+            }))
+          })
+        }
       }
     },
     hasSession: () => options.hasSession ?? true,

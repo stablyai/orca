@@ -68,11 +68,15 @@ describe('SSH identity file reads', () => {
     )
   })
 
-  it('leaves non-auth errors and missing files unannotated', () => {
+  it('names a missing configured key', () => {
     const skipped: SkippedIdentityFiles = new Map()
-    expect(resolvePrivateKeys(targetFor(join(root, 'missing')), null, skipped)).toEqual([])
-    expect(skipped.size).toBe(0)
+    const missing = join(root, 'missing')
+    expect(resolvePrivateKeys(targetFor(missing), null, skipped)).toEqual([])
+    expect([...skipped]).toEqual([[missing, 'it does not exist']])
+  })
 
+  it('leaves non-auth errors unannotated', () => {
+    const skipped: SkippedIdentityFiles = new Map()
     resolvePrivateKeys(targetFor(join(root, 'directory')), null, skipped)
     const networkError = new Error('connect ECONNREFUSED')
     withSkippedIdentityFileDetail(networkError, skipped)

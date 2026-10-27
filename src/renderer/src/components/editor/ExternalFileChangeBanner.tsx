@@ -103,7 +103,8 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
     worktreeId: file.worktreeId,
     connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
     expectedExternalSshTargetId: file.externalSshTargetId,
-    access: editorTabFileAccess(state, file)
+    access: editorTabFileAccess(state, file),
+    terminalArtifactGrantId: file.terminalArtifactGrantId
   }).then((result) => {
     if (result.isBinary) {
       return

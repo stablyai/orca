@@ -7,6 +7,7 @@ import {
   type ProjectMovePauseResponse
 } from '../../shared/project-move-pause'
 import type { WorkspaceSleepOutcome, WorkspaceSleepRequest } from '../../shared/workspace-sleep'
+import { addFanoutListener, addFanoutListeners } from '../event-listener-fanout'
 
 type SleepRuntime = {
   sleepWorkspaces: (request: WorkspaceSleepRequest) => Promise<WorkspaceSleepOutcome[]>
@@ -101,11 +102,12 @@ export async function pauseWorkspacesForProjectMove(
       }
     })
   }
-  ipcMain.on('ui:projectMovePauseResponse', onResponse)
-  mainWindow.once('closed', onUnavailable)
-  webContents.once('destroyed', onUnavailable)
-  webContents.once('render-process-gone', onUnavailable)
-  webContents.on('did-start-navigation', onNavigation)
+  const releaseListeners = [
+    addFanoutListener(ipcMain, 'ui:projectMovePauseResponse', onResponse),
+    addFanoutListener(mainWindow, 'closed', onUnavailable),
+    addFanoutListeners(webContents, ['destroyed', 'render-process-gone'], onUnavailable),
+    addFanoutListener(webContents, 'did-start-navigation', onNavigation)
+  ]
   const envelope = { requestId, protocol: PROJECT_MOVE_PAUSE_PROTOCOL } as const
   let outcomes: WorkspaceSleepOutcome[] = []
   try {
@@ -154,10 +156,8 @@ export async function pauseWorkspacesForProjectMove(
         /* The renderer no longer holds a live reservation. */
       }
     }
-    ipcMain.removeListener('ui:projectMovePauseResponse', onResponse)
-    mainWindow.removeListener('closed', onUnavailable)
-    webContents.removeListener('destroyed', onUnavailable)
-    webContents.removeListener('render-process-gone', onUnavailable)
-    webContents.removeListener('did-start-navigation', onNavigation)
+    for (const release of releaseListeners) {
+      release()
+    }
   }
 }

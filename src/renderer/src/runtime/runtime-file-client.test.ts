@@ -183,7 +183,21 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
-  it('rejects remote-owned text reads that are not worktree-relative', async () => {
+  // Why: a restored host-file tab lost its grant; only its host may answer for the path.
+  it('asks the host for a grant for an absolute host path, never this computer', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: '/tmp/scratch.md',
+        exists: false,
+        isDirectory: false
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
     await expect(
       readRuntimeFileContent({
         target: { kind: 'environment' as const, environmentId: 'env-1' },
@@ -191,8 +205,14 @@ describe('runtime file client', () => {
         relativePath: '/tmp/scratch.md',
         worktreeId: 'wt-1'
       })
-    ).rejects.toThrow('Remote file is outside the owning runtime worktree')
+    ).rejects.toThrow()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.resolveTerminalPath' })
+    )
+    expect(fsReadFile).not.toHaveBeenCalled()
+  })
 
+  it('rejects remote-owned text reads that are not worktree-relative', async () => {
     await expect(
       readRuntimeFileContent({
         target: { kind: 'environment' as const, environmentId: 'env-1' },

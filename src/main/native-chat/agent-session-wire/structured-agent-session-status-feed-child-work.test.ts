@@ -42,7 +42,7 @@ async function feedWith(sink: StructuredAgentSessionStatusSink) {
   return new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, session]]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => 1_000,
     statusSink: () => sink
   })

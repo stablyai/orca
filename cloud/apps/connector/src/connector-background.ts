@@ -1,3 +1,7 @@
+import type { ConnectorCore } from './connector-core.js'
+import type { ConnectorInbox } from './connector-inbox.js'
+import type { SlackEdge } from './slack-edge.js'
+
 // Chains each sweep after the previous one settles, so a slow database never stacks them.
 export function every(label: string, intervalMs: number, run: () => Promise<unknown>): () => void {
   let timer: NodeJS.Timeout | undefined
@@ -35,20 +39,26 @@ const INBOX_RETENTION_MS = 7 * 24 * 60 * 60_000
 
 export function startConnectorBackground(runtime: {
   inbox: {
-    expireDue(): Promise<{ hostId: string; externalId: string }[]>
+    expireDue: ConnectorInbox['expireDue']
     pruneSettled(retentionMs: number): Promise<number>
   }
+  core: Pick<ConnectorCore, 'onExpired' | 'startBackground'>
+  slack?: Pick<SlackEdge, 'startBackground'>
 }): () => void {
   const stops = [
     every('inbox_expiry', EXPIRY_SWEEP_INTERVAL_MS, async () => {
-      const threads = await runtime.inbox.expireDue()
+      const threads = await runtime.inbox.expireDue(runtime.core.onExpired)
       if (threads.length > 0) {
-        console.log(JSON.stringify({ event: 'orca_connector_deliveries_expired', threads: threads.length }))
+        console.log(
+          JSON.stringify({ event: 'orca_connector_deliveries_expired', threads: threads.length })
+        )
       }
     }),
     every('inbox_retention', INBOX_PRUNE_INTERVAL_MS, () =>
       runtime.inbox.pruneSettled(INBOX_RETENTION_MS)
-    )
+    ),
+    runtime.core.startBackground(),
+    runtime.slack?.startBackground() ?? (() => {})
   ]
   return () => {
     for (const stop of stops) {

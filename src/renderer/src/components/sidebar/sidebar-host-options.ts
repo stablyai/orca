@@ -26,6 +26,7 @@ import type {
 } from '../../../../shared/runtime-host-status'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
+import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
 import {
   getWslHostRowDetail,
   getWslHostRowHealth,
@@ -40,6 +41,8 @@ export type SidebarHostOption = {
   kind: 'local' | 'ssh' | 'runtime'
   health: ExecutionHostHealth
   presence: 'local' | 'configured' | 'project' | 'active'
+  /** Why a failed SSH host failed, as Settings → SSH Hosts says it; host pickers show it. */
+  failureReason?: string
   // Host menus need the compatibility verdict to explain version skew.
   compatibility?: RuntimeCompatVerdict
   blockedReason?: RuntimeHostBlockedReason
@@ -115,9 +118,13 @@ export function buildSidebarHostOptions(args: {
     }
     if (host.kind === 'ssh') {
       const targetId = decodeURIComponent(host.id.slice('ssh:'.length))
+      const state = args.sshConnectionStates?.get(targetId)
       // Disconnected hosts remain listed when configured or still referenced by projects.
       return {
         ...host,
+        ...(host.health === 'error' && state
+          ? { failureReason: sshConnectFailureText(state, state.error?.trim() || host.detail) }
+          : {}),
         presence: configuredSshTargetIds.has(targetId)
           ? 'configured'
           : projectSshTargetIds.has(targetId)

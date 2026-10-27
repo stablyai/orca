@@ -242,7 +242,6 @@ export function BrowserPageToolbar({
         ),
         disabled: !externalUrl
       }}
-      // oxlint-disable-next-line react-doctor/no-unstable-nested-components -- BrowserChromeToolbar calls this as a function, so BrowserToolbarMenu stays one stable component.
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
           currentProfileId={sessionProfileId}

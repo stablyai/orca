@@ -37,6 +37,8 @@ export type StructuredAgentSessionComposerOptions = {
   snapshot: readonly SessionOptionDescriptor[]
   invokeAction: (id: string) => Promise<boolean>
   setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
+  /** What the running session reported for its `/` menu; undefined until read or on an older host. */
+  sessionCommands?: readonly AgentSessionSlashCommand[]
   conversationCommands?: readonly AgentSessionConversationCommand[]
   runConversationCommand?: (
     command: AgentSessionConversationCommand
@@ -106,12 +108,19 @@ export function structuredSessionSlashCommands(
   ]
 }
 
-/** Claim hidden TUI-only commands too, preventing literal prose delivery; leave agent-handled commands unclaimed for passthrough. */
-function structuredRecognizedCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
+/** Claim hidden TUI-only commands too, preventing literal prose delivery; leave agent-handled
+ *  and session-reported commands unclaimed for passthrough. */
+function structuredRecognizedCommands(
+  agent: AgentType,
+  reported: readonly AgentSessionSlashCommand[] | undefined
+): readonly SlashCommandSuggestion[] {
+  const sessionHandled = new Set(
+    reported?.filter((entry) => entry.kind === 'command').map((entry) => entry.name)
+  )
   return [
     ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
     ...CONVERSATION_COMMANDS,
-    ...getHostClaimedNativeChatCommands(agent)
+    ...getHostClaimedNativeChatCommands(agent).filter((entry) => !sessionHandled.has(entry.name))
   ]
 }
 
@@ -120,11 +129,13 @@ function structuredRecognizedCommands(agent: AgentType): readonly SlashCommandSu
  *  would be silently dropped, whereas a pass-through command is a real send. */
 export function isStructuredAgentSessionComposerCommand(
   text: string,
-  agent: AgentType = 'codex'
+  agent: AgentType = 'codex',
+  reported?: readonly AgentSessionSlashCommand[]
 ): boolean {
   const command = commandParts(text)
   return Boolean(
-    command && structuredRecognizedCommands(agent).some((entry) => entry.name === command.name)
+    command &&
+    structuredRecognizedCommands(agent, reported).some((entry) => entry.name === command.name)
   )
 }
 
@@ -189,7 +200,10 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       error: null
     }
   }
-  if (!command || !isStructuredAgentSessionComposerCommand(text, controller.agent)) {
+  if (
+    !command ||
+    !isStructuredAgentSessionComposerCommand(text, controller.agent, controller.sessionCommands)
+  ) {
     return { handled: false, accepted: false, error: null }
   }
   if (command.name === 'clear' || command.name === 'compact') {

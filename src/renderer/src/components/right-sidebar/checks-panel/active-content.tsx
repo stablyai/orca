@@ -1,7 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
-import { toast } from 'sonner'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import HostedReviewActions from '../HostedReviewActions'
 import { GitHubPRStackMap } from '../GitHubPRStackMap'
@@ -50,7 +49,6 @@ export function ChecksPanelActiveContent({
     commentsLoading,
     commentsSelectionClearRequest,
     conflictDetailsRefreshing,
-    consumeClaimedCommentResolutionAfterDeliveryRef,
     detachedHeadDisplay,
     editingTitle,
     getGitLabProjectRef,
@@ -59,8 +57,6 @@ export function ChecksPanelActiveContent({
     handleDeleteComment,
     handleEditComment,
     handleFixChecksWithAI,
-    handleLaunchAborted,
-    handleLaunchAccepted,
     handleLinkAnotherReview,
     handleLoadCheckDetails,
     handleOpenPR,
@@ -325,32 +321,7 @@ export function ChecksPanelActiveContent({
             : null
         }
         onSaveAgentDefault={saveLaunchActionDefault}
-        // Claim the ack payload when the tab exists; host writes still wait for prompt delivery.
-        onLaunchAccepted={handleLaunchAccepted}
-        onLaunchAborted={handleLaunchAborted}
-        onLaunched={() => {
-          // Successful prompt delivery is required before host replies or resolves.
-          consumeClaimedCommentResolutionAfterDeliveryRef.current()
-          if (agentComposerState?.actionId === 'resolveConflicts') {
-            toast.success(
-              translate(
-                'auto.components.right.sidebar.ChecksPanel.a0181a8d76',
-                'Started an AI agent for the conflicts.'
-              )
-            )
-            return
-          }
-          if (agentComposerState?.actionId === 'resolveComments') {
-            // resolveSelectedThreadsAfterLaunch emits the resolve/reply toast.
-            return
-          }
-          toast.success(
-            translate(
-              'auto.components.right.sidebar.ChecksPanel.2ef90c9819',
-              'Started an AI agent for the broken checks.'
-            )
-          )
-        }}
+        {...agentComposerState?.launchContext}
       />
     </div>
   )

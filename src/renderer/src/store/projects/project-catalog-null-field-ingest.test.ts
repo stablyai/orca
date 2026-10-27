@@ -98,8 +98,8 @@ describe('project catalog ingest with non-string row fields', () => {
     const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
     const projection = getProjectHostSetupProjectionFromState({
       repos,
-      projects: [...ingested.projects],
-      projectHostSetups: [...ingested.setups]
+      endpointProjects: [...ingested.projects],
+      endpointProjectHostSetups: [...ingested.setups]
     })
     expect(() =>
       buildProjectByRepoIdLikeSettings(projection.setups, projection.projects)
@@ -140,8 +140,8 @@ describe('project catalog ingest with non-string row fields', () => {
     const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
     const args = {
       repos,
-      projects: [...ingested.projects],
-      projectHostSetups: [...ingested.setups]
+      endpointProjects: [...ingested.projects],
+      endpointProjectHostSetups: [...ingested.setups]
     }
     expect(getProjectHostSetupProjectionFromState(args)).toBe(
       getProjectHostSetupProjectionFromState(args)

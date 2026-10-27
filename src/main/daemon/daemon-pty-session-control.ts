@@ -4,7 +4,7 @@ import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionInput } from './daemon-pty-session-input'
-import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
+import { remainingDaemonRequestTimeoutMs, teardownReadBudgetMs } from './daemon-request-deadline'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { readDaemonWslSleepCwd } from './daemon-wsl-sleep-cwd'
@@ -15,6 +15,8 @@ import type { PtySpawnResult } from '../providers/pty-provider-contract'
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
+// A busy daemon must not eat the final checkpoint's share of the Sleep deadline.
+const LIVE_SLEEP_CWD_BUDGET_MS = 1_500
 
 export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   protected abstract adoptListedSessionForSleep(
@@ -137,7 +139,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
               },
               opts.deadlineMs
             )
-          : null
+          : await this.readLiveSleepCwd(id, opts.deadlineMs)
       const committed = await this.runExclusiveCheckpoint(
         async () => {
           // Set inside: a caller past its deadline leaves this checkpoint running without it.
@@ -185,11 +187,23 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         this.historyManager?.suspendSession(id)
       }
     }
-    await this.client.request(
-      'kill',
-      { sessionId: id, immediate: opts.immediate ?? false },
-      remainingDaemonRequestTimeoutMs(opts.deadlineMs)
-    )
+    try {
+      await this.client.request(
+        'kill',
+        { sessionId: id, immediate: opts.immediate ?? false },
+        remainingDaemonRequestTimeoutMs(opts.deadlineMs)
+      )
+    } catch (error) {
+      // Only a session this adapter turned into host loss is known gone; any other id may still
+      // live in a legacy daemon sharing the history dir, so its history must not be removed.
+      if (
+        opts.keepHistory ||
+        !(error instanceof SessionNotFoundError) ||
+        !this.hostLossSessionIds.has(id)
+      ) {
+        throw error
+      }
+    }
     await this.completeShutdownWithHistoryLock(id, opts)
   }
 
@@ -199,6 +213,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     opts: { keepHistory?: boolean }
   ): Promise<void> {
     this.activeSessionIds.delete(id)
+    this.hostLossSessionIds.delete(id)
     this.clearSessionAwaitingDaemonRecovery(id)
     this.dirtySessionVersions.delete(id)
     if (!opts.keepHistory) {
@@ -262,6 +277,29 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       return result.cwd ?? ''
     } catch {
       return ''
+    }
+  }
+
+  /**
+   * A native shell's folder at Sleep (OSC 7, else its process's cwd). Bash prints no OSC 7, so
+   * without this the checkpoint keeps the spawn folder and Wake opens there (e.g. on a Linux host).
+   */
+  private async readLiveSleepCwd(id: string, deadlineMs?: number): Promise<string | null> {
+    // Windows has no process-cwd lookup (it would spawn a missing lsof); the snapshot's OSC 7 cwd stands.
+    const budget = teardownReadBudgetMs(LIVE_SLEEP_CWD_BUDGET_MS, deadlineMs)
+    if (process.platform === 'win32' || budget <= 0 || !this.activeSessionIds.has(id)) {
+      return null
+    }
+    try {
+      const { cwd } = await this.client.request<{ cwd: string | null }>(
+        'getCwd',
+        { sessionId: id },
+        budget
+      )
+      // A removed folder reads back from /proc as `<path> (deleted)`, which no shell can return to.
+      return cwd && !cwd.endsWith(' (deleted)') ? cwd : null
+    } catch {
+      return null
     }
   }
 

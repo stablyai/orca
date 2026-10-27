@@ -248,12 +248,38 @@ describe('OrchestrationPane', () => {
     expect(input.value).toBe('1')
   })
 
+  it('shows worker heartbeats on by default and saves the opposite choice when toggled', async () => {
+    const rendered = await renderPane()
+    const toggle = rendered.querySelector<HTMLButtonElement>('[aria-label="Worker heartbeats"]')
+    expect(toggle?.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => {
+      toggle?.click()
+    })
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ orchestrationHeartbeatsEnabled: false })
+    expect(matchesSettingsSearch('heartbeat', getOrchestrationPaneSearchEntries())).toBe(true)
+  })
+
+  it('renders a saved heartbeat opt-out and turns it back on', async () => {
+    const rendered = await renderPane({
+      ...getDefaultSettings('/tmp'),
+      orchestrationHeartbeatsEnabled: false
+    })
+    const toggle = rendered.querySelector<HTMLButtonElement>('[aria-label="Worker heartbeats"]')
+    expect(toggle?.getAttribute('aria-checked')).toBe('false')
+    await act(async () => {
+      toggle?.click()
+    })
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ orchestrationHeartbeatsEnabled: true })
+  })
+
   it('keeps host-only runtime settings out of paired web clients', () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
 
     expect(markup).not.toContain('Nested worker depth')
     expect(markup).not.toContain('Tell the coordinator about chat errors')
+    expect(markup).not.toContain('Worker heartbeats')
     expect(
       matchesSettingsSearch(
         'nested worker',

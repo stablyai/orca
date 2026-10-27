@@ -41,7 +41,10 @@ vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
     assertCurrent: mocks.assertCurrent
   })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.rpc,
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
+}))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({
   scheduleEditorLineReveal: mocks.reveal
 }))
@@ -138,15 +141,42 @@ it('resolves paired paths on the host and never falls back to client filesystem 
   expect(mocks.open).toHaveBeenCalledWith(
     expect.objectContaining({ runtimeEnvironmentId: 'env-a', relativePath: 'file.ts' })
   )
+})
+
+it('opens a paired path outside every workspace through the grant its host issued', async () => {
+  mocks.route.current.target = { kind: 'environment', environmentId: 'env-a' }
   mocks.rpc.mockResolvedValue({
     exists: true,
     isDirectory: false,
-    absolutePath: '/outside/file.ts',
+    absolutePath: '/private/tmp/handoff.md',
+    relativePath: null,
+    openTarget: {
+      kind: 'absolute-file',
+      provider: 'local',
+      absolutePath: '/private/tmp/handoff.md',
+      grantId: 'grant-1'
+    }
+  })
+  await openQuickOpenFile('/tmp/handoff.md', 'wt', '/repo', { pathQuery: '/tmp/handoff.md' })
+  expect(mocks.stat).not.toHaveBeenCalled()
+  expect(mocks.open).toHaveBeenCalledWith(
+    expect.objectContaining({
+      filePath: '/private/tmp/handoff.md',
+      relativePath: '/private/tmp/handoff.md',
+      runtimeEnvironmentId: 'env-a',
+      terminalArtifactGrantId: 'grant-1'
+    })
+  )
+  expect(mocks.open).not.toHaveBeenLastCalledWith(expect.objectContaining({ readOnly: true }))
+  mocks.rpc.mockResolvedValue({
+    exists: false,
+    isDirectory: false,
+    absolutePath: '/tmp/gone.md',
     relativePath: null
   })
   await expect(
-    openQuickOpenFile('/outside/file.ts', 'wt', '/repo', { pathQuery: '/outside/file.ts' })
-  ).rejects.toThrow('outside the workspace')
+    openQuickOpenFile('/tmp/gone.md', 'wt', '/repo', { pathQuery: '/tmp/gone.md' })
+  ).rejects.toThrow('File not found on its host: /tmp/gone.md')
 })
 
 it('keeps directories, denied files, missing files and replaced owners out of the editor', async () => {

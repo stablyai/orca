@@ -19,7 +19,6 @@ import {
 } from './remote-cli-page-admission'
 
 // Main-session CDP keys follow window focus; guest widget events protect the user's input (#20595).
-// See docs/reference/agent-browser-focus-isolation.md.
 
 export type GuestCdpSender = GuestSessionCdpSender
 

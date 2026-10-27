@@ -1,4 +1,11 @@
 {
+  "agentLaunch": {
+    "opencode": {
+      "updateRequired": "Esta versão do OpenCode não pode iniciar com segurança com o modelo escolhido. Atualize o OpenCode para uma versão compatível ou omita a escolha do modelo.",
+      "invalidConfig": "O OpenCode não conseguiu aplicar este modelo à configuração de inicialização. Verifique a configuração de inicialização do OpenCode e tente novamente, ou omita a escolha do modelo.",
+      "unsupportedLaunch": "O OpenCode não pode aplicar este modelo a esta inicialização. Abra um novo terminal local com argumentos de inicialização compatíveis ou omita a escolha do modelo."
+    }
+  },
   "common": {
     "retry": "Tentar novamente",
     "cancel": "Cancelar"
@@ -4288,9 +4295,7 @@
           "show": "Mostrar",
           "hide": "Ocultar",
           "externalWorktreesGlobal": "Padrão global: {{value0}}",
-          "useGlobal": "Usar global",
-          "removeProjectCheckout": "Remova este checkout do Orca. Outros checkouts deste projeto permanecem.",
-          "removeProjectKeepCheckouts": "Remova este projeto do Orca. Os checkouts que têm suas próprias configurações permanecem."
+          "useGlobal": "Usar global"
         },
         "Settings": {
           "3bf149e873": "Configurações do Projeto > {{value0}}",
@@ -5592,6 +5597,8 @@
           "editDescription": "Atualize os detalhes de conexão desta máquina. As alterações se aplicam na próxima conexão.",
           "addDescription": "Adicione uma máquina persistente na qual você pode entrar via SSH.",
           "editingPrefix": "Editando",
+          "reconnectOnLaunch": "Reconectar ao iniciar",
+          "reconnectOnLaunchHelp": "Quando desativado, o Orca deixa este host, e qualquer servidor Orca acessado por ele, desconectado ao iniciar até você conectá-lo.",
           "allowRemoteCliControl": "Permitir que a CLI orca deste host controle o Orca",
           "allowRemoteCliControlHelp": "Ativado por padrão para novos hosts. Permite que comandos orca executados neste host abram e controlem abas do navegador Orca neste computador, apenas nos espaços de trabalho deste host e enquanto ele estiver conectado. Também permite que terminais iniciados por um Orca mais antigo neste host executem comandos de orquestração (check, inbox, send, ask, reply) para seu próprio trabalho supervisionado. Eles não podem ler seus arquivos, área de transferência ou cookies. Quando desativado, eles acessam apenas o próprio servidor Orca deste host.",
           "addHost": "Adicionar host"
@@ -7716,6 +7723,10 @@
           "chatErrorEscalationNeedsChat": "Ative a interface de chat nas configurações experimentais para usar.",
           "chatErrorEscalationKeywordError": "erro",
           "chatErrorEscalationKeywordChat": "chat",
+          "heartbeatTitle": "Sinais de vida dos workers",
+          "heartbeatDescription": "Os workers atribuídos dão sinal a cada poucos minutos para que o coordenador distinga um agente trabalhando de um travado. Desativar reduz as mensagens para o coordenador, mas ele perde esse sinal de acompanhamento. Vale para workers atribuídos após a mudança.",
+          "heartbeatKeywordHeartbeat": "sinal de vida",
+          "heartbeatKeywordStalled": "travado",
           "7bc082f4de": "Copiar comando de instalação"
         },
         "RuntimeAccessGrantList": {
@@ -8615,7 +8626,9 @@
           "nodeDownloadBlockedNoMirror": "Nem este computador nem este host conseguiram baixar o Node.js, necessário para o servidor Orca. Verifique a rede ou o proxy nas duas máquinas e conecte novamente.",
           "nodeDownloadBlockedMirrorTried": "Nem este computador nem este host conseguiram baixar o Node.js, nem mesmo pelo espelho de downloads do Node.js. Verifique a configuração do espelho e conecte novamente.",
           "reassurance": "É executado em {{host}}, acessado pela sua própria conexão SSH. Seu código e seus arquivos permanecem onde estão. Apenas a lista de projetos, abas e terminais do Orca é movida para {{host}}.",
-          "refusedBlockedReason": "O Orca ainda não está configurado neste host. {{reason}}"
+          "refusedBlockedReason": "O Orca ainda não está configurado neste host. {{reason}}",
+          "refusedLeaveBehind": "Alguns itens salvos deste host não podem ser movidos para o servidor do Orca: {{items}}. “Mover mesmo assim” conecta o host e os mantém neste computador.",
+          "refusedLeaveBehindUnnamed": "Alguns itens salvos deste host não podem ser movidos para o servidor do Orca. “Mover mesmo assim” conecta o host e os mantém neste computador."
         },
         "ZcodeCliSetupSection": {
           "title": "Usar GLM com ZCode",
@@ -8948,6 +8961,16 @@
           "searchLabel": "Buscar builds",
           "searchPlaceholder": "Buscar builds…",
           "noMatches": "Nenhuma build encontrada."
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "O macOS não exibiu a notificação",
+              "macFailureDescription": "Ative Permitir notificações para o Orca nas Configurações do Sistema.",
+              "windowsFailureTitle": "O Windows não exibiu a notificação",
+              "windowsFailureDescription": "Ative as notificações para o Orca nas Configurações do Windows."
+            }
+          }
         }
       },
       "right": {
@@ -10094,8 +10117,6 @@
             "ea4788705e": "Cancelar",
             "7ec6abbf2a": "Redefinir",
             "f4f3c9ca4a": "Modelo de prompt",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "Argumentos da CLI",
             "b99c33cec5": "Configurações",
             "15c5d85706": "Agente",
             "3e8f21954f": "erro",
@@ -10923,14 +10944,14 @@
           "sshTargetNotFoundDetail": "Atualize os espaços de trabalho ou reconecte o host e tente novamente.",
           "sshTargetInvalid": "A configuração do host SSH está incompleta.",
           "sshTargetInvalidDetail": "Edite ou reconecte o host SSH e tente novamente.",
-          "sshAliasRequired": "O VS Code precisa de um alias de configuração SSH para este host.",
+          "sshAliasRequired": "Este editor precisa de um alias de configuração SSH para este host.",
           "sshAliasRequiredDetail": "Adicione um alias Host para {{host}}:{{port}} à sua configuração SSH local, reconecte o espaço de trabalho e tente novamente.",
           "remoteEditorUnsupported": "Este aplicativo não pode abrir espaços de trabalho SSH.",
-          "remoteEditorUnsupportedDetail": "Escolha o VS Code ou use o aplicativo localmente.",
+          "remoteEditorUnsupportedDetail": "Escolha VS Code, Cursor ou Zed, ou use o app localmente.",
           "remotePathInvalid": "O caminho não é válido para o host SSH.",
           "remotePathInvalidDetail": "Atualize o espaço de trabalho antes de tentar novamente.",
-          "remoteLaunchFailed": "Não foi possível abrir o caminho no VS Code.",
-          "remoteLaunchFailedDetail": "Verifique o comando do VS Code configurado nesta máquina.",
+          "remoteLaunchFailed": "Não foi possível abrir o caminho no editor.",
+          "remoteLaunchFailedDetail": "Verifique o comando do editor configurado nesta máquina.",
           "1417fd8380": "Personalizar aplicativos...",
           "8009ab69a6": "Abrir em",
           "bd0e8159f8": "Verifique a configuração do comando do editor ou do gerenciador de arquivos nesta máquina.",
@@ -10939,7 +10960,7 @@
           "3921d3d9a5": "A pasta do espaço de trabalho não foi encontrada.",
           "f387af445b": "O caminho do espaço de trabalho não é um caminho local válido.",
           "3ec372b664": "gerenciador-de-arquivos",
-          "remoteEditorHint": "Somente o VS Code pode abrir pastas em um host SSH.",
+          "remoteEditorHint": "Somente VS Code, Cursor e Zed podem abrir pastas em um host SSH.",
           "remoteRuntimeEditorHint": "Os aplicativos deste computador só podem abrir arquivos deste servidor quando o Orca se conecta a ele por SSH.",
           "wsl": "WSL"
         },
@@ -14004,7 +14025,6 @@
         "88f478cdef": "Falha ao mergear o pull request",
         "a161925adc": "Pull request mergeado",
         "0506a78337": "Isso vai atualizar o pull request no GitHub.",
-        "844dc193c7": "{{value0}} PR #{{value1}}?",
         "995dd6af9b": "Abrir verificações do PR",
         "8a22eb3f7b": "Nenhum revisor correspondente.",
         "67755a83a1": "Todos os outros",
@@ -14553,6 +14573,9 @@
           },
           "KeepAwakeCard": {
             "209713d3c7": "Opcional"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "Reabra quando quiser em Ajuda > Explorar o Orca."
           }
         },
         "tips": {
@@ -14579,7 +14602,8 @@
             "53905bd076": "Pré-visualização de desenvolvimento: abrindo o terminal de configuração de skills.",
             "1da82af45b": "A CLI do Orca precisa de atenção",
             "ce13a742d0": "`orca` registrado no PATH.",
-            "d1a86c7eb5": "Abra as Configurações para concluir a configuração da CLI."
+            "d1a86c7eb5": "Abra as Configurações para concluir a configuração da CLI.",
+            "cliInstallFailed": "Não foi possível instalar a CLI do Orca."
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "Criar worktree \"{{value0}}\"",
@@ -15345,7 +15369,6 @@
         "aba792c8b3": "Falha ao mergear o pull request",
         "dbe5e2448e": "Pull request mergeado",
         "a27ee5ca1a": "Isso vai atualizar o pull request no GitHub.",
-        "03d7216d62": "{{value0}} PR #{{value1}}?",
         "e9b7cb7d17": "Falha ao {{value0}} o PR",
         "bd3b4492a0": "Pull request reaberto",
         "9f88657c4e": "Pull request fechado",
@@ -15633,7 +15656,10 @@
               "failed": {
                 "toast": {
                   "62a0af2cb4": "Não foi possível confirmar a cópia para a área de transferência do terminal",
-                  "fdd3e7e977": "O aplicativo de terminal solicitou uma cópia, mas o Orca não conseguiu confirmar que ela chegou à área de transferência do sistema."
+                  "fdd3e7e977": "O aplicativo de terminal solicitou uma cópia, mas o Orca não conseguiu confirmar que ela chegou à área de transferência do sistema.",
+                  "de286dcfe1": "A cópia do terminal precisa de um clique",
+                  "84c938ffa2": "O navegador bloqueou uma cópia do aplicativo do terminal. Clique em Copiar para colocar o texto na sua área de transferência.",
+                  "a73165c6c5": "Copiar"
                 }
               }
             }
@@ -16061,6 +16087,16 @@
           "89c7713645": "Tela inicial do Orca Mobile"
         }
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "Fechar o PR #{{number}}?",
+        "mergeLabel": "Criar commit de merge",
+        "mergeTitle": "Fazer merge do PR #{{number}} com um commit de merge?",
+        "rebaseLabel": "Rebase e merge",
+        "rebaseTitle": "Fazer rebase e merge do PR #{{number}}?",
+        "reopenTitle": "Reabrir o PR #{{number}}?",
+        "squashLabel": "Squash e merge",
+        "squashTitle": "Fazer squash e merge do PR #{{number}}?"
+      },
       "PullRequestPage": {
         "2560588245": "Falha ao solicitar o revisor",
         "3450247584": "Comentário",
@@ -16134,7 +16170,6 @@
         "aae645d36d": "Falha ao mergear o pull request",
         "c57873d721": "Pull request mergeado",
         "a63b3c159c": "Isso vai atualizar o pull request no GitHub.",
-        "eec3706a6a": "{{value0}} PR #{{value1}}?",
         "710e47aa06": "Pull request reaberto",
         "7aa3b5f706": "Pull request fechado",
         "3d77438c92": "Isso vai reabrir o pull request no GitHub.",
@@ -18314,6 +18349,17 @@
           },
           "copy": {
             "copyFailed": "Não foi possível copiar os detalhes do relatório de falha."
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "Relatar uma falha",
+            "uiErrorTitle": "O Orca encontrou um erro de UI recuperável",
+            "closedTitle": "O Orca foi fechado inesperadamente",
+            "reportDescription": "Envie um relatório de falha que preserva sua privacidade. Logs de diagnóstico recentes com dados sensíveis removidos são incluídos quando disponíveis.",
+            "uiErrorDescription": "Envie um relatório de diagnóstico que preserva sua privacidade para nos ajudar a entender a parte da UI que falhou.",
+            "closedDescription": "Envie um relatório de diagnóstico que preserva sua privacidade para nos ajudar a entender o que aconteceu.",
+            "reportNotesPlaceholder": "Opcional: o que aconteceu?",
+            "uiErrorNotesPlaceholder": "Opcional: o que você estava fazendo antes deste erro de UI?",
+            "closedNotesPlaceholder": "Opcional: o que você estava fazendo antes de o Orca fechar?"
           }
         }
       },
@@ -19315,7 +19361,6 @@
         "permissions": "Permissões",
         "permissionAsk": "Pedir aprovação",
         "permissionAskDescription": "Pede aprovação antes de edições e comandos que suas configurações não permitem",
-        "permissionAskCodexDescription": "Edita arquivos e executa comandos neste espaço de trabalho; pede aprovação para outras ações",
         "permissionAskSharedDescription": "Pede aprovação antes de edições ou comandos que ainda não tem permissão para realizar",
         "permissionAcceptEdits": "Aceitar edições",
         "permissionAcceptEditsDescription": "Aprova edições e comandos de arquivo; pede aprovação para o restante",
@@ -19795,6 +19840,7 @@
       },
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
+        "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
         "exitUnconfirmedFromTerminal": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
         "exitUnconfirmed": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
         "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder.",
@@ -20752,10 +20798,6 @@
         "restartOne": "Reiniciar sessão",
         "restartOther": "Reiniciar {{count}} sessões",
         "listLabel": "Sessões do Claude para reiniciar",
-        "selectAll": "Selecionar tudo",
-        "selectAllSessions": "Selecionar todas as sessões",
-        "selectedCount": "{{selected}} de {{total}} selecionadas",
-        "selectWorkspace": "Selecionar todas as sessões em {{workspace}}",
         "session": "Sessão do Claude",
         "busy": "Trabalhando",
         "idle": "Ociosa",
@@ -20769,7 +20811,20 @@
         "settingRestart": "Sempre reiniciar",
         "settingKeep": "Nunca reiniciar",
         "restartingOne": "Reiniciando 1 sessão do Claude em {{account}}",
-        "restartingOther": "Reiniciando {{count}} sessões do Claude em {{account}}"
+        "restartingOther": "Reiniciando {{count}} sessões do Claude em {{account}}",
+        "groupOnAccount": "Em execução em {{account}}",
+        "groupElsewhere": "Fora de {{account}}",
+        "groupCantMove": "Não podem ser movidas",
+        "selectGroup": "Selecionar todas as sessões em {{group}}",
+        "reasonWsl": "Terminal WSL",
+        "reasonOwnFolder": "Usa sua própria pasta do Claude",
+        "reasonUnknownAccount": "Conta desconhecida",
+        "reasonNoSession": "Não é possível retomar",
+        "reviewBodyOne": "1 outra sessão do Claude não foi movida para {{next}}.",
+        "reviewBodyOther": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
+        "notMovedOne": "1 outra sessão não foi movida.",
+        "notMovedOther": "{{count}} outras sessões não foram movidas.",
+        "review": "Revisar"
       }
     },
     "managedData": {

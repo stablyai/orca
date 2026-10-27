@@ -267,7 +267,21 @@ describe('setActiveWorktree', () => {
           terminalWindowsShell: 'wsl.exe',
           terminalWindowsWslDistro: 'Debian'
         },
-        projects: [
+        endpointProjectHostSetups: [
+          {
+            id: 'setup-project-1',
+            projectId: 'project-1',
+            repoId: 'repo1',
+            hostId: 'local',
+            path: '/repo1',
+            displayName: 'Repo 1',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        endpointProjects: [
           {
             id: 'project-1',
             displayName: 'Project',
@@ -312,7 +326,21 @@ describe('setActiveWorktree', () => {
 
       seedStore(store, {
         settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'powershell.exe' },
-        projects: [
+        endpointProjectHostSetups: [
+          {
+            id: 'setup-project-1',
+            projectId: 'project-1',
+            repoId: 'repo1',
+            hostId: 'local',
+            path: '/repo1',
+            displayName: 'Repo 1',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        endpointProjects: [
           {
             id: 'project-1',
             displayName: 'Project',

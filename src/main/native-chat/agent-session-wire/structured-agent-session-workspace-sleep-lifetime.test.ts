@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   adapterAtPublishFor,
@@ -36,7 +37,13 @@ it('omits an unverified stop superseded by a newer send while retaining a siblin
   const sibling = 'session-beta'
   const siblingRecord = { ...record, sessionId: sibling }
   const getRecord = store.getRecord.bind(store)
-  vi.spyOn(store, 'listRecords').mockReturnValue([record, siblingRecord])
+  vi.spyOn(store, 'listConversations').mockReturnValue(
+    [record, siblingRecord].map(agentSessionConversationView)
+  )
+  const getConversation = store.getConversation
+  vi.spyOn(store, 'getConversation').mockImplementation((id) =>
+    id === sibling ? agentSessionConversationView(siblingRecord) : getConversation(id)
+  )
   vi.spyOn(store, 'getRecord').mockImplementation((id) =>
     id === sibling ? siblingRecord : getRecord(id)
   )

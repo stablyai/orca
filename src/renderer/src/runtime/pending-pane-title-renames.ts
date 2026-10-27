@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 
 // Hold local renames over pre-rename snapshots until host echo/new revision/expiry; unique leaf IDs key the hold.

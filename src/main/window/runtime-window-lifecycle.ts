@@ -90,7 +90,7 @@ export function registerRuntimeWindowLifecycle(
         }, 10_000)
         const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
           // Renderer-supplied request IDs confer no authority; only this window can satisfy reveal.
-          if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
+          if (event.sender !== mainWebContents || reply.requestId !== requestId) {
             return
           }
           clearTimeout(timer)

@@ -337,6 +337,20 @@ describe('conditional panel publication', () => {
       structuredSession: { sessionId: 'owner' }
     })
     expect(latest?.sessions[0]?.previewMessages[0]?.text).toBe('New prompt')
+    list.mockResolvedValue({
+      ...first,
+      fingerprint: 'c'.repeat(64),
+      sessions: [{ ...session, projectOwnerKey: 'repo:current' }]
+    })
+    await refresh()
+    expect(latest?.sessions[0]?.projectOwnerKey).toBe('repo:current')
+    list.mockResolvedValue({
+      ...first,
+      fingerprint: 'd'.repeat(64),
+      sessions: [{ ...session, projectOwnerKey: null }]
+    })
+    await refresh()
+    expect(latest?.sessions[0]?.projectOwnerKey).toBeNull()
   })
 
   it('does not reuse proofs across host, depth or project switches', async () => {

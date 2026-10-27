@@ -81,6 +81,9 @@ vi.mock('./use-mobile-session-view-mode', () => ({
     toggleTabChatView: vi.fn()
   })
 }))
+vi.mock('./use-mobile-structured-session-commands', () => ({
+  useMobileStructuredSessionCommands: () => ({ commands: undefined, refresh: vi.fn() })
+}))
 vi.mock('./use-mobile-native-chat-session', () => ({
   useMobileNativeChatSession: () => sessionState
 }))
@@ -121,17 +124,17 @@ vi.mock('./native-chat/composer/use-mobile-native-chat-drafts', () => ({
     }
   }
 }))
-vi.mock('./use-mobile-native-chat-prompts', () => ({
+vi.mock('./native-chat/input/use-mobile-native-chat-prompts', () => ({
   useMobileNativeChatPrompts: () => promptsState
 }))
 const answerSendArgs: { streamIdentity?: string }[] = []
-vi.mock('./use-mobile-native-chat-answer-send', () => ({
+vi.mock('./native-chat/input/use-mobile-native-chat-answer-send', () => ({
   useMobileNativeChatAnswerSend: (args: { streamIdentity?: string }) => {
     answerSendArgs.push(args)
     return { answerAsk: vi.fn(), cancelPending: vi.fn() }
   }
 }))
-vi.mock('./mobile-native-chat-permission-send', () => ({
+vi.mock('./native-chat/input/mobile-native-chat-permission-send', () => ({
   useMobileNativeChatPermissionSend: () => vi.fn()
 }))
 vi.mock('./use-mobile-native-chat-stop', () => ({
@@ -152,12 +155,10 @@ import {
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
 } from './native-chat/mobile-native-chat-stale-input'
-import {
-  useMobileNativeChatController,
-  type MobileNativeChatController
-} from './use-mobile-native-chat-controller'
+import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
-import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
+import { mobileNativeChatPromptDismissals } from './native-chat/input/mobile-native-chat-prompt-dismissals'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
 const sendWithOutcome = vi.mocked(NativeChatSend.sendMobileNativeChatMessageWithOutcome)

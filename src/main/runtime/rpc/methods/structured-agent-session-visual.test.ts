@@ -1,10 +1,14 @@
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { nativeChatScratchFolderFor } from '../../../native-chat/native-chat-scratch-folder'
 import { nativeChatVisualRevision } from '../../../native-chat/native-chat-visual-file-read'
@@ -39,11 +43,14 @@ let record: AgentSessionRecord | null
 
 beforeEach(async () => {
   stateDirectory = await mkdtemp(join(tmpdir(), 'orca-visual-rpc-'))
-  record = { ...agentSessionRecordFixture(), sessionId: SESSION }
+  record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION }))
   setStructuredAgentSessionHost(
     Object.assign(hostStub(), {
       deps: {
-        store: { getRecord: (id: string) => (record?.sessionId === id ? record : null) }
+        store: {
+          getConversation: (id: string) =>
+            record?.sessionId === id ? agentSessionConversationView(record) : null
+        }
       }
     })
   )

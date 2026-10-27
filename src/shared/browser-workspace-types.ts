@@ -160,6 +160,8 @@ export type BrowserSessionProfile = {
   owner?: ManagedBrowserProfileOwner
 }
 
+export type LinuxCookieKeyFailure = 'secret-tool-missing' | 'keyring-locked' | 'key-unavailable'
+
 export type BrowserCookieImportSummary = {
   totalCookies: number
   importedCookies: number
@@ -185,6 +187,7 @@ export type BrowserCookieImportSummary = {
         failedCookies: number
         otherFailedCookies?: number
         reason: 'app-bound-encryption' | 'linux-keyring-unavailable' | 'unknown'
+        keyringFailure?: { cause: LinuxCookieKeyFailure; browser: string }
       }
 }
 

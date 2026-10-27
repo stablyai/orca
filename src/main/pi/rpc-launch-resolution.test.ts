@@ -85,7 +85,10 @@ async function setup() {
     observedAt: 100
   })
   const withPrior = (link: AgentSessionProviderHandleLink) => {
-    vi.spyOn(store, 'getRecord').mockReturnValue({ ...record, providerHandleChain: [link] })
+    vi.spyOn(store, 'requireWritableRecord').mockReturnValue({
+      ...record,
+      providerHandleChain: [link]
+    })
   }
   return { store, record, workspace, resolver, resolveCommand, settings, prior, withPrior }
 }
@@ -145,7 +148,7 @@ describe('Pi host launch resolution', () => {
     const h = await setup()
     const old = join(root, 'old-malformed.jsonl')
     await writeFile(old, 'not a Pi session header')
-    vi.spyOn(h.store, 'getRecord').mockReturnValue({
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
       ...h.record,
       providerHandleChain: [],
       providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 }
@@ -255,12 +258,12 @@ describe('Pi host launch resolution', () => {
     if (!record) {
       throw new Error('record missing')
     }
-    vi.spyOn(h.store, 'getRecord').mockReturnValue({
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
       ...record,
       location: { ...record.location, executionHostId: 'ssh:remote' }
     })
     await expect(h.resolver(identity)).rejects.toThrow('run on the local host')
-    vi.spyOn(h.store, 'getRecord').mockReturnValue({
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
       ...record,
       accountHome: { variable: 'CODEX_HOME', path: '/wrong' }
     })
@@ -279,7 +282,7 @@ describe('Pi launch folder of a floating chat', () => {
       location: { ...h.record.location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID },
       ...(launchDirectory ? { launchDirectory } : {})
     }
-    vi.spyOn(h.store, 'getRecord').mockReturnValue(floating)
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue(floating)
     const pinLaunchDirectory = vi.spyOn(h.store, 'pinLaunchDirectory').mockResolvedValue(floating)
     const resolveWorkspacePath = vi.fn(async () => moved)
     const resolver = createPiRpcLaunchResolver({
@@ -296,7 +299,7 @@ describe('Pi launch folder of a floating chat', () => {
     const h = await floatingSetup(join(root, 'workspace'))
     const file = join(root, 'pinned.jsonl')
     await writeFile(file, `${JSON.stringify({ type: 'session', cwd: h.workspace })}\n`)
-    vi.spyOn(h.store, 'getRecord').mockReturnValue({
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
       ...h.floating,
       providerHandleChain: [h.prior(file)]
     })
@@ -324,7 +327,10 @@ describe('Pi launch folder of a floating chat', () => {
 
   it('keeps resolving a folder chat by its workspace, ignoring any recorded folder', async () => {
     const h = await setup()
-    vi.spyOn(h.store, 'getRecord').mockReturnValue({ ...h.record, launchDirectory: '/elsewhere' })
+    vi.spyOn(h.store, 'requireWritableRecord').mockReturnValue({
+      ...h.record,
+      launchDirectory: '/elsewhere'
+    })
     await expect(h.resolver(identity)).resolves.toMatchObject({ cwd: h.workspace })
   })
 })

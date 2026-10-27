@@ -1,13 +1,11 @@
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type {
-  AskAnswerSelection,
-  AskPrompt,
-  parseAskFromStatus
-} from '../../../src/shared/native-chat-ask'
-import type { detectAgentPermission } from './mobile-native-chat-permission'
-import type { parseAgentQuestion } from './mobile-native-chat-question'
+import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask-types'
+import type { parseAskFromStatus } from '../../../src/shared/native-chat-ask'
+import type { detectAgentPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { parseAgentQuestion } from './native-chat/input/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
@@ -20,8 +18,9 @@ import type { MobileStructuredQueuedMessageControls } from './use-mobile-structu
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import type { MobileNativeChatPendingMessage } from './native-chat/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
-import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean
@@ -93,5 +92,6 @@ export type MobileNativeChatController = {
   // Read parked TUI launch text to clear one line per Ctrl+U before pasting images.
   readSeededLaunchDraft: () => string | null
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  nativeChatSessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   nativeChatAcceptsImages: boolean
 }

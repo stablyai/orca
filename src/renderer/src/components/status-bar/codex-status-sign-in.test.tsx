@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /** Exercise real inline sign-in wiring through reauthentication, restart prompts and success/failure feedback. */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -9,6 +9,7 @@ import type {
   CodexRateLimitAccountsState
 } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const markLiveCodexSessionsForRestart = vi.fn(async () => {})
 const toastSuccess = vi.fn()
@@ -18,6 +19,7 @@ const fetchSettings = vi.fn(async () => {})
 const reauthenticate = vi.fn(async (_args: unknown) => codexSnapshot(null))
 
 let storeSettings: GlobalSettings
+let accountOwner: RuntimeClientTarget
 
 function codexAccount(id: string, updatedAt: number): CodexManagedAccountSummary {
   return {
@@ -84,6 +86,11 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
   })),
   selectCodexProviderAccount: vi.fn(async () => codexSnapshot(null)),
   selectClaudeProviderAccount: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+}))
+
+vi.mock('@/runtime/use-worktree-runtime-target', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useActiveAccountOwner: () => ({ target: accountOwner, wslHostDistro: null })
 }))
 
 vi.mock('@/lib/windows-terminal-capabilities', () => ({
@@ -165,11 +172,21 @@ const codexProvider: ProviderRateLimits = {
   updatedAt: 1
 } as unknown as ProviderRateLimits
 
-async function renderSwitcherAndOpenAccounts(summaryLabel: string): Promise<void> {
+const liveUsage: ProviderRateLimits = {
+  ...codexProvider,
+  status: 'ok',
+  error: null,
+  weekly: { usedPercent: 11, windowMinutes: 10_080, resetsAt: null, resetDescription: null }
+}
+
+async function renderSwitcherAndOpenAccounts(
+  summaryLabel: string,
+  codex = codexProvider
+): Promise<void> {
   const { CodexSwitcherMenu } = await import('./StatusBar')
   render(
     React.createElement(CodexSwitcherMenu, {
-      codex: codexProvider,
+      codex,
       compact: false,
       iconOnly: false
     })
@@ -182,6 +199,7 @@ describe('status bar Codex sign-in action', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     storeSettings = settingsWithActive(null)
+    accountOwner = { kind: 'local' }
     Object.defineProperty(window, 'api', {
       configurable: true,
       writable: true,
@@ -191,6 +209,32 @@ describe('status bar Codex sign-in action', () => {
 
   afterEach(() => {
     cleanup()
+  })
+
+  it.each([null, 'account-1'])(
+    'shows live usage in the active account row, including system default: %s',
+    async (activeAccountId) => {
+      storeSettings = settingsWithActive(activeAccountId)
+      await renderSwitcherAndOpenAccounts(
+        activeAccountId ? 'account-1@example.com' : 'System default',
+        liveUsage
+      )
+
+      const activeRow = screen.getByRole('menuitem', { name: /Active/ })
+      expect(within(activeRow).getByText('11% used wk')).toBeTruthy()
+    }
+  )
+
+  it("keeps a remote owner's usage off rows picked by this desktop's runtime target", async () => {
+    accountOwner = { kind: 'environment', environmentId: 'remote-1' }
+    const { CodexSwitcherMenu } = await import('./StatusBar')
+    render(
+      React.createElement(CodexSwitcherMenu, { codex: liveUsage, compact: false, iconOnly: false })
+    )
+    fireEvent.click(screen.getByText('System default'))
+
+    const activeRow = await screen.findByRole('menuitem', { name: /Active/ })
+    expect(within(activeRow).queryByText('11% used wk')).toBeNull()
   })
 
   it.each([null, 'Enterprise'])(

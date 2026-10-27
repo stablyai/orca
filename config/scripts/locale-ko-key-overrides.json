@@ -239,6 +239,30 @@
   "auto.components.NewWorkspaceComposerModal.fa90f739a5": {
     "ko": "워크스페이스를 만들기 전에 프로젝트, 워크스페이스 이름, agent를 선택하세요."
   },
+  "auto.components.PullRequestConfirmation.closeTitle": {
+    "ko": "PR #{{number}}을(를) 닫으시겠습니까?"
+  },
+  "auto.components.PullRequestConfirmation.mergeLabel": {
+    "ko": "병합 커밋 생성"
+  },
+  "auto.components.PullRequestConfirmation.mergeTitle": {
+    "ko": "병합 커밋을 생성하여 PR #{{number}}을(를) 병합하시겠습니까?"
+  },
+  "auto.components.PullRequestConfirmation.rebaseLabel": {
+    "ko": "리베이스 및 병합"
+  },
+  "auto.components.PullRequestConfirmation.rebaseTitle": {
+    "ko": "PR #{{number}}을(를) 리베이스하여 병합하시겠습니까?"
+  },
+  "auto.components.PullRequestConfirmation.reopenTitle": {
+    "ko": "PR #{{number}}을(를) 다시 여시겠습니까?"
+  },
+  "auto.components.PullRequestConfirmation.squashLabel": {
+    "ko": "스쿼시 및 병합"
+  },
+  "auto.components.PullRequestConfirmation.squashTitle": {
+    "ko": "PR #{{number}}을(를) 스쿼시하여 병합하시겠습니까?"
+  },
   "auto.components.PullRequestPage.00b7b82329": {
     "ko": "헤드 브랜치"
   },

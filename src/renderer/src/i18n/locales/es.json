@@ -1,4 +1,11 @@
 {
+  "agentLaunch": {
+    "opencode": {
+      "updateRequired": "Esta versión de OpenCode no puede iniciarse de forma segura con el modelo elegido. Actualiza OpenCode a una versión compatible u omite la selección de modelo.",
+      "invalidConfig": "OpenCode no pudo aplicar este modelo a la configuración de inicio. Revisa la configuración de inicio de OpenCode y vuelve a intentarlo, u omite la selección de modelo.",
+      "unsupportedLaunch": "OpenCode no puede aplicar este modelo a este inicio. Abre un terminal local nuevo con argumentos de inicio compatibles u omite la selección de modelo."
+    }
+  },
   "app": {
     "saving": {
       "delayedTitle": "El almacenamiento del perfil está tardando más de lo habitual",
@@ -294,6 +301,23 @@
     "followSymlinkedDirectoriesDescription": "Busca carpetas enlazadas en Apertura rápida y expande las carpetas enlazadas locales en el Explorador de archivos.",
     "accounts": {
       "claudeRemoveFolder": "Orca elimina la carpeta de Claude de esta cuenta y su inicio de sesión de este equipo. El historial de chat compartido con Predeterminado del sistema se conserva. Si está seleccionada, el próximo Claude que inicies usará Predeterminado del sistema."
+    },
+    "sourceControl": {
+      "actionModel": {
+        "on": "Activado",
+        "off": "Desactivado",
+        "invalidArgs": "Los argumentos de CLI de {{value0}} no son válidos. Corrígelos en Ajustes → Source Control AI.",
+        "model": "Modelo",
+        "agentDefault": "Predeterminado del agente",
+        "effortDefault": "Predeterminado",
+        "savedModel": "Modelo de Configuración: {{value0}}",
+        "permissionsDefaultHint": "Las terminales usan los Permisos de agentes salvo que esta acción defina sus propios argumentos CLI.",
+        "chatsOnly": "Solo se aplica a los chats",
+        "terminalsOnly": "Solo se aplica a las terminales",
+        "extraArgs": "Argumentos CLI adicionales",
+        "launchOptions": "Modelo y permisos",
+        "savedLaunchOptions": "Opciones guardadas: {{value0}}. Los servidores antiguos usan su propia configuración de permisos."
+      }
     }
   },
   "menu": {
@@ -1487,7 +1511,6 @@
         "aba792c8b3": "No se pudo hacer merge del pull request",
         "dbe5e2448e": "Pull request mergeado",
         "a27ee5ca1a": "Esto actualizará el pull request en GitHub.",
-        "03d7216d62": "{{value0}} PR #{{value1}}?",
         "e9b7cb7d17": "No se pudo {{value0}} PR",
         "bd3b4492a0": "Pull request reabierto",
         "9f88657c4e": "Pull request cerrado",
@@ -1933,6 +1956,16 @@
         "createWorktree": "Crear worktree",
         "createWorkspace": "Crear espacio de trabajo"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "¿Cerrar PR #{{number}}?",
+        "mergeLabel": "Crear commit de merge",
+        "mergeTitle": "¿Hacer merge de PR #{{number}} con un commit de merge?",
+        "rebaseLabel": "Rebase y merge",
+        "rebaseTitle": "¿Hacer rebase y merge de PR #{{number}}?",
+        "reopenTitle": "¿Reabrir PR #{{number}}?",
+        "squashLabel": "Squash y merge",
+        "squashTitle": "¿Hacer squash y merge de PR #{{number}}?"
+      },
       "PullRequestPage": {
         "2560588245": "No se pudo solicitar el revisor",
         "3450247584": "Comentario",
@@ -2002,7 +2035,6 @@
         "aae645d36d": "No se pudo hacer merge del pull request",
         "c57873d721": "Pull request mergeado",
         "a63b3c159c": "Esto actualizará el pull request en GitHub.",
-        "eec3706a6a": "{{value0}} PR #{{value1}}?",
         "710e47aa06": "Pull request reabierto",
         "7aa3b5f706": "Pull request cerrado",
         "3d77438c92": "Esto reabrirá el pull request en GitHub.",
@@ -2331,7 +2363,6 @@
         "88f478cdef": "No se pudo hacer merge del pull request",
         "a161925adc": "Pull request mergeado",
         "0506a78337": "Esto actualizará el pull request en GitHub.",
-        "844dc193c7": "{{value0}} PR #{{value1}}?",
         "995dd6af9b": "Abrir checks del PR",
         "8a22eb3f7b": "No hay revisores que coincidan.",
         "67755a83a1": "Todos los demás",
@@ -3439,7 +3470,10 @@
               "failed": {
                 "toast": {
                   "62a0af2cb4": "No se pudo confirmar la copia del portapapeles del terminal",
-                  "fdd3e7e977": "La app del terminal solicitó una copia, pero Orca no pudo confirmar que llegara al portapapeles del sistema."
+                  "fdd3e7e977": "La app del terminal solicitó una copia, pero Orca no pudo confirmar que llegara al portapapeles del sistema.",
+                  "de286dcfe1": "La copia del terminal necesita un clic",
+                  "84c938ffa2": "El navegador bloqueó una copia de la aplicación del terminal. Haz clic en Copiar para ponerla en tu portapapeles.",
+                  "a73165c6c5": "Copiar"
                 }
               }
             }
@@ -5582,7 +5616,9 @@
           "51001182e3": "Directorio vacío",
           "971d85cc84": "Se abre como proyecto en este host · {{value0}}",
           "00c4235c10": "No hay coincidencias para '{{value0}}'",
-          "largeInputNoMatches": "No hay coincidencias para esta entrada larga"
+          "largeInputNoMatches": "No hay coincidencias para esta entrada larga",
+          "entriesLabel": "Entradas de la carpeta",
+          "inputLabel": "Filtro o ruta"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -6078,16 +6114,16 @@
           "sshTargetNotFoundDetail": "Actualice los espacios de trabajo o vuelva a conectar el host y vuelva a intentarlo.",
           "sshTargetInvalid": "La configuración del host SSH está incompleta.",
           "sshTargetInvalidDetail": "Edite o vuelva a conectar el host SSH y vuelva a intentarlo.",
-          "sshAliasRequired": "VS Code necesita un alias de configuración SSH para este host.",
+          "sshAliasRequired": "Este editor necesita un alias de configuración SSH para este host.",
           "sshAliasRequiredDetail": "Añade un alias Host para {{host}}:{{port}} a tu configuración SSH local, vuelve a conectar el espacio de trabajo e inténtalo de nuevo.",
           "remoteEditorUnsupported": "Esta aplicación no puede abrir espacios de trabajo SSH.",
-          "remoteEditorUnsupportedDetail": "Elija VS Code o use la aplicación localmente.",
+          "remoteEditorUnsupportedDetail": "Elige VS Code, Cursor o Zed, o usa la aplicación localmente.",
           "remotePathInvalid": "La ruta no es válida para el host SSH.",
           "remotePathInvalidDetail": "Actualice el espacio de trabajo antes de volver a intentarlo.",
-          "remoteLaunchFailed": "No se pudo abrir la ruta en VS Code.",
-          "remoteLaunchFailedDetail": "Comprueba el comando de VS Code configurado en este equipo.",
+          "remoteLaunchFailed": "No se pudo abrir la ruta en el editor.",
+          "remoteLaunchFailedDetail": "Comprueba el comando del editor configurado en esta máquina.",
           "wsl": "WSL",
-          "remoteEditorHint": "Sólo VS Code puede abrir carpetas en un host SSH.",
+          "remoteEditorHint": "Sólo VS Code, Cursor y Zed pueden abrir carpetas en un host SSH.",
           "remoteRuntimeEditorHint": "Las aplicaciones de este equipo solo pueden abrir los archivos del servidor cuando Orca se conecta a él por SSH."
         },
         "WorktreeTitleInlineRename": {
@@ -8114,6 +8150,10 @@
           "chatErrorEscalationNeedsChat": "Activa la interfaz de chat en la configuración experimental para usarlo.",
           "chatErrorEscalationKeywordError": "error",
           "chatErrorEscalationKeywordChat": "chat",
+          "heartbeatTitle": "Latidos de los trabajadores",
+          "heartbeatDescription": "Los trabajadores asignados se reportan cada pocos minutos para que el coordinador distinga un agente que trabaja de uno colgado. Si lo desactivas, el coordinador recibe menos mensajes, pero pierde esa señal de actividad. Se aplica a los trabajadores asignados después del cambio.",
+          "heartbeatKeywordHeartbeat": "latido",
+          "heartbeatKeywordStalled": "atascado",
           "7bc082f4de": "Copiar comando de instalación"
         },
         "OrchestrationSetupCard": {
@@ -8324,8 +8364,6 @@
           "c7ef4415de": "Nombre para mostrar",
           "b0a0c14a1c": "Detalles de visualización específicos del proyecto para la barra lateral y las pestañas.",
           "removeProjectAllHosts": "Eliminar este proyecto de Orca en todos los hosts configurados.",
-          "removeProjectCheckout": "Eliminar este checkout de Orca. Los demás checkouts de este proyecto se conservan.",
-          "removeProjectKeepCheckouts": "Eliminar este proyecto de Orca. Los checkouts que tienen su propia configuración se conservan.",
           "0909e5d650": "Eliminar proyecto",
           "ee5a290616": "Abierto como carpeta. Las funciones de Git no están disponibles para este espacio de trabajo.",
           "323debba71": "Tipo:",
@@ -8943,6 +8981,8 @@
           "editDescription": "Actualiza los detalles de conexión de esta máquina. Los cambios se aplican en la próxima conexión.",
           "addDescription": "Agrega una máquina persistente en la que puedas iniciar sesión por SSH.",
           "editingPrefix": "Editando",
+          "reconnectOnLaunch": "Reconectar al iniciar",
+          "reconnectOnLaunchHelp": "Si está desactivado, Orca deja este host, y cualquier servidor de Orca al que se llegue a través de él, desconectado al iniciarse hasta que lo conectes.",
           "allowRemoteCliControl": "Permitir que la orca CLI de este host controle Orca",
           "allowRemoteCliControlHelp": "Activado de forma predeterminada en los hosts nuevos. Permite que los comandos orca ejecutados en este host abran y controlen pestañas del navegador de Orca en este escritorio, solo en los espacios de trabajo de este host y solo mientras esté conectado, y que las terminales iniciadas por una versión anterior de Orca en este host ejecuten comandos de orquestación (check, inbox, send, ask, reply) para su propio trabajo supervisado. No pueden leer tus archivos, tu portapapeles ni tus cookies. Cuando está desactivado, solo llegan al propio servidor de Orca de este host.",
           "addHost": "Añadir host"
@@ -12841,6 +12881,8 @@
           "behindMigrating": "Ejecuta el servidor de Orca, que se actualizará cuando termine el traslado de sus proyectos.",
           "behindCheckFailed": "Ejecuta el servidor de Orca; Orca no pudo comprobar si está por detrás de esta app.",
           "refusedBlockedReason": "Orca aún no está configurado en este host. {{reason}}",
+          "refusedLeaveBehind": "Algunos elementos guardados de este host no se pueden mover a su servidor de Orca: {{items}}. «Mover de todos modos» conecta el host y los conserva en este equipo.",
+          "refusedLeaveBehindUnnamed": "Algunos elementos guardados de este host no se pueden mover a su servidor de Orca. «Mover de todos modos» conecta el host y los conserva en este equipo.",
           "runtimeNoexec": "Este host no permite ejecutar programas desde ~/.orca-remote, por lo que Orca no puede iniciar su servidor allí. Esto normalmente significa que la carpeta de inicio está montada con noexec. Pídale al administrador del host que permita la ejecución de programas allí y luego conéctese nuevamente.",
           "setupContactLost": "Orca perdió contacto con este host mientras configuraba su servidor. No se detuvo nada en el host. Conéctese nuevamente para continuar."
         },
@@ -13124,6 +13166,16 @@
           "searchLabel": "Buscar compilaciones",
           "noMatches": "No hay compilaciones coincidentes.",
           "searchPlaceholder": "Buscar compilaciones…"
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "macOS no mostró la notificación",
+              "macFailureDescription": "Activa Permitir notificaciones para Orca en Ajustes del Sistema.",
+              "windowsFailureTitle": "Windows no mostró la notificación",
+              "windowsFailureDescription": "Activa las notificaciones para Orca en Configuración de Windows."
+            }
+          }
         }
       },
       "right": {
@@ -13695,8 +13747,6 @@
             "ea4788705e": "Cancelar",
             "7ec6abbf2a": "Reiniciar",
             "f4f3c9ca4a": "Plantilla de prompt",
-            "fe119187bb": "--model sonnet",
-            "bc8dc39f4b": "Argumentos CLI",
             "b99c33cec5": "Ajustes",
             "15c5d85706": "Agente",
             "3e8f21954f": "error",
@@ -15684,6 +15734,9 @@
             "0d6efe9cf4": "Recomendado en macOS cuando los proyectos o worktrees están en carpetas protegidas.",
             "dac08ec03e": "Abriendo...",
             "6e3d62b816": "Abrir Acceso total al disco"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "Vuelve a abrirlo cuando quieras desde Ayuda > Explorar Orca."
           }
         },
         "tips": {
@@ -15710,7 +15763,8 @@
             "53905bd076": "Vista previa de desarrollo: abriendo la terminal de configuración de skills.",
             "1da82af45b": "Orca CLI necesita atención",
             "ce13a742d0": "`orca` registrado en PATH.",
-            "d1a86c7eb5": "Abre Configuración para finalizar la configuración de la CLI."
+            "d1a86c7eb5": "Abre Configuración para finalizar la configuración de la CLI.",
+            "cliInstallFailed": "No se pudo instalar la CLI de Orca."
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "Crear worktree \"{{value0}}\"",
@@ -16715,6 +16769,17 @@
           },
           "copy": {
             "copyFailed": "No se pudieron copiar los detalles del informe de fallo."
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "Informar de un fallo",
+            "uiErrorTitle": "Orca encontró un error de interfaz recuperable",
+            "closedTitle": "Orca se cerró inesperadamente",
+            "reportDescription": "Envía un informe de fallo que protege tu privacidad. Cuando están disponibles, se incluyen registros de diagnóstico recientes sin datos sensibles.",
+            "uiErrorDescription": "Envía un informe de diagnóstico que protege tu privacidad para ayudarnos a entender la parte de la interfaz que falló.",
+            "closedDescription": "Envía un informe de diagnóstico que protege tu privacidad para ayudarnos a entender qué pasó.",
+            "reportNotesPlaceholder": "Opcional: ¿qué pasó?",
+            "uiErrorNotesPlaceholder": "Opcional: ¿qué estabas haciendo antes de este error de interfaz?",
+            "closedNotesPlaceholder": "Opcional: ¿qué estabas haciendo antes de que Orca se cerrara?"
           }
         }
       },
@@ -18898,7 +18963,6 @@
         "permissions": "Permisos",
         "permissionAsk": "Pedir aprobación",
         "permissionAskDescription": "Pregunta antes de ediciones y comandos que tu configuración no permite",
-        "permissionAskCodexDescription": "Edita archivos y ejecuta comandos en este espacio de trabajo; pregunta antes de cualquier otra cosa",
         "permissionAskSharedDescription": "Pregunta antes de ediciones o comandos que aún no tiene permitidos",
         "permissionAcceptEdits": "Aceptar ediciones",
         "permissionAcceptEditsDescription": "Aprueba ediciones y comandos de archivos; pregunta por lo demás",
@@ -19051,6 +19115,7 @@
         "showTerminal": "Mostrar terminal"
       },
       "resumeInNewChat": {
+        "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
         "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
         "cannotResume": "Esta conversación de {{agent}} no se puede reanudar en un chat nativo.",
         "exitUnconfirmed": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones.",
@@ -20462,7 +20527,6 @@
       "signInLinkCopied": "Enlace de inicio de sesión copiado. Ábrelo en una ventana privada para iniciar sesión con otra cuenta.",
       "signInLinkCopyFailed": "No se pudo copiar el enlace.",
       "switchSessions": {
-        "selectAll": "Seleccionar todo",
         "busy": "Trabajando",
         "idle": "Inactivo",
         "keyword": {
@@ -20476,19 +20540,29 @@
         "restartOne": "Reiniciar sesión",
         "title": "Cambiado a {{account}}",
         "keep": "Mantener como está",
-        "selectAllSessions": "Seleccionar todas las sesiones",
         "restartOther": "Reiniciar {{count}} sesiones",
         "listLabel": "Sesiones de Claude que se reiniciarán",
-        "selectedCount": "{{selected}} de {{total}} seleccionadas",
         "dontAskAgainHint": "Puede desactivar esto en Configuración → Cuentas de proveedores de IA.",
-        "selectWorkspace": "Seleccionar todas las sesiones en {{workspace}}",
         "session": "Sesión de Claude",
         "settingKeep": "Nunca reiniciar",
         "settingRestart": "Reiniciar siempre",
         "settingTitle": "Cuando cambias de cuenta mientras Claude se está ejecutando",
         "settingDescription": "El reinicio continúa con cada conversación en ejecución en la nueva cuenta.",
         "restartingOther": "Reiniciando {{count}} sesiones de Claude con {{account}}",
-        "restartingOne": "Reiniciando 1 sesión de Claude con {{account}}"
+        "restartingOne": "Reiniciando 1 sesión de Claude con {{account}}",
+        "groupOnAccount": "En ejecución con {{account}}",
+        "groupElsewhere": "No está con {{account}}",
+        "groupCantMove": "No se pueden mover",
+        "selectGroup": "Seleccionar todas las sesiones de {{group}}",
+        "reasonWsl": "Terminal de WSL",
+        "reasonOwnFolder": "Usa tu propia carpeta de Claude",
+        "reasonUnknownAccount": "Cuenta desconocida",
+        "reasonNoSession": "No se puede reanudar",
+        "reviewBodyOne": "Otra sesión de Claude no se movió a {{next}}.",
+        "reviewBodyOther": "Otras {{count}} sesiones de Claude no se movieron a {{next}}.",
+        "notMovedOne": "Otra sesión no se movió.",
+        "notMovedOther": "Otras {{count}} sesiones no se movieron.",
+        "review": "Revisar"
       }
     },
     "hostSignIn": {
@@ -20741,6 +20815,7 @@
     }
   },
   "sourceControl": {
+    "actionSaveFailed": "No se pudo guardar esta acción. Intenta guardarla de nuevo en Ajustes.",
     "discard": {
       "deleteUntrackedFileDescription": "Esto eliminará permanentemente este archivo sin seguimiento. No se puede deshacer.",
       "deleteUntrackedFilesDescription": "Esto eliminará permanentemente estos {{count}} archivos sin seguimiento. No se puede deshacer.",

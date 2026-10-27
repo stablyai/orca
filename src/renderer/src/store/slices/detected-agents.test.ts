@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { _getRemoteDetectPromiseCountForTest, createDetectedAgentsSlice } from './detected-agents'
 import {
@@ -45,12 +46,14 @@ function createTestStore(initial?: Partial<AppState>) {
       }) as AppState
   )
   store.setState({
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [],
     worktreesByRepo: {},
     activeRepoId: null,
     activeWorktreeId: null,
     ...initial
-  } as Partial<AppState>)
+  })
   return store
 }
 
@@ -132,10 +135,10 @@ describe('createDetectedAgentsSlice WSL context', () => {
         runtime: {
           kind: 'wsl',
           hostPlatform: 'wsl',
-          projectId: 'repo-1',
+          projectId: 'repo:repo-1',
           distro: 'Ubuntu',
           reason: 'project-override',
-          cacheKey: 'repo-1:wsl:Ubuntu'
+          cacheKey: 'repo:repo-1:wsl:Ubuntu'
         }
       }
     })
@@ -373,13 +376,16 @@ describe('createDetectedAgentsSlice WSL context', () => {
   })
 
   it('detects agents in the project override runtime instead of legacy agent location', async () => {
+    const repos = [makeRepo({ id: 'repo-1', path: 'C:\\repo' })]
+    const { setups } = projectHostSetupProjectionFromRepos(repos)
     const store = createTestStore({
       settings: {
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Ubuntu'
       } as AppState['settings'],
-      projects: [
+      endpointProjectHostSetups: setups.map((setup) => ({ ...setup, projectId: 'repo-1' })),
+      endpointProjects: [
         {
           id: 'repo-1',
           displayName: 'repo-1',
@@ -390,10 +396,10 @@ describe('createDetectedAgentsSlice WSL context', () => {
           localWindowsRuntimePreference: { kind: 'windows-host' }
         }
       ],
-      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      repos,
       activeRepoId: 'repo-1',
       activeWorktreeId: null
-    } as Partial<AppState>)
+    })
 
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
 

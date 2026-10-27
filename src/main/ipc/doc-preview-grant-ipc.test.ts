@@ -78,12 +78,12 @@ function authorize(grantId: unknown, relativePath: unknown): boolean {
   return handler({ sender }, grantId, relativePath) as boolean
 }
 
-function reportLinkClick(url: unknown): void {
+function reportLinkClick(url: unknown, modifiers?: unknown): void {
   const listener = mocks.listeners.get(DOC_PREVIEW_LINK_CLICK_CHANNEL)
   if (!listener) {
     throw new Error('link click listener not registered')
   }
-  listener({ sender }, url)
+  listener({ sender }, url, modifiers)
 }
 
 beforeEach(() => {
@@ -175,9 +175,21 @@ describe('document preview grant handlers', () => {
 
     expect(mocks.reportDocPreviewLinkClick).toHaveBeenCalledExactlyOnceWith(
       sender,
-      'https://example.com/docs'
+      'https://example.com/docs',
+      undefined
     )
     expect(mocks.isTrustedBrowserRenderer).not.toHaveBeenCalled()
+  })
+
+  it('forwards additive modifier data without changing the legacy URL argument', () => {
+    const modifiers = { metaKey: true, ctrlKey: false, shiftKey: true }
+    reportLinkClick('https://example.com/docs', modifiers)
+
+    expect(mocks.reportDocPreviewLinkClick).toHaveBeenCalledExactlyOnceWith(
+      sender,
+      'https://example.com/docs',
+      modifiers
+    )
   })
 
   it('ignores a reported click that is not a string at all', () => {

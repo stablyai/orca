@@ -1,10 +1,11 @@
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInit, TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
+import { useMobileNativeChatTerminalStream } from './native-chat/use-mobile-native-chat-terminal-stream'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 import { useMobileSessionTerminalSubscription } from './use-mobile-session-terminal-subscription'
@@ -92,7 +93,6 @@ function harness(phone: Terminal) {
     },
     clientId: 'client-1',
     setTerminalModes: vi.fn(),
-    setCoveredStreamRevision: vi.fn(),
     setTerminalKeyboardMetrics: vi.fn(),
     terminalCwdRef: { current: new Map() },
     terminalRefs: { current: new Map([[HANDLE, terminal]]) },
@@ -117,24 +117,40 @@ function harness(phone: Terminal) {
     markNativeChatInputLeaseReady: vi.fn(),
     signalTerminalInventoryRecovery: vi.fn()
   }
-  let subscribe: ((handle: string) => void) | undefined
   function Probe() {
+    const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the foundation reads only the fields built above.
-    const base = fields as unknown as MobileSessionNativeChatDictationModel
+    const base = {
+      ...fields,
+      setCoveredStreamRevision
+    } as unknown as MobileSessionNativeChatDictationModel
     const foundation = useMobileSessionTerminalSubscriptionFoundation(base)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the subscription reads only these fields and the foundation's outputs.
     const scope = {
       ...fields,
       ...foundation
     } as unknown as MobileSessionTerminalSubscriptionFoundationModel
-    subscribe = useMobileSessionTerminalSubscription(scope).subscribeToTerminal
+    const subscribe = useMobileSessionTerminalSubscription(scope).subscribeToTerminal
+    useMobileNativeChatTerminalStream({
+      showNativeChat: false,
+      activeHandle: HANDLE,
+      activeTabType: 'terminal',
+      leaseReady: false,
+      streamRevision: coveredStreamRevision,
+      subscriptionsRef: fields.terminalUnsubsRef,
+      subscribingRef: fields.subscribingHandlesRef,
+      leaseOnlyRef: fields.leaseOnlyHandlesRef,
+      webReadyRef: fields.webReadyHandlesRef,
+      subscribe,
+      unsubscribe: foundation.unsubscribeTerminal
+    })
     return null
   }
   act(() => {
     renderer = create(createElement(Probe))
   })
   return {
-    subscribe: () => act(() => subscribe!(HANDLE)),
+    subscribeCount: () => fields.client.subscribe.mock.calls.length,
     emit: (frame: unknown) => act(() => handlers.at(-1)!(frame)),
     initCount: () => vi.mocked(terminal.init).mock.calls.length,
     flush: () => Promise.all(pending.splice(0))
@@ -159,7 +175,6 @@ async function streamEndsThenResubscribes(teardown: 'end' | 'error') {
   }
 
   await writeSync(host, '$ claude\r\n' + tui.first('Thinking'))
-  page.subscribe()
   page.emit({
     type: 'scrollback',
     seq: 1,
@@ -173,7 +188,6 @@ async function streamEndsThenResubscribes(teardown: 'end' | 'error') {
   await writeSync(host, tui.frame('Writing bench.ts'))
   await writeSync(host, tui.frame('Running suite'))
 
-  page.subscribe()
   page.emit({
     type: 'scrollback',
     seq: 2,
@@ -183,14 +197,21 @@ async function streamEndsThenResubscribes(teardown: 'end' | 'error') {
   })
   await live(tui.frame('Finished in 3s'))
   await page.flush()
-  return { host: screen(host), phone: screen(phone), inits: page.initCount() }
+  return {
+    host: screen(host),
+    phone: screen(phone),
+    inits: page.initCount(),
+    subscribes: page.subscribeCount()
+  }
 }
 
 describe('resubscribe after the stream tears down', () => {
+  // A disconnect already dropped the lease, so the teardown itself must trigger the resubscribe (#32985).
   it.each(['end', 'error'] as const)(
-    'draws the fresh snapshot after a stream `%s` frame',
+    'resubscribes a rendered terminal and draws the fresh snapshot after a stream `%s` frame',
     async (teardown) => {
-      const { host, phone, inits } = await streamEndsThenResubscribes(teardown)
+      const { host, phone, inits, subscribes } = await streamEndsThenResubscribes(teardown)
+      expect(subscribes).toBe(2)
       expect(inits).toBe(2)
       expect(phone).toEqual(host)
     }

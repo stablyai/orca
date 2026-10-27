@@ -108,11 +108,12 @@ export function getLocalWorktreePathAccess(
 
 export async function removeLocalWorktreePath(
   targetPath: string,
-  options: LocalWorktreeFilesystemOptions = {}
+  options: LocalWorktreeFilesystemOptions = {},
+  signal?: AbortSignal
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
-    await removeHostTree(targetPath)
+    await removeHostTree(targetPath, { signal })
     return
   }
 

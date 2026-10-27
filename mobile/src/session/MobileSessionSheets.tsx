@@ -86,6 +86,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     handleCloseTerminal,
     handleCloseSessionTab,
     bulkCloseActions,
+    bulkCloseConfirm,
     closeWithBulkActions,
     createTabAgentActions,
     sendDiffNotesAgentActions,
@@ -333,6 +334,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onConfirm={confirmDiscardMarkdown}
         onCancel={() => setDiscardMarkdownTarget(null)}
       />
+      <ConfirmModal {...bulkCloseConfirm} />
       <TextInputModal
         visible={renameTarget != null}
         title="Rename Terminal"

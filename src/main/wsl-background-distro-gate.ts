@@ -13,29 +13,37 @@ function distroKey(distro: string): string {
 }
 
 /** Require a fresh running-list result; last-known-good fallback could boot a distro that has since stopped. */
-export async function listConfirmedRunningWslDistros(): Promise<string[]> {
-  return listRunningWslDistrosAsync({ requireConfirmed: true }).catch(() => [])
+export async function listConfirmedRunningWslDistros(
+  options: { startedAfter?: number } = {}
+): Promise<string[]> {
+  return listRunningWslDistrosAsync({ requireConfirmed: true, ...options }).catch(() => [])
 }
 
 export type WslRunningDistrosRead =
   | { status: 'confirmed'; distros: string[] }
   | { status: 'unavailable' }
 
-/** Preserve probe failure separately from a confirmed stopped distro. */
-export async function readConfirmedRunningWslDistros(): Promise<WslRunningDistrosRead> {
+/** Preserve probe failure separately from a confirmed stopped distro. `startedAfter`: see resolveRunningWslDistros. */
+export async function readConfirmedRunningWslDistros(
+  options: { startedAfter?: number } = {}
+): Promise<WslRunningDistrosRead> {
   try {
     return {
       status: 'confirmed',
-      distros: await listRunningWslDistrosAsync({ requireConfirmed: true })
+      distros: await listRunningWslDistrosAsync({ requireConfirmed: true, ...options })
     }
   } catch {
     return { status: 'unavailable' }
   }
 }
 
-export async function isWslDistroRunning(distro: string): Promise<boolean> {
+/** `startedAfter`: only a running-list read started after it counts, e.g. after a link died. */
+export async function isWslDistroRunning(
+  distro: string,
+  options: { startedAfter?: number } = {}
+): Promise<boolean> {
   const wanted = distroKey(distro)
-  const running = await listConfirmedRunningWslDistros()
+  const running = await listConfirmedRunningWslDistros(options)
   return running.some((candidate) => distroKey(candidate) === wanted)
 }
 

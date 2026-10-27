@@ -144,3 +144,21 @@ describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => 
     expect(result.startupPlan?.launchCommand).not.toContain('danger-full-access')
   })
 })
+
+it('keeps own permission on the direct terminal route with unrelated args and env', () => {
+  const result = buildDirectWorkItemAgentStartupPlan({
+    agent: 'codex',
+    draftContent: 'Fix checks',
+    promptDelivery: 'draft',
+    launchPlatform: 'linux',
+    settings: {
+      agentPermissionDefault: 'full-access',
+      agentDefaultArgs: { codex: '--search' },
+      agentDefaultEnv: { codex: { KEEP: 'value' } }
+    },
+    sessionOptions: { permissionMode: 'own' }
+  })
+  expect(result.startupPlan?.launchCommand).not.toContain('bypass')
+  expect(result.startupPlan?.launchCommand).toContain("'--search'")
+  expect(result.startupPlan?.env).toEqual({ KEEP: 'value' })
+})

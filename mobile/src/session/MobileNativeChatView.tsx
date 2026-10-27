@@ -13,7 +13,8 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
+import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
   NativeChatLiveTurnIndicator,
@@ -45,14 +46,14 @@ import {
   MobileNativeChatComposer,
   type MobileNativeChatStructuredComposer
 } from './native-chat/composer/MobileNativeChatComposer'
-import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
+import { MobileNativeChatPromptCard } from './native-chat/input/MobileNativeChatPromptCard'
 import {
   NO_COMPOSER_TRAY,
   type ComposerTrayProps
 } from './native-chat/composer/use-mobile-native-chat-composer-tray'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
-import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
+import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatRowList } from './MobileNativeChatRowList'
 import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'

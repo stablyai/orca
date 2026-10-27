@@ -22,6 +22,7 @@ import {
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,
+  hostGrantedEditorFields,
   resolveHostWorkspaceFile,
   type HostWorkspaceFile
 } from './terminal-host-workspace-file'
@@ -114,7 +115,7 @@ export function openDetectedFilePath(
       getConnectionExecutionHostId(fileContext.connectionId)
     const sourceRuntimeOwnerId = runtimeTargetEnvironmentId(fileContext.target)
     let hostWorkspaceFile: HostWorkspaceFile | null = null
-    let hostGrantId: string | null = null
+    let hostGrant: ReturnType<typeof hostGrantedEditorFields> | null = null
     let clientLocal = false
     if (!fileContext.sourceHostResolved) {
       if (refuseExplicitNonEditorRoute()) {
@@ -156,7 +157,7 @@ export function openDetectedFilePath(
         deps.terminalHandle
       )
       if (linkOwner?.kind === 'grant') {
-        hostGrantId = linkOwner.grantId
+        hostGrant = hostGrantedEditorFields(linkOwner)
         mappedFilePath = linkOwner.absolutePath
         statResult = { isDirectory: false, escapesWorktree: true }
       } else if (linkOwner?.kind === 'client') {
@@ -200,7 +201,7 @@ export function openDetectedFilePath(
     const pageDestination =
       canOpenWithSystemDefault &&
       !clientLocal &&
-      hostGrantId === null &&
+      hostGrant === null &&
       !explicitGroupRequest &&
       isHtmlFilePath(mappedFilePath)
         ? (deps.browserDestination ??
@@ -231,14 +232,14 @@ export function openDetectedFilePath(
     }
 
     // Why: a granted file is readable only through its grant, so it opens in Orca, never as a download.
-    if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrantId === null) {
+    if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrant === null) {
       // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
       await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
       return
     }
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
-    if (isHtmlFilePath(mappedFilePath) && hostGrantId === null) {
+    if (isHtmlFilePath(mappedFilePath) && hostGrant === null) {
       if (deps.openInSourceGroup) {
         refuseExplicitNonEditorRoute()
         return
@@ -280,7 +281,7 @@ export function openDetectedFilePath(
         relativePath = maybeRelative
       }
     } else if (
-      hostGrantId === null &&
+      hostGrant === null &&
       !isFloatingWorkspaceId(worktreeId) &&
       store.openFiles.some(
         (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
@@ -320,8 +321,7 @@ export function openDetectedFilePath(
         runtimeEnvironmentId: clientLocal ? null : runtimeEnvironmentId,
         // Why: a tab's owner must match its workspace's to be editable; this one is this computer's.
         ...(clientLocal && targetWorktreeId === worktreeId ? { readOnly: true } : {}),
-        // Why: the grant is the only authority to read a host file outside its workspaces.
-        ...(hostGrantId !== null ? { readOnly: true, terminalArtifactGrantId: hostGrantId } : {}),
+        ...hostGrant,
         // Retain SSH owner or restored absolute remote paths become indistinguishable from client-local external files.
         ...(relativePath === filePath &&
         fileContext.target.kind === 'local' &&

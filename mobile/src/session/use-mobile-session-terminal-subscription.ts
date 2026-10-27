@@ -47,25 +47,25 @@ export function useMobileSessionTerminalSubscription(
     signalTerminalInventoryRecovery
   } = scope
   const subscribeToTerminal = useCallback(
-    (handle: string) => {
+    (handle: string): boolean => {
       const diagnostics = terminalDiagnosticsRef.current
       const logSkippedGate = (reason: string) =>
         diagnostics.streamSkipped(handle, reason, handle === activeHandleRef.current)
       if (!client) {
         logSkippedGate('no-client')
-        return
+        return false
       }
       if (clientId === null) {
         logSkippedGate('no-client-identity')
-        return
+        return false
       }
       if (terminalUnsubsRef.current.has(handle)) {
         logSkippedGate('already-subscribed')
-        return
+        return false
       }
       if (subscribingHandlesRef.current.has(handle)) {
         logSkippedGate('subscribe-in-flight')
-        return
+        return false
       }
       const covered = nativeChatTerminalStream.isTerminalCoveredByNativeChat(
         showNativeChatRef.current,
@@ -77,18 +77,18 @@ export function useMobileSessionTerminalSubscription(
         const ref = getTerminalRef(handle)
         if (!ref) {
           logSkippedGate('no-webview-ref')
-          return
+          return false
         }
         if (!webReadyHandlesRef.current.has(handle)) {
           logSkippedGate('webview-not-ready')
-          return
+          return false
         }
         const frame = terminalFrameRef.current
         if (!viewportMeasuredRef.current) {
           // Wait for first frame layout: document ready can arrive before its fitted dimensions.
           if (!frame) {
             logSkippedGate('frame-not-laid-out')
-            return
+            return false
           }
           // Use the document’s measured cell box so the host serializes scrollback at phone dimensions.
           const dims = ref.fitDimensions(frame)
@@ -299,6 +299,7 @@ export function useMobileSessionTerminalSubscription(
         unsub()
       }
       subscribingHandlesRef.current.delete(handle)
+      return true
     },
     [
       client,

@@ -3,8 +3,9 @@ import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-s
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { readCodexThreadId } from './codex-structured-thread-facts'
+import { readCodexSandboxPolicy, type CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 
 export type CodexOpenedThread = {
   threadId: string
@@ -16,6 +17,7 @@ export type CodexOpenedThread = {
   effort?: string | null
   /** Present, including null, only when this app-server reports the effective tier. */
   serviceTier?: string | null
+  sandbox?: CodexSandboxPolicy
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -129,6 +131,7 @@ export async function openCodexThread(
   const effort = nonEmptyString(result.reasoningEffort)
   const serviceTierKnown = Object.hasOwn(result, 'serviceTier')
   const serviceTier = nonEmptyString(result.serviceTier)
+  const sandbox = readCodexSandboxPolicy(result.sandbox)
   return {
     threadId,
     reportedPermissionMode: reportedCodexPermissionMode(result),
@@ -139,17 +142,30 @@ export async function openCodexThread(
       : {}),
     ...(model ? { model } : {}),
     ...(effort || result.reasoningEffort === null ? { effort } : {}),
+    ...(sandbox ? { sandbox } : {}),
     ...(serviceTierKnown ? { serviceTier } : {})
   }
 }
 
 /** Unrecognized policies remain the agent's settings rather than a guessed Orca mode. */
-function reportedCodexPermissionMode(reply: Record<string, unknown>): string | null {
+export function reportedCodexPermissionMode(reply: Record<string, unknown>): string | null {
   const approval = reply.approvalPolicy ?? reply.approval_policy
   const reviewer = reply.approvalsReviewer ?? reply.approvals_reviewer
   const sandbox = reply.sandbox
   const sandboxType =
     typeof sandbox === 'object' && sandbox !== null && 'type' in sandbox ? sandbox.type : sandbox
+  const readOnly = sandboxType === 'readOnly' || sandboxType === 'read-only'
+  const workspace = sandboxType === 'workspaceWrite' || sandboxType === 'workspace-write'
+  const full = sandboxType === 'dangerFullAccess' || sandboxType === 'danger-full-access'
+  if (approval === 'on-request' && reviewer === 'user' && readOnly) {
+    return 'ask'
+  }
+  if (approval === 'on-request' && reviewer === 'auto_review' && workspace) {
+    return 'auto'
+  }
+  if (approval === 'never' && reviewer === 'user' && full) {
+    return 'full-access'
+  }
   if (sandboxType === 'readOnly' || sandboxType === 'read-only') {
     return 'read-only'
   }

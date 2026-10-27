@@ -80,13 +80,7 @@ it('keeps the Bun anti-slop scan aligned with the local audit', () => {
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
   const localCommand = manifest.scripts['audit:anti-slop'].split('&&').at(-1).trim()
   expect(audit.run.trim().split('\n')[0]).toBe('node config/scripts/sync-anti-slop-plugin.mjs')
-  expect(
-    audit.run
-      .trim()
-      .split('\n')
-      .at(-1)
-      .replace('bun --smol node_modules/oxlint/bin/oxlint', 'oxlint')
-  ).toBe(localCommand)
+  expect(audit.run.trim().split('\n').at(-1)).toBe(localCommand)
 })
 
 it('requires physical preflight success before publishing shards and admitting consumers', () => {

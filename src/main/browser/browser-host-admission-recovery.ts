@@ -1,5 +1,5 @@
 import type { BrowserClientHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike

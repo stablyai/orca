@@ -7,7 +7,7 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   type StructuredAgentSessionState
 } from '../../../src/shared/structured-agent-session-reducer'
-import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
 import {
   projectStructuredQuestion,
   type StructuredQuestionItem

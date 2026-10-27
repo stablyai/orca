@@ -40,7 +40,7 @@ describe('useActiveProjectSkillRuntime', () => {
       activeRepoId: null,
       activeWorktreeId: null,
       activeWorkspaceExecutionHostId: null,
-      projects: [],
+      endpointProjects: [],
       repos: [],
       worktreesByRepo: {},
       folderWorkspaces: [],

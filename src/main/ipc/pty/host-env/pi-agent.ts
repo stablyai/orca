@@ -149,7 +149,9 @@ export function getInheritedAgentSessionStampEnvKeysToDelete(
   // Explicit nested-Claude stamps survive; structured-session caller keys never belong to terminal panes.
   return [
     ...CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined),
-    ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS
+    ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
+    // A pane is never a Claude background job; an inherited job dir would silence its agent hooks.
+    'CLAUDE_JOB_DIR'
   ]
 }
 

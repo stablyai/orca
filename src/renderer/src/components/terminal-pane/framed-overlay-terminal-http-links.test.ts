@@ -41,6 +41,9 @@ describe('framed overlay terminal HTTP links', () => {
     const openUrl = vi.fn()
     vi.stubGlobal('window', { api: { shell: { openUrl } } })
     registerHttpLinkStoreAccessor(() => ({
+      repos: [],
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()

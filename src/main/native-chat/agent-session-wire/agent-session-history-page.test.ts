@@ -20,7 +20,7 @@ import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-w
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   serializeRemoteRuntimePayload
-} from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import {
   createTrackedJournalOpener,

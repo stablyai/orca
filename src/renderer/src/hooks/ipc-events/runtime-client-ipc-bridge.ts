@@ -3,14 +3,17 @@ import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/term
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
+import {
+  refreshRuntimeEnvironmentCatalog,
+  setRuntimeEnvironmentCatalogRefresher
+} from '@/runtime/runtime-environment-pairing-refresh'
 import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState,
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -205,6 +208,13 @@ export function registerRuntimeClientIpcBridge(
     useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
   })
   unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
+  // `orca environment add/rm` edits the registry without any renderer request (#25251).
+  const stopCatalogChanged = window.api.runtimeEnvironments?.onCatalogChanged?.(() => {
+    void refreshRuntimeEnvironmentCatalog()
+  })
+  if (stopCatalogChanged) {
+    unsubs.push(stopCatalogChanged)
+  }
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),

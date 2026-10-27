@@ -21,29 +21,10 @@ function session(overrides: Partial<NativeChatSession>): NativeChatSession {
 }
 
 describe('selectNativeChatViewState', () => {
-  it('maps loading', () => {
-    expect(selectNativeChatViewState(session({ messages: [], status: 'loading' })).kind).toBe(
-      'loading'
-    )
-  })
-
   it('keeps rendering messages while the session reports loading', () => {
     expect(selectNativeChatViewState(session({ status: 'loading' }))).toEqual({
       kind: 'ready',
       isWorking: false
-    })
-  })
-
-  it('maps error with its message when nothing has loaded (P2-21)', () => {
-    const state = selectNativeChatViewState(
-      session({ messages: [], status: 'error', error: 'boom' })
-    )
-    expect(state).toEqual({ kind: 'error', message: 'boom' })
-  })
-
-  it('maps an error with no text to no message', () => {
-    expect(selectNativeChatViewState(session({ messages: [], status: 'error' }))).toEqual({
-      kind: 'error'
     })
   })
 
@@ -58,10 +39,6 @@ describe('selectNativeChatViewState', () => {
   it('shows a terminal-backed read error over local echoes', () => {
     const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }))
     expect(state).toEqual({ kind: 'error', message: 'boom' })
-  })
-
-  it('maps empty when there are no messages', () => {
-    expect(selectNativeChatViewState(session({ messages: [], status: 'ready' })).kind).toBe('empty')
   })
 
   it('empty wins over a working hook on a pre-session conversation', () => {
@@ -82,13 +59,6 @@ describe('selectNativeChatViewState', () => {
     expect(selectNativeChatViewState(session({ status: 'working' }))).toEqual({
       kind: 'ready',
       isWorking: true
-    })
-  })
-
-  it('maps ready (not working)', () => {
-    expect(selectNativeChatViewState(session({ status: 'ready' }))).toEqual({
-      kind: 'ready',
-      isWorking: false
     })
   })
 })

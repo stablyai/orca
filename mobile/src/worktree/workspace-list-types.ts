@@ -37,6 +37,8 @@ export type Worktree = {
   createdAt?: number
   // Use filesystem basenames to dedupe fallback workspace names.
   path: string
+  /** Older paths of a renamed or moved workspace; older hosts omit it. */
+  priorWorktreeIds?: string[]
   isArchived?: boolean
   isMainWorktree?: boolean
   hasHostSidebarActivity?: boolean

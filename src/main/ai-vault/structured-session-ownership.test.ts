@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentSessionLeaseFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,
@@ -155,11 +159,15 @@ describe('structured AI Vault ownership', () => {
     ).toThrow('agent_session_conflict')
 
     installOwnership({
-      lease: agentSessionLeaseFixture({
-        handoffStage: 'new-owner-proving',
-        claimStatus: 'reserved',
-        ownerProcess: null
-      })
+      ownerObservation: agentSessionConversationView(
+        agentSessionRecordFixture(
+          agentSessionLeaseFixture({
+            handoffStage: 'new-owner-proving',
+            claimStatus: 'reserved',
+            ownerProcess: null
+          })
+        )
+      ).ownerObservation
     })
     await expect(
       assertLegacyAiVaultResumeCommandAllowed(

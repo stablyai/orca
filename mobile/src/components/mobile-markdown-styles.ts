@@ -62,8 +62,12 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.input,
-    padding: spacing.sm
+    padding: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs
   },
+  codeBody: { flex: 1 },
   codeLanguage: {
     fontSize: 10,
     color: colors.textMuted,

@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { RotateCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
+import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobilePrActions, type MobilePrActions } from '../session/use-mobile-pr-actions'
@@ -32,7 +33,7 @@ type Props = {
   state: PrSidebarState
   onRetry: () => void
   // Re-fetches authoritative PR data after a successful mutation (U3/U6) or create.
-  refetch: () => void
+  refetch: (options?: PrSidebarLoadOptions) => void
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -160,7 +161,7 @@ function PrSidebarContent({
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
   onRetry: () => void
-  refetch: () => void
+  refetch: (options?: PrSidebarLoadOptions) => void
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -264,7 +265,7 @@ function PrSidebarSections({
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
-  refetch: () => void
+  refetch: (options?: PrSidebarLoadOptions) => void
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
@@ -315,6 +316,7 @@ function PrSidebarSections({
             client={client}
             worktreeId={worktreeId}
             onUnlinked={refetch}
+            onRecheck={() => refetch({ includeDetails: false })}
           />
         </View>
       </View>

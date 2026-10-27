@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../shared/onboarding-defaults'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -117,6 +118,22 @@ describe('Store', () => {
     expect(store.getSettings().terminalLineHeight).toBe(1)
     store.flush()
     expect((readDataFile() as PersistedState).settings.terminalLineHeight).toBe(1)
+  })
+
+  it('loads an old heartbeat profile, saves off, and reopens with heartbeats still off', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    delete persisted.settings.orchestrationHeartbeatsEnabled
+    writeDataFile(persisted)
+    const store = await createStore()
+    expect(store.getSettings().orchestrationHeartbeatsEnabled).toBe(true)
+    expect(new OrcaRuntimeService(store).getOrchestrationHeartbeatMinutes()).toBe(5)
+    store.updateSettings({ orchestrationHeartbeatsEnabled: false })
+    store.flush()
+    expect(readDataFile()).toHaveProperty('settings.orchestrationHeartbeatsEnabled', false)
+    await closeTestStores()
+    const reopened = await createStore()
+    expect(reopened.getSettings().orchestrationHeartbeatsEnabled).toBe(false)
+    expect(new OrcaRuntimeService(reopened).getOrchestrationHeartbeatMinutes()).toBeNull()
   })
 
   it('returns default UI state when no data file exists', async () => {

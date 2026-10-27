@@ -1,5 +1,8 @@
 import { refreshWslHostPairing } from '../../shared/runtime-environment-wsl-host-store'
-import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
+import {
+  readWslHostDeployments,
+  type WslHostDeploymentRecord
+} from '../../shared/wsl-host-deployment-store'
 import type { WslHostStatus } from '../../shared/wsl-host-types'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
@@ -39,5 +42,15 @@ export function toWslHostStatus(
         : status.state === 'failed'
           ? (status.deferredUpdate ?? null)
           : null
+  }
+}
+
+/** The registered WSL hosts; an unreadable store reads as none rather than failing the caller. */
+export function readWslHostRecordsQuietly(userDataPath: string): WslHostDeploymentRecord[] {
+  try {
+    return readWslHostDeployments(userDataPath).deployments
+  } catch (error) {
+    console.warn('[wsl-hosts] Could not read WSL host records:', error)
+    return []
   }
 }

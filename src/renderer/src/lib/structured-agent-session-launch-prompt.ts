@@ -29,6 +29,7 @@ export type StructuredPromptDeliveryResult = {
 
 type StagedDelivery = Omit<StructuredPromptDeliveryResult, 'inComposer' | 'failureNotified'> & {
   inComposer: boolean
+  failureNotified?: boolean
 }
 
 export type StructuredLaunchPromptOptions = {
@@ -251,6 +252,21 @@ export function settleStructuredAgentLaunchPrompt(args: {
       if (!prompt || prompt.discarded) {
         return { delivered: false, failureNotified: true }
       }
+      if (receipt.configurationFailure) {
+        const result = {
+          delivered: false,
+          inComposer: handBackStagedPrompt(prompt),
+          failureNotified: true
+        }
+        prompt.delivery = Promise.resolve(result)
+        prompt.settleCreate(result)
+        unstage(prompt)
+        prompt.discarded = true
+        return {
+          ...result,
+          ...(result.inComposer ? { inComposer: true as const } : { inComposer: undefined })
+        }
+      }
       if (prompt.createOwned) {
         prompt.createSend?.settle(
           receipt.firstMessage
@@ -279,7 +295,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
             : { kind: 'unconfirmed' }
         )
       }
-      // The chat never started: its text waits in the chat's composer for the person's own Send.
+      // The launch did not submit: its text waits in the chat's composer for the person's own Send.
       if (prompt && !prompt.discarded && !prompt.delivery) {
         unstage(prompt)
         prompt.discarded = true
@@ -293,7 +309,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
         settled,
         prompt.whenCreateSettled.then(({ inComposer, ...outcome }) => ({
           ...outcome,
-          failureNotified: false,
+          failureNotified: outcome.failureNotified ?? false,
           ...(inComposer ? { inComposer: true as const } : {})
         })),
         prompt.whenDiscarded.then((): StructuredPromptDeliveryResult => ({

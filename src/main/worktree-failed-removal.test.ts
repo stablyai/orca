@@ -8,6 +8,7 @@ import { listWorktreesStrict } from './git/worktree'
 import type * as WorktreeRemovalModule from './git/worktree-removal'
 import { deleteBranchOfUnregisteredWorktree } from './git/worktree-removal'
 import { beginTerminalInstall } from './ipc/watcher-removal-gate'
+import { formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { registerWorktreeChangeInvalidator } from './ipc/worktree-change-invalidators'
 import {
   _resetPendingWorktreeRemovalsForTests,
@@ -48,7 +49,7 @@ const mainWorktree: GitWorktreeInfo = {
 
 beforeEach(async () => {
   directory = await realpath(await mkdtemp(join(tmpdir(), 'orca-failed-removal-')))
-  checkout = join(directory, 'feature')
+  checkout = join(directory, 'feature-$&-$$-$`')
   worktreeId = `repo-1::${checkout}`
   // What Git left: part of the checkout, `.git` already deleted.
   await mkdir(join(checkout, 'node_modules', 'a'), { recursive: true })
@@ -67,7 +68,7 @@ afterEach(async () => {
 })
 
 function startFailingRemoval(
-  job: Pick<BackgroundWorktreeRemovalJob, 'cleanupPushTargetRemote'> = {}
+  job: Partial<Pick<BackgroundWorktreeRemovalJob, 'run' | 'cleanupPushTargetRemote'>> = {}
 ): Promise<unknown> {
   return startBackgroundWorktreeRemoval({
     removal: {
@@ -123,6 +124,38 @@ describe('a delete that fails after Git dropped the registration', () => {
     ).toEqual(rows)
     // Nothing fences the leftover: a failed delete must not block terminals indefinitely.
     beginTerminalInstall(checkout)()
+  })
+
+  it.each([
+    ['is open in another program', 'Close that program'],
+    [
+      'could not be deleted; it may be read-only or open in another program',
+      'Close any program using it'
+    ]
+  ])('stores truthful leftover guidance when a file %s', async (reason, advice) => {
+    const heldFile = join(checkout, 'node_modules', 'a', 'LICENSE')
+    const initial = formatWorktreeRemovalError(
+      new Error(`${heldFile} ${reason}. ${advice} and delete again.`),
+      checkout,
+      true
+    )
+    const message = `Failed to force delete worktree at ${checkout}. ${heldFile} ${reason}. Close any program using it. You may need to delete the remaining folder at ${checkout} manually to finish removing this workspace.`
+    await expect(
+      startFailingRemoval({
+        run: async () => {
+          throw new Error(initial)
+        }
+      })
+    ).rejects.toThrow(initial)
+    await _settlePendingWorktreeRemovalsForTests()
+
+    expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toMatchObject([
+      { worktreeId, failure: { message } }
+    ])
+    expect(await listRows()).toEqual([mainWorktree, { ...leftoverRow(), removalError: message }])
+    _resetPendingWorktreeRemovalsForTests()
+    await loadWorktreeRemovalRecords(join(directory, 'profile'))
+    expect(await listRows()).toEqual([mainWorktree, { ...leftoverRow(), removalError: message }])
   })
 
   it('invalidates cached listings, which still hold the registration Git dropped', async () => {

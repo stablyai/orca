@@ -85,6 +85,9 @@ The injected preamble is authoritative. A dispatched worker must:
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
    new file, after a test run — and once more immediately before `worker_done`:
    `ORCA orchestration check --terminal <your_handle> --json`.
+   After processing every message, ack the batch, which returns the next one, and
+   repeat until `count` is 0; an unacked batch replays and hides newer mail:
+   `ORCA orchestration check --terminal <your_handle> --ack <delivery_id> --json`.
 4. Send `worker_done` exactly once, from the dispatched terminal, with a
    three-sentence executive summary, both lifecycle IDs, and explicit
    `--outcome succeeded` or `--outcome failed`. Never encode failure only in prose.

@@ -213,7 +213,8 @@ describe('floating workspace skill discovery', () => {
     floatingWorkspacePath: '/home/me/scratch',
     folderWorkspaces: [],
     projectGroups: [],
-    projects: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [],
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     // Floating panels stay local even with a focused paired runtime.

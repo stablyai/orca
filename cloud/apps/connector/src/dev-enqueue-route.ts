@@ -38,14 +38,17 @@ export function registerDevEnqueueRoute<E extends Env>(
     if (!delivery.success) {
       return context.json({ error: 'invalid_request' }, 400)
     }
-    const { deliveryId: _id, seq: _seq, expiresAt: _expiresAt, conversation: _c, ...rest } =
-      delivery.data
+    const {
+      deliveryId: _id,
+      seq: _seq,
+      expiresAt: _expiresAt,
+      conversation: _c,
+      ...rest
+    } = delivery.data
     const status = await deps.queue({
       thread: {
-        externalId,
-        teamId: 'dev',
-        channelId: 'dev',
-        threadTs: externalId,
+        conversation: { source: 'slack', externalId },
+        place: { workspaceId: 'dev', containerId: 'dev', threadId: externalId },
         ownerUserId: 'dev',
         hostId,
         placeId

@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {

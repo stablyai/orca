@@ -55,6 +55,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'
   },
+  'orchestration run-show': {
+    removed: '--removed              List the Tasks, Dispatches and workers removed from this Run',
+    cursor: '--cursor <cursor>      Cursor printed by the previous page of removed work'
+  },
   'worktree set': {
     unread: '--unread               Mark the workspace unread in the sidebar',
     read: '--read                 Mark the workspace read, clearing the unread dot'

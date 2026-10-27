@@ -145,6 +145,32 @@ describe('preflight RPC methods', () => {
     expect(resolveAgentDetectionHost).not.toHaveBeenCalled()
   })
 
+  it('routes a project through its launch context and rejects mixed selectors before detection', async () => {
+    const context = { agents: ['codex'], workspaceKind: 'git', executionContext: { kind: 'host' } }
+    const detectProjectLaunchContext = vi.fn().mockResolvedValue(context)
+    const resolveAgentDetectionHost = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only these runtime members.
+    const runtime = {
+      getRuntimeId: () => 'runtime',
+      detectProjectLaunchContext,
+      resolveAgentDetectionHost
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+    const project = { repo: 'r1' }
+    const response = await dispatcher.dispatch(makeRequest('preflight.detectAgents', { project }))
+    expect(response).toMatchObject({ ok: true, result: context })
+    expect(detectProjectLaunchContext).toHaveBeenCalledExactlyOnceWith('r1')
+    detectProjectLaunchContext.mockClear()
+    for (const selector of [{ repoId: 'r1' }, { worktreeId: 'r1::/work' }]) {
+      const mixed = await dispatcher.dispatch(
+        makeRequest('preflight.detectAgents', { project, ...selector })
+      )
+      expect(mixed).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    }
+    expect(detectProjectLaunchContext).not.toHaveBeenCalled()
+    expect(resolveAgentDetectionHost).not.toHaveBeenCalled()
+  })
+
   it.each(['preflight.detectAgents', 'preflight.refreshAgents'])(
     '%s never probes locally after repository ownership refuses',
     async (method) => {

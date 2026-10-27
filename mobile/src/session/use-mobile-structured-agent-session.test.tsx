@@ -14,7 +14,7 @@ import type {
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'

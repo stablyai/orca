@@ -90,7 +90,7 @@ export function requireUnownedStructuredAgentSessionAdoption(input: {
   const conflict = input.host
     ? findConflictingStructuredAdoption({
         ...input,
-        ownership: listStructuredProviderSessionOwnership(input.host.deps.store.listRecords())
+        ownership: listStructuredProviderSessionOwnership(input.host.deps.store.listConversations())
       })
     : null
   if (conflict) {

@@ -1,11 +1,11 @@
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { RemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
 import type { RuntimeCapability } from '../../protocol-version'
 import type {
   RemoteRuntimeSocketDeathCause,
   RemoteRuntimeSocketLivenessOptions
-} from '../../remote-runtime-socket-liveness'
+} from '../remote-runtime-socket-liveness'
 
 export type SharedControlConnectionState =
   | 'closed'

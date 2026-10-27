@@ -141,7 +141,7 @@ export function useMobileNativeChatSession(args: {
         limit: limitRef.current,
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
-        capabilities: { transcriptPending: 1 },
+        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
         ...(transcriptPath ? { transcriptPath } : {})
       },
       (raw) => {
@@ -224,6 +224,7 @@ export function useMobileNativeChatSession(args: {
           agent,
           sessionId,
           limit: beforeOffset === null ? nextLimit : pageLimit,
+          capabilities: { transcriptSourceOrder: 1 },
           ...(beforeOffset === null ? {} : { beforeOffset }),
           ...(transcriptPath ? { transcriptPath } : {})
         },

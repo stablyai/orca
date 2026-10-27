@@ -44,7 +44,7 @@ import { colors } from '../theme/mobile-theme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
-import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
+import { MobileNativeChatTaskList } from './native-chat/input/MobileNativeChatTaskList'
 import { MobileNativeChatOpenedDetailContext } from './mobile-native-chat-opened-detail'
 import {
   MAX_DISCLOSURES,

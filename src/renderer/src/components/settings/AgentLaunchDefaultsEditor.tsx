@@ -88,7 +88,9 @@ export function AgentDefaultArgsInput({
   argsOverride,
   onSaveArgs,
   permissionChip,
-  note
+  note,
+  disabled = false,
+  onDraftChange
 }: {
   defaultArgs: string
   argsOverride: string
@@ -100,12 +102,14 @@ export function AgentDefaultArgsInput({
     onRemove: () => void
   }
   note?: string
+  disabled?: boolean
+  onDraftChange?: (value: string) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const chipRef = useRef<HTMLSpanElement>(null)
   const chipButtonRef = useRef<HTMLButtonElement>(null)
-  const argsDraft = draft ?? argsOverride
+  const argsDraft = onDraftChange ? argsOverride : (draft ?? argsOverride)
   const { pending, write } = useAgentLaunchFieldWrite()
   useLayoutEffect(() => {
     const input = inputRef.current
@@ -126,11 +130,11 @@ export function AgentDefaultArgsInput({
     return () => observer.disconnect()
   }, [permissionChip?.flag])
   const commitArgs = (): void => {
-    if (pending || draft === null) {
+    if (disabled || pending || (!onDraftChange && draft === null)) {
       return
     }
-    const value = draft.trim()
-    if (value === argsOverride) {
+    const value = argsDraft.trim()
+    if (!onDraftChange && value === argsOverride) {
       setDraft(null)
       return
     }
@@ -142,11 +146,11 @@ export function AgentDefaultArgsInput({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-xs font-medium leading-none text-muted-foreground">
         {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <div
           className="scrollbar-sleek relative max-h-[calc(var(--spacing)*41+2px)] min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
           onBlur={(event) => {
@@ -165,9 +169,14 @@ export function AgentDefaultArgsInput({
               {...permissionChip}
               chipRef={chipRef}
               buttonRef={chipButtonRef}
-              disabled={pending}
+              disabled={disabled || pending}
               onRemove={() => {
-                if (draft !== null) {
+                if (disabled || pending) {
+                  return
+                }
+                if (onDraftChange) {
+                  onDraftChange(permissionChip.removeRecipe(argsDraft) ?? argsDraft)
+                } else if (draft !== null) {
                   setDraft(permissionChip.removeRecipe(draft) ?? draft)
                 }
                 inputRef.current?.focus()
@@ -180,9 +189,16 @@ export function AgentDefaultArgsInput({
             ref={inputRef}
             rows={1}
             value={argsDraft}
+            disabled={disabled}
             readOnly={pending}
-            onChange={(event) => setDraft(event.target.value.replace(/[\r\n]/g, ''))}
+            aria-label={translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+            onChange={(event) =>
+              (onDraftChange ?? setDraft)(event.target.value.replace(/[\r\n]/g, ''))
+            }
             onKeyDown={(event) => {
+              if (disabled || pending) {
+                return
+              }
               if (
                 permissionChip &&
                 event.key === 'Backspace' &&
@@ -206,8 +222,13 @@ export function AgentDefaultArgsInput({
               }
             }}
             placeholder={
-              defaultArgs ||
-              translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
+              permissionChip
+                ? undefined
+                : defaultArgs ||
+                  translate(
+                    'auto.components.settings.AgentsPane.6f99bf5dd0',
+                    'No default arguments'
+                  )
             }
             spellCheck={false}
             className="block min-h-5 [field-sizing:content]"
@@ -218,8 +239,11 @@ export function AgentDefaultArgsInput({
             type="button"
             variant="ghost"
             size="xs"
+            disabled={disabled}
             onClick={() => {
-              setDraft(argsDraft)
+              if (!onDraftChange) {
+                setDraft(argsDraft)
+              }
               write(
                 defaultArgs,
                 () => onSaveArgs(defaultArgs),

@@ -22,10 +22,13 @@ export function createOrchestrationRpcHarness() {
 
   const coordinatorPaneKey = COORDINATOR_PANE_KEY
 
-  function setup(withBoundRun = true): OrchestrationRpcState {
+  function setup(
+    withBoundRun = true,
+    store: ConstructorParameters<typeof OrcaRuntimeService>[0] = null
+  ): OrchestrationRpcState {
     db = new OrchestrationDb(':memory:')
     dbOpen = true
-    runtime = new OrcaRuntimeService()
+    runtime = new OrcaRuntimeService(store)
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : null
