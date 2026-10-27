@@ -38,6 +38,10 @@ async function stopAllSessionsThenQuit(): Promise<void> {
     return
   }
   stopAllInFlight = true
+  // Why: the ready gate and daemon polls can take tens of seconds after the user confirmed.
+  const progressToastId = toast.loading(
+    translate('quitAndStopAllSessions.stopping', 'Stopping terminal sessions, then quitting…')
+  )
   try {
     // Why hydration too: closed tabs are only persisted once the session restore succeeded.
     const ready = await waitForWorkspaceSessionReady()
@@ -75,6 +79,7 @@ async function stopAllSessionsThenQuit(): Promise<void> {
     console.error('[quit-and-stop-all-sessions] Stopping sessions failed:', error)
     showStopAllFailure()
   } finally {
+    toast.dismiss(progressToastId)
     stopAllInFlight = false
   }
 }

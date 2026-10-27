@@ -155,12 +155,15 @@ export function quitAndStopAllSessionsFromUserCommand(): void {
       : explainStopAllSessionsUnavailable
   void ask(showMessageBoxOnMainWindow)
     .then((confirmed) => {
-      if (confirmed) {
-        sendOneShotToMainWindow(
+      if (
+        confirmed &&
+        !sendOneShotToMainWindow(
           'ui:quitAndStopAllSessions',
           state.pendingQuitAndStopAllSessions,
           QUIT_AND_STOP_ALL_SESSIONS_REQUEST_TTL_MS
         )
+      ) {
+        console.warn('[quit] Quit Completely confirmed, but no main window could take the request')
       }
     })
     .catch((error) => console.error('[quit] Quit Completely failed:', error))

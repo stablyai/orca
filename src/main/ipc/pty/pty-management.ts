@@ -97,6 +97,10 @@ async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSess
 // Polls so the tab sweep's exact kills can settle.
 export async function confirmNoDaemonSessionsRemain(): Promise<boolean> {
   const adapters = getDaemonAdapters()
+  // Why: neither can change within the poll window, so waiting it out only delays the refusal.
+  if (!listedEveryGeneration(adapters, new Set())) {
+    return false
+  }
   const pollDeadline = Date.now() + POLL_WINDOW_MS
   do {
     const { sessions, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)

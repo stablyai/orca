@@ -21294,6 +21294,7 @@
     "confirm": "Arrêter les sessions et quitter",
     "cancel": "Annuler",
     "failed": "Impossible d'arrêter toutes les sessions de terminal, Orca reste donc ouvert.",
+    "stopping": "Arrêt des sessions de terminal, puis fermeture…",
     "ok": "OK",
     "unavailableMessage": "Orca ne peut pas arrêter toutes les sessions de terminal pour le moment.",
     "unavailableDetail": "Rien n'a été arrêté. Réessayez une fois vos terminaux ouverts. Si un terminal indique qu'il a été ouvert dans une version plus récente d'Orca, rouvrez-le d'abord. Si vos terminaux sont déjà ouverts, quittez puis relancez Orca, et réessayez."

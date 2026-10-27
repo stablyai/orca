@@ -23,7 +23,9 @@ vi.mock('@/lib/worktree-agent-activation-gate', () => ({
   waitForWorkspaceSessionReady: mocks.waitReady
 }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => mocks.storeState } }))
-vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('sonner', () => ({
+  toast: { error: mocks.toastError, loading: vi.fn(() => 'progress'), dismiss: vi.fn() }
+}))
 
 import { registerQuitAndStopAllSessionsIpcBridge } from './quit-and-stop-all-sessions-ipc-bridge'
 
