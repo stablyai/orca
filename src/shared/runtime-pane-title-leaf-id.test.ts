@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import {
+  isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleForLeaf,
   resolveRuntimePaneTitleLeafResolution
 } from './runtime-pane-title-leaf-id'
@@ -58,5 +59,22 @@ describe('resolveRuntimePaneTitleLeafResolution', () => {
       title: 'Codex',
       hasAnyPaneTitle: true
     })
+  })
+})
+
+describe('isRuntimePaneTitleOrphan', () => {
+  it('keeps ids the layout cannot place but that are not removed panes', () => {
+    expect(isRuntimePaneTitleOrphan(leafLayout.root, '0')).toBe(false)
+    expect(isRuntimePaneTitleOrphan(leafLayout.root, '-1')).toBe(false)
+  })
+
+  it('keeps a resolvable live pane', () => {
+    expect(isRuntimePaneTitleOrphan(splitLayout.root, '2')).toBe(false)
+    expect(isRuntimePaneTitleOrphan(splitLayout.root, LEAF_B)).toBe(false)
+  })
+
+  it('flags a leaf id and an out-of-range slot the layout no longer has', () => {
+    expect(isRuntimePaneTitleOrphan(leafLayout.root, LEAF_B)).toBe(true)
+    expect(isRuntimePaneTitleOrphan(leafLayout.root, '2')).toBe(true)
   })
 })

@@ -126,6 +126,23 @@ export function resolveRuntimePaneTitleLeafIdFromRoot(
 }
 
 /**
+ * True only when a runtime pane title provably belongs to a pane the layout no longer has.
+ * Ids the resolver cannot place (parked or legacy slots below FIRST_PANE_ID) stay live.
+ */
+export function isRuntimePaneTitleOrphan(
+  root: TerminalPaneLayoutNode | null | undefined,
+  runtimePaneId: string,
+  layoutLeafIds: ReadonlySet<string> = new Set(collectRuntimePaneLeafIds(root))
+): boolean {
+  const leafId = resolveRuntimePaneTitleLeafIdFromRoot(root, runtimePaneId)
+  if (leafId !== null) {
+    return !layoutLeafIds.has(leafId)
+  }
+  const numericPaneId = Number(runtimePaneId)
+  return !(Number.isInteger(numericPaneId) && numericPaneId < FIRST_PANE_ID)
+}
+
+/**
  * Resolve a sparse live runtime pane slot through the tab's current PTY bindings.
  * PaneManager ids survive closes with gaps, while the live PTY list retains order.
  */
