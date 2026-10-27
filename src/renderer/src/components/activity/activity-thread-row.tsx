@@ -11,7 +11,7 @@ import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
 import { ActivityThreadHoverCard } from './activity-thread-hover-card'
-import { activityThreadRowCopy, activityThreadStatusId } from './activity-thread-presentation'
+import { activityThreadRowCopy } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
 import type { ActivityThreadClickEvent } from './use-activity-thread-selection'
 
@@ -94,7 +94,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   const agentLabel = formatAgentTypeLabel(thread.agentType)
   const projectPrefix = projectLabel?.trim()
   const showProjectPrefix =
-    activityThreadStatusId(thread) === 'working' &&
     Boolean(projectPrefix) &&
     projectPrefix?.toLowerCase() !== projectGroupLabel?.trim().toLowerCase()
   const accessibleTitle = showProjectPrefix ? `${projectPrefix}: ${taskTitle}` : taskTitle

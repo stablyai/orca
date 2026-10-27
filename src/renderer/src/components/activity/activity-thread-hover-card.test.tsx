@@ -152,23 +152,34 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     )
   })
 
-  it('omits a repeated project prefix under that Project group and outside Working', async () => {
+  it('keeps the project prefix when an agent waits or finishes', async () => {
     const thread = createTestThread()
-    await act(async () => {
-      root.render(<Harness thread={thread} projectLabel="Orca" projectGroupLabel="orca" />)
-    })
-    expect(
-      container.querySelector('[data-worktree-card-surface="true"]')?.textContent
-    ).not.toContain('Orca ·')
+    for (const currentAgentState of ['waiting', null] as const) {
+      await act(async () => {
+        root.render(<Harness thread={{ ...thread, currentAgentState }} projectLabel="Orca" />)
+      })
+      const card = container.querySelector('[data-worktree-card-surface="true"]')
+      expect(card?.textContent).toContain('Orca · Audit current HEAD on m4air environment')
+      expect(card?.getAttribute('aria-label')).toBe('Orca: Audit current HEAD on m4air environment')
+    }
+  })
 
-    await act(async () => {
-      root.render(
-        <Harness thread={{ ...thread, currentAgentState: 'waiting' }} projectLabel="Orca" />
-      )
-    })
-    expect(
-      container.querySelector('[data-worktree-card-surface="true"]')?.textContent
-    ).not.toContain('Orca ·')
+  it('omits a repeated project prefix under that Project group for every state', async () => {
+    const thread = createTestThread()
+    for (const currentAgentState of ['working', 'waiting', null] as const) {
+      await act(async () => {
+        root.render(
+          <Harness
+            thread={{ ...thread, currentAgentState }}
+            projectLabel="Orca"
+            projectGroupLabel="orca"
+          />
+        )
+      })
+      expect(
+        container.querySelector('[data-worktree-card-surface="true"]')?.textContent
+      ).not.toContain('Orca ·')
+    }
   })
 
   it('keeps project context when the Project group uses a different checkout name', async () => {
