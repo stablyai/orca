@@ -55,6 +55,7 @@ export function RemoteFileBrowser({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [fileHint, setFileHint] = useState(false)
+  const [homePath, setHomePath] = useState<string | null>(null)
   // Tied to the list, preview and text it was moved on, so any new listing, preview or keystroke starts
   // from its own default (a cached listing reappears as the same array; a typed path waits on a debounce).
   const [highlight, setHighlight] = useState<{
@@ -136,6 +137,7 @@ export function RemoteFileBrowser({
         // Only bare ~ resolves the home anchor; ~/sub must not replace it.
         if (dirPath === '~') {
           homePathRef.current = result.resolvedPath
+          setHomePath(result.resolvedPath)
         }
       } catch (err) {
         if (gen !== genRef.current) {
@@ -387,6 +389,7 @@ export function RemoteFileBrowser({
         displayEntries={displayEntries}
         activeIndex={activeEntryIndex}
         projectFolders={projectFolders}
+        homePath={homePath}
         activeProjectFolderIndex={activeEntryIndex >= 0 ? -1 : activeIndex}
         listboxId={listboxId}
         filter={filter}
