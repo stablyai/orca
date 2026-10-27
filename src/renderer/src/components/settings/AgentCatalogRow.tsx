@@ -205,7 +205,7 @@ export function AgentCatalogRow({
             isEnabled={isEnabled}
             onSetEnabled={onSetEnabled}
           />
-          <div className="grid grid-cols-[max-content_1.75rem_1.75rem] items-center gap-1.5">
+          <div className="grid grid-cols-[minmax(6.5rem,max-content)_1.75rem_1.75rem] items-center gap-1.5">
             <div className="flex justify-start">
               {isDetected && isEnabled && (
                 <Button
