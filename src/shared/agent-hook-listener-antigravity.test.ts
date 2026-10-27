@@ -9,11 +9,6 @@ import {
 import { hasPendingAgentResultText } from './agent-hook-listener/grok-result-discovery'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
-import { createTestStore } from '../renderer/src/store/slices/store-test-helpers'
-import { normalizeAgentStatusEvent } from '../renderer/src/hooks/ipc-events/normalize-agent-status-event'
-import { resolveTerminalTabActivityStatus } from '../renderer/src/components/tab-bar/terminal-tab-activity-status'
-import { hookRowAgentPhase } from './agent-transitions'
-import { selectAutomationRunOutputSnapshot } from '../renderer/src/components/automations/automation-run-output-snapshot'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener', () => {
@@ -512,40 +507,13 @@ describe('shared agent-hook-listener', () => {
       transcriptPath: writeTranscript('child', 'translate to fr', 'Subagent report')
     }
     const subagentCall = { name: 'invoke_subagent', args: { TypeName: 'self', Prompt: 'fr' } }
-    const stores = [createTestStore(), createTestStore()]
-    const send = (hookEventName: string, payload: Record<string, unknown>) => {
-      const event = normalizeHookPayload(
+    const send = (hookEventName: string, payload: Record<string, unknown>) =>
+      normalizeHookPayload(
         state,
         'antigravity',
         { paneKey: PANE_KEY, hook_event_name: hookEventName, payload },
         'production'
-      )
-      if (!event) {
-        return null
-      }
-      for (const [index, store] of stores.entries()) {
-        const ipc = {
-          ...event.payload,
-          paneKey: PANE_KEY,
-          connectionId: null,
-          receivedAt: 1_000_000,
-          stateStartedAt: 1_000_000
-        }
-        const normalized = normalizeAgentStatusEvent(
-          index ? { ...ipc, mainAgent: undefined } : ipc
-        )!
-        store.getState().setAgentStatus(PANE_KEY, normalized)
-        const entry = store.getState().agentStatusByPaneKey[PANE_KEY]
-        expect(
-          resolveTerminalTabActivityStatus({
-            tab: { id: 'tab-1', title: '' },
-            agentStatusByPaneKey: store.getState().agentStatusByPaneKey
-          })
-        ).toBe(event.payload.state)
-        expect(hookRowAgentPhase(entry)).toBe(event.payload.state)
-      }
-      return event.payload.state
-    }
+      )?.payload.state ?? null
 
     try {
       const states = [
@@ -568,17 +536,17 @@ describe('shared agent-hook-listener', () => {
         null,
         'working'
       ])
-      expect(stores[0].getState().agentStatusByPaneKey[PANE_KEY].mainAgent?.state).toBe('working')
 
-      expect(send('Stop', { ...parent, fullyIdle: true })).toBe('done')
-      expect(stores[0].getState().agentStatusByPaneKey[PANE_KEY].mainAgent?.state).toBe('done')
-      for (const store of stores) {
-        const entry = store.getState().agentStatusByPaneKey[PANE_KEY]
-        expect(entry.stateHistory.every((item) => item.state === 'working')).toBe(true)
-        expect(selectAutomationRunOutputSnapshot(entry.lastAssistantMessage, null)?.content).toBe(
-          'Parent final report'
-        )
-      }
+      const done = normalizeHookPayload(
+        state,
+        'antigravity',
+        { paneKey: PANE_KEY, hook_event_name: 'Stop', payload: { ...parent, fullyIdle: true } },
+        'production'
+      )
+      expect(done?.payload).toMatchObject({
+        state: 'done',
+        lastAssistantMessage: 'Parent final report'
+      })
       expect(
         send('PreInvocation', { conversationId: 'next-conversation', lastUserInput: 'next' })
       ).toBe('working')

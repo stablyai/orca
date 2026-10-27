@@ -1,4 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener'
+import { hookRowAgentPhase } from '../../../../../shared/agent-transitions'
+import { resolveTerminalTabActivityStatus } from '../../../components/tab-bar/terminal-tab-activity-status'
+import { selectAutomationRunOutputSnapshot } from '../../../components/automations/automation-run-output-snapshot'
 import { normalizeAgentStatusEvent } from '../../../hooks/ipc-events/normalize-agent-status-event'
 import { createTestStore } from '../store-test-helpers'
 
@@ -16,6 +24,67 @@ function osc(revision: number) {
 }
 
 describe('the main agent fact on a renderer status entry', () => {
+  it.each([false, true])('projects the captured parent/child turn (old relay=%s)', (oldRelay) => {
+    const dir = mkdtempSync(join(tmpdir(), 'agy-consumer-'))
+    const transcriptPath = join(dir, 'parent.jsonl')
+    const parent = { conversationId: 'parent', lastUserInput: 'translate', transcriptPath }
+    const child = { conversationId: 'child', lastUserInput: '' }
+    const toolCall = { name: 'invoke_subagent', args: { TypeName: 'self', Prompt: 'fr' } }
+    const tab = { id: 'tab-1', title: '' }
+    const listener = createHookListenerState()
+    const store = createTestStore()
+    writeFileSync(
+      transcriptPath,
+      JSON.stringify({ source: 'MODEL', type: 'PLANNER_RESPONSE', content: 'Parent final report' })
+    )
+    try {
+      for (const [hook_event_name, payload, expected, lead] of [
+        ['PreInvocation', parent, 'working', 'working'],
+        ['PreToolUse', { ...parent, toolCall }, 'working', 'working'],
+        ['PostToolUse', { ...parent, toolCall }, 'working', 'working'],
+        ['PreInvocation', child, null, null],
+        ['Stop', { ...parent, fullyIdle: false }, 'working', 'done'],
+        ['PostInvocation', child, null, null],
+        ['Stop', { ...child, fullyIdle: true }, null, null],
+        ['PreInvocation', parent, 'working', 'working'],
+        ['Stop', { ...parent, fullyIdle: true }, 'done', 'done'],
+        ['PreInvocation', { conversationId: 'next', lastUserInput: 'next' }, 'working', 'working']
+      ] as const) {
+        const event = normalizeHookPayload(
+          listener,
+          'antigravity',
+          { paneKey: PANE, hook_event_name, payload },
+          'production'
+        )
+        expect(event?.payload.state ?? null).toBe(expected)
+        if (!event) {
+          continue
+        }
+        const normalized = normalizeAgentStatusEvent({
+          ...event.payload,
+          paneKey: PANE,
+          connectionId: null,
+          receivedAt: 1_000_000,
+          stateStartedAt: 1_000_000,
+          mainAgent: oldRelay ? undefined : event.payload.mainAgent
+        })!
+        store.getState().setAgentStatus(PANE, normalized)
+        const { agentStatusByPaneKey } = store.getState()
+        const entry = agentStatusByPaneKey[PANE]
+        expect(resolveTerminalTabActivityStatus({ tab, agentStatusByPaneKey })).toBe(expected)
+        expect(hookRowAgentPhase(entry)).toBe(expected)
+        expect(entry.mainAgent?.state).toBe(oldRelay ? undefined : lead)
+        if (expected === 'done') {
+          expect(entry.stateHistory.every((item) => item.state === 'working')).toBe(true)
+          const output = selectAutomationRunOutputSnapshot(entry.lastAssistantMessage, null)
+          expect(output?.content).toBe('Parent final report')
+        }
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('lands on the entry from the IPC payload and is reused by reference when unchanged', () => {
     const store = createTestStore()
     const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 5 }
