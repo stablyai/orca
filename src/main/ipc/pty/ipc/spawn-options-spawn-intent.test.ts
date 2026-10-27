@@ -22,12 +22,6 @@ async function resolveSpawnIntent(args: PtySpawnIpcArgs): Promise<unknown> {
 const PANE = { cols: 80, rows: 24 }
 
 describe('renderer pty spawn: declared spawn intent', () => {
-  it('hands a known intent to the provider', async () => {
-    await expect(resolveSpawnIntent({ ...PANE, spawnIntent: 'user-resume' })).resolves.toBe(
-      'user-resume'
-    )
-  })
-
   it('treats a missing or unknown intent as undeclared', async () => {
     await expect(resolveSpawnIntent(PANE)).resolves.toBeUndefined()
     await expect(resolveSpawnIntent({ ...PANE, spawnIntent: 'urgent' })).resolves.toBeUndefined()

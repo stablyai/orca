@@ -26,6 +26,21 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 
+describe('browser native focus routing', () => {
+  it('selects the general E2E lane for focus adapter and image fixture changes', () => {
+    const spec = 'tests/e2e/browser-image-link-focus.spec.ts'
+    for (const file of [
+      'src/renderer/src/components/browser-pane/assemble-chrome/browser-page-guest-focus.ts',
+      'tests/e2e/helpers/browser-link-server.ts'
+    ]) {
+      const specs = selectPrE2eSpecs([file])
+      expect(specs, file).toContain(spec)
+      expect(selectGeneralE2eSpecs(specs), file).toContain(spec)
+      expect(classifyE2eJobs(JSON.stringify(specs)).e2e_run_changed, file).toBe(true)
+    }
+  })
+})
+
 describe('pr-e2e-native-only-routing', () => {
   const workflow = prWorkflow
   const filterStep = workflow.jobs.code_paths.steps.find((step) => step.id === 'e2e_filter')

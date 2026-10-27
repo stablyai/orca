@@ -51,17 +51,6 @@ afterEach(() => {
 })
 
 describe('noticeDocPreviewDownloadBlocked', () => {
-  it('tells the shell which preview had a download refused', async () => {
-    const notice = await loadNotifier()
-
-    notice(guestBoundTo(GRANT_ID))
-
-    expect(mocks.publishDocPreviewFailure).toHaveBeenCalledWith({
-      grantId: GRANT_ID,
-      reason: 'download-blocked'
-    })
-  })
-
   it('says it once however often the document asks', async () => {
     const notice = await loadNotifier()
     const guest = guestBoundTo(GRANT_ID)

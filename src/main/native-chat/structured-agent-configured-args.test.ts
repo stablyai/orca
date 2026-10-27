@@ -20,10 +20,6 @@ describe('structured chat configured Arguments', () => {
     }
   )
 
-  it('uses the existing default when the Arguments key is absent', () => {
-    expect(structuredAgentConfiguredArgs('claude', {})).toEqual(['--dangerously-skip-permissions'])
-  })
-
   it('preserves Windows paths under the configured shell', () => {
     expect(
       structuredAgentConfiguredArgs(

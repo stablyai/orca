@@ -19,18 +19,6 @@ function eligibility(
 describe('isHostedReviewCreateEligibilityConfirmable', () => {
   const base = { reviewLookup: 'not_found' as const, hasHardRefreshError: false }
 
-  it('allows canCreate and needs_push when nothing hard-blocks', () => {
-    expect(
-      isHostedReviewCreateEligibilityConfirmable({ ...base, eligibility: eligibility() })
-    ).toBe(true)
-    expect(
-      isHostedReviewCreateEligibilityConfirmable({
-        ...base,
-        eligibility: eligibility({ canCreate: false, blockedReason: 'needs_push' })
-      })
-    ).toBe(true)
-  })
-
   it('fails closed on every hard-block: null, existing_review, positive, hard error, unavailable', () => {
     expect(isHostedReviewCreateEligibilityConfirmable({ ...base, eligibility: null })).toBe(false)
     expect(

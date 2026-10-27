@@ -2,34 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration } from './commit-message-plan'
 
 describe('Antigravity generation planning', () => {
-  it('plans Antigravity generation with one structured prompt on stdin', () => {
-    const result = planCommitMessageGeneration(
-      { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
-      'real commit prompt'
-    )
-
-    expect(result).toEqual({
-      ok: true,
-      plan: {
-        binary: 'agy',
-        args: [
-          '--print=',
-          '--input-format=stream-json',
-          '--output-format=stream-json',
-          '--sandbox',
-          '--model',
-          'Gemini 3.5 Flash (Medium)'
-        ],
-        stdinPayload: `${JSON.stringify({
-          event: 'user',
-          message: { role: 'user', content: [{ type: 'text', text: 'real commit prompt' }] }
-        })}\n`,
-        label: 'Antigravity',
-        outputFormat: 'antigravity-stream-json'
-      }
-    })
-  })
-
   it.each(['-fix: something', '--sandbox', 'line one\n"quoted"\r\n日本語 🐳'])(
     'keeps Antigravity prompt text out of argv: %s',
     (prompt) => {

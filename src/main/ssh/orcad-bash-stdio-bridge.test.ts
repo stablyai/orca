@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -62,6 +63,10 @@ function spawnBridge(port: number, env: Partial<NodeJS.ProcessEnv> = {}): Bridge
     args: ['-c', orcadBashStdioBridgeCommand(port)],
     env: { ...process.env, HOME: guestHome(scratch, false), ...env }
   })
+}
+
+function realCat(): string {
+  return spawnSync('sh', ['-c', 'command -v cat'], { encoding: 'utf8' }).stdout.trim()
 }
 
 function exitOf(child: Bridge): Promise<number | null> {
@@ -253,6 +258,41 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
       accepted!.destroy()
       await expect(exited).resolves.toBe(0)
       await expectNoSurvivors(pids)
+    } finally {
+      server.close()
+    }
+  })
+
+  it('waits for the cat it kills before exiting, so no zombie is left for the session init', async () => {
+    // WSL's per-session init never reaps orphans; a zombie there kept an idle distro running (R40).
+    // This cat takes a moment to die and leaves a mark, so the relay must wait to see it.
+    const dir = mkdtempSync(join(scratch, 'reap-'))
+    const bin = join(dir, 'bin')
+    mkdirSync(bin)
+    writeFileSync(
+      join(bin, 'cat'),
+      '#!/bin/sh\n' +
+        `trap 'kill $c 2>/dev/null; sleep 0.3; : > "${join(dir, 'killed-cat')}"; exit 0' TERM\n` +
+        `${realCat()} "$@" & c=$!\nwait $c\n` +
+        // The relay starts the socket reader first; the stdin reader stays blocked as on a real
+        // host, where the desktop keeps its pipe open.
+        `mkdir "${join(dir, 'socket-reader')}" 2>/dev/null || { sleep 30 & c=$!; wait $c; }\n`,
+      { mode: 0o755 }
+    )
+    let accepted: Socket | null = null
+    const server = createServer((socket) => {
+      accepted = socket
+    })
+    const port = await listen(server)
+    try {
+      const child = spawnBridge(port, { PATH: `${bin}:${process.env.PATH}` })
+      const exited = exitOf(child)
+      await decode(child.stdout).ready
+      await expect.poll(() => accepted).not.toBeNull()
+      // orcad hangs up: the reading cat ends, the relay kills the one still reading stdin.
+      accepted!.destroy()
+      await expect(exited).resolves.toBe(0)
+      expect(existsSync(join(dir, 'killed-cat'))).toBe(true)
     } finally {
       server.close()
     }
