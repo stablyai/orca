@@ -37,6 +37,20 @@ describe('resolvePnpmCliInvocation', () => {
     })
   })
 
+  // Why: under npx, npm exec would look for a package named "install"; PATH finds the real pnpm.
+  it.each([
+    ['/usr/share/nodejs/npm/bin/npx-cli.js', 'linux', 'pnpm', false],
+    ['/usr/local/lib/node_modules/npm/bin/npm-cli.js', 'darwin', 'pnpm', false],
+    ['C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npx-cli.js', 'win32', 'pnpm.cmd', true]
+  ])(
+    'ignores the npm CLI %s that `npx` or `npm run` exports',
+    (npmExecPath, platform, command, shell) => {
+      expect(
+        resolvePnpmCliInvocation({ npmExecPath, nodeExecPath, platform, pnpmHome: '' })
+      ).toEqual({ command, prefixArgs: [], shell })
+    }
+  )
+
   it('does not wrap a Windows native pnpm.exe in node', () => {
     expect(
       resolvePnpmCliInvocation({
