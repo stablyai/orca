@@ -20886,6 +20886,8 @@
       "added": "アカウントを追加しました。次に起動する Claude で使用するには、これを選択してください。",
       "nextLaunch": "{{value0}} → {{value1}}。次に起動する Claude はこれを使用します。実行中のセッションはそれぞれのアカウントを維持します。",
       "profileSwitching": "切り替えは、任意のタブで次に起動する Claude に適用されます。実行中のセッションはそれぞれのアカウントを維持します。",
+      "systemDefault": "システムのデフォルト",
+      "unnamedAccount": "Claude アカウント",
       "systemDefaultNamed": "システムのデフォルト: {{value0}}",
       "systemDefaultIsSaved": "システムのデフォルトは {{value0}} としてサインインしており、これは保存済みのアカウントでもあります。以前のバージョンの Orca がそのログインをここにコピーした可能性があります。自分のログインでない場合は、システムのデフォルトを選択して claude /login を実行してください。",
       "systemDefaultIsSavedDismiss": "閉じる",

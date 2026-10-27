@@ -20823,6 +20823,8 @@
       "added": "계정이 추가되었습니다. 다음에 시작하는 Claude에 사용하려면 이 계정을 선택하세요.",
       "nextLaunch": "{{value0}} → {{value1}}. 다음에 시작하는 Claude가 이를 사용합니다. 실행 중인 세션은 해당 계정을 유지합니다.",
       "profileSwitching": "전환은 모든 탭에서 다음에 시작하는 Claude에 적용됩니다. 실행 중인 세션은 해당 계정을 유지합니다.",
+      "systemDefault": "시스템 기본값",
+      "unnamedAccount": "Claude 계정",
       "systemDefaultNamed": "시스템 기본값: {{value0}}",
       "systemDefaultIsSaved": "시스템 기본값은 {{value0}}(으)로 로그인되어 있으며, 이는 저장된 계정이기도 합니다. 이전 Orca 버전에서 해당 로그인을 여기에 복사했을 수 있습니다. 본인의 로그인이 아니라면 시스템 기본값을 선택하고 claude /login을 실행하세요.",
       "systemDefaultIsSavedDismiss": "닫기",

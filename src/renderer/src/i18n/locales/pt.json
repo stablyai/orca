@@ -20935,6 +20935,8 @@
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
       "nextLaunch": "{{value0}} → {{value1}}. O próximo Claude que você iniciar usará essa conta. Sessões em execução mantêm suas contas.",
       "profileSwitching": "A troca se aplica ao próximo Claude que você iniciar em qualquer aba.",
+      "systemDefault": "Padrão do sistema",
+      "unnamedAccount": "Conta do Claude",
       "systemDefaultNamed": "Padrão do sistema: {{value0}}",
       "systemDefaultIsSaved": "O Padrão do sistema está conectado como {{value0}}, que também é uma conta salva. Uma versão anterior do Orca pode ter copiado esse login para lá. Se não for seu próprio login, selecione Padrão do sistema e execute claude /login.",
       "systemDefaultIsSavedDismiss": "Dispensar",

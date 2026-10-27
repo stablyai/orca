@@ -20824,6 +20824,8 @@
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",
       "nextLaunch": "{{value0}} → {{value1}}. Le prochain Claude que vous démarrez l'utilise. Les sessions en cours conservent leur compte.",
       "profileSwitching": "Le changement s'applique au prochain Claude que vous démarrez dans n'importe quel onglet. Les sessions en cours conservent leur compte.",
+      "systemDefault": "Valeur par défaut du système",
+      "unnamedAccount": "Compte Claude",
       "systemDefaultNamed": "Système par défaut : {{value0}}",
       "systemDefaultIsSaved": "Système par défaut est connecté en tant que {{value0}}, qui est aussi un compte enregistré. Une version antérieure d'Orca a peut-être copié cette connexion à cet endroit. S'il ne s'agit pas de votre propre connexion, sélectionnez Système par défaut et exécutez claude /login.",
       "systemDefaultIsSavedDismiss": "Ignorer",

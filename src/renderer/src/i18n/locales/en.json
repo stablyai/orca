@@ -21222,6 +21222,8 @@
       "added": "Account added. Select it to use it for the next Claude you start.",
       "nextLaunch": "{{value0}} → {{value1}}. The next Claude you start uses it. Running sessions keep their account.",
       "profileSwitching": "Switching applies to the next Claude you start in any tab.",
+      "systemDefault": "System default",
+      "unnamedAccount": "Claude account",
       "systemDefaultNamed": "System default: {{value0}}",
       "systemDefaultIsSaved": "System default is signed in as {{value0}}, which is also a saved account. An earlier Orca version may have copied that login there. If it is not your own login, select System default and run claude /login.",
       "systemDefaultIsSavedDismiss": "Dismiss",

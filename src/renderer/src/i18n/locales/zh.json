@@ -20824,6 +20824,8 @@
       "added": "已添加账户。选择它即可将其用于您下次启动的 Claude。",
       "nextLaunch": "{{value0}} → {{value1}}。您下次启动的 Claude 将使用它。正在运行的会话会保留其账户。",
       "profileSwitching": "切换会应用于您在任何标签页中下次启动的 Claude。正在运行的会话会保留其账户。",
+      "systemDefault": "系统默认",
+      "unnamedAccount": "Claude 账户",
       "systemDefaultNamed": "系统默认：{{value0}}",
       "systemDefaultIsSaved": "系统默认已登录为 {{value0}}，它同时也是一个已保存的账户。较早版本的 Orca 可能已将那个登录信息复制到那里。如果它不是您自己的登录信息，请选择系统默认并运行 claude /login。",
       "systemDefaultIsSavedDismiss": "关闭",
