@@ -1,5 +1,6 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
+  getWorktreeExecutionHostId,
   normalizeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId,
@@ -7,6 +8,7 @@ import {
 } from '../execution-host'
 import type { FolderWorkspace } from '../folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
+import type { Repo } from '../repo-types'
 
 /** null means "no host filter" — every host is visible. */
 export function getVisibleSidebarHostIdSet(
@@ -19,8 +21,7 @@ export function getVisibleSidebarHostIdSet(
   return visibleHostIds ? new Set<ExecutionHostId>(visibleHostIds) : null
 }
 
-// Why shared: the sidebar render path and the Cmd+1–9 order must apply the same
-// host filtering, or the numbering drifts from the cards whenever a filter is on.
+// Use identical host filtering for visible cards and Cmd+1–9 numbering.
 export function filterProjectGroupsForVisibleHosts(
   projectGroups: readonly ProjectGroup[],
   visibleHostIdSet: ReadonlySet<ExecutionHostId> | null,
@@ -32,6 +33,18 @@ export function filterProjectGroupsForVisibleHosts(
   return projectGroups.filter((group) =>
     visibleHostIdSet.has(getProjectGroupExecutionHostIdForRows(group, defaultHostId))
   )
+}
+
+export function filterReposForVisibleHosts(
+  repos: readonly Repo[],
+  visibleHostIdSet: ReadonlySet<ExecutionHostId> | null,
+  defaultHostId: ExecutionHostId
+): readonly Repo[] {
+  return visibleHostIdSet
+    ? repos.filter((repo) =>
+        visibleHostIdSet.has(getWorktreeExecutionHostId({}, repo, defaultHostId))
+      )
+    : repos
 }
 
 export function filterFolderWorkspacesForVisibleHosts(

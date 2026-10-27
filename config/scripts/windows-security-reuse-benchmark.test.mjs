@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { afterEach, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
+import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import { sha256Of } from './orcad-prebuild-slot-contents.mjs'
 import { peImage } from './windows-pe-image-fixture.mjs'
 import {
@@ -93,7 +94,7 @@ function windows(arch = 'x64') {
     ...process,
     platform: 'win32',
     arch,
-    versions: { ...process.versions, node: '24.21.0' }
+    versions: { ...process.versions, node: NODE_RUNTIME_PIN.version }
   })
   vi.stubEnv('SOURCE_SHA', sourceSha)
   vi.stubEnv('BENCHMARK_RUNNER', arch === 'x64' ? 'windows-2022' : 'windows-11-arm')
@@ -360,6 +361,8 @@ it.each(['x64', 'arm64'])(
       report.samples.every((sample) => sample.fullCommandMs >= sample.buildIncludingReuseProbesMs)
     ).toBe(true)
     const phases = report.phases.map((phase) => phase.label)
+    expect(phases).toContain('verify-prepared-node')
+    expect(phases).toContain('warm-compiler-before-measurement')
     expect(phases.indexOf('verify-prepared-node')).toBeLessThan(
       phases.indexOf('control-full-build-and-probe')
     )

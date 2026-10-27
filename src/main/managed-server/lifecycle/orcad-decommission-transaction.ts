@@ -1,11 +1,4 @@
-/**
- * The decommission entry of the activation journal: stop the active orcad with an
- * instance-bound request and record that nothing serves, or put it back.
- *
- * Phases: `prepared` (nothing sent), `stop-dispatched` (the request may have reached the
- * host), `process-exited` (exit proven by a completed-stop receipt). Only the last may commit.
- * On the host the later two are filed under `dispatched`; see `orcadDecommissionJournal`.
- */
+// Only process-exited may commit; dispatched phases nest under prepared for released readers.
 import {
   serializeOrcadActivationRecord,
   withDeactivatedVersion,
@@ -28,24 +21,22 @@ export type OrcadDecommissionTransaction = {
   request: OrcadManagedStopRequest | null
 }
 
-/** A dispatched stop as journaled: the real phase, under a field released desktops drop. */
-export type OrcadDecommissionDispatch = {
+/** Released desktops drop this field. */
+type OrcadDecommissionDispatch = {
   phase: 'stop-dispatched' | 'process-exited'
   request: OrcadManagedStopRequest
 }
 
-export type OrcadDecommissionJournal = Omit<OrcadDecommissionTransaction, 'phase' | 'request'> & {
+type OrcadDecommissionJournal = Omit<OrcadDecommissionTransaction, 'phase' | 'request'> & {
   phase: 'prepared'
   request: null
   dispatched?: OrcadDecommissionDispatch
 }
 
 export type OrcadDecommissionRecoveryPlan =
-  /** Exit was proven; write the deactivated record (if it is not there yet) and confirm. */
   | { action: 'confirm-decommissioned'; version: string; record: OrcadActivationRecord | null }
-  /** The request may have reached orcad; its completion or cancellation decides. */
+  /** Completion or cancellation must settle a possibly delivered request. */
   | { action: 'resume-stop'; request: OrcadManagedStopRequest; record: OrcadActivationRecord }
-  /** Nothing was sent; the active version must still be serving. */
   | { action: 'keep-serving'; version: string }
 
 export function createOrcadDecommissionTransaction(options: {
@@ -83,13 +74,8 @@ export function withOrcadDecommissionProcessExited(
   return { ...transaction, phase: 'process-exited', updatedAt: now.toISOString() }
 }
 
-/**
- * The entry as written to the host. Why a dispatched stop still reads `prepared` at the top level:
- * a released desktop recovering `stop-dispatched` or `process-exited` commits its core recordAfter,
- * which drops the stopped build's activeAppVersion, and its next connect then deploys its own older
- * build over state the stopped one may have migrated. Reading `prepared`, it relaunches the recorded
- * build instead. Released readers drop the unknown `dispatched` field.
- */
+/** Keep top-level prepared so released readers relaunch the recorded build instead of downgrading.
+ * Their parser drops dispatched; their completed-stop path loses activeAppVersion protection. */
 export function orcadDecommissionJournal(
   transaction: OrcadDecommissionTransaction
 ): OrcadDecommissionJournal {
@@ -99,7 +85,6 @@ export function orcadDecommissionJournal(
     : { ...rest, phase: 'prepared', request: null, dispatched: { phase, request } }
 }
 
-/** A reason when the parsed journal is not a coherent decommission; otherwise `null`. */
 export function orcadDecommissionTransactionDefect(
   transaction: OrcadDecommissionTransaction
 ): string | null {
@@ -118,7 +103,6 @@ export function orcadDecommissionTransactionDefect(
   return null
 }
 
-/** Called once the current record matched one side of the transaction. */
 export function planOrcadDecommissionRecovery(
   transaction: OrcadDecommissionTransaction,
   committed: boolean
@@ -143,7 +127,7 @@ export function planOrcadDecommissionRecovery(
   return { action: 'keep-serving', version: transaction.activeVersion }
 }
 
-/** The record a finished stop writes: the journaled `recordAfter` plus its advisory fields. */
+/** Preserve advisory fields alongside the journaled recordAfter. */
 export function committedOrcadDecommissionRecord(
   transaction: OrcadDecommissionTransaction
 ): OrcadActivationRecord {

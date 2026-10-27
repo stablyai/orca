@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalToolCallItem } from '../../../src/shared/agent-session-journal-types'
-import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
+import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import { projectStructuredItemToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import type {
   NativeChatBlock,
@@ -15,7 +15,6 @@ const scrolls = vi.hoisted(() => ({ toEnd: vi.fn(), to: vi.fn() }))
 
 vi.mock('react-native', async () => {
   const React = await import('react')
-  // A class, so the run's box can call it the way it calls a real ScrollView.
   class ScrollView extends React.Component<{ children?: ReactNode }> {
     scrollToEnd = scrolls.toEnd
     scrollTo = scrolls.to
@@ -70,7 +69,6 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'CopyButton' }))
 vi.mock('../platform/external-link', () => ({ openExternalLink: vi.fn() }))
-// Android's policy: transcript text is not inline-selectable, so a scroll is never read as a selection.
 vi.mock('../components/inline-text-selection', () => ({ INLINE_TEXT_SELECTION: false }))
 
 import { openExternalLink } from '../platform/external-link'
@@ -88,7 +86,6 @@ describe('ToolRun', () => {
     renderer = null
   })
 
-  /** An opened run with its rows closed, as the turn caret leaves it. */
   function render(
     blocks: NativeChatBlock[] | NativeChatMessage,
     onOpenFile?: (path: string) => void
@@ -97,13 +94,18 @@ describe('ToolRun', () => {
       renderer = create(
         createElement(ToolRun, {
           blocks: Array.isArray(blocks) ? blocks : blocks.blocks,
-          defaultExpanded: true,
-          expandChildren: false,
           onOpenFile
         })
       )
     })
+    openRun(renderer!)
     return renderer!
+  }
+
+  function openRun(tree: ReactTestRenderer): void {
+    act(() => {
+      tree.root.findAll((node) => String(node.type) === 'Pressable')[0]!.props.onPress()
+    })
   }
 
   const textIn = (node: ReactTestInstance): string[] =>
@@ -112,7 +114,6 @@ describe('ToolRun', () => {
       .map((text) => String(text.children.join('')))
 
   describe('tool rows, as desktop draws them', () => {
-    // The last match: a lone command's run header reads as the command too.
     const pressable = (tree: ReactTestRenderer, label: string): ReactTestInstance =>
       tree.root
         .findAll((node) => String(node.type) === 'Pressable')
@@ -198,7 +199,6 @@ describe('ToolRun', () => {
       expect(onOpenFile).toHaveBeenCalledWith('src/a.ts')
       expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Listed', 'src']))
       expect(textNode(tree, 'src').props.onPress).toBeUndefined()
-      // The rest of the row opens the row, not the file.
       open(tree, 'Read')
       expect(textIn(tree.root)).toContain('a')
       expect(onOpenFile).toHaveBeenCalledTimes(1)
@@ -267,7 +267,7 @@ describe('ToolRun', () => {
       })
     }
 
-    it('opens a rewrite to every removed and added line, interleaved, with nothing cut', () => {
+    it('opens a rewrite to every removed and added line in unified order, with nothing cut', () => {
       const before = Array.from({ length: 15 }, (_, i) => `old ${i}`).join('\n')
       const after = Array.from({ length: 15 }, (_, i) => `new ${i}`).join('\n')
       const tree = render([
@@ -281,9 +281,8 @@ describe('ToolRun', () => {
       expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Edited', 'a.ts', '+15', '-15']))
       openRow(tree, 'a.ts')
       const rows = textIn(tree.root).filter((text) => /^(old|new) \d+$/.test(text))
-      expect(rows).toHaveLength(30)
+      expect(rows).toEqual([...before.split('\n'), ...after.split('\n')])
       expect(textIn(tree.root).some((text) => text.includes('truncated'))).toBe(false)
-      // The result the card speaks for draws no row of its own.
       expect(textIn(tree.root)).not.toContain('The file src/a.ts has been updated.')
     })
 
@@ -394,12 +393,11 @@ describe('ToolRun', () => {
         renderer = create(
           createElement(ToolRun, {
             blocks: [todo(['completed', 'completed', 'pending'])],
-            previousTodoWrite: todo(['completed', 'in_progress']),
-            defaultExpanded: true,
-            expandChildren: false
+            previousTodoWrite: todo(['completed', 'in_progress'])
           })
         )
       })
+      openRun(renderer!)
       expect(textIn(renderer!.root)).toEqual(
         expect.arrayContaining(['Completed Task 1', 'Added Task 2', 'Full task list'])
       )
@@ -413,8 +411,7 @@ describe('ToolRun', () => {
       { type: 'tool-result', output: 'a.ts' }
     ]
 
-    /** The transcript's store, with the run mounted or recycled away. */
-    function Transcript({ mounted, toolsExpanded }: { mounted: boolean; toolsExpanded: boolean }) {
+    function Transcript({ mounted }: { mounted: boolean }) {
       const disclosures = useMobileNativeChatDisclosures('host\0worktree\0tab')
       return createElement(
         MobileNativeChatDisclosureContext.Provider,
@@ -422,15 +419,13 @@ describe('ToolRun', () => {
         mounted
           ? createElement(ToolRun, {
               blocks,
-              disclosureId: 'a1',
-              defaultExpanded: toolsExpanded,
-              expandChildren: toolsExpanded
+              disclosureId: 'a1'
             })
           : null
       )
     }
 
-    function show(props: { mounted: boolean; toolsExpanded: boolean }): void {
+    function show(props: { mounted: boolean }): void {
       act(() => {
         if (renderer) {
           renderer.update(createElement(Transcript, props))
@@ -450,12 +445,12 @@ describe('ToolRun', () => {
     }
 
     it('keeps an opened run and line open after the row is recycled and drawn again', () => {
-      show({ mounted: true, toolsExpanded: false })
+      show({ mounted: true })
       press('ls')
       press('ls')
       expect(textIn(renderer!.root)).toContain('a.ts')
-      show({ mounted: false, toolsExpanded: false })
-      show({ mounted: true, toolsExpanded: false })
+      show({ mounted: false })
+      show({ mounted: true })
       expect(textIn(renderer!.root)).toContain('a.ts')
     })
 
@@ -470,44 +465,25 @@ describe('ToolRun', () => {
     })
 
     it('comes back where the reader left its box after the row is recycled', () => {
-      show({ mounted: true, toolsExpanded: false })
+      show({ mounted: true })
       press('ls')
       act(() => {
         box().props.onScroll(scrolled(120))
       })
-      show({ mounted: false, toolsExpanded: false })
-      show({ mounted: true, toolsExpanded: false })
+      show({ mounted: false })
+      show({ mounted: true })
       scrolls.to.mockClear()
       act(() => {
         box().props.onContentSizeChange()
       })
       expect(scrolls.to).toHaveBeenCalledWith({ y: 120, animated: false })
     })
-
-    it('restores the reader’s choice when the Tools toggle goes back off', () => {
-      show({ mounted: true, toolsExpanded: false })
-      press('ls')
-      show({ mounted: true, toolsExpanded: true })
-      expect(textIn(renderer!.root)).toContain('a.ts')
-      show({ mounted: true, toolsExpanded: false })
-      // The run the reader opened is still open; the line they never opened is closed again.
-      expect(textIn(renderer!.root).filter((text) => text === 'ls')).toHaveLength(2)
-      expect(textIn(renderer!.root)).not.toContain('a.ts')
-    })
-  })
-
-  it('lets a tap inside the run land while the keyboard is up, as the transcript list does', () => {
-    const tree = render([{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }])
-    const boxes = tree.root.findAll((node) => String(node.type) === 'ScrollView')
-    expect(boxes.map((box) => box.props.keyboardShouldPersistTaps)).toEqual(['handled'])
   })
 
   it('follows new work at the end of a live run, but holds still when the reader opens a row', () => {
     const live = (blocks: NativeChatBlock[]) =>
       createElement(ToolRun, {
         blocks,
-        defaultExpanded: true,
-        expandChildren: false,
         activeTurnIsWorking: true,
         trailing: true
       })
@@ -518,6 +494,7 @@ describe('ToolRun', () => {
     act(() => {
       renderer = create(live(first))
     })
+    openRun(renderer!)
     const box = () => renderer!.root.findAll((node) => String(node.type) === 'ScrollView')[0]!
     act(() => {
       box().props.onContentSizeChange()
@@ -547,29 +524,10 @@ describe('ToolRun', () => {
     expect(scrolls.toEnd).toHaveBeenCalledTimes(1)
   })
 
-  it("keeps a row's output out of inline selection where the platform forbids it", () => {
-    const tree = render([
-      { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
-      { type: 'tool-result', output: 'a.ts' }
-    ])
-    act(() => {
-      tree.root
-        .findAll((node) => String(node.type) === 'Pressable')
-        .findLast((node) => textIn(node).includes('ls'))!
-        .props.onPress()
-    })
-    const output = tree.root.findAll(
-      (node) => String(node.type) === 'Text' && textIn(node)[0] === 'a.ts'
-    )[0]!
-    expect(output.props.selectable).toBe(false)
-  })
-
   it('does not save a follow for a later row opening when new work left the height unchanged', () => {
     const live = (blocks: NativeChatBlock[]) =>
       createElement(ToolRun, {
         blocks,
-        defaultExpanded: true,
-        expandChildren: false,
         activeTurnIsWorking: true,
         trailing: true
       })
@@ -577,11 +535,11 @@ describe('ToolRun', () => {
     act(() => {
       renderer = create(live([call]))
     })
+    openRun(renderer!)
     const box = () => renderer!.root.findAll((node) => String(node.type) === 'ScrollView')[0]!
     act(() => {
       box().props.onContentSizeChange()
     })
-    // The result lands under the closed row: the box's height does not change.
     act(() => {
       renderer!.update(live([call, { type: 'tool-result', output: 'a.ts' }]))
     })

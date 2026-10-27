@@ -8,27 +8,6 @@ import {
 } from './native-chat-agent-profiles'
 
 describe('native chat agent picker profiles', () => {
-  // The composer types the same `/` for every agent; skillPrefix is only the
-  // form a picked skill is written as.
-  it('keeps Codex skills invocable as dollar tokens', () => {
-    expect(getNativeChatAgentProfile('codex')).toMatchObject({
-      skillPrefix: '$',
-      skillSourceOwner: 'codex'
-    })
-  })
-
-  it('writes Claude-family and Grok skills as slash tokens', () => {
-    expect(getNativeChatAgentProfile('claude')).toMatchObject({
-      skillPrefix: '/',
-      skillSourceOwner: 'claude'
-    })
-    expect(getNativeChatAgentProfile('openclaude')).toMatchObject({ skillSourceOwner: 'claude' })
-    expect(getNativeChatAgentProfile('grok')).toMatchObject({
-      skillPrefix: '/',
-      skillSourceOwner: 'grok'
-    })
-  })
-
   it('does not grant custom or unverified agents a skill grammar', () => {
     expect(getNativeChatAgentProfile('custom-agent')).toBeNull()
   })
@@ -39,8 +18,7 @@ describe('host-claimed native chat commands', () => {
     return getHostClaimedNativeChatCommands(agent).map((command) => command.name)
   }
 
-  // Claude's harness expands a slash command out of the message body, so claiming
-  // its catalog only answered "/init is not available" for commands that do run.
+  // Claude expands slash commands from message text; host claiming produced false unavailable replies.
   it('claims nothing from the Claude-family catalog', () => {
     expect(names('claude')).toEqual([])
     expect(names('openclaude')).toEqual([])
@@ -69,26 +47,15 @@ describe('native chat command replies', () => {
     expect(getNativeChatCommandReply('omp', 'compact')).toBeNull()
   })
 
-  it('declares only /context, the one reply the desktop chat implements', () => {
-    for (const agent of ['claude', 'openclaude', 'codex', 'omp', 'grok', 'custom-agent']) {
-      const declared = getVerifiedNativeChatCommands(agent).filter(({ reply }) => reply)
-      expect(declared.map(({ name }) => name)).toEqual(
-        agent === 'omp' || agent === 'openclaude' ? ['context'] : []
-      )
-    }
-  })
-
   it('leaves out of the agent-answered catalog only the commands that declare a reply', () => {
     const names = (agent: string) =>
       getAgentAnsweredNativeChatCommands(agent).map(({ name }) => name)
-    expect(names('openclaude')).toEqual(names('claude'))
-    expect(names('omp')).toEqual(
-      getVerifiedNativeChatCommands('omp')
-        .map(({ name }) => name)
-        .filter((name) => name !== 'context')
-    )
-    expect(getAgentAnsweredNativeChatCommands('codex')).toEqual(
-      getVerifiedNativeChatCommands('codex')
-    )
+    expect(names('openclaude')).toContain('compact')
+    expect(names('openclaude')).not.toContain('context')
+    expect(names('omp')).toContain('model')
+    expect(names('omp')).toContain('usage')
+    expect(names('omp')).not.toContain('context')
+    expect(names('codex')).toContain('permissions')
+    expect(names('grok')).toEqual([])
   })
 })

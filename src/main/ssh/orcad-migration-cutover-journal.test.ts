@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { writeSecureJsonFileWithinLimit } from '../../shared/bounded-secure-json-file'
-import { parseOrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+import { parseOrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { orcadMigrationCutoverFixture as cutover } from './orcad-migration-cutover-fixture'
 import {
   findOrcadMigrationSourceCutoverForTarget,
@@ -93,8 +93,7 @@ describe('migration cutover journal sidecar', () => {
     )
   })
 
-  // Older desktops read these files: the shared store must keep the path and bytes the SSH
-  // journal has always written (the exact call it made before the store existed).
+  // Keep legacy SSH journal paths/bytes readable by downgraded desktops.
   it('writes the same path and bytes the SSH journal always wrote', () => {
     writeOrcadMigrationSourceCutover(userDataPath, cutover())
     expect(orcadMigrationCutoverJournalDirectory(userDataPath)).toBe(

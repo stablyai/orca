@@ -45,7 +45,6 @@ export function subscribeOpenCodeNativeChatTranscript(
   let windowLimit = initialLimit
   const fingerprints = new Map<number, string>()
   let gateErrorEmitted = false
-  // Whether the subscriber already has a frame (or pending notice) to render.
   let settled = false
   let settleTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -72,8 +71,7 @@ export function subscribeOpenCodeNativeChatTranscript(
     settleTimer = setTimeout(settleUnflushed, UNFLUSHED_SETTLE_MS)
     settleTimer.unref?.()
   }
-  // never break the poll loop (an escaping throw would skip scheduleTick and
-  // leave polling permanently deaf on a void tick()).
+  // Escaping subscriber errors would skip scheduling and permanently stop polling.
   function emitSafely(run: () => void, what: string): void {
     try {
       run()
@@ -105,7 +103,6 @@ export function subscribeOpenCodeNativeChatTranscript(
         return
       }
       if (!dbPath) {
-        // No DB (yet): keep polling, like the JSONL resolve-poll path (#8401).
         scheduleTick()
         return
       }
@@ -114,7 +111,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         return
       }
       if (!signal) {
-        // Session row not landed yet — the hook can fire first.
+        // Hooks may arrive before the session row.
         scheduleTick()
         return
       }
@@ -138,7 +135,6 @@ export function subscribeOpenCodeNativeChatTranscript(
         return
       }
       if (!page) {
-        // The session vanished between signal and page reads; keep polling.
         scheduleTick()
         return
       }
@@ -158,7 +154,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
-      // Imported rows can precede the frontier regardless of their storage rowid.
+      // Imported ZCode rows may precede the frontier regardless of storage rowid.
       if (agent === 'zcode') {
         if (
           await replaceWithBridgedWindow(dbPath, page, signal.messageCount < lastCounts.messages)
@@ -186,7 +182,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         const oldest = page.items[0]!.rowid
         const displaced = [...fingerprints.keys()].filter((rowid) => rowid < oldest)
         if (displaced.length > 0) {
-          // Verify the displaced fringe: cap eviction and a real deletion look identical in the tail.
+          // Check displaced rows: tail eviction and deletion otherwise look identical.
           const older = await readPage({
             dbPath,
             sessionId: args.sessionId,
@@ -203,7 +199,7 @@ export function subscribeOpenCodeNativeChatTranscript(
           }
         }
       }
-      // A balanced delete and append can move a removed row before the new tail.
+      // Balanced delete/append can hide a removed row before the new tail.
       const removed = [...fingerprints.keys()].some((rowid) => !present.has(rowid))
       if (changed || shrinking || removed) {
         if (await replaceWithBridgedWindow(dbPath, page, shrinking)) {
@@ -233,7 +229,7 @@ export function subscribeOpenCodeNativeChatTranscript(
     } catch (err) {
       if (!closed && lastSignal === null && !gateErrorEmitted && args.onInitialSnapshot) {
         gateErrorEmitted = true
-        // Its retryable message outranks the empty settle; don't overwrite it.
+        // Keep retryable errors visible instead of overwriting with empty settlement.
         settled = true
         stopSettleTimer()
         const failure = errorMessage(err)
@@ -254,11 +250,8 @@ export function subscribeOpenCodeNativeChatTranscript(
     windowLimit = Math.max(windowLimit, fingerprints.size)
   }
 
-  // Bounded reads on the worker thread shared with the AI-Vault scanner.
-  // Widens until the window overlaps the emitted frontier: a poll-gap burst
-  // bigger than one window must bridge, not skip. Holds everything back (no
-  // lastSignal/lastEmittedRowId advance) when even the capped window cannot
-  // overlap, so the gap retries instead of dropping rows.
+  // Widen bounded worker reads until they overlap the emitted frontier, bridging poll-gap bursts.
+  // If even the cap cannot overlap, retain the old signal/frontier and retry without losing rows.
   async function replaceWithBridgedWindow(
     db: string,
     page: Awaited<ReturnType<typeof readPage>>,
@@ -278,8 +271,7 @@ export function subscribeOpenCodeNativeChatTranscript(
       }
       const oldest = replacement.items[0]?.rowid
       if (oldest === undefined) {
-        // Empty renderable window (only non-renderable rows moved the
-        // signal): nothing to bridge — settle like a normal replace.
+        // Non-renderable-only changes leave nothing to bridge.
         const hasMore = replacement.hasMore
         const before = replacement.beforeMessageRowId ?? 0
         fingerprints.clear()

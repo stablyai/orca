@@ -1,5 +1,4 @@
-// Local actions reveal this pane at the press. Resume reveals once the host lifts the pause;
-// host delivery, queued drafts and Stop never move the reader.
+// Reveal local actions at press and Resume after confirmed unpause; host delivery, queued drafts and Stop preserve reader position.
 
 import { useCallback, useMemo } from 'react'
 import {
@@ -12,21 +11,19 @@ import type { StructuredAgentSessionQueuedMessagesController } from './use-struc
 type StructuredController = ReturnType<typeof useStructuredAgentSession>
 
 export function useStructuredNativeChatSubmitReveal(
-  controller: Pick<StructuredController, 'respond' | 'queuedMessages'>,
-  /** Relaunches a start that failed. */
+  controller: Pick<StructuredController, 'respond' | 'queuedMessages' | 'capturePresentation'>,
   retryLaunch: () => void,
   /** The host may take no turn: no card is sent now or resumed, and no failed start retried. */
   startsHeld = false
 ): {
   messageListRef: React.RefObject<NativeChatMessageListHandle | null>
-  /** For the composer, which reveals as it sends. */
   revealLatest: () => void
   retryLaunch: () => void
   respond: StructuredController['respond']
   queuedMessages: StructuredAgentSessionQueuedMessagesController
 } {
   const { messageListRef, revealLatest } = useNativeChatRevealLatest()
-  const { respond, queuedMessages } = controller
+  const { respond, queuedMessages, capturePresentation } = controller
   const revealingRetryLaunch = useCallback(() => {
     if (startsHeld) {
       return
@@ -44,8 +41,9 @@ export function useStructuredNativeChatSubmitReveal(
   const revealingQueue = useMemo<StructuredAgentSessionQueuedMessagesController>(() => {
     // Resume can be refused or find nothing paused, so it reveals only once the host lifts it.
     const revealing = (lift: () => Promise<boolean>) => async (): Promise<boolean> => {
+      const isCurrent = capturePresentation()
       const resumed = await lift()
-      if (resumed) {
+      if (resumed && isCurrent()) {
         revealLatest()
       }
       return resumed
@@ -73,7 +71,7 @@ export function useStructuredNativeChatSubmitReveal(
         return steered
       }
     }
-  }, [queuedMessages, revealLatest, startsHeld])
+  }, [capturePresentation, queuedMessages, revealLatest, startsHeld])
   return {
     messageListRef,
     revealLatest,

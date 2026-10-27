@@ -178,8 +178,7 @@ describe('normalizeImageTranscriptMessages', () => {
   })
 
   it('folds a multi-block companion turn into one turn carrying every ref', () => {
-    // Claude records a multi-image paste as ONE companion message with a marker block
-    // per image, so a single-block-only rule missed every multi-image turn.
+    // Claude emits one companion message with multiple source blocks; single-block matching missed multi-image pastes.
     const out = normalizeImageTranscriptMessages([
       {
         id: 'companion',
@@ -316,6 +315,15 @@ describe('composer image chips at send and back', () => {
     ).toBe(`${chip('r-3')} then ${chip('r-1')}, not [Image #3]`)
   })
 
+  it('strips only the markers its images have, leaving a typed one past them', () => {
+    expect(stripSentImagePromptMarkers('[Image #1] then [Image #2], not [Image #3]', 2)).toBe(
+      'then , not [Image #3]'
+    )
+    expect(stripSentImagePromptMarkers('Explain the literal token [Image #1]', 0)).toBe(
+      'Explain the literal token [Image #1]'
+    )
+  })
+
   it('leaves a quoted file path that reads like a marker as typed, back or stripped', () => {
     const files = [
       formatNativeChatFileReference('/repo/[Image #1].md'),
@@ -326,7 +334,7 @@ describe('composer image chips at send and back', () => {
       expect(promptMarkersToImageReferences(`[Image #1] in ${file}`, ['r-1'])).toBe(
         `${chip('r-1')} in ${file}`
       )
-      expect(stripSentImagePromptMarkers(`[Image #1] in ${file} [Image #1]`)).toBe(`in ${file}`)
+      expect(stripSentImagePromptMarkers(`[Image #1] in ${file} [Image #1]`, 1)).toBe(`in ${file}`)
     }
   })
 

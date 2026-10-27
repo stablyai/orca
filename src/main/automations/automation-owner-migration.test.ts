@@ -83,7 +83,6 @@ function migrate(input: {
   })
 }
 
-/** A folder workspace rooted on an SSH host: its scope connection pins every record inside it. */
 function pinnedWorkspaceState(): {
   folderWorkspaces: FolderWorkspace[]
   projectGroups: ProjectGroup[]
@@ -124,7 +123,6 @@ function pinnedWorkspaceState(): {
   }
 }
 
-/** The same workspace after its execution host was changed outside the automation editor. */
 function repinnedWorkspaceState(connectionId: string): {
   folderWorkspaces: FolderWorkspace[]
   projectGroups: ProjectGroup[]
@@ -187,8 +185,6 @@ describe('migrateAutomationOwners', () => {
     expect(second.sshTargets).toEqual(first.sshTargets)
   })
 
-  // Refusing to run an orphan is dispatch's live verdict, not a persisted write:
-  // the record keeps its selector and its enablement untouched.
   it('leaves an automation whose target is gone in place without rewriting or disabling it', () => {
     const automation = makeAutomation({
       executionTargetType: 'ssh',
@@ -369,8 +365,6 @@ describe('migrateAutomationOwners', () => {
     expect(result.automations[0].executionTargetGeneration).toBeUndefined()
   })
 
-  // The pin, not the project, is what dispatch resolves; a pin this authority cannot
-  // vouch for stays unstamped so it classifies like an unresolvable SSH selector.
   it('never stamps a pinned local record whose pin names an unregistered target', () => {
     const result = migrate({
       automations: [pinnedLocalAutomation()],
@@ -384,7 +378,6 @@ describe('migrateAutomationOwners', () => {
     expect(migrated.executionTargetId).toBe('local')
   })
 
-  // Absence of evidence: with no workspace list supplied, nothing proves the record is pinned.
   it('leaves a record alone when no workspace list was supplied to prove a pin', () => {
     const result = migrate({ automations: [pinnedLocalAutomation()], sshTargets: [] })
     expect(result.automations[0].enabled).toBe(true)

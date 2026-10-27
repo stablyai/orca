@@ -1,5 +1,7 @@
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { AppState } from '@/store/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean
@@ -7,15 +9,25 @@ export type TerminalLinkStoreSettings = {
   activeRuntimeEnvironmentId?: string | null
 }
 
-export type TerminalLinkStoreState = {
+export type TerminalLinkStoreState = Pick<
+  AppState,
+  'repos' | 'endpointProjects' | 'endpointProjectHostSetups'
+> & {
   settings: TerminalLinkStoreSettings | undefined
   setActiveWorktree: Mock
   createBrowserTab: Mock
   openFile: Mock
+  openFileForLink: Mock
   setPendingEditorReveal: Mock
   setMarkdownViewMode: Mock
   activeFileIdByWorktree: Record<string, string | null>
   openFiles: { filePath: string; worktreeId: string }[]
+  groupsByWorktree: Record<string, TabGroup[]>
+  unifiedTabsByWorktree: Record<
+    string,
+    (Pick<Tab, 'id' | 'entityId' | 'groupId'> &
+      Partial<Pick<Tab, 'contentType' | 'executionHostId'>>)[]
+  >
   worktreesByRepo: Record<
     string,
     {
@@ -34,6 +46,7 @@ export type TerminalLinkTestDoubles = {
   openFileUriMock: Mock
   openFilePathMock: Mock
   openFileMock: Mock
+  openFileForLinkMock: Mock
   statMock: Mock
   fsPathExistsMock: Mock
   runtimeEnvironmentCallMock: Mock
@@ -62,17 +75,47 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const setMarkdownViewModeMock = vi.fn()
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
+  // Adapt legacy openFile assertions while recording the opened view for guarded reveal.
+  const openFileForLinkMock = vi.fn(
+    (
+      file: { filePath: string; worktreeId: string },
+      options: unknown,
+      _intent: unknown,
+      onShown?: (shown: { fileId: string; viewStateId: string; groupId: string }) => void
+    ) => {
+      const returned: unknown = openFileMock(file, options)
+      const fileId =
+        typeof returned === 'string'
+          ? returned
+          : (storeState.activeFileIdByWorktree[file.worktreeId] ?? file.filePath)
+      const view = { id: `view:${fileId}`, entityId: fileId, groupId: 'group-1' }
+      storeState.unifiedTabsByWorktree = {
+        ...storeState.unifiedTabsByWorktree,
+        [file.worktreeId]: [...(storeState.unifiedTabsByWorktree[file.worktreeId] ?? []), view]
+      }
+      const shown = { fileId, viewStateId: view.id, groupId: view.groupId }
+      // As today's store: the view is drawn at once.
+      onShown?.(shown)
+      return shown
+    }
+  )
   const storeState: TerminalLinkStoreState = {
+    repos: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     settings: undefined as TerminalLinkStoreSettings | undefined,
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock,
     openFile: openFileMock,
+    openFileForLink: openFileForLinkMock,
     setPendingEditorReveal: setPendingEditorRevealMock,
     setMarkdownViewMode: setMarkdownViewModeMock,
     activeFileIdByWorktree: {} as Record<string, string | null>,
-    openFiles: [] as { filePath: string; worktreeId: string }[],
+    openFiles: [],
+    unifiedTabsByWorktree: {},
+    groupsByWorktree: {},
     worktreesByRepo: {},
-    folderWorkspaces: [] as []
+    folderWorkspaces: []
   }
 
   return {
@@ -80,6 +123,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     openFileUriMock,
     openFilePathMock,
     openFileMock,
+    openFileForLinkMock,
     statMock,
     fsPathExistsMock,
     runtimeEnvironmentCallMock,

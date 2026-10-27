@@ -7,18 +7,10 @@ import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'
 import { resolveGhosttyThemeColors } from './theme-resolution'
 
-// Why: defensive upper bound on the Ghostty config size we're willing to read
-// into memory on the main process. Real configs are a few KB; anything past
-// this is almost certainly a symlink mistake or a pathological file and we
-// would rather surface an error than OOM the main process.
+// Bound config reads to avoid loading arbitrarily large files into main.
 const MAX_CONFIG_BYTES = 1_000_000
 
-// Why: mapGhosttyToOrca creates new object instances for nested values like
-// terminalColorOverrides. A reference comparison (!==) would always report
-// them as changed even when the contents are identical. The stringifier sorts
-// keys at every object depth so persisted settings whose storage preserves a
-// different key order compare equal. Arrays keep their ordering (meaningful
-// for list-valued settings).
+// Compare nested values structurally with sorted keys while preserving meaningful array order.
 function stableStringify(v: unknown): string {
   if (v === null || typeof v !== 'object') {
     return JSON.stringify(v)
@@ -69,10 +61,7 @@ function usesConditionalThemePair(themeName: string): boolean {
     .some((part) => part.startsWith('light:') || part.startsWith('dark:'))
 }
 
-// Why: `theme = <name>` is how most Ghostty configs pick their colors, so
-// dropping it silently loses the entire palette. Resolve the referenced theme
-// file and merge its colors as defaults: explicit config keys win, and config
-// palette entries are appended after the theme's so per-index overrides apply.
+// Theme colors are defaults; explicit config colors and palette entries take precedence.
 async function applyThemeReference(parsed: Record<string, string | string[]>): Promise<string[]> {
   const rawTheme = parsed['theme']
   if (rawTheme === undefined) {

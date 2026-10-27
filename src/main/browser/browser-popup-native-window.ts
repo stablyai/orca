@@ -1,15 +1,15 @@
 import { app, type BrowserWindow, type WebContents } from 'electron'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
-import { safeOrigin } from './browser-manager-types'
 import type { PopupChildWindowOptions, PopupOriginBarWindow } from './popup-origin-bar-window'
 import {
   isNativeBrowserPopupWindow,
   markNativeBrowserPopupWindow
 } from './native-browser-popup-windows'
 import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
+import { describeCommittedPopupOrigin } from './popup-committed-origin'
 
 const rejectedNativePopups = new WeakSet<BrowserWindow>()
-// Why: like Electron, an opener's latest script admission answers the next child it shows.
+// The latest script admission belongs to the next child the opener shows.
 const pendingScriptedNativePopups = new WeakMap<
   WebContents,
   ((window: BrowserWindow) => void) | null
@@ -28,13 +28,9 @@ export function isNativeBrowserPopupRequest(input: {
   )
 }
 
-/**
- * OpenURL constructs this window synchronously, before resuming its native navigation; a script
- * window.open constructs it in a later task, when the renderer shows the child it created.
- */
+// OpenURL creates synchronously; scripted window.open creates its child in a later task.
 export function allowNativeBrowserPopup(input: {
   opener: WebContents
-  targetUrl: string
   options: Electron.BrowserWindowConstructorOptions
   background?: boolean
   canPresent?: () => boolean
@@ -90,7 +86,7 @@ export function allowNativeBrowserPopup(input: {
     action: 'allow',
     overrideBrowserWindowOptions: {
       ...input.options,
-      title: safeOrigin(input.targetUrl),
+      title: 'about:blank',
       fullscreenable: false,
       show: mayPresent && !input.background,
       // Content-sized like origin-bar popups, so resizeTo cannot hide the origin title.
@@ -102,8 +98,7 @@ export function allowNativeBrowserPopup(input: {
   }
 }
 
-// Electron emits did-create-window on the opener synchronously after constructing the child, before
-// the child's first request; unadmitted native children there are discarded rather than left bare.
+// did-create-window runs before the child's first request, allowing unadmitted children to be rejected.
 function awaitScriptedNativePopup(
   opener: WebContents,
   admit: (window: BrowserWindow) => void
@@ -129,7 +124,6 @@ function awaitScriptedNativePopup(
   pendingScriptedNativePopups.set(opener, admit)
 }
 
-/** Ends popup contents Chromium created before their pending first request can leave. */
 export function discardBrowserPopupContents(contents: WebContents): void {
   if (contents.isDestroyed()) {
     return
@@ -148,7 +142,7 @@ export function discardBrowserPopupContents(contents: WebContents): void {
 function rejectNativeBrowserPopup(window: BrowserWindow): void {
   rejectedNativePopups.add(window)
   discardBrowserPopupContents(window.webContents)
-  // Destroy only after Electron's constructor returns, even if close failed or was intercepted.
+  // Wait for Electron's constructor to return before destroying the window.
   queueMicrotask(() => {
     if (!window.isDestroyed()) {
       window.destroy()
@@ -159,7 +153,6 @@ function rejectNativeBrowserPopup(window: BrowserWindow): void {
 /** The native frame is the trust surface; public APIs cannot reparent its primary contents. */
 export function prepareNativeBrowserPopup(
   window: BrowserWindow,
-  initialUrl: string,
   prepareContent?: (contents: WebContents) => boolean
 ): PopupOriginBarWindow {
   const contents = window.webContents
@@ -195,19 +188,24 @@ export function prepareNativeBrowserPopup(
     rejectNativeBrowserPopup(window)
     return popup
   }
-  const updateOrigin = (url: string): void => {
+  const updateOrigin = (): void => {
     if (!window.isDestroyed()) {
-      window.setTitle(safeOrigin(url))
+      window.setTitle(describeCommittedPopupOrigin(contents).label)
     }
   }
   window.on('page-title-updated', (event) => event.preventDefault())
   // A blocked/uncommitted redirect must never lend its origin to the old document.
-  contents.on('did-navigate', (_event, url) => updateOrigin(url))
-  contents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+  contents.on('did-navigate', updateOrigin)
+  contents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
     if (isMainFrame) {
-      updateOrigin(url)
+      updateOrigin()
     }
   })
-  updateOrigin(initialUrl)
+  contents.on('did-fail-load', (_event, _errorCode, _errorDescription, _url, isMainFrame) => {
+    if (isMainFrame) {
+      updateOrigin()
+    }
+  })
+  updateOrigin()
   return popup
 }

@@ -12,15 +12,7 @@ import {
 import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
 import { projectFleetWorkerPage } from './worker-observation'
 
-/**
- * A cached hook row must keep the identity it was observed under.
- *
- * The fleet snapshot remints every row on every read, so a row seen under one process used to
- * acquire whichever process, dispatch and terminal the pane owned at read time. Incarnation
- * equality in the matcher then agreed perfectly while the evidence described a dead process.
- * These cases replay one unchanged row across a rebind, so nothing but the capture point can
- * make them fail closed.
- */
+/** Capture hook identity at ingest; reminting cached observations during fleet reads could falsely match a new occupant's incarnation. Replay one row across rebind to catch that drift. */
 const PANE_KEY = 'tab-observed:11111111-1111-4111-8111-111111111111'
 const REMINTED_PANE_KEY = 'tab-observed:22222222-2222-4222-8222-222222222222'
 const TERMINAL_HANDLE = 'term_observed'
@@ -53,7 +45,7 @@ function createWorld(): ObservedWorld {
   const server = new AgentHookServer()
   const observed = new AgentStatusObservedPaneIdentities()
   server.subscribeEnrichedStatus((entry) =>
-    recordObservedAgentStatusPaneIdentity(observed, entry.paneKey, identity)
+    recordObservedAgentStatusPaneIdentity(observed, entry, identity)
   )
   const host = {
     ...identity,
@@ -191,8 +183,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
     world.dispatchPane(PANE_KEY, DISPATCH_OLD)
     world.ingest(PANE_KEY, 'working')
-    // The pane is reused by a new process and the durable worker names it too, so the
-    // matcher's incarnation equality agrees — with an observation from the dead process.
+    // A new process owns both pane and durable worker; never retag the dead process's cached observation to match it.
     world.runProcess(TERMINAL_HANDLE, INCARNATION_TWO)
 
     expect(
@@ -239,8 +230,7 @@ describe('fleet evidence keeps the identity it was observed under', () => {
     world.ingest(PANE_KEY, 'working')
     world.runProcess(TERMINAL_HANDLE, INCARNATION_TWO)
 
-    // An unsupervised worker has no materialized resource, so nothing downstream can
-    // contradict the incarnation the row was minted with.
+    // Unsupervised workers lack durable resources to contradict a wrongly minted incarnation.
     expect(
       livenessOf(
         world,

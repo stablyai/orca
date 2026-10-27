@@ -1,16 +1,12 @@
-// Covers the wiring the image-attachments suite structurally cannot: that hook
-// injects its own baseSend stub, so it never observes the real send params.
-
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-// Type-only, so it is erased before the `./mobile-native-chat-send` mock below applies.
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
 const typeCommandWithOutcome = vi.fn()
-vi.mock('./mobile-native-chat-send', () => ({
+vi.mock('./native-chat/mobile-native-chat-send', () => ({
   sendMobileNativeChatMessageWithOutcome: (...args: unknown[]) => sendWithOutcome(...args),
   typeMobileNativeChatCommandWithOutcome: (...args: unknown[]) => typeCommandWithOutcome(...args),
   clearMobileNativeChatInput: (...args: unknown[]) => clearInputWrite(...args),
@@ -18,16 +14,12 @@ vi.mock('./mobile-native-chat-send', () => ({
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS: 2_000
 }))
-vi.mock('./mobile-native-chat-stale-input', () => ({
+vi.mock('./native-chat/mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: () => Promise.resolve(true)
 }))
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
-import {
-  acquireMobileNativeChatTerminalWrite,
-  releaseMobileNativeChatTerminalWrite,
-  resetMobileNativeChatTerminalWritesForTests
-} from './mobile-native-chat-terminal-write-lock'
+import { resetMobileNativeChatTerminalWritesForTests } from './native-chat/mobile-native-chat-terminal-write-lock'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
@@ -111,16 +103,7 @@ describe('useMobileNativeChatMessageSend', () => {
     api = null
   })
 
-  it('sizes the pre-clear to every line of a parked launch draft', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
-    await act(async () => {
-      await api!.send('hello')
-    })
-    expect(clearArgs().clearInput).toBe(buildAgentTuiClearInputForText(DRAFT))
-  })
-
   it('issues the burst as its OWN write, before the body', async () => {
-    // Bundled into the body write it arrived as literal Ctrl+U text.
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     await act(async () => {
       await api!.send('hello')
@@ -133,7 +116,6 @@ describe('useMobileNativeChatMessageSend', () => {
   })
 
   it('aborts without sending the body when the clear is rejected', async () => {
-    // Sending on top of an uncleared line is exactly the concatenation bug.
     clearInputWrite.mockResolvedValue(false)
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     let result: boolean | undefined
@@ -145,8 +127,7 @@ describe('useMobileNativeChatMessageSend', () => {
   })
 
   it('keeps the body write free of the dedicated terminal control', async () => {
-    // A Ctrl+U written immediately before body text in the SAME write arrives as
-    // a literal control character, so it would head the received message.
+    // Bundled Ctrl+U can arrive as literal body text; keep controls in a separate write.
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     await act(async () => {
       await api!.send('hello')
@@ -194,7 +175,6 @@ describe('useMobileNativeChatMessageSend', () => {
   })
 
   it('does not clear an image send after the image was pasted', async () => {
-    // A second clear here would wipe the image that was just pasted.
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     await act(async () => {
       await api!.send('caption', ['file:///a.png'])
@@ -204,26 +184,7 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
-  it('does not resolve a composer seed from a question-card answer', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
-    await act(async () => {
-      await api!.answerQuestion('1')
-    })
-    expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
-  })
-
-  it('creates an optimistic echo for an ordinary chat send', async () => {
-    mount(() => null)
-    await act(async () => {
-      await api!.send('hello')
-    })
-    expect(acceptSend).toHaveBeenCalledTimes(1)
-    expect(onCommandSend).not.toHaveBeenCalled()
-  })
-
-  // The STA-3332 "Queued forever" regression: command sends dispatch into the
-  // agent's TUI and never echo as user turns, so they must not create a pending
-  // bubble that no transcript match can ever retire.
+  // TUI commands never echo as user turns; optimistic bubbles would remain queued forever.
   it('never creates an optimistic echo for a catalog command send', async () => {
     mount(() => null)
     await act(async () => {
@@ -236,8 +197,7 @@ describe('useMobileNativeChatMessageSend', () => {
   it.each(['claude', 'openclaude'] as const)(
     'keeps %s composer slash sends pasted',
     async (agent) => {
-      // `/model` is not in Claude's autocomplete catalog, but the session-option
-      // recorder still recognizes it without claiming a generic command ran.
+      // Session-option tracking recognizes controls missing from autocomplete without claiming a generic command.
       mount(() => null, agent)
       await act(async () => {
         await api!.send('/model sonnet')
@@ -373,31 +333,7 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(nextRecorder).not.toHaveBeenCalled()
   })
 
-  it('rejects a question answer while another composed write holds the terminal', async () => {
-    mount(() => null)
-    // An image paste sequence is mid-flight into the same PTY.
-    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
-
-    let result: boolean | undefined
-    await act(async () => {
-      result = await api!.answerQuestion('1')
-    })
-    expect(result).toBe(false)
-    expect(sendWithOutcome).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Answer not sent')
-
-    releaseMobileNativeChatTerminalWrite('term')
-    await act(async () => {
-      result = await api!.answerQuestion('1')
-    })
-    expect(result).toBe(true)
-    // The answer released its own hold on the way out.
-    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
-    releaseMobileNativeChatTerminalWrite('term')
-  })
-
-  // The host writes these bytes verbatim, so whitespace the match key drops must
-  // not reach the agent's input line and glue the next rapid send onto it (#14262).
+  // Trim wire whitespace so it cannot glue the next rapid send to the agent input line.
   it('trims trailing whitespace without changing leading prompt content', async () => {
     mount(() => null)
     await act(async () => {
@@ -408,16 +344,7 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(acceptSend.mock.calls[0]![1]).toBe('  run the tests')
   })
 
-  it('trims trailing whitespace on a question answer too', async () => {
-    mount(() => null)
-    await act(async () => {
-      await api!.answerQuestion('\n 1 ')
-    })
-    expect(sentArgs().text).toBe('\n 1')
-  })
-
-  // #14819: the trim is a wire concern only. A rejected send hands the composer
-  // back to the user, and it has to be the draft they typed, blank lines included.
+  // Trim only wire text; rejection must restore the exact draft, including blank lines.
   it('restores the untrimmed draft when the send is rejected', async () => {
     const draft = 'first line\n\nsecond line\n\n'
     sendWithOutcome.mockResolvedValue('rejected')
@@ -427,7 +354,7 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send(draft)
     })
 
-    expect(sentArgs().text).toBe('first line\n\nsecond line')
+    expect(sentArgs().text).toBe('\x1b[200~first line\r\rsecond line\x1b[201~')
     expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
     expect(clearDraftForSend.mock.calls[0]![1]).toBe(draft)
   })

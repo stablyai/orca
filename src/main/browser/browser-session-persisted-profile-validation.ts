@@ -8,7 +8,7 @@ type PersistedProfileWithUserAgentMode = Record<string, unknown> & {
   readonly userAgentMode: unknown
 }
 
-// Why: validate on-disk profile shape so a tampered JSON file can't inject an arbitrary partition into the will-attach-webview allowlist.
+// Persisted metadata must not add arbitrary partitions to the webview allowlist.
 export function isValidPersistedBrowserSessionProfile(
   profile: unknown,
   activeOrcaProfileId: string
@@ -34,16 +34,13 @@ export function inspectRetiredBrowserSessionProfileUserAgentModes(
   let noticePending = false
   let degraded = false
   for (const profile of profiles) {
-    // Refusing to hydrate an entry is not the same as finding a retired choice: hydrateFromPersisted
-    // already skips it silently, and a notice here would claim an old choice could not be inspected
-    // for a profile that never carried one.
+    // Invalid profiles without a retired choice must not trigger a migration notice.
     if (!isRecord(profile) || !hasPersistedProfileUserAgentMode(profile)) {
       continue
     }
     noticePending = true
     const mode = profile.userAgentMode
-    // Degraded covers both ways the choice is uninspectable: an unreadable mode, and a mode sitting
-    // on an entry we refuse to hydrate, where we cannot say which profile it belonged to.
+    // Unknown modes and unhydratable profiles make the retired choice uninspectable.
     if (
       (mode !== 'clean' && mode !== 'native') ||
       !isValidPersistedBrowserSessionProfile(profile, activeOrcaProfileId)

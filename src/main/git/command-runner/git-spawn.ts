@@ -11,10 +11,6 @@ import { acquireGitAdmission } from './git-subprocess-admission'
 import { classifyGitCommand } from '../../../shared/git-command-classification'
 import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
 
-/**
- * Spawn a git child process. Drop-in replacement for
- * `spawn('git', args, { cwd, stdio, ... })`.
- */
 export type GitSpawnOptions = SpawnOptions & {
   cwd: string
   wslDistro?: string

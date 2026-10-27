@@ -5,7 +5,8 @@ import {
   includesQualifiedSearchRefs,
   projectRepoSearchRefsForClient
 } from './repo-search-ref-projection'
-import { RepoSelector } from '../../../../shared/rpc-contract/github-repo-target-params'
+import { RepoSelector, RepoShow } from '../../../../shared/rpc-contract/github-repo-target-params'
+import { hostQualifiedRepoSelector } from '../../runtime-repo-selector'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
@@ -78,7 +79,12 @@ export const REPO_METHODS = [
     params: ProjectGroupMoveProject,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.moveProjectToGroup(params.repo, params.groupId ?? null, params.order),
+        await context.runtime.moveProjectToGroup(
+          params.repo,
+          params.groupId ?? null,
+          params.order,
+          params.connectionId
+        ),
         context
       )
     })
@@ -127,8 +133,7 @@ export const REPO_METHODS = [
       )
     })
   }),
-  // Why a new method, not a field on repo.add: an old host would strip the field and register the
-  // path on itself instead of on its SSH target. Gated by ssh.target-management.v1.
+  // Use a new ssh.target-management.v1 method: old repo.add would strip the target and register the path locally.
   defineMethod({
     name: 'repo.addRemote',
     permission: 'workspace',
@@ -167,9 +172,12 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.show',
     permission: 'workspace',
-    params: RepoSelector,
+    params: RepoShow,
     handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(await context.runtime.showRepo(params.repo), context)
+      repo: projectRepoVisibilityForClient(
+        await context.runtime.showRepo(hostQualifiedRepoSelector(params.repo, params.repoHostId)),
+        context
+      )
     })
   }),
   defineMethod({

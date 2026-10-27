@@ -1,8 +1,4 @@
-/**
- * #13071: a project id can exist on several hosts. Removing one host's project must
- * never resolve the bare id to another host's row (the unique-candidate or
- * focused-host fallback), or the other host's live project is destroyed.
- */
+// Require exact host row on removal: unique-candidate/focused fallbacks can destroy the other host’s same-ID project (#13071).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
@@ -16,6 +12,18 @@ import { purgeOrphanedRuntimeSshProjects } from './worktrees/teardown/orphaned-r
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const baseRepo: Repo = {
   id: 'same-repo',
@@ -204,14 +212,24 @@ describe('project removal stays on its owner host (#13071)', () => {
           })
         ]
       },
+      // Main loads the tab bar through its group, so the group record must hold both tabs.
+      groupsByWorktree: {
+        [worktreeId]: [
+          { id: 'g', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1', '/work/same/a.ts'] }
+        ]
+      },
       terminalLayoutsByTabId: { 'tab-1': makeLayout() },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
       activeTabId: 'tab-1',
       openFiles: [makeOpenFile({ id: '/work/same/a.ts', worktreeId })],
       activeFileIdByWorktree: { [worktreeId]: '/work/same/a.ts' }
     })
+    const main = await drawTabsFromMain(store)
 
     await store.getState().removeProject('same-repo', { hostId: 'local' })
+    // A layout-owner build closes the editor tab in main; its frame drops the tab.
+    await main.settle()
+    main.close()
 
     const state = store.getState()
     expect(state.worktreesByRepo['same-repo']).toEqual([sshTwin])

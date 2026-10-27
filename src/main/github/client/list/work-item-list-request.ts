@@ -84,7 +84,7 @@ export function buildWorkItemListRequest(args: {
     }
   }
 
-  // Why: search/issues omits the PR fields the Tasks columns need; use gh's rich PR list on a stable created sort.
+  // Rich PR fields require gh pr list; align its creation sort with numbered issue searches.
   searchParts.push(WORK_ITEM_NUMBER_SORT_QUALIFIER)
   const out = [
     'pr',
@@ -101,7 +101,7 @@ export function buildWorkItemListRequest(args: {
   return { args: out, offset: (page - 1) * limit }
 }
 
-// Why: shared shape so listWorkItems can lift per-side errors (#1076 silent wrongness) into the IPC envelope — a swallowed side reads as end-of-data to pagination (#11485).
+// Carry per-source failures through IPC so pagination cannot mistake them for end-of-data.
 export type PartialWorkItemsResult = {
   items: MainWorkItem[]
   issuesError?: ClassifiedError
@@ -116,7 +116,7 @@ export function assertSshRepoHasResolvedGitHubSource(args: {
   if (!args.connectionId || args.issueOwnerRepo || args.prOwnerRepo) {
     return
   }
-  // Why: SSH repo paths are remote-only, so without a resolved owner/repo gh would query local state.
+  // SSH-only paths cannot let gh infer a local repository.
   throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
 }
 
@@ -126,9 +126,7 @@ export type ResolvedPrWorkItemSource = {
   upstreamCandidate: OwnerRepo | null
 }
 
-// Why: only an explicit `origin` preference is origin-only; `upstream`/`auto`/
-// undefined keep the multi-candidate probe ordered upstream-first, matching
-// resolvePrWorkItemSource list semantics.
+/** Only explicit origin is origin-only; other preferences retain upstream-first candidate resolution. */
 export async function resolvePrWorkItemSource(
   repoPath: string,
   preference: IssueSourcePreference | undefined,
@@ -140,9 +138,7 @@ export async function resolvePrWorkItemSource(
     connectionId,
     localGitOptions
   )
-  // Why: PR list/count polling must not spawn a failing upstream lookup on
-  // origin-only clones, while still preserving upstream-first resolution when
-  // the remote is configured or remote discovery fails open.
+  // Skip known-absent upstreams; unknown remote discovery remains fail-open.
   const upstreamCandidatePromise = shouldProbeGitRemote(
     repoPath,
     'upstream',
@@ -157,9 +153,7 @@ export async function resolvePrWorkItemSource(
     originCandidatePromise,
     upstreamCandidatePromise
   ])
-  // Why: fork-contribution PRs live on the upstream repo (the fork's own PR
-  // list is almost always empty), so 'auto' resolves upstream-first exactly
-  // like the issue side. Only an explicit 'origin' pick pins PRs to the fork.
+  // Fork contribution PRs live upstream; explicit origin alone selects the fork namespace.
   const source = preference === 'origin' ? originCandidate : (upstreamCandidate ?? originCandidate)
   return { source, originCandidate, upstreamCandidate }
 }

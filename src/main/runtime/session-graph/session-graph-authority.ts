@@ -1,6 +1,8 @@
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as ResolveBrowserNetworkExecutionHostForWorktreeMethods } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithHasTerminalsForWorktree } from './session-graph-reload-lifecycle'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import {
   assertFolderWorkspacePathUsable,
@@ -25,6 +27,7 @@ import {
   isDesktopBrowserBridgeHostEnabled
 } from '../desktop-browser-bridge/desktop-browser-bridge-registry'
 import { runtimeBrowserCommandsFactoryIsAvailable } from '../runtime-browser-commands-factory'
+import { hasPairedPageHost } from '../browser/browser-client-page-opening'
 import { resolveRemoteCliBrowserScopeSelector } from '../desktop-browser-bridge/remote-cli-browser-scope'
 import type { RpcContext } from '../rpc/core'
 
@@ -74,6 +77,10 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.rejectAllWaiters('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      this.headlessGraphFallbackAvailable = true
+      startedMainTerminalSurfaces(this)?.republish({ force: true })
+    }
   }
 
   assertGraphReady(): void {
@@ -163,26 +170,12 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
       : this.resolveWorktreeSelector(selector)
   }
 
-  /**
-   * Closes the window in which snapshots warn that this client's client-hosted pages are still
-   * unaccounted for. Keyed by paired device because one client attaching says nothing about another.
-   */
+  /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */
   markClientHostedPagesReconciled(pairedDeviceId: string): void {
     this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
   }
 
-  /**
-   * The execution-host key a client-hosted page in this workspace would be created under now.
-   *
-   * Adoption cannot reuse the key an inventory entry reports: native and WSL keys name the runtime
-   * that minted them, and an SSH key carries a per-process provider epoch, so a restart always
-   * invalidates them.
-   *
-   * The two failure modes are not the same answer. A workspace that no longer resolves is gone and
-   * its pages have nothing left to be restored into; an execution host that is merely not up yet --
-   * an SSH provider mid-reconnect, a project runtime still repairing -- is a "not now", and must
-   * never be read as permission to retire the page.
-   */
+  /** Resolve the current host key; native/WSL runtime ids and SSH provider epochs expire on restart. Missing workspaces are gone; reconnect/repair is temporary and never authorizes page retirement. */
   async resolveBrowserExecutionHostKeyForWorkspace(
     workspaceId: string
   ): Promise<BrowserExecutionHostKeyResolution> {
@@ -231,7 +224,11 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
       signal: context.signal,
       hostEnabled: isDesktopBrowserBridgeHostEnabled(),
       registry: getDesktopBrowserBridgeRegistry(this),
-      localBrowserAvailable: runtimeBrowserCommandsFactoryIsAvailable(),
+      // This runtime lists/retires desktop-hosted pages even while their desktop is gone, so those commands need no bridge.
+      localBrowserAvailable:
+        runtimeBrowserCommandsFactoryIsAvailable() ||
+        getRuntimeBrowserPageRegistry(this).listPages().length > 0 ||
+        hasPairedPageHost({ getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this) }),
       resolveWorkspace: (selector) => this.resolveBrowserWorkspace(selector)
     })
   }

@@ -63,22 +63,29 @@ describePostgres('PostgreSQL counter write committed in the same round trip', ()
 
   it('commits the earlier statements and the counter together in one message', async () => {
     const sent = vi.spyOn(pg.Client.prototype, 'query')
-    let messagesForCommit = 0
-    const result = await database.transaction(async (transaction) => {
-      await transaction.query(`INSERT INTO ${table}_log (id, note) VALUES (?, ?)`, ['a', 'x'])
-      const before = sent.mock.calls.length
-      const committed = await commitWithFinalWrite(transaction, counterUpdate, counterParams("it's", 1))
-      messagesForCommit = sent.mock.calls.length - before
-      return committed
-    })
-    const texts = sent.mock.calls.map(([text]) => String(text))
-    sent.mockRestore()
-    expect(result).toBe(true)
-    expect(messagesForCommit).toBe(1)
-    expect(texts.filter((text) => text === 'COMMIT')).toEqual([])
-    expect(texts.at(-1)).toMatch(/; COMMIT$/)
-    expect(await counter("it's")).toBe(1)
-    expect(await logged()).toBe(1)
+    try {
+      let messagesForCommit = 0
+      const result = await database.transaction(async (transaction) => {
+        await transaction.query(`INSERT INTO ${table}_log (id, note) VALUES (?, ?)`, ['a', 'x'])
+        const before = sent.mock.calls.length
+        const committed = await commitWithFinalWrite(
+          transaction,
+          counterUpdate,
+          counterParams("it's", 1)
+        )
+        messagesForCommit = sent.mock.calls.length - before
+        return committed
+      })
+      const texts = sent.mock.calls.map(([text]) => String(text))
+      expect(result).toBe(true)
+      expect(messagesForCommit).toBe(1)
+      expect(texts.filter((text) => text === 'COMMIT')).toEqual([])
+      expect(texts.at(-1)).toMatch(/; COMMIT$/)
+      expect(await counter("it's")).toBe(1)
+      expect(await logged()).toBe(1)
+    } finally {
+      sent.mockRestore()
+    }
   })
 
   it('rolls back over cap and lets the caller read the row outside the transaction', async () => {
@@ -113,34 +120,45 @@ describePostgres('PostgreSQL counter write committed in the same round trip', ()
     expect(await logged()).toBe(0)
   })
 
-  it('retries a deadlock or lock timeout raised by the fused message and commits once', async () => {
+  it('retries a deadlock raised by the fused message and commits once', async () => {
+    const sequence = `${table}_retry_sequence`
+    const trigger = `${table}_retry_trigger`
+    const fn = `${table}_retry`
     let attempts = 0
-    let theirAttempts = 0
-    let otherHolds!: () => void
-    const otherHolding = new Promise<void>((resolve) => (otherHolds = resolve))
-    let ourHold!: () => void
-    const weHold = new Promise<void>((resolve) => (ourHold = resolve))
-    const theirs = other.transaction(async (transaction) => {
-      theirAttempts += 1
-      await transaction.query(`UPDATE ${table} SET n = n WHERE id = 'b'`)
-      otherHolds()
-      await weHold
-      // Waits for 'a', which the first attempt below holds: one side deadlocks.
-      await transaction.query(`UPDATE ${table} SET n = n WHERE id = 'a'`)
-    }, { reportRetries: false })
-    const ours = database.transaction(async (transaction) => {
-      attempts += 1
-      await transaction.query(`UPDATE ${table} SET n = n WHERE id = 'a'`)
-      await otherHolding
-      ourHold()
-      return await commitWithFinalWrite(transaction, counterUpdate, counterParams('b', 1))
-    }, { reportRetries: false })
-    const [mine, their] = await Promise.allSettled([ours, theirs])
-    // Whichever side PostgreSQL picks as the victim retries and then succeeds.
-    expect(mine.status).toBe('fulfilled')
-    expect(their.status).toBe('fulfilled')
-    expect(await counter('b')).toBe(1)
-    expect(attempts + theirAttempts).toBeGreaterThanOrEqual(3)
+    try {
+      await admin.query(`CREATE SEQUENCE ${sequence}`)
+      await admin.query(`CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF nextval('${sequence}') = 1 THEN
+            RAISE EXCEPTION 'injected fused deadlock' USING ERRCODE = '40P01';
+          END IF;
+          RETURN NEW;
+        END $$`)
+      await admin.query(`CREATE TRIGGER ${trigger} BEFORE UPDATE ON ${table}
+        FOR EACH ROW EXECUTE FUNCTION ${fn}()`)
+      const result = await database.transaction(
+        async (transaction) => {
+          attempts += 1
+          await transaction.query(`INSERT INTO ${table}_log (id, note) VALUES (?, ?)`, [
+            'a',
+            'retry'
+          ])
+          return await commitWithFinalWrite(transaction, counterUpdate, counterParams('a', 1))
+        },
+        { reportRetries: false }
+      )
+      expect(result).toBe(true)
+      expect(attempts).toBe(2)
+      expect(await counter('a')).toBe(1)
+      expect(await logged()).toBe(1)
+      expect(
+        Number((await admin.query(`SELECT last_value FROM ${sequence}`)).rows[0].last_value)
+      ).toBe(2)
+    } finally {
+      await admin.query(`DROP TRIGGER IF EXISTS ${trigger} ON ${table}`)
+      await admin.query(`DROP FUNCTION IF EXISTS ${fn}()`)
+      await admin.query(`DROP SEQUENCE IF EXISTS ${sequence}`)
+    }
   }, 20_000)
 
   it('retries a lock timeout raised by the fused message', async () => {
@@ -165,6 +183,8 @@ describePostgres('PostgreSQL counter write committed in the same round trip', ()
 
   it('never retries when the connection is lost under the fused message', async () => {
     let attempts = 0
+    let pid: number | undefined
+    let rejected: Promise<void> | undefined
     const blocker = new pg.Client({ connectionString: databaseUrl })
     await blocker.connect()
     try {
@@ -172,21 +192,40 @@ describePostgres('PostgreSQL counter write committed in the same round trip', ()
       await blocker.query(`SELECT n FROM ${table} WHERE id = 'a' FOR UPDATE`)
       const ours = database.transaction(async (transaction) => {
         attempts += 1
-        const pid = Number((await transaction.query('SELECT pg_backend_pid() AS pid'))[0]!.pid)
-        // Ends the backend while the fused message waits on the row lock.
-        setTimeout(() => {
-          void admin.query('SELECT pg_terminate_backend($1)', [pid])
-        }, 200)
+        pid = Number((await transaction.query('SELECT pg_backend_pid() AS pid'))[0]!.pid)
         return await commitWithFinalWrite(transaction, counterUpdate, counterParams('a', 1))
       })
-      await expect(ours).rejects.toThrow()
+      rejected = expect(ours).rejects.toMatchObject({ code: '57P01' })
+      await expect
+        .poll(
+          async () => {
+            if (pid === undefined) {
+              return false
+            }
+            const rows = await admin.query(
+              `SELECT 1 FROM pg_stat_activity
+          WHERE pid = $1 AND wait_event_type = 'Lock' AND query LIKE '%; COMMIT'`,
+              [pid]
+            )
+            return rows.rowCount === 1
+          },
+          { timeout: 2_000, interval: 10 }
+        )
+        .toBe(true)
+      expect(
+        (await admin.query('SELECT pg_terminate_backend($1) AS terminated', [pid])).rows
+      ).toEqual([{ terminated: true }])
+      await rejected
     } finally {
-      await blocker.query('ROLLBACK').catch(() => undefined)
-      await blocker.end()
+      try {
+        await blocker.query('ROLLBACK')
+      } finally {
+        await blocker.end()
+        await rejected
+      }
     }
     expect(attempts).toBe(1)
     expect(await counter('a')).toBe(0)
-    // The pool still serves after dropping the dead client.
     await expect(database.query('SELECT 1 AS one')).resolves.toEqual([{ one: 1 }])
   }, 20_000)
 

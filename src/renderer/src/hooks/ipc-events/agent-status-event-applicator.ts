@@ -1,22 +1,19 @@
-import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import {
-  resolveAgentStatusIdentity,
-  shouldSuppressInheritedTerminalStatus
-} from '../../../../shared/agent-status-identity'
+import { pickHostTurnEnd, type AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { normalizeProgramStatusFacet } from '../../../../shared/program-status/facet'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { track } from '@/lib/telemetry'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
-import type { AgentStatusBatchUpdate, AgentStatusUpdate } from '@/store/slices/agent-status'
+import type { AgentStatusUpdate } from '@/store/slices/agent-status/agent-status-contract'
 import { observeAgentHookCompletionForNotification } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
 import {
   applyResolvedAgentTerminalTitleToTab,
   hasRuntimeBackedWorktreeAttribution,
   isAgentStatusForRecentlyClosedTab,
+  isInheritedFromActivePane,
   isSeenHostReplay,
   resolveHookPayloadAgentType,
   shouldApplyResolvedAgentTerminalTitleToTab
@@ -35,6 +32,11 @@ import {
   normalizeAgentStatusEvent,
   normalizeAgentStatusMetadata
 } from './normalize-agent-status-event'
+import {
+  applyProgramStatusOnlyUpdate,
+  applyProviderSessionOnlyUpdate,
+  foldProgramStatusIntoPendingRows
+} from './agent-status-partial-updates'
 
 export function createAgentStatusEventApplicator(args: {
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
@@ -65,6 +67,7 @@ export function createAgentStatusEventApplicator(args: {
     if (!payload) {
       return 'dropped'
     }
+    const programStatus = normalizeProgramStatusFacet(data.programStatus) ?? null
     // Reuse first-match pane ownership without rescanning every worktree per event.
     const routingIndex = options?.batch?.routingIndex ?? createAgentStatusPaneRoutingIndex(store)
     let {
@@ -104,6 +107,11 @@ export function createAgentStatusEventApplicator(args: {
       }
     }
     if (!exists) {
+      if (data.programStatusOnly === true) {
+        // Why not pend: progress ticks would crowd real rows out of the bounded queue.
+        foldProgramStatusIntoPendingRows(pendingAgentStatusEvents, data.paneKey, programStatus)
+        return 'dropped'
+      }
       if (options?.replay === true) {
         if (data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
           if (options?.retry !== true) {
@@ -119,7 +127,8 @@ export function createAgentStatusEventApplicator(args: {
       }
       return 'pending'
     }
-    if (options?.replay !== true && options?.retry !== true) {
+    // A facet tick does not supersede a pending state row for the pane.
+    if (options?.replay !== true && options?.retry !== true && data.programStatusOnly !== true) {
       for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
         if (pendingAgentStatusEvents[index].data.paneKey === data.paneKey) {
           pendingAgentStatusEvents.splice(index, 1)
@@ -150,38 +159,25 @@ export function createAgentStatusEventApplicator(args: {
       return 'dropped'
     }
     const existingStatus = store.agentStatusByPaneKey[paneKey]
+    if (data.programStatusOnly === true) {
+      // Why after ownership but before staleness: the republished row keeps its old receivedAt.
+      return applyProgramStatusOnlyUpdate(store, options?.batch, paneKey, programStatus)
+    }
     if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
       return 'dropped'
     }
     if (data.providerSessionOnly) {
-      if (!data.providerSession || data.agentType !== 'pi') {
-        return 'dropped'
-      }
-      const providerSessionUpdate: AgentStatusBatchUpdate = {
-        kind: 'providerSession',
+      return applyProviderSessionOnlyUpdate({
+        store,
+        batch: options?.batch,
+        data,
         paneKey,
-        agent: 'pi',
-        providerSession: data.providerSession,
-        timing: { updatedAt: data.receivedAt },
         routing: {
           tabId: ownerTabId,
           worktreeId: data.worktreeId ?? owningWorktreeId,
           ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
-        },
-        metadata: data.launchToken ? { launchToken: data.launchToken } : undefined
-      }
-      if (options?.batch) {
-        return options.batch.transaction.apply(providerSessionUpdate) ? 'applied' : 'dropped'
-      }
-      store.recordAgentProviderSession(
-        providerSessionUpdate.paneKey,
-        providerSessionUpdate.agent,
-        providerSessionUpdate.providerSession,
-        providerSessionUpdate.timing,
-        providerSessionUpdate.routing,
-        providerSessionUpdate.metadata
-      )
-      return 'applied'
+        }
+      })
     }
     const resolvedPayload = resolveHookPayloadAgentType(payload, identityTitle ?? title)
     const statusPayload = data.orchestration
@@ -197,31 +193,13 @@ export function createAgentStatusEventApplicator(args: {
     const statusPayloadWithObservation = data.observation
       ? { ...statusPayloadWithProvenance, observation: data.observation }
       : statusPayloadWithProvenance
-    const identity = resolveAgentStatusIdentity({
-      existing:
-        existingStatus &&
-        sameAgentStatusTerminalOwner(
-          {
-            connectionId: existingStatus.connectionId ?? null,
-            worktreeId: existingStatus.worktreeId
-          },
-          {
-            connectionId:
-              (ownershipConnectionId === undefined
-                ? existingStatus.connectionId
-                : ownershipConnectionId) ?? null,
-            worktreeId: data.worktreeId ?? owningWorktreeId ?? existingStatus.worktreeId
-          }
-        )
-          ? existingStatus
-          : undefined,
-      incoming: statusPayload.agentType,
-      now: data.receivedAt
-    })
+    // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
+    const statusPayloadWithProgramStatus = { ...statusPayloadWithObservation, programStatus }
     if (
       existingStatus &&
-      shouldSuppressInheritedTerminalStatus({
-        inheritedFromActivePane: identity.inheritedFromActivePane
+      isInheritedFromActivePane(existingStatus, data, statusPayload.agentType, {
+        connectionId: ownershipConnectionId,
+        worktreeId: owningWorktreeId
       })
     ) {
       return 'dropped'
@@ -230,7 +208,7 @@ export function createAgentStatusEventApplicator(args: {
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
     const update: AgentStatusUpdate = {
       paneKey,
-      payload: statusPayloadWithObservation,
+      payload: statusPayloadWithProgramStatus,
       terminalTitle,
       timing: {
         updatedAt: data.receivedAt,
@@ -238,7 +216,8 @@ export function createAgentStatusEventApplicator(args: {
           ? { evidenceObservedAt: data.evidenceObservedAt }
           : {}),
         stateStartedAt: data.stateStartedAt,
-        ...(Number.isFinite(data.turnStartedAt) ? { turnStartedAt: data.turnStartedAt } : {})
+        ...(Number.isFinite(data.turnStartedAt) ? { turnStartedAt: data.turnStartedAt } : {}),
+        ...pickHostTurnEnd(data)
       },
       routing: {
         tabId: ownerTabId,
@@ -248,15 +227,16 @@ export function createAgentStatusEventApplicator(args: {
       },
       metadata: normalizeAgentStatusMetadata(data, authorityRestartId)
     }
-    // Why: replays are cached state, so they seed completion tracking unless they carry an unseen done.
+    // Why: replays are cached state, so they seed completion tracking unless they carry an unseen completion.
     const replayed =
       options?.replay === true || isSeenHostReplay(data, resolvedPayload.state, existingStatus)
     const applyPostCommitNotification = (): void => {
       if (statusWorktreeId && (!replayed || resolvedPayload.state === 'working')) {
-        const notificationPayload =
-          typeof data.stateStartedAt === 'number'
-            ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
-            : resolvedPayload
+        const notificationPayload = {
+          ...resolvedPayload,
+          stateStartedAt: data.stateStartedAt,
+          ...pickHostTurnEnd(data)
+        }
         observeAgentHookCompletionForNotification({
           paneKey,
           worktreeId: statusWorktreeId,

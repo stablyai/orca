@@ -18,9 +18,6 @@ type Props = {
   onPress: () => void
 }
 
-// The glanceable PR status line on the branch card. Tapping it switches to the
-// Pull Request segment. Rendered only when the repo supports hosted review — the
-// parent gates on that, so this component always has something meaningful to show.
 export function MobileSourceControlPrChip({ summary, onPress }: Props) {
   return (
     <Pressable

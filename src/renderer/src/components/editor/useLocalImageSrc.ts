@@ -85,24 +85,19 @@ export function getLocalImageSrcCacheKey(
     : null
 }
 
-/**
- * Resolves a raw markdown image src to a displayable URL. For local images,
- * reads the file via IPC and returns a blob URL. For http/https/data URLs,
- * returns the URL directly. Re-validates on window re-focus so deleted or
- * replaced images are picked up.
- */
+/** Resolve local images through IPC/blob URLs and revalidate on refocus; external URLs pass through. */
 export function useLocalImageSrc(
   rawSrc: string | undefined,
   filePath: string,
   connectionId?: string | null,
   runtimeContext?: LocalImageRuntimeContext | null,
-  access?: LocalFileAccess
+  access?: LocalFileAccess,
+  retryKey?: number
 ): string | undefined {
   const [generation, setGeneration] = useState(getLocalImageCacheGeneration())
   const externalSrc =
     rawSrc && runtimeContext !== null && isExternalUrl(rawSrc) ? rawSrc : undefined
-  // Why key effects on the cache key: callers rebuild equal context objects on unrelated store
-  // updates, and re-leasing on each one revoked the URL an <img> was still showing.
+  // Key leases by semantic identity; equal rebuilt context objects must not revoke a still-displayed image URL.
   const cacheKey = getLocalImageSrcCacheKey(rawSrc, filePath, connectionId, runtimeContext, access)
   const readImage = useEffectEvent((): Promise<string | null> => {
     const absolutePath = rawSrc ? resolveImageAbsolutePath(rawSrc, filePath) : null
@@ -156,16 +151,12 @@ export function useLocalImageSrc(
     return () => {
       cancelled = true
     }
-  }, [cacheKey, externalSrc, generation])
+  }, [cacheKey, externalSrc, generation, retryKey])
 
   return displaySrc
 }
 
-/**
- * Loads a local image via IPC and returns its blob URL, suitable for use
- * outside React (e.g. ProseMirror nodeViews). Resolves from cache when
- * available.
- */
+/** Load through the same IPC/blob cache outside React, including ProseMirror node views. */
 export async function loadLocalImageSrc(
   rawSrc: string,
   filePath: string,

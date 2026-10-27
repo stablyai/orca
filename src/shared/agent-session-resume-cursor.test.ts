@@ -5,6 +5,7 @@ import {
   isResumableTuiAgent
 } from './agent-session-resume'
 import { buildAgentResumeStartupPlan } from './tui-agent-startup'
+import { resolveStartupShell, tokenizeStartupCommand } from './tui-agent-startup-shell'
 
 describe('Cursor conversation continuity', () => {
   it('captures only the hook conversation identity', () => {
@@ -39,11 +40,16 @@ describe('Cursor conversation continuity', () => {
         platform,
         agentArgs: '--mode ask'
       })
-      expect(plan?.launchCommand).toContain('custom-cursor')
-      expect(plan?.launchCommand).toContain('conversation-742')
-      expect(plan?.launchCommand).toContain('--resume')
-      expect(plan?.launchCommand).toContain('--mode')
-      expect(plan?.launchCommand).not.toContain('--continue')
+      expect(plan).not.toBeNull()
+      if (!plan) {
+        throw new Error('Missing Cursor resume plan')
+      }
+      expect(
+        tokenizeStartupCommand(plan.launchCommand, resolveStartupShell(platform))
+      ).toMatchObject({
+        ok: true,
+        tokens: ['custom-cursor', '--mode', 'ask', '--resume', 'conversation-742']
+      })
     }
   )
 })

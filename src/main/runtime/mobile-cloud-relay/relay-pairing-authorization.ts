@@ -1,4 +1,4 @@
-import type { MobilePairingConnectionContext } from '../runtime-rpc'
+import type { MobilePairingConnectionContext } from '../runtime-rpc/runtime-rpc-pairing-types'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 
 // Derives install authorization only from immutable connection metadata, never from request params.

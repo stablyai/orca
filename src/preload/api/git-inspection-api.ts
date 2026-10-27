@@ -3,6 +3,7 @@ import type {
   GitCommitCompareResult,
   GitDiffResult
 } from '../../shared/git-diff-compare-types'
+import type { GitMutationInFlight } from '../../shared/git-mutation-in-flight'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -28,6 +29,8 @@ export type GitInspectionApi = {
     /** Merge-base OID to measure the branch line total against; omit to skip the work. */
     branchLineTotalMergeBase?: string
     requestToken?: string
+    /** The active workspace's first status: a user act that may start its WSL distro. */
+    wakeWslDistro?: boolean
   }) => Promise<GitStatusResult>
   cancelStatus: (args: { requestToken: string }) => Promise<void>
   setStatusUpstreamRefWatch: (args: {
@@ -57,6 +60,10 @@ export type GitInspectionApi = {
     worktreePath: string
     connectionId?: string
   }) => Promise<GitConflictOperation>
+  mutationInFlight: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<GitMutationInFlight>
   diff: (args: {
     worktreePath: string
     filePath: string

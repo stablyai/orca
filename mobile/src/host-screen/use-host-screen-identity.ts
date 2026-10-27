@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { getCachedWorktrees } from '../cache/worktree-cache'
 import { loadPinnedIds } from '../storage/preferences'
 import { loadHosts, updateLastConnected } from '../transport/host-store'
@@ -35,9 +36,9 @@ export function useHostScreenIdentity(args: {
     setWorktreesLoaded
   } = state
 
-  // Load persisted pins from local cache; view settings are no longer local (they sync via ui.get).
+  // Cache pins locally only without the feed; view settings come from ui.get.
   useEffect(() => {
-    if (!hostId) {
+    if (!hostId || ORCA_SIDEBAR_INPUTS_IS_MAIN) {
       return
     }
     let stale = false
@@ -53,7 +54,7 @@ export function useHostScreenIdentity(args: {
     }
   }, [hostId])
 
-  // Why: mirror client into a ref so imperative call sites read it without re-subscribing.
+  // Imperative callbacks read the current client without resubscribing.
   useEffect(() => {
     clientRef.current = client
   }, [client])
@@ -73,7 +74,7 @@ export function useHostScreenIdentity(args: {
     setHostPlatform(null)
     setShowPinnedInGroups(false)
     repoMetadataFetchedAtRef.current = 0
-    // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
+    // Expo Router can reuse the screen for a new hostId; reseed because the state initializer runs only once.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
     setCatalogError(null)
     if (freshCache) {

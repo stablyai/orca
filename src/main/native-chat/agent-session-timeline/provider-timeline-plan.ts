@@ -1,9 +1,4 @@
-// One grammar event's journal writes, admitted as one sink transition.
-//
-// What each write says, and whether it writes at all, is decided by its resolver when the
-// transition reaches its turn in the journal's write queue. `onAdmitted` work (the state, text
-// marked written) runs only when the sink takes the transition, so a refused event leaves the
-// assembler exactly as it was and re-applying it is the retry.
+// Resolve rows on the write lane; advance state/text bookkeeping only after admission so refusal is retryable.
 
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type {
@@ -12,7 +7,6 @@ import type {
 } from '../agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire/structured-agent-session-transition'
 
-/** The sink calls the assembler needs: one-operation transitions, and the journal as it stands. */
 export type ProviderTimelineSink = Required<
   Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>
 > &
@@ -38,7 +32,6 @@ export class ProviderTimelinePlan {
     this.lifecycle = true
   }
 
-  /** Runs once the sink takes the transition. */
   onAdmitted(change: () => void): void {
     this.admitted.push(change)
   }
@@ -65,7 +58,6 @@ export class ProviderTimelinePlan {
   }
 }
 
-/** The sink as the assembler needs it; null for a sink without transitions or a journal view. */
 export function providerTimelineSink(
   sink: StructuredAgentSessionEventSink
 ): ProviderTimelineSink | null {

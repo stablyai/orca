@@ -11,7 +11,6 @@ import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runt
 import { NativeChatInstallStrip } from './NativeChatInstallStrip'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 
-/** What a chat's input slot holds for the program its host must install first. */
 export type NativeChatInstallSlotState =
   | { kind: 'none' }
   /** The first status read is out: the composer stays, its sends held until the host answers. */
@@ -28,10 +27,7 @@ export type NativeChatInstallSlotInstall = Extract<NativeChatInstallSlotState, {
 const NONE: NativeChatInstallSlotState = { kind: 'none' }
 const RESERVED: NativeChatInstallSlotState = { kind: 'reserved' }
 
-/** Install shows while the chat's host has nothing to run, its install included, and the composer
- *  stays disabled beneath it; anything runnable, or a status the host could not report, leaves
- *  the composer alone. Until the host says whether it provides the program, the composer stays
- *  usable but sends nothing. */
+/** Reserve unknown readiness with an editable composer and held sends; missing runtimes show installation, while read failures leave it alone. */
 export function useNativeChatInstallSlot(
   props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'isVisible'>,
   agentLabel: string,

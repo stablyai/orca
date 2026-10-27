@@ -1,10 +1,5 @@
-/**
- * Stopping a running orcad on the host without taking its terminals with it.
- *
- * SIGTERM starts one bounded durable shutdown. If it outlasts this wait, preserve the
- * current owner; SIGKILL would skip flushing state and releasing the instance lock.
- */
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+// SIGKILL skips durable shutdown and instance-lock release; preserve owners that outlast the stop wait.
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -22,15 +17,7 @@ import {
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
 
-/**
- * Ask the orcad recorded in a version dir to stop, and wait for it to go.
- *
- * A build whose readiness advertises `health.stopRequests` is asked through the slot-local
- * request file, which only that orcad watches; older builds keep receiving SIGTERM. Both need
- * the readiness PID to corroborate the launcher's PID first, so a reused PID is never stopped.
- * `justLaunched` is only for this client's fixed exec launcher, including pre-readiness exits.
- * Windows has no graceful signal, so it only ever writes the request file.
- */
+/** Corroborate the readiness PID before stopping; justLaunched also covers pre-readiness exits. */
 export function stopOrcadCommand(
   host: RemoteHostPlatform,
   remoteInstallDir: string,
@@ -40,16 +27,18 @@ export function stopOrcadCommand(
   )
 ): string {
   if (isWindowsRemoteHost(host)) {
-    // Windows: stop-request file only; TerminateProcess skips durable shutdown and leaks the instance lock.
+    // Windows termination skips durable shutdown; use the stop-request file.
     return orcadWindowsSlotOpCommand(host, remoteInstallDir, 'stop', [
       remoteInstallDir,
       String(options.waitSeconds),
       options.justLaunched === true ? '1' : '0'
     ])
   }
-  const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
-  const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
-  const requestFile = shellEscape(
+  const pidFile = quotePosixShell(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
+  const readiness = quotePosixShell(
+    joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME)
+  )
+  const requestFile = quotePosixShell(
     joinRemotePath(host, remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME)
   )
   const readRuntimePid = [
@@ -69,7 +58,7 @@ export function stopOrcadCommand(
       ? []
       : [
           `runtime_answer=$(${selectOrcadSlotRuntimeCommand(host, remoteInstallDir, options.nodePath)}; ` +
-            `"$orcad_runtime" -e ${shellEscape(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
+            `"$orcad_runtime" -e ${quotePosixShell(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
           '[ "$pid" = "${runtime_answer%%:*}" ] || { echo UNKNOWN; exit 0; };',
           'stop_mode=${runtime_answer#*:};'
         ]),
@@ -92,11 +81,11 @@ export type OrcadStopOutcome =
   | 'no-pid'
   | 'still-running'
   | 'signal-failed'
-  /** Windows only: the build cannot be asked to stop, and terminating it would skip shutdown. */
+  /** Windows build lacks graceful stop support. */
   | 'unsupported'
-  /** Explicitly unknown before any stop was sent: nothing happened. */
+  /** Proven unknown before sending a stop. */
   | 'unknown'
-  /** Unknown or unparseable once a stop may have been sent: the host may still be changing. */
+  /** A stop may have been sent; the host may still be changing. */
   | 'unconfirmed'
 
 export function parseOrcadStopOutcome(output: string): OrcadStopOutcome {
@@ -126,7 +115,6 @@ export function parseOrcadStopOutcome(output: string): OrcadStopOutcome {
   }
 }
 
-/** True when the port is free and a successor may bind. */
 export function orcadStopFreedTheHost(outcome: OrcadStopOutcome): boolean {
   return outcome === 'stopped' || outcome === 'already-exited'
 }

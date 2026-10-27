@@ -1,16 +1,10 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import { completeWorkerTerminalRelease } from './worker-release-completion'
 
-/**
- * A `--retry-of` start replaces a failed attempt, so the terminal that attempt still owns goes
- * through the same release as `worker-release`: output archived, a user takeover kept, and a
- * release cut short by a restart finished by recovery. Without it every retry of a failed start
- * left one more live agent behind.
- *
- * Cleanup only: the retry neither waits on it nor fails because of it.
- */
+/** Release the failed attempt's terminal on retry-of: archive output, preserve user takeover and retain interrupted cleanup for recovery.
+ * Best-effort only; cleanup never blocks or fails the new start. */
 export function releaseRetriedWorkerTerminal(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,

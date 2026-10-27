@@ -1,12 +1,10 @@
-import type { ExecutionHostId } from '../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
+import type { Repo } from '../shared/repo-types'
 import { deriveGitRemoteIdentity, type GitRemoteIdentity } from '../shared/git-remote-identity'
 import { gitExecFileAsync } from './git/runner'
 import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
 
-// Why: the runner only arms its kill timer when a timeout is passed, so an unbounded local probe
-// never settles on a hung NFS/SMB cwd (the path walk blocks) or a wedged `wsl.exe -d <distro>`.
-// Matches the background local-git-read budget in git/git-username.ts; a probe cut off early just
-// reports `unavailable` and retries on the enrichment TTL.
+// Bound probes on hung network mounts or WSL; timeouts remain unavailable and retry later.
 const LOCAL_PROBE_TIMEOUT_MS = 5000
 
 export type GitRemoteIdentityProbeOptions = {
@@ -14,24 +12,20 @@ export type GitRemoteIdentityProbeOptions = {
   timeoutMs?: number
 }
 
-/** `no-remote` means git answered and the repo has no usable remote;
- *  `unavailable` means the probe never reached git (host down, SSH not up
- *  yet, git error) and says nothing about the repo. */
+/** no-remote proves absence; unavailable leaves the repo identity unknown. */
 export type GitRemoteIdentityProbe =
   | { status: 'resolved'; identity: GitRemoteIdentity }
   | { status: 'no-remote' }
   | { status: 'unavailable' }
 
-/** Runs a read-only git command in `repoPath` on the host that owns it, bounded by the probe
- *  timeouts. Resolves null when this process has no route to that host's git; throws on git errors. */
+/** Resolves null for unserved hosts; git errors reject. */
 export async function runGitProbeOnHost(
   args: string[],
   repoPath: string,
   executionHostId: ExecutionHostId,
   options: GitRemoteIdentityProbeOptions = {}
 ): Promise<{ stdout: string } | null> {
-  // A runtime server runs its own git (its repo row's SSH target is nested in that server's
-  // namespace), and this process serves no `ssh:` host.
+  // Runtime and SSH targets must not fall back to this machine's git.
   if (resolveGitRouteForHost(executionHostId).kind !== 'local') {
     return null
   }
@@ -48,8 +42,7 @@ export async function probeGitRemoteIdentity(
   options: GitRemoteIdentityProbeOptions = {}
 ): Promise<GitRemoteIdentityProbe> {
   try {
-    // Inside the try on purpose: an id naming no host must land on `unavailable` like every other
-    // probe that never reached git. It must never become the local answer for a remote path.
+    // Route errors also mean unavailable, never a local answer for a remote path.
     const result = await runGitProbeOnHost(['remote', '-v'], repoPath, executionHostId, options)
     if (!result) {
       return { status: 'unavailable' }
@@ -57,8 +50,7 @@ export async function probeGitRemoteIdentity(
     const identity = deriveGitRemoteIdentity(result.stdout)
     return identity ? { status: 'resolved', identity } : { status: 'no-remote' }
   } catch {
-    // Repo creation must not fail because a best-effort remote probe failed. A timeout or an abort
-    // lands here too, and must stay `unavailable`: only `no-remote` may clear a resolved identity.
+    // Probe failures must not fail repo creation or clear a known identity.
     return { status: 'unavailable' }
   }
 }
@@ -70,4 +62,18 @@ export async function detectGitRemoteIdentity(
 ): Promise<GitRemoteIdentity | null> {
   const probe = await probeGitRemoteIdentity(repoPath, executionHostId, options)
   return probe.status === 'resolved' ? probe.identity : null
+}
+
+export async function readCurrentGitRemoteIdentity(
+  repo: Pick<Repo, 'path' | 'kind' | 'gitRemoteIdentity'>
+): Promise<Pick<Repo, 'gitRemoteIdentity'>> {
+  if (repo.kind === 'folder') {
+    return { gitRemoteIdentity: null }
+  }
+  // Both setup paths register files in this process.
+  const probe = await probeGitRemoteIdentity(repo.path, LOCAL_EXECUTION_HOST_ID)
+  if (probe.status === 'resolved') {
+    return { gitRemoteIdentity: probe.identity }
+  }
+  return { gitRemoteIdentity: probe.status === 'no-remote' ? null : repo.gitRemoteIdentity }
 }

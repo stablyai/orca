@@ -25,6 +25,11 @@ function before(relPath, prefixes) {
   }
   return false
 }
+for (const predicate of [before, after]) {
+  assert.equal(predicate('packages/app', ['packages/app']), true)
+  assert.equal(predicate('packages/app/file.ts', ['packages/app']), true)
+  assert.equal(predicate('packages/app2/file.ts', ['packages/app']), false)
+}
 const files = Array.from(
   { length: 100000 },
   (_, index) => `src/components/group-${index % 100}/file-${index}.tsx`

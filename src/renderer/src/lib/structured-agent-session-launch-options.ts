@@ -3,8 +3,11 @@ import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
 } from '../../../shared/agent-session-wire'
-import { STRUCTURED_LAUNCH_OPTION_IDS } from '../../../shared/native-chat-session-option-defaults'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'
+import {
+  STRUCTURED_LAUNCH_OPTION_IDS,
+  structuredLaunchCompatibleOptions,
+  structuredLaunchRequestedOptions
+} from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
@@ -15,26 +18,46 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionLaunchCancelledError,
   type StructuredAgentLaunchReceipt
-} from './structured-agent-session-launch-recovery'
+} from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners,
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
   type AgentSessionWriteFailure
 } from '../../../shared/agent-session-write-failure'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
+import {
+  structuredAgentSessionModelOffers,
+  type StructuredAgentSessionOptionState
+} from '../../../shared/structured-agent-session-options'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
   /** What the host runs as far as the launch knows: the create seed, then each accepted pick. */
   seed?: Readonly<Record<string, string>>
+  /** Read-only projection of durable action input; held contains only subsequent edits. */
+  explicit?: Readonly<Record<string, string>>
   /** Encoded picks made before publish; the launch applies them before it publishes. */
   held: Readonly<Record<string, string>>
+  /** A paired server has not yet said what create seeds, so nothing can be picked against it. */
+  seedPending?: true
+}
+
+export function initialStructuredLaunchSelection(
+  intent: StructuredAgentSessionLaunchIntent
+): StructuredLaunchSelection {
+  return {
+    seed: intent.seedOptions,
+    ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),
+    held: {},
+    ...(intent.target.kind !== 'local' && !intent.seedOptions ? { seedPending: true } : {})
+  }
 }
 
 export type StructuredLaunchOptionOutcome =
@@ -55,30 +78,33 @@ function repliesFor(state: StructuredLaunchState): Map<string, OptionReply> {
   return replies
 }
 
-/**
- * Records a pick made while the launch has no fence to send it against. Null once the launch
- * has published or is gone: the pick then goes through the session like any other.
- */
+/** Hold picks only before publication; published/missing launches use the normal session option path. */
 export function holdStructuredAgentSessionLaunchOption(
   sessionId: string,
   id: string,
-  encoded: string
+  encoded: string,
+  /** The picker's list, under which a model pick keeps only the held values the model offers. */
+  picker?: Pick<StructuredAgentSessionOptionState, 'catalog' | 'verifiedModelIds'>
 ): Promise<StructuredLaunchOptionOutcome> | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state || state.cancelled || state.callers.outcome === 'published') {
     return null
   }
+  if (state.selection.seedPending) {
+    return null
+  }
   const replies = repliesFor(state)
-  const held = { ...state.selection.held }
-  // A model pick drops picks held under the model it replaces; the permission mode is the chat's.
-  const dropped =
-    id === 'model'
-      ? Object.keys(held).filter((key) => key !== AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
-      : [id]
-  for (const key of dropped) {
-    replies.get(key)?.({ kind: 'superseded' })
-    replies.delete(key)
-    delete held[key]
+  const held: Record<string, string> = {}
+  // Each held value is the chat's own: a pick supersedes an earlier pick of the same option.
+  for (const [key, value] of Object.entries(state.selection.held)) {
+    const offered =
+      id !== 'model' || !picker || structuredAgentSessionModelOffers(picker, encoded, key, value)
+    if (key !== id && offered) {
+      held[key] = value
+    } else {
+      replies.get(key)?.({ kind: 'superseded' })
+      replies.delete(key)
+    }
   }
   state.selection = { ...state.selection, held: { ...held, [id]: encoded } }
   notifyStructuredLaunchListeners()
@@ -136,6 +162,7 @@ function settleHeldOption(
   // A pick made while this one was in flight superseded it and stays held for the next pass.
   const settled = current === encoded
   state.selection = {
+    explicit: state.selection.explicit,
     seed: outcome.kind === 'accepted' ? { ...seed, ...outcome.options } : seed,
     held: settled ? rest : state.selection.held
   }
@@ -148,21 +175,70 @@ function settleHeldOption(
   state.callers.onSettled()
 }
 
-/** Selections included in the durable create are already the host's option intent. */
+/** Old hosts configure the known chat before submitting; Fast keeps saved-preference admission. */
+export async function applyStructuredLaunchExplicitOptions(
+  state: StructuredLaunchState,
+  receipt: StructuredAgentLaunchReceipt
+): Promise<StructuredAgentLaunchReceipt> {
+  const requested = structuredLaunchRequestedOptions({
+    explicit: state.selection.explicit,
+    held: state.selection.held
+  })
+  if (!requested) {
+    return applyStructuredLaunchHeldOptions(state, receipt)
+  }
+  const compatible = structuredLaunchCompatibleOptions(state.intent.agent, requested)
+  const entries = Object.entries(compatible).sort(([a], [b]) =>
+    a === 'model' ? -1 : b === 'model' ? 1 : 0
+  )
+  for (const [id, encoded] of entries) {
+    if (state.cancelled) {
+      throw new StructuredAgentSessionLaunchCancelledError()
+    }
+    if (id === 'fastMode' && state.selection.held[id] === undefined) {
+      continue
+    }
+    const outcome = await setLaunchOption(
+      state.intent.target,
+      receipt.sessionId,
+      receipt.fence,
+      id,
+      encoded
+    )
+    settleHeldOption(state, id, encoded, outcome)
+    if (outcome.kind === 'refused' && requested[id] !== undefined) {
+      for (const [key, value] of Object.entries(state.selection.held)) {
+        settleHeldOption(state, key, value, outcome)
+      }
+      return { ...receipt, configurationFailure: outcome.failure }
+    }
+  }
+  return applyStructuredLaunchHeldOptions(state, receipt)
+}
+
+const createHeld = new WeakMap<StructuredLaunchState, Readonly<Record<string, string>>>()
+
+/** The held picks this create attempt carries, in whatever form it carries them. */
+export function holdStructuredLaunchCreatePicks(
+  state: StructuredLaunchState,
+  held: Readonly<Record<string, string>>
+): void {
+  createHeld.set(state, held)
+}
+
+// Durable-create picks already count as host intent; settle carried values while retaining newer choices.
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
   options: Readonly<Record<string, string>>
 ): void {
-  for (const [id, encoded] of Object.entries(options)) {
+  const carried = { ...options, ...createHeld.get(state) }
+  createHeld.delete(state)
+  for (const [id, encoded] of Object.entries(carried)) {
     settleHeldOption(state, id, encoded, { kind: 'accepted', options })
   }
 }
 
-/**
- * Applies the picks held during launch against the create receipt's fence, model first so an
- * effort lands under the model it was picked against, until none is left. A refused pick is
- * reported to its picker and never keeps the launch from publishing.
- */
+/** Apply held picks against the create fence until drained, model before effort. Report refusals to pickers without blocking launch publication. */
 export async function applyStructuredLaunchHeldOptions(
   state: StructuredLaunchState,
   receipt: StructuredAgentLaunchReceipt

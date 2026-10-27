@@ -2,7 +2,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { LEGACY_TAB_SWITCH_BINDINGS } from '../../shared/keybindings'
+import {
+  getEffectiveKeybindingsForAction,
+  LEGACY_TAB_SWITCH_BINDINGS
+} from '../../shared/keybindings'
 import {
   getUserKeybindingsPath,
   migrateLegacyKeybindings,
@@ -22,6 +25,56 @@ describe('keybinding-file', () => {
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('roundtrips old arrays, new claims, explicit conflicts, masks/reset and pruning', () => {
+    const toggle = 'terminal.toggleNativeChat'
+    const navigation = 'worktree.navigateDown'
+    const aliases = ['Mod+Shift+J', 'Mod+Alt+Y']
+    const seed = (value: unknown) => writeFileSync(filePath, JSON.stringify(value))
+    const effective = () =>
+      getEffectiveKeybindingsForAction(
+        toggle,
+        'darwin',
+        readKeybindingFile(filePath, 'darwin').overrides
+      )
+    writeKeybindingOverride(filePath, 'darwin', navigation, aliases)
+    expect(effective()).toEqual([])
+    seed({ keybindings: { [navigation]: aliases } })
+    expect(readKeybindingFile(filePath, 'darwin').overrides).toEqual({ [navigation]: aliases })
+    writeKeybindingOverride(filePath, 'darwin', navigation, [])
+    expect(effective()).toEqual(['Mod+Shift+J'])
+    writeKeybindingOverride(filePath, 'darwin', toggle, [])
+    expect(effective()).toEqual([])
+    writeKeybindingOverride(filePath, 'darwin', toggle, null)
+    expect(effective()).toEqual(['Mod+Shift+J'])
+    writeKeybindingOverride(filePath, 'darwin', navigation, null)
+    expect(effective()).toEqual([])
+    expect(() => writeKeybindingOverride(filePath, 'darwin', toggle, aliases)).toThrow('conflicts')
+    seed({
+      version: 1,
+      keybindings: { [navigation]: ['Mod+Alt+Y'], [toggle]: ['Mod+Alt+Y'] },
+      platforms: { darwin: { [navigation]: [] } }
+    })
+    const unchanged = readFileSync(filePath, 'utf8')
+    expect(() => writeKeybindingOverride(filePath, 'darwin', navigation, null)).toThrow('conflicts')
+    expect(readFileSync(filePath, 'utf8')).toBe(unchanged)
+    seed({ keybindings: { [navigation]: ['Mod+Shift+J', 'Mod+P'] } })
+    expect(readKeybindingFile(filePath, 'darwin').overrides).toEqual({})
+    expect(effective()).toEqual(['Mod+Shift+J'])
+    seed({ keybindings: { 'worktree.palette': aliases } })
+    expect(
+      writeKeybindingOverride(filePath, 'win32', 'worktree.palette', aliases).overrides[
+        'worktree.palette'
+      ]
+    ).toEqual(aliases)
+    expect(
+      getEffectiveKeybindingsForAction(
+        toggle,
+        'win32',
+        readKeybindingFile(filePath, 'win32').overrides
+      )
+    ).toEqual(['Mod+Shift+J'])
   })
 
   it('resolves the user-facing keybindings path under ~/.orca', () => {
@@ -265,7 +318,6 @@ describe('keybinding-file', () => {
       'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
       'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
     })
-    // Effective bindings reproduce the pre-swap behavior with no conflicts dropped.
     expect(snapshot.overrides).toMatchObject({
       'tab.nextSameType': ['Mod+Shift+BracketRight'],
       'tab.nextAllTypes': ['Mod+Alt+BracketRight']
@@ -274,8 +326,7 @@ describe('keybinding-file', () => {
   })
 
   it('preserves a customized action while still pinning the un-customized ones', () => {
-    // A partially-customized existing user: they rebound one action. The other
-    // three must still land on their pre-swap defaults, not the new ones.
+    // Pin unchanged actions even when the user customized only one.
     writeKeybindingOverride(filePath, 'darwin', 'tab.nextSameType', ['Mod+Alt+K'])
 
     const result = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
@@ -290,10 +341,7 @@ describe('keybinding-file', () => {
   })
 
   it('preserves pre-swap customizations that conflict only with the new defaults', () => {
-    // This was valid before the swap: moving nextSameType to Mod+K freed its
-    // old Shift+] chord for previousSameType. The new registry temporarily
-    // assigns Shift+] to nextAllTypes, but the seed must not mistake the
-    // resulting conflict for an absent user override and replace it.
+    // Inspect raw overrides: new defaults can make a valid pre-swap custom chord appear conflicting.
     writeFileSync(
       filePath,
       JSON.stringify({
@@ -322,8 +370,7 @@ describe('keybinding-file', () => {
   })
 
   it('is a no-op once every swapped action already resolves on this platform', () => {
-    // Seeding writes the whole document at once, so it clears the per-write
-    // conflict guard that a naive one-action-at-a-time write would trip.
+    // Seed atomically so per-action conflict guards cannot reject valid pre-swap chords.
     const first = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
     expect(first.seeded).toBe(true)
     expect(first.snapshot.diagnostics).toEqual([])
@@ -333,8 +380,7 @@ describe('keybinding-file', () => {
   })
 
   it('does not let a foreign-platform override block the active-platform pin', () => {
-    // Only linux is customized; a darwin launch must still pin darwin so the
-    // active platform keeps the pre-swap behavior.
+    // Only active-platform customizations affect whether its actions need pins.
     writeKeybindingOverride(filePath, 'linux', 'tab.nextAllTypes', ['Mod+Alt+K'])
 
     const result = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
@@ -355,7 +401,6 @@ describe('keybinding-file', () => {
     const second = seedLegacyTabSwitchBindings(filePath, 'darwin', LEGACY_TAB_SWITCH_BINDINGS)
 
     expect(first.seeded).toBe(true)
-    // A second pass is a no-op: the pins now read as existing customization.
     expect(second.seeded).toBe(false)
     const snapshot = readKeybindingFile(filePath, 'darwin')
     expect(snapshot.overrides['terminal.search']).toEqual(['Mod+Shift+F'])
@@ -395,9 +440,7 @@ describe('keybinding-file', () => {
   })
 
   it('throws instead of freezing the seed when a legacy binding fails normalization', () => {
-    // A dropped pin must not be silent: the service catches the throw and keeps
-    // the cohort pending so a corrected build can retry the seed. Valid pins
-    // from the same batch are still written so users keep the good shortcuts.
+    // Write good pins, but retain the migration cohort so dropped pins can retry after a fix.
     expect(() =>
       seedLegacyTabSwitchBindings(filePath, 'darwin', {
         'tab.nextSameType': ['J'],

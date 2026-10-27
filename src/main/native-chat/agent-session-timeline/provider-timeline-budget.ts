@@ -1,10 +1,5 @@
-// One admission budget for everything the assembler holds open: running items, pending requests
-// and open text streams. The open set is the state's open items plus the open streams, one entry
-// per item (an item and its stream share its row id) and one per request key whatever its
-// incarnation. Before refusing, each entry is checked against the journal by key, so an answer a
-// client gave, a row another writer settled, or a stream whose turn settled frees its room. Past the budget an event is refused
-// as `failed`, which ends the session the way a failed journal write does, and the journal-derived
-// dead-generation settlement closes whatever it left open.
+// Items, requests and streams share one admission budget. Recheck journal settlement before refusing;
+// exhaustion fails the session so dead-generation recovery can settle retained work.
 
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
@@ -34,7 +29,6 @@ export function providerTimelineBudgetAdmits(input: {
   if (!journal) {
     return false
   }
-  // Another writer's fact, read by key: what it settled is settled.
   for (const key of state.items.keys()) {
     if (state.settledInJournal(key, journal)) {
       state.items.delete(key)

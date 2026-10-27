@@ -19,13 +19,7 @@ import {
   NativeChatUnsubscribe
 } from '../../../../shared/rpc-contract/native-chat-params'
 
-// Why: a long agent session can hold thousands of turns (with full tool I/O).
-// Shipping all of them over the paired connection and rendering them at once
-// freezes the mobile app, so the runtime RPC windows to the most recent slice —
-// the conversation tail is what the chat view shows first. The desktop IPC path
-// is unaffected (it reads locally with a virtualized list).
-// Small first page for a fast initial paint; the client raises `limit` to load
-// older history as the user scrolls back.
+// Default to a small transcript tail for fast paired-client paint; clients page older history, while local IPC stays virtualized.
 const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
 
 function sanitizeMessage(
@@ -45,10 +39,7 @@ function sanitizeAppendForClient(
   return messages.map((message) => sanitizeMessage(message, clientKind))
 }
 
-/** Window a transcript to its most recent `limit` messages so a long session
- *  can't freeze the client. Windowing by count applies to ALL RPC clients —
- *  shipping thousands of turns over the paired link is bad for web and mobile
- *  alike. Char-clipping (the mobile-only payload diet) is applied separately. */
+/** Window every RPC client by message count; apply mobile-only character clipping separately. */
 function windowTranscript(
   messages: readonly NativeChatMessage[],
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
@@ -91,7 +82,8 @@ export const NATIVE_CHAT_METHODS = [
             params.transcriptPath
           ),
           limit,
-          beforeOffset: params.beforeOffset
+          beforeOffset: params.beforeOffset,
+          sourceOrder: params.capabilities?.transcriptSourceOrder === 1
         },
         signal
       )
@@ -121,13 +113,7 @@ export const NATIVE_CHAT_METHODS = [
       let closed = false
       let unsubscribe = (): void => {}
       const setupController = new AbortController()
-      // Why: the first drain is a bounded tail snapshot; later drains emit only
-      // appended turns. This avoids parsing or shipping full long transcripts.
-      // Clients merge by message id, so the initial windowed batch doubles as the
-      // snapshot. Keyed by the client-supplied subscriptionId when present so
-      // registration and unsubscribe derive from the same token; otherwise by
-      // agent:sessionId, which is exactly the token existing mobile clients send to
-      // unsubscribe (no wire break).
+      // Drain a bounded tail first, then appended turns merged by id. Use the supplied cleanup token or legacy agent:sessionId so unsubscribe matches.
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
@@ -162,12 +148,12 @@ export const NATIVE_CHAT_METHODS = [
           params.transcriptPath
         ),
         initialLimit: limit,
+        sourceOrder: params.capabilities?.transcriptSourceOrder === 1,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
             return
           }
-          // Forward an initial-drain error so a watching client's first frame carries it
-          // instead of stranding the view at 'loading' when the read keeps throwing.
+          // Emit initial-read errors so a watching view cannot remain loading forever.
           emit({
             type: 'snapshot',
             ...pageForClient(messages, hasMore, beforeOffset, clientKind, limit, params.agent),

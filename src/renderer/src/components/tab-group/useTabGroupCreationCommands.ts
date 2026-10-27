@@ -9,7 +9,7 @@ import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
@@ -37,7 +37,6 @@ export function useTabGroupCreationCommands({
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
 
-  // Why: these stay unmemoized plain lambdas — the original built them inline in the returned commands object.
   return {
     newBrowserTab: () => {
       void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
@@ -50,7 +49,6 @@ export function useTabGroupCreationCommands({
             void ensureSimulatorTab(worktreeId, { surfacePane: true })
             return
           }
-          // Why: mobile simulators are most useful beside the current tab group.
           void openMobileEmulatorTab(worktreeId, {
             placement: 'rightSplit',
             targetGroupId: groupId
@@ -70,7 +68,7 @@ export function useTabGroupCreationCommands({
         if (!source) {
           return
         }
-        const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+        const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
         const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
           'managed-browser'
         ]
@@ -113,7 +111,10 @@ export function useTabGroupCreationCommands({
     },
     newTerminalWithShell: (shellOverride: string) => {
       void (async () => {
-        const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
+        const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
+          useAppStore.getState(),
+          worktreeId
+        )
         const outcome = await createWebRuntimeSessionTerminal({
           worktreeId,
           environmentId,

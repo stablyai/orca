@@ -27,8 +27,7 @@ const MUSE_EFFORT: CatalogOption = {
 
 export const MUSE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
-  // Why: Muse model ids are account/channel-scoped and it has no listing command, so
-  // seed nothing (no picker) and let worker-start pass the caller's id to `--model`.
+  // Muse has account-scoped IDs and no listing command: seed no picker; let worker-start pass the caller's --model.
   models: [],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],

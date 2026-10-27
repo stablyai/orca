@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from './tui-agent-startup'
 import {
   unwrapPosixShellScript,
   unwrapPowerShellScript
 } from './tui-agent-startup-script.test-fixture'
 
-// Hermes is the only agent whose launch Orca rewrites token by token — it owns the startup query,
-// the TUI mode, and where an override's flags may sit relative to the chat subcommand. Its cases
-// outgrew the general startup-plan file.
+// Hermes owns startup query/TUI/subcommand flag placement; keep its token-rewrite cases together.
 
 describe('hermes startup plans', () => {
   it('moves Hermes command override flags after the chat subcommand', () => {
@@ -22,6 +20,7 @@ describe('hermes startup plans', () => {
     const script = unwrapPosixShellScript(plan?.launchCommand)
     expect(script).toContain("'--provider' 'anthropic' '--yolo' '--tui'")
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe('run privately')
+    expect(plan?.launchConfig.agentArgs).toBe('--yolo')
   })
 
   it.each([
@@ -226,5 +225,25 @@ describe('hermes startup plans', () => {
 
     expect(plan?.launchCommand).toBe('hermes --tui')
     expect(plan?.followupPrompt).toBeNull()
+  })
+
+  it('keeps the override and agent args of a prompted Hermes launch when it resumes', () => {
+    const launch = buildAgentStartupPlan({
+      agent: 'hermes',
+      prompt: 'start work',
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      agentArgs: '--yolo',
+      platform: 'linux'
+    })
+    const resume = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      platform: 'linux',
+      agentCommand: launch?.launchConfig.agentCommand,
+      agentArgs: launch?.launchConfig.agentArgs
+    })
+
+    expect(resume?.launchCommand).toBe("hermes --profile work '--yolo' '--resume' 's1'")
   })
 })

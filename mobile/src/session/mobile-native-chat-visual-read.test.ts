@@ -83,8 +83,15 @@ describe('readMobileNativeChatVisual', () => {
       )
     const source = sourceWith(sendRequest)
     await readMobileNativeChatVisual(source, 'chart.html')
-    await readMobileNativeChatVisual(source, 'chart.html')
-    expect(cachedMobileNativeChatVisual(source, 'chart.html')?.revision).toBe(REVISION_B)
+    await expect(readMobileNativeChatVisual(source, 'chart.html')).resolves.toEqual({
+      kind: 'ready',
+      html: '<hr>',
+      revision: REVISION_B
+    })
+    expect(cachedMobileNativeChatVisual(source, 'chart.html')).toEqual({
+      html: '<hr>',
+      revision: REVISION_B
+    })
   })
 
   it('drops the cached bytes when the host refuses a visual it served before', async () => {
@@ -169,7 +176,10 @@ describe('readMobileNativeChatVisual', () => {
     const first = readMobileNativeChatVisual(source, 'chart.html')
     const second = readMobileNativeChatVisual(source, 'chart.html')
     resolve(success({ ok: true, revision: REVISION_A, sizeBytes: 3, html: '<p>' }))
-    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { kind: 'ready', html: '<p>', revision: REVISION_A },
+      { kind: 'ready', html: '<p>', revision: REVISION_A }
+    ])
     expect(sendRequest).toHaveBeenCalledTimes(1)
   })
 

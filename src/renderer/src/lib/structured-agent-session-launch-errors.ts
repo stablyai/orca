@@ -17,18 +17,19 @@ export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSes
   constructor(
     message: string,
     code: string = 'structured_agent_session_unsupported',
-    refusal?: AgentSessionRefusalReference
+    refusal?: AgentSessionRefusalReference,
+    /** The host's own word for why it can't run the chat here (`wsl`, `remote`), when it gave one. */
+    readonly hostReason?: string
   ) {
     super(message, code, refusal)
     this.name = 'StructuredAgentSessionCreateRefusalError'
   }
 }
 
-/**
- * Refused with a code that does not prove the session is absent. A sibling opened here would sit
- * beside a session the host may already hold, so this deliberately is NOT a refusal error: it flows
- * down the same path as a lost reply, which replays the intent and reconciles.
- */
+/** The source disappeared before any create was sent; no host cancellation is owed. */
+export class StructuredAgentSessionCreateAbandonedError extends StructuredAgentSessionCreateRefusalError {}
+
+// Refusal without proven absence is ambiguous: sibling creation could duplicate an existing host session. Reconcile/replay it like a lost reply, never classify it as definitive refusal.
 export class StructuredAgentSessionCreateUnknownOutcomeError extends StructuredAgentSessionCreateError {
   constructor(message: string, code: string, refusal?: AgentSessionRefusalReference) {
     super(message, code, refusal)

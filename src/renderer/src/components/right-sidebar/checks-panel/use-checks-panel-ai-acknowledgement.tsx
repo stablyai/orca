@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
 import {
@@ -80,19 +80,22 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     [fetchComments, fetchGitLabDetails]
   )
 
+  const refreshCommentsRef = useRef(refreshCommentsAfterBulkResolve)
+  useLayoutEffect(() => {
+    refreshCommentsRef.current = refreshCommentsAfterBulkResolve
+  }, [refreshCommentsAfterBulkResolve])
+
   const resolveSelectedThreadsAfterLaunch = useCallback(
     async (resolution: NonNullable<ChecksAgentComposerState['commentResolution']>) => {
       clearSentCommentSelection(resolution.reviewContextKey)
-      // Why: ignore headSha churn; only abort resolve/UI refresh if the user left this PR/panel.
+      // Ignore headSha churn; abort only when the user leaves this review/panel.
       const launchStableKey = checksPanelReviewStableKey(resolution.reviewContextKey)
-      // Why: the host calls keep the snapshotted target, but every UI mutation must belong
-      // to the review the panel is showing now — otherwise replies land in another PR's list.
+      // Host calls keep the snapshotted target; gate UI writes so replies cannot appear in another review.
       const isPanelStillOnLaunchReview = (): boolean =>
         checksPanelReviewStableKey(asyncResultKeyRef.current) === launchStableKey
       const githubTarget = resolution.githubTarget
       const canReplyOnHost = resolution.provider === 'github' && githubTarget != null
-      // Why: only GitHub posts fixing replies today; a GitLab MR reaching replied=0 is expected,
-      // and a missing reply target only matters when something in the selection needs a reply.
+      // Only GitHub supports fixing replies; missing targets matter only when selected comments need replies.
       let lastHostError =
         resolution.provider === 'github' &&
         githubTarget == null &&
@@ -151,8 +154,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
                 }
               )
               if (result.ok) {
-                // Why: force threadId/path onto the optimistic row so the sidebar groups it
-                // under the parent immediately (API payload may omit them).
+                // Attach threadId/path because API omissions would otherwise leave optimistic replies outside their parent.
                 if (isPanelStillOnLaunchReview()) {
                   setComments((prev) =>
                     mergePRCommentIntoList(
@@ -175,8 +177,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
               return false
             }
           },
-          // Why: CodeRabbit / review-summary / conversation comments have no nested-reply
-          // API, so the ack sends one combined body for all of them.
+          // Conversation/review-summary comments lack nested replies; combine their acknowledgements into one body.
           replyAsConversation: async (body) => {
             if (!githubTarget) {
               return false
@@ -210,11 +211,10 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       })
 
       if (isPanelStillOnLaunchReview()) {
-        await refreshCommentsAfterBulkResolve(resolution.provider)
+        await refreshCommentsRef.current(resolution.provider)
       }
 
-      // Why: surface the underlying API error when replies were possible but none landed.
-      // Resolvable threads are acked by resolving, so replied=0 is correct when nothing needed one.
+      // Report host errors only when replies were needed and supported; resolving alone legitimately yields zero replies.
       const repliedNoneDespiteHostSupport =
         canReplyOnHost &&
         counts.replied === 0 &&
@@ -252,7 +252,6 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       addPRConversationComment,
       addPRReviewCommentReply,
       clearSentCommentSelection,
-      refreshCommentsAfterBulkResolve,
       resolveReviewThread,
       commentsRef,
       setComments,
@@ -260,107 +259,62 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     ]
   )
 
-  /**
-   * Tab created: park the payload so panel churn during submit-after-ready cannot drop it.
-   * Posts nothing — fixing replies and resolves are irreversible and wait for delivery.
-   */
-  const claimPendingCommentResolutionForLaunch = useCallback((): void => {
-    const pendingResolution = takePendingPRCommentAiAck() ?? pendingCommentResolutionRef.current
-    pendingCommentResolutionRef.current = null
-    if (!pendingResolution) {
-      return
+  const commentLaunchCallbacks = (
+    resolution: NonNullable<ChecksAgentComposerState['commentResolution']>
+  ) => {
+    let delivered = false
+    return {
+      onLaunchAccepted: () => {
+        takePendingPRCommentAiAck(resolution)
+        if (pendingCommentResolutionRef.current === resolution) {
+          pendingCommentResolutionRef.current = null
+        }
+        claimedCommentResolutionRef.current = resolution
+        commentResolutionLaunchAcceptedRef.current = true
+        setCommentResolutionAckBusyNow(true)
+      },
+      onLaunchAborted: () => {
+        if (claimedCommentResolutionRef.current === resolution) {
+          claimedCommentResolutionRef.current = null
+        }
+        commentResolutionLaunchAcceptedRef.current = false
+        pendingCommentResolutionRef.current = resolution
+        setPendingPRCommentAiAck(resolution)
+        setCommentResolutionAckBusyNow(false)
+      },
+      onLaunched: () => {
+        if (delivered) {
+          return
+        }
+        delivered = true
+        takePendingPRCommentAiAck(resolution)
+        if (pendingCommentResolutionRef.current === resolution) {
+          pendingCommentResolutionRef.current = null
+        }
+        if (claimedCommentResolutionRef.current === resolution) {
+          claimedCommentResolutionRef.current = null
+        }
+        commentResolutionLaunchAcceptedRef.current = false
+        setCommentResolutionAckBusyNow(true)
+        void resolveSelectedThreadsAfterLaunch(resolution)
+          .catch((err) => {
+            console.warn('Failed to acknowledge selected review comments after AI launch:', err)
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
+                'Started the agent, but could not resolve or reply on the selected comments.'
+              )
+            )
+          })
+          .finally(() => setCommentResolutionAckBusyNow(false))
+      }
     }
-    claimedCommentResolutionRef.current = pendingResolution
-    commentResolutionLaunchAcceptedRef.current = true
-    setCommentResolutionAckBusyNow(true)
-  }, [
-    setCommentResolutionAckBusyNow,
-    claimedCommentResolutionRef,
-    pendingCommentResolutionRef,
-    commentResolutionLaunchAcceptedRef
-  ])
-
-  /** Launch failed after the tab existed: hand the payload back for a retry, post nothing. */
-  const releaseClaimedCommentResolutionAfterFailedLaunch = useCallback((): void => {
-    const claimed = claimedCommentResolutionRef.current
-    claimedCommentResolutionRef.current = null
-    commentResolutionLaunchAcceptedRef.current = false
-    if (claimed) {
-      pendingCommentResolutionRef.current = claimed
-      setPendingPRCommentAiAck(claimed)
-    }
-    setCommentResolutionAckBusyNow(false)
-  }, [
-    setCommentResolutionAckBusyNow,
-    claimedCommentResolutionRef,
-    pendingCommentResolutionRef,
-    commentResolutionLaunchAcceptedRef
-  ])
-
-  /** Prompt reached the agent: only now may Orca write to the host. */
-  const consumeClaimedCommentResolutionAfterDelivery = useCallback((): void => {
-    const resolution =
-      claimedCommentResolutionRef.current ??
-      takePendingPRCommentAiAck() ??
-      pendingCommentResolutionRef.current
-    claimedCommentResolutionRef.current = null
-    pendingCommentResolutionRef.current = null
-    commentResolutionLaunchAcceptedRef.current = false
-    if (!resolution) {
-      setCommentResolutionAckBusyNow(false)
-      return
-    }
-    setCommentResolutionAckBusyNow(true)
-    void resolveSelectedThreadsAfterLaunch(resolution)
-      .catch((err) => {
-        console.warn('Failed to resolve/reply on selected review comments after AI launch:', err)
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.ChecksPanel.495b2f8c4b',
-            'Started the agent, but could not resolve or reply on the selected comments.'
-          )
-        )
-      })
-      .finally(() => setCommentResolutionAckBusyNow(false))
-  }, [
-    resolveSelectedThreadsAfterLaunch,
-    setCommentResolutionAckBusyNow,
-    claimedCommentResolutionRef,
-    pendingCommentResolutionRef,
-    commentResolutionLaunchAcceptedRef
-  ])
-  // Why: auto-start can capture a stale callback; always call the latest consumer.
-  const consumeClaimedCommentResolutionAfterDeliveryRef = useRef(
-    consumeClaimedCommentResolutionAfterDelivery
-  )
-  const claimPendingCommentResolutionForLaunchRef = useRef(claimPendingCommentResolutionForLaunch)
-  const releaseClaimedCommentResolutionAfterFailedLaunchRef = useRef(
-    releaseClaimedCommentResolutionAfterFailedLaunch
-  )
-  useEffect(() => {
-    consumeClaimedCommentResolutionAfterDeliveryRef.current =
-      consumeClaimedCommentResolutionAfterDelivery
-    claimPendingCommentResolutionForLaunchRef.current = claimPendingCommentResolutionForLaunch
-    releaseClaimedCommentResolutionAfterFailedLaunchRef.current =
-      releaseClaimedCommentResolutionAfterFailedLaunch
-  }, [
-    consumeClaimedCommentResolutionAfterDelivery,
-    claimPendingCommentResolutionForLaunch,
-    releaseClaimedCommentResolutionAfterFailedLaunch
-  ])
-  const handleLaunchAccepted = useCallback((): void => {
-    claimPendingCommentResolutionForLaunchRef.current()
-  }, [])
-  const handleLaunchAborted = useCallback((): void => {
-    releaseClaimedCommentResolutionAfterFailedLaunchRef.current()
-  }, [])
+  }
   return {
     clearSentCommentSelection,
     refreshCommentsAfterBulkResolve,
     resolveSelectedThreadsAfterLaunch,
-    handleLaunchAccepted,
-    handleLaunchAborted,
-    consumeClaimedCommentResolutionAfterDeliveryRef
+    commentLaunchCallbacks
   }
 }
 

@@ -19,9 +19,12 @@ import {
 } from '../../tui-idle-evidence'
 import { leafTuiIdleEvidence, ptyTuiIdleEvidence } from '../../tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
+import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
+import { detectTerminalComposerDraft } from '../../../../shared/terminal-composer-draft'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
-import type { OrcaRuntimeWithDeliverPendingMessages } from '../../orchestration/mail/terminal-message-delivery'
+
+const DIALOG_HOLD_RECHECK_MS = 2000
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected abstract resolveWaiter(
@@ -31,10 +34,6 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   protected abstract removeWaiter(
     ...args: Parameters<OrcaRuntimeWithResolveWaiter['removeWaiter']>
   ): ReturnType<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-
-  protected abstract deliverPendingMessages(
-    ...args: Parameters<OrcaRuntimeWithDeliverPendingMessages['deliverPendingMessages']>
-  ): ReturnType<OrcaRuntimeWithDeliverPendingMessages['deliverPendingMessages']>
 
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
     const handle = this.issueHandle(leaf)
@@ -72,9 +71,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!waiters || waiters.size === 0) {
       return
     }
-    // Why re-rank rather than resolve outright: the transition that brought us here is only a
-    // title sample. Weak ready (a name-only title, #6011) cannot see a dialog the tail lost,
-    // so it is left to the poll, which settles it only after a rendered-screen read.
+    // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
     const verdict = this.evaluateTuiIdleForLeaf(leaf)
     for (const waiter of Array.from(waiters)) {
       if (waiter.condition !== 'tui-idle') {
@@ -144,17 +141,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     )
   }
 
-  /**
-   * Settled-enough-to-type check that also arms a retry when it says no.
-   *
-   * Why the retry: the wait path POLLS, so weak evidence that only becomes valid with the
-   * passage of time (a pane going quiet) eventually satisfies it. Delivery is edge-driven —
-   * a title transition, a graph sync, a new message — with no poll behind it, so a refusal
-   * at an edge is final unless another edge happens to arrive. A hookless Codex pane never
-   * emits an explicit `X ready`, so the refusal below would strand the queued message
-   * permanently once the pane fell quiet. One-shot timer, armed only for a leaf that
-   * actually refused, cleared as soon as any path delivers.
-   */
+  /** Edge-driven delivery needs a one-shot recheck when quiet evidence may later settle; otherwise hookless agents can strand queued mail without another title/graph/message edge. */
   protected checkDeliverySettledAndArmRecheck(leaf: { tabId: string; leafId: string }): boolean {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     if (this.isAgentSettledForDelivery(leaf)) {
@@ -177,21 +164,21 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (this.deliveryRecheckTimersByLeafKey.has(leafKey)) {
       return
     }
-    const live = this.leaves.get(leafKey)
-    // Why this delay: the only refusal that time alone can lift is tier 3 waiting on the
-    // stream to go quiet, so wake just after the window could have elapsed. A pane that is
-    // still producing output re-arms from its own fresher timestamp rather than spinning.
+    const live = this.leaves.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.pty
+    // Only quiet-window refusal expires with time; schedule just beyond it and re-arm from fresher output if still streaming.
     const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
-    const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
+    // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
+    const delay =
+      live?.ptyId && this.isPtyHoldingDelivery(live.ptyId)
+        ? DIALOG_HOLD_RECHECK_MS
+        : Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByLeafKey.delete(leafKey)
-      const current = this.leaves.get(leafKey)
+      const current = this.leaves.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.leaf
       if (!current) {
         return
       }
-      // Why the gate again here: delivery sites gate at the CALL, not inside
-      // deliverPendingMessagesForLeaf, so firing straight into it would hand the retry the
-      // very injection the gate exists to prevent. A pane that went busy again re-arms.
+      // Recheck settlement before retry delivery; the pane may have become busy again.
       if (this.checkDeliverySettledAndArmRecheck(current)) {
         this.deliverPendingMessagesForLeaf(current)
       }
@@ -200,27 +187,44 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     this.deliveryRecheckTimersByLeafKey.set(leafKey, timer)
   }
 
-  /**
-   * Whether this pane is settled enough to TYPE INTO.
-   *
-   * Why the same ranking as the wait path: mailbox delivery writes the pointer plus Enter
-   * into the pane, so acting on a name-only `Codex` title mid-turn injects keystrokes into
-   * a running agent's session. That is the #6011 mis-settlement in a path with a worse
-   * failure mode than a racing script. Liveness stays a separate requirement — callers
-   * keep their own `lastAgentStatusObservedLive` checks.
-   */
+  /** Pointer plus Enter requires the same readiness ranking as waits; name-only titles can occur mid-turn (#6011). Callers separately require live status evidence. */
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
-    const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!live) {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    const live = this.leaves.get(leafKey)
+    // A pane no window publishes (headless serve) carries its evidence on its PTY record.
+    const lanePty = live ? null : this.getPtyLaneMailboxTarget(leafKey)?.pty
+    const evidence = live
+      ? leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
+          buildTerminalWaitText(live.tailBuffer, live.tailPartialLine, live.preview)
+        )
+      : lanePty
+        ? ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, lanePty, () =>
+            buildTerminalWaitText(lanePty.tailBuffer, lanePty.tailPartialLine, lanePty.preview)
+          )
+        : null
+    const ptyId = live ? live.ptyId : lanePty?.ptyId
+    if (!evidence || (ptyId && this.isPtyHoldingDelivery(ptyId))) {
       return false
     }
-    const evidence = leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
-      buildTerminalWaitText(live.tailBuffer, live.tailPartialLine, live.preview)
-    )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
     return isTuiIdleReadyVerdict(
       evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
+    )
+  }
+
+  /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one. */
+  private isPtyHoldingDelivery(ptyId: string): boolean {
+    if (this.isPtyAwaitingUserInput(ptyId)) {
+      return true
+    }
+    const lastInputAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    const state = this.readWholeScreenModel(ptyId)
+    return (
+      lastInputAt !== null &&
+      Date.now() - lastInputAt <= USER_INPUT_HOLD_CAP_MS &&
+      !!state &&
+      detectTerminalComposerDraft(state.emulator.getCursorLineContext()) !== null
     )
   }
 
@@ -249,26 +253,5 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return title
     }
     return null
-  }
-
-  protected settlePendingMessageDelivery(
-    ptyId: string,
-    flight: { enterTimer: ReturnType<typeof setTimeout> | null }
-  ): void {
-    if (this.messageDeliveryFlightsByPtyId.get(ptyId) !== flight) {
-      return
-    }
-    this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    const parked = this.parkedMessageRedeliveriesByPtyId.get(ptyId)
-    if (!parked) {
-      return
-    }
-    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
-    for (const [mailboxHandle, delivery] of parked) {
-      this.deliverPendingMessages(delivery.leaf, {
-        mailboxHandle,
-        reservedTypes: delivery.reservedTypes
-      })
-    }
   }
 }

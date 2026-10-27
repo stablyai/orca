@@ -4,9 +4,7 @@ import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { readVerifiedDaemonPid } from './daemon-pid-identity'
 import { PROTOCOL_VERSION } from './types'
 
-// 'severed': macOS can no longer resolve the daemon's TCC responsible process, so
-// Accessibility/Automation grants on Orca silently stop covering its terminals (STA-3491).
-// 'unknown' fails open: legacy pid files and probe failures must not trigger replacement.
+// Unknown attribution must not trigger daemon replacement.
 export type MacDaemonTccAttributionHealth = 'intact' | 'severed' | 'unknown'
 
 let cachedMacDaemonTccAttributionHealth: {
@@ -33,11 +31,7 @@ function getMacDaemonTccAttributionCacheKey(
   }
 }
 
-/**
- * macOS pins a process's TCC "responsible process" to the binary that forked it,
- * by file reference. If that binary path disappears while the daemon survives, tccd
- * cannot resolve the grant subject for the daemon's terminals (STA-3491).
- */
+/** Legacy forked daemons use the spawning app as their TCC grant subject (STA-3491). */
 export async function getMacDaemonTccAttributionHealth(
   runtimeDir: string,
   socketPath: string,

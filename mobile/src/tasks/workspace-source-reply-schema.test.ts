@@ -9,9 +9,6 @@ import {
   repoSparsePresetSaveSchema,
   sshConnectionStateSchema
 } from './workspace-source-reply-schema'
-import { SSH_CONNECTION_STATUS } from '../transport/ssh-connection-status-arms'
-
-// Pins the SSH status degrade, the error tri-state beside it, and the preset requirement.
 
 const connected = {
   targetId: 'ssh-1',
@@ -21,7 +18,7 @@ const connected = {
 }
 
 describe('the SSH connection record', () => {
-  it('reads the recorded connected state whole', () => {
+  it('reads the representative connected state whole', () => {
     expect(sshConnectionStateSchema.safeParse({ state: connected })).toMatchObject({
       success: true,
       data: connected
@@ -45,6 +42,14 @@ describe('the SSH connection record', () => {
     })
   })
 
+  it('keeps the record when its managed-server note is malformed', () => {
+    const parsed = sshConnectionStateSchema.safeParse({
+      state: { ...connected, managedServer: { serving: { detail: 7 } } }
+    })
+    expect(parsed.success && parsed.data).toMatchObject({ status: 'connected' })
+    expect(parsed.success && parsed.data?.managedServer?.serving?.detail).toBeUndefined()
+  })
+
   it('answers undefined for a payload with no state member', () => {
     expect(sshConnectionStateSchema.safeParse({})).toMatchObject({ success: true, data: undefined })
   })
@@ -58,10 +63,18 @@ describe('the SSH connection record', () => {
 })
 
 describe('status is an open enum that degrades to disconnected', () => {
-  // The arm list is pinned to SshConnectionStatus in the schema module, where tsc looks; this loop
-  // proves every pinned arm survives the parse rather than degrading.
+  // Independent wire values keep a removed schema arm in the test domain.
   it('takes every arm the host declares, so nothing it sends today degrades', () => {
-    for (const status of SSH_CONNECTION_STATUS) {
+    for (const status of [
+      'disconnected',
+      'connecting',
+      'auth-failed',
+      'deploying-relay',
+      'connected',
+      'reconnecting',
+      'reconnection-failed',
+      'error'
+    ] as const) {
       const parsed = sshConnectionStateSchema.safeParse({ state: { ...connected, status } })
       expect(parsed.success && parsed.data).toMatchObject({ status })
     }
@@ -77,22 +90,13 @@ describe('status is an open enum that degrades to disconnected', () => {
     })
   })
 
-  it('never degrades a newer arm to connected', () => {
-    const parsed = sshConnectionStateSchema.safeParse({
-      state: { ...connected, status: 'whatever' }
-    })
-    expect(parsed.success ? parsed.data?.status : 'unparsed').not.toBe('connected')
-  })
-
   it('stays fatal for a non-string status, which is the wrong type and not a newer arm', () => {
     const parsed = sshConnectionStateSchema.safeParse({ state: { ...connected, status: 7 } })
     expect(parsed.success && parsed.data).toBeUndefined()
   })
 })
 
-// The degrade above is only allowed because it is invisible to every reader. Main passed an arm it
-// did not know straight through as a string; these pin that the degraded value reaches the same
-// verdict, so a newer host's arm renders what main rendered.
+// Unknown SSH states must degrade to the same disconnected/readiness verdicts every consumer already uses.
 describe('the degrade is inert at the gate that reads status', () => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models the status arm a newer host sends, which is precisely what SshConnectionStatus cannot express: the union names every arm this build knows, so the value under test has to enter as one the compiler would reject.
   const newerArm = 'handshaking-v2' as SshConnectionStatus
@@ -143,9 +147,7 @@ describe('error is a tri-state the drawer renders', () => {
   })
 })
 
-// The record is a salvagedOptional, so any fatal member drops the WHOLE record, and the connect
-// path's fallback for a dropped record is `fallbackSshState(connectionId, 'connected', null)`.
-// Requiring a member nothing reads would therefore turn a partial reply into a connected drawer.
+// One fatal member drops the whole state and triggers connected fallback; unread fields must not invalidate an auth-failed record.
 describe('a partial record survives with the status it came with', () => {
   it('keeps a record that omits reconnectAttempt, which nothing reads', () => {
     const parsed = sshConnectionStateSchema.safeParse({
@@ -182,7 +184,7 @@ describe('a partial record survives with the status it came with', () => {
 describe('a sparse preset requires what the drawer sorts and joins', () => {
   const preset = { id: 'p1', name: 'docs', directories: ['docs'] }
 
-  it('reads the recorded preset whole', () => {
+  it('reads the representative preset whole', () => {
     expect(repoSparsePresetListSchema.safeParse({ presets: [preset] })).toMatchObject({
       success: true,
       data: [preset]
@@ -210,7 +212,7 @@ describe('a sparse preset requires what the drawer sorts and joins', () => {
 })
 
 describe('detected agent ids', () => {
-  it('reads the recorded probe answers', () => {
+  it('reads the representative probe answers', () => {
     expect(detectedAgentIdsSchema.safeParse(['codex', 'claude'])).toMatchObject({
       success: true,
       data: ['codex', 'claude']
@@ -228,11 +230,11 @@ describe('detected agent ids', () => {
 })
 
 describe('the orca.yaml hooks require nothing', () => {
-  it('reads the recorded reply for a repo with no setup script and no source', () => {
+  it('reads the representative reply for a repo with no setup script and no source', () => {
     expect(repoSetupHooksSchema.safeParse({ hooks: { scripts: {} } }).success).toBe(true)
   })
 
-  it('reads the recorded reply with an explicit null setupTrust', () => {
+  it('reads the representative reply with an explicit null setupTrust', () => {
     const parsed = repoSetupHooksSchema.safeParse({
       hooks: { scripts: { setup: 'pnpm install' } },
       source: 'repo',
@@ -242,12 +244,12 @@ describe('the orca.yaml hooks require nothing', () => {
     expect(parsed.success && parsed.data).toMatchObject({ setupTrust: null })
   })
 
-  it('keeps a setupRunPolicy this build has never heard of on the skip arm', () => {
+  it('reads a setupRunPolicy this build has never heard of as skip-by-default', () => {
     const parsed = repoSetupHooksSchema.safeParse({ setupRunPolicy: 'prompt-twice' })
-    expect(parsed.success && parsed.data).toMatchObject({ setupRunPolicy: 'prompt-twice' })
+    expect(parsed.success && parsed.data).toMatchObject({ setupRunPolicy: 'skip-by-default' })
   })
 
-  it('keeps the untrimmed setup script the recorded reply carries', () => {
+  it('keeps the untrimmed setup script the representative reply carries', () => {
     const parsed = repoSetupHooksSchema.safeParse({ hooks: { scripts: { setup: '  pnpm i  ' } } })
     expect(parsed.success && parsed.data).toMatchObject({
       hooks: { scripts: { setup: '  pnpm i  ' } }
@@ -270,7 +272,7 @@ describe('sparse presets', () => {
 })
 
 describe('base-ref search requires neither member', () => {
-  it('reads both recorded shapes', () => {
+  it('reads both representative shapes', () => {
     expect(repoBaseRefSearchSchema.safeParse({ refs: ['main'] }).success).toBe(true)
     expect(
       repoBaseRefSearchSchema.safeParse({

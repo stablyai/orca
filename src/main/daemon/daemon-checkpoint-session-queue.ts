@@ -1,17 +1,5 @@
-/**
- * Serializes terminal-history checkpoint work per session.
- *
- * Why per session and not one process-wide tail: checkpoint exclusivity only
- * protects one session directory's tmp-write/rename pair. A single global tail
- * made a warm reattach wait on every other session's checkpoint, so one
- * never-settling checkpoint blocked every daemon-backed terminal (STA-4173).
- *
- * Why deadlines never cancel: an operation that blows its deadline keeps running
- * to completion. Waiters degrade (older snapshot, retry next tick) instead of
- * dropping durable history that a later reattach would need.
- */
+// Serialize per session so a stalled checkpoint cannot block other terminals; deadlines abandon waits, not writes.
 
-/** Running plus queued operations one session may hold before callers are turned away. */
 export const CHECKPOINT_SESSION_QUEUE_MAX_PENDING = 3
 
 type DeadlineCallbacks = {
@@ -23,20 +11,15 @@ export class CheckpointSessionQueue {
   private tails = new Map<string, Promise<unknown>>()
   private pending = new Map<string, number>()
 
-  /** True when the session's queue is full and a new caller should degrade instead of wait. */
   isSaturated(sessionId: string): boolean {
     return (this.pending.get(sessionId) ?? 0) >= CHECKPOINT_SESSION_QUEUE_MAX_PENDING
   }
 
-  /** Waits for the session's turn and resolves when the operation finishes. */
   run<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
     return this.enqueue(sessionId, operation)
   }
 
-  /**
-   * Waits for the session's turn, giving up after `deadlineMs` and resolving
-   * `onDeadline`. The operation still runs to completion in the background.
-   */
+  /** Resolve onDeadline after the wait budget; the queued operation still runs to completion. */
   runWithDeadline<T>(
     sessionId: string,
     operation: () => Promise<T>,
@@ -73,9 +56,7 @@ export class CheckpointSessionQueue {
     })
   }
 
-  // Why there is no clear(): dropping a tail while its write is parked would let the next caller
-  // into the same session directory, and two concurrent tmp-write/rename pairs lose a checkpoint.
-  // Entries remove themselves as operations settle, so a stalled session pins one entry at most.
+  // Never clear active tails: overlapping writes to a session's temp file can lose a checkpoint.
 
   private enqueue<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.tails.get(sessionId) ?? Promise.resolve()
@@ -93,8 +74,7 @@ export class CheckpointSessionQueue {
         this.tails.delete(sessionId)
       }
     }
-    // Why a detached handler: `next` is the shared tail, so a rejection the caller
-    // already sees would still surface here as an unhandled rejection.
+    // Observe the shared tail's rejection as well as the caller's promise.
     next.then(settle, settle)
     return next
   }

@@ -5,8 +5,7 @@ import { z } from 'zod'
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SessionMetadata = z.looseObject({ cwd: z.string() })
 
-/** The conversation a sign-in's checking session saved, removed after the server's exit is proven
- *  and only when its metadata names `cwd`, the sign-in's own temporary folder. */
+/** Call after proven server exit; remove only sessions whose metadata matches the temporary cwd. */
 export async function removeAntigravitySignInSessionFiles(
   home: string,
   sessionId: string | undefined,

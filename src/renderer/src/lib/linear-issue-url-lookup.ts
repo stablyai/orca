@@ -1,5 +1,9 @@
 import { linearStatus } from '@/runtime/runtime-linear-client'
 import {
+  credentialDecryptionMessage,
+  isIntegrationCredentialDecryptionError
+} from '../../../shared/integration-credential-errors'
+import {
   findLinearIssueWorkspaceLookupIds,
   isLinearIssueUrlResolutionMatch,
   type LinearIssueUrlIntent
@@ -23,7 +27,10 @@ async function fetchMatchingLinearIssue(
   try {
     const issue = await fetchLinearIssue(intent.identifier, workspaceId, { sourceContext })
     return issue && isLinearIssueUrlResolutionMatch(intent, issue) ? issue : null
-  } catch {
+  } catch (error) {
+    if (isIntegrationCredentialDecryptionError(error)) {
+      throw error
+    }
     return null
   }
 }
@@ -46,6 +53,7 @@ export async function lookupLinearIssueUrl({
   readLinearStatus?: (sourceContext: TaskSourceContext | null) => Promise<LinearConnectionStatus>
 }): Promise<LinearIssue | null> {
   const triedWorkspaceIds = new Set<string>()
+  const undecryptableWorkspaceIds = new Set<string>()
   const lookupInStatus = async (
     status: Pick<
       LinearConnectionStatus,
@@ -62,7 +70,10 @@ export async function lookupLinearIssueUrl({
         workspaceId,
         sourceContext,
         fetchLinearIssue
-      )
+      ).catch(() => {
+        undecryptableWorkspaceIds.add(workspaceId)
+        return null
+      })
       if (issue) {
         return issue
       }
@@ -76,5 +87,10 @@ export async function lookupLinearIssueUrl({
   }
 
   const currentStatus = await readLinearStatus(sourceContext).catch(() => null)
-  return currentStatus ? lookupInStatus(currentStatus) : null
+  const issue = currentStatus ? await lookupInStatus(currentStatus) : null
+  // Why: a healthy workspace may still match; report the credential failure only when none did.
+  if (!issue && undecryptableWorkspaceIds.size > 0) {
+    throw new Error(credentialDecryptionMessage('Linear'))
+  }
+  return issue
 }

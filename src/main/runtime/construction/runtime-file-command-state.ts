@@ -1,11 +1,9 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
 import type { LocalProjectGhExecOptions } from '../../project-runtime-git-options'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-terminal-contracts'
 import { OrcaRuntimeWithPreservedBranchCleanup } from './runtime-host-services'
 import { RuntimeFileCommands } from '../orca-runtime-files'
-import { nativeChatTranscriptIncludesPath } from '../../native-chat/native-chat-file-provenance'
 import { createRuntimeFileWatcherRemoval } from '../runtime-file-watcher-removal'
 import { RuntimeGitCommands } from '../orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../runtime-hosted-review-commands'
@@ -22,7 +20,6 @@ import { RuntimeRepositoryIssueCommand } from '../runtime-repository-issue-comma
 import { ClientHostedBrowserRowPublisher } from '../client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import {
   isChatScratchWorktreeId,
   resolveChatScratchSelectorFolder
@@ -32,8 +29,18 @@ import type { RuntimeStore } from '../runtime-store-contract'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type { Repo } from '../../../shared/repo-types'
 import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
+import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
+  protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
+    worktreeId?: string,
+    options?: { force?: boolean }
+  ): Set<string>
+  abstract notifyMobileSessionTabsChanged(worktreeId: string): void
   abstract resolveRuntimeFileTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     executionHostId: ExecutionHostId
@@ -48,20 +55,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     relativePath: string
   } | null>
   abstract resolveTerminalCwd(handle: string): Promise<string | null>
-  abstract resolveTerminalContext(handle: string): {
-    worktreeId: string
-    connectionId: string | null
-  } | null
   abstract resolveTerminalFileUriHostname(handle: string): string | null
-  abstract hasRecentTerminalOutputPath(
-    handle: string,
-    pathText: string,
-    absolutePath: string
-  ): boolean
-  protected abstract getMobileSessionTabsForWorktree(
-    worktreeId: string,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult
   protected abstract resolveRuntimeGitTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     repo?: Repo
@@ -93,15 +87,14 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
 
-  protected abstract resolveRepoSelector(selector: string): Promise<Repo>
+  protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
 
   protected readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
     requireStore: () => this.requireStore(),
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: async (selector) => {
-      // Why here, not in the general resolver: that one also places new chats, and a scratch folder
-      // must never become a chat's workspace.
+      // Scratch folders are file-only; the general resolver also places chats.
       const scratchFolder = await resolveChatScratchSelectorFolder(selector)
       return scratchFolder
         ? {
@@ -113,36 +106,18 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     resolveKnownWorkspaceFileTarget: (absolutePath, executionHostId) =>
       this.resolveKnownWorkspaceFileTarget(absolutePath, executionHostId),
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
-    resolveTerminalContext: (terminalHandle) => this.resolveTerminalContext(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>
       this.resolveTerminalFileUriHostname(terminalHandle),
-    hasRecentTerminalOutputPath: (terminalHandle, pathText, absolutePath) =>
-      this.hasRecentTerminalOutputPath(terminalHandle, pathText, absolutePath),
-    hasRecentNativeChatOutputPath: (worktreeId, context, pathText, absolutePath) =>
-      nativeChatTranscriptIncludesPath({
-        tabs: this.getMobileSessionTabsForWorktree(worktreeId).tabs,
-        context,
-        pathText,
-        absolutePath
-      }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position) => {
-      // The UI cannot open a tab in a workspace that has no row.
-      if (isChatScratchWorktreeId(worktreeId)) {
-        throw new Error('chat_scratch_not_openable')
+    openFile: createRuntimeEditorFileOpener({
+      getNotifier: () => this.notifier,
+      applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+      groupFor: (id) => this.editorOpenGroupFor(id),
+      publishHeadlessTabs: (id) => {
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id, { force: true })
+        this.notifyMobileSessionTabsChanged(id)
       }
-      if (!this.notifier?.openFile) {
-        throw new Error('renderer_unavailable')
-      }
-      this.notifier.openFile(
-        worktreeId,
-        filePath,
-        relativePath,
-        runtimeEnvironmentId,
-        navigation,
-        ...(position ? [position] : [])
-      )
-    },
+    }),
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
@@ -161,6 +136,10 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     }
   })
 
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+
+  protected abstract editorOpenGroupFor(worktreeId: string): string | undefined
+
   protected readonly fileWatcherRemoval = createRuntimeFileWatcherRemoval(this.fileCommands)
 
   closeFileWatchersForRemoval = this.fileWatcherRemoval.close
@@ -175,12 +154,10 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     getRuntimeSettings: () => this.requireStore().getSettings(),
     getCommitMessageAgentEnvironment: () => this.accounts.getCommitMessageAgentEnvironment(),
-    // Why: resolved worktrees are cached for a second, so link/unlink would lag
-    // generation; meta is keyed by the same id the resolver returns.
+    // Override the resolver's one-second linked-issue cache so template generation sees link/unlink immediately.
     getWorktreeLinkedIssue: (worktreeId) => {
       const store = this.store
-      // Why: an unreadable store is "unknown", not "unlinked" — undefined keeps
-      // the resolver's cached linkedIssue instead of suppressing {linkedIssue}.
+      // Unreadable means unknown: undefined retains cached linkedIssue; null would suppress it.
       if (!store?.getWorktreeMeta) {
         return undefined
       }
@@ -200,26 +177,18 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
           }
         : null
     },
-    // Why (#17828 review follow-up): RuntimeGitSyncCommands materializes with no store to
-    // avoid unrelated side effects; this is its only way back into the persisted
-    // `pushTarget.remoteCreated` flag that #17842's orphan sweep relies on.
-    persistMaterializedPushTarget: (worktreeId, pushTarget) => {
+    // #17828/#17842: materialized git-sync has no store; persist remoteCreated here for orphan cleanup.
+    persistMaterializedPushTarget: (worktree, pushTarget) => {
       const store = this.store
-      if (!store?.setWorktreeMeta) {
+      const target = store ? worktreeRowTarget(store, worktree) : undefined
+      if (!store || !target || isWslMoveWorktreeBlocked(target.id, target.hostId)) {
         return
       }
-      // Bookkeeping incidental to the push: a project a WSL move is taking skips it, not the push.
-      if (isWslMoveWorktreeBlocked(worktreeId, store.getWorktreeMeta?.(worktreeId)?.hostId)) {
-        return
-      }
-      store.setWorktreeMeta(worktreeId, { pushTarget })
+      store.setWorktreeMeta(target, { pushTarget })
     }
   })
 
-  /** Set by pty IPC: fires when a PTY gains/loses remote view subscribers so
-   *  the daemon background mark (keep-tail stream thinning) can resync — a
-   *  live mobile/web view consumes raw bytes and must never be thinned, even
-   *  while the desktop pane is hidden. */
+  /** Remote views consume raw bytes even with a hidden desktop; resync daemon marks so those streams are never thinned. */
   onRemoteTerminalViewPresenceChanged: ((ptyId: string) => void) | null = null
 
   protected readonly interactiveWaitProbesByPtyId = new Map<
@@ -227,15 +196,10 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     Promise<RuntimeTerminalAgentStatus | undefined>
   >()
 
-  // Why a cache: leaf-branch sends may arrive per keystroke; one proven-absent
-  // verdict per ptyId serves the burst instead of a probe round-trip each call.
+  // Keystroke bursts share a cached proven-absent verdict instead of probing per send.
   protected readonly provenAbsentLeafPtyVerdicts = new Map<string, number>()
 
   protected readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
-
-  // Why: probe dedupe shares one promise across callers, but each caller's
-  // continuation would re-deliver the same unread rows; arm one per pty.
-  protected readonly probeDeferredDeliveryPtyIds = new Set<string>()
 
   protected readonly hostedReviews = new RuntimeHostedReviewCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
@@ -323,20 +287,5 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     }
   })
 
-  /** Worktrees whose persisted client-hosted rows this runtime is responsible for rewriting. */
   protected readonly persistedClientHostedBrowserWorktreeIds = new Set<string>()
-
-  // Why: the whole pointer→Enter span must be single-flight per pty. Triggers
-  // landing mid-flight park their mailbox and re-run once on settle. The
-  // flight object is the settle identity: a stale settle surviving an exit
-  // retire must not clear a newer same-id flight or flush its parked trigger.
-  protected readonly messageDeliveryFlightsByPtyId = new Map<
-    string,
-    { enterTimer: ReturnType<typeof setTimeout> | null }
-  >()
-
-  protected readonly parkedMessageRedeliveriesByPtyId = new Map<
-    string,
-    Map<string, { leaf: RuntimeLeafRecord; reservedTypes?: ReadonlySet<string> }>
-  >()
 }

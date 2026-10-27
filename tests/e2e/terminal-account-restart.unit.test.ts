@@ -6,6 +6,7 @@ import { makePaneKey } from '../../src/shared/stable-pane-id'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
 import { setLocalPtyProvider } from '../../src/main/ipc/pty/provider/registry'
 import { TerminalIntentionalStops } from '../../src/main/runtime/terminal-intentional-stops'
+import { getDefaultSettings } from '../../src/shared/constants'
 
 vi.mock('electron', () =>
   import('../../src/main/ipc/pty-ipc-mock-registry').then((m) => m.electronModuleMock())
@@ -72,6 +73,7 @@ const cwd = '/tmp/restart'
 const tabId = 'tab-1'
 const leafId = '11111111-1111-4111-8111-111111111111'
 const paneKey = makePaneKey(tabId, leafId)
+const configuredCommand = 'codex-wrapper --profile work'
 
 type RestartHarness = ReturnType<typeof installRestartHarness>
 
@@ -177,9 +179,10 @@ function installRestartHarness(
     pendingWrite: null,
     quitFlushStarted: false,
     writeGeneration: 0,
-    lastDurableWriteGeneration: 0
+    lastDurableWriteGeneration: 0,
+    ptyBindingGenerations: new Map<string, number>()
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: binding writes read only state, write bookkeeping, durable mutation and the session partitions from these fakes.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: binding writes read only state, write bookkeeping, durable mutation, the per-pane binding generations and the session partitions from these fakes.
   const bindingArgs = [bindingRuntime, store] as unknown as ConstructorParameters<
     typeof PtyBindingPersistenceOperations
   >
@@ -230,7 +233,16 @@ let rendererState: StoreState
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: StoreState) => unknown) => selector(rendererState),
-    { getState: () => rendererState, subscribe: () => () => {} }
+    {
+      getState: () =>
+        Object.assign(rendererState, {
+          getKnownWorktreeById: (id: string) =>
+            Object.values(rendererState.worktreesByRepo)
+              .flat()
+              .find((worktree) => worktree.id === id)
+        }),
+      subscribe: () => () => {}
+    }
   )
 }))
 vi.mock('zustand/react/shallow', () => ({ useShallow: (selector: unknown) => selector }))
@@ -263,8 +275,12 @@ describe('account restart through renderer connection and host spawn', () => {
     const host = installRestartHarness()
     registerWithFakes(mainWindow, host.runtime, host.store)
     rendererState = createInitialStoreState(() => rendererState)
+    rendererState.settings = {
+      ...getDefaultSettings('/home/dev'),
+      agentCmdOverrides: { codex: configuredCommand }
+    }
     rendererState.tabsByWorktree[worktreeId][0].ptyId = 'pty-old'
-    rendererState.ptyIdsByTabId[tabId] = ['pty-old']
+    rendererState.ptyIdsByTabId = { ...rendererState.ptyIdsByTabId, [tabId]: ['pty-old'] }
     rendererState.sleepingAgentSessionsByPaneKey[paneKey] = {
       paneKey,
       tabId,
@@ -276,7 +292,12 @@ describe('account restart through renderer connection and host spawn', () => {
       capturedAt: 1,
       updatedAt: 1
     }
-    rendererState.terminalLayoutsByTabId[tabId].ptyIdsByLeafId[leafId] = 'pty-old'
+    const layouts = rendererState.terminalLayoutsByTabId ?? {}
+    const layout = layouts[tabId]!
+    rendererState.terminalLayoutsByTabId = {
+      ...layouts,
+      [tabId]: { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: 'pty-old' } }
+    }
     await installTerminalTestGlobals()
     installIpcPtyWindow(window, {})
     window.api.pty.claimViewport = vi.fn()
@@ -310,7 +331,7 @@ describe('account restart through renderer connection and host spawn', () => {
       paneTransportsRef: { current: transports },
       clearTabPtyId: vi.fn(() => {
         rendererState.tabsByWorktree[worktreeId][0].ptyId = null
-        rendererState.ptyIdsByTabId[tabId] = []
+        rendererState.ptyIdsByTabId = { ...rendererState.ptyIdsByTabId, [tabId]: [] }
       })
     })
     rendererState.pendingPaneAccountRestarts = { 'pty-old': 'codex' }
@@ -349,7 +370,7 @@ describe('account restart through renderer connection and host spawn', () => {
       expect(window.api.pty.spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           replacesPtyId: 'pty-old',
-          command: 'codex',
+          command: configuredCommand,
           launchAgent: 'codex',
           startupCommandDelivery: 'shell-ready'
         })
@@ -377,6 +398,10 @@ describe('account restart through renderer connection and host spawn', () => {
       const host = installRestartHarness()
       registerWithFakes(mainWindow, host.runtime, host.store)
       rendererState = createInitialStoreState(() => rendererState)
+      rendererState.settings = {
+        ...getDefaultSettings('/home/dev'),
+        agentCmdOverrides: { codex: configuredCommand }
+      }
       await installTerminalTestGlobals()
       const runtimeCall = vi.fn(
         async (args: { method: string; params?: Record<string, unknown> }) => {
@@ -403,7 +428,7 @@ describe('account restart through renderer connection and host spawn', () => {
             tabId,
             leafId,
             worktreeId,
-            command: 'codex',
+            command: args.params?.command ?? 'codex',
             launchAgent: 'codex',
             startupCommandDelivery: 'shell-ready'
           })
@@ -435,9 +460,14 @@ describe('account restart through renderer connection and host spawn', () => {
         await import('../../src/renderer/src/components/terminal-pane/remote-runtime-pty-transport')
       const { releasePaneTransportForRestart } =
         await import('../../src/renderer/src/components/terminal-pane/pane-restart-transport-handoff')
-      const { CODEX_ACCOUNT_RESTART_STARTUP } =
-        await import('../../src/renderer/src/lib/codex-session-restart')
-      const options = { worktreeId, tabId, leafId, ...CODEX_ACCOUNT_RESTART_STARTUP }
+      const { buildCodexAccountRestartStartup } =
+        await import('../../src/renderer/src/lib/agent-account-restart-startup')
+      const options = {
+        worktreeId,
+        tabId,
+        leafId,
+        ...buildCodexAccountRestartStartup({ worktreeId })
+      }
       const old = createRemoteRuntimePtyTransport('fake-host', options)
       await old.connect({ url: '', callbacks: {} })
       expect(old.getPtyId()).toBe('remote:fake-host@@term-old')
@@ -449,9 +479,22 @@ describe('account restart through renderer connection and host spawn', () => {
         expect(replacement.getPtyId()).toBe('remote:fake-host@@term-old')
         expect(host.shutdown).not.toHaveBeenCalled()
         expect(host.providerSpawn.mock.calls.every(([options]) => options.attachOnly)).toBe(true)
-        expect(
-          runtimeCall.mock.calls.filter(([args]) => args.method.startsWith('terminal.create'))
-        ).toHaveLength(2)
+        const creates = runtimeCall.mock.calls.filter(([args]) =>
+          args.method.startsWith('terminal.create')
+        )
+        expect(creates).toHaveLength(2)
+        if (!hostAuthority) {
+          for (const [request] of creates) {
+            expect(request).toMatchObject({
+              method: 'terminal.create',
+              params: {
+                command: configuredCommand,
+                launchAgent: 'codex',
+                startupCommandDelivery: 'shell-ready'
+              }
+            })
+          }
+        }
       } finally {
         replacement.detach?.()
       }

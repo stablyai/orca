@@ -60,11 +60,7 @@ async function detectLocalPackageHomepageIcon(repoPath: string): Promise<RepoIco
   }
 }
 
-/**
- * The connection this client may dial to read `executionHostId`'s remotes, or `refuse` when it may
- * dial none. `runtime:` is refused rather than degraded to `null`: that server runs its own git,
- * and answering "no connection" would read this machine's copy of the path instead.
- */
+// Runtime hosts must be refused: a null connection would read this machine's paths.
 function repoRemoteReadConnection(
   executionHostId: ExecutionHostId
 ): { kind: 'refuse' } | { kind: 'dial'; connectionId: string | null } {
@@ -114,8 +110,6 @@ export async function detectRepoIcon({
       return fileIcon
     }
 
-    // Why the same route again: a remote repoPath must not be probed on the client filesystem —
-    // a same-named local path answers for the wrong repo.
     const homepageIcon =
       route.kind === 'local' ? await detectLocalPackageHomepageIcon(repoPath) : null
     if (homepageIcon) {
@@ -126,13 +120,12 @@ export async function detectRepoIcon({
       return (await detectGitHubAvatarIcon(repoPath, executionHostId, upstream)) ?? undefined
     }
   } catch {
-    // Repo creation must not fail because a best-effort icon probe failed.
+    // Icon failures must not prevent repo creation.
   }
   return undefined
 }
 
-// Why: `upstream: null` is a resolved "not a fork" marker and prevents
-// repeated best-effort probes.
+// A null upstream marks a resolved non-fork and prevents repeated probes.
 export async function detectRepoIconAndUpstream({
   repoPath,
   kind,

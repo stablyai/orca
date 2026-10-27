@@ -19,6 +19,7 @@ type Params = {
   stagedEntries: MobileCommitFailureRecovery['stagedEntries']
   sendGitRequest: SendGitRequest
   sendCommitRequest: (message: string) => Promise<unknown>
+  cancelGenerateCommitMessage: () => void
   runGitSyncSteps: () => Promise<void>
   runGitWorkflow: RunGitWorkflow
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
@@ -30,14 +31,13 @@ type Params = {
   recordCommitFailure: RecordMobileCommitFailure
 }
 
-// Commit + commit-then-action runners. Split from the main runners hook to keep
-// each file under the line limit; behavior is unchanged from the original.
 export function useMobileSourceControlCommitRunners(params: Params) {
   const {
     commitMessage,
     stagedEntries,
     sendGitRequest,
-    sendCommitRequest,
+    sendCommitRequest: sendCommitRequestOnly,
+    cancelGenerateCommitMessage,
     runGitSyncSteps,
     runGitWorkflow,
     loadStatus,
@@ -48,6 +48,14 @@ export function useMobileSourceControlCommitRunners(params: Params) {
     setCommitMessage,
     recordCommitFailure
   } = params
+  // Cancel generation before committing so its late reply cannot refill the cleared message box.
+  const sendCommitRequest = useCallback(
+    (message: string) => {
+      cancelGenerateCommitMessage()
+      return sendCommitRequestOnly(message)
+    },
+    [cancelGenerateCommitMessage, sendCommitRequestOnly]
+  )
 
   const commit = useCallback(async () => {
     const message = commitMessage.trim()

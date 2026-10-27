@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-// A queue action still on its way to the host greys its controls until the host answers.
-
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -22,10 +20,7 @@ import { toast } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
-import type {
-  StructuredAgentSessionMutate,
-  StructuredAgentSessionWrite
-} from './use-structured-agent-session-mutate'
+import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 
 function waitingDraft(messageId: string, position: number): AgentSessionQueuedMessage {
@@ -45,6 +40,8 @@ function renderHeldQueue(
 ): void {
   function HeldQueue(): React.JSX.Element {
     const owner = useStructuredAgentSessionQueuedMessages({
+      admit: () => ({ target: { kind: 'local' }, write: write, mutate: async () => null }),
+      capturePresentation: () => () => true,
       enabled: true,
       queuedMessages,
       queuePause: { reason: 'stopped' },
@@ -52,8 +49,7 @@ function renderHeldQueue(
       hasPendingPrompt: false,
       isWorking: false,
       composerScopeKey: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list only awaits mutate; its answer is never read.
-      mutate: mutate as StructuredAgentSessionMutate,
+      mutate: mutate,
       editTransport: { target: { kind: 'local' }, sessionId: 'session', capable: false, write }
     })
     return <NativeChatQueuedMessageList chatWorktreeId={null} controller={owner} />

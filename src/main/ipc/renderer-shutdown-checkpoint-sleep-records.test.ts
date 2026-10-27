@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import {
   addWorkspace,
   emptySession,
@@ -37,7 +37,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
-vi.mock('../ssh/ssh-config-parser', () => ({
+vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -73,36 +73,39 @@ function record(paneKey: string, capturedAt: number): SleepingAgentSessionRecord
   }
 }
 
-function stage(state: WorkspaceSessionState, sleepRecords?: SleepingAgentSessionRecord[]) {
+function stage(state: WorkspaceSessionState) {
   const event: { returnValue?: unknown } = {}
   handlers.get('app:stage-before-unload-sync')!(event, {
     sessions: [{ state, hostId: 'local' }],
-    ui: {},
-    ...(sleepRecords ? { sleepRecords } : {})
+    ui: {}
   })
   return event.returnValue
 }
 
 describe('the quit checkpoint in a layout-owner build', () => {
   let store: ReturnType<typeof createStore>
+  const quitRecords: SleepingAgentSessionRecord[] = []
+  const quitResumeRecordsFor = vi.fn(() => quitRecords)
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     store = createStore()
-    registerRendererShutdownCheckpointHandler(store)
+    quitRecords.length = 0
+    quitResumeRecordsFor.mockClear()
+    registerRendererShutdownCheckpointHandler(store, quitResumeRecordsFor)
   })
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('records the quit capture’s resume records in main before staging', () => {
+  it('records main’s own quit capture before staging, though the window’s save lacks it', () => {
     store.setWorkspaceSession(session(), 'local')
     const captured = record(PANE_A, 2)
+    quitRecords.push(captured)
 
-    expect(
-      stage({ ...session(), sleepingAgentSessionsByPaneKey: { [PANE_A]: captured } }, [captured])
-    ).toEqual({ ok: true })
+    expect(stage(session())).toEqual({ ok: true })
 
+    expect(quitResumeRecordsFor).toHaveBeenCalledOnce()
     expect(store.getWorkspaceSession('local').sleepingAgentSessionsByPaneKey?.[PANE_A]).toEqual(
       captured
     )
@@ -112,14 +115,12 @@ describe('the quit checkpoint in a layout-owner build', () => {
     // Main woke tab-b (a phone showed it) after the window last saw its record.
     store.setWorkspaceSession(session(), 'local')
     const captured = record(PANE_A, 2)
+    quitRecords.push(captured)
 
-    stage(
-      {
-        ...session(),
-        sleepingAgentSessionsByPaneKey: { [PANE_A]: captured, [PANE_B]: record(PANE_B, 1) }
-      },
-      [captured]
-    )
+    stage({
+      ...session(),
+      sleepingAgentSessionsByPaneKey: { [PANE_A]: captured, [PANE_B]: record(PANE_B, 1) }
+    })
 
     const records = store.getWorkspaceSession('local').sleepingAgentSessionsByPaneKey ?? {}
     expect(Object.keys(records)).toEqual([PANE_A])

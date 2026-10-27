@@ -52,8 +52,7 @@ export class PushDeviceRegistryStore {
     private readonly now: () => number = Date.now
   ) {}
 
-  // The registration id is stable for a (host, device) pair so a re-registered
-  // phone keeps the id the desktop already persisted; only the token rotates.
+  // Stable host/device registration IDs preserve desktop references across phone re-registration; only tokens rotate.
   async upsert(input: PushDeviceUpsert): Promise<PushDeviceUpsertResult> {
     const now = this.now()
     return await this.database.transaction<PushDeviceUpsertResult>(async (transaction) => {

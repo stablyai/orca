@@ -1,7 +1,4 @@
-// A message queued behind a send whose Codex turn has not opened yet waits for that turn: handed
-// over once it opens, it goes in as a steer and its row belongs to that turn, never ahead of it.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake, keeping
-// Codex 0.157's turn bookkeeping, and the rows are drawn by the client's own projection.
+// Drive the real host/journal/adapter and client projection with fake Codex 0.157; sends behind an unopened turn wait to steer into it.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,12 +10,12 @@ import { projectStructuredAgentSessionMessages } from '../../shared/structured-a
 import { projectNativeChatTranscriptMessages } from '../../shared/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../shared/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from '../../shared/native-chat-turn-membership'
-import {
-  CodexAppServerRequestError,
-  type CodexAppServerConnection,
-  type CodexAppServerConnectionHandlers,
-  type openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+import { CodexAppServerRequestError } from '../codex/app-server/codex-app-server-request-error'
+import type {
+  CodexAppServerConnection,
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
 import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
@@ -100,7 +97,7 @@ let interruptEndHeld: boolean
 let turns: ReturnType<typeof codexTurnLifecycleFake>
 let operations = 0
 
-/** The durable ledger stamps its own clock and refuses an id far from it. */
+/** Use the ledger clock; far-future operation ids are refused. */
 const operationId = (): string => `${Date.now()}-${(++operations).toString(16).padStart(32, '0')}`
 
 function envelope(method: string, fields: Record<string, unknown>) {
@@ -133,6 +130,7 @@ async function stop(turnId?: string): Promise<void> {
   if (!stopped.ok) {
     throw new Error(JSON.stringify(stopped.refusal))
   }
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
 }
 
 /** `/compact` as the chat surface runs it; refused while the chat still owes work. */
@@ -249,7 +247,10 @@ beforeEach(async () => {
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
     ...scriptedCodexTransport(openConnection)
   })
-  const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
+  const attachParams = hostTestAttachParams(null, {
+    providerHandle: undefined,
+    options: { model: MODEL.model }
+  })
   attachParams.envelope.clientOperationId = operationId()
   const attached = await host.attach(CALLER, attachParams)
   if (!attached.ok) {
@@ -361,9 +362,10 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect(openWaits.turnIds).toEqual([])
 
     turns.start()
+    expect((await submission(second))?.handedOverAt).toBeUndefined()
+    turns.echo(first)
     await vi.waitFor(async () => expect((await submission(second))?.handedOverAt).toBeDefined())
     await vi.waitFor(() => expect(steers).toBe(1))
-    turns.echo(first)
     says('working on the first', 'reply-1')
     says('more on both', 'reply-2')
 
@@ -397,8 +399,8 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect((await submission(b))?.handedOverAt).toBeUndefined()
 
     turns.start()
-    await vi.waitFor(() => expect(steers).toBe(2))
     turns.echo(zero)
+    await vi.waitFor(() => expect(steers).toBe(2))
     says('working on zero', 'reply-0')
 
     expect(await rowScope(a)).toMatchObject({ kind: 'turn' })
@@ -413,7 +415,7 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect(new Set(rows.slice(3).map((row) => row.turn)).size).toBe(1)
   })
 
-  // A Stop withdraws what is still queued, so the held message is taken back, never sent.
+  // Stop withdraws queued messages before handover.
   it('is withdrawn with the queue by a Stop pressed before that turn opens', async () => {
     const compaction = await compactRunning()
     const zero = await send('queued zero')
@@ -453,7 +455,7 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect(steers).toBe(0)
   })
 
-  // Its turn/start answer lost, the send ahead settles as doubt at once, and that releases the wait.
+  // A lost turn/start answer settles unknown immediately and releases the wait.
   it('goes in at once when the send ahead lost its answer', async () => {
     const compaction = await compactRunning()
     const answer = turns.routes['turn/start']
@@ -470,7 +472,7 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect(answers).toBe(3)
   })
 
-  // A steer still unanswered joined a turn that is open; it opens nothing, so nothing waits on it.
+  // An unanswered steer opens no turn, so later sends need not wait on it.
   it('never holds a message sent into a turn already running, nor one behind such a steer', async () => {
     const warmUp = await send('warm up')
     await vi.waitFor(() => expect(answers).toBe(1))
@@ -517,7 +519,7 @@ describe('a send whose turn Codex answered and never opened', () => {
     expect(openWaits.turnIds).toEqual([])
   })
 
-  // No clock: however long Codex takes to open the turn, the send ahead is never doubted for it.
+  // Slow turn opening alone must never turn an accepted send into doubt.
   it('never doubts a send whose turn is slow to open, and holds the next until it opens', async () => {
     const { first, second } = await heldBehindAnAnsweredSend()
 
@@ -528,17 +530,19 @@ describe('a send whose turn Codex answered and never opened', () => {
     expect(verdictOf((await settled()).submissions, first)).toBe('pending')
     expect((await submission(second))?.handedOverAt).toBeUndefined()
     turns.start()
-    await vi.waitFor(() => expect(steers).toBe(1))
     turns.echo(first)
+    await vi.waitFor(() => expect(steers).toBe(1))
     await vi.waitFor(async () =>
       expect(verdictOf((await settled()).submissions, first)).toBe('accepted')
     )
   })
 
-  // Steered in the moment the turn opens, it can be echoed before the send that opened the turn.
-  it('keeps the turn, and its live status, on the send that opened it when the steer echoes first', async () => {
+  // The opener's echo identifies the choices a matching follow-up may steer into.
+  it('keeps the turn and its live status on the opener when a later steer echoes', async () => {
     const { first, second } = await heldBehindAnAnsweredSend()
     turns.start()
+    expect((await submission(second))?.handedOverAt).toBeUndefined()
+    turns.echo(first)
     await vi.waitFor(() => expect(steers).toBe(1))
 
     turns.echo(second)
@@ -546,7 +550,7 @@ describe('a send whose turn Codex answered and never opened', () => {
       expect(verdictOf((await settled()).submissions, second)).toBe('accepted')
     )
 
-    expect(verdictOf((await settled()).submissions, first)).toBe('pending')
+    expect(verdictOf((await settled()).submissions, first)).toBe('accepted')
     const rows = await drawn()
     expect(rows.map((row) => row.text)).toEqual(['look around', 'and check the tests'])
     expect(new Set(rows.map((row) => row.turn))).toEqual(
@@ -556,7 +560,7 @@ describe('a send whose turn Codex answered and never opened', () => {
   })
 })
 
-// Codex reports the thread idle ahead of the `turn/completed` of a turn it opened, as the fake does.
+// Codex may report idle before turn/completed for an opened turn.
 describe('a send in a turn Codex opened, when Codex reports the thread idle', () => {
   function lateSettlements(clientMessageId: string) {
     return vi

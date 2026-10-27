@@ -13,7 +13,7 @@ import { managedWorktreeDirectories, ScopePathSet } from './session-search-scope
 
 type ScopeRepo = SessionSearchScopeCatalog['repos'][number]
 
-/** `unknown` says this host has no such workspace or project. Never a reason to search everything. */
+/** Unknown scope must never widen to an unrestricted search. */
 export function resolveSessionSearchScope(
   within: AiVaultSearchScopeIdentity,
   catalog: SessionSearchScopeCatalog | null
@@ -28,8 +28,7 @@ export function resolveSessionSearchScope(
   return paths.length > 0 ? { kind: 'resolved', paths } : { kind: 'unknown' }
 }
 
-// Transcripts are keyed by working directory, so a renamed workspace's own
-// history lives under the paths it used to occupy.
+// Transcripts retain the working directory used before a workspace rename.
 function resolveWorkspaceScope(worktreeId: string, catalog: SessionSearchScopeCatalog): string[] {
   const repo = repoById(catalog, getRepoIdFromWorktreeId(worktreeId))
   if (!repo) {
@@ -45,9 +44,7 @@ function resolveWorkspaceScope(worktreeId: string, catalog: SessionSearchScopeCa
   return paths.folded()
 }
 
-// Through the registry rather than reading the path out of the id: the id is
-// client-supplied, and a scope identity must not be a way to hand the host a
-// path to search.
+// Resolve client-supplied IDs through registration to reject arbitrary search paths.
 function registeredWorktreeId(
   worktreeId: string,
   repo: ScopeRepo,
@@ -62,14 +59,11 @@ function registeredWorktreeId(
   if (registered) {
     return registered
   }
-  // The checkout and a folder project's workspaces sit at the repo path, which
-  // this host recorded when it registered the repo.
+  // Checkouts and folder workspaces can use the registered repo path without a workspace row.
   const named = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
   return named && areRuntimePathsEqual(named, repo.path) ? getRepoMainWorktreeId(repo) : null
 }
 
-// A project set up on several hosts resolves on each, the key being the
-// project's id and not a path.
 function resolveProjectScope(projectKey: string, catalog: SessionSearchScopeCatalog): string[] {
   const paths = new ScopePathSet()
   const repoIds = new Set<string>()
@@ -88,7 +82,6 @@ function resolveProjectScope(projectKey: string, catalog: SessionSearchScopeCata
       }
     }
   }
-  // A repo-keyed project is the repo itself, which no setup row has to mention.
   if (projectKey.startsWith('repo:')) {
     repoIds.add(projectKey.slice('repo:'.length))
   }
@@ -125,8 +118,7 @@ function addRepoScopePaths(
   }
 }
 
-// A prior path another workspace now occupies is that workspace's: the id
-// embeds the path, so the claimant's id *is* the prior id.
+// A prior ID registered again belongs to its current workspace, not its former owner.
 function addPriorWorktreePaths(
   paths: ScopePathSet,
   worktreeId: string,

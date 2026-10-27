@@ -27,12 +27,7 @@ import type {
 import type { RuntimeTerminalIdlePolls } from './terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 
-/**
- * A pane with no retained bytes and no status has only its provider's screen to read, and one
- * whose tail shows a rule file's `profile.screenProbeBanner` is probed as before screen rules. So
- * is a clockless pane whose rules read the trusted screen, whatever its status: a re-attached
- * pane's own model can be untrusted. A clocked one settles through the poll, once quiet.
- */
+/** Probe unseen/provider-only panes and clockless screen-ruled agents with untrusted restored models; clocked panes settle through quiet polling. profile.screenProbeBanner also opts in. */
 function shouldProbeVisibleScreen(
   paneAgent: TuiAgent | null,
   record: Pick<RuntimePtyWorktreeRecord, 'lastAgentStatus' | 'lastOutputAt'>,
@@ -48,6 +43,8 @@ function shouldProbeVisibleScreen(
 type RuntimeTerminalWaitDependencies = TuiIdleEvidenceSource & {
   defaultTimeoutMs: number
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
+  /** A disconnected terminal that may still run, so an exit wait keeps waiting for its end. */
+  exitUnsettled(pty: RuntimePtyWorktreeRecord): boolean
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
   startVisibleReadProbe(
     waiter: TerminalWaiter,
@@ -86,7 +83,7 @@ export class RuntimeTerminalWait {
     const condition = options?.condition ?? 'exit'
     const pty = this.deps.getLivePty(handle)
     if (pty) {
-      if (condition === 'exit' && !pty.pty.connected) {
+      if (condition === 'exit' && !pty.pty.connected && !this.deps.exitUnsettled(pty.pty)) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       const ptyWaitText = buildTerminalWaitText(
@@ -94,8 +91,7 @@ export class RuntimeTerminalWait {
         pty.pty.tailPartialLine,
         pty.pty.preview
       )
-      // Why strong verdicts only, here and at every other synchronous site: weak evidence
-      // cannot see a dialog the tail lost, so it settles only on the poll, after a screen read.
+      // Only strong verdicts settle synchronously; weak evidence needs the poll's rendered-screen check.
       const ptyVerdict = condition === 'tui-idle' ? this.evaluatePty(pty.pty, ptyWaitText) : null
       if (ptyVerdict?.kind === 'blocked') {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyVerdict.reason)
@@ -135,7 +131,11 @@ export class RuntimeTerminalWait {
         if (!live) {
           this.waiters.remove(waiter)
           reject(new Error('terminal_handle_stale'))
-        } else if (condition === 'exit' && !live.pty.connected) {
+        } else if (
+          condition === 'exit' &&
+          !live.pty.connected &&
+          !this.deps.exitUnsettled(live.pty)
+        ) {
           this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
         } else if (condition === 'tui-idle') {
           const livePtyWaitText = buildTerminalWaitText(
@@ -172,17 +172,13 @@ export class RuntimeTerminalWait {
       return buildTerminalWaitBlockedResult(handle, condition, leaf, leafVerdict.reason)
     }
 
-    // Why: if the agent already announced rest before the waiter was registered, resolve
-    // immediately. Only 'idle' satisfies tui-idle, not 'permission'. Permission means the
-    // agent is blocked on user approval, not finished with its task.
+    // Strong rest can satisfy before waiter registration; permission is user-blocked, not task completion.
     if (leafVerdict?.kind === 'ready-strong') {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
 
     return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
-      // Why: tui-idle depends on OSC title transitions from a recognized agent.
-      // If no agent is detected, the waiter would hang forever. Enforce a default
-      // timeout so unsupported CLIs fail predictably instead of silently blocking.
+      // Bound unsupported-agent waits so missing OSC classification cannot hang forever.
       const effectiveTimeoutMs =
         typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
           ? options.timeoutMs
@@ -215,9 +211,7 @@ export class RuntimeTerminalWait {
 
       this.waiters.add(waiter)
 
-      // Why: the handle may go stale or exit in the small gap between the first
-      // validation and waiter registration. Re-checking here keeps wait --for
-      // exit honest instead of hanging on a terminal that already changed.
+      // Revalidate after waiter registration to catch handle replacement or exit in the gap.
       try {
         const live = this.deps.getLiveLeaf(handle)
         if (getTerminalState(live.leaf) === 'exited') {
@@ -235,15 +229,10 @@ export class RuntimeTerminalWait {
               buildTerminalWaitBlockedResult(handle, condition, live.leaf, verdict.reason)
             )
           } else if (verdict.kind === 'ready-strong') {
-            // Why: don't clear lastAgentStatus here. It's a factual record of the
-            // last detected OSC state, not a one-shot signal. Clearing it causes
-            // subsequent tui-idle waiters to hang even though the agent is idle —
-            // the first waiter consumes the status and all later ones see null.
+            // Status is retained evidence, not a consumable signal; clearing idle strands subsequent waiters.
             this.waiters.resolve(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
           } else {
-            // Why: renderer-synced previews can show a known ready prompt even
-            // while the last OSC title is still "working"; keep polling the
-            // preview/title until the waiter resolves or hits its timeout.
+            // Ready previews can precede idle OSC titles; keep polling both.
             this.polls.startLeaf(waiter, live.leaf, verdict)
             const paneAgent = this.deps.getPaneAgent(live.leaf.ptyId)
             if (shouldProbeVisibleScreen(paneAgent, live.leaf, liveLeafWaitText)) {

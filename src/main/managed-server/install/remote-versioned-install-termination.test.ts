@@ -1,23 +1,22 @@
-import type * as ExecCommandModule from '../../ssh/remote-exec-command'
+import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../ssh/remote-exec-command', async (importOriginal) => ({
+vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
 
-import type { SshConnection } from '../../ssh/ssh-connection'
 import { REMOTE_INSTALL_MODELS } from './remote-install-model'
-import { execCommand } from '../../ssh/remote-exec-command'
+import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import {
   abandonInstall,
   finalizeInstall,
   isRemoteInstallComplete
 } from './remote-versioned-install'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked execCommand never reads the connection.
-const conn = {} as SshConnection
+const conn = unusedSshConnection()
 const mockExec = vi.mocked(execCommand)
 
 beforeEach(() => {
@@ -56,7 +55,6 @@ describe.each([
           sshChannelCloseConfirmed: true
         })
       )
-      // abandonInstall also reports that the lock was not confirmed removed.
       await expect(release(conn, remoteDir, host)).resolves.toBeFalsy()
     }
   )

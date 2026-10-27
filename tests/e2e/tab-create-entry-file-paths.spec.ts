@@ -19,14 +19,10 @@ test('new-tab file results prioritize the filename and reveal the full path on h
   await ensureTerminalVisible(orcaPage)
 
   const newTab = orcaPage.getByRole('button', { name: 'New tab' })
-  // Why: aria-controls is only set after results exist, so it cannot be the
-  // open-state locator. aria-autocomplete is always on this input and is not
-  // translated copy.
+  // Use untranslated aria-autocomplete because aria-controls appears only once results exist.
   const input = orcaPage.locator('input[role="combobox"][aria-autocomplete="list"]')
   const row = orcaPage.locator('[role="option"]').filter({ hasText: 'Open file' }).first()
-  // Keyboard activation avoids the animated tab bar's pointer stability gate.
-  // Re-open and re-type until the file scan has produced an Open file row —
-  // the scan starts when the menu opens and can outlast a single fill.
+  // Activate by keyboard to avoid animated-strip stability; reopen/refill until async file scanning produces a result.
   await expect(async () => {
     if ((await newTab.getAttribute('aria-expanded')) !== 'true') {
       await newTab.press('Space')
@@ -55,16 +51,12 @@ test('new-tab file results prioritize the filename and reveal the full path on h
   })
   expect(overflow).toEqual({ filenameClipped: false, rowClipped: false })
 
-  // Two hovers on purpose: results stream in and remount the row, and Radix only
-  // opens on a pointermove it actually receives. A single hover can land before
-  // the remount and leave the cursor sitting still over a row that never saw it.
+  // Hover twice because streamed results can remount under a stationary pointer before Radix receives pointermove.
   await row.hover({ position: { x: 20, y: 12 } })
   await orcaPage.waitForTimeout(250)
   await row.hover({ position: { x: 40, y: 12 } })
 
-  // Exact cursor placement is arithmetic, unit-tested via cursorTooltipOffsets.
-  // Asserting it here measured the app mid-reflow and was flaky; what E2E is
-  // uniquely good for is that the tooltip really opens with the whole path.
+  // Units pin exact cursor offsets; E2E proves the full-path tooltip opens without measuring mid-reflow geometry.
   await expect(
     orcaPage.locator('[data-slot="tooltip-content"]').filter({ hasText: relativeFilePath })
   ).toBeVisible()

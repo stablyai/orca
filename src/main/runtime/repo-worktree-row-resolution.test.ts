@@ -13,6 +13,7 @@ import {
   resolveScopedWorktreeIdRow,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 function repo(
   id: string,
@@ -46,13 +47,14 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
 } {
   const metaById: Record<string, WorktreeMeta> = {}
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
   const store = {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getAllWorktreeLineage: () => ({}),
     getProjects: () => [],
     getSettings: () => ({}),
-    setWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
       const next = { ...metaById[worktreeId], ...updates } as WorktreeMeta
       metaById[worktreeId] = next
       return next
@@ -319,12 +321,7 @@ describe('host-qualified scoped worktree resolution', () => {
   })
 })
 
-/**
- * #16243: the renderer can only address a workspace by `id:<repoId>::<path>`, and this scoped
- * lookup is what a host-qualified removal resolves through. It matched the id byte for byte while a
- * `path:` selector has always compared through `normalizeRuntimePathForComparison`, so a stored id
- * spelling its path differently from `git worktree list` resolved for the CLI and not for the UI.
- */
+/** Normalize id-selector paths like path selectors so UI removal resolves the same host-qualified row as CLI (#16243). */
 describe('scoped worktree id resolution across path spellings (#16243)', () => {
   it.each([
     ['a trailing slash', '/same/worktree', 'shared::/same/worktree/'],

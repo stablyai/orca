@@ -1,45 +1,4 @@
-/**
- * issue1-ui-flash repro: on a paired client viewing a remote-runtime worktree,
- * TWO independent writers own the same store keys for one mirrored pane:
- *
- *  A) the client's own byte-derived pipeline (renderer owns agent status for
- *     remote panes: pty-connection.ts `shouldOwnAgentStatusInRenderer =
- *     runtimeEnvironmentId !== null`): setAgentStatus('working', prompt) ->
- *     setGeneratedTabTitleFromAgentPrompt writes agentStatusByPaneKey +
- *     tab.generatedTitle (+ unified generatedLabel), all client-clock stamped;
- *  B) the host `session.tabs` snapshot mirror (applyWebSessionTabsSnapshot):
- *     every accepted snapshot REBUILDS the mirrored TerminalTab (dropping the
- *     client-set generatedTitle — buildMirroredTerminalTabs carries only
- *     default/custom title, color, pin, viewMode) and last-write-wins-merges
- *     agentStatus by cross-machine wall-clock updatedAt (or DELETES the client
- *     entry outright when the host surface carries none).
- *
- * Neither writer is authoritative, so while both keep publishing (the host
- * republishes on any host store change; client OSC/hook heartbeats keep
- * firing) the client UI alternates between frame A ("Configurar y entender
- * ..." + working) and frame B ("Terminal" + "Done - Claude") indefinitely —
- * the flash in the user screenshots. The tab bar renders terminal titles from
- * tabsByWorktree via resolveTerminalTabTitle (TabBar.tsx:1037), so
- * tab.generatedTitle is the VISIBLE label source that flaps.
- *
- * Suite layout:
- *  - "single-authority invariant" tests assert convergence. This is the fix
- *    gate (RED before the client-authority fence existed).
- *  - "converged sequence pinned" tests were the inverted defect pins: same
- *    harness, same controlled clocks, now asserting the exact post-fix store
- *    sequence (one transition, then stability) instead of the alternation.
- *  - "authority handback" tests cover the other direction: a pane the client
- *    does NOT own (never wrote / torn down / gone stale) still cedes to the
- *    host, and host-only state classes still pierce the fence.
- *
- * The fix is a client-authority fence keyed by pane: pty-connection registers
- * the pane when `shouldOwnAgentStatusInRenderer` is decided and marks a write
- * on each byte-derived status, so `replayClientOscWorking` below does both —
- * that is what the renderer really does for a remote pane.
- *
- * Clocks are injected everywhere (vi.setSystemTime + explicit snapshot
- * timestamps); timing is never the oracle — transition counts/ordering are.
- */
+/** Paired panes receive both client byte-derived status/titles and host snapshot echoes. Proven client ownership must fence stale echoes despite cross-machine clocks; teardown returns authority and host-only states pierce the fence. Drive real mirror/store logic with controlled clocks and assert transition order/count, including generatedLabel and epoch stability. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
@@ -62,8 +21,7 @@ import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-ap
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { shouldApplyWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 
-// Why: web-session-tabs-sync imports the app-level store singleton; this
-// harness drives a createTestStore instance instead, like the sibling suite.
+// Mirror imports app singleton; redirect it to this createTestStore harness.
 vi.mock('../store', () => ({
   useAppStore: {
     setState: vi.fn(),
@@ -82,11 +40,9 @@ const MIRROR_PANE_KEY = makePaneKey(MIRROR_TAB_ID, LEAF_ID)
 const HOST_PANE_KEY = makePaneKey(HOST_TAB_ID, LEAF_ID)
 const T0 = 1_700_000_000_000
 const CYCLES = 3
-// The prompt Claude is running on the host (user screenshot: "Configurar y entender ...").
 const CLIENT_PROMPT = 'Configurar y entender los comprobantes electronicos del sistema'
 const EXPECTED_GENERATED_TITLE = deriveGeneratedTabTitle(CLIENT_PROMPT)!
 
-// Unrelated local pane that must survive every mirror cycle untouched.
 const LOCAL_WT = 'repo1::/path/local-wt'
 const LOCAL_PANE_KEY = makePaneKey('local-tab-1', LEAF_ID)
 
@@ -109,8 +65,6 @@ function makeHostSnapshot(args: {
       {
         type: 'terminal',
         id: HOST_SURFACE_ID,
-        // Host has no generated title for this pane, so its resolved surface
-        // title is the plain default (frame B in the screenshots).
         title: 'Terminal',
         parentTabId: HOST_TAB_ID,
         leafId: LEAF_ID,
@@ -119,8 +73,6 @@ function makeHostSnapshot(args: {
         terminal: 'terminal-1',
         ...(args.includeAgentStatus
           ? {
-              // Host hook projection: the turn looks finished from the host's
-              // point of view ("Done - Claude" in the sidebar, frame B).
               agentStatus: {
                 state: 'done' as const,
                 prompt: '',
@@ -153,17 +105,11 @@ function applyHostSnapshot(
   store.setState(patch as Partial<AppState>)
 }
 
-/**
- * Byte-identical replay of what the client renderer does for a remote pane on
- * a Claude status OSC (pty-connection.ts handleRendererOwnedAgentStatus with
- * shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null): timing is
- * undefined, so updatedAt is the CLIENT's Date.now().
- */
+/** Replay paired pty-connection OSC handling with client Date.now(); return ownership release held until dispose. */
 /** Returns the pane's release, as pty-connection holds it for dispose(). */
 function replayClientOscWorking(store: TestStore, clientNow: number): () => void {
   vi.setSystemTime(clientNow)
-  // Exactly what pty-connection does for a remote pane: claim the pane once at
-  // transport creation, then prove the claim on every byte-derived status.
+  // Claim on transport creation, then verify ownership on each byte-derived status.
   const release = registerRendererOwnedAgentStatusPane(MIRROR_PANE_KEY, ENV)
   markRendererOwnedAgentStatusWrite(MIRROR_PANE_KEY)
   store
@@ -196,8 +142,6 @@ function captureFrame(store: TestStore, source: string): Frame {
     source,
     statusState: s.agentStatusByPaneKey[MIRROR_PANE_KEY]?.state ?? null,
     tabGeneratedTitle: tab?.generatedTitle ?? null,
-    // What the tab bar shows: resolveTerminalTabTitle precedence for this
-    // fixture reduces to generatedTitle || title.
     visibleTabBarLabel: tab?.generatedTitle ?? tab?.title ?? null,
     unifiedGeneratedLabel: unified?.generatedLabel ?? null,
     unifiedLabel: unified?.label ?? null,
@@ -224,20 +168,22 @@ function seedPairedClientStore(): TestStore {
     },
     worktreesByRepo: {
       repo1: [
-        makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+        // The paired server owns this workspace, so its titles stay the window's to apply.
+        makeWorktree({
+          id: WT,
+          repoId: 'repo1',
+          path: '/path/wt1',
+          runtimeOwnerEnvironmentId: ENV
+        }),
         makeWorktree({ id: LOCAL_WT, repoId: 'repo1', path: '/path/local-wt' })
       ]
     },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  })
   return store
 }
 
-/**
- * Drives the dual-publication interleaving with fully controlled clocks:
- * host and client each keep emitting with normally advancing timestamps
- * (zero cross-machine skew required). Returns one frame per publication.
- */
+/** Interleave host/client publications with advancing controlled clocks and no skew; capture each resulting frame. */
 function runDualPublicationCycles(store: TestStore, includeAgentStatus: boolean): Frame[] {
   applyHostSnapshot(
     store,
@@ -246,11 +192,8 @@ function runDualPublicationCycles(store: TestStore, includeAgentStatus: boolean)
   )
   const frames: Frame[] = [captureFrame(store, 'host-snapshot-1')]
   for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
-    // Client OSC heartbeat: Claude is mid-turn per the client's byte stream.
     replayClientOscWorking(store, T0 + cycle * 1_000 - 500)
     frames.push(captureFrame(store, `client-osc-${cycle}`))
-    // Host republishes (any host store change republishes; the hook row
-    // re-delivers `done` with a fresh host wall-clock updatedAt).
     applyHostSnapshot(
       store,
       makeHostSnapshot({
@@ -284,11 +227,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       const frames = runDualPublicationCycles(store, true)
       const evidence = `observed publication frames:\n${JSON.stringify(frames, null, 2)}`
 
-      // Disagreement begins at the first client byte-derived write (frame 1).
-      // A single-authority design allows at most one more transition after
-      // that (whichever side is authoritative wins and sticks). Current main
-      // flips on EVERY publication: 2 * CYCLES status transitions and
-      // 2 * CYCLES visible-label transitions.
+      // After the first client write, authority may settle once but must not alternate status/title on each publication.
       const statusTransitionsAfterDisagreement = countTransitions(
         frames.slice(1).map((f) => f.statusState)
       )
@@ -301,14 +240,12 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
 
     it('a host surface without agentStatus does not delete the client-owned fresher live entry', () => {
       const store = seedPairedClientStore()
-      // Initial mirror: host publishes the pane with NO hook status at all.
       applyHostSnapshot(
         store,
         makeHostSnapshot({ snapshotVersion: 1, hostNow: T0, includeAgentStatus: false }),
         T0
       )
-      // Client byte pipeline: agent is working; client clock strictly AHEAD of
-      // anything the host ever published, so no freshness rule can justify a wipe.
+      // Client clock exceeds all host timestamps; freshness cannot justify deletion.
       replayClientOscWorking(store, T0 + 1_000)
       expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
 
@@ -318,8 +255,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         T0 + 1_500
       )
       const entryAfterMirror = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
-      // RED on main: buildMirroredAgentStatusPatch deletes the live entry
-      // because the host surface carries no agentStatus for the pane key.
+      // Host omission must not delete a client-owned live row.
       expect(entryAfterMirror?.state, 'host mirror deleted the fresher client live entry').toBe(
         'working'
       )
@@ -331,7 +267,6 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       const store = seedPairedClientStore()
       expect(EXPECTED_GENERATED_TITLE).toBeTruthy()
 
-      // Unrelated local pane written by the local pipeline; must never be touched.
       store
         .getState()
         .setAgentStatus(
@@ -346,10 +281,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
 
       const frames = runDualPublicationCycles(store, true)
 
-      // Exact post-fix sequence: the host frame owns the pane until the client's
-      // byte pipeline claims it, and every later republication is a no-op —
-      // including the unified generatedLabel, which now tracks the terminal tab
-      // instead of diverging behind the equality bail.
+      // Host owns until the first byte write; later echoes must be no-ops including unified generatedLabel.
       const expectedFrames: Partial<Frame>[] = [
         {
           source: 'host-snapshot-1',
@@ -376,8 +308,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       expect(countTransitions(frames.map((f) => f.statusState))).toBe(1)
       expect(countTransitions(frames.map((f) => f.visibleTabBarLabel))).toBe(1)
 
-      // No re-render/re-sort churn: a host republication that changes nothing
-      // must not bump the global agent-status epoch.
+      // No-op echoes must not bump agent-status epoch and trigger render/sort churn.
       for (const [index, frame] of frames.entries()) {
         if (frame.source.startsWith('host-snapshot-') && index > 0) {
           expect(frame.agentStatusEpoch, frame.source).toBe(frames[index - 1]!.agentStatusEpoch)
@@ -392,8 +323,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       const store = seedPairedClientStore()
       const frames = runDualPublicationCycles(store, false)
 
-      // The hook-only host publishes nothing for an OSC-driven pane; that is not
-      // proof the agent stopped, so the client entry survives every cycle.
+      // Hook-only host omission is not exit evidence for OSC-driven panes.
       const statusSequence = frames.map((f) => f.statusState)
       expect(statusSequence).toEqual([
         null,
@@ -412,8 +342,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
     })
   })
 
-  // The fence must be narrow: it only holds while THIS renderer is proving it
-  // owns the pane's bytes, and it never hides host-only state classes.
+  // Fence only proven client writers and never host-only state classes.
   describe('authority handback', () => {
     it('does not fence a pane that claimed authority but never wrote byte-derived status', () => {
       const store = seedPairedClientStore()
@@ -440,7 +369,6 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
     it('cedes back to the host once the pane is torn down', () => {
       const store = seedPairedClientStore()
       const release = replayClientOscWorking(store, T0 + 500)
-      // pty-connection.dispose(): a detached client stops observing the bytes.
       release()
 
       applyHostSnapshot(
@@ -458,21 +386,12 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toBeUndefined()
     })
 
-    // Contract change (STA-3107): the stale boundary DECAYS a client-owned
-    // pane, it does not delete it. This test previously asserted deletion,
-    // whose premise — that going stale hands the pane back to the host — does
-    // not hold when the host publishes no status for the pane: there is no host
-    // value to hand back to, so deletion erased the pane from the sidebar
-    // instead. A paired client asleep past the boundary lost a row for every
-    // pane it owned on the first snapshot after wake. Teardown (the test above)
-    // is the real handback signal; staleness is a display state that every
-    // consumer already renders as idle, exactly like a local pane.
+    // Staleness decays client status to idle rather than deleting it (STA-3107); host omission offers no replacement. Only teardown hands authority back, so waking clients retain their rows.
     it('decays rather than deletes a client "working" the agent never closed', () => {
       const store = seedPairedClientStore()
       replayClientOscWorking(store, T0)
       expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
 
-      // The agent went OSC-silent: no further client write, no host status.
       const afterStale = T0 + AGENT_STATUS_STALE_AFTER_MS + 1
       applyHostSnapshot(
         store,

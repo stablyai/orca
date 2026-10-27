@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../shared/structured-agent-cli-conversation-adoption'
+import {
+  adoptsCliConversations,
+  CLI_CONVERSATION_ADOPTING_AGENTS
+} from '../../shared/structured-agent-cli-conversation-adoption'
 import {
   clearGrokSessionPathLookupCacheForTests,
   findGrokChatHistoryBySessionId,
@@ -23,7 +26,6 @@ import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { resolveOpenCodeDatabasePath } from '../opencode/opencode-data-directory'
 import * as hostReadableTranscriptPath from './host-readable-transcript-path'
 
-// The OpenCode reader's worker, run in process.
 vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => {
   const query = await import('./transcript-opencode-sqlite-query')
   return {
@@ -44,7 +46,7 @@ async function createAdoptionTestDirectory(prefix: string): Promise<string> {
 }
 
 beforeEach(() => {
-  // Grok and Pi also look where Session History lists them from; keep that off the real home.
+  // Keep fallback history discovery away from real user homes.
   vi.stubEnv('GROK_HOME', join(tmpdir(), 'orca-adopt-no-grok-home'))
   vi.stubEnv('PI_CODING_AGENT_DIR', join(tmpdir(), 'orca-adopt-no-pi-home'))
 })
@@ -59,7 +61,6 @@ afterEach(async () => {
   root = null
 })
 
-/** Each agent's CLI conversation as its own CLI lays it out under an account home. */
 const RECORDED: Record<'grok' | 'omp' | 'pi', (home: string, text: string) => Promise<string>> = {
   grok: async (home, text) => {
     const dir = join(home, 'sessions', encodeURIComponent('/repo/orca'), SESSION_ID)
@@ -97,7 +98,7 @@ const RECORDED: Record<'grok' | 'omp' | 'pi', (home: string, text: string) => Pr
     )
     return file
   },
-  // Pi's documented format: a system message carries the prompt in `sections`, its content empty.
+  // Pi system prompts live in sections with empty content.
   pi: async (home, text) => {
     const dir = join(home, 'sessions', '--repo-orca--')
     await mkdir(dir, { recursive: true })
@@ -157,16 +158,24 @@ function adopt(
 }
 
 describe('which chats can take over a CLI conversation', () => {
-  it('maps exactly the row agents of the agents the host registers a transcript import for', () => {
-    expect(
-      Object.fromEntries(
-        STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.filter(
-          (registration) => registration.transcriptImport
-        ).flatMap((registration) =>
-          registration.sessionHistory.rowAgents.map((row) => [row, registration.definition.agent])
-        )
-      )
-    ).toEqual(CLI_CONVERSATION_ADOPTING_AGENTS)
+  it('names, for every row an importing chat lists, only chats that import and list it', () => {
+    const importing = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.filter(
+      (registration) => registration.transcriptImport
+    )
+    const rows = new Set(importing.flatMap((registration) => registration.sessionHistory.rowAgents))
+    expect(new Set(Object.keys(CLI_CONVERSATION_ADOPTING_AGENTS))).toEqual(rows)
+    for (const [row, agents] of Object.entries(CLI_CONVERSATION_ADOPTING_AGENTS)) {
+      for (const agent of agents) {
+        const registration = importing.find((entry) => entry.definition.agent === agent)
+        expect(registration?.sessionHistory.rowAgents, `${agent} takes over ${row}`).toContain(row)
+      }
+    }
+    for (const registration of importing) {
+      const { agent } = registration.definition
+      if (adoptsCliConversations(agent)) {
+        expect(CLI_CONVERSATION_ADOPTING_AGENTS[agent][0]).toBe(agent)
+      }
+    }
   })
 })
 
@@ -295,7 +304,7 @@ it.each(['win32', 'linux', 'darwin'] as const)(
     )
     const nativePlatform = process.platform
     const needsWslResolution = hostReadableTranscriptPath.needsWslHostResolution
-    // Simulated home precedence still reads fixture paths native to the actual host.
+    // Simulate home precedence while retaining fixture paths native to the actual host.
     vi.spyOn(hostReadableTranscriptPath, 'needsWslHostResolution').mockImplementation((path) =>
       needsWslResolution(path, nativePlatform)
     )

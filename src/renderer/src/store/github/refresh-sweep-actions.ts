@@ -7,6 +7,7 @@ import { issueCacheKey, prCacheKey } from './cache-identity'
 import { CACHE_TTL, evictStaleEntries } from './cache-policy'
 import { pruneExpiredPRRefreshStates } from './pr-refresh-state'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export const createRefreshSweepActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -24,8 +25,7 @@ export const createRefreshSweepActions = (
         projectViewCache: evictStaleEntries(s.projectViewCache),
         prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
       }
-      // Why: each eviction helper returns its input untouched when nothing changed, so an
-      // unchanged sweep can return `s` and avoid waking every subscriber on window resume.
+      // Unchanged eviction returns input maps; return s too so window-resume sweeps do not wake every subscriber.
       return next.commentsCache === s.commentsCache &&
         next.prCache === s.prCache &&
         next.issueCache === s.issueCache &&
@@ -47,7 +47,7 @@ export const createRefreshSweepActions = (
     const now = Date.now()
     const repoLookup = getGitHubRepoLookupIndex(state.repos)
 
-    for (const worktrees of Object.values(state.worktreesByRepo)) {
+    for (const worktrees of Object.values(selectWorktreesByRepo(state))) {
       for (const wt of worktrees) {
         const repo = repoLookup.findById(wt.repoId)
         if (!repo) {
@@ -77,7 +77,7 @@ export const createRefreshSweepActions = (
   refreshGitHubForWorktree: (worktreeId) => {
     const state = get()
     let worktree: Worktree | undefined
-    for (const worktrees of Object.values(state.worktreesByRepo)) {
+    for (const worktrees of Object.values(selectWorktreesByRepo(state))) {
       worktree = worktrees.find((w) => w.id === worktreeId)
       if (worktree) {
         break
@@ -92,7 +92,6 @@ export const createRefreshSweepActions = (
       return
     }
 
-    // Invalidate this worktree's cache entries
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
     const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
     const prKey = prCacheKey(
@@ -129,7 +128,6 @@ export const createRefreshSweepActions = (
       return updates
     })
 
-    // Re-fetch (skip when branch is empty — detached HEAD during rebase)
     if (!worktree.isBare && branch) {
       get().enqueueGitHubPRRefresh(worktreeId, 'post-push', 100)
     }

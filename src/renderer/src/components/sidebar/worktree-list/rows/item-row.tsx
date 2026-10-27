@@ -1,12 +1,11 @@
+import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
 import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
 import WorktreeCard, { type ActiveSurfaceVariant } from '../../WorktreeCard'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
@@ -22,7 +21,7 @@ import {
 import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { getWorktreeOptionId } from './option-dom'
+import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 import type { WorktreeRowDragState } from '../drag/row-state'
 
 export type WorktreeItemRowContext = {
@@ -58,13 +57,12 @@ export type WorktreeItemRowContext = {
   onCardDragStart: (
     event: React.DragEvent<HTMLDivElement>,
     worktreeId: string,
-    draggedIds: readonly string[]
+    draggedCopies: DraggedWorktreeCopies
   ) => void
   onCardDragEnd: () => void
 }
 
-// Geometry differs three ways: a plain grouped row, a lineage child inheriting its parent's
-// surface, and a row inside a folder-backed project group.
+// Handle plain rows, inherited lineage offsets and folder-backed project geometry separately.
 function getWorktreeItemRowGeometry(
   ctx: WorktreeItemRowContext,
   itemRow: WorktreeItemRow,
@@ -123,11 +121,10 @@ export function renderWorktreeItemRow(
     ctx.worktreeDragState.draggingWorktreeId &&
     (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
       ctx.nativeLineageDropTargetId === itemRow.worktree.id)
-  const isActiveWorktree =
-    ctx.activeWorktreeId === itemRow.worktree.id &&
-    (!ctx.activeWorkspaceExecutionHostId ||
-      worktreeIdentity ===
-        composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, itemRow.worktree.id))
+  const isActiveWorktree = isActiveSidebarWorkspace(itemRow.worktree, {
+    worktreeId: ctx.activeWorktreeId,
+    hostId: ctx.activeWorkspaceExecutionHostId ?? null
+  })
   return (
     <div
       key={itemRow.rowKey}
@@ -152,8 +149,13 @@ export function renderWorktreeItemRow(
       data-scroll-reveal-highlight={
         ctx.highlightedRevealRowKey === itemRow.rowKey ? 'true' : undefined
       }
-      // Why: nested child cards live inside the parent's clickable body; bubbling would activate/edit the parent too.
-      onClick={nested ? stopNestedWorktreeCardBubble : undefined}
+      onClick={(event) => {
+        forwardOptionPressToCardSurface(event)
+        // Why: nested child cards live inside the parent's clickable body; bubbling would activate/edit the parent too.
+        if (nested) {
+          event.stopPropagation()
+        }
+      }}
       onClickCapture={ctx.onRowClickCapture}
       onDoubleClick={nested ? stopNestedWorktreeCardBubble : undefined}
       onDragStart={nested ? stopNestedWorktreeCardBubble : undefined}

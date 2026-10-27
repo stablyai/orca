@@ -1,5 +1,4 @@
-// Where a browser keeps its per-host device key. The private key is a non-extractable CryptoKey,
-// so script on this origin can sign with it but can never read it out.
+// Per-host private keys are non-extractable: origin scripts can sign but cannot export them.
 export type WebDeviceKeyRecord = {
   /** `${hostPublicKeyB64}|${environmentId}` */
   id: string

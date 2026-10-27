@@ -4,15 +4,15 @@
   "family": "tasks.workspace-ssh-local",
   "namedDeltas": [],
   "values": {
+    "057cfe2200b5": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"repoId\":\"repo-1\"}}"
+    },
     "11405363c62d": {
       "name": "workspaceAgent",
       "ordinal": 1,
       "value": "claude"
-    },
-    "5da628eecd2f": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     },
     "7400f4eebe66": {
       "agent": "claude",
@@ -28,38 +28,6 @@
       "ordinal": 3,
       "value": {
         "$rpc": "null"
-      }
-    },
-    "9fdd4a87eb0b": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": ["codex", "claude"]
-        }
       }
     },
     "a9ec92743b9e": {
@@ -79,6 +47,38 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ebcf6c6d8d86": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repoId": "repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
+      }
     }
   },
   "recording": {
@@ -87,8 +87,8 @@
       {
         "id": "local-agents-detected",
         "observation": {
-          "sender": ["9fdd4a87eb0b"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["ebcf6c6d8d86"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

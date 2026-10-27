@@ -21,11 +21,7 @@ export type ParentSlot<TEntry> = {
   index: number
 }
 
-/**
- * One directory the walk has opened but not finished. `entries` is the admitted
- * listing; `childResults` is only allocated for the root, because callers read
- * top-level items and aggregate totals rather than the whole tree.
- */
+/** An unfinished directory. Retain only root child results because callers read top-level items and totals. */
 export type DirectoryFrame<TEntry> = {
   result: WorkspaceSpaceEntryScan
   entries: readonly TEntry[]

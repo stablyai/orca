@@ -2,27 +2,31 @@ import { posix, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
-  sanitizeWorktreeDisplayName,
-  resolveWorktreeCreateDisplayName,
-  resolveWorktreeCreateDisplayNameRequest,
-  resolveWorktreeCreateDisplayNameMeta,
   ensurePathWithinWorkspace,
-  computeBranchName,
-  getConfiguredBranchPrefix,
-  computeValidatedBranchName,
   computeWorktreePath,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
-  shouldSetDisplayName,
-  mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
   isWindowsLongPathWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from './worktree-logic'
+import {
+  sanitizeWorktreeDisplayName,
+  resolveWorktreeCreateDisplayName,
+  resolveWorktreeCreateDisplayNameRequest,
+  resolveWorktreeCreateDisplayNameMeta,
+  shouldSetDisplayName
+} from './worktree-display-name'
+import {
+  computeBranchName,
+  getConfiguredBranchPrefix,
+  computeValidatedBranchName
+} from './worktree-branch-name'
+import { mergeWorktree } from './worktree-metadata-merge'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 
 describe('sanitizeWorktreeName', () => {
@@ -55,18 +59,12 @@ describe('sanitizeWorktreeName', () => {
   })
 
   it('collapses internal consecutive dots so git check-ref-format accepts the branch', () => {
-    // Why: a prompt containing `../../` used to slugify to `..-..-foo` and
-    // survive sanitization with `..` intact. `git branch` then rejected it
-    // with "is not a valid branch name", breaking worktree creation from the
-    // composer's auto-named branches.
+    // Slugification can preserve internal .., which Git rejects even without path separators.
     expect(sanitizeWorktreeName('for-..-..-feature')).toBe('for-.-.-feature')
     expect(sanitizeWorktreeName('a..b...c')).toBe('a.b.c')
   })
 
   it('preserves non-ASCII letters and numbers', () => {
-    // Why: users name workspaces in their own language (CJK, accented Latin,
-    // Cyrillic, etc.). Stripping these to ASCII left the name empty and threw
-    // "Invalid worktree name" on every non-Latin keyboard input.
     expect(sanitizeWorktreeName('中文')).toBe('中文')
     expect(sanitizeWorktreeName('日本語 テスト')).toBe('日本語-テスト')
     expect(sanitizeWorktreeName('café-déjà')).toBe('café-déjà')

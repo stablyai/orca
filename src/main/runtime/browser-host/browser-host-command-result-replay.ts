@@ -24,9 +24,17 @@ export function isBrowserHostUnplacedPageResult(
   const page = pages.get(params.browserPageId)
   const record = page?.records.get(params.commandSequence)
   return (
-    page?.generation === params.pageHostGeneration &&
-    record?.event.commandId === params.commandId &&
-    record.resultAdmission !== 'placed-page'
+    (page?.generation === params.pageHostGeneration &&
+      record?.event.commandId === params.commandId &&
+      record.resultAdmission !== 'placed-page') ||
+    Boolean(
+      page &&
+      record?.event.command.type === 'switchProfile' &&
+      record.settled &&
+      record.event.pageHostGeneration === params.pageHostGeneration &&
+      record.event.commandId === params.commandId &&
+      params.pageHostGeneration < page.generation
+    )
   )
 }
 

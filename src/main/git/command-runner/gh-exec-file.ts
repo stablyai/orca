@@ -39,17 +39,13 @@ import {
   GH_RETRY_DELAYS_MS
 } from './gh-retry-policy'
 
-// `cwd?` omitted for non-repo-scoped gh calls (rate_limit, listAccessibleProjects) so one WSL-aware wrapper serves both.
-// `wslDistro?` routes global cwd-less gh through `wsl.exe -d <distro>` on WSL-only Windows where gh.exe isn't on host PATH.
-// `idempotent?` gates transient-error retry (auto-detected from argv); retrying a write that already reached GitHub would duplicate it.
+// cwd is optional; wslDistro routes global calls when Windows has no host gh binary.
+// Retry only idempotent calls: a failed response can follow a completed write.
 export type GhExecOptions = Omit<GitExecOptions, 'cwd'> & {
   cwd?: string
   wslDistro?: string
   idempotent?: boolean
-  // Why: `gh api` and `--repo OWNER/REPO` shorthand resolve against gh's
-  // default host, not the repo's remote. Carrying the host here lets the
-  // runner qualify every spawn once, so call sites can't silently fall back
-  // to github.com for GHES repos; it also scopes the rate-limit breaker.
+  // Pin API/repo shorthand to its host, including GHES, and scope rate-limit state there.
   host?: string
   /** Per-project account binding; the runner resolves and injects a child-only token. */
   ghAccount?: { host: string; user: string }
@@ -68,8 +64,7 @@ function ghRateLimitScope(
   resolved: ResolvedCommand
 ): string {
   const runtime = resolved.wsl ? `wsl:${resolved.wsl.distro.toLowerCase()}` : 'native'
-  // Why: an explicit argv hostname controls the actual gh request even when
-  // GH_HOST or options.host disagree, so breaker state must follow that host.
+  // Explicit argv hosts determine the actual request and therefore its breaker scope.
   const host =
     explicitGhHostname(args) ??
     options.host ??
@@ -100,13 +95,7 @@ function assertGhRateLimitScopeAvailable(
   }
 }
 
-/**
- * Async gh CLI execution. Drop-in replacement for
- * `execFileAsync('gh', args, { cwd, encoding, ... })`.
- *
- * Retries transient 5xx / 429-without-Retry-After / network-reset failures with
- * exponential backoff; other errors fail fast.
- */
+/** Execute gh with bounded retries for transient failures on idempotent calls. */
 export async function ghExecFileAsync(
   args: string[],
   options: GhExecOptions = {},
@@ -124,24 +113,20 @@ export async function ghExecFileWithScopeAsync(
 ): Promise<{ stdout: string; stderr: string; rateLimitScope: string }> {
   // Why: retry safety must reflect the original call even when fallbacks replace the resolved command.
   const idempotent = options.idempotent ?? argsLookIdempotent(args)
-  // Why: legacy github.com ownerRepos omit `host`; bound calls still need a pinned
-  // options.host before token-var selection and argv qualification.
+  // Legacy bound calls may omit host; pin it before selecting token variables or qualifying argv.
   if (options.ghAccount && !options.host?.trim() && args[0] !== 'auth') {
     options = { ...options, host: options.ghAccount.host.trim().toLowerCase() }
   }
   args = applyGhHostToArgs(args, options.host)
   let resolved = resolveCommand('gh', args, options.cwd, options.wslDistro)
-  // Why: while a bucket is rate-limited every spawn returns 403 — fail fast; the probe is exempt so the breaker can learn the reset,
-  // and `auth token` is exempt because a keyring read never spends API quota (a bound token resolve must not report "unavailable").
-  // Why: scope by runtime and host so unrelated github.com, GHES, and WSL quotas cannot block each other.
+  // Skip blocked API buckets; exempt reset probes and local token reads, and isolate host/runtime quotas.
   const rateLimitBucket = classifyGhRateLimitBucket(args)
   const rateLimitExempt = isGhRateLimitProbe(args) || isGhLocalOnlyCommand(args)
   let boundEnv: NodeJS.ProcessEnv | undefined = options.env
   let boundEnvResolvedKey: string | null = null
   const boundEnvKeyFor = (command: ResolvedCommand): string =>
     command.wsl ? `wsl:${command.wsl.distro}` : 'native'
-  // Why: unbound calls must reach the spawn in the same tick — callers that abort
-  // synchronously would otherwise never get a child to kill.
+  // Preserve synchronous spawning for unbound calls so immediate aborts still have a child to kill.
   const ensureBoundEnv = (hooks?: GhCaptureLifetimeHooks): Promise<void> | null => {
     const key = boundEnvKeyFor(resolved)
     if (boundEnvResolvedKey === key) {
@@ -162,8 +147,7 @@ export async function ghExecFileWithScopeAsync(
   let lastError: unknown
   let attemptedHostFallback = false
   let attemptedDefaultWslFallback = false
-  // Why: a bound resolve fails before any spawn when gh is missing inside WSL; reuse the
-  // host fallback and re-resolve the token for the host it now runs on.
+  // A missing WSL gh can fail during token resolution; fall back and resolve credentials on the new host.
   const tryHostFallbackAfterBoundResolveFailure = (error: unknown): boolean => {
     if (attemptedHostFallback) {
       return false
@@ -196,11 +180,7 @@ export async function ghExecFileWithScopeAsync(
       if (lifetime) {
         await lifetime.waitPending(options.signal)
       }
-      // Why to-termination and not execFileCapture: `gh` on PATH is routinely a
-      // shim (mise, asdf, volta, a hand-written wrapper), so the deadline below
-      // has a chain to reap, not one process. execFileCapture's POSIX kill only
-      // signals the direct child, which orphans the rest to init — a wedged
-      // helper then outlives the timeout that was supposed to bound it (#18234).
+      // gh may be a shim chain; terminate the whole tree so descendants cannot outlive the deadline.
       const { stdout, stderr } = await execFileCaptureToTermination(
         resolved.binary,
         resolved.args,
@@ -208,10 +188,10 @@ export async function ghExecFileWithScopeAsync(
           cwd: resolved.cwd,
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
-          // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
           timeout: timeoutMs,
           env: nonInteractiveGhEnv(boundEnv ?? options.env),
           signal: options.signal,
+          stdin: options.stdin,
           onChildTerminated: lifetime?.capture(),
           onDeadlineKill: () => logHostedCliDeadlineKill('gh', resolved.binary, args, timeoutMs)
         },
@@ -269,10 +249,10 @@ export async function ghExecFileWithScopeAsync(
       ) {
         const wslResolved = resolveDefaultWslCli('gh', args)
         if (wslResolved) {
-          // Why: WSL-only Windows installs have no host gh.exe, and global calls (rate_limit/auth) carry no cwd to route by.
+          // Global calls have no cwd to route WSL-only Windows installs.
           resolved = wslResolved
           attemptedDefaultWslFallback = true
-          // Why: token and capability are per execution host — re-resolve after native→WSL.
+          // Resolve the token again on the new execution host.
           boundEnvResolvedKey = null
           assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitExempt)
           attempt = -1
@@ -282,7 +262,7 @@ export async function ghExecFileWithScopeAsync(
       if (!attemptedHostFallback && canFallBackToHostGitHubCli('gh', args, resolved, stderr)) {
         resolved = resolveHostGitHubCli('gh', args)
         attemptedHostFallback = true
-        // Why: token and capability are per execution host — re-resolve after WSL→host.
+        // Resolve the token again on the new execution host.
         boundEnvResolvedKey = null
         assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitExempt)
         attempt = -1
@@ -290,7 +270,7 @@ export async function ghExecFileWithScopeAsync(
       }
       const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
       if (idempotent && !isLastAttempt && isTransientGhError(stderr)) {
-        // Why: honor the server's Retry-After over our backoff (a shorter sleep just re-fails); cap so a huge hint can't stall IPC.
+        // Honor Retry-After, capped to keep IPC bounded.
         const retryAfterMs = parseRetryAfterMs(stderr)
         const delayMs =
           retryAfterMs !== null
@@ -304,6 +284,5 @@ export async function ghExecFileWithScopeAsync(
       lifetime?.seal()
     }
   }
-  // Unreachable: the loop either returns or throws. Here for TS exhaustiveness.
   throw lastError
 }

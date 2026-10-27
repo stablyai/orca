@@ -65,8 +65,6 @@ describe('WSL git read routing', () => {
     resetWslGitReadEnvironmentForTests()
   })
 
-  // Why these two: they are the parse #10917 reports, and they run through the
-  // general git options that never opted into the shell-free route.
   it.each([
     ['remote get-url', ['remote', 'get-url', 'origin']],
     ['remote list', ['remote']],
@@ -83,7 +81,6 @@ describe('WSL git read routing', () => {
     expect(resolved).toContain('--exec')
     expect(resolved).toContain('/usr/bin/env')
     expect(resolved).toContain(`PATH=${LOGIN_ENVIRONMENT.path}`)
-    // No shell means no rc file, so no banner can reach the parsed stdout.
     expect(resolved).not.toContain('-lc')
     expect(resolved).not.toContain('sh')
     expect(resolved.join(' ')).not.toContain('getent passwd')

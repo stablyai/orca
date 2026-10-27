@@ -5,16 +5,15 @@ import { join } from 'node:path'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
-import {
-  AGENT_STATUS_MAX_SUBAGENTS,
-  AGENT_STATUS_STALE_AFTER_MS
-} from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
+
+const CHILD_COUNT = 32
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -58,7 +57,7 @@ describe('nested agent hooks preserve the owning pane', () => {
         await post('claude', {
           hook_event_name: 'Stop',
           session_id: 'claude-parent',
-          background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS }, (_, i) => ({
+          background_tasks: Array.from({ length: CHILD_COUNT }, (_, i) => ({
             id: `child${i}`,
             type: 'subagent',
             status: 'running',
@@ -72,7 +71,7 @@ describe('nested agent hooks preserve the owning pane', () => {
           mainAgent: { state: 'done' },
           providerSession: { id: 'claude-parent' }
         })
-        expect(before[0]?.subagents).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
+        expect(before[0]?.subagents).toHaveLength(CHILD_COUNT)
         pushed.mockClear()
         for (const hook_event_name of [
           'SessionStart',
@@ -111,9 +110,7 @@ describe('nested agent hooks preserve the owning pane', () => {
           session_id: 'claude-parent',
           agent_id: 'child0'
         })
-        expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(
-          AGENT_STATUS_MAX_SUBAGENTS - 1
-        )
+        expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(CHILD_COUNT - 1)
         await post('claude', {
           hook_event_name: 'Stop',
           session_id: 'claude-parent',
@@ -205,5 +202,88 @@ describe('nested agent hooks preserve the owning pane', () => {
     expect(server.getStatusSnapshot()).toEqual(before)
     expect(pushed).not.toHaveBeenCalled()
     server.stop()
+  })
+
+  // #30589: a background child that posts while the owner idles must not then silence the owner.
+  it("returns the pane to its owner when the owner's next hook follows a nested agent", async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    const nestedClaude = {
+      agentProcess: JSON.stringify({ pid: 4242, platform: 'darwin', startTime: 'nested' })
+    }
+    const post = (source: AgentHookSource, payload: Record<string, unknown>, overrides = {}) =>
+      postHookEvent(server, buildBody(payload, overrides), `/hook/${source}`)
+    try {
+      await post('codex', {
+        hook_event_name: 'UserPromptSubmit',
+        session_id: 'owner',
+        prompt: 'Start job'
+      })
+      await post('codex', { hook_event_name: 'Stop', session_id: 'owner' })
+      await post(
+        'claude',
+        { hook_event_name: 'UserPromptSubmit', session_id: 'child', prompt: 'Background job' },
+        nestedClaude
+      )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ agentType: 'claude', state: 'working' })
+
+      await post('codex', {
+        hook_event_name: 'UserPromptSubmit',
+        session_id: 'owner',
+        prompt: 'Next task'
+      })
+      await post(
+        'claude',
+        { hook_event_name: 'PreToolUse', session_id: 'child', tool_name: 'Bash' },
+        nestedClaude
+      )
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        agentType: 'codex',
+        state: 'working',
+        prompt: 'Next task',
+        providerSession: { id: 'owner' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps a stale owner type from letting a nested codex exec take the pane over the relay', async () => {
+    const server = new AgentHookServer()
+    const dir = mkdtempSync(join(tmpdir(), 'orca-stale-owner-'))
+    const relay = new RelayAgentHookServer({
+      endpointDir: dir,
+      forward: (event) => server.ingestRemote(event, 'conn-1')
+    })
+    await relay.start()
+    const post = (source: AgentHookSource, payload: Record<string, unknown>) =>
+      fetch(`http://127.0.0.1:${relay.getCoordinates().port}/hook/${source}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': relay.getCoordinates().token
+        },
+        body: JSON.stringify(buildBody(payload))
+      })
+    try {
+      await post('codex', { hook_event_name: 'UserPromptSubmit', session_id: 'old', prompt: 'Old' })
+      await post('codex', { hook_event_name: 'Stop', session_id: 'old' })
+      await post('claude', { hook_event_name: 'UserPromptSubmit', session_id: 'c', prompt: 'Now' })
+      await post('codex', {
+        hook_event_name: 'UserPromptSubmit',
+        session_id: 'exec',
+        prompt: 'Review'
+      })
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        agentType: 'claude',
+        prompt: 'Now',
+        providerSession: { id: 'c' }
+      })
+    } finally {
+      relay.stop()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

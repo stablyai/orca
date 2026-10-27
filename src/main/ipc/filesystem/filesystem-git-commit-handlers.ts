@@ -14,7 +14,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       _event,
       args: { worktreePath: string; message: string; connectionId?: string }
     ): Promise<{ success: boolean; error?: string }> => {
-      // Why: validate at the IPC boundary so the renderer gets a clear error instead of an opaque execFile failure.
+      // Validate at IPC so users receive a clear error before process launch.
       if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
       }

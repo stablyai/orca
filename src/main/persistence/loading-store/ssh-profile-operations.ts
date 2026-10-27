@@ -26,7 +26,7 @@ import type { WriteSchedulingOperations } from './write-scheduling'
 import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
 import { syncProjectHostSetupCompatibilityState } from './repo-lifecycle-operations'
 import { scheduleSave } from './write-scheduling'
-import { forgetSshConnectionGeneration } from '../../ssh/ssh-connection-generation'
+import { forgetSshConnectionGeneration } from '../../ssh/connection/ssh-connection-generation'
 
 type SshProfileOperationsRuntime = Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
 

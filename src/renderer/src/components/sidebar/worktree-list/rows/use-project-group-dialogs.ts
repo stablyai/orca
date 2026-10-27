@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { projectRemovalTargets } from '../../removal-unsaved-files'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -9,6 +11,10 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
@@ -64,7 +70,6 @@ function reportProjectGroupDeleteFailures(result: {
   }
 }
 
-// Create/rename/delete flows for project groups, including the contained-project fan-out.
 export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
   repoMap: Map<string, Repo>
@@ -89,14 +94,14 @@ export function useProjectGroupDialogs(args: {
       if (repo.projectGroupId === groupId) {
         return
       }
-      void moveProjectToGroup(repo.id, groupId, undefined, getRepoExecutionHostId(repo))
+      void moveProjectToGroup(repo, groupId)
     },
     [moveProjectToGroup]
   )
 
   const handleRemoveProjectFromGroup = useCallback(
     (repo: Repo) => {
-      void moveProjectToGroup(repo.id, null, undefined, getRepoExecutionHostId(repo))
+      void moveProjectToGroup(repo, null)
     },
     [moveProjectToGroup]
   )
@@ -114,10 +119,9 @@ export function useProjectGroupDialogs(args: {
         return
       }
       if (nameDialog.type === 'create-from-repo') {
-        const hostId = getRepoExecutionHostId(nameDialog.repo)
-        const group = await createProjectGroup(name, hostId)
+        const group = await createProjectGroup(name, getRepoExecutionHostId(nameDialog.repo))
         if (group) {
-          await moveProjectToGroup(nameDialog.repo.id, group.id, undefined, hostId)
+          await moveProjectToGroup(nameDialog.repo, group.id)
         }
         return
       }
@@ -166,6 +170,21 @@ export function useProjectGroupDialogs(args: {
   )
   const removeContainedProjects =
     deleteProjectCount > 0 && deleteDialog?.removeContainedProjects === true
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
+  const deleteUnsavedTargets = useMemo(
+    () =>
+      removeContainedProjects && deleteTargets
+        ? projectRemovalTargets(
+            { worktreesByRepo, detectedWorktreesByRepo },
+            deleteTargets.projects.map((project) => ({
+              repoId: project.id,
+              hostId: project.hostId
+            }))
+          )
+        : [],
+    [deleteTargets, detectedWorktreesByRepo, removeContainedProjects, worktreesByRepo]
+  )
 
   const handleDeleteProjectGroup = useCallback(
     (groupId: string, groupName: string, hostId?: ExecutionHostId) => {
@@ -178,18 +197,25 @@ export function useProjectGroupDialogs(args: {
     if (!deleteDialog) {
       return
     }
+    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, deleteUnsavedTargets)
     try {
       reportProjectGroupDeleteFailures(
         await deleteProjectGroupWithContainedProjects(deleteDialog.groupId, {
           removeContainedProjects,
-          hostId: deleteDialog.hostId
+          hostId: deleteDialog.hostId,
+          confirmedDiscards
         })
       )
     } finally {
       // Why: deleting contained projects can unmount this dialog before its close handler runs, so the parent owns cleanup.
       setDeleteDialog(null)
     }
-  }, [deleteProjectGroupWithContainedProjects, removeContainedProjects, deleteDialog])
+  }, [
+    deleteProjectGroupWithContainedProjects,
+    removeContainedProjects,
+    deleteDialog,
+    deleteUnsavedTargets
+  ])
 
   return {
     nameDialog,
@@ -199,6 +225,7 @@ export function useProjectGroupDialogs(args: {
     deleteProjectCount,
     deleteProjectNames,
     removeContainedProjects,
+    deleteUnsavedTargets,
     handleCreateGroupFromRepo,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,

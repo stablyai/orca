@@ -1,11 +1,13 @@
 import type { RuntimeBrowserTabQueries } from './browser-tab-queries'
-import { retireRuntimeBrowserClientPage } from './browser-client-page-close'
+import {
+  resolveClientPageToClose,
+  retireRuntimeBrowserClientPage
+} from './browser-client-page-close'
 import { BrowserError } from '../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
-import type { RuntimeBrowserTabCatalog } from './browser-tab-catalog'
 
 export class RuntimeBrowserTabClose {
   constructor(
@@ -29,8 +31,7 @@ export class RuntimeBrowserTabClose {
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'resolveBrowserWorktreeId' | 'retireGhostBrowserSessionRow'
-    >,
-    private readonly catalog: Pick<RuntimeBrowserTabCatalog, 'assertClientPageWorkspace'>
+    >
   ) {}
 
   async browserTabClose(params: {
@@ -38,22 +39,7 @@ export class RuntimeBrowserTabClose {
     page?: string
     worktree?: string
   }): Promise<{ closed: boolean }> {
-    const pages = this.host.getRuntimeBrowserPageRegistry()
-    let clientPage = params.page ? pages.getPage(params.page) : undefined
-    if (clientPage) {
-      await this.catalog.assertClientPageWorkspace(clientPage, params.worktree)
-    } else if (!params.page) {
-      const workspaceId = params.worktree
-        ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
-        : undefined
-      if (pages.listPages(workspaceId).length > 0) {
-        const tab =
-          params.index !== undefined
-            ? (await this.queries.browserTabList({ worktree: params.worktree })).tabs[params.index]
-            : (await this.queries.browserTabCurrent({ worktree: params.worktree })).tab
-        clientPage = tab ? pages.getPage(tab.browserPageId) : undefined
-      }
-    }
+    const clientPage = await resolveClientPageToClose(this.host, this.queries, params)
     if (clientPage) {
       return retireRuntimeBrowserClientPage(this.host, clientPage)
     }
@@ -62,8 +48,7 @@ export class RuntimeBrowserTabClose {
     const explicitPage = namedPageId !== null
     const bridge = this.host.getAgentBrowserBridge()
     if (!bridge) {
-      // Why before the refusal: a runtime with no browser session cannot be holding this page
-      // either, but it can still be carrying the session row that names it.
+      // Even without a live browser session, a retained row may still need retirement.
       if (
         namedPageId &&
         params.worktree &&
@@ -93,7 +78,7 @@ export class RuntimeBrowserTabClose {
       }
       tabId = entries[params.index][0]
     } else {
-      // Why: try the bridge first; fall back to the renderer for tabs whose webview hasn't mounted yet (e.g. just created).
+      // Unmounted tabs need renderer fallback when the bridge has not registered them.
       const tabs = bridge.getRegisteredTabs(worktreeId)
       const entries = [...tabs.entries()]
       const activeEntry = entries.find(([, wcId]) => wcId === bridge.getActiveWebContentsId())
@@ -102,11 +87,10 @@ export class RuntimeBrowserTabClose {
       }
     }
 
-    // Why: headless serve has no renderer to ask, so destroy the offscreen page directly.
     const authoritativeWindow = this.host.getAvailableAuthoritativeWindow()
     const offscreen = authoritativeWindow ? null : this.host.getOffscreenBrowserBackend()
     if (offscreen) {
-      // Why: resolve the active page for implicit close so we don't report success while closing nothing.
+      // An implicit close needs a real active page or would falsely report success.
       const resolvedTabId = tabId ?? bridge.getActivePageId(worktreeId)
       if (!resolvedTabId) {
         return { closed: false }
@@ -122,8 +106,7 @@ export class RuntimeBrowserTabClose {
         )
       }
       await offscreen.closeTab(resolvedTabId)
-      // Why: closeTab only destroys the guest; without retirement, paired clients keep a
-      // dead session tab until an unrelated republish (closeMobileSessionTab already retires).
+      // Destroying the guest alone leaves paired clients' session rows stale.
       if (worktreeId) {
         if (this.host.retireRuntimeOwnedBrowserSessionTab) {
           this.host.retireRuntimeOwnedBrowserSessionTab(worktreeId, resolvedTabId)
@@ -170,7 +153,7 @@ export class RuntimeBrowserTabClose {
         }
       }
       ipcMain.on('browser:tabCloseReply', handler)
-      // Why: pass worktreeId so the renderer scopes the close correctly instead of falling back to the globally active tab in the wrong worktree.
+      // Scope renderer close to its owning worktree, not the globally active one.
       win.webContents.send('browser:requestTabClose', { requestId, tabId, worktreeId })
     })
 

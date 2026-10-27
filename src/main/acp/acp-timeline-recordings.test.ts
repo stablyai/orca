@@ -5,6 +5,7 @@ import {
   messageText
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
+import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 
 afterEach(closeProviderTimelineRigs)
 
@@ -104,6 +105,32 @@ describe('recorded ACP traffic through the journal', () => {
     ).toBe(5000)
     await fixture.feed(loading.slice(nextPrompt))
     expect(await fixture.rig.turns()).toHaveLength(2)
+  })
+
+  it("keeps an OpenCode 2 chat's history once across a reopen, and adds the follow-up turn", async () => {
+    const fixture = await openAcpFixtureRig(OPENCODE_ACP_DIALECT)
+    const frames = await readAcpFixture('opencode-v2-reopen')
+    await fixture.feed(frames.filter((frame) => frame.process === 'A'))
+    const before = await fixture.rig.rows()
+    expect((await fixture.rig.turns()).map((turn) => turn.outcome)).toEqual([
+      'success',
+      'cancellation',
+      'cancellation'
+    ])
+    await fixture.restart()
+    const loading = frames.filter((frame) => frame.process === 'B')
+    const nextPrompt = loading.findIndex((frame) => frame.message.method === 'session/prompt')
+    await fixture.feed(loading.slice(0, nextPrompt))
+    fixture.finishLoad()
+    const items = (rows: typeof before) => rows.filter((row) => row.body.kind !== 'turn')
+    expect(items(await fixture.rig.rows())).toEqual(items(before))
+    await fixture.feed(loading.slice(nextPrompt))
+    expect((await fixture.rig.turns()).map((turn) => turn.outcome)).toEqual([
+      'success',
+      'cancellation',
+      'cancellation',
+      'success'
+    ])
   })
 
   it('answers questions with the recorded reply shape and shows the plan as a plan, not a gate', async () => {

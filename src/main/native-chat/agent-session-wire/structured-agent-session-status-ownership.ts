@@ -22,17 +22,15 @@ export type StructuredAgentSessionStatusSink = {
     subject: AgentStatusStructuredSessionSubject
   ) => void
   forget: (subject: AgentStatusStructuredSessionSubject) => void
-  /** The session's child-work evidence, addressed by the subject its parent row landed under. */
+  /** Address evidence by the parent row’s landed subject. */
   publishChildWork?: (
     subject: AgentStatusStructuredSessionSubject,
     evidence: AgentChildWorkEvidence[],
     provider: AgentSessionRecord['provider']
   ) => void
-  /** The child records the sink holds for that subject, as the views every surface reads. */
   readChildWork?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkView[]
-  /** The records those views project, with the host-only facts no view carries. */
+  /** Includes host-only facts omitted from views. */
   readChildWorkRecords?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkRecord[]
-  /** Every provider handle a live record of the subject answers to for its current run. */
   readChildWorkHandles?: (subject: AgentStatusStructuredSessionSubject) => ReadonlySet<string>
 }
 
@@ -41,12 +39,10 @@ export type CapturedChildWorkStops = {
   acknowledge: (evidence: readonly AgentChildWorkEvidence[]) => void
 }
 
-/** Retain the owner address because record removal may precede the final status callback. */
+/** Retain addresses through record removal for final callbacks. */
 export class StructuredAgentSessionStatusOwnership {
   private readonly subjects = new Map<string, AgentStatusStructuredSessionSubject>()
-  // Why separate from `subjects`: the address must survive a throwing publish so teardown can still
-  // forget a row that did land, but "we hold an address" is not evidence the row is there. Only a
-  // publish that returned proves that, and only that proof may suppress the re-offer below.
+  // Retain failed-publish addresses for cleanup, but only returned publication proves landing.
   private readonly landed = new Set<string>()
   private readonly open = new StructuredAgentSessionOpenChildWork()
 
@@ -91,9 +87,7 @@ export class StructuredAgentSessionStatusOwnership {
     this.landed.add(summary.sessionId)
   }
 
-  /** Children ride the address the parent landed under: without that proof the store would
-   *  refuse them anyway, and offering them earlier would race the parent row. The open set takes
-   *  every edge regardless, since that gate is the store's, not the provider's. */
+  /** Publish children only after parent landing; track all provider edges independently of display admission. */
   publishChildWork(
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
@@ -107,11 +101,8 @@ export class StructuredAgentSessionStatusOwnership {
     this.sink()?.publishChildWork?.(subject, evidence, provider)
   }
 
-  /** A Stop's callback closes only lifetimes captured before the provider call can await. */
-  captureChildWorkStops(
-    sessionId: string,
-    handleIds: readonly string[]
-  ): CapturedChildWorkStops {
+  /** Capture lifetimes before provider awaits so Stop cannot close replacement runs. */
+  captureChildWorkStops(sessionId: string, handleIds: readonly string[]): CapturedChildWorkStops {
     const captured = new Map<string, ChildWorkLifetimeToken | undefined>()
     for (const handleId of handleIds) {
       captured.set(handleId, this.open.capture(sessionId, handleId))
@@ -132,12 +123,11 @@ export class StructuredAgentSessionStatusOwnership {
     }
   }
 
-  /** Whether the session's provider reported child work running that has not ended. */
   childWorkOpen(sessionId: string): boolean {
     return this.open.hasOpen(sessionId)
   }
 
-  /** Whether some of that work has no record, whatever kept it out of the store. */
+  /** Includes provider work rejected by display storage. */
   childWorkIncomplete(sessionId: string): boolean {
     const open = this.open.handles(sessionId)
     if (!open) {
@@ -152,7 +142,7 @@ export class StructuredAgentSessionStatusOwnership {
     return [...open].some((handleId) => !recorded.has(handleId))
   }
 
-  /** Undefined until the parent row has landed: a sink holds no children for a parent it lacks. */
+  /** No parent landing means no stored children to read. */
   readChildWork(sessionId: string): AgentChildWorkView[] | undefined {
     const subject = this.subjects.get(sessionId)
     return subject && this.landed.has(sessionId) ? this.sink()?.readChildWork?.(subject) : undefined

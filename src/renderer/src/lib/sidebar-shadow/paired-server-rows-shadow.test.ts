@@ -13,7 +13,9 @@ describe('readWindowPairedServerRows', () => {
             makeWorktree('other', 'Unlisted server', { hostId: 'runtime:gone' })
           ]
         },
-        folderWorkspaces: [makeFolderWorkspace({ executionHostId: 'runtime:box', name: 'Notes' })]
+        folderWorkspaces: [makeFolderWorkspace({ executionHostId: 'runtime:box', name: 'Notes' })],
+        repos: [],
+        worktreeLineageById: {}
       },
       new Set(['runtime:box'])
     )
@@ -27,7 +29,14 @@ describe('readWindowPairedServerRows', () => {
         branch: 'refs/heads/main',
         displayName: 'On the server',
         isArchived: false,
-        isPinned: true
+        isPinned: true,
+        isMainWorktree: false,
+        isUnread: false,
+        lineage: null,
+        workspaceStatus: 'in-progress',
+        sortOrder: 0,
+        defaultBranch: false,
+        recentAt: 0
       },
       'runtime:box|folder:folder-1': expect.objectContaining({
         kind: 'folder',

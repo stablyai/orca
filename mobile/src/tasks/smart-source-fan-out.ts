@@ -7,9 +7,9 @@ import {
   type SmartNameMode
 } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../transport/rpc-client'
-import { isGitHubWorkItemsSshRemoteRequiredError } from './mobile-work-items'
+import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../src/shared/work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
-import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
+import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import {
   searchBranches,
   searchGitHubItems,
@@ -48,7 +48,6 @@ function shouldSearchLinear(mode: SmartNameMode, linearAvailable: boolean): bool
   return linearAvailable && (mode === 'smart' || mode === 'linear')
 }
 
-// The shared row builder only shows Jira search results in the Jira tab.
 function shouldSearchJira(mode: SmartNameMode, jiraAvailable: boolean): boolean {
   return jiraAvailable && mode === 'jira'
 }
@@ -71,14 +70,10 @@ type FanOutArgs = {
   jiraSiteId: JiraSiteSelection | null | undefined
 }
 
-// Runs every provider search the active mode needs, concurrently. Smart mode is
-// best-effort (a single provider failure never blocks the others); single-provider
-// modes surface the failure. No cross-provider ranking/dedup — the shared row
-// builder concatenates in provider order.
+// Smart mode tolerates individual provider failures; single-provider modes surface them. Preserve provider-order results.
 export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutResult> {
   if (!isSmartWorkspaceSourceQueryWithinLimit(args.query)) {
-    // Why: the source limit is an outbound-request boundary, not only a render
-    // limit; pasted payloads must never fan out to provider CLIs or SSH hosts.
+    // Bound outbound searches too: oversized pasted input must never fan out to provider CLIs or SSH hosts.
     return { ...EMPTY, needsGitHubRemote: false, error: '' }
   }
   const {

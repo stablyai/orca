@@ -49,8 +49,8 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/renderer/src/store/slices/recently-closed-tabs.ts',
   // The client the oracle reads every view through.
   'src/cli/runtime/client.ts',
-  'src/shared/remote-runtime-client.ts',
-  'src/shared/remote-runtime-subscription-transport.ts',
+  'src/shared/remote-runtime/remote-runtime-client.ts',
+  'src/shared/remote-runtime/requests/remote-runtime-subscription-transport.ts',
   'src/shared/paired-runtime-connection.ts',
   'src/shared/pairing.ts',
   // The harness: the oracle imports most of the shared e2e helpers, not just its own.
@@ -62,6 +62,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   '.github/scripts/e2e-with-window-manager.sh',
   // The job itself: the called workflow, its window-spec lane picker, and this route.
   '.github/workflows/e2e.yml',
+  '.github/scripts/prepare-ubuntu-apt.sh',
   'config/scripts/ci-e2e-job-selection.mjs',
   'config/scripts/pr-layout-oracle-route.mjs'
 ]

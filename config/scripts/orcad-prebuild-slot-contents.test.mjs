@@ -150,8 +150,16 @@ describe('slotSourceFiles', () => {
       'conpty.node',
       'conpty_console_list.node',
       'conpty/conpty.dll',
-      'conpty/OpenConsole.exe'
+      'conpty/OpenConsole.exe',
+      'pty.node',
+      'winpty.dll',
+      'winpty-agent.exe'
     ])
+    // Upstream's winpty prebuilds: Orca's patch removes winpty from the source build.
+    const sources = Object.fromEntries(files)
+    for (const file of ['pty.node', 'winpty.dll', 'winpty-agent.exe']) {
+      expect(sources[file]).toBe(join(nodePtyDir, 'prebuilds', 'win32-arm64', file))
+    }
     expect(files[2][1]).toBe(
       join(nodePtyDir, 'third_party', 'conpty', '1.23.251008001', 'win10-arm64', 'conpty.dll')
     )
@@ -186,8 +194,7 @@ describe('highestGlibcNeed', () => {
 
 describe('mergeManifest', () => {
   it('accumulates slots across the per-runner CI builds', () => {
-    // Overwriting would erase every other runner's record, and the release gate would then
-    // reject a matrix that is actually complete.
+    // Preserve other runners’ slot records or a complete matrix fails the release gate.
     const first = mergeManifest(null, next('linux-x64-glibc'))
     const second = mergeManifest(first, next('darwin-arm64'))
     expect(Object.keys(second.slots)).toEqual(['darwin-arm64', 'linux-x64-glibc'])

@@ -21,10 +21,7 @@ export const jsonlLanguageConfiguration: Monaco.languages.LanguageConfiguration 
   ]
 }
 
-// Why: JSONL is one JSON value per line, so we reuse JSON-style Monarch tokens
-// for color but must NOT attach Monaco's JSON language service — whole-document
-// validation would flag every record after line one as unexpected trailing
-// content. This provider is presentation-only: no schema/record validation.
+// Reuse JSON colors without its whole-document language service, which would reject independent JSONL records after the first; no validation is intended.
 export const jsonlMonarchLanguage: Monaco.languages.IMonarchLanguage = {
   defaultToken: '',
   tokenPostfix: '.jsonl',
@@ -34,12 +31,7 @@ export const jsonlMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       { include: '@whitespace' },
       // Property key vs string value are both quoted; color keys distinctly.
       [/"(?:[^"\\]|\\.)*"(?=\s*:)/, 'type.identifier'],
-      // Why the lookahead: each JSONL line is an independent value, but Monarch
-      // state survives the line break. Pushing `@string` unconditionally meant
-      // one truncated record (a normal way for a log to end) left every later
-      // record inside the string state, rendering the rest of the file as one
-      // string. Only enter the escape-aware state once a closing quote is known
-      // to be on this line; an unterminated remainder is consumed below instead.
+      // Enter escape-aware string state only with a same-line closing quote; otherwise truncated records would color every later line as one string.
       [/"(?=(?:[^"\\]|\\.)*")/, 'string', '@string'],
       [/"(?:[^"\\]|\\.)*\\?$/, 'string.invalid'],
       [/[{}[\]]/, '@brackets'],

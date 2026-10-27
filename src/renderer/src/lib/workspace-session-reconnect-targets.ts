@@ -1,40 +1,24 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { isOwnedSshTargetId } from '../../../shared/execution-host'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 
 export function buildActiveConnectionIdsAtShutdown(
   snapshot: WorkspaceSessionSnapshot,
-  // Why: required (null = none) rather than defaulted — every caller already
-  // has the terminal session data in hand, and a default initializer would
-  // re-run the full repo/worktree scan on the shutdown-critical path.
+  // Require precomputed session data (null means none) to avoid default full-catalog rescans during shutdown.
   remoteSessionIdsByTabId: WorkspaceSessionState['remoteSessionIdsByTabId'] | null
 ): WorkspaceSessionState['activeConnectionIdsAtShutdown'] {
-  // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
-  // object. Object.entries() on a Map returns [] — must use Array.from().
-  // Runtime-owned states are normally never broadcast to the renderer, but a
-  // pane-level optimistic write could stamp one; exclude them here too.
+  // Use Map iteration, not Object.entries; also exclude optimistic runtime-owned states even though normal broadcasts omit them.
   const targetIds = new Set(
     Array.from(snapshot.sshConnectionStates.entries())
-      .filter(
-        ([targetId, state]) => state.status === 'connected' && !isRuntimeOwnedSshTargetId(targetId)
-      )
+      .filter(([targetId, state]) => state.status === 'connected' && !isOwnedSshTargetId(targetId))
       .map(([targetId]) => targetId)
   )
 
-  // Why: shutdown can observe SSH in a transient state (relay drop mid-quit,
-  // exhausted reconnect) after the socket closed but before the snapshot
-  // flushed. The durable PTY id still names the target Orca must reconnect to
-  // restore that surviving remote session. Two exclusions:
-  // 'disconnected'/'auth-failed'/never-observed usually mean an explicit user
-  // disconnect or a failed/cancelled connect — startup must not auto-dial a
-  // host the user left offline or stack credential dialogs (sessions still
-  // restore on tab focus via the deferred flow, so only eagerness is lost).
-  // Runtime-owned (ephemeral-VM) targets belong to the runtime layer; a
-  // renderer-driven ssh.connect would dispose the runtime's live relay session.
+  // Durable PTY IDs retain reconnect targets through transient shutdown transport loss. Exclude explicit disconnect/auth-failed/unobserved targets to honor offline intent and avoid credential loops; focus restore still works. Runtime-owned targets are excluded because renderer connect can dispose their live relay.
   for (const sessionId of Object.values(remoteSessionIdsByTabId ?? {})) {
     const connectionId = parseAppSshPtyId(sessionId)?.connectionId
-    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
+    if (!connectionId || isOwnedSshTargetId(connectionId)) {
       continue
     }
     const status = snapshot.sshConnectionStates.get(connectionId)?.status

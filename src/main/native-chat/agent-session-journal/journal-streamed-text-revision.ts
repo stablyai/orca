@@ -3,12 +3,7 @@ import { agentJournalLinkageFields } from '../../../shared/agent-session-journal
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 
-/**
- * A later revision of an assistant message that changes only its content. An OS crash that loses
- * it loses streamed text and nothing else: no send, approval, stop, ownership or turn fact rides
- * it, and a turn's settlement is written FULL after it, which makes it durable. Everything else
- * keeps the per-commit fsync.
- */
+/** Only streamed assistant text may skip per-commit fsync; FULL turn settlement makes it durable. */
 export function isJournalStreamedTextRevision(
   state: JournalReducerState,
   row: JournalRow

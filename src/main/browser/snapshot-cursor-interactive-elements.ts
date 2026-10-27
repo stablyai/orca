@@ -1,10 +1,7 @@
 import type { SnapshotEntry } from './snapshot-ax-tree-walk'
 import type { CdpCommandSender } from './snapshot-engine'
 
-// Why: finds DOM elements that are visually interactive (cursor:pointer, onclick,
-// tabindex, contenteditable) but lack standard ARIA roles. These are common in
-// modern SPAs where styled <div>s act as buttons. Returns them as a JS array of
-// remote object references that we can resolve to backendNodeIds via CDP.
+// Find controls omitted from the accessibility tree, such as styled div buttons.
 export async function findCursorInteractiveElements(
   sendCommand: CdpCommandSender,
   existingEntries: SnapshotEntry[]
@@ -13,8 +10,6 @@ export async function findCursorInteractiveElements(
   const results: SnapshotEntry[] = []
 
   try {
-    // Single evaluate call that finds interactive elements and returns their info
-    // along with a way to reference them by index
     const { result } = (await sendCommand('Runtime.evaluate', {
       expression: `(() => {
         const SKIP_ROLES = new Set(['button','link','textbox','checkbox','radio','tab',
@@ -89,13 +84,12 @@ export async function findCursorInteractiveElements(
       }
     }
 
-    // Clean up
     await sendCommand('Runtime.evaluate', {
       expression: 'delete window.__orcaCursorInteractive',
       returnByValue: true
     })
   } catch {
-    // DOM query failed — not critical, just return empty
+    // Supplementary DOM discovery may fail; retain any entries already found.
   }
 
   return results

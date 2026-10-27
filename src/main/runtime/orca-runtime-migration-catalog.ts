@@ -1,18 +1,21 @@
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReference,
+  OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationSnapshotChunkResult
-} from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type {
   OrcadMigrationBlobChunkRequest,
   OrcadMigrationBlobChunkResult,
   OrcadMigrationBlobDescriptor
-} from '../../shared/orcad-migration-blob-transfer'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import {
+  abortStagedOrcadMigrationCatalogByReferenceDurably,
   abortStagedOrcadMigrationCatalogDurably,
   commitStagedOrcadMigrationCatalogDurably,
   getOrcadMigrationCatalogState,
@@ -27,6 +30,7 @@ type MigrationStoreKey =
   | 'stageOrcadMigrationSnapshotChunk'
   | 'stageOrcadMigrationBlobChunk'
   | 'abortStagedOrcadMigrationCatalog'
+  | 'abortStagedOrcadMigrationCatalogByReference'
   | 'getOrcadMigrationCatalogState'
   | 'flushPendingOrThrowAsync'
 
@@ -94,6 +98,20 @@ export abstract class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithRes
     })
   }
 
+  async abortStagedOrcadMigrationCatalogByReference(
+    reference: OrcadMigrationCatalogReference,
+    options: { signal?: AbortSignal } = {}
+  ): Promise<OrcadMigrationCatalogReferenceAbortResult> {
+    return abortStagedOrcadMigrationCatalogByReferenceDurably({
+      store: this.requireMigrationStore(
+        'abortStagedOrcadMigrationCatalogByReference',
+        'flushPendingOrThrowAsync'
+      ),
+      reference,
+      signal: options.signal
+    })
+  }
+
   getOrcadMigrationCatalogState(manifest: OrcadMigrationManifest): OrcadMigrationCatalogState {
     return getOrcadMigrationCatalogState({
       store: this.requireMigrationStore('getOrcadMigrationCatalogState'),
@@ -102,22 +120,17 @@ export abstract class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithRes
     })
   }
 
-  /**
-   * The moved shell history store load left waiting, installed once this runtime can see the
-   * host's shells. An unanswered inventory leaves it for the next catalog-state query.
-   */
+  /** Install deferred migrated history after host-shell discovery; unanswered inventory retries on the next catalog query. */
   async installPendingOrcadMigrationShellHistory(): Promise<void> {
     const store = this.store
-    // Why: runs on every orcad start; with nothing to install it must not pay a process inventory.
+    // Every daemon start calls this; no pending blobs must cost no inventory.
     if (
       !store?.installPendingOrcadMigrationReceivedBlobs ||
       !store.hasPendingOrcadMigrationShellHistory?.()
     ) {
       return
     }
-    // Daemon shells that outlived a restart count as live only once the inventory recorded them.
-    // Why the real worktrees: an empty list re-files sessions it cannot resolve and drops their
-    // restored orchestration receipts.
+    // Inventory first to find restart-surviving shells; real worktrees preserve their restored orchestration receipts.
     if (
       this.ptyController?.listProcesses &&
       !(await this.refreshPtyWorktreeRecordsWithControllerInventory([
@@ -132,13 +145,11 @@ export abstract class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithRes
     })
   }
 
-  // The last shell of a worktree exiting releases a moved history that waited on it.
   override onPtyExit(
     ...args: Parameters<OrcaRuntimeWithResolveWaiter['onPtyExit']>
   ): ReturnType<OrcaRuntimeWithResolveWaiter['onPtyExit']> {
     const worktreeId = this.ptysById.get(args[0])?.worktreeId
     const result = super.onPtyExit(...args)
-    // The store checks its deferred set first, so an exit in any other worktree costs one lookup.
     if (worktreeId) {
       try {
         this.store?.installDeferredOrcadMigrationShellHistory?.(worktreeId, {
@@ -151,10 +162,11 @@ export abstract class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithRes
     return result
   }
 
+  // Migrated history belongs here; same-id SSH twins never write it.
   private readonly migrationWorktreeHasLiveShells = (worktreeId: string): boolean =>
-    this.getLivePtyIdsForWorktree(worktreeId).size > 0
+    this.getLivePtyIdsForWorktree(worktreeId, undefined, { resolvedConnectionId: null }).size > 0
 
-  // The capability check covers the captured Store, not a different virtual return.
+  // Check the captured Store, not a potentially different virtual return.
   private requireMigrationStore(...methods: MigrationStoreKey[]): RuntimeStore {
     const store = this.store
     if (!store || methods.some((method) => typeof store[method] !== 'function')) {

@@ -172,8 +172,7 @@ describe('useSetupScriptPromptRevalidation', () => {
 
   it('re-inspects when a worktree activates while the prompt shows no effective setup', async () => {
     const requestRevalidation = vi.fn()
-    // Mirror the card's real lifecycle: promptState is null on mount, so the
-    // activation effect does not fire until a negative result has been cached.
+    // Activation revalidation waits until a negative inspection result is cached.
     const rerender = await render({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -241,8 +240,7 @@ describe('useSetupScriptPromptRevalidation', () => {
       promptState: missingSetup('repo-1'),
       requestRevalidation
     })
-    // The card nulls its state for the whole inspection round trip, so the
-    // activation lands while nothing is revalidatable.
+    // Model activation during the card’s inspection round trip, when its prompt state is null.
     await rerender({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -275,7 +273,6 @@ describe('useSetupScriptPromptRevalidation', () => {
       requestRevalidation
     })
 
-    // Before: every one of these 20 switches cost a hooksCheck + setupScriptImports pair.
     for (let round = 0; round < 10; round += 1) {
       await setActiveWorktree('worktree-2')
       await setActiveWorktree('worktree-1')

@@ -1,12 +1,14 @@
-import { useAppStore } from '@/store'
+import { useAppStore, type AppState } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
   resolveSshHostReportedPlatform,
-  resolveAgentResumeLaunchTarget
+  resolveAgentResumeLaunchTarget,
+  type AgentResumeLaunchTarget
 } from '@/lib/agent-resume-launch-target'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
@@ -18,7 +20,9 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import { CODEX_ACCOUNT_RESTART_STARTUP } from './codex-session-restart'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import { resolveAgentLaunchCommand } from '../../../shared/tui-agent-launch-command'
+import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
 
 export type AgentAccountRestartStartup = {
   command: string
@@ -35,6 +39,8 @@ type AccountRestartPane = {
   worktreeId: string
   shellOverride?: string
 }
+
+type AccountRestartTarget = Pick<AccountRestartPane, 'worktreeId' | 'shellOverride'>
 
 /**
  * The resume startup for the pane's own session, or null when it has none to name.
@@ -61,16 +67,107 @@ export function resolveAgentAccountRestartResumeStartup(
     return null
   }
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+  // Why Codex only: a WSL Claude resume reads the guest's selected-account pointer at launch.
+  if (
+    agent === 'codex' &&
+    projectRuntime?.status === 'resolved' &&
+    projectRuntime.runtime.kind === 'wsl'
+  ) {
     return null
   }
-  const worktree = state.getKnownWorktreeById(args.worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   const launchConfig =
     (entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
     (sleeping?.agent === agent ? sleeping.launchConfig : undefined)
+  const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
+  const startupPlan = buildAgentResumeStartupPlan({
+    agent,
+    providerSession,
+    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    agentArgs:
+      launchConfig !== undefined
+        ? launchConfig.agentArgs
+        : unrecordedLaunchUsesDefaults
+          ? resolveTuiAgentLaunchArgs(agent, state.settings)
+          : null,
+    agentEnv:
+      launchConfig !== undefined
+        ? launchConfig.agentEnv
+        : unrecordedLaunchUsesDefaults
+          ? resolveTuiAgentLaunchEnv(agent, state.settings, resumeTarget.platform)
+          : null,
+    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+    ...(launchConfig?.ompResumeFilePath
+      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
+      : {}),
+    platform: resumeTarget.platform,
+    shell: resumeTarget.shell,
+    // Both restart executors spawn in the tab's start folder.
+    launchCwd:
+      state.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === args.tabId)?.startupCwd ??
+      state.getKnownWorktreeById(
+        args.worktreeId,
+        getExecutionHostIdForWorktree(state, args.worktreeId)
+      )?.path
+  })
+  if (!startupPlan) {
+    return null
+  }
+  return {
+    startupCommandDelivery: 'shell-ready',
+    launchAgent: agent,
+    command: startupPlan.launchCommand,
+    ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    // Main repins launch home only when the spawn names its resumed session; keep that identity with the account move.
+    resumeProviderSession: providerSession
+  }
+}
+
+/** Account-switch startup: Codex can relaunch fresh; Claude requires its recorded conversation. */
+export function buildPaneAccountRestartStartup(
+  agent: AccountRestartAgent,
+  args: AccountRestartPane
+): AgentAccountRestartStartup | null {
+  const resume = resolveAgentAccountRestartResumeStartup(agent, args)
+  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+}
+
+export function buildCodexAccountRestartStartup(
+  args: AccountRestartTarget
+): AgentAccountRestartStartup {
+  const state = useAppStore.getState()
+  const target = resolveAccountRestartLaunchTarget(
+    state,
+    args,
+    getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
+  )
+  const command = resolveAgentLaunchCommand({
+    agent: 'codex',
+    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    platform: target.platform,
+    shell: resolveStartupShell(target.platform, target.shell)
+  })
+  if (!command.ok) {
+    throw new Error(command.error)
+  }
+  return {
+    command: command.command,
+    startupCommandDelivery: 'shell-ready',
+    launchAgent: 'codex'
+  }
+}
+
+function resolveAccountRestartLaunchTarget(
+  state: AppState,
+  args: AccountRestartTarget,
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined
+): AgentResumeLaunchTarget {
   const executionHostId = getExecutionHostIdForWorktree(state, args.worktreeId)
-  const resumeTarget = resolveAgentResumeLaunchTarget({
+  const worktree = state.getKnownWorktreeById(args.worktreeId, executionHostId)
+  const repo = worktree
+    ? state.repos.find((entry) => repoMatchesHostIdentity(entry, worktree.repoId, executionHostId))
+    : null
+  return resolveAgentResumeLaunchTarget({
     projectRuntime,
     connectionId: repo?.connectionId,
     executionHostId,
@@ -83,52 +180,4 @@ export function resolveAgentAccountRestartResumeStartup(
       runtimeEnvironmentIdUnlessTwin(state, args.worktreeId)
     )
   })
-  const startupPlan = buildAgentResumeStartupPlan({
-    agent,
-    providerSession,
-    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs)
-          : null,
-    agentEnv:
-      launchConfig !== undefined
-        ? launchConfig.agentEnv
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv)
-          : null,
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    ...(launchConfig?.ompResumeFilePath
-      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-      : {}),
-    platform: resumeTarget.platform,
-    shell: resumeTarget.shell
-  })
-  if (!startupPlan) {
-    return null
-  }
-  return {
-    startupCommandDelivery: 'shell-ready',
-    launchAgent: agent,
-    command: startupPlan.launchCommand,
-    ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
-    // Why it rides along: main only repins the launch home for a spawn that
-    // names the session it is resuming, so dropping this drops the account move.
-    resumeProviderSession: providerSession
-  }
-}
-
-/**
- * The startup an account-switch restart relaunches the pane with. Codex falls
- * back to a bare relaunch; Claude only ever resumes, so null means skip it.
- */
-export function buildPaneAccountRestartStartup(
-  agent: AccountRestartAgent,
-  args: AccountRestartPane
-): AgentAccountRestartStartup | null {
-  const resume = resolveAgentAccountRestartResumeStartup(agent, args)
-  return resume ?? (agent === 'codex' ? CODEX_ACCOUNT_RESTART_STARTUP : null)
 }

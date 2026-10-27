@@ -3,14 +3,14 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { tmpdir } from 'node:os'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
-  // Stable callback identities so companion-board Effects only re-run on real state changes.
+  // Keep callback identities stable so companion-board effects track real state changes only.
   closeWorkspaceBoard: vi.fn(),
   dropOwnerRef: vi.fn(),
   panel: {
@@ -110,7 +110,6 @@ function setSidebarState(settings: GlobalSettings, statusBarVisible = true): voi
     setAgentDashboardDrawerOpen: vi.fn(),
     fetchAllWorktrees: vi.fn(),
     repos: [],
-    // The toolchain banner indexes this map. The real store always has one.
     detectedWorktreesByRepo: {},
     setSidebarWidth: vi.fn(),
     settings,
@@ -145,6 +144,24 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Sidebar', () => {
+  it('explains the incomplete workspace list until startup discovery finishes', () => {
+    vi.useFakeTimers()
+    try {
+      setSidebarState(getDefaultSettings(tmpdir()))
+      mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: false }
+      const view = render(sidebarElement())
+      expect(view.queryByRole('status')).toBeNull()
+      act(() => vi.advanceTimersByTime(200))
+      expect(view.getByRole('status').textContent).toContain('Discovering workspaces')
+      expect(view.getByRole('status').textContent).toContain('More workspaces may appear')
+      mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
+      view.rerender(sidebarElement())
+      expect(view.queryByRole('status')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('anchors the setup script popup to the bottom toolbar', () => {
     setSidebarState(getDefaultSettings(tmpdir()))
     const view = render(sidebarElement())
@@ -167,9 +184,11 @@ describe('Sidebar', () => {
     })
 
     const markup = renderSidebar()
+    const sidebarRootTag = markup.slice(0, markup.indexOf('>'))
 
-    expect(markup).toContain('--worktree-sidebar:#101820')
-    expect(markup).toContain('--worktree-sidebar-foreground:#f0f4f8')
+    expect(sidebarRootTag).toContain('--worktree-sidebar:#101820')
+    expect(sidebarRootTag).toContain('--worktree-sidebar-foreground:#f0f4f8')
+    expect(sidebarRootTag).toMatch(/[;"]color:#f0f4f8/)
     expect(markup).toContain('data-testid="workspace-kanban-drawer"')
     expect(markup.match(/--worktree-sidebar:#101820/g)).toHaveLength(2)
   })

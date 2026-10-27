@@ -11,6 +11,8 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts']
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
 const CLASS_PROPERTY_NAMES = new Set(['className', 'classNames'])
+// Why: the children of these elements are CSS or code, never copy a translator should see.
+const NON_COPY_JSX_ELEMENTS = new Set(['style', 'script'])
 const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
   'ariaLabel',
   'aria-label',
@@ -62,8 +64,7 @@ const USER_VISIBLE_OBJECT_METHODS = new Set([
   'warning'
 ])
 const USER_VISIBLE_OBJECT_NAMES = new Set(['toast'])
-// Why: only comparison operands are code, not copy. Bailing on every non-`+`
-// operator hid whole subtrees behind `cond && <JSX/>` guards and `?? 'fallback'`.
+// Only comparison operands are non-copy; rejecting all non-+ operators hides guarded JSX and ?? fallback strings.
 const COPY_PRESERVING_BINARY_OPERATORS = new Set([
   ts.SyntaxKind.PlusToken,
   ts.SyntaxKind.QuestionQuestionToken,
@@ -314,8 +315,16 @@ function isUserVisibleCallArgument(node) {
   )
 }
 
+function isInsideNonCopyJsxElement(node) {
+  const element = findAncestor(node, (ancestor) => ts.isJsxElement(ancestor))
+  return Boolean(element && NON_COPY_JSX_ELEMENTS.has(element.openingElement.tagName.getText()))
+}
+
 function classifyStringNode(node) {
-  if (hasAncestorObjectPropertyName(node, CLASS_PROPERTY_NAMES)) {
+  if (
+    hasAncestorObjectPropertyName(node, CLASS_PROPERTY_NAMES) ||
+    isInsideNonCopyJsxElement(node)
+  ) {
     return undefined
   }
 

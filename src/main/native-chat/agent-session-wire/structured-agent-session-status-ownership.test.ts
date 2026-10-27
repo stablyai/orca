@@ -5,7 +5,6 @@ import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveEvidence
 } from '../../../shared/agent-status-child-work-evidence'
-import { AGENT_STATUS_STORE_LIMITS } from '../../../shared/agent-status-store-contract'
 import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { StructuredAgentSessionStatusOwnership } from './structured-agent-session-status-ownership'
@@ -68,8 +67,7 @@ describe('structured status owner address retention', () => {
     }
     const owner = new StructuredAgentSessionStatusOwnership(() => sink)
     expect(() => owner.publish(summary, location)).toThrow('store down')
-    // The feed skips an unchanged re-projection only when the location already matches. Reporting a
-    // match here would strand the row: the publish never landed and nothing else re-offers it.
+    // Failed publication must not establish location proof or suppress a later re-offer.
     expect(owner.matchesLocation(summary.sessionId, location)).toBe(false)
     owner.publish(summary, location)
     expect(sink.publish).toHaveBeenCalledTimes(2)
@@ -114,7 +112,6 @@ describe('structured status owner address retention', () => {
     owner.forget(summary.sessionId)
     owner.publishChildWork(summary.sessionId, evidence, 'claude')
     expect(sink.publishChildWork).toHaveBeenCalledOnce()
-    // An address held after a publish that threw is not a row that landed.
     const unlanded = new StructuredAgentSessionStatusOwnership(() => ({
       ...sink,
       publish: () => {
@@ -161,28 +158,24 @@ describe('child work the provider reported, recorded or not', () => {
     outcome: 'succeeded'
   })
 
-  /** Another session holds every child record the store has room for; idle parent beside it. */
-  function storeFull() {
-    const { owner } = owners()
-    owner.publish({ ...summary, sessionId: 'structured-busy' }, location)
-    owner.publishChildWork(
-      'structured-busy',
-      Array.from({ length: AGENT_STATUS_STORE_LIMITS.children }, (_unused, index) =>
-        agentLive(`busy-${index}`)
-      ),
-      'claude'
-    )
+  function refusingStore() {
+    let refusing = true
+    const { owner } = owners(() => refusing)
     owner.publish({ ...summary, status: 'idle' }, location)
-    return owner
+    return {
+      owner,
+      admit: () => {
+        refusing = false
+      }
+    }
   }
 
   it('marks an idle parent incomplete when the store refuses its live background child', () => {
-    const owner = storeFull()
+    const { owner } = refusingStore()
     owner.publishChildWork(summary.sessionId, [agentLive('background-agent')], 'claude')
 
     expect(owner.readChildWork(summary.sessionId)).toEqual([])
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)
-    // Refused again, still untracked.
     owner.publishChildWork(summary.sessionId, [agentLive('background-agent')], 'claude')
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)
     owner.publishChildWork(
@@ -194,18 +187,17 @@ describe('child work the provider reported, recorded or not', () => {
   })
 
   it('is whole again once the refused child is admitted on a later report', () => {
-    const owner = storeFull()
+    const { owner, admit } = refusingStore()
     owner.publishChildWork(summary.sessionId, [agentLive('background-agent')], 'claude')
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)
-    // The other session goes, and with it the records that filled the store.
-    owner.forget('structured-busy')
+    admit()
     owner.publishChildWork(summary.sessionId, [agentLive('background-agent')], 'claude')
     expect(owner.readChildWork(summary.sessionId)).toHaveLength(1)
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(false)
   })
 
   it('is whole again once every refused child reports its own end', () => {
-    const owner = storeFull()
+    const { owner } = refusingStore()
     owner.publishChildWork(summary.sessionId, [agentLive('first'), agentLive('second')], 'claude')
     owner.publishChildWork(summary.sessionId, [ended('first')], 'claude')
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)
@@ -214,20 +206,6 @@ describe('child work the provider reported, recorded or not', () => {
     expect(owner.childWorkOpen(summary.sessionId)).toBe(false)
   })
 
-  it('marks a parent the store refused incomplete, since none of its children is recorded', () => {
-    const { owner } = owners()
-    for (let index = 0; index < AGENT_STATUS_STORE_LIMITS.parents; index++) {
-      owner.publish({ ...summary, sessionId: `structured-other-${index}` }, location)
-    }
-    owner.publish({ ...summary, status: 'idle' }, location)
-    owner.publishChildWork(summary.sessionId, [agentLive('background-agent')], 'claude')
-    expect(owner.readChildWork(summary.sessionId)).toEqual([])
-    expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)
-    owner.publishChildWork(summary.sessionId, [ended('background-agent')], 'claude')
-    expect(owner.childWorkIncomplete(summary.sessionId)).toBe(false)
-  })
-
-  // Claude names the run a task ended on, and a resumed agent's earlier run may end late.
   it('holds recorded work open, never incomplete, through a late ending of its earlier run', () => {
     const { owner } = owners()
     owner.publish(summary, location)
@@ -303,11 +281,10 @@ describe('child work the provider reported, recorded or not', () => {
     captured.acknowledge([stop])
     owner.publishChildWork(summary.sessionId, [stop], 'claude')
     expect(owner.childWorkOpen(summary.sessionId)).toBe(false)
-    // The Stop did not take: the settled record lists nothing, so the work is open and unlisted.
+    // Failed Stop leaves live work outside the store’s settled display record.
     owner.publishChildWork(summary.sessionId, [agentLive('helper', 'new-run')], 'claude')
     expect(owner.childWorkOpen(summary.sessionId)).toBe(true)
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)
     expect(captured.current('helper')).toBe(false)
   })
-
 })

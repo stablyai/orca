@@ -99,9 +99,7 @@ function appendQuery(url: string, values: Record<string, string>): string {
   return `${url}?${search.toString()}`
 }
 
-// GitHub/Gitea compare refs keep '/' (slashed branch names like feature/foo) and
-// ':' (the owner:branch fork qualifier) literal; percent-encoding those separators
-// makes GitHub fail to resolve the branch. Only the segments between them are encoded.
+// Keep / and : literal in GitHub/Gitea refs; encoding them prevents branch resolution.
 function encodeCompareRef(ref: string): string {
   return ref
     .split(':')
@@ -122,10 +120,7 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
     return null
   }
 
-  // Why: the tracking upstream is the source of truth for where the branch
-  // actually lives on the remote. When it tracks a remote we can't resolve to a
-  // URL (a fork tracked via plain git, so pushTarget is empty), a base-repo
-  // compare link would 404 — suppress instead of pointing at a missing branch.
+  // An unresolvable fork upstream would make a base-repo compare link point to a missing branch.
   const upstream = parseUpstream(input.upstreamName)
   const baseRemoteName = input.repoRemoteName?.trim() || null
   const hasResolvableForkUrl = Boolean(input.pushTarget?.remoteUrl?.trim())
@@ -144,17 +139,14 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
     return null
   }
 
-  // Why: without a pushTarget or tracking upstream there's no evidence the branch
-  // exists on any remote, so a compare/PR-create link would land on GitHub's
-  // "There isn't anything to compare" page. No link beats a broken one.
+  // Without a push target or upstream, no remote branch is known to exist for a working compare link.
   const pushedBranch = input.pushTarget?.branchName?.trim()
   if (!pushedBranch && !upstream) {
     return null
   }
 
   const provider = normalizeProvider(input.provider) ?? baseRepo.provider ?? headRepo.provider
-  // Prefer the pushed branch name (pushTarget, else the tracking upstream on the
-  // base remote) so the link matches what exists remotely, not the local name.
+  // Use the remote branch name; it may differ from the local name.
   const headBranch =
     pushedBranch ||
     (upstream && (!baseRemoteName || upstream.remoteName === baseRemoteName)
@@ -169,11 +161,7 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
         githubHeadRef(baseRepo, headRepo, headBranch)
       )}?expand=1`
     case 'gitlab':
-      // Why: the source branch lives in the head repo, so the New-MR page must
-      // be opened on that project — a fork's branch is invisible to the base
-      // project and its /-/merge_requests/new page would 404 the source_branch.
-      // GitLab defaults the target to the fork's upstream. headRepo === baseRepo
-      // for the non-fork case, so this is a no-op there.
+      // Open GitLab’s MR form in the source project; the base project cannot resolve a fork’s source branch.
       return appendQuery(`${headRepo.webBaseUrl}/-/merge_requests/new`, {
         'merge_request[source_branch]': headBranch,
         'merge_request[target_branch]': baseBranch

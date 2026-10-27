@@ -1,7 +1,7 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RetiredTerminalSurface } from '../../runtime/mobile-session-terminal-retirement'
 
-/** The caller fences the old owner; a restart keeps the pane and removes only its process binding. */
+/** Caller proves old ownership; restart removes the binding while retaining the pane. */
 export function clearReplacedPaneBinding(
   session: WorkspaceSessionState,
   surface: RetiredTerminalSurface

@@ -4,6 +4,7 @@ import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-request-t
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
 import type { AppState } from '../types'
+import { matchesRepoCacheEviction, type RepoCacheEviction } from './cache-identity'
 
 export type InflightPR = {
   promise: Promise<PRInfo | null>
@@ -50,11 +51,7 @@ export function nextProviderRequestId(): number {
   return providerRequestSequence
 }
 
-/**
- * Why: the upgrade wait is bounded, so a stronger request can run beside a weaker one for the same
- * key. Only the request the key currently resolves to may write that key's cache — otherwise a late
- * weaker reply overwrites the stronger request's fresher result under a brand-new `fetchedAt`.
- */
+/** Bounded upgrade waits permit concurrent strengths; only current key owner may cache replies or late weaker results gain fresh timestamps over newer data. */
 export function ownsInflightRequest<T extends { requestId: number }>(
   registry: ReadonlyMap<string, T>,
   key: string,
@@ -96,13 +93,9 @@ export function releaseProviderRequestSlot(): void {
   providerRequestsInFlight -= 1
 }
 
-export function clearInflightWorkItemsForRepo(repoId: string, repoPath?: string): void {
-  const prefixes = [`${repoId}::`]
-  if (repoPath && repoPath !== repoId) {
-    prefixes.push(`${repoPath}::`)
-  }
+export function clearInflightWorkItemsForRepo(eviction: RepoCacheEviction): void {
   for (const key of Array.from(inflightWorkItemsRequests.keys())) {
-    if (prefixes.some((prefix) => key.startsWith(prefix))) {
+    if (matchesRepoCacheEviction(key, eviction)) {
       inflightWorkItemsRequests.delete(key)
     }
   }

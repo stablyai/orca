@@ -1,6 +1,6 @@
 import { RuntimeClientError } from '../runtime-client'
 
-/** Returns the text unchanged; an explicit empty value clears saved extras on edit. */
+/** An explicit empty value clears saved extras. */
 export function getExtraAgentArgsFlag(flags: Map<string, string | boolean>): string | undefined {
   if (!flags.has('extra-agent-args')) {
     return undefined

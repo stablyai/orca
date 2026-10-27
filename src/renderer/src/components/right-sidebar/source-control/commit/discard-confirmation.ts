@@ -1,6 +1,6 @@
 import { basename } from '@/lib/path'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiscardAllArea } from './discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import { translate } from '@/i18n/i18n'
 
 export type DiscardConfirmationCopy = {
@@ -9,9 +9,7 @@ export type DiscardConfirmationCopy = {
   confirmLabel: string
 }
 
-/**
- * Discard removes untracked files; staged additions retain their index version.
- */
+/** Discard deletes untracked files; staged additions retain their index version. */
 export function discardDeletesEntryFile(entry: Pick<GitStatusEntry, 'area' | 'status'>): boolean {
   return entry.area === 'untracked' || entry.status === 'untracked'
 }
@@ -75,8 +73,15 @@ export function getDiscardAreaConfirmationCopy(
         title: count === 1 ? 'Delete 1 untracked file?' : `Delete ${count} untracked files?`,
         description:
           count === 1
-            ? 'This will permanently delete this untracked file. This cannot be undone.'
-            : `This will permanently delete these ${count} untracked files. This cannot be undone.`,
+            ? translate(
+                'sourceControl.discard.deleteUntrackedFileDescription',
+                'This will permanently delete this untracked file. This cannot be undone.'
+              )
+            : translate(
+                'sourceControl.discard.deleteUntrackedFilesDescription',
+                'This will permanently delete these {{count}} untracked files. This cannot be undone.',
+                { count }
+              ),
         confirmLabel: count === 1 ? 'Delete' : `Delete ${count}`
       }
     case 'staged':
@@ -99,8 +104,15 @@ export function getDiscardAreaConfirmationCopy(
         ),
         description:
           count === 1
-            ? 'This will revert the unstaged changes in 1 file. This cannot be undone.'
-            : `This will revert unstaged changes in ${count} files. This cannot be undone.`,
+            ? translate(
+                'sourceControl.discard.unstagedSelectionIncludingUntrackedDescription',
+                'This will revert unstaged changes and permanently delete any untracked files in this selection. This cannot be undone.'
+              )
+            : translate(
+                'sourceControl.discard.unstagedFilesIncludingUntrackedDescription',
+                'This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone.',
+                { count }
+              ),
         confirmLabel: 'Discard all'
       }
   }

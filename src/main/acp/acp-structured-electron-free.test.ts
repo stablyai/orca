@@ -1,12 +1,11 @@
-// The ACP lane runs in whatever process hosts the runtime, the headless one included, so nothing
-// it reaches may import Electron.
+// Bundled relative-source imports must not reach Electron; external package internals are excluded.
 
 import { resolve } from 'node:path'
 import { build } from 'esbuild'
 import { describe, expect, it } from 'vitest'
 
 describe('ACP structured lane', () => {
-  it('reaches no Electron import from the adapter, its launch resolution or any agent row', async () => {
+  it('bundles the adapter, launch resolution and agent rows without relative-source Electron imports', async () => {
     const result = await build({
       entryPoints: [
         resolve(__dirname, 'acp-structured-session-adapter.ts'),

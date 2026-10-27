@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration-manifest-validation'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../shared/orcad-migration/orcad-migration-scrollback'
 import { transferOrcadMigrationSnapshots } from './orcad-migration-snapshot-coordinator'
 
 const BYTES = Buffer.from('resume these bytes', 'utf8')

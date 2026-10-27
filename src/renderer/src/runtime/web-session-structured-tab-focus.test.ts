@@ -30,7 +30,7 @@ describe('web session structured tab focus', () => {
   it('keeps the exact active structured tab across a host snapshot', () => {
     const first = structuredTab('session-1', 0)
     const second = structuredTab('session-2', 1)
-    const state = {
+    const state: WebSessionTabsSyncState = {
       activeBrowserTabId: null,
       activeBrowserTabIdByWorktree: {},
       activeFileId: null,
@@ -58,6 +58,7 @@ describe('web session structured tab focus', () => {
       },
       layoutByWorktree: {},
       openFiles: [],
+      editorBuffers: {},
       ptyIdsByTabId: {},
       remoteBrowserPageHandlesByPageId: {},
       tabBarOrderByWorktree: { [WORKTREE_ID]: [first.id, second.id] },
@@ -66,7 +67,7 @@ describe('web session structured tab focus', () => {
       unifiedTabsByWorktree: { [WORKTREE_ID]: [first, second] },
       unreadTerminalTabs: {},
       sortEpoch: 0
-    } as WebSessionTabsSyncState
+    }
     const snapshot: RuntimeMobileSessionTabsResult = {
       worktree: WORKTREE_ID,
       publicationEpoch: 'epoch-1',

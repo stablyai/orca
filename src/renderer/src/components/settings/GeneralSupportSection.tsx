@@ -29,14 +29,7 @@ export function GeneralSupportSection({
   hasPrecedingSections
 }: GeneralSupportSectionProps): React.JSX.Element {
   const mountedRef = useMountedRef()
-  // Why: the star state is derived from gh, not from settings, so it does not
-  // live in the global settings store. 'hidden' covers already-starred users
-  // so the section drops out for people who don't need to act.
-  //
-  // We start in 'loading' and render a placeholder at the exact same
-  // dimensions as the resolved section. When gh resolves to 'hidden', the
-  // placeholder collapses with a grid-rows transition so content above it
-  // doesn't shift; anything below (nothing today, but future-proof) eases up.
+  // Keep gh-derived state local; use a same-size placeholder that collapses with its divider when the section is hidden.
   const [starState, setStarState] = useState<SupportState>('loading')
 
   useEffect(() => {
@@ -79,8 +72,7 @@ export function GeneralSupportSection({
     if (mountedRef.current) {
       setStarState('starred')
     }
-    // Why: clicking star anywhere should also permanently mute the
-    // threshold-based nag so the user isn't re-prompted via the popup.
+    // Starring here must also silence the threshold-based popup permanently.
     await window.api.starNag.complete()
   }
 
@@ -104,9 +96,7 @@ function SupportSection({
   hasPrecedingSections,
   onStarClick
 }: SupportSectionProps): React.JSX.Element {
-  // Why: 'hidden' means gh is unavailable or the user had already starred on a
-  // previous session. Collapse the whole section, including its leading
-  // Separator, so the settings pane doesn't carry an empty strip.
+  // Collapse the leading separator too when gh is unavailable or the repo was already starred.
   const collapsed = state === 'hidden'
 
   return (
@@ -153,9 +143,7 @@ function SupportRow({
   state: 'not-starred' | 'web-fallback' | 'opening-github' | 'starring' | 'starred'
   onStarClick: () => void | Promise<void>
 }): React.JSX.Element {
-  // Why: the left-hand label is the setting's identity and must not change
-  // when the user clicks. The right-hand control is what changes: before
-  // starring it is a button; after success it becomes a small confirmation.
+  // Keep the setting label stable; only its action changes to confirmation after starring.
   return (
     <SearchableSetting
       title={translate(
@@ -209,8 +197,7 @@ function SupportRow({
 }
 
 function SupportRowThanks(): React.JSX.Element {
-  // Why: match the size="sm" button's h-8 / gap-1.5 / px-3 dimensions so the
-  // row height stays identical when the button is swapped out.
+  // Match the sm button’s dimensions so confirmation cannot change row height.
   return (
     <div
       className="shrink-0 inline-flex h-8 items-center gap-1.5 px-3 text-sm font-medium

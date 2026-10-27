@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { waitForSentinel } from './ssh-relay-sentinel'
-import { RELAY_SENTINEL } from '../remote-frame-protocol'
+import { RELAY_SENTINEL } from '../remote-exec/remote-frame-protocol'
 import {
   RelayVersionMismatchError,
   RELAY_EXIT_CODE_VERSION_MISMATCH

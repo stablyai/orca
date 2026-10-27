@@ -4,17 +4,33 @@ const launchAgentInNewTab = vi.hoisted(() => vi.fn())
 const writeClipboardText = vi.hoisted(() => vi.fn(async () => undefined))
 const ensureDetectedAgentsForWorktree = vi.hoisted(() => vi.fn())
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
-const store: { settings: { disabledTuiAgents: string[] } } = vi.hoisted(() => ({
-  settings: { disabledTuiAgents: [] }
-}))
+const store: { settings: { disabledTuiAgents: string[]; experimentalNativeChat?: boolean } } =
+  vi.hoisted(() => ({
+    settings: { disabledTuiAgents: [] }
+  }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab }))
 vi.mock('@/lib/agent-catalog', () => ({
+  getAgentCatalog: () => [{ id: 'claude', label: 'Claude' }],
   getAgentLabel: (agent: string) => (agent === 'codex' ? 'Codex' : 'Claude')
 }))
-vi.mock('@/lib/agent-detection-target-inventory', () => ({ ensureDetectedAgentsForWorktree }))
+vi.mock('@/lib/agent-detection-target-inventory', () => ({
+  ensureDetectedAgentsForWorktree,
+  // A declined chat falls back to a terminal only where the agent's CLI was detected.
+  readAgentInventoryForTarget: () => ({ ids: ['claude'], state: 'successful' })
+}))
 vi.mock('sonner', () => ({ toast }))
+vi.mock('./host-chat-program-acquisition', () => ({
+  acquireAgentLaunchChoices: async (_: unknown, run: () => unknown) => {
+    const detected = await run()
+    return { detected, offered: detected }
+  }
+}))
+vi.mock('./host-chat-program', () => ({ agentChoicePending: () => false }))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: vi.fn(async () => ({ supported: false, reason: 'wsl' }))
+}))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     Object.entries(values ?? {}).reduce(
@@ -71,7 +87,8 @@ describe('launchAgentSessionContinuation', () => {
     const { detectAgentSessionContinuationAgents } =
       await import('./launch-agent-session-continuation')
 
-    await expect(detectAgentSessionContinuationAgents('wt-1')).resolves.toEqual(['claude', 'codex'])
+    const { detected } = await detectAgentSessionContinuationAgents('wt-1')
+    expect(detected).toEqual(['claude', 'codex'])
     expect(ensureDetectedAgentsForWorktree).toHaveBeenCalledWith(store, 'wt-1')
   })
 
@@ -118,8 +135,7 @@ describe('launchAgentSessionContinuation', () => {
   })
 
   it('hedges instead of claiming success when the paste went out unconfirmed', async () => {
-    // Regression (#22479): on Windows the composer-ready signal can never fire, so the paste
-    // is written blind. Reporting that as a delivered handoff hid a prompt that never arrived.
+    // Windows may force blind paste; do not report a handoff delivered when its composer was never observed (#22479).
     launchAgentInNewTab.mockImplementation(
       (args: {
         onPromptDelivered?: () => void
@@ -171,4 +187,52 @@ describe('launchAgentSessionContinuation', () => {
     expect(toast.success).toHaveBeenCalledWith('Session context sent to Codex in a new session.')
     expect(toast.warning).not.toHaveBeenCalled()
   })
+})
+
+it('retains the accepted route across detection, and explicit chat declines without the preference fallback', async () => {
+  const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+  const { beginHostAdmittedStructuredLaunch } =
+    await import('./structured-agent-session-launch-admission')
+  for (const requestedSurface of [undefined, 'chat'] as const) {
+    const detected = Promise.withResolvers<string[]>()
+    ensureDetectedAgentsForWorktree.mockReturnValueOnce(detected.promise)
+    const pending = launchAgentSessionContinuation({
+      agent: 'claude',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      initialCwd: '/repo/.',
+      launchSource: 'sidebar',
+      launchChoice: {
+        agent: 'claude',
+        route: 'structured-native-chat',
+        executionHostId: 'local',
+        requestedSurface
+      }
+    })
+    store.settings.experimentalNativeChat = false
+    detected.resolve(['claude'])
+    await pending
+    const args = launchAgentInNewTab.mock.calls.at(-1)?.[0]
+    expect(args).toMatchObject({
+      initialCwd: '/repo/.',
+      groupId: 'group-1',
+      prompt: 'continue',
+      agentSessionLaunchPlan: { route: 'structured-native-chat', requestedSurface }
+    })
+    const fallback = vi.fn(() => ({ opened: true }))
+    const launch = beginHostAdmittedStructuredLaunch({
+      plan: args.agentSessionLaunchPlan,
+      hooks: {},
+      worktreeId: 'wt-1',
+      executionHostId: 'local',
+      target: { kind: 'local' },
+      openAdmitted: vi.fn(),
+      onHostDeclined: fallback
+    })
+    await expect(launch.settlement).resolves.toMatchObject({
+      kind: requestedSurface ? 'failed' : 'terminal'
+    })
+    expect(fallback).toHaveBeenCalledTimes(requestedSurface ? 0 : 1)
+  }
 })

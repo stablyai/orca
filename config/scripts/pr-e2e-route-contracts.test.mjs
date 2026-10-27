@@ -16,6 +16,7 @@ import { testImportClosure } from './e2e-test-import-closure.mjs'
 import { isLayoutOracleSource, LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
 import {
   hasNativeImeSourceChange,
+  MANUAL_ONLY_E2E_SPECS,
   PR_E2E_SOURCE_ROUTES,
   selectPrE2eSpecs,
   shouldRunReusablePrE2e
@@ -24,6 +25,21 @@ import {
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
+
+describe('browser native focus routing', () => {
+  it('selects the general E2E lane for focus adapter and image fixture changes', () => {
+    const spec = 'tests/e2e/browser-image-link-focus.spec.ts'
+    for (const file of [
+      'src/renderer/src/components/browser-pane/assemble-chrome/browser-page-guest-focus.ts',
+      'tests/e2e/helpers/browser-link-server.ts'
+    ]) {
+      const specs = selectPrE2eSpecs([file])
+      expect(specs, file).toContain(spec)
+      expect(selectGeneralE2eSpecs(specs), file).toContain(spec)
+      expect(classifyE2eJobs(JSON.stringify(specs)).e2e_run_changed, file).toBe(true)
+    }
+  })
+})
 
 describe('pr-e2e-native-only-routing', () => {
   const workflow = prWorkflow
@@ -56,12 +72,7 @@ describe('pr-e2e-native-only-routing', () => {
 })
 
 describe('pr-e2e-pane-close-routing', () => {
-  /**
-   * The product paths of #21005, "retire captured remote handles when pending panes close". It
-   * changed the pane close and retirement lifecycle across three transports and matched no route
-   * at all, so it merged with E2E skipped outright. The routes named every module that BINDS a
-   * pane and none that unbinds one.
-   */
+  // #21005 changed pane close/retirement across three transports with E2E skipped: routes covered binders but missed unbinders.
   const PENDING_PANE_CLOSE_CHANGE = [
     'src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts',
     'src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts',
@@ -87,8 +98,7 @@ describe('pr-e2e-pane-close-routing', () => {
 
     it('routes each unbind authority on its own, not just as a group', () => {
       expect(CLOSE_ROUTE, 'the close route was renamed or removed').toBeDefined()
-      // A single-file change is the shape that slipped through; assert per path rather than only
-      // on the union, where one matching path would hide five that do not.
+      // Assert each single path; union could hide missed routes behind one match.
       for (const file of PENDING_PANE_CLOSE_CHANGE) {
         expect(selectPrE2eSpecs([file]), file).toEqual(CLOSE_ROUTE.specs.toSorted())
       }
@@ -274,7 +284,7 @@ describe('ssh-browser-e2e-routing', () => {
     const run = job.steps.find(
       (step) => step.name === 'Run Docker SSH browser network route journeys'
     )
-    expect(job['runs-on']).toBe('ubuntu-latest')
+    expect(job['runs-on']).toBe('blacksmith-4vcpu-ubuntu-2404')
     expect(job.if).toContain("inputs.test_files == ''")
     expect(job.if).toContain(spec)
     expect(install.with['native-runtime']).toBe('node')
@@ -288,7 +298,7 @@ describe('ssh-browser-e2e-routing', () => {
       'src/main/browser/browser-network-deferred-socket.ts',
       'src/main/browser/browser-network-execution-route.ts',
       'src/main/browser/system-ssh-socks-client-socket.ts',
-      'src/main/ssh/system-ssh-dynamic-forward-process.ts',
+      'src/main/ssh/system-transport/system-ssh-dynamic-forward-process.ts',
       'tests/e2e/helpers/docker-ssh-host-target.ts',
       'tests/e2e/helpers/docker-ssh-host-image.ts'
     ]) {
@@ -376,8 +386,7 @@ describe('orcad-e2e-routing', () => {
         'tests/e2e/helpers/orcad-convert-flow.ts',
         'tests/e2e/helpers/orcad-convert-host.ts'
       ],
-      ORCAD_IDLE_EXIT_E2E_SPEC,
-      ORCAD_OPEN_IN_OWNER_E2E_SPEC
+      ORCAD_IDLE_EXIT_E2E_SPEC
     )
   })
 
@@ -396,14 +405,16 @@ describe('orcad-e2e-routing', () => {
     expect(jobs['orcad-ssh-docker'].needs).toEqual(['build'])
   })
 
-  it('runs every managed-SSH spec in one sharded lane, only when one is routed', () => {
+  it('passes the requested managed-SSH specs to the sharded lane', () => {
     const lane = jobs['orcad-ssh-docker']
     expect(lane.if).toBe(
       `inputs.test_files == '' || contains(inputs.test_files, '${MANAGED_SSH_E2E_SPEC_PREFIX}')`
     )
-    expect(lane.strategy.matrix.shard).toEqual(['1/2', '2/2'])
+    expect(lane.strategy.matrix.shard).toBe(
+      `\${{ fromJSON(inputs.managed_ssh_shards || '["1/2","2/2"]') }}`
+    )
     const run = lane.steps.find((step) => step.env?.ORCA_E2E_SSH_DOCKER === '1').run
-    expect(run).toContain(` ${MANAGED_SSH_E2E_SPEC_PREFIX} `)
+    expect(run).toContain('"${TEST_FILES[@]}"')
     expect(run).toContain('--shard="$SHARD"')
     for (const spec of [
       ORCAD_AUTO_CONVERT_E2E_SPEC,
@@ -463,12 +474,12 @@ describe('orcad-e2e-routing', () => {
           'src/renderer/src/components/terminal-pane/terminal-host-file-link-existence.ts',
           'src/renderer/src/runtime/runtime-terminal-artifact-read.ts',
           // #30130's Disconnect sources merged with this lane skipped.
-          'src/main/ipc/ssh-host-user-disconnect.ts',
-          'src/main/ipc/ssh-connect-flow.ts',
-          'src/main/ipc/ssh-connection-handlers.ts',
-          'src/main/ipc/runtime-environment-connectivity-handlers.ts',
-          'src/main/ipc/runtime-environment-manual-disconnect.ts',
-          'src/main/ssh/ssh-connection-manager.ts',
+          'src/main/ipc/ssh/ssh-host-user-disconnect.ts',
+          'src/main/ipc/ssh/ssh-connect-flow.ts',
+          'src/main/ipc/ssh/ssh-connection-handlers.ts',
+          'src/main/ipc/runtime-environments/runtime-environment-connectivity-handlers.ts',
+          'src/main/ipc/runtime-environments/runtime-environment-manual-disconnect.ts',
+          'src/main/ssh/connection/ssh-connection-manager.ts',
           'src/main/ssh/ssh-user-disconnect.ts',
           'src/renderer/src/runtime/web-session-close-intent.ts',
           'src/renderer/src/runtime/web-session-close-replay.ts'
@@ -494,24 +505,30 @@ describe('managed-SSH remote sources routing', () => {
       .filter((name) => /^ssh-orcad-.*\.spec\.ts$/.test(name))
       .map((name) => `tests/e2e/${name}`)
     expect(specs.length).toBeGreaterThan(0)
-    expect(specs.filter((spec) => !routed.has(spec))).toEqual([])
+    expect(
+      specs.filter((spec) => !routed.has(spec) && !MANUAL_ONLY_E2E_SPECS.includes(spec))
+    ).toEqual([])
   })
 
   it('starts the lane for remote product sources no hand-kept route names', () => {
     for (const file of [
       // #30130 and #30120 merged with the lane skipped.
-      'src/main/ipc/ssh.ts',
+      'src/main/ipc/ssh/ssh.ts',
       'src/cli/runtime/serve-orcad-launch.ts',
       'src/main/orcad/orcad-entry.ts',
-      'src/main/ssh/ssh-connection.ts',
-      'src/main/ipc/runtime-environment-status-probe.ts',
-      'src/main/ipc/orcad-runtime-lifecycle-handlers.ts',
+      'src/main/ssh/connection/ssh-connection.ts',
+      'src/main/ipc/runtime-environments/runtime-environment-status-probe.ts',
+      'src/main/ipc/runtime-environments/orcad-runtime-lifecycle-handlers.ts',
       'src/shared/protocol-version.ts',
-      'src/shared/remote-runtime-client-error-classification.ts',
+      'src/shared/remote-runtime/remote-runtime-client-error-classification.ts',
       // #30047 and #30060: sidebar sleep and project removal.
       'src/renderer/src/components/sidebar/sleep-worktree-flow.ts',
       'src/renderer/src/components/sidebar/ssh-host-remove-resolution.ts',
-      'src/renderer/src/store/repos/repo-removal.ts'
+      'src/renderer/src/store/repos/repo-removal.ts',
+      // #30775: the pane banner for a managed server that refused this desktop.
+      'src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.tsx',
+      'src/renderer/src/components/terminal-pane/use-managed-pairing-refused.ts',
+      'src/renderer/src/components/terminal-pane/TerminalPaneRuntimePortals.tsx'
     ]) {
       expect(existsSync(join(projectDir, file)), file).toBe(true)
       expect(selectsManagedSshLane(file), file).toBe(true)
@@ -520,8 +537,8 @@ describe('managed-SSH remote sources routing', () => {
 
   it('leaves unit tests and local-only sources alone', () => {
     for (const file of [
-      'src/main/ssh/ssh-connection.test.ts',
-      'src/main/ipc/ssh.test.ts',
+      'src/main/ssh/connection/ssh-connection.test.ts',
+      'src/main/ipc/ssh/ssh.test.ts',
       'src/main/daemon/daemon-server.ts',
       'src/main/runtime/rpc/methods/accounts.ts',
       'src/renderer/src/components/sidebar/WorktreeCard.tsx',

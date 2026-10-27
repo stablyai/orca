@@ -1,4 +1,4 @@
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
@@ -11,14 +11,14 @@ export function acquireInstallLockParentCommand(
   remoteRelayDir: string
 ): string {
   if (!isWindowsRemoteHost(host)) {
-    return `mkdir -p ${shellEscape(remoteRelayDir)}`
+    return `mkdir -p ${quotePosixShell(remoteRelayDir)}`
   }
   return powerShellCommand(
     `$null = New-Item -ItemType Directory -Force -Path ${powerShellLiteral(remoteRelayDir)}`
   )
 }
 
-/** A file the holder writes inside the lock in the same command that creates it. */
+/** Written in the same command that acquires the lock. */
 export type InstallLockOwnerFile = { fileName: string; token: string }
 
 export function tryCreateInstallLockCommand(
@@ -28,7 +28,7 @@ export function tryCreateInstallLockCommand(
 ): string {
   if (!isWindowsRemoteHost(host)) {
     return [
-      `if mkdir ${shellEscape(lockDir)} 2>/dev/null; then`,
+      `if mkdir ${quotePosixShell(lockDir)} 2>/dev/null; then`,
       posixCurrentBootIdentityAssignment(host, 'current_boot_id'),
       posixWriteBootIdentity(lockDir, 'current_boot_id'),
       ...posixWriteOwner(lockDir, owner),
@@ -36,9 +36,7 @@ export function tryCreateInstallLockCommand(
       'else echo BUSY; fi'
     ].join(' ')
   }
-  // Why: old Orca clients recognize only a directory at `.install-lock`, while
-  // concurrent New-Item calls can both report success in PowerShell 5.1. Keep
-  // that directory marker and arbitrate ownership with an atomic child file.
+  // Older clients need the directory marker; an atomic child file arbitrates PowerShell 5.1 races.
   return powerShellCommand(
     [
       `$lock = ${powerShellLiteral(lockDir)}`,
@@ -60,10 +58,9 @@ export function tryCreateInstallLockCommand(
 
 export function probeInstallLockExistsCommand(host: RemoteHostPlatform, lockPath: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `test -e ${shellEscape(lockPath)} && echo LOCKED || echo OPEN`
+    return `test -e ${quotePosixShell(lockPath)} && echo LOCKED || echo OPEN`
   }
-  // Why: one prerelease briefly wrote file locks; accept both shapes so those
-  // hosts remain recoverable after upgrading to directory-plus-owner locks.
+  // Accept prerelease file locks as well as directory-plus-owner locks.
   return powerShellCommand(
     `if (Test-Path -LiteralPath ${powerShellLiteral(lockPath)}) { 'LOCKED' } else { 'OPEN' }`
   )
@@ -83,13 +80,10 @@ export function lockAgeSecondsCommand(host: RemoteHostPlatform, lockDir: string)
   )
 }
 
-/**
- * Backdates a lock its holder is leaving behind on purpose, so stale-takeover recovery need not
- * wait out the window that only protects a holder still working.
- */
+/** Backdate abandoned locks to permit immediate stale takeover. */
 export function orphanInstallLockCommand(host: RemoteHostPlatform, lockDir: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `touch -m -t 200001010000 ${shellEscape(lockDir)}`
+    return `touch -m -t 200001010000 ${quotePosixShell(lockDir)}`
   }
   return powerShellCommand(
     `(Get-Item -LiteralPath ${powerShellLiteral(lockDir)} -ErrorAction Stop).LastWriteTimeUtc = ` +
@@ -97,7 +91,7 @@ export function orphanInstallLockCommand(host: RemoteHostPlatform, lockDir: stri
   )
 }
 
-/** A takeover writes the new holder's owner file too, so the holder it replaced can tell. */
+// Replacement owner tokens let displaced holders detect takeover.
 export function tryStealInstallLockCommand(
   host: RemoteHostPlatform,
   lockDir: string,
@@ -118,8 +112,8 @@ function posixStealInstallLockCommand(
   owner?: InstallLockOwnerFile,
   exitedOwner?: exitedOwnerSteal.InstallLockExitedOwner
 ): string {
-  const escapedLockDir = shellEscape(lockDir)
-  const escapedStealLockPrefix = shellEscape(`${lockDir}.steal`)
+  const escapedLockDir = quotePosixShell(lockDir)
+  const escapedStealLockPrefix = quotePosixShell(`${lockDir}.steal`)
   return [
     posixCurrentBootIdentityAssignment(host, 'current_boot_id'),
     `${posixReadBootIdentity(lockDir, 'recorded_boot_id')}`,
@@ -248,7 +242,7 @@ function posixCurrentBootIdentityAssignment(
 }
 
 function posixReadBootIdentity(lockDir: string, variableName: string): string {
-  const markerPath = shellEscape(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}`)
+  const markerPath = quotePosixShell(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}`)
   return [
     `${variableName}=$(head -c 128 ${markerPath} 2>/dev/null | tr -d '\\r\\n') || ${variableName}=;`,
     `if ! printf '%s\\n' "$${variableName}" | grep -Eq '^(linux:[0-9a-fA-F-]{1,64}:[0-9]{1,32}|darwin:[0-9]{1,32})$'; then ${variableName}=; fi;`
@@ -256,8 +250,8 @@ function posixReadBootIdentity(lockDir: string, variableName: string): string {
 }
 
 function posixWriteBootIdentity(lockDir: string, variableName: string): string {
-  const markerPath = shellEscape(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}`)
-  const markerTempPrefix = shellEscape(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}.tmp`)
+  const markerPath = quotePosixShell(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}`)
+  const markerTempPrefix = quotePosixShell(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}.tmp`)
   return [
     `if [ -n "$${variableName}" ]; then`,
     `boot_marker_tmp=${markerTempPrefix}.$$;`,
@@ -305,12 +299,12 @@ function posixLockAgeSecondsAssignment(lockDir: string): string {
 }
 
 function posixLockIdentityAssignment(lockDir: string, variableName: string): string {
-  const escapedLockDir = shellEscape(lockDir)
+  const escapedLockDir = quotePosixShell(lockDir)
   return `${variableName}=$(stat -c %Y:%i ${escapedLockDir} 2>/dev/null || stat -f %m:%i ${escapedLockDir} 2>/dev/null)`
 }
 
 function posixLockMtimeSecondsAssignment(lockDir: string, variableName: string): string {
-  const escapedLockDir = shellEscape(lockDir)
+  const escapedLockDir = quotePosixShell(lockDir)
   return `${variableName}=$(stat -c %Y ${escapedLockDir} 2>/dev/null || stat -f %m ${escapedLockDir} 2>/dev/null)`
 }
 
@@ -319,7 +313,7 @@ function posixWriteOwner(lockDir: string, owner?: InstallLockOwnerFile): string[
     return []
   }
   const ownerPath = `${lockDir.replace(/\/+$/u, '')}/${owner.fileName}`
-  return [`printf %s ${shellEscape(owner.token)} > ${shellEscape(ownerPath)};`]
+  return [`printf %s ${quotePosixShell(owner.token)} > ${quotePosixShell(ownerPath)};`]
 }
 
 function windowsWriteOwner(owner?: InstallLockOwnerFile): string {

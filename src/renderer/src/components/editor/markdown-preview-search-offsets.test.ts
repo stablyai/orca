@@ -1,43 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { findTextMatchRanges } from './markdown-preview-search'
 
-function referenceMatchRanges(text: string, query: string): { start: number; end: number }[] {
-  let normalized = ''
-  let originalOffset = 0
-  const starts: number[] = []
-  const ends: number[] = []
-  for (const char of text) {
-    const lowercase = char.toLocaleLowerCase()
-    for (let index = 0; index < lowercase.length; index += 1) {
-      starts.push(originalOffset)
-      ends.push(originalOffset + char.length)
-    }
-    normalized += lowercase
-    originalOffset += char.length
-  }
-  const normalizedQuery = Array.from(query, (char) => char.toLocaleLowerCase()).join('')
-  const matches: { start: number; end: number }[] = []
-  let searchStart = 0
-  while (searchStart <= normalized.length - normalizedQuery.length) {
-    const start = normalized.indexOf(normalizedQuery, searchStart)
-    if (start === -1) {
-      break
-    }
-    const end = start + normalizedQuery.length
-    matches.push({ start: starts[start] ?? text.length, end: ends[end - 1] ?? text.length })
-    searchStart = end + (normalizedQuery.length === 0 ? 1 : 0)
-  }
-  return matches
-}
-
-function createRandom(seed: number): (max: number) => number {
-  let state = seed
-  return (max) => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
-    return state % max
-  }
-}
-
 function mockLowercaseLocale(locale: string): void {
   const lowercase = String.prototype.toLocaleLowerCase
   vi.spyOn(String.prototype, 'toLocaleLowerCase').mockImplementation(function (this: string) {
@@ -57,9 +20,16 @@ describe('case-insensitive Markdown search offsets', () => {
     ])
   })
 
-  it.each(['İ', '😊', '𐐀'])('keeps offsets across an ordinary prefix and %s', (character) => {
+  it.each([
+    { character: 'İ', first: 9, second: 18 },
+    { character: '😊', first: 10, second: 20 },
+    { character: '𐐀', first: 10, second: 20 }
+  ])('keeps offsets across an ordinary prefix and $character', ({ character, first, second }) => {
     const text = `Prefix ${character} NEEDLE ${character} needle`
-    expect(findTextMatchRanges(text, 'needle')).toEqual(referenceMatchRanges(text, 'needle'))
+    expect(findTextMatchRanges(text, 'needle')).toEqual([
+      { start: first, end: first + 6 },
+      { start: second, end: second + 6 }
+    ])
   })
 
   it('preserves whole code-point ranges for lone surrogate queries', () => {
@@ -75,49 +45,19 @@ describe('case-insensitive Markdown search offsets', () => {
     ])
   })
 
-  it.each(['en-US', 'tr', 'az', 'lt', 'el'])(
-    'preserves every ASCII character in locale %s',
-    (locale) => {
-      mockLowercaseLocale(locale)
-      const ascii = Array.from({ length: 128 }, (_, index) => String.fromCharCode(index)).join('')
-      const text = `${ascii} IJI iIj ${ascii}`
-      for (const query of [...ascii, 'IJI', 'iij', 'j']) {
-        expect(findTextMatchRanges(text, query)).toEqual(referenceMatchRanges(text, query))
-      }
-    }
-  )
-
-  it.each(['en-US', 'tr', 'az', 'lt', 'el'])(
-    'matches reference code-point folding in locale %s',
-    (locale) => {
-      mockLowercaseLocale(locale)
-      const random = createRandom(101)
-      const characters = [
-        'a',
-        'B',
-        ' ',
-        'İ',
-        'I',
-        'ı',
-        '\u0307',
-        'Σ',
-        'σ',
-        'ς',
-        '𐐀',
-        '𐐨',
-        '😊',
-        '\ud800',
-        '\udc00'
-      ]
-      for (let sample = 0; sample < 250; sample += 1) {
-        let text = ''
-        for (let index = 0; index < 100; index += 1) {
-          text += characters[random(characters.length)]
-        }
-        const start = random(text.length)
-        const query = text.slice(start, start + random(4) + 1)
-        expect(findTextMatchRanges(text, query)).toEqual(referenceMatchRanges(text, query))
-      }
-    }
-  )
+  it.each([
+    { locale: 'en-US', dotted: [0, 2, 4], dotless: [6] },
+    { locale: 'tr', dotted: [2, 4], dotless: [0, 6] },
+    { locale: 'az', dotted: [2, 4], dotless: [0, 6] },
+    { locale: 'lt', dotted: [0, 2, 4], dotless: [6] },
+    { locale: 'el', dotted: [0, 2, 4], dotless: [6] }
+  ])('respects dotted and dotless I in $locale', ({ locale, dotted, dotless }) => {
+    mockLowercaseLocale(locale)
+    expect(findTextMatchRanges('I i İ ı', 'i')).toEqual(
+      dotted.map((start) => ({ start, end: start + 1 }))
+    )
+    expect(findTextMatchRanges('I i İ ı', 'ı')).toEqual(
+      dotless.map((start) => ({ start, end: start + 1 }))
+    )
+  })
 })

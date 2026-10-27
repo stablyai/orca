@@ -49,6 +49,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
   const lastCommentClose = normalizedContent.lastIndexOf('-->')
   const { transport } = codec
   let index = 0
+  let nextDocLinkClose = 0
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let result = ''
@@ -93,8 +94,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
         tickCount += 1
       }
 
-      // Why: the closing backtick sequence must be exactly tickCount backticks,
-      // not a longer run. We scan forward to find the first exact match.
+      // CommonMark closes inline code only on an exact-length backtick run.
       let searchFrom = index + tickCount
       let closingIndex = -1
       while (searchFrom < normalizedContent.length) {
@@ -102,7 +102,6 @@ export function encodeRawMarkdownHtmlForRichEditor(
         if (candidate === -1) {
           break
         }
-        // Verify the match is exactly tickCount backticks (no extra backtick before/after)
         if (
           (candidate === 0 || normalizedContent[candidate - 1] !== '`') &&
           normalizedContent[candidate + tickCount] !== '`'
@@ -124,8 +123,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
     if (isLineStart) {
       const detailsHtml = matchDetails(index)
       if (detailsHtml && isEditableDetailsHtmlBlock(detailsHtml)) {
-        // Why: <details>/<summary> is an editable rich-mode node; raw passthrough
-        // would make toggle blocks reopen as inert HTML instead.
+        // Editable details/summary nodes must bypass raw passthrough or reopen as inert HTML.
         result += detailsHtml.raw
         index += detailsHtml.raw.length
         continue
@@ -145,8 +143,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
       }
     }
 
-    // Why: authored text that happens to contain this editor's random envelope
-    // prefix must remain literal even in HTML-free documents and after edits.
+    // Keep authored random-envelope prefixes literal, including after edits and in HTML-free documents.
     if (normalizedContent.startsWith(transport.authoredPrefix, index)) {
       const authoredEnd = normalizedContent.indexOf(']]', index + transport.authoredPrefix.length)
       const authoredOccurrence =
@@ -179,14 +176,16 @@ export function encodeRawMarkdownHtmlForRichEditor(
       }
     }
 
-    // Why: doc link encoding runs inside this loop so fenced code and backtick
-    // spans have already been excluded from semantic preprocessing.
+    // Encode document links only after excluding fenced and inline code from semantic preprocessing.
     if (
       normalizedContent[index] === '[' &&
       normalizedContent[index + 1] === '[' &&
       !isEscaped(normalizedContent, index)
     ) {
-      const closingIndex = normalizedContent.indexOf(']]', index + 2)
+      if (nextDocLinkClose !== -1 && nextDocLinkClose < index + 2) {
+        nextDocLinkClose = normalizedContent.indexOf(']]', index + 2)
+      }
+      const closingIndex = nextDocLinkClose
       if (closingIndex !== -1) {
         const rawTarget = normalizedContent.slice(index + 2, closingIndex)
         const link = parseMarkdownDocLink(rawTarget)

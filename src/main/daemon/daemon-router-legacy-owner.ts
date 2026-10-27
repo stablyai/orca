@@ -1,14 +1,9 @@
 import type { PtySpawnOptions } from '../providers/pty-provider-contract'
-import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
+import { isDaemonEndpointGoneError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import type { LegacyDaemonExitProof } from './daemon-legacy-exit-proof'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 
-/**
- * The daemon still running an unrouted session id, or undefined when none does. Why: a spawn of
- * that id on the current daemon starts a second session under it, and the next stop of the id
- * lands on the old one's live agent. A legacy daemon that cannot answer is not proof of death,
- * so it refuses unless its pid is proven gone.
- */
+/** Resolve legacy ownership before creating a duplicate; unknown owners require endpoint-loss and exit proof. */
 export async function findLegacySessionOwner(
   opts: Pick<PtySpawnOptions, 'sessionId' | 'isNewSession' | 'attachOnly'>,
   current: DaemonPtyAdapter,
@@ -19,22 +14,26 @@ export async function findLegacySessionOwner(
   if (!sessionId || opts.isNewSession || opts.attachOnly || legacy.length === 0) {
     return undefined
   }
-  // Why first: an unreachable legacy daemon must not block reattaching the current daemon's own session.
-  if ((await probeOwnership(current, sessionId)) === true) {
+  // Unreachable legacy daemons must not block the current daemon's proven sessions.
+  if ((await probeOwnership(current, sessionId)).live === true) {
     return current
   }
   const verdicts = await Promise.all(
-    legacy.map(async (adapter) => ({
-      adapter,
-      live: await probeOwnership(adapter, sessionId)
-    }))
+    legacy.map(async (adapter) => ({ adapter, ...(await probeOwnership(adapter, sessionId)) }))
   )
   exitProof.record(legacy)
   const owner = verdicts.find(({ live }) => live === true)
   if (owner) {
     return owner.adapter
   }
-  if (verdicts.some(({ adapter, live }) => live === null && !exitProof.hasExited(adapter))) {
+  // A missing PID may describe an old daemon while its replacement still owns the endpoint.
+  const provenExited = (adapter: DaemonPtyAdapter, endpointGone: boolean): boolean =>
+    endpointGone && exitProof.hasExited(adapter)
+  if (
+    verdicts.some(
+      ({ adapter, live, endpointGone }) => live === null && !provenExited(adapter, endpointGone)
+    )
+  ) {
     throw new TerminalSessionOwnerUnverifiedError(sessionId)
   }
   return undefined
@@ -45,18 +44,18 @@ const LEGACY_OWNER_INVENTORY_MS = 2_000
 async function probeOwnership(
   adapter: DaemonPtyAdapter,
   sessionId: string
-): Promise<boolean | null> {
+): Promise<{ live: boolean | null; endpointGone: boolean }> {
   const live = await adapter.probePtyLiveness(sessionId).catch(() => null)
   if (live !== null) {
-    return live
+    return { live, endpointGone: false }
   }
-  // Why: the probe never reconnects, so a daemon whose startup connect failed would refuse forever.
+  // Liveness probes do not reconnect; inventory can recover a failed startup connection.
   try {
     const processes = await adapter.listProcesses({
       deadlineMs: Date.now() + LEGACY_OWNER_INVENTORY_MS
     })
-    return processes.some((process) => process.id === sessionId)
-  } catch {
-    return null
+    return { live: processes.some((process) => process.id === sessionId), endpointGone: false }
+  } catch (error) {
+    return { live: null, endpointGone: isDaemonEndpointGoneError(error) }
   }
 }

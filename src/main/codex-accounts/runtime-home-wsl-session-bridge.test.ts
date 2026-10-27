@@ -23,8 +23,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -163,7 +163,6 @@ describe('CodexRuntimeHomeService', () => {
       createSettings({
         activeCodexManagedAccountId: null,
         activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } },
-        // Why: the override is a Linux path inside the distro, not <wslHome>/.codex.
         codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.config/codex' } }
       })
     )

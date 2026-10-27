@@ -56,18 +56,15 @@ describe('canPasteImageDropPathRaw', () => {
   })
 })
 
-// Why: small replays of how agents recover a path from pasted text, so the
-// escaped form is checked against what they actually accept.
+// Mirror agent path parsers so escaping is checked against their accepted syntax.
 
-// Claude Code 2.1.285 `S` then `x`: strip one pair of outer quotes, then
-// unescape `\X` to `X` with `\\` kept as one backslash.
+// Claude Code 2.1.285 S → x strips outer quotes, unescapes pairs and retains one backslash from a doubled pair.
 function claudeCodeRecoverPath(pasted: string): string {
   const unquoted = /^(['"]).*\1$/s.test(pasted) ? pasted.slice(1, -1) : pasted
   return unquoted.replace(/\\(.)/gs, '$1')
 }
 
-// Codex `normalize_pasted_path`: a drive/UNC path skips shlex once one outer
-// quote pair is stripped; anything else must shlex-split into exactly one token.
+// Codex skips shlex for unquoted drive/UNC paths; other paths must shlex-split into one token.
 function codexRecoverPath(pasted: string): string | null {
   const unquoted = pasted.replace(/^(['"])(.*)\1$/s, '$2')
   if (/^([a-z]:[\\/]|\\\\)/i.test(unquoted)) {
@@ -133,10 +130,7 @@ describe('formatImageDropPasteText', () => {
   })
 })
 
-// pi-image-paste 1.0.0 `tokenizePathLikeText` + `tryExtendBareToken`, bare tokens
-// only (the escaped POSIX form never starts with a quote): a token keeps `\X`
-// pairs, stops at any JS whitespace (U+202F included) and is shell-unescaped;
-// if no file exists it extends across up to 8 following words.
+// pi-image-paste 1.0.0 bare tokens preserve escape pairs, stop at JS whitespace (including U+202F), then shell-unescape and extend up to eight words if missing.
 function piImagePasteRecoverPath(pasted: string, exists: (path: string) => boolean): string | null {
   const unescape = (text: string): string => text.replace(/\\(.)/gs, '$1')
   let index = 0

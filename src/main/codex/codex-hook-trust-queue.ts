@@ -1,11 +1,8 @@
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
 import { getCodexConfigTomlPath, getSystemCodexConfigTomlPath } from './codex-hook-definition'
 
-// Why (#16441): these sequences mutate the runtime config.toml *and* the
-// system one — approval promotion, the system-config sync and the legacy sweep
-// all touch ~/.codex/config.toml — so they hold both lanes across their awaits.
-// Lock order is always runtime-before-system; every other holder acquires it
-// that way too.
+// Promotion, config sync and legacy cleanup mutate both homes; hold both lanes across awaits.
+// Always acquire runtime before system to preserve lock order.
 export function runExclusivelyForRuntimeAndSystemTrustConfig<T>(
   runtimeHomePath: string,
   run: () => Promise<T>

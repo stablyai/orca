@@ -52,8 +52,7 @@ const ConversationKnowledgeSidebarEntry = lazyWithRetry(
 )
 
 const SidebarNav = React.memo(function SidebarNav() {
-  // Why: this memo boundary needs its own language subscription, while
-  // translate() preserves Orca's pseudo-localization behavior.
+  // Subscribe across this memo boundary; translate still handles pseudo-localization.
   useTranslation()
   const worktreePaletteShortcutCombos = useShortcutKeyComboDetails('worktree.palette')
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)

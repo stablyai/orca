@@ -111,9 +111,7 @@ describe('notifyDirectWorkItemAgentStartTimeout', () => {
   })
 })
 
-// Why: the Source Control AI dialogs hide the CLI arguments field on launches that cannot apply
-// it, and then send nothing. Only `undefined` reaches the global Agents arguments here — an
-// empty string is an explicit "no arguments" that would silently suppress the user's setting.
+// Omitted hidden arguments must stay undefined to inherit settings; empty string explicitly clears them.
 describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => {
   const withGlobalArgs = {
     ...settings,
@@ -145,4 +143,22 @@ describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => 
     expect(result.startupPlan?.launchCommand).toContain("'--model' 'gpt-5'")
     expect(result.startupPlan?.launchCommand).not.toContain('danger-full-access')
   })
+})
+
+it('keeps own permission on the direct terminal route with unrelated args and env', () => {
+  const result = buildDirectWorkItemAgentStartupPlan({
+    agent: 'codex',
+    draftContent: 'Fix checks',
+    promptDelivery: 'draft',
+    launchPlatform: 'linux',
+    settings: {
+      agentPermissionDefault: 'full-access',
+      agentDefaultArgs: { codex: '--search' },
+      agentDefaultEnv: { codex: { KEEP: 'value' } }
+    },
+    sessionOptions: { permissionMode: 'own' }
+  })
+  expect(result.startupPlan?.launchCommand).not.toContain('bypass')
+  expect(result.startupPlan?.launchCommand).toContain("'--search'")
+  expect(result.startupPlan?.env).toEqual({ KEEP: 'value' })
 })

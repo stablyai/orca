@@ -4,6 +4,7 @@ import {
 } from '../../../../shared/antigravity-session-origin'
 import type React from 'react'
 import { Badge } from '@/components/ui/badge'
+import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -36,13 +37,15 @@ export function SessionMetadata({
   liveState,
   updatedAt,
   worktreeInfo,
-  vaultScope
+  vaultScope,
+  sourceHostLabel
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
   updatedAt: string
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   vaultScope: AiVaultScope
+  sourceHostLabel?: string
 }) {
   const modelLabel = sessionModelLabel(session)
   const origin = antigravitySessionOrigin(session.filePath)
@@ -55,10 +58,18 @@ export function SessionMetadata({
         <AgentIcon agent={session.agent} size={14} />
       </span>
       <div className="flex min-w-0 items-center gap-1.5">
-        {/* Why: 'done' is the resting state of every finished pane — badging it
-            would mark most rows; only live attention states earn a dot. */}
+        {/* Most finished panes are done; reserve dots for live attention states. */}
         {liveState && liveState !== 'done' ? <AgentStateDot state={liveState} /> : null}
         <span className="min-w-0 shrink-[2] truncate">{agentLabel(session.agent)}</span>
+        {sourceHostLabel ? (
+          <WorktreeHostContextBadge
+            label={sourceHostLabel}
+            className="min-w-0 shrink"
+            title={translate('aiVault.searchHitSourceHost', 'Found on {{value0}}', {
+              value0: sourceHostLabel
+            })}
+          />
+        ) : null}
         {isAntigravityReferenceSession(session) ? (
           <Badge
             variant="outline"

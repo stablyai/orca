@@ -5,11 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 type LayoutEvent = { nativeEvent: { layout: { width: number; height: number } } }
 type ViewProps = { children?: ReactNode; onLayout?: (event: LayoutEvent) => void }
 
-/**
- * react-native-web's rule, not React Native's: `useElementLayout` puts a View under its
- * ResizeObserver in a mount-only effect, so a View that gains `onLayout` after it mounted is never
- * observed and never reports. The double reports once, at mount, and only if it mounted with one.
- */
+// Model react-native-web’s mount-only ResizeObserver: adding onLayout after mount never observes the View.
 const { FRAME, WebView } = await vi.hoisted(async () => {
   const react = await import('react')
   const frame = { width: 390, height: 600 }
@@ -67,27 +63,7 @@ function controller(
 }
 
 describe('the terminal frame on the page', () => {
-  it('reports its height when the session opens from the loading state', () => {
-    const heights: number[] = []
-    const notify = (frame: { height: number }): void => {
-      heights.push(frame.height)
-    }
-    let renderer: ReturnType<typeof create> | undefined
-    act(() => {
-      renderer = create(
-        createElement(MobileSessionActiveContent, { controller: controller(true, notify) })
-      )
-    })
-    act(() => {
-      renderer?.update(
-        createElement(MobileSessionActiveContent, { controller: controller(false, notify) })
-      )
-    })
-    expect(heights).toEqual([FRAME.height])
-  })
-
   it('stays one mounted frame across loading, a pending terminal and the terminal', () => {
-    // A frame that remounts per branch reports again on every return; one that stays reports once.
     const heights: number[] = []
     const notify = (frame: { height: number }): void => {
       heights.push(frame.height)

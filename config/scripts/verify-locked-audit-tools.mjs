@@ -89,6 +89,11 @@ try {
 
   const stale = join(fixture, 'config', 'audit-tools')
   mkdirSync(stale, { recursive: true })
+  mkdirSync(join(fixture, 'config', 'patches'), { recursive: true })
+  copyFileSync(
+    join(root, 'config', 'patches', 'braces@3.0.3.patch'),
+    join(fixture, 'config', 'patches', 'braces@3.0.3.patch')
+  )
   for (const file of ['pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
     copyFileSync(join(root, 'config', 'audit-tools', file), join(stale, file))
   }

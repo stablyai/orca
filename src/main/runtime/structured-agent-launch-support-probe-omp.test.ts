@@ -36,11 +36,9 @@ async function fakeOmp(dir: string, version: string): Promise<string> {
 }
 
 function runtimeWith(settings: Settings) {
-  return {
-    requireStore: () => ({ getSettings: () => settings }),
-    resolveRuntimeFileTarget: async () => ({ worktree: { path: root } })
-  }
+  return { requireStore: () => ({ getSettings: () => settings }) }
 }
+const workspace = async () => root
 
 function launchWith(settings: Settings) {
   return createAcpStructuredLaunchResolver(acpLaunchSpecFor('omp')!, {
@@ -91,7 +89,7 @@ describe.skipIf(process.platform === 'win32')('OMP create check and launch, real
       agentDefaultEnv: {},
       agentCmdOverrides: { omp: join(privateBin, 'omp') }
     }
-    expect(await structuredAgentSupportsLaunch('omp', 'id:w', runtimeWith(settings))).toBe(true)
+    expect(await structuredAgentSupportsLaunch('omp', workspace, runtimeWith(settings))).toBe(true)
     const launch = await launchWith(settings)
     expect(launch.command).toBe(join(privateBin, 'omp'))
     expect(launch.args).toEqual(['acp'])
@@ -99,13 +97,13 @@ describe.skipIf(process.platform === 'win32')('OMP create check and launch, real
 
   it('asks the OMP the per-agent PATH names, not the one first on the shell PATH', async () => {
     const settings = { ...base, agentDefaultEnv: { omp: { PATH: `${privateBin}:/usr/bin:/bin` } } }
-    expect(await structuredAgentSupportsLaunch('omp', 'id:w', runtimeWith(settings))).toBe(true)
+    expect(await structuredAgentSupportsLaunch('omp', workspace, runtimeWith(settings))).toBe(true)
     expect((await launchWith(settings)).command).toBe(join(privateBin, 'omp'))
   })
 
   it('keeps an OMP older than 17.0.5 on its terminal-backed chat', async () => {
     const settings = { ...base, agentDefaultEnv: {} }
-    expect(await structuredAgentSupportsLaunch('omp', 'id:w', runtimeWith(settings))).toBe(false)
+    expect(await structuredAgentSupportsLaunch('omp', workspace, runtimeWith(settings))).toBe(false)
   })
 
   it('refuses the launch with the setting named when the Command is not runnable', async () => {
@@ -115,7 +113,7 @@ describe.skipIf(process.platform === 'win32')('OMP create check and launch, real
       agentCmdOverrides: { omp: join(root, 'missing', 'omp') }
     }
     // Admitted, so the chat states why rather than silently opening a terminal.
-    expect(await structuredAgentSupportsLaunch('omp', 'id:w', runtimeWith(settings))).toBe(true)
+    expect(await structuredAgentSupportsLaunch('omp', workspace, runtimeWith(settings))).toBe(true)
     await expect(launchWith(settings)).rejects.toMatchObject({
       name: 'AgentSessionPreSpawnError',
       reason: 'agentCommandNotRunnable'

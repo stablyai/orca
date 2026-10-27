@@ -1,10 +1,10 @@
-import { OrcaRuntimeWithDeliverPendingMessages } from './orchestration/mail/terminal-message-delivery'
+import { OrcaRuntimeWithResolveExitWaiters } from './terminal/wait/terminal-wait-settlements'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import type { BrowserWindow } from 'electron'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 
-export abstract class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithDeliverPendingMessages {
+export abstract class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithResolveExitWaiters {
   protected resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
     this.terminalWaiters.resolve(waiter, result)
   }
@@ -25,10 +25,10 @@ export abstract class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithDelive
     return `${tabId}::${leafId}`
   }
 
-  getAuthoritativeWindow(): BrowserWindow {
+  getAuthoritativeWindow(missingWindowMessage = 'No renderer window available'): BrowserWindow {
     const win = this.getAvailableAuthoritativeWindow()
     if (!win || win.isDestroyed()) {
-      throw new Error('No renderer window available')
+      throw new Error(missingWindowMessage)
     }
     return win
   }

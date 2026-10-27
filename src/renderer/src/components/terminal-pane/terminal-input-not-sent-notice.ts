@@ -1,9 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-/** Says out loud that input may have died with a restarted terminal endpoint; dropping it silently
- *  made the first command after a daemon death vanish without a trace. Worded as "may": an
- *  unacknowledged write can still have reached the old shell, and retyping blindly could repeat it. */
+/** Disclose input lost during endpoint replacement; say may because unacknowledged writes can reach the old shell and retyping could duplicate them. */
 export function notifyTerminalInputNotSent(tabId: string): void {
   toast.info(
     translate(

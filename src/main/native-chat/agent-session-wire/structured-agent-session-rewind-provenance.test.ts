@@ -1,8 +1,3 @@
-// A rewind after a failed cleanup: the dead generation's turn and prompt are still saved as
-// running and pending, and the rewind rebuilds the epoch at the live fence. Through the rewind's
-// own row builders and a real SQLite journal, each carries the old fold's provenance, so the host
-// projection never promotes that work to the live generation's.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,11 +13,7 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import {
-  mergeRetainedHostLifecycleRows,
-  retainedRowReplacement,
-  rewindProviderRows
-} from './structured-rewind-retained-host-rows'
+import { structuredRewindCut } from './structured-rewind-cut'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -40,7 +31,7 @@ function codexItem(turnId: string, ordinal: number): AgentJournalItemIdentity {
 const TURN = codexItem('turn-dead', 0)
 const PROMPT = codexItem('turn-dead', 1)
 const REPLY = codexItem('turn-dead', 2)
-const LATER = codexItem('turn-live', 0)
+const UNDONE = codexItem('turn-undone', 0)
 const PENDING = {
   state: 'pending' as const,
   selectedOptionId: null,
@@ -53,10 +44,10 @@ const REPLY_BODY: AgentJournalItemBody = {
   blocks: [{ type: 'text', text: 'partial' }]
 }
 
-const LATER_BODY: AgentJournalItemBody = {
+const UNDONE_BODY: AgentJournalItemBody = {
   kind: 'message',
-  role: 'assistant',
-  blocks: [{ type: 'text', text: 'mine' }]
+  role: 'user',
+  blocks: [{ type: 'text', text: 'undo me' }]
 }
 
 let root: string
@@ -71,7 +62,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** The dead generation's work as its cleanup left it: nothing settled. */
 async function leftByDeadGeneration(): Promise<AgentSessionJournal> {
   const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
   const scope = { fence: DEAD, ownerFence: DEAD, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
@@ -92,34 +82,17 @@ async function leftByDeadGeneration(): Promise<AgentSessionJournal> {
     inTurn
   )
   await journal.appendItem(REPLY, REPLY_BODY, inTurn)
+  await journal.appendItem(UNDONE, UNDONE_BODY, { ...scope, fence: LIVE, ownerFence: LIVE })
   return journal
 }
 
-/** The rewind's rebuild, as `rewindStructuredAgentSession` and its recovery write it. */
 async function rewindAtLiveFence(journal: AgentSessionJournal): Promise<void> {
-  const retained = journal.snapshot().items.map(({ itemId, observedAt, turnScope }) => {
-    const ownerFence = journal.itemFence(itemId)
-    return {
-      itemId,
-      body: journal.itemBody(itemId)!,
-      observedAt,
-      ...(turnScope ? { turnScope } : {}),
-      ...(ownerFence === undefined ? {} : { ownerFence })
-    }
+  const cut = structuredRewindCut(journal, {
+    itemId: agentJournalItemKey(UNDONE),
+    provider: 'codex',
+    nativeId: 'thread-1'
   })
-  // The live agent's history names the dead turn's prompt and reply it still holds, and one of
-  // its own.
-  const provider = rewindProviderRows(
-    [
-      { identity: PROMPT, body: journal.itemBody(agentJournalItemKey(PROMPT))! },
-      { identity: REPLY, body: REPLY_BODY },
-      { identity: LATER, body: LATER_BODY }
-    ],
-    2_000,
-    LIVE
-  )
-  const merged = mergeRetainedHostLifecycleRows(retained, provider)
-  await journal.replaceEpochItems('handle_forked', LIVE, merged.map(retainedRowReplacement))
+  await journal.replaceEpochItems('handle_forked', LIVE, cut!.kept)
 }
 
 describe('a rewind after a failed cleanup', () => {
@@ -131,14 +104,13 @@ describe('a rewind after a failed cleanup', () => {
 
     expect(journal.epoch).not.toBe(before)
     const work = new StructuredAgentSessionCurrentWork(journal, LIVE)
-    // Rebuilt at the live fence, still the dead generation's work.
+    // New row fence must not promote old execution provenance.
     expect(journal.itemFence(agentJournalItemKey(TURN))).toBe(DEAD)
     expect(journal.itemFence(agentJournalItemKey(PROMPT))).toBe(DEAD)
     expect(journal.itemFence(agentJournalItemKey(REPLY))).toBe(DEAD)
     expect(work.activeTurnId()).toBeNull()
     expect(work.actionablePromptIds()).toEqual([])
     expect(work.working()).toBe(false)
-    // What the live agent itself reported is its own.
-    expect(work.isCurrentItem(agentJournalItemKey(LATER))).toBe(true)
+    expect(journal.itemBody(agentJournalItemKey(UNDONE))).toBeNull()
   })
 })

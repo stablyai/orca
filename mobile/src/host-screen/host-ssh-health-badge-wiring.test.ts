@@ -1,9 +1,10 @@
 import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act, create as createRenderer } from 'react-test-renderer'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
-vi.mock('react-native', () => ({}))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../cache/worktree-cache', () => ({
   getCachedWorktrees: () => null,
   setCachedWorktrees: () => {}
@@ -13,9 +14,24 @@ vi.mock('../cache/repo-cache', () => ({ setCachedRepos: () => {} }))
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
 import type { Worktree } from '../worktree/workspace-list-types'
-import { useHostDisplayWorktrees } from './use-host-display-worktrees'
+import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { useHostScreenState } from './use-host-screen-state'
+
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
 
 function reply(result: unknown): RpcResponse {
   return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime' } }
@@ -38,12 +54,10 @@ function row(worktreeId: string, repoId: string): Worktree {
   }
 }
 
-// Drives the screen's own state, metadata refresh and row projection against one desktop reply set.
 async function displayedRows(args: {
   repos: { id: string; displayName: string; connectionId?: string }[]
   rows: Worktree[]
   sshTarget: Record<string, unknown>
-  /** The catalog a second refresh answers, once the first has applied. */
   thenRepos?: { id: string; displayName: string; connectionId?: string }[]
 }): Promise<Worktree[]> {
   let repos = args.repos
@@ -65,11 +79,15 @@ async function displayedRows(args: {
   }
   let setWorktrees: ((rows: Worktree[]) => void) | undefined
   function Probe(): null {
-    const state = useHostScreenState('host-1', undefined)
+    const state = useHostScreenState('host-1')
     state.clientRef.current = client
     setWorktrees = state.setWorktrees
     seen.refresh = useHostRepoMetadata({ client, connState: 'connected', hostId: 'host-1', state })
-    seen.rows = useHostDisplayWorktrees('connected', state, 'host-1')
+    seen.rows = useHostDisplayWorktrees(
+      'connected',
+      state,
+      useResolvedHostPlatform(state, 'host-1')
+    )
     return null
   }
   await act(async () => {
@@ -134,3 +152,5 @@ describe('SSH host health on the host list rows', () => {
     expect(rows[0].hostContextHealthLabel).toBeUndefined()
   })
 })
+
+afterEach(unmountRenderers)

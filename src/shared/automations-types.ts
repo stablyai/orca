@@ -104,17 +104,14 @@ export type Automation = {
    *  @deprecated Use runContext.projectId/runContext.repoId or
    *  getAutomationRunRepoId(). */
   runContext?: WorkspaceRunContext | null
-  /** Why: task/provider data can come from a different host/account than the
-   *  workspace run target, so automations persist it separately. */
+  /** Task/provider host/account may differ from the workspace run target; persist independently. */
   sourceContext?: TaskSourceContext | null
   /** @deprecated Legacy repo-id compatibility field. New code should persist
    *  runContext and use getAutomationRunRepoId() for fallback reads. */
   projectId: string
   executionTargetType: AutomationExecutionTargetType
   executionTargetId: string
-  /** Why: pins the SSH registration incarnation this record was attached to, so a
-   *  removed-and-re-added target reusing the id can't silently adopt it. Absent on
-   *  local records, on legacy records, and on orphans whose target is gone. */
+  /** Pin SSH registration identity to prevent same-ID re-adoption after removal. Absent on local/legacy/gone-target orphans. */
   executionTargetGeneration?: number
   schedulerOwner: AutomationSchedulerOwner
   workspaceMode: AutomationWorkspaceMode
@@ -144,14 +141,12 @@ export type AutomationRun = {
   status: AutomationRunStatus
   trigger: AutomationRunTrigger
   workspaceId: string | null
-  /** Why: run history must remain understandable after the backing workspace
-   *  is deleted and its live metadata is gone. */
+  /** Keep run history understandable after workspace deletion removes live metadata. */
   workspaceDisplayName?: string | null
   sessionKind: 'terminal'
   chatSessionId: string | null
   terminalSessionId: string | null
-  /** Why: a terminal tab can later point at a different pane/PTY. Automation
-   *  run reopening must target the pane that actually executed the run. */
+  /** Retain the executed pane/PTY because terminal tabs may later point elsewhere. */
   terminalPaneKey: string | null
   terminalPtyId: string | null
   outputSnapshot: AutomationRunOutputSnapshot | null
@@ -161,12 +156,9 @@ export type AutomationRun = {
   startedAt: number | null
   dispatchedAt: number | null
   createdAt: number
-  /** Why: run titles must stay unique once retention prunes old runs, so the
-   *  number can no longer be derived from how many runs are currently kept. */
+  /** Persist unique run numbers; retention makes retained count unsuitable. */
   runNumber?: number
-  /** Why: a target that cannot resolve refuses every occurrence, so consecutive
-   *  identical refusals fold into this record instead of one row each. Counts the
-   *  occurrences the record stands for; absent means one. */
+  /** Fold consecutive identical target refusals instead of recording each occurrence; absence counts as one. */
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
@@ -246,6 +238,8 @@ export type AutomationDispatchResult = {
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
   error?: string | null
+  /** With `dispatched`: when the agent was handed the run, if not now. */
+  dispatchedAt?: number
 }
 
 export type ExternalAutomationProvider = 'openclaw'

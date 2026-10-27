@@ -16,7 +16,6 @@ export type PendingPromptValidation =
   | { ok: true; item: AgentJournalRenderItem; prompt: PendingPromptBody }
   | { ok: false; refusal: AgentSessionWireRefusal }
 
-/** The prompt the client named is not one waiting on the user: nothing to answer. */
 function promptGone(message: string): PendingPromptValidation {
   return {
     ok: false,
@@ -24,7 +23,6 @@ function promptGone(message: string): PendingPromptValidation {
   }
 }
 
-/** The prompt item the client named, once it is no longer waiting on anyone. */
 export function settledPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   itemId: string
@@ -34,7 +32,7 @@ export function settledPrompt(
   return item && prompt && prompt.resolution.state !== 'pending' ? { item, prompt } : null
 }
 
-/** A Cancel of a prompt already cancelled has nothing left to do: it is answered, not refused. */
+/** Repeated Cancel of a cancelled prompt succeeds without effects. */
 export function answerCancelOfSettledPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   input: { turnId?: string; prompt: { itemId: string } },
@@ -93,8 +91,7 @@ export function validatePendingPrompt(
   return { ok: true, item, prompt }
 }
 
-/** A pending prompt an ended generation raised (`StructuredAgentSessionCurrentWork.isCurrentItem`):
- *  no live provider holds it, so a Cancel of it reaches no provider. */
+/** Ended-generation prompts have no live owner. */
 export function isEndedGenerationPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
   pending: Extract<PendingPromptValidation, { ok: true }>

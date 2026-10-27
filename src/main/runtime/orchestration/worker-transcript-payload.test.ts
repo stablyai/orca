@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import {
   boundWorkerTranscriptMessages,
-  boundWorkerTranscriptTail,
-  redactWorkerTerminalLines
+  boundWorkerTranscriptTail
 } from './worker-transcript-payload'
+import { redactWorkerTerminalLines } from './worker-terminal-redaction'
 
 describe('worker transcript wire bounds', () => {
   it('clips oversized blocks and omits local image paths', () => {
@@ -59,10 +59,7 @@ describe('worker transcript wire bounds', () => {
     )
   })
 
-  // The bound matches the producer's per-group cap, so nothing this build writes
-  // is clipped here. It stays because the journal schema declares no maximum and
-  // a remote host may run a build with a larger one — the transport's own
-  // invariant that no single block is huge.
+  // Retain transport bounds even at today's producer cap: mixed-version peers can emit larger groups.
   it('caps and redacts a spawn group the way every other collection is capped', () => {
     const result = boundWorkerTranscriptMessages([
       {
@@ -125,8 +122,7 @@ describe('worker transcript wire bounds', () => {
     expect(block?.type === 'subagent-group' ? block.groupId.length : 0).toBe(512)
     expect(agent?.id.length).toBe(512)
     expect(agent?.label.length).toBe(512)
-    // A clipped state names no state any build knows, which is what
-    // `unverifiable` records — a 512-character fragment is not a state at all.
+    // A clipped state is not a valid known state; report unverifiable.
     expect(agent?.state).toBe('unverifiable')
     expect(result.limited).toBe(true)
   })
@@ -187,7 +183,6 @@ describe('worker transcript wire bounds', () => {
         body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'done' }] }
       }
     ])
-    // Anti-vacuous: the projection itself does position the row.
     expect(message?.journalPosition).toEqual({ sequence: 7, index: 1 })
     for (const served of [
       boundWorkerTranscriptMessages([message!]).messages,
@@ -199,7 +194,7 @@ describe('worker transcript wire bounds', () => {
   })
 
   it('keeps two roster ids sharing a 512-char prefix distinct', () => {
-    // The id is the roster key: a plain prefix clip would merge the two children.
+    // Digest roster keys so equal prefixes cannot merge distinct children.
     const head = 'a'.repeat(512)
     const result = boundWorkerTranscriptMessages([
       {

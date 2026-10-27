@@ -6,14 +6,21 @@ import { applyWorktreeHostContextLabels } from '../worktree/worktree-host-contex
 import { applyWorktreeRowDisplayState } from '../worktree/worktree-host-row-identity'
 import type { HostScreenState } from './use-host-screen-state'
 
-/** The rows the host list renders: the live or last-known catalog with display state and host badges. */
+/** The desktop's platform: its own report, or the paired descriptor's before that lands. */
+export function useResolvedHostPlatform(
+  state: HostScreenState,
+  hostId: string | undefined
+): NodeJS.Platform | null {
+  const descriptorPlatform = useHostDescriptor(hostId)?.platform ?? null
+  return state.hostPlatform ?? descriptorPlatform
+}
+
 export function useHostDisplayWorktrees(
   connState: ConnectionState,
   state: HostScreenState,
-  hostId: string | undefined
+  hostPlatform: NodeJS.Platform | null
 ) {
   const { serverWorkspaces } = state
-  // Why: a server's label and health come with its rows, alongside the desktop's SSH ones.
   const hostLabelById = useMemo(
     () => withServerHosts(state.hostLabelById, serverWorkspaces.hosts, (host) => host.label),
     [state.hostLabelById, serverWorkspaces.hosts]
@@ -22,12 +29,8 @@ export function useHostDisplayWorktrees(
     () => withServerHosts(state.hostHealthById, serverWorkspaces.hosts, serverHostHealth),
     [state.hostHealthById, serverWorkspaces.hosts]
   )
-  const descriptorPlatform = useHostDescriptor(hostId)?.platform ?? null
-  // Why: metadata reads the platform only for a mixed desktop catalog; server rows mix it too.
-  const hostPlatform = state.hostPlatform ?? descriptorPlatform
   return useMemo(() => {
-    // Why: live `worktrees` is authoritative only while connected; under the amber
-    // mount default, connecting/handshaking must keep the pre-reconnect list too.
+    // Use live rows only while connected; connecting/handshaking must preserve the cached list too.
     const base = connState === 'connected' ? state.worktrees : state.lastKnownWorktrees
     const rows = [...base, ...serverWorkspaces.worktrees]
     return applyWorktreeHostContextLabels(

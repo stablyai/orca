@@ -23,6 +23,7 @@ import {
 export function renderMobileTasksItemActions(model: ConnectionPresentationModel) {
   const {
     actionItem,
+    taskDetailHandoff,
     copiedLinkKey,
     copyTaskLink,
     copyTextToClipboard,
@@ -43,16 +44,18 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
       <Pressable
         style={styles.actionRow}
         disabled={creatingKey === actionItem.key}
-        onPress={() => {
-          // Jira, like Linear, is not repo-scoped, so the target repo has to be asked for
-          // rather than defaulted to the first one.
-          const needsRepoChoice = actionItem.provider === 'linear' || actionItem.provider === 'jira'
-          if (needsRepoChoice && workspaceRepos.length > 1) {
-            setWorkspaceRepoPickerItem(actionItem)
-            return
-          }
-          openWorkspaceCreate(actionItem)
-        }}
+        onPress={() =>
+          taskDetailHandoff.closeThen(() => {
+            // Jira and Linear are not repo-scoped; ask for the target repo instead of choosing the first.
+            const needsRepoChoice =
+              actionItem.provider === 'linear' || actionItem.provider === 'jira'
+            if (needsRepoChoice && workspaceRepos.length > 1) {
+              setWorkspaceRepoPickerItem(actionItem)
+              return
+            }
+            openWorkspaceCreate(actionItem)
+          })
+        }
       >
         <Plus size={16} color={colors.textPrimary} />
         <Text style={styles.actionText}>

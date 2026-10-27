@@ -19,6 +19,10 @@ function lintSources(sources) {
 }
 
 const sources = {
+  escapedImport: String.raw`
+      import { use\u0041ppStore as useStore } from '@/store'
+      export const WholeStore = () => useStore()
+    `,
   subscriptions: `
       import { useAppStore as useStore } from '@/store'
       const WholeStore = () => useStore()
@@ -41,7 +45,7 @@ const sources = {
   namedSelectors: `
       import { useAppStore } from '@/store'
       const EarlyFresh = () => useAppStore(selectFreshRows)
-      const selectFreshRows = (state) => state.rows.filter(Boolean)
+      function selectFreshRows(state) { return state.rows.filter(Boolean) }
       const Stable = () => useAppStore(selectActiveId)
       const selectActiveId = (state) => state.activeId
     `,
@@ -75,10 +79,31 @@ const sources = {
       const Delegating = () => useAppStore((state) => buildRows(state))
       const NestedDelegating = () => useAppStore(useShallow((state) => ({ ids: buildRows(state) })))
     `,
+  lexicalBindings: `
+      import { useAppStore } from '@/store'
+      const select = s => ({ active: s.active })
+      const build = s => s.rows.map(row => row.id)
+      function View() {
+        const select = s => s.active, build = s => s.rows
+        useAppStore(select)
+        return useAppStore(s => build(s))
+      }
+      export function useTargetState(options) { useAppStore(options); return { options } }
+    `,
+  shadowedImports: `
+      import { useAppStore, useAppStore as useStore } from '@/store'
+      import { usePluginPanelsStore as usePanels } from '@/store/plugin-panels'
+      import { useShallow as shallow } from 'zustand/react/shallow'
+      function View(useStore, usePanels, shallow) {
+        useStore(); usePanels()
+        return useAppStore(shallow(s => ({ ids: s.rows.map(row => row.id) })))
+      }
+    `,
   cachedHelpers: `
       import { useAppStore } from '@/store'
       import { useShallow } from 'zustand/react/shallow'
       // The identity-caching shape: fresh only on a miss, cached otherwise.
+      const cache = new WeakMap()
       const selectCachedRows = (state) => cache.get(state.key) ?? state.rows.filter(Boolean)
       const Cached = () => useAppStore((state) => selectCachedRows(state))
       const CachedNested = () => useAppStore(useShallow((state) => ({ rows: selectCachedRows(state) })))
@@ -96,6 +121,16 @@ beforeAll(() => {
 })
 
 describe('app store performance Oxlint plugin', () => {
+  it('resolves an escaped store import through the text prefilter', () => {
+    expect(
+      diagnosticsBySource.get(sources.escapedImport).map((diagnostic) => diagnostic.code)
+    ).toEqual(['app-store-performance(require-selector)'])
+  })
+
+  it.each(['lexicalBindings', 'shadowedImports'])('respects lexical bindings in %s', (name) => {
+    expect(diagnosticsBySource.get(sources[name])).toEqual([])
+  })
+
   it('reports whole-store and fresh-reference subscriptions', () => {
     const diagnostics = diagnosticsBySource.get(sources.subscriptions)
 

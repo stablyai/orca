@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
-import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import {
+  resolveMobileNativeChat,
+  type MobileNativeChatTab
+} from './native-chat/mobile-native-chat-eligibility'
 import {
   useMobileSessionViewMode,
   type MobileSessionViewModeController
@@ -14,12 +17,15 @@ export function useMobileNativeChatActiveResolution(args: {
   activeHandleRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
 }): {
+  sessionViewReady: boolean
   isTabChatView: (tabId: string) => boolean
   setTabView: MobileSessionViewModeController['setTabView']
   toggleTabChatView: (tabId: string) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
   activeChatAgent: string | null
+  /** False when only memory names the agent; chat writes stay locked. */
+  activeChatAgentConfirmed: boolean
   activeChatAgentRef: MutableRefObject<string | null>
   activeChatSessionId: string | null
   activeChatStructured: boolean
@@ -38,10 +44,12 @@ export function useMobileNativeChatActiveResolution(args: {
     nativeChatTranscriptIsLocalReadable,
     worktreeId
   } = args
-  const { isTabChatView, setTabView, toggleTabChatView } = useMobileSessionViewMode({
-    hostId,
-    worktreeId
-  })
+  const {
+    ready: sessionViewReady,
+    isTabChatView,
+    setTabView,
+    toggleTabChatView
+  } = useMobileSessionViewMode({ hostId, worktreeId })
   const tabWantsChat =
     activeSessionTab?.type === 'agent-session' ||
     (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)
@@ -75,12 +83,14 @@ export function useMobileNativeChatActiveResolution(args: {
   const streamScopeKey = `${routeKey}\0${activeChatSessionId ?? providerSessionId}\0${activeHandleRef.current ?? ''}`
 
   return {
+    sessionViewReady,
     isTabChatView,
     setTabView,
     toggleTabChatView,
     showNativeChat,
     showNativeChatRef,
     activeChatAgent,
+    activeChatAgentConfirmed: activeChatResolution?.agentConfirmed !== false,
     activeChatAgentRef,
     activeChatSessionId,
     activeChatStructured,

@@ -23,6 +23,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   browser: 'host',
   clipboard: 'host',
   computer: 'host',
+  connector: 'host',
   desktopBrowserBridge: 'host',
   diagnostics: 'host',
   emulator: 'host',

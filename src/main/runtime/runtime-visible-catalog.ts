@@ -1,8 +1,4 @@
-/**
- * The projects a client may list: the same rows the desktop sidebar shows. A converted SSH host's
- * source rows and a WSL host's moved rows stay in the store for a downgrade, but the server that
- * now owns them lists them. Internal callers (routing, selectors, migration) keep the full store.
- */
+/** Client listings hide retained SSH/WSL source rows kept for downgrades; internal routing, selectors and migration use the full store. */
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -16,16 +12,18 @@ import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
 } from '../../shared/worktree-execution-host-resolution'
+import type { ProjectHostSetup } from '../../shared/project-types'
 import {
   visibleFolderWorkspaces,
   visibleProjectGroups,
+  visibleProjectHostSetups,
   visibleRepos
 } from '../ssh/orcad-retained-source'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type CatalogSource = Pick<
   RuntimeStore,
-  'getRepos' | 'getProjectGroups' | 'getFolderWorkspaces' | 'getSshTargets'
+  'getRepos' | 'getProjectGroups' | 'getFolderWorkspaces' | 'getSshTargets' | 'getProjectHostSetups'
 >
 
 // Headless orcad has no SSH targets, so nothing of its own is ever a retained source.
@@ -34,7 +32,8 @@ function catalogStore(store: CatalogSource) {
     getRepos: () => store.getRepos(),
     getProjectGroups: () => store.getProjectGroups?.() ?? [],
     getFolderWorkspaces: () => store.getFolderWorkspaces?.() ?? [],
-    getSshTargets: () => store.getSshTargets?.() ?? []
+    getSshTargets: () => store.getSshTargets?.() ?? [],
+    getProjectHostSetups: () => store.getProjectHostSetups?.() ?? []
   }
 }
 
@@ -44,6 +43,10 @@ export function runtimeVisibleRepos(store: CatalogSource | null): Repo[] {
 
 export function runtimeVisibleProjectGroups(store: CatalogSource | null): ProjectGroup[] {
   return store ? visibleProjectGroups(catalogStore(store)) : []
+}
+
+export function runtimeVisibleProjectHostSetups(store: CatalogSource | null): ProjectHostSetup[] {
+  return store ? visibleProjectHostSetups(catalogStore(store)) : []
 }
 
 export function runtimeVisibleFolderWorkspaces(store: CatalogSource | null): FolderWorkspace[] {
@@ -64,10 +67,7 @@ const NOTHING_HIDDEN: RuntimeHiddenRepos = {
 
 const repoRowKey = (repoId: string, hostId: ExecutionHostId): string => `${hostId}\0${repoId}`
 
-/**
- * Repo rows in the store that clients must not see, keyed by repo id AND execution host: the same
- * id can be visible on one host and a retained source row on another.
- */
+/** Hidden repo rows are host-qualified: the same repo id may remain visible on another host. */
 export function runtimeHiddenRepos(store: CatalogSource | null): RuntimeHiddenRepos {
   if (!store) {
     return NOTHING_HIDDEN
@@ -109,10 +109,7 @@ function folderHostId(folder: FolderWorkspace): ExecutionHostId | null {
   return folder.connectionId ? toSshExecutionHostId(folder.connectionId) : null
 }
 
-/**
- * Hosts known only through hidden rows. A client listing must not name them as "not covered":
- * that would send a user or agent to list a host whose rows are hidden on purpose.
- */
+/** Exclude hosts known only through hidden rows from not-covered listings, or clients would be directed to intentionally hidden sources. */
 export function runtimeHiddenHostIds(store: CatalogSource | null): ReadonlySet<ExecutionHostId> {
   const hiddenRepos = runtimeHiddenRepos(store)
   if (!store) {

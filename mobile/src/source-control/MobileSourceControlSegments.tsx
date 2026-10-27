@@ -11,8 +11,6 @@ type Props = {
   onSelect: (tab: SourceControlHubTab) => void
 }
 
-// The hub's top-level lens switcher. Switching is local state (no route push) so
-// scroll position and the shared branch card persist across Changes/PR/History.
 export function MobileSourceControlSegments({ active, onSelect }: Props) {
   return (
     <View style={hubStyles.segments} accessibilityRole="tablist">

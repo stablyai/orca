@@ -7,6 +7,7 @@ import {
   type TerminalOscColorQuerySlot
 } from '../../../../shared/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
+import { installProgramStatusQueryResponder } from '../../../../shared/program-status/query-responder'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
 export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
@@ -22,11 +23,10 @@ type TerminalCapabilityRepliesDeps = {
   da1Response?: string
   // Resolved per query so a live inline-images toggle changes what the next DA1 advertises.
   sixelSupported?: () => boolean
-  /** Why a thunk, like sixelSupported: the pane's launch agent may not be registered
-   *  in the store yet when the handlers are installed, so a boolean captured here
-   *  answers jcode's burst anyway. Why skip at all: jcode themes itself, and the reply
-   *  can land before its composer is ready and render as pre-typed text. */
+  /** Resolve lazily because agent registration may follow handler installation; suppress jcode’s self-theming query burst before replies can land as composer text. */
   skipOscColorQueryReplies?: () => boolean
+  /** False while the pane's execution host cannot read OSC 7501 (see PROGRAM_STATUS_RUNTIME_CAPABILITY). */
+  answerProgramStatusQueries?: () => boolean
 }
 
 // Adds Sixel to a DA1 response so DA1-detecting image tools emit Sixel; idempotent.
@@ -153,8 +153,7 @@ export function installTerminalCapabilityReplyHandlers(
           if (!isPrimaryDeviceAttributesQuery(params)) {
             return false
           }
-          // Why: restored scrollback may contain old DA1 queries; answering those
-          // into the fresh shell recreates the stray-input leak this handler fixes.
+          // Never answer replayed queries into the fresh shell; that recreates stray input.
           if (!deps.isReplaying()) {
             const base = deps.da1Response ?? DEFAULT_DA1_RESPONSE
             deps.sendInput(deps.sixelSupported?.() ? withSixelDa1Attribute(base) : base)
@@ -188,7 +187,12 @@ export function installTerminalCapabilityReplyHandlers(
         }
         return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
       })
-    )
+    ),
+    installProgramStatusQueryResponder({
+      parser: deps.parser,
+      emitReply: deps.sendInput,
+      shouldReply: () => !deps.isReplaying() && deps.answerProgramStatusQueries?.() !== false
+    })
   ]
 
   return {

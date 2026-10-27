@@ -1,15 +1,11 @@
 import type { Prompt } from 'ssh2'
-import type { SshConnectionCallbacks } from './ssh-connection-utils'
+import type { SshConnectionCallbacks } from './connection/ssh-connection-callbacks'
 
-// Why: servers commonly reuse keyboard-interactive (RFC 4256) to collect the
-// login password itself before issuing MFA challenges. Password-looking
-// prompts route through the password credential flow (and its cache) so
-// reconnects stay silent; every other prompt needs a fresh human answer.
+// Route password challenges through cached-password auth; other MFA prompts require fresh human answers.
 const PASSWORD_PROMPT = /password/i
-// Why: a one-time code answered with the cached login password would burn MFA
-// attempts (and can lock the account) on every reconnect.
+// Never auto-answer OTP with cached password: repeated reconnects can exhaust MFA attempts or lock accounts.
 const ONE_TIME_PROMPT = /one.?time|otp/i
-// Why: bounds a malicious/misbehaving server's prompt text before it reaches the credential dialog.
+// Bound host-controlled prompt text before showing credential UI.
 const PROMPT_DETAIL_MAX = 4_096
 
 export function isKeyboardInteractivePasswordPrompt(prompt: Prompt): boolean {
@@ -39,19 +35,14 @@ export type KeyboardInteractiveSession = {
   requestCredential: SshConnectionCallbacks['onCredentialRequest']
   getCachedPassword: () => string | null
   setCachedPassword: (value: string) => void
-  /** The server asked again after the cached password was sent, so it was refused. */
   markCachedPasswordRejected: () => void
   markCancelled: () => void
   isCancelled: () => boolean
-  // Why: one cached-password auto-answer per connection attempt — a second
-  // password prompt in the same attempt means the server rejected the cached
-  // value, so the user must be asked again instead of looping a bad password.
+  // Auto-answer cached password once per attempt; repeated challenge proves refusal and must prompt again.
   state: { passwordAutoAnswered: boolean }
 }
 
-// Answers one keyboard-interactive round. Returns null when the user
-// cancelled (or no prompter is available); callers respond with no answers so
-// the server fails the round and the regular auth-error flow takes over.
+// Null means no usable answers; send none so normal authentication failure handling resumes.
 export async function collectKeyboardInteractiveResponses(
   session: KeyboardInteractiveSession,
   instructions: string,
@@ -61,9 +52,7 @@ export async function collectKeyboardInteractiveResponses(
   if (session.isCancelled()) {
     return null
   }
-  // Why: a missing prompter is a capability gap, not a user decision — it
-  // must return null WITHOUT calling markCancelled(), or SshConnection would
-  // treat it as an explicit decline and skip its passphrase/password rungs.
+  // Missing prompter is no user decline; do not suppress remaining passphrase/password rungs.
   if (!session.requestCredential) {
     return null
   }

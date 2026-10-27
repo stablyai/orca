@@ -35,9 +35,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     scrollbackAnsi?: string
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
-    // Why: dangling mid-escape tail the restorer must write LAST, after any
-    // reset, so the next live chunk completes it instead of rendering it
-    // literally (Bug E / #7329).
+    // Restore dangling escapes after all resets so the next live chunk completes them (#7329).
     pendingEscapeTailAnsi?: string
   } | null>
   abstract serializeRendererTerminalBuffer(
@@ -120,9 +118,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     if (headlessSnapshot) {
       return headlessSnapshot
     }
-    // Why: hidden-output recovery is initiated by the desktop renderer. If the
-    // runtime has not built headless state yet, the mounted xterm is still the
-    // best available state and avoids a false "snapshot unavailable" result.
+    // Before headless state exists, use the mounted xterm for desktop recovery instead of falsely reporting no snapshot.
     const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
     return rendererSnapshot ?? this.serializeProviderTerminalBuffer(ptyId, opts)
   }
@@ -132,10 +128,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     if (!leaf?.ptyId) {
       throw new Error('terminal_not_found')
     }
-    // Why: clear is a terminal UI action (Cmd+K on desktop), not shell input.
-    // Route through the controller so renderer-owned xterm buffers, daemon
-    // sessions, and SSH relay sessions all drop scrollback before the next
-    // mobile snapshot.
+    // Clear is a UI action, not shell input; clear renderer/provider and headless history before mobile snapshots.
     await this.ptyController?.clearBuffer?.(leaf.ptyId)
     await this.clearHeadlessTerminalBuffer(leaf.ptyId)
     return { handle, cleared: true }
@@ -155,12 +148,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     return this.ptyController?.getSize?.(ptyId) ?? null
   }
 
-  // Why: a width reflow on a normal-buffer PTY must re-stream the full
-  // scrollback to mobile so it rewraps at the new cols, but alternate-screen
-  // TUIs (vim, Claude Code) own their repaint and have no scrollback — for
-  // those the mobile client just resizes xterm geometry and consumes the
-  // TUI's own redraw, so the resize re-stream must be skipped. Provider state
-  // covers restored PTYs whose main-side emulator is only a partial suffix.
+  // Normal-buffer resize replays scrollback; alt-screen TUIs repaint themselves. Restored partial models defer screen-mode authority to the provider.
   isTerminalAlternateScreen(ptyId: string): boolean {
     if (this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ?? false
@@ -172,14 +160,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     )
   }
 
-  // Why: daemon-backed PTYs that the runtime adopted after an Orca relaunch
-  // start with a fresh headless emulator that has zero scrollback, even though
-  // the daemon's on-disk checkpoint and the desktop xterm both contain the
-  // full prior history. Without this hydration, mobile subscribers see only
-  // the bare current prompt because serializeHeadlessTerminalBuffer always
-  // wins over the renderer-path fallback. Seeding the emulator with the
-  // adapter's snapshot/cold-restore data makes mobile and desktop agree on
-  // what scrollback is available.
+  // Adopted daemon sessions need retained-history hydration after relaunch or the empty headless model hides history from mobile.
   seedHeadlessTerminal(
     ptyId: string,
     data: string,
@@ -200,10 +181,10 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     }
     const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
-    state.outputSequence = this.getPtyOutputSequence(ptyId)
+    const seededSequence = this.getPtyOutputSequence(ptyId)
     this.headlessTerminals.set(ptyId, state)
     this.recordOsc7MetadataForPty(ptyId, data)
-    this.recordRecentPtyOutputForPathProvenance(ptyId, data)
+    this.recordRecentPtyOutput(ptyId, data)
     state.writeChain = state.writeChain
       .then(async () => {
         if (this.headlessTerminals.get(ptyId) !== state) {
@@ -215,10 +196,9 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
-        // Why AFTER the seed write: the snapshot payload cannot carry kitty
-        // pushes (rehydrateSequences deliberately omits them), but ordering
-        // behind it keeps the parse deterministic. Unflagged like the seed —
-        // re-applying flags must answer no one.
+        // Why only now: a reader comparing sequences must not take the unseeded grid as current.
+        state.outputSequence = seededSequence
+        // Replay kitty flags after seed data for deterministic parsing; both must remain silent to historical queries.
         if (typeof metadata.kittyKeyboardFlags === 'number') {
           await state.emulator.applyKittyKeyboardFlags(metadata.kittyKeyboardFlags)
           if (this.headlessTerminals.get(ptyId) !== state) {
@@ -245,12 +225,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       })
   }
 
-  // Why: reattach/cold-restore/replay payloads arrive as spawn RPC results and
-  // never pass through onPtyData, so after a relaunch the records backing
-  // `terminal list`/`terminal read` stayed blank while the session was alive.
-  // Seed semantics (applySeededAgentStatus precedent): write state only — no
-  // waiters, no orchestration events, and no lastOutputAt, because restored
-  // bytes are historical output, not fresh activity.
+  // Restore RPC bytes bypass onPtyData; seed read/list state without waiters, orchestration events or fresh-output clocks.
   seedTerminalRestoreTail(ptyId: string, restore: { text?: string; lastTitle?: string }): void {
     const seed = restore.text ? buildRestoredTerminalTailSeed(restore.text) : null
     if (seed) {

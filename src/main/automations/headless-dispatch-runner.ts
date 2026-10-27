@@ -26,7 +26,7 @@ export type HeadlessAutomationDispatchContext = {
   watchRun: (run: AutomationRun) => void
 }
 
-/** Thrown by a dispatcher that finds the run should not start; recorded as a skip, not a failure. */
+/** Record dispatch refusals as skips. */
 export class AutomationDispatchRefusedError extends Error {}
 
 function describeDispatchError(error: unknown): string {
@@ -49,6 +49,8 @@ export async function runHeadlessAutomationDispatch(
     })
   }
   let launch: HeadlessAutomationDispatchLaunch
+  // The agent can finish before launch returns.
+  const dispatchedAt = Date.now()
   try {
     launch = await ctx.dispatcher({ automation, run, target })
   } catch (error) {
@@ -70,14 +72,21 @@ export async function runHeadlessAutomationDispatch(
   const updated = runs.updateRun({
     runId: run.id,
     status: 'dispatched',
+    dispatchedAt,
     ...launchRunTarget,
-    // Kept here: a watched run's completion is written without it.
+    // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
     error: null
   })
-  // Observe the launched agent even while persistence is stalled or rejects its acknowledgement.
+  // Start observation without waiting for persistence acknowledgement.
   if (!launch.completion) {
-    ctx.watchRun({ ...run, ...launchRunTarget, status: 'dispatched', error: null })
+    ctx.watchRun({
+      ...run,
+      ...launchRunTarget,
+      status: 'dispatched',
+      dispatchedAt,
+      error: null
+    })
   } else {
     void launch.completion
       .then(

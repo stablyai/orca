@@ -7,9 +7,9 @@ import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
   isCommandAvailable,
-  isCommandOnPath,
-  shellQuote
+  isCommandOnPath
 } from './preflight-command-exec'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 const COMMAND = 'orca-22975-gh'
 const BROKEN_SHIM = 'echo broken-shim >&2\nexit 126\n'
@@ -20,7 +20,7 @@ async function cliInDirectory(label: string, body = 'echo gh-version-fixture\n')
   await mkdir(dir, { recursive: true })
   await writeFile(
     path.join(dir, COMMAND),
-    `#!/bin/sh\nprintf '%s\\n' "$@" >> ${shellQuote(path.join(dir, 'argv.txt'))}\n${body}`,
+    `#!/bin/sh\nprintf '%s\\n' "$@" >> ${quotePosixShell(path.join(dir, 'argv.txt'))}\n${body}`,
     { mode: 0o755 }
   )
   return dir
@@ -188,8 +188,11 @@ describe.skipIf(process.platform === 'win32')(
 
     it('recovers a working copy after a real launcher timeout', async () => {
       const marker = path.join(root, 'descendant-terminated')
-      const childScript = `trap ${shellQuote(`printf terminated > ${shellQuote(marker)}; exit 0`)} TERM\n/bin/sleep 30 &\nwait\n`
-      const hung = await cliInDirectory('hung', `/bin/sh -c ${shellQuote(childScript)} &\nwait\n`)
+      const childScript = `trap ${quotePosixShell(`printf terminated > ${quotePosixShell(marker)}; exit 0`)} TERM\n/bin/sleep 30 &\nwait\n`
+      const hung = await cliInDirectory(
+        'hung',
+        `/bin/sh -c ${quotePosixShell(childScript)} &\nwait\n`
+      )
       const good = await cliInDirectory('good')
       vi.stubEnv('PATH', [hung, good].join(path.delimiter))
 

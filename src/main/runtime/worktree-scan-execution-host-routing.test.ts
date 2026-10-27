@@ -1,6 +1,4 @@
-// SSH ownership has two spellings on a repo row: the legacy `connectionId` field and the unified
-// `executionHostId: 'ssh:*'`. This suite pins the scan and the terminal launch that follows it for
-// the second spelling — the seam #17909 identified but could not test end to end (#11163).
+// An executionHostId-only SSH repo must route scans and subsequent terminal launches remotely (#11163).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
@@ -29,6 +27,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const TARGET_ID = 'remote-1'
 const REPO_ID = 'repo-remote'
@@ -55,7 +54,6 @@ function makeMeta(overrides: Record<string, unknown> = {}) {
   }
 }
 
-/** One repo row owned by an SSH host, stamped with `executionHostId` only — no `connectionId`. */
 function makeStore(repoOverrides: Record<string, unknown>) {
   const metaById: Record<string, ReturnType<typeof makeMeta>> = {
     [WORKTREE_ID]: makeMeta({
@@ -83,7 +81,7 @@ function makeStore(repoOverrides: Record<string, unknown>) {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
       return metaById[id]
     },

@@ -63,8 +63,7 @@ function getInput(): HTMLInputElement {
 function typePath(path: string): void {
   act(() => {
     const input = getInput()
-    // Why: React tracks controlled inputs through the native setter; direct
-    // assignment can be ignored by the synthetic input event handler.
+    // Use the native setter so React recognizes controlled-input events.
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     setValue?.call(input, path)
     input.dispatchEvent(new Event('input', { bubbles: true }))

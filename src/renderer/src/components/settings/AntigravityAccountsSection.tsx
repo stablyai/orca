@@ -15,6 +15,12 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
 import { useAppStore } from '../../store'
+import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import {
+  AntigravityChatSignInRow,
+  antigravityChatSignInBlocked,
+  useAntigravityChatSignIn
+} from './AntigravityChatSignInRow'
 
 export function AntigravityAccountsSection({
   owner,
@@ -26,16 +32,7 @@ export function AntigravityAccountsSection({
   label: string
 }): React.JSX.Element {
   const [state, setState] = useState<AntigravityAccountState | null>(null)
-  const [usageSnapshot, setUsageSnapshot] = useState<{
-    subject: string
-    authMethod: string
-    limits: ProviderRateLimits | null
-  } | null>(null)
-  const current = state?.currentAccount
-  const usage =
-    current?.subject === usageSnapshot?.subject && current?.authMethod === usageSnapshot?.authMethod
-      ? usageSnapshot?.limits
-      : null
+  const [usage, setUsage] = useState<ProviderRateLimits | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
@@ -48,6 +45,9 @@ export function AntigravityAccountsSection({
   const nativeChat = useAppStore((s) => s.settings?.experimentalNativeChat === true)
   const chats = nativeChat && runtime !== 'wsl'
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
+  // A remote host's sign-in finishes from the address pasted back into its row.
+  const chatSignIn = chats && chatRuntime.kind === 'active'
+  const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
 
   useEffect(() => {
     mounted.current = true
@@ -86,9 +86,9 @@ export function AntigravityAccountsSection({
     pending.current = true
     setBusy(true)
     setError(null)
+    setUsage(null)
     try {
       if (action === 'Usage') {
-        setUsageSnapshot(null)
         const before = await callAntigravityAccounts(owner, target, 'List')
         const snapshot = await callRuntimeRpc<{ rateLimits: RateLimitState }>(
           owner,
@@ -99,24 +99,20 @@ export function AntigravityAccountsSection({
         if (mounted.current) {
           setState(after)
         }
+        const account = before.currentAccount
+        // Native credentials may expose no subject, making two unidentified logins indistinguishable.
         if (
-          !before.currentAccount?.subject ||
-          before.currentAccount.subject !== after.currentAccount?.subject ||
-          before.currentAccount.authMethod !== after.currentAccount.authMethod
+          !account ||
+          !after.currentAccount ||
+          account.subject !== after.currentAccount.subject ||
+          account.authMethod !== after.currentAccount.authMethod
         ) {
           throw new Error('The native account changed while reading usage. Refresh usage again.')
         }
         if (mounted.current) {
-          setUsageSnapshot({
-            subject: before.currentAccount.subject,
-            authMethod: before.currentAccount.authMethod,
-            limits: snapshot.rateLimits.antigravity
-          })
+          setUsage(snapshot.rateLimits.antigravity)
         }
       } else {
-        if (action === 'Select') {
-          setUsageSnapshot(null)
-        }
         const next = await callAntigravityAccounts(owner, target, action, accountId)
         if (mounted.current) {
           setState(next)
@@ -202,7 +198,7 @@ export function AntigravityAccountsSection({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={busy || !state.currentAccount?.identityKnown}
+              disabled={busy || !state.currentAccount}
               onClick={() => void run('AddCurrent')}
             >
               {translate('accounts.antigravity.save', 'Save current account')}
@@ -288,16 +284,35 @@ export function AntigravityAccountsSection({
         )}
       </p>
       {chats && chatRuntime.kind === 'active' ? (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'settings.chat.providers.antigravityDescription',
-              'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
-            )}
-          </p>
+        <div className="space-y-4">
           <ManagedRuntimeInstallRow
             observation={chatRuntime}
             agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
+            signInRunning={antigravityChatSignInRunning(signIn.flow)}
+          >
+            {(line, actions) => (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {translate(
+                      'settings.chat.providers.antigravityDescription',
+                      'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
+                    )}
+                  </p>
+                  {line}
+                </div>
+                {actions}
+              </div>
+            )}
+          </ManagedRuntimeInstallRow>
+          <AntigravityChatSignInRow
+            owner={owner}
+            label={label}
+            description={translate(
+              'accounts.antigravity.chatDescription',
+              'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
+            )}
+            disabled={antigravityChatSignInBlocked(chatRuntime)}
           />
         </div>
       ) : null}

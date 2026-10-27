@@ -128,9 +128,10 @@ async function main() {
   assertRepoPath(options.mountedRepo, '/mnt/')
   const distro = await resolveDistro(options.distro)
   const jiti = createJiti(import.meta.url)
-  const { buildWslLoginShellCommand, quotePosixShell } = await jiti.import(
+  const { buildWslLoginShellCommand } = await jiti.import(
     '../../src/shared/wsl-login-shell-command.ts'
   )
+  const { quotePosixShell } = await jiti.import('../../src/shared/shell-argument-quoting.ts')
 
   const loginProbe = buildWslLoginShellCommand(
     `printf '\\n__ORCA_PATH__%s\\n__ORCA_GIT__%s\\n__ORCA_HOME__%s\\n' "$PATH" "$(command -v git)" "$HOME"`

@@ -1,5 +1,6 @@
 import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
+import { AiVaultScanWorkload } from './ai-vault-scan-workload'
 import { sessionFileExecutionNamespace } from './codex-session-root-dedup'
 
 type AgentTally = {
@@ -8,12 +9,10 @@ type AgentTally = {
   openSources: number
 }
 
-/** What one scan has found and read so far, for the progress it reports. */
 export class AiVaultScanTally {
   private readonly agents = new Map<AiVaultAgent, AgentTally>()
   private stage: AiVaultScanWork['stage'] = 'finding'
-  private readDone = 0
-  private readTotal = 0
+  readonly workload = new AiVaultScanWorkload()
 
   openSource(agent: AiVaultAgent): () => void {
     const tally = this.agent(agent)
@@ -28,8 +27,7 @@ export class AiVaultScanTally {
   }
 
   addFile(agent: AiVaultAgent, file: { path: string; dev?: number; ino?: number }): void {
-    // Why: a hard link is one file within an execution namespace; WSL distros
-    // can reuse the same device and inode numbers for unrelated files.
+    // Inodes identify hardlinks only within one execution namespace; WSL distros can reuse them.
     const identity =
       typeof file.dev === 'number' &&
       typeof file.ino === 'number' &&
@@ -45,36 +43,39 @@ export class AiVaultScanTally {
     this.agent(agent).databases += count
   }
 
-  startReading(total: number): void {
+  startReading(): void {
     this.stage = 'reading'
-    this.readTotal += total
-  }
-
-  addRead(count: number): void {
-    this.readDone += count
   }
 
   snapshot(): AiVaultScanWork {
     const agents: AiVaultScanWork['agents'] = []
+    for (const agent of AI_VAULT_AGENTS) {
+      if (this.workload.has(agent)) {
+        this.agent(agent)
+      }
+    }
     for (const [agent, tally] of this.agents) {
-      if (tally.files.size > 0 || tally.databases > 0 || tally.openSources > 0) {
+      if (
+        tally.files.size > 0 ||
+        tally.databases > 0 ||
+        tally.openSources > 0 ||
+        this.workload.has(agent)
+      ) {
         agents.push({
           agent,
           files: tally.files.size,
           databases: tally.databases,
-          walking: tally.openSources > 0
+          walking: tally.openSources > 0,
+          ...(this.stage === 'reading' ? { read: this.workload.snapshot(agent) } : {})
         })
       }
     }
-    // Discovery settles in any order; a fixed order keeps the rows from jumping.
+    // Fixed provider order prevents rows jumping as discovery finishes.
     agents.sort((a, b) => AI_VAULT_AGENTS.indexOf(a.agent) - AI_VAULT_AGENTS.indexOf(b.agent))
     return {
       stage: this.stage,
       agents,
-      read: {
-        done: Math.min(this.readDone, this.readTotal),
-        total: this.readTotal
-      }
+      read: this.stage === 'reading' ? this.workload.total() : { done: 0, total: 0 }
     }
   }
 

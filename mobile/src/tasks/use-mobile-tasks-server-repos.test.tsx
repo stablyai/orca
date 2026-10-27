@@ -12,7 +12,6 @@ import { getTaskRepoDetail } from './mobile-tasks-repository-presentation'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 
 const desktopRef: { current: FakeSession | null } = { current: null }
-/** The desktop's saved repo choice, as its settings answer it. */
 const savedSelectionRef: { current: string[] } = { current: [] }
 const savedSettingsRef: { current: Record<string, unknown> } = { current: {} }
 
@@ -22,7 +21,6 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: <Styles,>(styles: Styles) => styles, hairlineWidth: 1 }
 }))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => async () => {} }))
-// The whole screen mounts; its surface only hands the finished model to the test.
 const surface: { model?: ConnectionPresentationModel } = {}
 vi.mock('./MobileTasksLegacySurface', () => ({
   MobileTasksLegacySurface: ({ model }: { model: ConnectionPresentationModel }) => {
@@ -35,7 +33,6 @@ vi.mock('./MobileTasksLegacySurface', () => ({
     return null
   }
 }))
-// The screen's barrel with its pure modules real; its native views and icons render nothing.
 vi.mock('./mobile-tasks-dependencies', async () => {
   const react = await import('react')
   const pure = {
@@ -52,7 +49,7 @@ vi.mock('./mobile-tasks-dependencies', async () => {
     ...(await import('./host-repo-list')),
     ...(await import('../../../src/shared/task-providers')),
     ...(await import('./hosted-repo-selection')),
-    ...(await import('./mobile-work-items')),
+    ...(await import('../../../src/shared/work-items')),
     ...(await import('./github-work-item-source-errors')),
     ...(await import('./github-project-repo-match')),
     ...(await import('./github-project-reference')),
@@ -97,7 +94,6 @@ const { MobileTasksScreen } = await import('./MobileTasksScreen')
 type Sent = { method: string; params?: unknown; executionHost?: string }
 const sentBy = new WeakMap<FakeSession, Sent[]>()
 
-/** Records where each call ran, then answers it with `answer`. */
 function recording(
   client: FakeSession,
   answer: (method: string, executionHost: string | undefined) => Promise<RpcResponse>
@@ -145,7 +141,6 @@ function issue(title: string) {
   }
 }
 
-/** A desktop relaying to `runtime:vm`, whose repo list `vmRepoList` answers. */
 function desktop(
   vmRepoList: () => Promise<unknown> = async () => ({ repos: VM_REPOS }),
   hostsList: () => Promise<unknown> = async () => ({ hosts: HOSTS }),
@@ -185,7 +180,6 @@ function desktop(
   })
 }
 
-/** What each render showed: the full-list spinner, and how many items. */
 const renders: { loading: boolean; refreshing: boolean; count: number }[] = []
 const mounted: ReactTestRenderer[] = []
 afterEach(() => {
@@ -234,7 +228,6 @@ async function loadRepos(model: () => ConnectionPresentationModel): Promise<unkn
   return loaded.repos
 }
 
-/** Lets the hosts feed and every answered server list land. */
 async function settle(): Promise<void> {
   for (let round = 0; round < 5; round += 1) {
     await act(async () => {
@@ -250,7 +243,6 @@ const VM_REPO = {
   executionHostId: 'runtime:vm'
 }
 
-/** Where each call on the screen's client ran: its `executionHost`, or `desktop`. */
 function ranOn(client: FakeSession, method: string): string[] {
   return (sentBy.get(client) ?? [])
     .filter((sent) => sent.method === method)
@@ -329,10 +321,8 @@ describe('Tasks screen repos on the desktop and its servers', () => {
     const model = await mount(client, [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY])
     await loadRepos(model)
     await settle()
-    // The server's SSH-backed repo is left out: a server cannot serve it.
     expect(model().repos).toEqual([...MAC_REPOS, VM_REPO])
     expect(await loadRepos(model)).toEqual([...MAC_REPOS, VM_REPO])
-    // The server needing an update is never asked.
     expect(ranOn(client, 'repo.list').sort()).toEqual(['desktop', 'runtime:vm'])
   })
 
@@ -350,7 +340,6 @@ describe('Tasks screen repos on the desktop and its servers', () => {
     const model = await mount(client, [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY])
     await loadRepos(model)
     await settle()
-    // Only this page's calls: the screen's own quiet reload already ran when the server joined.
     const earlier = ranOn(client, 'github.listWorkItems').length
     const page: { titles?: string[] } = {}
     await act(async () => {
@@ -410,7 +399,6 @@ describe('Tasks screen repos on the desktop and its servers', () => {
     const loadedBefore = ranOn(desktopRef.current!, 'github.listWorkItems').length
     late.resolve({ repos: VM_REPOS })
     await settle()
-    // One quiet load of every listed repo.
     expect(ranOn(desktopRef.current!, 'github.listWorkItems').slice(loadedBefore).sort()).toEqual([
       'desktop',
       'runtime:vm'
@@ -443,7 +431,6 @@ describe('Tasks screen repos on the desktop and its servers', () => {
     })
     await settle()
     expect(ranOn(client, 'repo.list')).toHaveLength(listed)
-    // An explicit re-read: the server answers the same list, so the items aren't reloaded.
     await act(async () => {
       await model().repoListReload()
     })
@@ -467,7 +454,6 @@ describe('Tasks screen repos on the desktop and its servers', () => {
     await settle()
     expect([...model().effectiveRepoIds]).toEqual(['vm-repo'])
     expect(titles(model)).toEqual(['from the server'])
-    // Exactly one load, of the one repo the filter now names.
     expect(ranOn(desktopRef.current!, 'github.listWorkItems').slice(before)).toEqual(['runtime:vm'])
   })
 
@@ -533,13 +519,12 @@ describe('Tasks screen repos on the desktop and its servers', () => {
     await settle()
     expect([...model().effectiveRepoIds]).toEqual([])
     expect(titles(model)).toEqual(['from the desktop'])
-    // One load for the widened filter, not a second quiet one for the server leaving.
     expect(ranOn(client, 'github.listWorkItems').slice(before)).toEqual(['desktop'])
     expect(renders.slice(leftFrom).some((seen) => seen.refreshing)).toBe(false)
   })
 
   it("edits the filter from what's shown, so a gone repo can't turn a tap into All", async () => {
-    // A third repo, so picking two stays a filter rather than becoming All.
+    // Keep a third repo so selecting two still tests a filter rather than All.
     const vmDocs = { id: 'vm-docs', displayName: 'docs', path: '/srv/docs' }
     const model = await mount(
       desktop(async () => ({ repos: [...VM_REPOS, vmDocs] })),

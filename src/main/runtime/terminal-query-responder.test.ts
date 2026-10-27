@@ -1,8 +1,4 @@
-/**
- * Phase 5 model query responder:
- * reply parity through the runtime emulator, the per-chunk ownership matrix,
- * the main-side replay guard, and the ingestion-time capture race.
- */
+/** Verify emulator reply parity, per-chunk ownership, replay silence and capture races. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -11,7 +7,7 @@ import {
   markHiddenRendererPty,
   setRendererPtyDeliveryInterest,
   unmarkHiddenRendererPty
-} from '../ipc/pty-hidden-delivery-gate'
+} from '../ipc/pty/delivery/pty-hidden-delivery-gate'
 import {
   _resetTerminalModelQueryAuthorityForTest,
   markNativeWindowsConptyPty
@@ -118,9 +114,7 @@ afterEach(() => {
 })
 
 describe('reply parity for hidden-dropped chunks', () => {
-  // Expected replies pinned from the design doc and verified against the
-  // bundled @xterm/headless build — the same core the renderer runs, so
-  // parity is structural for static and model-state classes.
+  // Pin design replies against bundled xterm/headless, which shares renderer core.
   it.each([
     ['DA1 CSI c', '\x1b[c', ['\x1b[?1;2c']],
     ['DA1 CSI 0 c variant', '\x1b[0c', ['\x1b[?1;2c']],
@@ -170,8 +164,7 @@ describe('reply parity for hidden-dropped chunks', () => {
     ['DSR ?25n UDK status', '\x1b[?25n'],
     ['DSR ?26n keyboard status', '\x1b[?26n'],
     ['DSR ?53n locator status', '\x1b[?53n'],
-    // View-attribute class: silent until the slice-2 renderer attribute push
-    // — a fabricated default would resurrect the default-black OSC-11 bug.
+    // No renderer attributes means silence; fabricated colors would revive the default-black OSC-11 bug.
     ['OSC 10 foreground query', '\x1b]10;?\x07'],
     ['OSC 11 background query', '\x1b]11;?\x07'],
     ['OSC 12 cursor-color query', '\x1b]12;?\x1b\\'],
@@ -260,6 +253,53 @@ describe('reply ownership matrix', () => {
     ])
   })
 
+  // #32944: a paired desktop pauses a background pane's stream, so the DA1 fish waits on reaches no xterm.
+  it('answers while the only remote view has paused its output, and yields once it resumes', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-paused')
+    let paused = true
+    const releasePaused = runtime.registerRemoteTerminalViewSubscriber('pty-paused', () => paused)
+
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+
+    paused = false
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(1)
+
+    // A second, receiving view keeps authority even while the first pauses again.
+    paused = true
+    const releaseLive = runtime.registerRemoteTerminalViewSubscriber('pty-paused', () => false)
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(1)
+
+    releaseLive()
+    releasePaused()
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(2)
+  })
+
+  // #32944: a paused view's discarded queries fall back to main only when that view alone owned them.
+  it('reports sole remote query ownership and answers yielded stateless queries', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-yield')
+    const releaseA = runtime.registerRemoteTerminalViewSubscriber('pty-yield', () => false)
+    expect(runtime.isSoleRemoteTerminalQueryOwner('pty-yield')).toBe(true)
+    const releaseB = runtime.registerRemoteTerminalViewSubscriber('pty-yield', () => false)
+    expect(runtime.isSoleRemoteTerminalQueryOwner('pty-yield')).toBe(false)
+    releaseB()
+    releaseA()
+
+    runtime.onPtyData('pty-yield', 'prompt', 0)
+    runtime.answerYieldedTerminalQueries('pty-yield', '\x1b[c')
+    await settle(runtime, 'pty-yield')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+  })
+
   it('keeps raw preview presence separate from terminal query authority', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-preview')
@@ -275,10 +315,22 @@ describe('reply ownership matrix', () => {
     expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(false)
   })
 
-  it('treats mobile subscriber records as remote view subscribers', async () => {
-    const { runtime } = createResponderRuntime()
-    await runtime.handleMobileSubscribe('pty-mob', 'client-1', { cols: 40, rows: 20 })
-    expect(runtime.hasRemoteTerminalViewSubscriber('pty-mob')).toBe(true)
+  it('yields to a phone-fitted mobile view but answers for a passive desktop-size one', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-fit')
+    runtime.registerRemoteTerminalViewSubscriber('pty-fit', () => false, 'client-1')
+    await runtime.handleMobileSubscribe('pty-fit', 'client-1', { cols: 40, rows: 20 })
+    runtime.onPtyData('pty-fit', '\x1b[6n', 1_000)
+    await settle(runtime, 'pty-fit')
+    expect(replies).toEqual([])
+
+    markHiddenRendererPty('pty-passive')
+    runtime.setMobileDisplayMode('pty-passive', 'desktop')
+    runtime.registerRemoteTerminalViewSubscriber('pty-passive', () => false, 'client-1')
+    await runtime.handleMobileSubscribe('pty-passive', 'client-1', { cols: 40, rows: 20 })
+    runtime.onPtyData('pty-passive', '\x1b[6n', 1_000)
+    await settle(runtime, 'pty-passive')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[1;1R'])
   })
 })
 
@@ -321,9 +373,7 @@ describe('kitty flag re-seed parity (terminal-query-authority.md §kitty)', () =
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-kitty')
 
-    // Daemon warm-reattach threads modes.kittyKeyboardFlags through the
-    // spawn result into the seed; applying them is a seed-side write and
-    // must answer no one (main-side replay guard).
+    // Warm-reattach kitty flags seed state and must emit no replies.
     runtime.seedHeadlessTerminal('pty-kitty', 'restored prompt', undefined, {
       kittyKeyboardFlags: 5
     })
@@ -475,14 +525,11 @@ describe('HeadlessEmulator forwarding window', () => {
   it('scopes the async-fallback forwarding window to the flagged chunk parse', async () => {
     const onQueryReply = vi.fn()
     const emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
-    // Force the async write path (xterm deprecates writeSync; the fallback
-    // must stay structurally safe without writeChain serialization).
+    // Exercise async xterm writes without writeChain serialization; writeSync is deprecated.
     const internals = emulator as unknown as { terminal: { _core: { writeSync?: unknown } } }
     internals.terminal._core.writeSync = undefined
     try {
-      // Enqueue an unflagged seed carrying a query, then a flagged live
-      // chunk, WITHOUT awaiting between them: both sit in xterm's write
-      // queue together. The seed parse must not see an open window.
+      // Queue unflagged seed and flagged live writes together; the seed must not borrow the live reply window.
       const seed = emulator.write('seeded\x1b[c')
       const live = emulator.write('\x1b[5n', { forwardQueryReplies: true })
       await Promise.all([seed, live])
@@ -513,10 +560,7 @@ describe('HeadlessEmulator forwarding window', () => {
 })
 
 describe('view-attribute bridge replies (after renderer push)', () => {
-  // Reply bytes pinned to the renderer xterm's format: OSC replies use the
-  // queried ident, 16-bit doubled-byte channels, and ST termination
-  // (CoreBrowserTerminal._handleColorEvent + toRgbString); ?996n answers with
-  // the contour 997 report, same bytes as mode2031SequenceFor.
+  // Match renderer xterm: queried OSC id, doubled-byte 16-bit RGB and ST; ?996n uses contour 997 (CoreBrowserTerminal._handleColorEvent/toRgbString).
   it.each([
     ['OSC 10 foreground', '\x1b]10;?\x07', ['\x1b]10;rgb:d0d0/d0d0/d0d0\x1b\\']],
     ['OSC 11 background', '\x1b]11;?\x07', ['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\']],
@@ -550,10 +594,7 @@ describe('view-attribute bridge replies (after renderer push)', () => {
   it('answers ?996n from palette luminance, not the pushed app mode (dark palette, light app mode)', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-lum-dark')
-    // Supported divergence: light app mode with terminalUseSeparateLightTheme
-    // off renders a dark terminal theme. A visible xterm answers ?996n from
-    // bg/fg relative luminance (CoreBrowserTerminal._reportColorScheme), so
-    // the hidden reply must say dark here too.
+    // Separate-light-theme off can leave dark terminal colors in light app mode; match xterm luminance-based ?996n.
     setTerminalViewAttributes(viewAttributes({ colorSchemeMode: 'light' }))
 
     runtime.onPtyData('pty-lum-dark', '\x1b[?996n', Date.now())
@@ -696,9 +737,7 @@ describe('per-PTY OSC color SET layering', () => {
   })
 
   it('tracks SET mutations parsed from a seed without replying, like renderer replay', async () => {
-    // Cold-restore scrollback replayed into a visible renderer xterm re-applies
-    // OSC SETs to its theme service; the model mirrors that state — but the
-    // replay guard still keeps the seed from ANSWERING anything.
+    // Restored OSC SETs update theme state like visible xterm, while replay remains silent.
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-seedset')
     setTerminalViewAttributes(viewAttributes())
@@ -720,9 +759,7 @@ describe('per-PTY OSC color SET layering', () => {
     runtime.onPtyData('pty-idem', '\x1b]11;#ffffff\x07', Date.now())
     await settle(runtime, 'pty-idem')
 
-    // A second window / renderer reload / macOS re-activation re-pushes
-    // byte-identical attributes (its publisher dedupe is per-process). That is
-    // not a theme apply, so the OSC SET overlay must survive.
+    // Identical renderer re-pushes after reload/window activation are not theme applies and must retain OSC SET overlays.
     setTerminalViewAttributes(viewAttributes())
     runtime.onPtyData('pty-idem', '\x1b]11;?\x07', Date.now())
     await settle(runtime, 'pty-idem')
@@ -738,9 +775,7 @@ describe('per-PTY OSC color SET layering', () => {
     runtime.onPtyData('pty-clear', '\x1b]11;#ffffff\x07', Date.now())
     await settle(runtime, 'pty-clear')
 
-    // A theme apply overwrites OSC-SET-mutated colors on visible panes too
-    // (ThemeService._setTheme), so the model mirrors that on every CHANGED
-    // push (identical re-pushes are filtered — see the test above).
+    // Changed theme pushes reset OSC SET overlays like visible xterm ThemeService._setTheme.
     setTerminalViewAttributes(viewAttributes({ background: [0x10, 0x20, 0x30] }))
     runtime.onPtyData('pty-clear', '\x1b]11;?\x07', Date.now())
     await settle(runtime, 'pty-clear')

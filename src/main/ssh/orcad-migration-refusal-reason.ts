@@ -1,7 +1,7 @@
 import type {
   OrcadMigrationBlocker,
   OrcadMigrationDependencyKind
-} from '../../shared/orcad-migration-preflight'
+} from '../../shared/orcad-migration/orcad-migration-preflight'
 
 const DEPENDENCY_WORDS: Record<OrcadMigrationDependencyKind, string> = {
   'saved-port-forward': 'saved port forwards',
@@ -49,7 +49,6 @@ function blockerWords(blocker: OrcadMigrationBlocker): string[] {
   }
 }
 
-/** The refusal names what blocks, in plain words; the status line shows only this text. */
 export function orcadMigrationRefusalReason(blockers: readonly OrcadMigrationBlocker[]): string {
   const words = [...new Set(blockers.flatMap(blockerWords))]
   return words.length > 0

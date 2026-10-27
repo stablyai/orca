@@ -16,19 +16,14 @@ export function hasInstructionalPluginContributions(manifest: PluginConsentSubje
   )
 }
 
-/**
- * Consent covers both the declared host capabilities and whether the plugin
- * executes trusted Node code. A panel-only update that adds `main` crosses a
- * trust boundary even when its capability list is unchanged.
- */
+/** Adding trusted Node main code crosses a consent boundary even when declared capabilities stay unchanged. */
 export function canonicalizePluginConsent(
   manifest: PluginConsentSubject,
   contentIdentity?: string
 ): string {
   const capabilities = canonicalizeCapabilitySet(manifest.capabilities)
   const workerIdentity = manifest.main === undefined ? '' : '\0trusted-node-worker'
-  // Instructional bytes execute later under user or agent authority, so
-  // approval is bound to their immutable install/dev-tree identity.
+  // Instructional bytes later execute under user/agent authority; bind approval to immutable install/dev-tree identity.
   const instructionalIdentity = hasInstructionalPluginContributions(manifest)
     ? `\0instructional-content:${contentIdentity ?? 'unresolved'}`
     : ''

@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   sendRuntimePtyInputVerified: vi.fn((..._args: unknown[]) => Promise.resolve(true)),
   sendNativeChatAskAnswer: vi.fn(),
   sendNativeChatMessage: vi.fn(),
-  // Mutable so a test can swap the live status between sendAnswer and settle.
   storeState: { agentStatusByPaneKey: {} as Record<string, unknown> }
 }))
 
@@ -33,8 +32,7 @@ vi.mock('../../store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  sendRuntimePtyInput: (...args: unknown[]) => mocks.sendRuntimePtyInput(...args),
-  sendRuntimePtyInputVerified: (...args: unknown[]) => mocks.sendRuntimePtyInputVerified(...args)
+  sendRuntimePtyInput: (...args: unknown[]) => mocks.sendRuntimePtyInput(...args)
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: (...args: unknown[]) => mocks.sendRuntimePtyInputVerified(...args)
@@ -46,7 +44,7 @@ vi.mock('./native-chat-runtime-send', () => ({
 }))
 
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
-import type { AskPrompt } from './native-chat-interactive-prompt'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 
 const PROMPT: AskPrompt = {
   questions: [{ question: 'q', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] }]
@@ -65,12 +63,28 @@ describe('useNativeChatInteractiveSend', () => {
     mocks.sendNativeChatMessage.mockReturnValue(handle)
   })
 
+  it('refuses OMP question answers and cancellation without writing or clearing the wait', async () => {
+    const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'omp'))
+    const settled = vi.fn()
+    act(() => {
+      expect(result.current.sendAnswer(PROMPT, [{ indices: [1] }], settled)).toEqual({
+        settleAfterMs: 0
+      })
+    })
+    expect(settled).toHaveBeenCalledWith(false)
+    await expect(result.current.cancelAsk()).resolves.toBe(false)
+    expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(mocks.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
   it('routes a non-selector answer through the pasted-text send path', () => {
     const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'grok'))
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
 
-    // Grok commits a pasted answer: label text 'B', not option-number keystrokes.
     expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith('pty-1', 'B', {
       onDeliverySettled: expect.any(Function)
     })
@@ -82,8 +96,7 @@ describe('useNativeChatInteractiveSend', () => {
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
 
-    // Codex's request_user_input card ignores typed labels (STA-1860 shape):
-    // the 2nd option is delivered as its digit '2', which selects AND commits.
+    // Codex request_user_input commits option digits and ignores typed labels (STA-1860).
     expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith(
       'pty-1',
       [{ raw: '2' }],
@@ -92,12 +105,38 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
+  it('sends a Codex async answer as an ordinary message that quotes each answered question', () => {
+    const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'codex'))
+    const prompt: AskPrompt = {
+      replyAsMessage: true,
+      questions: [
+        { question: 'Which color?', multiSelect: false, options: [{ label: 'Red' }] },
+        { question: 'Skipped?', multiSelect: false, options: [] },
+        { question: 'Any constraints?', multiSelect: false, options: [] }
+      ]
+    }
+
+    act(() =>
+      result.current.sendAnswer(prompt, [
+        { indices: [0] },
+        { indices: [] },
+        { indices: [], other: 'None' }
+      ])
+    )
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith(
+      'pty-1',
+      '> Which color?\n\nRed\n\n> Any constraints?\n\nNone',
+      { onDeliverySettled: expect.any(Function) }
+    )
+    expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+  })
+
   it('routes a Claude answer through the option-number keystroke path', () => {
     const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'claude'))
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
 
-    // The 2nd option is delivered as its number '2', not the label 'B' (STA-1860).
     expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith(
       'pty-1',
       [{ raw: '2' }],
@@ -253,10 +292,9 @@ describe('useNativeChatInteractiveSend', () => {
   it('infers the answered question baseline, not a replacement that became current mid-send', () => {
     const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'claude'))
 
-    // Answer question A while it is the current waiting question.
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
 
-    // A different AskUserQuestion becomes current before the paced send settles.
+    // Replace question A before its paced delivery settles.
     mocks.storeState = {
       agentStatusByPaneKey: {
         [PANE_KEY]: {
@@ -271,8 +309,7 @@ describe('useNativeChatInteractiveSend', () => {
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[2]
     onSettled?.(true)
 
-    // The baseline is question A's (captured before delivery), so the server can
-    // reject it against the now-current question B instead of clearing B's wait.
+    // The captured A baseline lets the server reject settlement against B without clearing B’s wait.
     expect(mocks.inferQuestionAnswered).toHaveBeenCalledExactlyOnceWith({
       paneKey: PANE_KEY,
       baselineUpdatedAt: waitingQuestion.updatedAt,

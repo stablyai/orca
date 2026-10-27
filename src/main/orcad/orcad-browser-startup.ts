@@ -6,16 +6,13 @@ import {
   setRuntimeBrowserCommandsFactory
 } from '../runtime/runtime-browser-commands-factory'
 import {
-  closeBrowserPageWithoutEngine,
-  closeRegisteredBrowserClientPage
-} from '../runtime/browser/browser-client-page-close'
-import {
   resolveOrcadBrowserProvider,
   type OrcadBrowserProvider,
   type OrcadBrowserProviderOptions
 } from './orcad-browser-provider'
+import { orcadClientPageCommand } from './orcad-client-page-commands'
 
-/** Browser discovery must not hold core RPC readiness hostage to a desktop authorization UI. */
+/** Discover browsers asynchronously so authorization UI cannot block core RPC readiness. */
 export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions): {
   ready: Promise<void>
   stop(): Promise<void>
@@ -24,52 +21,46 @@ export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions):
   let provider: OrcadBrowserProvider | null = null
   let startupError: unknown
   let stopping: Promise<void> | undefined
+  const engineAvailable = (): boolean => !controller.signal.aborted && !!provider?.isAvailable()
   setRuntimeBrowserCommandsFactory(
     (host) => {
       let commands: RuntimeBrowserCommands | undefined
-      // Every member resolves through the getter, so the target needs no members of its own.
       const target: RuntimeBrowserCommands = Object.create(null)
       return new Proxy(target, {
         get: (_target, property) => {
           if (property === 'then' || typeof property !== 'string') {
             return undefined
           }
-          const forward = (args: unknown[]): unknown => {
-            if (controller.signal.aborted || !provider?.isAvailable()) {
+          const forward = (args: unknown[], name: string = property): unknown => {
+            if (!engineAvailable() || !provider) {
               throw browserUnavailableError()
             }
             commands ??= provider.factory(host)
-            return callBrowserCommand(commands, property, args)
+            return callBrowserCommand(commands, name, args)
           }
-          if (property === 'browserTabClose') {
-            // Why: client-hosted pages live in this runtime's registry, never in the provider.
-            return async (...args: Parameters<RuntimeBrowserCommands['browserTabClose']>) => {
-              const params = args[0] ?? {}
-              if (controller.signal.aborted || !provider?.isAvailable()) {
-                return closeBrowserPageWithoutEngine(host, params, browserUnavailableError)
-              }
-              return (await closeRegisteredBrowserClientPage(host, params)) ?? forward(args)
-            }
-          }
-          return (...args: unknown[]) => forward(args)
+          return (
+            orcadClientPageCommand(host, property, forward, engineAvailable) ??
+            ((...args: unknown[]) => forward(args))
+          )
         }
       })
     },
-    { headless: true, isAvailable: () => !controller.signal.aborted && !!provider?.isAvailable() }
+    {
+      headless: true,
+      clientHostingWithoutEngine: true,
+      isAvailable: engineAvailable
+    }
   )
   const ready = Promise.resolve()
     .then(() => resolveOrcadBrowserProvider({ ...options, signal: controller.signal }))
     .then(
+      // The factory still serves desktop-hosted pages when no engine provider resolves.
       (resolved) => {
         provider = resolved
-        if (!resolved && !controller.signal.aborted) {
-          setRuntimeBrowserCommandsFactory(null)
-        }
       },
       (error: unknown) => {
         startupError = error
         if (!controller.signal.aborted) {
-          setRuntimeBrowserCommandsFactory(null)
           console.warn('[orcad] Browser startup failed:', error)
         }
       }
@@ -80,7 +71,7 @@ export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions):
       controller.abort()
       stopping ??= ready.then(async () => {
         await provider?.stop()
-        // Unexpected resolver errors may include failed cleanup of a partially started provider.
+        // Resolver errors may include failed cleanup of partially started providers.
         if (startupError) {
           throw startupError
         }
@@ -96,7 +87,6 @@ function isBrowserCommandMember(value: unknown): value is BrowserCommandMember {
   return typeof value === 'function'
 }
 
-/** The proxy forwards by name; anything that is not a command method is refused, not invoked. */
 function callBrowserCommand(
   commands: RuntimeBrowserCommands,
   name: string,

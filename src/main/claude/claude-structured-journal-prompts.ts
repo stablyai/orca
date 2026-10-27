@@ -30,15 +30,13 @@ type ClaudeJournalPrompt = {
 type ClaudeJournalPromptEntry = {
   items: ClaudeJournalPrompt[]
   cancellationPending: boolean
-  /** The subagent that raised it, as its rows name it; absent for the session's own agent. */
+  /** Journal producer ID; absent for the session's own agent. */
   asker?: string
-  /** Its rows have landed in the journal, so a reader of the journal sees the card. */
+  /** Waiting status requires a durable prompt card. */
   written: boolean
-  /** Settles once `written` is decided, for a sink that writes later. */
   landed?: Promise<void>
 }
 
-/** A card the journal holds pending, by the subagent that raised it. */
 export type ClaudeOpenPromptCard = { promptKey: string; asker: string }
 
 function cancelledPromptBody(
@@ -66,25 +64,19 @@ export class ClaudeJournalPrompts {
   constructor(
     private readonly deps: {
       sink: StructuredAgentSessionEventSink
-      /** The turn that raised the prompt: the open one, else the conversation. */
       turnScope: () => AgentJournalTurnScope
       bindPromptItemId?: (journalItemId: string, promptKey: string) => void
       questionItems?: (input: {
         sessionId: string
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
       }) => ClaudeQuestionItem[]
-      /** The agent that raised the prompt, as a row's producer linkage; empty for the session's own. */
       producerOf?: (
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
       ) => AgentJournalProducerLinkage
     }
   ) {}
 
-  /**
-   * A prompt row carries the linkage of the agent that raised it: the permission callback names the
-   * subagent that asked, or the tool call it gates names one. The pending row still makes the session
-   * `attention` whoever asked; the linkage files the card under that subagent.
-   */
+  /** Attribute the card to its asker; any pending card still puts the session in attention. */
   handle(event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>): void {
     const producer = this.deps.producerOf?.(event.prompt) ?? {}
     const items: ClaudeJournalPrompt[] = []
@@ -132,7 +124,7 @@ export class ClaudeJournalPrompts {
     }
   }
 
-  /** A sink that cannot say when its writes land wrote them already. */
+  // Sinks without write barriers are treated as synchronous.
   private markWritten(entry: ClaudeJournalPromptEntry): void {
     const written = this.deps.sink.written?.()
     if (!written) {
@@ -144,8 +136,7 @@ export class ClaudeJournalPrompts {
     })
   }
 
-  /** Settles once the card's rows have landed, or proved they never will; nothing for a card a
-   *  sink wrote at once, or one already closed. */
+  /** No promise for synchronous writes or closed cards; a settled promise can indicate failure. */
   whenWritten(promptKey: string): Promise<void> | undefined {
     return this.items.get(promptKey)?.landed
   }
@@ -225,9 +216,9 @@ export class ClaudeJournalPrompts {
     return admission
   }
 
-  retryPendingCancellations(): void {
+  retryPendingCancellations(): StructuredAgentSessionSinkAdmission {
     if (this.pendingCancellationTotal === 0) {
-      return
+      return ADMITTED
     }
     for (const [promptKey, entry] of this.items) {
       if (!entry.cancellationPending) {
@@ -235,20 +226,20 @@ export class ClaudeJournalPrompts {
       }
       const admission = this.admitCancellation(promptKey)
       if (!admission.accepted && admission.reason === 'backpressure') {
-        return
+        return admission
       }
       const retained = this.items.get(promptKey)
       if (retained) {
         this.setCancellationPending(retained, false)
       }
     }
+    return ADMITTED
   }
 
   resolve(promptKey: string): void {
     this.deletePrompt(promptKey)
   }
 
-  /** Subagents' cards whose rows have landed and that nobody has closed or taken over yet. */
   *openCards(): IterableIterator<ClaudeOpenPromptCard> {
     for (const [promptKey, entry] of this.items) {
       if (entry.written && entry.asker !== undefined) {
@@ -257,14 +248,13 @@ export class ClaudeJournalPrompts {
     }
   }
 
-  /** The host records the card itself, so nothing here writes it any more. The returned undo hands
-   *  it back when that record fails, so Claude's own withdrawal can still close it. */
+  /** Transfer cancellation ownership to the host; undo if its journal commit fails. */
   handOver(promptKey: string): () => void {
     const entry = this.items.get(promptKey)
     this.deletePrompt(promptKey)
     return () => {
       if (entry && !this.items.has(promptKey)) {
-        // The same entry, so a write still landing marks the card it hands back.
+        // Reuse the entry so an in-flight write updates the restored card.
         entry.cancellationPending = false
         this.items.set(promptKey, entry)
       }

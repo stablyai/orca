@@ -10,7 +10,6 @@ import {
 import CommentMarkdown from './CommentMarkdown'
 import type { FileLinkExists } from './comment-markdown-native-chat-file-links'
 
-// These fixtures exercise prose, links and images without rendering diagrams.
 const mocks = vi.hoisted(() => ({
   mermaid: vi.fn(() => {
     throw new Error('These fixtures must not render Mermaid diagrams')
@@ -21,7 +20,6 @@ vi.mock('./CommentMermaidBlock', () => ({ default: mocks.mermaid }))
 
 const everyPathExists: FileLinkExists = () => true
 
-/** The host's files, by the path text a reply names them with. */
 function filesAt(...pathTexts: string[]): FileLinkExists {
   const files = new Set(pathTexts)
   return (link) => files.has(link.pathText)

@@ -12,7 +12,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -66,8 +66,11 @@ describe.each(['ipc', 'runtime'])('%s restored scrollback', (controller) => {
       runtime.onPtyData(binding.ptyId, 'live output\r\n', Date.now())
       gate.finish.resolve()
       await pending
-      const snapshot = await runtime.serializeMainTerminalBuffer(binding.ptyId)
-      expect(snapshot?.data).toContain('restored history')
+      // Cold restore parks restored history above a blank viewport, so read it from scrollback.
+      const snapshot = await runtime.serializeMainTerminalBuffer(binding.ptyId, {
+        scrollbackRows: 1_000
+      })
+      expect(snapshot?.data.split('restored history')).toHaveLength(2)
       expect(snapshot?.data).toContain('live output')
       expect(snapshot?.data.indexOf('restored history')).toBeLessThan(
         snapshot?.data.indexOf('live output') ?? -1

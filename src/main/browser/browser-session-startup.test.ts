@@ -116,7 +116,7 @@ describe('initializeBrowserSessionsForApp', () => {
     })
 
     expect(collectOrphanedBrowserRoutePartitionStorageMock).toHaveBeenCalledOnce()
-    // Hoisting the sweep above the binding runtime leaves it with no active profile and it collects nothing.
+    // Orphan collection needs the active profile configured first.
     expect(configureRouteSessionsForOrcaProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
       collectOrphanedBrowserRoutePartitionStorageMock.mock.invocationCallOrder[0]
     )

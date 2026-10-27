@@ -3,6 +3,7 @@ import {
   normalizeRuntimePathForComparison
 } from './cross-platform-path'
 import { parseWslUncPath, toWindowsWslPath } from './wsl-paths'
+import type { AiVaultSession } from './ai-vault-types'
 
 /** Native scans can contain several WSL distros under the same execution host. */
 export function sessionFileExecutionNamespace(filePath: string): string {
@@ -17,6 +18,17 @@ export function createAiVaultScopeCwdMatcher(
   const matches = createNormalizedAiVaultScopeCwdMatcher(scopePaths)
   return (cwd, filePath) =>
     cwd ? matches(normalizeRuntimePathForComparison(cwd), filePath) : false
+}
+
+/** The recorded cwd, or a host-resolved alias of it, is inside the scope. */
+export function aiVaultSessionInScope(
+  inScope: (cwd: string | null | undefined, filePath?: string) => boolean,
+  session: Pick<AiVaultSession, 'cwd' | 'cwdAliases' | 'filePath'>
+): boolean {
+  return (
+    inScope(session.cwd, session.filePath) ||
+    (session.cwdAliases?.some((alias) => inScope(alias, session.filePath)) ?? false)
+  )
 }
 
 /** Pre-normalized variant for project attribution across many candidate roots. */

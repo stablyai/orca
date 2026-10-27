@@ -1,21 +1,24 @@
 import { useMemo } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
 import { agentJournalToolCallLifecycle } from '../../../src/shared/agent-journal-tool-call-lifecycle'
-import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
-import type { NativeChatDiffLine } from '../../../src/shared/native-chat-diff'
+import {
+  diffFromText,
+  diffFromToolCall
+} from '../../../src/shared/native-chat/tools/native-chat-diff'
+import type { NativeChatDiffLine } from '../../../src/shared/native-chat/tools/native-chat-diff'
 import {
   formatToolDuration,
   mcpToolIdentity,
   toolWebSearchResults,
   type NativeChatWebSearchResult
-} from '../../../src/shared/native-chat-tool-identity'
-import { nativeChatToolIconName } from '../../../src/shared/native-chat-tool-icon'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-identity'
+import { nativeChatToolIconName } from '../../../src/shared/native-chat/tools/native-chat-tool-icon'
 import {
   NATIVE_CHAT_TOOL_ROW_VERB_COPY,
   nativeChatToolLineLabel
-} from '../../../src/shared/native-chat-tool-line-label'
-import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import {
   isToolCallBlock,
   type NativeChatToolCallBlock,
@@ -27,6 +30,7 @@ import { openExternalLink } from '../platform/external-link'
 import { colors } from '../theme/mobile-theme'
 import { highlightMobileCode } from './mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
+import { MobileNativeChatToolOutput } from './MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
@@ -34,7 +38,6 @@ import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles
 const RESULT_LABEL = 'Result'
 const NO_SEARCH_RESULTS: NativeChatWebSearchResult[] = []
 
-/** Desktop parity: `NativeChatSearchResults`. The search's hits as links. */
 function SearchResults({
   results,
   fontScale
@@ -84,15 +87,16 @@ function DiffView({ lines, fontScale }: { lines: NativeChatDiffLine[]; fontScale
   )
 }
 
-/** Desktop parity: `NativeChatToolLine`'s `ToolLineDetail`. Its own component so a
- *  row diffs and highlights only while it is open. */
+// Defer output diff/highlight work until its row opens.
 function ToolLineDetail({
   call,
   body,
   fullCommand,
   commandLanguage,
   results,
-  fontScale
+  fontScale,
+  disclosureKey,
+  memberId
 }: {
   call: NativeChatToolCallBlock | undefined
   body: NativeChatToolResultBlock | undefined
@@ -100,6 +104,8 @@ function ToolLineDetail({
   commandLanguage: string | null
   results: NativeChatWebSearchResult[]
   fontScale: number
+  disclosureKey?: string
+  memberId?: string
 }): React.JSX.Element {
   const diff = call
     ? diffFromToolCall(call.name, call.input)
@@ -120,7 +126,9 @@ function ToolLineDetail({
       {results.length > 0 ? <SearchResults results={results} fontScale={fontScale} /> : null}
       {diff ? <DiffView lines={diff} fontScale={fontScale} /> : null}
       {!diff && fullCommand ? (
-        <ScrollView
+        <MobileNativeChatOwnedScrollView
+          rootIdentity={`${memberId ?? call?.callId ?? 'detail'}:command`}
+          positionKey={`${disclosureKey ?? call?.callId ?? 'detail'}:command`}
           style={[styles.codeBox, styles.codeScroll]}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"
@@ -128,55 +136,44 @@ function ToolLineDetail({
           <Text selectable={INLINE_TEXT_SELECTION} style={[styles.codeText, type]}>
             {command ? <MobileSyntaxSegments segments={command} /> : fullCommand}
           </Text>
-        </ScrollView>
+        </MobileNativeChatOwnedScrollView>
       ) : null}
       {body ? (
-        <ScrollView
-          style={[styles.codeBox, styles.codeScroll]}
-          nestedScrollEnabled
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text
-            selectable={INLINE_TEXT_SELECTION}
-            style={[styles.codeText, type, body.isError && styles.errorText]}
-          >
-            {truncateToolDetail(body.output)}
-          </Text>
-        </ScrollView>
+        <MobileNativeChatToolOutput
+          body={body}
+          type={type}
+          rootIdentity={`${memberId ?? body.callId ?? 'detail'}:output`}
+          positionKey={`${disclosureKey ?? body.callId ?? 'detail'}:output`}
+        />
       ) : null}
     </View>
   )
 }
 
-/** Desktop parity: `NativeChatToolLine`. A tool sentence with its output behind its
- *  own disclosure; an orphan result draws as a `Result` row. */
 export function MobileNativeChatToolLine({
+  memberId,
   block,
   result,
-  defaultExpanded,
   disclosureKey,
   fontScale,
   onOpenFile
 }: {
+  memberId?: string
   block: NativeChatToolCallBlock | NativeChatToolResultBlock
-  /** This call's output, when the run paired one to it. */
   result?: NativeChatToolResultBlock
-  defaultExpanded: boolean
-  /** Identity this line's open state is remembered under while it is unmounted. */
   disclosureKey?: string
   fontScale: number
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, defaultExpanded)
+  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const call = isToolCallBlock(block) ? block : undefined
   const label = call ? nativeChatToolLineLabel(call, result) : null
   const body = call ? result : block.type === 'tool-result' ? block : undefined
   const fullCommand = label?.commandDetail ?? null
-  // A call the reader stopped was cut short, not failed.
+  // User interruption is not tool failure.
   const lifecycle = call ? agentJournalToolCallLifecycle(call) : null
   const failed = lifecycle === 'failed' || (lifecycle !== 'interrupted' && result?.isError === true)
   const verb = label?.verb ? NATIVE_CHAT_TOOL_ROW_VERB_COPY[label.verb] : null
-  // The run's header already says these ran; the row is the command itself.
   const commandAlone = label?.command === true && verb !== null && label.target.length > 0
   const mcp = call ? mcpToolIdentity(call.name, call.mcpIdentity) : null
   const name = call ? (mcp ? `${mcp.server} / ${mcp.tool}` : call.name) : RESULT_LABEL
@@ -198,7 +195,7 @@ export function MobileNativeChatToolLine({
   const duration = call ? formatToolDuration(call.durationMs) : null
 
   return (
-    <View>
+    <View testID={memberId}>
       <Pressable
         style={styles.line}
         onPress={() => hasDetail && setExpanded(!expanded)}
@@ -209,7 +206,7 @@ export function MobileNativeChatToolLine({
         <View style={[styles.iconSlot, { width: iconSize }]}>
           {call ? (
             <MobileNativeChatToolGlyph
-              name={nativeChatToolIconName(call.name, call.mcpIdentity)}
+              name={nativeChatToolIconName(call.name, call.mcpIdentity, call.input)}
               size={iconSize}
               color={failed ? colors.statusRed : colors.textMuted}
             />
@@ -248,6 +245,8 @@ export function MobileNativeChatToolLine({
       </Pressable>
       {hasDetail && expanded ? (
         <ToolLineDetail
+          memberId={memberId}
+          disclosureKey={disclosureKey}
           call={call}
           body={body}
           fullCommand={fullCommand}

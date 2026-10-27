@@ -1,6 +1,14 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs,
+  publishesResumeOutcomeInStore
+} from './pty-connection-test-main-pane-start-fixtures'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { UUID_RE } from './pty-connection-test-constants'
 import {
@@ -46,6 +54,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -101,10 +110,29 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: {}
       })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2),
+          transport
+        })
+      }
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(4)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main owns resume and record consumption; attach must not show a window-owned restored banner.
+        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        await flushAsyncTicks(10)
+        expect(transport.connect).toHaveBeenCalledTimes(1)
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+        return
+      }
       expect(transport.connect).toHaveBeenCalledTimes(1)
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -157,8 +185,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     })
 
     it('says the fresh-spawn resume started fresh when main declined it', async () => {
-      // Why: the primary #10757 path — the sidebar resumes a sleeping agent into a new tab,
-      // so there is no restored PTY and the spawn is fresh, not a cold restore.
+      // Sidebar resume creates a fresh tab without a restored PTY; it still needs a resume banner (#10757).
       const { connectPanePty } = await import('./pty-connection')
       const spawn = createDeferred<{ id: string; agentResumeUnavailable: true }>()
       const transport = createMockTransport()
@@ -207,10 +234,32 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: {}
       })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: (ptyId) => {
+            bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)(ptyId)
+            publishesResumeOutcomeInStore(
+              () => mockStoreState,
+              paneKey,
+              'resume-unavailable'
+            )(ptyId)
+          },
+          transport
+        })
+      }
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(4)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main starts the pane and declines its resume; the window attaches and says so.
+        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        await flushAsyncTicks(10)
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
+        return
+      }
       expect(transport.connect).toHaveBeenCalledWith(
         expect.not.objectContaining({ sessionId: expect.any(String) })
       )
@@ -223,8 +272,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     })
 
     it('lets a declined resume replace an already-shown restored banner', async () => {
-      // Why: the banner latch is one-shot per pane. A pane that showed "session restored"
-      // and then respawned into a session main declined must stop claiming the restore.
+      // A later declined resume must clear an earlier restored-banner latch.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
       let connectCount = 0
@@ -281,11 +329,28 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
         isVisibleRef
       })
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: (ptyId) => {
+            bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)(ptyId)
+            publishesResumeOutcomeInStore(() => mockStoreState, paneKey, 'restored')(ptyId)
+          },
+          transport
+        })
+      }
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
         noteVisibilityResume: () => void
       }
       await flushAsyncTicks(10)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main starts and resumes the pane; the window attaches and shows main's outcome once.
+        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
+        return
+      }
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
       isVisibleRef.current = false
 

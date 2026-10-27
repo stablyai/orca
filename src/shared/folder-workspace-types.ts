@@ -3,6 +3,7 @@ import type { TaskSourceContext } from './task-source-context'
 import type { TuiAgent } from './tui-agent'
 import type { DiffComment } from './diff-comment-types'
 import type { SmartTier } from './sidebar-list/sort-stamps'
+import type { ExternalConversationLink } from './external-conversation-link'
 import type {
   WorkspaceCreatorProvenance,
   WorkspaceLinkedItem,
@@ -44,9 +45,12 @@ export type FolderWorkspace = {
   lastActivityAt: number
   smartTier?: SmartTier
   smartAt?: number
+  lastTerminalUseAt?: number
   createdAt: number
   updatedAt: number
   diffComments?: DiffComment[]
+  /** See {@link WorktreeMeta.externalConversations}. */
+  externalConversations?: ExternalConversationLink[]
 }
 
 export type FolderWorkspaceLinkedTask = WorkspaceLinkedItem

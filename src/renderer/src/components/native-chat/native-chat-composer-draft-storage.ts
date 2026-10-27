@@ -1,6 +1,4 @@
-// The stored form of composer drafts and the storage they live in. Drafts are kept in their own
-// store (IndexedDB), not localStorage, so they never compete with other saved state for its quota
-// and need no budget: every draft comes back.
+// Use IndexedDB so drafts do not compete with settings for localStorage quota.
 
 import type { JSONContent } from '@tiptap/react'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -17,6 +15,7 @@ export type NativeChatComposerDraftImage = {
 
 export type NativeChatComposerDraft = {
   readonly text: string
+  readonly pastedTextFiles?: Readonly<Record<string, string>>
   /** The editor's document for exactly `text`; dropped when the text changes without one. */
   readonly document?: JSONContent
   readonly images: readonly NativeChatComposerDraftImage[]
@@ -33,8 +32,7 @@ export type StoredNativeChatComposerDraft = NativeChatComposerDraft & {
   readonly owner?: NativeChatComposerDraftOwner
 }
 
-/** Where drafts are kept. Every write and removal settles once storage has committed it, and
- *  rejects when storage refused it. */
+/** Resolve writes/removals only after commit; reject refused persistence. */
 export type NativeChatComposerDraftStorage = {
   loadAll(): Promise<ReadonlyMap<string, unknown>>
   read(scopeKey: string): Promise<unknown>
@@ -47,8 +45,7 @@ export type NativeChatComposerDraftStorage = {
   ): Promise<void>
 }
 
-/** Drafts kept for this run only: the storage of an environment without IndexedDB (unit tests),
- *  and the fake those tests drive. */
+/** Use run-local storage without IndexedDB and as the controllable test backend. */
 export function createMemoryNativeChatComposerDraftStorage(): NativeChatComposerDraftStorage & {
   readonly drafts: Map<string, StoredNativeChatComposerDraft>
   refuseWrites: boolean
@@ -155,9 +152,22 @@ export function parseStoredNativeChatComposerDraft(
   if (typeof text !== 'string' || typeof savedAt !== 'number' || !Array.isArray(images)) {
     return null
   }
+  const pastedTextFiles = isRecord(value.pastedTextFiles)
+    ? Object.fromEntries(
+        Object.entries(value.pastedTextFiles).flatMap(([id, path]): [string, string][] =>
+          /^[0-9a-f-]{36}$/.test(id) &&
+          typeof path === 'string' &&
+          path !== '' &&
+          text.includes(`[Pasted text](orca-paste:${id})`)
+            ? [[id, path]]
+            : []
+        )
+      )
+    : undefined
   const owner = parseOwner(value.owner)
   return {
     text,
+    ...(pastedTextFiles ? { pastedTextFiles } : {}),
     ...(isEditorDocument(document) ? { document } : {}),
     images: images.flatMap((image) => parseImage(image) ?? []),
     savedAt,
@@ -167,7 +177,7 @@ export function parseStoredNativeChatComposerDraft(
 
 const LEGACY_LOCAL_STORAGE_PREFIX = 'orca:nativeChatComposerDraft:v1:'
 
-/** Drafts this change kept in localStorage before it moved them; never released, so they go. */
+/** Remove unreleased legacy localStorage drafts. */
 export function removeLegacyLocalStorageNativeChatComposerDrafts(): void {
   try {
     const keys: string[] = []

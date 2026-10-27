@@ -2,13 +2,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { translate } from '@/i18n/i18n'
-import { buildJiraPresetJql } from '../../../shared/jira-preset-jql'
+import { buildJiraPresetJql } from '../../../shared/jira/jira-preset-jql'
 import {
   getJiraStatusCatalogScopeKey,
   includeSelectedJiraStatuses
 } from './task-page-jira-status-catalog'
-import { restrictJiraQueryToProject } from '../../../shared/jira-project-reference'
-import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
+import { restrictJiraQueryToProject } from '../../../shared/jira/jira-project-reference'
+import type { TaskPageComposerActionsModel } from './task-page/use-task-page-composer-actions'
 
 export function TaskPageJiraStatusFilters({
   model

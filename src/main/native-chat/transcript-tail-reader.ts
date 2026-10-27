@@ -1,5 +1,5 @@
 import { readOpenCodeNativeChatTranscriptTail } from './transcript-opencode'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import type {
   AgentType,
   NativeChatMessage,
@@ -14,6 +14,7 @@ import {
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { inTranscriptFileOrder } from './transcript-file-order'
 import { extendTranscriptBoundary } from './transcript-file-version'
 import {
   nativeChatTurnLifecycleDecoderForAgent,
@@ -61,13 +62,15 @@ export async function readNativeChatTranscriptTailFile(
   endOffset?: number,
   decodeLifecycle?: NativeChatTurnLifecycleDecoder | null,
   signal?: AbortSignal,
-  onConsumedBoundary?: (boundary: Buffer) => void
+  onConsumedBoundary?: (boundary: Buffer) => void,
+  sourceOrder = false
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: NativeChatTurnLifecycle
   consumedTo: number
   hasMore: boolean
   beforeOffset: number
+  latestTimestamp?: number
   malformedRecordCount?: number
   oversizedRecordCount?: number
 }> {
@@ -99,7 +102,6 @@ export async function readNativeChatTranscriptTailFile(
     const newestFirst: { message: NativeChatMessage; offset: number }[] = []
     const finalByte = await readTranscriptByteAt(handle, filePath, consumedTo - 1, signal)
     if (finalByte === null) {
-      // File shrank between stat and probe: report empty, the next poll re-stats.
       return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
     }
     ignoreNextMalformedRecord = finalByte !== 0x0a
@@ -124,8 +126,7 @@ export async function readNativeChatTranscriptTailFile(
         signal
       )
       signal?.throwIfAborted()
-      // A short read means the file shrank mid-walk: stop paging back rather
-      // than stitch non-adjacent bytes into records.
+      // Short reads mean shrink; never stitch non-adjacent bytes into a record.
       if (bytesRead < buffer.length) {
         break
       }
@@ -153,9 +154,17 @@ export async function readNativeChatTranscriptTailFile(
     if (cursor === 0 && lineParts.length > 0 && newestFirst.length <= limit) {
       decodeLine(0, newestFirst)
     }
-    const chronological = newestFirst.toReversed()
-    // Why: slice(-0) returns the whole array, so a non-positive limit must
-    // window to nothing explicitly rather than leak every buffered record.
+    let latest = Number.NEGATIVE_INFINITY
+    const chronological = newestFirst.toReversed().map((entry) => {
+      const ordered = inTranscriptFileOrder(
+        entry.message,
+        latest,
+        sourceOrder ? entry.offset : undefined
+      )
+      latest = ordered.latest
+      return { message: ordered.message, offset: entry.offset }
+    })
+    // slice(-0) returns everything; non-positive limits must explicitly select nothing.
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
     return {
       messages: selected.map((entry) => entry.message),
@@ -163,6 +172,7 @@ export async function readNativeChatTranscriptTailFile(
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,
       beforeOffset: selected[0]?.offset ?? end,
+      ...(Number.isFinite(latest) ? { latestTimestamp: latest } : {}),
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),
       ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {})
     }
@@ -194,7 +204,7 @@ export async function readNativeChatTranscriptTailFile(
     lineOffset: number,
     messages: { message: NativeChatMessage; offset: number }[]
   ): void {
-    // Positional reads own these bytes; only multi-part records need joining in reverse order.
+    // Positional reads own their buffers; only split records require a reverse-order join.
     const bytes = lineParts.length === 1 ? lineParts[0] : Buffer.concat(lineParts.toReversed())
     let line = bytes.toString('utf8')
     if (line.endsWith('\r')) {
@@ -215,9 +225,7 @@ export async function readNativeChatTranscriptTailFile(
     }
     ignoreNextMalformedRecord = false
     const fallbackId = transcriptFallbackId(filePath, lineOffset)
-    // Why: scan the same bounded JSONL window for provider-authored lifecycle
-    // records so reconnect snapshots can replay completion without guessing
-    // from the last visible assistant message.
+    // Use provider lifecycle records from the same window; visible assistant text cannot prove completion.
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
     const message = decode(line, fallbackId)
     if (message) {
@@ -234,6 +242,7 @@ export async function readNativeChatTranscriptTail(
     filePath?: string
     limit: number
     beforeOffset?: number
+    sourceOrder?: boolean
   },
   signal?: AbortSignal
 ): Promise<
@@ -263,13 +272,11 @@ export async function readNativeChatTranscriptTail(
       args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
   } catch (error) {
     signal?.throwIfAborted()
-    // Why: gate refusal is transient unavailability with retry guidance —
-    // `notFound` would settle callers into a false "missing" state.
+    // Gate refusal is unavailable, never proof of a missing transcript.
     return { error: wslTranscriptFsRefusal(error).message }
   }
   signal?.throwIfAborted()
-  // Why: a new agent session can report its id before the first JSONL flush;
-  // callers keep that miss in loading/retry rather than showing a false error.
+  // Session IDs can arrive before the first flush; missing paths stay retryable.
   if (!filePath) {
     return { error: 'Transcript unavailable', notFound: true }
   }
@@ -281,13 +288,14 @@ export async function readNativeChatTranscriptTail(
       true,
       args.beforeOffset,
       decodeLifecycle,
-      signal
+      signal,
+      undefined,
+      args.sourceOrder
     )
     signal?.throwIfAborted()
     return {
       messages: result.messages,
-      // Why: an older pagination page must not rewind the live lifecycle; only
-      // the current transcript tail can authoritatively describe turn state.
+      // Historical pages cannot rewind live lifecycle; only the current tail describes present turn state.
       ...(args.beforeOffset === undefined && result.lifecycle
         ? { lifecycle: result.lifecycle }
         : {}),

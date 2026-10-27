@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { appendRetiredTerminalSurfaceProofs } from '../../shared/terminal-retirement-proof-ledger'
 import {
-  appendRetiredTerminalSurfaceProofs,
   attachRetirementProofsToSnapshot,
   preserveTerminalRetirementProofs
 } from './mobile-session-terminal-retirement-proof'
@@ -40,8 +40,7 @@ describe('mobile session terminal retirement proofs', () => {
     }
   )
 
-  // Why: host-authored writes never carry worktreeInstanceId. Without inheritance the stored
-  // entry forgets the occupant and renderer(A) -> host write -> renderer(B) launders A's proofs.
+  // Identity-less host writes must inherit the occupant, preventing renderer(A) -> host -> renderer(B) proof laundering.
   it('does not launder proofs across occupants through an identity-less host write', () => {
     const occupantA = snapshot({
       worktreeInstanceId: 'instance-a',
@@ -125,8 +124,7 @@ describe('mobile session terminal retirement proofs', () => {
   })
 
   it('does not bump the version when a re-delivered proof only changes position', () => {
-    // The append moves a re-supplied proof to the tail, so [A,B] re-supplied with A becomes [B,A].
-    // Comparing by position called that a change and fanned a no-op version bump to every client.
+    // Re-supplying A reorders [A,B] to [B,A]; position-based equality would emit a no-op version bump.
     const a = { ...retired, parentTabId: 'tab-a', leafId: 'leaf-a', ptyId: 'pty-a' }
     const b = { ...retired, parentTabId: 'tab-b', leafId: 'leaf-b', ptyId: 'pty-b' }
     const stored = snapshot({ retiredTerminalSurfaces: [a, b] })

@@ -4,9 +4,7 @@ import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 import type { GlobalSettings } from './global-settings-types'
 
-// ── Shared property enums ───────────────────────────────────────────────
-
-// Mirrors `TuiAgent` launch surface; `claude`↔`claude-code` (product, not CLI string). `other` is the escape hatch; see `tuiAgentToAgentKind`.
+// Wire names use product names (claude-code for the claude CLI); tuiAgentToAgentKind maps unknowns to other.
 export const AGENT_KIND_VALUES = [
   'claude-code',
   'claude-agent-teams',
@@ -58,8 +56,7 @@ export const AGENT_KIND_VALUES = [
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
-// Small set: only failures Orca's PTY-typed-command launch can observe (`binary_not_found` = shell ENOENT, `paste_readiness_timeout`, `unknown`).
-// Provider-side errors (auth/rate-limit/network) happen inside the agent CLI subprocess and are invisible to Orca. See telemetry-plan.md §Defer per-incident error fields.
+// Only launch failures are observable; provider auth/rate-limit/network errors remain inside the CLI subprocess.
 export const errorClassSchema = z.enum(['binary_not_found', 'paste_readiness_timeout', 'unknown'])
 export type ErrorClass = z.infer<typeof errorClassSchema>
 
@@ -115,7 +112,7 @@ export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
 
 export const setupScriptImportProviderSchema = z.enum(SETUP_SCRIPT_IMPORT_PROVIDERS)
 
-// Separate enum from `errorClassSchema` — different domain (git/filesystem worktree-create failures); merging would couple the two forever.
+// Keep workspace-create failures separate from agent launch failures so their enums can evolve independently.
 export const workspaceCreateErrorClassSchema = z.enum([
   'git_failed',
   'path_collision',
@@ -185,21 +182,20 @@ export const featureWallTourDepthStepSchema = z.enum(FEATURE_WALL_TOUR_DEPTH_STE
 
 export const featureWallExitActionSchema = z.enum(FEATURE_WALL_EXIT_ACTIONS)
 
-// `env_var` absent — env-var/CI paths override consent at runtime only, never firing an opt-in/out event.
-// `first_launch_notice` absent — the new-user cohort has no first-launch surface; those opt-outs come via `'settings'`.
+// Env/CI consent overrides emit no opt event; fresh installs have no first-launch surface and opt out through settings.
 export const optInViaSchema = z.enum(['first_launch_banner', 'settings'])
 export type OptInVia = z.infer<typeof optInViaSchema>
 
-// Whitelist of settings emittable on `settings_changed`. `orca_channel` (build-time, not user-togglable) is absent.
-// The telemetry opt-in toggle is also absent — it fires dedicated `telemetry_opted_in/out` events; listing it would double-fire.
+// Exclude build-time orca_channel and the opt-in toggle, which has dedicated events.
 export type BooleanGlobalSettingsKey = {
-  // Why: new toggles may be optional for legacy-settings compat but are still boolean once defaulted.
+  // Legacy-compatible optional toggles become booleans after defaulting.
   [Key in keyof GlobalSettings]-?: NonNullable<GlobalSettings[Key]> extends boolean ? Key : never
 }[keyof GlobalSettings]
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
   'openLinksInAppModifierInverts',
+  'openLinksInAppInBackground',
   'terminalLinkActionPopoverEnabled',
   'experimentalMobile',
   'experimentalPet',
@@ -209,6 +205,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
   'experimentalEphemeralVms',
+  'experimentalConnectors',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)

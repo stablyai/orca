@@ -1,11 +1,11 @@
-import type * as ExecCommandModule from '../remote-exec-command'
+import type * as ExecCommandModule from '../remote-exec/remote-exec-command'
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-vi.mock('../remote-exec-command', async (importOriginal) => ({
+vi.mock('../remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))

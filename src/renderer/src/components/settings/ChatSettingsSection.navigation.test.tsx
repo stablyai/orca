@@ -16,6 +16,7 @@ import type { SettingsInteractionController } from './use-settings-interaction-c
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import type { SettingsTerminalModel } from './use-settings-terminal-model'
 
+vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
 vi.mock('../../store', () => ({
   useAppStore: (selector: (value: { settingsSearchQuery: string }) => unknown) =>
     selector({ settingsSearchQuery: '' })
@@ -128,16 +129,6 @@ describe('Chat settings deep links', () => {
       screen.getByRole('switch', { name: 'Toggle inline visuals' })
     )
     await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(visuals))
-  })
-
-  it('activates Chat and renders the moved row for a deep link', async () => {
-    render(<NavigationHarness enabled initialSection="appearance" />)
-    await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-        'chat'
-      )
-    })
-    expect(screen.getByRole('spinbutton', { name: 'Code text size' })).toBeTruthy()
   })
 
   it('activates Chat and scrolls to the separate naming section for its deep link', async () => {

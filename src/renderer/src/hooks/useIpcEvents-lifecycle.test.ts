@@ -138,6 +138,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     // Subscribe before consuming pending requests or reading snapshots, so startup cannot miss pushes.
     for (const [subscribe, read] of [
       ['ui.onOpenSettings', 'ui.consumePendingOpenSettings'],
+      ['ui.onQuitAndStopAllSessions', 'ui.consumePendingQuitAndStopAllSessions'],
       ['ui.onOpenSkillShare', 'ui.consumePendingSkillShare'],
       ['rateLimits.onUpdate', 'rateLimits.get'],
       ['agentStatus.onSet', 'agentStatus.getSnapshot'],
@@ -161,7 +162,15 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     ).toBe(true)
     const activeSubscriptionCount = storeSubscriptions.filter((item) => item.active).length
     expect(activeSubscriptionCount).toBeGreaterThan(0)
-    expect(addDocumentListener.mock.calls.map(([type]) => type)).toEqual(['focusin', 'pointerdown'])
+    const documentListenerTypes = [
+      'focusin',
+      'pointerdown',
+      'compositionstart',
+      'compositionupdate',
+      'compositionend',
+      'input'
+    ]
+    expect(addDocumentListener.mock.calls.map(([type]) => type)).toEqual(documentListenerTypes)
 
     firstCleanup()
     expect(runtimeSubscriptions.every((unsubscribe) => unsubscribe.mock.calls.length === 1)).toBe(
@@ -185,10 +194,8 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     ).toBe(true)
     expect(storeSubscriptions.filter((item) => item.active)).toHaveLength(activeSubscriptionCount)
     expect(addDocumentListener.mock.calls.map(([type]) => type)).toEqual([
-      'focusin',
-      'pointerdown',
-      'focusin',
-      'pointerdown'
+      ...documentListenerTypes,
+      ...documentListenerTypes
     ])
 
     secondCleanup()

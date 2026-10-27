@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
@@ -242,11 +243,12 @@ describe('OrcaRuntimeService', () => {
     runtime.markRendererReloading(TEST_WINDOW_ID)
     runtime.markGraphUnavailable(TEST_WINDOW_ID)
 
-    expect(runtime.getStatus()).toMatchObject({
-      graphStatus: 'unavailable',
-      authoritativeWindowId: null,
-      rendererGraphEpoch: 2
-    })
+    // Main-owned panes remain answerable after the window closes.
+    expect(runtime.getStatus()).toMatchObject(
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? { graphStatus: 'ready', authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID }
+        : { graphStatus: 'unavailable', authoritativeWindowId: null, rendererGraphEpoch: 2 }
+    )
   })
 
   it('restores headless graph authority after a promoted renderer reload times out', async () => {

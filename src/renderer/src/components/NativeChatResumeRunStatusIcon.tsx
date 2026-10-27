@@ -4,8 +4,6 @@ import { translate } from '@/i18n/i18n'
 import { formatNativeChatDuration } from '../../../shared/native-chat-turn-status'
 import type { ResumeRunRowStatus } from './native-chat-resume-run-view'
 
-/** Tooltips keep per-chat progress from adding another label to each row. */
-
 export type ResumeRunStartPhase = 'starting' | 'ready' | null
 
 /** In flight, the host's feed says how far the agent got; the resume itself does not report it. */

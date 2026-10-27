@@ -38,6 +38,7 @@ export {
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
+  formatTerminalSetPaneTitle,
   formatTerminalSend,
   formatTerminalShow,
   formatTerminalSplit,
@@ -88,8 +89,7 @@ export type HostListEntry = {
   connectionStatus?: string
 }
 
-// Why: the selector column is the point of this command — the name alone is what callers already
-// had, and passing it on the wrong axis is the mistake this output exists to prevent.
+// Explicit host selectors prevent callers from using a display name on the wrong host scope.
 export function formatHostList(result: { hosts: HostListEntry[] }): string {
   const kindLabel: Record<HostListEntry['kind'], string> = {
     local: 'local',

@@ -237,9 +237,6 @@ export function deserializeAgentStatusSubject(value: string): AgentStatusSubject
   return null
 }
 
-export const agentStatusSubjectKey = serializeAgentStatusSubject
-export const parseAgentStatusSubjectKey = deserializeAgentStatusSubject
-
 export function agentStatusSubjectsEqual(
   left: AgentStatusSubject,
   right: AgentStatusSubject

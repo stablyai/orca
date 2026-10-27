@@ -1,4 +1,3 @@
-/** A folder workspace in a project group, and an automation with run history. */
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -61,7 +60,6 @@ export function foldersAndAutomationsWslMoverProfile(paths: WslMoverPaths): WslM
     projectId: 'repo-auto',
     executionTargetType: 'local',
     executionTargetId: 'local',
-    // The host schedules what it owns, as the existing orcad import does.
     schedulerOwner: paths.side === 'source' ? 'local_host_service' : 'remote_host_service',
     workspaceMode: 'existing',
     workspaceId: wtAuto,

@@ -1,8 +1,9 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
-import { SIDEBAR_INPUTS_BUILD, expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { WorkspaceReviewFactsSnapshotSchema } from '../../src/shared/sidebar-list/workspace-review-facts'
+import { getWorktreeIdFromHostIdentity } from '../../src/shared/worktree/host-qualified-identity'
 
 test.skip(
   !SIDEBAR_INPUTS_BUILD,
@@ -45,7 +46,9 @@ async function readMainReviewFact(page: Page, worktreeId: string): Promise<unkno
   if (!response.ok) {
     throw new Error('sidebarInputs.reviewFacts failed')
   }
-  return WorkspaceReviewFactsSnapshotSchema.parse(response.result).facts[worktreeId] ?? null
+  // Keyed by row identity; the seeded workspace is listed on this host only.
+  const facts = Object.entries(WorkspaceReviewFactsSnapshotSchema.parse(response.result).facts)
+  return facts.find(([key]) => getWorktreeIdFromHostIdentity(key) === worktreeId)?.[1] ?? null
 }
 
 test('main follows the window PR cache for each workspace', async ({ orcaPage }) => {
@@ -62,9 +65,7 @@ test('main follows the window PR cache for each workspace', async ({ orcaPage })
   await expect
     .poll(() => readMainReviewFact(orcaPage, worktreeId), { timeout: 5_000 })
     .toEqual({ provider: 'github', reviewState: 'merged' })
-  await expectNoSidebarShadowMismatches(orcaPage)
 
   await setWindowPRState(orcaPage, null)
   await expect.poll(() => readMainReviewFact(orcaPage, worktreeId), { timeout: 5_000 }).toBeNull()
-  await expectNoSidebarShadowMismatches(orcaPage)
 })

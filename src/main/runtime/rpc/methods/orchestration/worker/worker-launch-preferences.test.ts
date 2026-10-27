@@ -9,7 +9,7 @@ import {
   resolveFederatedWorkerLaunchReceipt,
   resolveWorkerLaunchPreferences
 } from './worker-launch-preferences'
-import { WorkerStartParams } from './worker-start-schema'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 
 describe('orchestration worker launch preferences', () => {
   it('passes a discovered OMP model through the existing launch arguments and receipt', () => {
@@ -117,10 +117,10 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support effort turbo')
   })
 
-  it('refuses an opencode model until the execution host verifies legacy TUI support', () => {
+  it('refuses an OpenCode model on an unsupported execution host', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'meta/muse-spark-1.3' })
-    ).toThrow('cannot verify launch-time model selection')
+    ).toThrow('cannot apply a model choice on this execution host')
   })
 
   it('explains the existing-worktree requirement even if a new-worktree host is verified', () => {

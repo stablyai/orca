@@ -14,6 +14,13 @@ import { styles } from './mobile-tasks-legacy-styles'
 import { renderMobileTasksProviderControls } from './mobile-tasks-provider-controls'
 import { renderMobileTasksSearchControl } from './mobile-tasks-search-control'
 
+const REFRESH_LABELS = {
+  github: 'Refresh GitHub work',
+  gitlab: 'Refresh GitLab work items',
+  linear: 'Refresh Linear',
+  jira: 'Refresh Jira issues'
+} as const
+
 export function renderMobileTasksChrome(model: ConnectionPresentationModel) {
   const { setTaskCopyFeedbackRootRef } = model
   return (
@@ -72,6 +79,9 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
       <Pressable
         style={styles.iconButton}
         disabled={!taskUiReady || loading || refreshing || githubProjectLoading}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={REFRESH_LABELS[provider]}
         onPress={() => {
           if (!taskUiReady) {
             return
@@ -89,6 +99,15 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
         <Pressable
           style={styles.iconButton}
           disabled={!taskUiReady}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            provider === 'github'
+              ? 'New GitHub issue'
+              : linearConnected
+                ? 'New Linear issue'
+                : 'Connect Linear'
+          }
           onPress={() => {
             if (!taskUiReady) {
               return

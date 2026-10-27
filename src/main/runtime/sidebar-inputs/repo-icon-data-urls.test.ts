@@ -87,6 +87,22 @@ describe('RepoIconDataUrls without an encoder (orcad)', () => {
   })
 })
 
+describe('RepoIconDataUrls.idsByRepo', () => {
+  it('names each repo’s image by host and repo, the ids a read answers', async () => {
+    const remote = { ...repo('a', AVATAR), connectionId: 'box' }
+    const { icons } = setup([
+      repo('a', AVATAR),
+      remote,
+      repo('glyph', { type: 'emoji', emoji: 'x' }),
+      repo('none', null)
+    ])
+    const id = repoIconId(AVATAR)!
+
+    expect(icons.idsByRepo()).toEqual({ 'local|a': id, 'ssh:box|a': id })
+    expect((await icons.read([id])).icons[0].dataUrl).not.toBeNull()
+  })
+})
+
 describe('RepoIconDataUrls with an encoder (desktop)', () => {
   it('re-encodes a fetched avatar at 64 px', async () => {
     const encoder = vi.fn<RepoIconPngEncoder>(() => ENCODED)

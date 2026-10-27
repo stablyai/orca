@@ -23,6 +23,7 @@ const idlePane: WslMovePaneFacts = {
 const hints = {
   hints: [{ paneKey: 'tab-1:leaf-1', cwd: '/home/dev/repo-1' }],
   unreadablePaneKeys: [],
+  noCwdPaneKeys: [],
   staleCwdPaneKeys: []
 }
 
@@ -57,9 +58,15 @@ function harness(overrides: Partial<WslMoveQuiesceDeps> = {}) {
 
 describe('quiesceWslMove', () => {
   it('fences, sleeps, proves exit and records the proven sessions', async () => {
-    const { deps, journal, removed, steps } = harness()
+    const proveExited = vi.fn(async (): Promise<WslMoveExitProof> => ({ verdict: 'exited' }))
+    const { deps, journal, removed, steps } = harness({ proveExited })
     const result = await quiesceWslMove(cutover(), scope, deps)
 
+    expect(proveExited).toHaveBeenCalledWith({
+      distro: cutover().manifest.source.distro,
+      workspaceKeys: scope.workspaceKeys,
+      sessionIds: new Set(['session-1'])
+    })
     expect(journal).toEqual(['source-fenced', 'quiesced'])
     expect(steps).toEqual(['sleep after source-fenced'])
     expect(removed).toEqual([])
@@ -119,14 +126,20 @@ describe('quiesceWslMove', () => {
 
   it('refuses a second quiesce of the same distro while the first runs', async () => {
     let releaseSleep: () => void = () => undefined
+    let signalSleepStarted: () => void = () => undefined
+    const sleepStarted = new Promise<void>((resolve) => {
+      signalSleepStarted = resolve
+    })
     const first = harness({
       sleepWorkspaces: () =>
         new Promise((resolve) => {
           releaseSleep = () => resolve({ failedWorktreeIds: [] })
+          signalSleepStarted()
         })
     })
     const running = quiesceWslMove(cutover(), scope, first.deps)
-    await vi.waitFor(() => expect(first.journal).toEqual(['source-fenced']))
+    await sleepStarted
+    expect(first.journal).toEqual(['source-fenced'])
 
     const second = harness()
     await expect(quiesceWslMove(cutover('move-2'), scope, second.deps)).resolves.toEqual({

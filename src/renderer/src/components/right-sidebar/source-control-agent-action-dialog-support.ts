@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -14,6 +16,34 @@ export function isSourceControlAgentDetectedAndEnabled(
   return Boolean(
     agent && detectedAgents.includes(agent) && isTuiAgentEnabled(agent, disabledAgents)
   )
+}
+
+export function buildSourceControlAgentAvailability({
+  detectedAgents,
+  disabledAgents,
+  selectedAgent
+}: {
+  detectedAgents: TuiAgent[]
+  disabledAgents: TuiAgent[] | undefined
+  selectedAgent: TuiAgent | null
+}): {
+  agentOptions: ReturnType<typeof getAgentCatalog>
+  selectedAgentUnavailable: boolean
+  hasEnabledAgents: boolean
+} {
+  const enabledDetectedAgents = detectedAgents.filter((agent) =>
+    isTuiAgentEnabled(agent, disabledAgents)
+  )
+  return {
+    agentOptions: getAgentCatalog().filter(
+      (entry) => enabledDetectedAgents.includes(entry.id) || entry.id === selectedAgent
+    ),
+    selectedAgentUnavailable: Boolean(
+      selectedAgent &&
+      !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
+    ),
+    hasEnabledAgents: enabledDetectedAgents.length > 0
+  }
 }
 
 export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
@@ -117,4 +147,17 @@ export function buildSourceControlAgentScopeNote(launchAgentScope: {
     effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
     globalAgentLabel: labelFor(launchAgentScope.globalAgentId)
   }
+}
+
+/** The workspace owner answers detection, including a paired host's SSH workspace. */
+export function detectSourceControlActionAgents(
+  worktreeId: string | null | undefined,
+  connectionId: string | null | undefined
+): Promise<TuiAgent[]> {
+  const state = useAppStore.getState()
+  return worktreeId
+    ? ensureDetectedAgentsForWorktree(state, worktreeId)
+    : typeof connectionId === 'string'
+      ? state.ensureRemoteDetectedAgents(connectionId)
+      : state.ensureDetectedAgents()
 }

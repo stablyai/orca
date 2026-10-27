@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => {
     removeWorktree: vi.fn(),
     clearWorktreeDeleteState: vi.fn(),
     allWorktrees: vi.fn<() => Worktree[]>(() => []),
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [] as Repo[],
     worktreeLineageById: {} as Record<string, WorktreeLineage>,
     updateSettings: vi.fn(),
@@ -57,7 +59,7 @@ vi.mock('@/store/selectors', () => ({
   useAllWorktrees: () => mocks.state.allWorktrees(),
   getWorktreeMapFromState: () =>
     new Map(mocks.state.allWorktrees().map((worktree) => [worktree.id, worktree])),
-  // Host-qualified lookup (STA-4343): resolve on the named host, else first-wins.
+  // Resolve on the named host; unqualified lookup retains first-wins compatibility.
   getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
     const rows = mocks.state
       .allWorktrees()
@@ -107,10 +109,6 @@ vi.mock('sonner', () => ({
 
 vi.mock('./delete-worktree-flow', () => ({
   runWorktreeDeletesInParallel: vi.fn()
-}))
-
-vi.mock('./active-worktree-focus-after-delete', () => ({
-  prepareActiveWorktreeFocusAfterDelete: () => vi.fn()
 }))
 
 vi.mock('./stale-workspace-list-toast', () => ({
@@ -238,7 +236,8 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
       force: false,
-      onForceDeleted: expect.any(Function)
+      onForceDeleted: expect.any(Function),
+      confirmedDiscards: expect.any(Map)
     })
   })
 
@@ -280,7 +279,8 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([child, parent], {
       force: true,
-      onForceDeleted: expect.any(Function)
+      onForceDeleted: expect.any(Function),
+      confirmedDiscards: expect.any(Map)
     })
   })
 
@@ -435,7 +435,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     }
     mocks.state.modalData = { worktreeId: workspace.id }
     mocks.state.allWorktrees.mockReturnValue([workspace])
-    // What a lost retry reply leaves behind while the host lists the retry's own failure.
+    // Model a lost retry reply while the host lists that retry’s failure.
     mocks.state.deleteStateByWorktreeId = {
       [workspace.id]: {
         isDeleting: false,
@@ -499,7 +499,8 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
       force: true,
-      onForceDeleted: expect.any(Function)
+      onForceDeleted: expect.any(Function),
+      confirmedDiscards: expect.any(Map)
     })
     const options = vi.mocked(runWorktreeDeletesInParallel).mock.calls[0]?.[1] as
       | { onForceDeleted?: (target: WorktreeRemovalTarget) => void }

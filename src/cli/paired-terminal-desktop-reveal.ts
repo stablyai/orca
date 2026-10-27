@@ -4,11 +4,7 @@ import type { RuntimeTerminalReveal } from '../shared/terminal-pane-reveal'
 import { RuntimeClient } from './runtime-client'
 import { resolveEnvironment } from './runtime/environments'
 
-/**
- * A paired server has no window, so `terminal.focus` there never navigates (#24688). The desktop
- * app on this machine shows that server's panes under the same ids and can reveal one.
- * Resolves false when no local desktop shows the environment; the server's answer then stands.
- */
+/** Paired servers have no window; reveal their pane through a local desktop if one is available. */
 export async function revealPairedTerminalOnLocalDesktop(
   client: RuntimeClient,
   handle: string
@@ -30,7 +26,6 @@ export async function revealPairedTerminalOnLocalDesktop(
     })
     return revealed.result.reveal.navigated
   } catch {
-    // Why: no desktop here, one without terminal.reveal, a headless one, or a handle gone since.
     return false
   }
 }

@@ -1,8 +1,4 @@
-/**
- * A launch from a paired client moves that client's view to the new tab and nobody else's: the view
- * intent belongs to the connection that asked. In-process callers and worktree-creating launches
- * keep today's behaviour.
- */
+/** Paired launches select only the caller's view; existing/folder targets select the tab, while worktree creates retain background provisioning. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import {
   CAPABLE_CLIENT,
   STRUCTURED_PREFERENCE,
@@ -28,11 +25,6 @@ const deliverTerminalPrompt = vi.hoisted(() => vi.fn(async () => true))
 vi.mock('./agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt: deliverTerminalPrompt
 }))
-const commitChatPrompt = vi.hoisted(() => vi.fn(async () => 'message-1'))
-vi.mock('./agent-launch-structured-prompt', () => ({
-  commitStructuredAgentSessionLaunchPrompt: commitChatPrompt
-}))
-
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 const AGENT_LAUNCH_REPLAY = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
@@ -73,7 +65,6 @@ function chatActivation(): unknown {
 
 beforeEach(() => {
   deliverTerminalPrompt.mockClear()
-  commitChatPrompt.mockClear()
   createStructuredSession
     .mockReset()
     .mockResolvedValue({ ok: true, value: { sessionId: 'sess-1' } })
@@ -106,11 +97,8 @@ describe('a paired client launching into an existing workspace', () => {
     )
   })
 
-  // Why: a pasted prompt waits up to a minute for the agent; the caller's view must not wait with it.
-  it.each([
-    ['terminal', {}, deliverTerminalPrompt],
-    ['chat', STRUCTURED_PREFERENCE, commitChatPrompt]
-  ] as const)(
+  // Prompt delivery can take a minute; caller navigation must not wait.
+  it.each([['terminal', {}, deliverTerminalPrompt]] as const)(
     'selects the new %s for the caller before its prompt is delivered',
     async (_surface, settings, deliver) => {
       const runtime = selectionRuntime({ settings, terminalPaneKey: PANE_KEY })
@@ -140,7 +128,7 @@ describe('a paired client launching into an existing workspace', () => {
     warn.mockRestore()
   })
 
-  // Why: a headless `--serve` host has no window to reveal into; the caller mirrors the tab anyway.
+  // Headless hosts have no window to reveal, but the caller still mirrors the tab.
   it('does not pass on the host’s own reveal warning, since the caller shows the tab itself', async () => {
     const runtime = selectionRuntime({
       settings: {},
@@ -152,6 +140,19 @@ describe('a paired client launching into an existing workspace', () => {
 
     expect(result.outcome).toMatchObject({ kind: 'terminal', handle: 'term_1' })
     expect(result.warning).toBeUndefined()
+  })
+
+  it('still tells a caller that shows the tab itself that its folder was gone', async () => {
+    const runtime = selectionRuntime({
+      settings: {},
+      terminalPaneKey: PANE_KEY,
+      terminalWarning: REVEAL_WARNING,
+      terminalStartupCwdFallback: true
+    })
+
+    const result = await launch(EXISTING_LAUNCH, runtime)
+
+    expect(result.warning).toBe(STARTUP_CWD_FALLBACK_SENTENCE)
   })
 
   // A folder workspace has no setup for a host activation to run, so its create moves only the caller.

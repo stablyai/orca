@@ -6,18 +6,21 @@ import { translate } from '@/i18n/i18n'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { ResumeInNewCliTooltipText } from './ai-vault-session-cli-fork-copy'
 
-/** "Resume in New Native Chat" / "Resume in New CLI", shared by the session-history row menus and
- *  the tab menu so both offer the same move under the same words. */
+/** History opens a new tab; active-tab controls switch surfaces. */
 export function AiVaultSessionSurfaceSwitchMenuItems({
+  action,
   menuKind,
   tooltipSide,
+  chatPending,
   onResumeInNewChat,
   onResumeInNewCli,
   cliPending = false
 }: {
+  action: 'resume' | 'switch'
   menuKind: 'dropdown' | 'context'
   tooltipSide: 'left' | 'right'
-  onResumeInNewChat?: () => void
+  chatPending?: boolean
+  onResumeInNewChat?: (event: Event) => void
   onResumeInNewCli?: (event: Event) => void
   cliPending?: boolean
 }): React.JSX.Element {
@@ -25,12 +28,21 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
   return (
     <>
       {onResumeInNewChat ? (
-        <Item onSelect={onResumeInNewChat}>
+        <Item
+          onSelect={onResumeInNewChat}
+          disabled={chatPending}
+          aria-busy={chatPending || undefined}
+        >
           <MessagesSquare className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-            'Resume in New Native Chat'
-          )}
+          {action === 'resume'
+            ? translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
+                'Resume in New Chat'
+              )
+            : translate(
+                'components.tab.bar.SortableTabContextMenu.switchToChatView',
+                'Continue in Chat UI'
+              )}
         </Item>
       ) : null}
       {onResumeInNewCli ? (
@@ -42,10 +54,15 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
               ) : (
                 <SquareTerminal className="size-3.5" />
               )}
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-                'Resume in New CLI'
-              )}
+              {action === 'resume'
+                ? translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
+                    'Resume in New Terminal'
+                  )
+                : translate(
+                    'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+                    'Continue with Terminal Agent'
+                  )}
             </Item>
           </TooltipTrigger>
           <TooltipContent side={tooltipSide} sideOffset={8}>

@@ -2,17 +2,14 @@ import { Plus, QrCode } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { PickerModal } from './PickerModal'
-import { useConnectedHostPicker } from './use-connected-host-picker'
 
 type Props = {
   connectedHosts: HostProfile[]
   onPairDesktop: () => void
-  onCreateWorkspace: (hostId: string) => void
+  onCreateWorkspace: () => void
 }
 
 export function MobileHomeQuickActions(props: Props) {
-  const hostPicker = useConnectedHostPicker(props.connectedHosts)
   const canCreateWorkspace = props.connectedHosts.length > 0
 
   return (
@@ -38,7 +35,7 @@ export function MobileHomeQuickActions(props: Props) {
             !canCreateWorkspace && styles.quickActionDisabled,
             pressed && styles.quickActionPressed
           ]}
-          onPress={() => hostPicker.pickHost(props.onCreateWorkspace)}
+          onPress={props.onCreateWorkspace}
         >
           <View style={styles.quickActionIcon}>
             <Plus size={16} color={colors.textSecondary} />
@@ -46,7 +43,6 @@ export function MobileHomeQuickActions(props: Props) {
           <Text style={styles.quickActionLabel}>New Workspace</Text>
         </Pressable>
       </View>
-      <PickerModal title="Create Workspace On" {...hostPicker.pickerProps} />
     </>
   )
 }

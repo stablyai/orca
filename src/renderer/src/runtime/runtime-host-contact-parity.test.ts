@@ -80,8 +80,7 @@ function* everySnapshotEntry(): Generator<{ label: string; entry: Entry }> {
       for (const retired of RETIRED) {
         for (const answered of [null, makeStatus()] as const) {
           for (const remoteControlState of REMOTE_CONTROL_STATES) {
-            // The store nulls `status` for anything but a verified, unretired probe, so the two
-            // reachable pairings are the ones enumerated here rather than a free cross-product.
+            // Store status exists only for verified unretired probes; enumerate reachable combinations, not an impossible cross-product.
             const entryStatus = verification === 'verified' && !retired ? answered : null
             const remoteControl = remoteControlState
               ? makeRemoteControl(remoteControlState)
@@ -147,8 +146,7 @@ describe('the contact separates what the host said from what it is worth', () =>
   })
 
   it('tells a host that was never reached apart from a handshake in flight', () => {
-    // These collapsed into one `null` before, and they want opposite affordances: one should
-    // offer Connect, the other should not.
+    // Previously collapsed nulls need opposite Connect affordances.
     expect(
       runtimeHostContactFromSnapshot(makeSnapshot('unavailable', 'unknown', false, null), null)
     ).toEqual({ verdict: 'unverifiable', reason: 'never-asked', lastAnswer: null })

@@ -1,3 +1,4 @@
+import { selectCanonicalProjectHostSetups } from '@/store/project-host-setup-selector'
 import { useCallback } from 'react'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { Repo } from '../../../../shared/repo-types'
@@ -11,15 +12,16 @@ import {
   automationWorktreeForRow,
   type AutomationListRow
 } from './automation-list-row-identity'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const AGENTS = getAgentCatalog().map((agent) => agent.id)
 
 /** Store-backed values shared by the page's state and action hooks. */
 export function useAutomationsPageStoreState() {
   const repos = useAppStore((s) => s.repos)
-  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)

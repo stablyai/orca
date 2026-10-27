@@ -29,9 +29,10 @@ type Setup = {
 
 function controllerFor({ repos, catalog = null, saved = [], staleOn = [] }: Setup) {
   const sessions = twinPartitionSessions(saved, staleOn)
+  const getRepos = vi.fn(() => repos)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the controller reads only repos, folder workspaces and workspace sessions.
   const store = {
-    getRepos: () => repos,
+    getRepos,
     getRepo: (id: string) => repos.find((row) => row.id === id),
     getFolderWorkspaces: () => [],
     getWorkspaceSessionHostIds: () => [...sessions.keys()],
@@ -44,7 +45,7 @@ function controllerFor({ repos, catalog = null, saved = [], staleOn = [] }: Setu
     hasRuntimeOwnedPtyCandidate: () => false,
     getCachedWorktrees: () => catalog
   })
-  return { controller, sessions }
+  return { controller, sessions, getRepos }
 }
 
 // The window's save routing is checked against the same table in workspace-session-twin-repo-host.test.ts.
@@ -73,6 +74,26 @@ describe('routing a repo id registered on two hosts, in a layout-owner build', (
     expect(controller.getHydrationTargets(true).get(TWIN_WORKTREE_ID)).toBe(
       sessions.get('runtime:env-1')
     )
+  })
+
+  it.each(['global-floating-terminal', 'removed-repo::/work/api'])(
+    'routes %s without reading the repo inventory',
+    (worktreeId) => {
+      layoutOwner.isMain = true
+      const { controller, getRepos } = controllerFor({ repos: [RUNTIME_ROW, LOCAL_ROW] })
+      expect(controller.tryGetHostId(worktreeId)).toBe('local')
+      expect(getRepos).not.toHaveBeenCalled()
+    }
+  )
+
+  it('reads the repo inventory once per hydration pass, not once per saved worktree', () => {
+    layoutOwner.isMain = true
+    const { controller, getRepos } = controllerFor({
+      repos: [RUNTIME_ROW, LOCAL_ROW],
+      saved: ['runtime:env-1', 'local']
+    })
+    controller.getHydrationTargets(true)
+    expect(getRepos).toHaveBeenCalledTimes(1)
   })
 })
 

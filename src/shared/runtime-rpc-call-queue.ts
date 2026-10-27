@@ -1,5 +1,5 @@
 import { abortSignalReason } from './abort-signal-reason'
-import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from './remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
 const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
@@ -51,9 +51,8 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
   )
 }
 
-// Why its own lane: these reply only when slow host work finishes (worktree.rm when Git has deleted
-// the checkout, a model catalog read that waits on the first listing), so they would hold the
-// foreground slots listing refreshes and sends need; the background lane's slots belong to status.
+// Slow worktree removal/model listing waits get a separate lane so foreground refresh/send slots remain free;
+// background slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
   return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
 }
@@ -156,14 +155,12 @@ export class RuntimeRpcCallQueuePool {
       if (call.background) {
         queue.backgroundActive += 1
       }
-      // Why: runtime streams and worktree actions share transport capacity with
-      // per-card status refreshes, so decorative calls must not stampede it.
+      // Decorative status refreshes must not stampede capacity shared with streams and workspace actions.
       let runPromise: Promise<unknown>
       try {
         runPromise = call.run()
       } catch (error) {
-        // Why: callers rely on queued work starting immediately, but sync
-        // validation errors must still flow through the cleanup path.
+        // Start queued work immediately but route synchronous validation failures through cleanup.
         runPromise = Promise.reject(error)
       }
       void runPromise.then(call.resolve, call.reject).finally(() => {

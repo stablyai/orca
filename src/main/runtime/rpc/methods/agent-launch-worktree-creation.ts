@@ -1,13 +1,5 @@
-/**
- * Creating the worktree an `agent.launch` asks for.
- *
- * `startupAgent` is the whole fork, and it is the same one `worker-worktree-creation` makes: a
- * terminal launch creates the worktree agent-first, so the startup terminal IS the agent, while a
- * structured launch creates it with no agent at all and its session is created for the worktree
- * afterwards. Setup, default tabs, provenance and lineage are identical either way.
- *
- * The executor owns which side of that fork this call lands on; nothing here re-decides it.
- */
+/** Terminal launches create agent-first worktrees; structured launches create the workspace without an agent and add chat afterwards.
+ * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
 
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -21,7 +13,7 @@ import type { AgentLaunchWorkspaceFactory } from '../../../agent-launch/agent-la
 import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnings'
 import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
-import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
@@ -56,12 +48,13 @@ export function agentLaunchWorkspaceFactory(
       options,
       accountEnv
     }) => {
-      const startupLaunchPreferences = toAgentLaunchPreferences(options)
+      const startupLaunchPreferences =
+        startupAgent && toAgentLaunchPreferences(options, startupAgent)
       let promptRodeLaunchCommand = false
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
       const params = create as WorktreeCreateParams
       const { runtime } = context
-      const repo = await runtime.showRepo(params.repo)
+      const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
       const automationProvenance = resolveAutomationWorkspaceProvenance({
         authority: runtime,
         repoSelector: params.repo,
@@ -75,9 +68,7 @@ export function agentLaunchWorkspaceFactory(
             {
               ...(agentLaunchMovesHostWindow(context) ? params : withoutHostActivation(params)),
               ...(startupAgent ? { startupAgent } : {}),
-              // Only ever set alongside `startupAgent`, which is what the create requires; the
-              // executor offers it only to an agent that takes its prompt on argv, and it rides only
-              // when the typed line can carry it.
+              // Only offer startupPrompt with startupAgent when the typed line can carry it.
               ...(startupPrompt ? { startupPrompt } : {})
             },
             {
@@ -103,14 +94,11 @@ export function agentLaunchWorkspaceFactory(
           ...(paneKey ? { startupPaneKey: paneKey } : {}),
           ...(startupLaunchPreferences ? { startupLaunchPreferences } : {}),
           ...(accountEnv ? { startupAccountEnv: { ...accountEnv } } : {}),
-          // The launch owns the agent whichever surface it settles on, so the workspace records
-          // it even when no startup terminal was created for it.
+          // Record the launch's agent on the workspace even when it has no startup terminal.
           createdWithAgent: agent,
           ...(promisedAgentChat ? { promisedAgentChat } : {}),
           ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
-          // Structured sessions have no startup command to sequence behind setup. Provision the
-          // setup terminal synchronously and attach a completion token so the launch can wait
-          // before creating the chat surface.
+          // Chats have no startup command to sequence after setup; provision setup synchronously and return its completion token.
           awaitTerminalProvisioning: true,
           observeSetupCompletion: true
         })
@@ -125,6 +113,7 @@ export function agentLaunchWorkspaceFactory(
           ) ?? result.warning
         return {
           worktreeId: result.worktree.id,
+          workspacePath: result.worktree.path,
           connectionId: repo.connectionId ?? null,
           startupTerminalHandle: result.startupTerminal?.handle,
           ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),
@@ -141,12 +130,7 @@ export function agentLaunchWorkspaceFactory(
   }
 }
 
-/**
- * A paired device's create leaves the host window where it is, as the rest of its launch does:
- * activating would switch the desktop to the new workspace and reveal the startup terminal there.
- * Without it, setup and default tabs are provisioned in the background instead. `runHooks` means
- * "run setup, and activate", so only its setup half is kept.
- */
+/** Paired creates provision setup/default tabs in the background; split runHooks (setup plus activation) to keep setup without moving the host window. */
 function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreateParams {
   return {
     ...params,

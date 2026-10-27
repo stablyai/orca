@@ -1,6 +1,6 @@
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
-import { publicKeyFromBase64 } from './e2ee-crypto'
-import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
+import { publicKeyFromBase64 } from '../../../shared/e2ee-crypto'
+import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import { isDeviceProofB64, verifyDeviceProof } from '../../../shared/device-key-proof'
 
 export type ClassifiedE2EEAuth =
@@ -133,8 +133,7 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
     : { ok: false, code: 'bad_proof' }
 }
 
-// Why: sealed, so only the pinned host can tell a client its key is revoked (it then deletes it);
-// 'Unauthorized' marks an unpaired device for the re-pair prompt, storage trouble is not one.
+// Seal revocation so only the pinned host can make clients delete keys; storage failures must not become Unauthorized re-pair prompts.
 export function describeMobileE2EEAuthFailure(failure: {
   code: MobileE2EEAuthFailureCode
   deviceId?: string

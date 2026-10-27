@@ -6,10 +6,10 @@ import {
   ExternalChromiumBrowserSession,
   type ExternalChromiumLaunch
 } from './external-chromium-browser-session'
-export type { ExternalChromiumLaunch } from './external-chromium-browser-session'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import {
   externalChromiumCommandArguments,
+  externalChromiumWaitCommand,
   normalizeExternalChromiumCommandResult
 } from './external-chromium-command-arguments'
 import {
@@ -44,7 +44,7 @@ export class ExternalChromiumBrowserProcess {
 
   createCommands(host: RuntimeBrowserCommandHost): RuntimeBrowserCommands {
     return new Proxy({} as RuntimeBrowserCommands, {
-      // Why: startup checks membership before invoking dynamically resolved commands.
+      // Startup checks membership before resolving commands dynamically.
       has: (_target, property) => typeof property === 'string' && property !== 'then',
       get: (_target, property) => {
         if (property === 'then') {
@@ -159,7 +159,14 @@ export class ExternalChromiumBrowserProcess {
       return this.session.run(['open', url])
     }
     if (method === 'browserEval') {
-      return this.session.run(['eval', String(params.expression ?? '')])
+      // eval reads a leading -b or --stdin as its own option; base64 never starts with "-".
+      const expression = Buffer.from(String(params.expression ?? '')).toString('base64')
+      return this.session.run(['eval', '-b', expression])
+    }
+    if (method === 'browserWait') {
+      const { args, processTimeoutMs } = externalChromiumWaitCommand(params)
+      await this.session.run(args, { timeoutMs: processTimeoutMs })
+      return { waited: true }
     }
     if (method === 'browserSelectAll') {
       await this.session.run(['focus', String(params.element ?? '')])
@@ -179,7 +186,7 @@ export class ExternalChromiumBrowserProcess {
         `${method} is not supported by this browser provider.`
       )
     }
-    const result = await this.session.run(command)
+    const result = await this.session.run(command, { cliArgv: method === 'browserExec' })
     return normalizeExternalChromiumCommandResult(method, params, result)
   }
 

@@ -1,3 +1,4 @@
+import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -128,8 +129,6 @@ describe('git worktree paths', () => {
   )
 
   it('annotates a worktree whose directory was deleted as prunable', async () => {
-    // Why: an un-pruned registration with a deleted directory must not surface
-    // as a live workspace (issue #8389).
     const { repoPath, worktreePath } = await createRepoWithPrunableWorktree()
 
     const worktrees = await listWorktrees(repoPath)
@@ -153,3 +152,5 @@ describe('git worktree paths', () => {
     expect(branchExists(repoPath, 'feature/locked-delete')).toBe(true)
   })
 })
+
+installRealWorkerThreadChildProcesses()

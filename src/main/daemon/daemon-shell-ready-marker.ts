@@ -1,3 +1,2 @@
-// Why: shells re-escape this when the wrapper templates interpolate it, so the
-// backslashes stay literal here and only become ESC/BEL once printf runs.
+// Keep backslashes literal through wrapper interpolation; printf turns them into ESC/BEL.
 export const SHELL_READY_MARKER = '\\033]777;orca-shell-ready\\007'

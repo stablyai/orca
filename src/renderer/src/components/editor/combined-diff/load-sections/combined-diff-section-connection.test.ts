@@ -73,16 +73,13 @@ describe('getCombinedDiffSectionConnectionId', () => {
       worktreesByRepo: {}
     })
 
-    // Section paths are repo-tree-relative; joined onto the workspace root they
-    // must resolve to the owning child repo, not the ambiguous workspace.
+    // Resolve section paths against their concrete child repo, not the ambiguous mixed-host folder workspace.
     expect(
       getCombinedDiffSectionConnectionId(workspaceKey, '/home/neil/platform', 'api/src/index.ts')
     ).toBe('ssh-1')
-    // Local child repo -> no connection (local read).
     expect(
       getCombinedDiffSectionConnectionId(workspaceKey, '/home/neil/platform', 'web/src/index.ts')
     ).toBeUndefined()
-    // A path owned by no single child repo stays ambiguous.
     expect(
       getCombinedDiffSectionConnectionId(workspaceKey, '/home/neil/platform', 'README.md')
     ).toBeUndefined()
@@ -90,9 +87,7 @@ describe('getCombinedDiffSectionConnectionId', () => {
 
   it('composes Windows section paths with the workspace root separator', () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    // A mixed local+SSH workspace makes the whole-workspace owner ambiguous, so
-    // resolution must fall through to composing the section path — the behavior
-    // this test guards. A single-SSH workspace would resolve before joinPath.
+    // Mix local and SSH repos so whole-workspace resolution stays ambiguous and must fall through to the Windows section path.
     useAppStore.setState({
       folderWorkspaces: [makeFolderWorkspace('C:\\Users\\neil\\platform')],
       projectGroups: [makeGroup('C:\\Users\\neil\\platform')],

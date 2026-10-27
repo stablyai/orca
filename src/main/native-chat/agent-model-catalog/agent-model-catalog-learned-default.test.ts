@@ -1,3 +1,5 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,9 +16,6 @@ import {
   agentReadsProjectModelConfig,
   workspaceMayOverrideDefaultModel
 } from './agent-project-model-override'
-
-// OpenCode and OMP list no default. A chat started with no pick in a workspace whose own config
-// picks nothing runs the account's default, so the host names it for the next new chat there.
 
 let root: string
 beforeEach(() => {
@@ -48,8 +47,7 @@ function workspace(name: string, files: Record<string, string> = {}): string {
 }
 
 function record(agent: string, workspacePath: string): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service reads only these fields.
-  return {
+  return agentSessionRecordFixture({
     sessionId: `${agent}-1`,
     provider: agent,
     accountHome: HOMES[agent]!,
@@ -60,11 +58,9 @@ function record(agent: string, workspacePath: string): AgentSessionRecord {
       workspaceId: 'ws-1',
       workspaceKind: 'git-worktree'
     }
-  } as AgentSessionRecord
+  })
 }
 
-/** A host whose saved list names no default, and one chat started with no pick in `workspacePath`
- *  that reports what it runs. */
 async function afterNoPickChat(agent: string, workspacePath: string, picked = false) {
   const chat = record(agent, workspacePath)
   const store = new AgentModelCatalogStore()
@@ -84,6 +80,10 @@ async function afterNoPickChat(agent: string, workspacePath: string, picked = fa
   )
   const catalog = createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => {
+      const saved = sessionId === chat.sessionId ? chat : undefined
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) => (sessionId === chat.sessionId ? chat : undefined),
     drivesRecord: () => true,
     resolveAccountHome: async () => HOMES[agent]!,
@@ -133,7 +133,7 @@ describe('a default learned from a chat with no pick', () => {
       const catalog = await afterNoPickChat(agent, clean)
       const answer = await catalog.read({ agent, workspacePath: clean })
       expect(named(answer)).toBe('github-copilot/claude-fable-5')
-      // Its own project config may still pick the model, so it is not every workspace's.
+      // Project config can override this default; do not promote it to every workspace.
       expect(answer).not.toHaveProperty('defaultHoldsInEveryWorkspace')
       expect(named(await catalog.read({ agent, workspacePath: workspace('other') }))).toBe(
         'github-copilot/claude-fable-5'

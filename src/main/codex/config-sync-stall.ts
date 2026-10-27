@@ -12,16 +12,7 @@ import type {
   CodexConfigSyncStatus
 } from '../../shared/codex-config-sync-types'
 
-/**
- * Reports whether the managed Codex runtime config is still tracking the user's
- * real `~/.codex/config.toml`, and why it is not when it has fallen behind.
- *
- * The mirror preserves the managed runtime config when the source is missing or
- * blank, which is silent by design — but the stall can persist for every launch
- * (a downed WSL distro, an unhydrated cloud-synced home), leaving "Orca ignores
- * my config edits" with nothing to diagnose. Derived on demand from the same
- * predicates the mirror uses, so the two can never disagree.
- */
+/** Diagnose settings withheld by a stalled mirror from the current file observations. */
 export function getCodexConfigSyncStatus(
   homes: CodexSettingsPromotionHomes = {
     runtimeHomePath: getOrcaManagedCodexHomePath(),
@@ -30,13 +21,9 @@ export function getCodexConfigSyncStatus(
 ): CodexConfigSyncStatus {
   const systemConfigPath = join(homes.systemHomePath, 'config.toml')
   const runtimeConfigPath = join(homes.runtimeHomePath, 'config.toml')
-  // Why: a stall only withholds settings once a managed runtime config exists;
-  // without one the mirror seeds it and there is nothing yet to fall behind.
-  // But `existsSync` never proved the config readable, so this function could
-  // report `synced` while the mirror refused its content read — telling the
-  // user their edits had been applied when nothing had run.
+  // Read content so an unreadable runtime cannot be reported as synced.
   const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
-  // Why: a config holding only Orca's daemon override withholds no user settings.
+  // An absent or daemon-only runtime withholds no user settings.
   if (
     runtimeConfigObservation.kind === 'absent' ||
     (runtimeConfigObservation.kind === 'present' &&
@@ -45,8 +32,6 @@ export function getCodexConfigSyncStatus(
     return { state: 'synced', reason: null, systemConfigPath }
   }
   if (runtimeConfigObservation.kind === 'indeterminate') {
-    // Why: the managed home is what could not be read, so say that rather than
-    // borrowing a source-side reason and blaming the wrong path.
     return {
       state: 'stalled',
       reason: 'managed-home-unavailable',
@@ -68,8 +53,6 @@ export function getCodexConfigSyncStatus(
     return { state: 'stalled', reason: 'missing-source', systemConfigPath }
   }
   if (systemConfigObservation.kind === 'indeterminate') {
-    // Why: the mirror aborts on an unreadable source too, so report the stall
-    // rather than claiming a sync that cannot happen.
     return { state: 'stalled', reason: 'unreadable-source', systemConfigPath }
   }
   const rawSystemConfig = systemConfigObservation.value
@@ -79,19 +62,10 @@ export function getCodexConfigSyncStatus(
   return { state: 'synced', reason: null, systemConfigPath }
 }
 
-// Why: the mirror runs on every launch and on the quota poll, so logging each
-// skip would bury the log. Latch per home and log the transition instead, so an
-// ongoing stall stays one line and a recovery is visible.
+// Latch per home to avoid repeating warnings on every launch and quota poll.
 const stalledHomes = new Map<string, CodexConfigSyncStallReason>()
 
-/**
- * Logs a config-sync stall once per episode instead of once per sync pass, and
- * logs again when the stall clears or its reason changes.
- *
- * Pass `mirrorError` from the mirror's catch path — an unreadable source throws
- * out of the mirror, and without it that stall would log the raw failure on
- * every launch and quota poll while never latching.
- */
+/** Pass mirrorError from catch paths so unreadable-source failures also latch. */
 export function reportCodexConfigSyncOutcome(
   runtimeHomePath: string,
   status: CodexConfigSyncStatus,
@@ -101,15 +75,13 @@ export function reportCodexConfigSyncOutcome(
   if (status.state === 'synced') {
     if (previousReason) {
       stalledHomes.delete(runtimeHomePath)
-      // Why: a removed runtime config also reads as synced, so this cannot
-      // claim the source became readable — only that the stall no longer holds.
+      // A removed runtime also clears the stall without proving the source readable.
       console.warn(
         `[codex-config] Config sync stall cleared for ${runtimeHomePath} (was ${previousReason}).`
       )
     }
     if (mirrorError) {
-      // Why: the mirror still failed for some reason the stall check cannot
-      // name, so surface it rather than swallowing it behind a clean status.
+      // Surface failures outside the conditions this status check can identify.
       console.warn('[codex-config] Failed to mirror system Codex config:', mirrorError)
     }
     return
@@ -130,7 +102,6 @@ export function reportCodexConfigSyncOutcome(
   )
 }
 
-/** Clears the per-home episode latch; the latch is module state, so suites that assert on transitions need a clean slate between cases. */
 export function resetCodexConfigSyncStallLatchForTests(): void {
   stalledHomes.clear()
 }

@@ -12,7 +12,6 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
       options: getOptionalJsonFlag(flags, 'options'),
-      // Why: gates are Run-scoped, so the coordinator handle is the authorized caller identity.
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(
@@ -36,7 +35,7 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration gate-list': async ({ flags, client, cwd, json }) => {
     const run = getOptionalStringFlag(flags, 'run')
-    // Why: named runs remain inspectable without a pane; only implicit runs resolve identity.
+    // Named runs can be inspected without resolving a pane identity.
     const from = run
       ? runScopedSessionCaller(flags)
       : await resolveCoordinatorTerminalHandle(flags, cwd, client)

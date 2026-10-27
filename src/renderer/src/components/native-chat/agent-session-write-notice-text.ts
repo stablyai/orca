@@ -1,5 +1,4 @@
-// Desktop words for a chat write that did not happen: each sentence translated whole, with the
-// shared English as its fallback so desktop and mobile never say it differently.
+// Translate whole shared sentences with their English fallbacks so desktop and mobile wording agree.
 
 import { translate } from '@/i18n/i18n'
 import {
@@ -38,7 +37,13 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.notDoneOption', COPY.notDoneOption),
   notDoneCommand: () =>
     translate('components.native-chat.writeNotice.notDoneCommand', COPY.notDoneCommand),
-  notDoneGoal: () => translate('components.native-chat.writeNotice.notDoneGoal', COPY.notDoneGoal),
+  notDoneGoalChangeIncomplete: () =>
+    translate(
+      'components.native-chat.writeNotice.notDoneGoalChangeIncomplete',
+      COPY.notDoneGoalChangeIncomplete
+    ),
+  notDoneQueuedEdit: () =>
+    translate('components.native-chat.writeNotice.notDoneQueuedEdit', COPY.notDoneQueuedEdit),
   restartFailed: () =>
     translate('components.native-chat.writeNotice.restartFailed', COPY.restartFailed),
   capacity: () => translate('components.native-chat.writeNotice.capacity', COPY.capacity),
@@ -46,6 +51,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.outcomeUnknown', COPY.outcomeUnknown),
   sendOutcomeLost: () =>
     translate('components.native-chat.writeNotice.sendOutcomeLost', COPY.sendOutcomeLost),
+  continuationSuperseded: () =>
+    translate(
+      'components.native-chat.writeNotice.continuationSuperseded',
+      COPY.continuationSuperseded
+    ),
   questionChanged: () =>
     translate('components.native-chat.writeNotice.questionChanged', COPY.questionChanged),
   cancelNotSaved: () =>
@@ -136,6 +146,10 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   queueTooLarge: () =>
     translate('components.native-chat.writeNotice.queueTooLarge', COPY.queueTooLarge),
   shrinkQueue: () => translate('components.native-chat.writeNotice.shrinkQueue', COPY.shrinkQueue),
+  messageTooLarge: () =>
+    translate('components.native-chat.writeNotice.messageTooLarge', COPY.messageTooLarge),
+  shortenMessage: () =>
+    translate('components.native-chat.writeNotice.shortenMessage', COPY.shortenMessage),
   optionRejected: () =>
     translate('components.native-chat.writeNotice.optionRejected', COPY.optionRejected),
   goalsUnsupported: () =>

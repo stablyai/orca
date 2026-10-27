@@ -3,6 +3,8 @@ import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
+import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
+import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 
 function createProvider(sessionIds: string[]): IPtyProvider {
   return {
@@ -58,17 +60,19 @@ describe('stopMissingWorktreeTerminals', () => {
     )
   })
 
-  it('never sweeps an SSH repo through the local provider', async () => {
+  it.each([
+    ['legacy connectionId', { connectionId: 'ssh-1' }],
+    ['unified executionHostId', { executionHostId: 'ssh:ssh-1' as const }]
+  ])('never sweeps an SSH repo (%s) through the local provider', async (_, host) => {
     const deletedId = 'repo-1::/workspace/deleted'
     const localProvider = createProvider([`${deletedId}@@local-session`])
     const runtime = createRuntime()
 
-    await stopMissingWorktreeTerminals({ ...localRepo, connectionId: 'ssh-1' }, [deletedId], [], {
+    await stopMissingWorktreeTerminals({ ...localRepo, ...host }, [deletedId], [], {
       runtime,
       getLocalProvider: () => localProvider
     })
 
-    // The runtime graph holds both hosts' terminals under one id, so the sweep must fence to this one.
     expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(deletedId, {
       resolvedWorktreeId: deletedId,
       resolvedConnectionId: 'ssh-1'
@@ -92,16 +96,13 @@ describe('stopMissingWorktreeTerminals', () => {
     )
 
     expect(result).toEqual({ stoppedWorktreeIds: [deletedId] })
-    // The graph fallback still names the owning connection: this repo's inventory must not
-    // stop a same-id workspace's terminals on another host.
     expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(deletedId, {
       resolvedWorktreeId: deletedId,
       resolvedConnectionId: 'ssh-1'
     })
   })
 
-  // Why: an agent cleaning up workspaces deletes many at once. Enumerating the
-  // host once per missing worktree is O(N) round-trips carrying O(N^2) rows.
+  // Per-workspace scans cost O(N) round trips carrying O(N²) rows; share one host inventory.
   it('enumerates the host once for the whole sweep', async () => {
     const ids = Array.from({ length: 25 }, (_, index) => `repo-1::/workspace/wt-${index}`)
     const provider = createProvider(ids.map((id) => `${id}@@session`))
@@ -116,8 +117,37 @@ describe('stopMissingWorktreeTerminals', () => {
     expect(provider.shutdown).toHaveBeenCalledTimes(ids.length)
   })
 
-  // Why: real providers put listProcesses/shutdown on the prototype and use `this`;
-  // batching them behind a wrapper must not break that binding.
+  it.each([false, true])(
+    'stops multiple workspaces through scoped daemon listings (unrelated duplicate: %s)',
+    async (duplicate) => {
+      const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b']
+      const targetSessions = ids.map((id) => `${id}@@session`)
+      const currentSessions = [...targetSessions, ...(duplicate ? ['unrelated'] : [])]
+      const current = createAdapter('current', currentSessions)
+      const legacy = createAdapter('legacy', duplicate ? ['unrelated'] : [])
+      const provider = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(
+        stopMissingWorktreeTerminals(localRepo, ids, [], {
+          runtime: createRuntime(),
+          getLocalProvider: () => provider
+        })
+      ).resolves.toEqual({ stoppedWorktreeIds: ids })
+
+      expect(currentSessions).toEqual(duplicate ? ['unrelated'] : [])
+      expect(
+        vi
+          .mocked(current.shutdown)
+          .mock.calls.map(([id]) => id)
+          .sort()
+      ).toEqual(targetSessions)
+      expect(legacy.shutdown).not.toHaveBeenCalled()
+      if (!duplicate) {
+        expect(current.listProcesses).toHaveBeenCalledOnce()
+      }
+    }
+  )
+
   it('keeps provider method binding intact while batching', async () => {
     class PrototypeProvider {
       listCalls = 0
@@ -148,9 +178,7 @@ describe('stopMissingWorktreeTerminals', () => {
     expect(provider.shutdownCalls).toHaveLength(ids.length)
   })
 
-  // Why: the batching must not leak past the calls it was built for. If the proxy
-  // were the receiver, a provider whose own method called `this.listProcesses()`
-  // would silently read this sweep's cached snapshot instead of the live host.
+  // Provider-internal this.listProcesses must bypass the sweep cache and read the live host.
   it('does not serve the shared snapshot to provider-internal listProcesses', async () => {
     class SelfListingProvider {
       listCalls = 0
@@ -160,7 +188,6 @@ describe('stopMissingWorktreeTerminals', () => {
         return this.sessions
       }
       async shutdown(): Promise<void> {
-        // A provider that re-reads live state as part of stopping.
         await this.listProcesses()
       }
     }
@@ -175,12 +202,9 @@ describe('stopMissingWorktreeTerminals', () => {
       getLocalProvider: () => provider as unknown as IPtyProvider
     })
 
-    // One shared sweep scan, plus each shutdown's own live re-read.
     expect(provider.listCalls).toBe(1 + ids.length)
   })
 
-  // Why: caching a rejected scan would let one transient failure suppress
-  // teardown for every remaining worktree in the sweep.
   it('does not reuse a failed process scan', async () => {
     const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b']
     const listProcesses = vi

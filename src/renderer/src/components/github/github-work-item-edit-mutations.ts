@@ -6,7 +6,7 @@ import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { isTwinRepo, runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
 import type { GitHubWorkItemProjectOrigin } from '@/components/github/github-work-item-identity'
@@ -16,19 +16,22 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
-// Why: for a Project row whose repo differs from the active workspace, mutations must target the row's actual repo via slug-addressed IPCs, else edits silently apply to the workspace's repo.
-// Why: these edit IPCs return `{ ok, error }`; callers throw on `!ok` so useImmediateMutation (which expects throws on failure) works unchanged.
+// Route Project edits to the row’s repository; callers throw on failed IPC results for optimistic rollback.
 export function getGitHubMutationTarget(
   repoId: string | null | undefined,
   projectOrigin: GitHubWorkItemProjectOrigin | undefined
 ): RuntimeClientTarget {
   // Why: even slug-addressed project-origin mutations must run on the backing repo's owner host when its id is known.
-  const owner = runtimeTargetForRepoOwner(useAppStore.getState(), repoId)
+  const state = useAppStore.getState()
+  const owner = runtimeTargetForRepoOwner(state, repoId)
   if (owner) {
     return owner
   }
-  // Why: an untracked repo's Project row goes to the host that loaded the row; any other
-  // slug-addressed edit uses this computer's credentials, never the focused server.
+  // Why: a twin is tracked on two hosts; only the row's own source may stand in for its owner.
+  if (isTwinRepo(state, repoId) && !projectOrigin) {
+    throw new Error(`No single host owns project ${repoId}.`)
+  }
+  // Untracked Project rows use their source host; other slug edits use local credentials, never the focused server.
   return projectOrigin ? projectViewCacheKeyTarget(projectOrigin.cacheKey) : { kind: 'local' }
 }
 

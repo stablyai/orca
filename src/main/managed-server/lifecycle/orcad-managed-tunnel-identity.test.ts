@@ -1,7 +1,7 @@
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { ServeReadiness } from '../../server/serve-readiness'
 
 const verifyRuntimePairingIdentity = vi.hoisted(() =>
@@ -46,6 +46,15 @@ describe('classifyOrcadTunnelIdentityFailure', () => {
       { closeCode: 4001 }
     )
     expect(classifyOrcadTunnelIdentityFailure(rejected).verdict).toBe('foreign')
+  })
+
+  it('reads a sealed token refusal as our own server that dropped this pairing', () => {
+    const refused = new RemoteRuntimeClientError(
+      'unauthorized',
+      'Remote Orca runtime rejected the pairing token.',
+      { pairingStage: 'access-grant' }
+    )
+    expect(classifyOrcadTunnelIdentityFailure(refused).verdict).toBe('unpaired')
   })
 
   it('reads a different runtime id as another server', () => {

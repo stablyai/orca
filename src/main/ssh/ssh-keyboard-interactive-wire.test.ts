@@ -3,13 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Server, utils, type Connection } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SshConnection } from './ssh-connection'
-import { createCallbacks, createResolvedConfig, createTarget } from './ssh-connection-test-fixtures'
+import { SshConnection } from './connection/ssh-connection'
+import {
+  createCallbacks,
+  createResolvedConfig,
+  createTarget
+} from './connection/ssh-connection-test-fixtures'
 import { initSshHostKeyStoreFile } from './ssh-host-key-store'
-import { resolveWithSshG } from './ssh-g-config-resolution'
-import type * as SshGConfigResolution from './ssh-g-config-resolution'
+import { resolveWithSshG } from './config/ssh-g-config-resolution'
+import type * as SshGConfigResolution from './config/ssh-g-config-resolution'
 
-vi.mock('./ssh-g-config-resolution', async (importOriginal) => ({
+vi.mock('./config/ssh-g-config-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof SshGConfigResolution>()),
   resolveWithSshG: vi.fn()
 }))

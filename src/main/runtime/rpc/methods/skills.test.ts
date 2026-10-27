@@ -259,7 +259,7 @@ describe('skills.share RPC', () => {
 
   beforeEach(() => {
     vi.mocked(discoverSkillsOnTarget).mockClear()
-    vi.mocked(resolveSkillDiscoveryTarget).mockImplementation((target) => ({
+    vi.mocked(resolveSkillDiscoveryTarget).mockImplementation(async (target) => ({
       kind: 'native-host',
       cwd: target?.cwd ?? undefined
     }))
@@ -307,7 +307,7 @@ describe('skills.share RPC', () => {
   })
 
   it('rejects WSL before attempting to read Linux paths with native fs', async () => {
-    vi.mocked(resolveSkillDiscoveryTarget).mockReturnValueOnce({
+    vi.mocked(resolveSkillDiscoveryTarget).mockResolvedValueOnce({
       kind: 'wsl',
       distro: 'Ubuntu',
       homeDir: '/home/alice',

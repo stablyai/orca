@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
-import { isENOENT } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import {
   getLocalWorktreePathAccess,
   toLocalWorktreeRuntimePath
@@ -19,6 +19,7 @@ import {
 } from './runtime-folder-workspace'
 import type { RuntimeStore } from './runtime-store-contract'
 import { isWslMoveRepoBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 /** Callers hold a local removal route; an `ssh:` or `runtime:` host is refused before this. */
 export async function isLocalRuntimeWorktreePathMissing(
@@ -62,7 +63,7 @@ export function listRuntimeFolderWorkspaces(
     const meta: Partial<WorktreeMeta> = existing?.instanceId
       ? existing
       : canWrite && (existing || repoOwnerCount === 1)
-        ? store.setWorktreeMeta(worktreeId, {
+        ? store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
             instanceId: getRuntimeFolderWorkspaceInstanceIdentity(repo, worktreeId),
             ...(existing ? {} : { displayName: repo.displayName, lastActivityAt: Date.now() })
           })

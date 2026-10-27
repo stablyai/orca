@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 
-// The resume tree's shape: levels, depth, where child workspaces go, and when machines show.
-
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import * as worktreeIds from '../../../shared/worktree/id'
 import { useAppStore } from '../store'
 import { getDefaultSettings } from '../../../shared/constants'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
@@ -41,6 +40,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount())
+  vi.restoreAllMocks()
   container.remove()
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
@@ -69,7 +69,6 @@ it('keeps every checkbox in the left column and indents what follows it 18px a l
     const row = item.querySelector('label')!
     const cell = (n: number) => row.querySelector<HTMLElement>(`:scope > :nth-child(${n})`)
     const disclosure = cell(3)
-    // The checkbox cell comes first, before any indent.
     expect(cell(1)?.querySelector('[role="checkbox"]')).not.toBeNull()
     const level = Number(item.getAttribute('aria-level'))
     expect(cell(2)?.style.width).toBe(`${(level - 1) * 18}px`)
@@ -90,7 +89,6 @@ it('reads levels apart by weight, with no row dividers or bands', () => {
 
   expect(itemOf(nodeBox('orca')).querySelector('.font-semibold')?.textContent).toBe('orca')
   expect(itemOf(nodeBox('parent')).querySelector('.font-medium')?.textContent).toBe('parent')
-  // Every row element but the checkboxes, which keep their own outline.
   const rows = container.querySelectorAll(
     '[role="treeitem"], [role="treeitem"] *:not([role="checkbox"])'
   )
@@ -129,7 +127,6 @@ it('heads a single SSH host with its machine node, named and marked SSH', () => 
   expect(itemOf(nodeBox('parent')).textContent).not.toContain(machine)
 })
 
-// A paired Orca server's runtime host is not this machine, but it is not SSH either.
 it('heads a runtime host with its machine node and no SSH chip', () => {
   const runtime: ExecutionHostId = 'runtime:env-1'
   render({ candidates: seedTree({ parent: runtime, child: runtime }) })
@@ -139,7 +136,6 @@ it('heads a runtime host with its machine node and no SSH chip', () => {
   expect(itemOf(nodeBox(machine)).textContent).not.toContain('SSH')
 })
 
-// A target saved through Add SSH target gets a generated id; the sidebar names it by its label.
 it('names an SSH machine by its saved name, not its target id', () => {
   const targetId = 'ssh-1728291234567-abc12d'
   const remote: ExecutionHostId = `ssh:${targetId}`
@@ -207,6 +203,97 @@ it('names a workspace the store does not know by its id, with the kind the host 
   expect(chatBox('lost').getAttribute('aria-label')).toContain('in folder:missing-folder')
 })
 
+it('names a git worktree the store does not know by its folder, not its repo-qualified id', () => {
+  render({ candidates: [candidate('lost', worktree('blobfish-2'))] })
+
+  expect(nodeBox('blobfish-2')).not.toBeNull()
+  expect(chatBox('lost').getAttribute('aria-label')).toContain('in blobfish-2')
+  expect(container.textContent).not.toContain('repo-1::')
+})
+
+it('disambiguates only colliding unknown folders with linear display work on render', () => {
+  const known = worktree('main', { displayName: 'Configured', hostId: 'local' })
+  useAppStore.setState({ worktreesByRepo: { 'repo-1': [known] } })
+  const controls = [
+    candidate('known', known),
+    candidate('unique', worktree('blobfish-2')),
+    candidate('opaque', worktree('opaque', { id: 'folder:missing-folder' }))
+  ]
+  const basename = vi.spyOn(worktreeIds, 'getWorktreePathBasenameFromId')
+  let nameReads = 0
+  const mapSet = Map.prototype.set
+  vi.spyOn(Map.prototype, 'set').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key,
+    value
+  ) {
+    if (typeof value?.parentPath === 'string' && value.name === 'main') {
+      const name = value.name
+      Object.defineProperty(value, 'name', {
+        get: () => {
+          nameReads++
+          return name
+        }
+      })
+    }
+    return mapSet.call(this, key, value)
+  })
+  const operations: number[] = []
+  let unknown: ResumeCandidate[] = []
+  for (const size of [10, 100]) {
+    unknown = Array.from({ length: size }, (_, index) =>
+      candidate(
+        `lost-${index}`,
+        worktree('main', {
+          id: `repo-1::/Users/test/projects/organization/orca/workspaces/client-${index}/main`
+        })
+      )
+    )
+    basename.mockClear()
+    nameReads = 0
+    render({ candidates: [...controls, ...unknown] })
+    const parses = basename.mock.calls.filter(([id]) => id.startsWith('repo-1::/Users/')).length
+    const work = parses + nameReads
+    expect(Math.min(parses, nameReads)).toBeGreaterThanOrEqual(size)
+    expect(work).toBeLessThanOrEqual(6 * size)
+    operations.push(work)
+    for (const index of [0, 1]) {
+      const parent = `/Users/test/projects/organization/orca/workspaces/client-${index}`
+      const detail = container.querySelector(`[title="${parent}"]`)
+      expect(detail?.textContent).toBe(parent)
+      expect(detail?.lastElementChild?.textContent).toBe(`/workspaces/client-${index}`)
+      const label = `main (${parent})`
+      const row = itemOf(nodeBox(label))
+      expect(row.querySelector('.font-medium')?.textContent).toBe('main')
+      expect(row.querySelector('button[aria-expanded]')?.getAttribute('aria-label')).toBe(
+        `Collapse ${label}`
+      )
+      expect(chatBox(`lost-${index}`).getAttribute('aria-label')).toContain(`in ${label}`)
+    }
+    expect(itemOf(nodeBox('Configured')).textContent).toContain('main-branch')
+    expect(itemOf(nodeBox('blobfish-2')).querySelector('[title]')).toBeNull()
+    expect(nodeBox('folder:missing-folder')).not.toBeNull()
+  }
+  expect(operations[1]).toBeLessThanOrEqual(12 * operations[0]!)
+  const collisionBoxes = container.querySelectorAll<HTMLElement>(
+    '[role="checkbox"][aria-label^="Select all chats in main ("]'
+  )
+  act(() => collisionBoxes[1]!.click())
+  expect(onToggleSpy).toHaveBeenCalledExactlyOnceWith('lost-1', false)
+  render({ candidates: unknown.slice(0, 2) })
+  const hydrated = { ...known, id: unknown[0]!.workspaceId, displayName: 'Resolved' }
+  act(() => useAppStore.setState({ worktreesByRepo: { 'repo-1': [known, hydrated] } }))
+  expect(nodeBox('Resolved')).not.toBeNull()
+  expect(itemOf(nodeBox('main')).querySelector('[title]')).toBeNull()
+  expect(container.querySelector('[aria-label^="Select all chats in main ("]')).toBeNull()
+  expect(
+    itemOf(nodeBox('main')).querySelector('button[aria-expanded]')?.getAttribute('aria-label')
+  ).toBe('Collapse main')
+  expect(chatBox('lost-1').getAttribute('aria-label')).toBe(
+    'Resume Codex chat "Prompt lost-1" in main'
+  )
+})
+
 // Its project is unknown too: a nameless "Select all chats in " checkbox would help no one.
 it('gives workspaces the store cannot place no project node', () => {
   const unknown: ResumeCandidate = {
@@ -220,7 +307,7 @@ it('gives workspaces the store cannot place no project node', () => {
   expect(container.querySelector('[aria-label="Select all chats in "]')).toBeNull()
 })
 
-// Why: the sidebar nests a child only under a parent on its own host; no host id matches only none.
+// Nest only same-host workspaces; unknown host matches only unknown host, as in the sidebar.
 it.each([
   ['both local', 'local', 'local', true],
   ['neither with a host id', undefined, undefined, true],

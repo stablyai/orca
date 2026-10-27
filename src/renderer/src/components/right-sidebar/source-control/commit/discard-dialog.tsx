@@ -11,7 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiscardAllArea } from './discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import {
   getDiscardAreaConfirmationCopy,
   getDiscardEntryConfirmationCopy
@@ -29,7 +29,7 @@ export function focusDiscardDialogConfirmButton(
   if (!confirmButton) {
     return
   }
-  // Why: Radix otherwise focuses Cancel first, making Enter dismiss this destructive confirm.
+  // Override Radix's initial Cancel focus so Enter confirms this destructive action.
   event.preventDefault()
   confirmButton.focus()
 }

@@ -127,6 +127,21 @@ describe('paired session-tab agent completion notifications', () => {
     expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
   })
 
+  // STA-12043: a cold-restored host republishes the old turn as unverifiable under a new date.
+  it('announces no completion for an unverifiable done', () => {
+    applySnapshot(makeAgentSnapshot(1, NOW, undefined, 'done', NOW), true)
+    const announced = mocks.observeAgentHookCompletionForNotification.mock.calls.length
+    const restored = makeAgentSnapshot(2, NOW + 60_000, undefined, 'done', NOW + 60_000)
+    const [tab] = restored.tabs
+    if (tab?.type === 'terminal' && tab.agentStatus) {
+      tab.agentStatus.restoredUnconfirmed = true
+    }
+
+    applySnapshot(restored, true)
+
+    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(announced)
+  })
+
   it('announces one live stamped completion after a late-pair working seed', () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
@@ -352,6 +367,22 @@ describe('paired session-tab agent completion notifications', () => {
           agentStatus: expect.objectContaining({ state: 'done', stateStartedAt: NOW + 15_000 })
         })
       )
+    })
+
+    it('announces a background turn stamped while the host was unreachable, once', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW), true)
+      applySnapshot(makeAgentSnapshot(2, NOW + 45_000, NOW + 15_000), false)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      applySnapshot(makeAgentSnapshot(3, NOW + 46_000, NOW + 15_000), false)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    })
+
+    it('seeds a stamped working row found on first load without announcing it', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW, NOW + 15_000), false)
+      vi.advanceTimersByTime(1_500)
+
+      expect(dispatchCompletion).not.toHaveBeenCalled()
     })
 
     it('seeds a done found on first load without announcing it', () => {

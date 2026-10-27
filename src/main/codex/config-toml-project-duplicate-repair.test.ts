@@ -8,7 +8,7 @@ import {
   removeTrustConfigFixture
 } from './config-toml-trust-test-fixtures'
 
-// Why: each case uses its own path because refusals are logged once per process.
+// Use distinct project paths because repair refusals are logged once per reason.
 let tmpDir: string
 let configPath: string
 let warn: ReturnType<typeof vi.spyOn>
@@ -28,7 +28,6 @@ afterEach(() => {
 describe('repairing configs broken by #22592', () => {
   it('removes the table Orca appended beside Codex quoted spelling and keeps a .bak', () => {
     const projectPath = '/Users/me/Projects/agentic-WPS'
-    // The reported file: Codex's table, then the duplicate an older Orca appended.
     const broken = [
       'model = "gpt-5.5"',
       '',

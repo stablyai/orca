@@ -96,7 +96,8 @@ function hostCounts(rows: readonly Row[]) {
     rows,
     hostOptions: HOSTS,
     workspaceHostScope: 'all',
-    defaultHostId: 'local'
+    defaultHostId: 'local',
+    localHostLabel: 'Local Mac'
   })
     .filter((row) => row.type === 'host-header')
     .map(({ hostId, count }) => ({ hostId, count }))

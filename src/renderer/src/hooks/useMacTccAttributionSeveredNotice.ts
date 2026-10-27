@@ -26,7 +26,7 @@ export function useMacTccAttributionSeveredNotice(): void {
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const uiLanguage = useAppStore((s) => s.settings?.uiLanguage ?? null)
-  const pluginLanguagePacks = usePluginLanguagePackStore((s) => s.packs)
+  const pluginLanguagePacks = usePluginLanguagePackStore((s) => s.entries)
   const pluginLanguagePacksLoaded = usePluginLanguagePackStore((s) => s.loaded)
   const { i18n } = useTranslation()
   const selectedPluginLanguage = pluginLanguagePacks.find((pack) => pack.id === uiLanguage)
@@ -107,9 +107,7 @@ export function useMacTccAttributionSeveredNotice(): void {
     const applyFolderAccessNotice = (mismatch: PtyManagementFolderAccessMismatch | null): void => {
       const { noticePhaseByScope, applyVerdict, showNotice, openFix } =
         useMacFolderAccessFixStore.getState()
-      // Why unconditionally: this is the evidence the dialog renders, and an open one completes
-      // its first step only when a later poll says the grant landed. A null verdict retires the
-      // notice from in there, so the same daemon can raise it again after a reconnect blip.
+      // Publish every verdict for dialog progress; null retires the notice so reconnect can legitimately re-raise it.
       applyVerdict(mismatch)
       if (!mismatch) {
         return
@@ -120,8 +118,7 @@ export function useMacTccAttributionSeveredNotice(): void {
         return
       }
       showNotice(daemonScope)
-      // Counted once per scope, not once per raise: a retired scope re-shows after a reconnect
-      // blip, and that second toast is the same notice, not a second affected user.
+      // Count once per evidence scope; re-raising after reconnect is not another affected user.
       if (phase === undefined) {
         track('daemon_folder_access_notice', { action: 'shown', cwd_class: cwdClass })
       }
@@ -141,16 +138,14 @@ export function useMacTccAttributionSeveredNotice(): void {
           action: {
             label: translate('auto.hooks.useMacTccAttributionSeveredNotice.folderAccessFix', 'Fix'),
             onClick: (event) => {
-              // Sonner deletes the toast after an action click, silently: the evidence is still
-              // true until a restart, so the toast has to survive the dialog being cancelled.
+              // Prevent Sonner’s silent action deletion so canceling the dialog still leaves the unresolved remedy visible.
               event.preventDefault()
               track('daemon_folder_access_notice', { action: 'fix_opened', cwd_class: cwdClass })
               // No captured verdict: the dialog opens on whatever the latest poll reported.
               openFix()
             }
           },
-          // Why onDismiss, no cancel button: every other toast dismisses through the X alone.
-          // Sonner fires it for a programmatic takedown too, which has already cleared the scope.
+          // Use the usual X dismissal; programmatic takedown clears scope before onDismiss fires.
           onDismiss: () => {
             const store = useMacFolderAccessFixStore.getState()
             if (store.noticePhaseByScope.get(daemonScope) !== 'visible') {

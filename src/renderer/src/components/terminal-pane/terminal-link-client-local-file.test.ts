@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -6,7 +7,10 @@ import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '@/runtime/runtime-compatibility-test-fixture'
-import { TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY } from '../../../../shared/runtime-file-contracts'
+import {
+  TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY,
+  TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY
+} from '../../../../shared/runtime-file-contracts'
 import {
   flushDoubleRaf,
   installTerminalLinkTestEnvironment
@@ -43,6 +47,7 @@ vi.mock('./terminal-remote-file-download-open', () => ({
 }))
 
 installTerminalLinkTestEnvironment(doubles)
+Object.assign(storeState, { runtimeEnvironments: [{ id: 'env-1', name: 'build-box' }] })
 
 const serverWorkspace = {
   worktreeId: 'wt-feat',
@@ -78,6 +83,10 @@ describe('a link to this computer printed in a paired-server terminal', () => {
         access: { kind: 'user-file' }
       })
     )
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-feat', {
+      providesInitialSurface: true,
+      executionHostId: 'runtime:env-1'
+    })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/Users/me/notes.md',
@@ -116,7 +125,7 @@ describe('a link to this computer printed in a paired-server terminal', () => {
     )
   })
 
-  it('keeps the host refusal when this computer does not have the file either', async () => {
+  it('reports a file neither the host nor this computer has as not found', async () => {
     hostDisowns('/etc/orca-missing')
     statMock.mockRejectedValueOnce(new Error('ENOENT: no such file'))
     const onOpenFailure = vi.fn()
@@ -129,8 +138,35 @@ describe('a link to this computer printed in a paired-server terminal', () => {
 
     expect(openFileMock).not.toHaveBeenCalled()
     expect(onOpenFailure).toHaveBeenCalledWith({
+      verdict: 'missing',
+      error: new Error('File not found on its host: /etc/orca-missing')
+    })
+  })
+
+  it('asks for a host update when an older host refuses a file outside its workspaces', async () => {
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) => {
+        const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (!status?.ok) {
+          return runtimeEnvironmentCallMock(args)
+        }
+        const capabilities = status.result.capabilities?.filter(
+          (capability) => capability !== TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY
+        )
+        return { ...status, result: { ...status.result, capabilities } }
+      }
+    )
+    hostDisowns('/tmp/handoff.md')
+    statMock.mockRejectedValueOnce(new Error('ENOENT: no such file'))
+    const onOpenFailure = vi.fn()
+
+    openDetectedFilePath('/tmp/handoff.md', null, null, { ...serverWorkspace, onOpenFailure })
+    await flushDoubleRaf()
+
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(onOpenFailure).toHaveBeenCalledWith({
       verdict: 'unverifiable',
-      error: new Error('/etc/orca-missing is outside every workspace on its host')
+      error: new Error('Update Orca on build-box to open files outside its workspaces')
     })
   })
 
@@ -156,8 +192,11 @@ describe('a link to this computer printed in a paired-server terminal', () => {
         if (!status?.ok) {
           return runtimeEnvironmentCallMock(args)
         }
+        // Why: hosts without cross-workspace search predate absolute-file grants too.
         const capabilities = status.result.capabilities?.filter(
-          (capability) => capability !== TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY
+          (capability) =>
+            capability !== TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY &&
+            capability !== TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY
         )
         return { ...status, result: { ...status.result, capabilities } }
       }
@@ -186,7 +225,7 @@ describe('a link to this computer printed in a paired-server terminal', () => {
 
     expect(statMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'unverifiable' }))
+    expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'missing' }))
   })
 
   it('opens a path the host granted read-only from the host, never from this computer', async () => {
@@ -239,7 +278,6 @@ describe('a link to this computer printed in a paired-server terminal', () => {
         relativePath: '/tmp/artifact.txt',
         worktreeId: 'wt-feat',
         runtimeEnvironmentId: 'env-1',
-        readOnly: true,
         terminalArtifactGrantId: 'g-1'
       }),
       { forceContentReload: true }

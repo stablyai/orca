@@ -4,6 +4,7 @@ import {
   parseAntigravityNativeCredential,
   type AntigravityNativeCredential
 } from './native-credential-codec'
+import { fetchGoogleIdentity } from './google-userinfo-identity'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -19,6 +20,14 @@ function matches(account: StoredAntigravityAccount, current: AntigravityNativeCr
   if (current.identity && account.subject) {
     return account.subject === current.identity.subject && account.authMethod === current.authMethod
   }
+  // agy's token refresh stores no id_token but keeps the grant's refresh token.
+  if (
+    current.refreshToken &&
+    account.authMethod === current.authMethod &&
+    parseAntigravityNativeCredential(account.credentials).refreshToken === current.refreshToken
+  ) {
+    return true
+  }
   return account.credentials === current.contents
 }
 
@@ -28,7 +37,8 @@ export class AntigravityAccountService {
   constructor(
     private readonly store: AntigravityAccountStore,
     private readonly backend: AntigravityCredentialBackend,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly lookupIdentity = fetchGoogleIdentity
   ) {}
 
   listAccounts(): Promise<AntigravityAccountState> {
@@ -41,27 +51,30 @@ export class AntigravityAccountService {
       if (!current) {
         throw new Error('Sign in with agy on this execution host, then save the current account.')
       }
-      if (!current.identity) {
-        throw new Error(
-          'The current Antigravity credential has no stable Google identity; it cannot be saved for switching.'
-        )
+      if (vault.accounts.some((entry) => matches(entry, current))) {
+        return this.state({ vault, current })
       }
-      let account = vault.accounts.find((entry) => matches(entry, current))
-      if (!account) {
+      const identity = current.identity ?? (await this.lookupIdentity(current.accessToken))
+      if (!current.identity && (await this.backend.read())?.contents !== current.contents) {
+        throw new Error('The native Antigravity account changed. Save the current account again.')
+      }
+      const identified = { ...current, identity }
+      const latest = this.store.read()
+      if (!latest.accounts.some((entry) => matches(entry, identified))) {
         const timestamp = this.now()
-        account = {
+        latest.accounts.push({
           id: randomUUID(),
-          email: current.identity.email,
-          subject: current.identity.subject,
+          email: identity.email,
+          subject: identity.subject,
           authMethod: current.authMethod,
           credentials: current.contents,
           createdAt: timestamp,
           updatedAt: timestamp
-        }
-        vault.accounts.push(account)
-        this.store.write(vault)
+        })
       }
-      return this.state({ vault, current })
+      this.updateSnapshot(latest, identified)
+      this.store.write(latest)
+      return this.state({ vault: latest, current: identified })
     })
   }
 
@@ -167,18 +180,18 @@ export class AntigravityAccountService {
     vault: AntigravityAccountVault
     current: AntigravityNativeCredential | null
   }): AntigravityAccountState {
+    const active = current ? vault.accounts.find((entry) => matches(entry, current)) : undefined
+    const subject = current?.identity?.subject ?? active?.subject ?? null
     return {
       accounts: vault.accounts.map(({ credentials: _credentials, ...account }) => account),
-      activeAccountId: current
-        ? (vault.accounts.find((entry) => matches(entry, current))?.id ?? null)
-        : null,
+      activeAccountId: active?.id ?? null,
       selectedAccountId: vault.selectedAccountId,
       currentAccount: current
         ? {
-            email: current.identity?.email ?? null,
-            subject: current.identity?.subject ?? null,
+            email: current.identity ? current.identity.email : (active?.email ?? null),
+            subject,
             authMethod: current.authMethod,
-            identityKnown: current.identity !== null
+            identityKnown: subject !== null
           }
         : null
     }

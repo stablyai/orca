@@ -28,11 +28,7 @@ function rowCount(tab: Partial<TerminalTab>, paneTitles?: Record<number, string>
   }).length
 }
 
-// Why: #9040 — Claude's thinking title is a braille spinner plus task text with no
-// provider token, so the dot's attribution gate rejected it and the worktree resolved
-// to 'active', which renders the same emerald dot as 'done'. The sidebar row builder
-// already falls back to the tab's launch identity for spinner titles (#9647); the dot
-// must agree.
+// Claude thinking titles lack provider tokens (#9040); use launch identity like sidebar rows (#9647) so working does not look done.
 describe('#9040 worktree dot attributes spinner titles to the launched agent', () => {
   it('spins for a Claude spinner title when the tab was launched as claude', () => {
     const status = getWorktreeStatus(
@@ -66,12 +62,7 @@ describe('#9040 worktree dot attributes spinner titles to the launched agent', (
   })
 })
 
-// Why: launchAgent usually clears on exit (clearTabLaunchAgent via
-// resolveLaunchedAgentExitEvidence), but not on every path — a hookless remote agent has
-// no completion hook and no shell-foreground producer, so its launch identity can outlive
-// it and a later ora-style spinner then reads as working. Documented trade-off, not an
-// oversight — the row builder has behaved this way since #9647. Pinned so it stays a
-// deliberate choice rather than drifting silently.
+// Accepted trade-off: hookless remote agents lack exit evidence, so retained launch identity can attribute a later unrelated spinner. Match the row builder’s deliberate #9647 behavior.
 describe('#9040 spinner attribution trade-off is bounded', () => {
   it('over-reports a non-agent spinner in a tab an agent was launched in', () => {
     const tab = {
@@ -90,9 +81,7 @@ describe('#9040 spinner attribution trade-off is bounded', () => {
   })
 })
 
-// Why: the gate's stated purpose is that the dot never spins with no matching sidebar
-// row. Claude's spinner title must reach the same dot/row agreement a named provider
-// already gets — no better, and no worse.
+// Claude and named-provider titles must produce the same dot/sidebar agreement.
 describe('#9040 spinner attribution matches named-provider dot/row agreement', () => {
   it('produces a sidebar row alongside the dot, like a named provider does', () => {
     const spinnerTab = {

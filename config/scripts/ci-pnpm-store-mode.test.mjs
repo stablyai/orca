@@ -52,8 +52,8 @@ function resolveMode(request, node, manager) {
 
 describe('automatic pnpm store mode', () => {
   it.each([
-    ['auto', '24', 'pnpm@12.8.1', '', true],
-    ['auto', '25', 'pnpm@12.8.1', 'pnpm', false],
+    ['auto', '24', 'pnpm@12.14.0', '', true],
+    ['auto', '25', 'pnpm@12.14.0', 'pnpm', false],
     ['auto', '24', 'pnpm@13.0.0', 'pnpm', false],
     ['true', '25', 'pnpm@13.0.0', '', true]
   ])(
@@ -129,18 +129,18 @@ describe('automatic pnpm store mode', () => {
   })
 
   it.each([
-    ['24', 'pnpm@12.8.1+sha512.fixture', 'true'],
-    ['24.x', 'pnpm@12.8.1', 'false'],
+    ['24', 'pnpm@12.14.0+sha512.fixture', 'true'],
+    ['24.x', 'pnpm@12.14.0', 'false'],
     ['24', 'pnpm@12.8.2', 'false'],
-    ['24', 'pnpm@12.8.10', 'false'],
+    ['24', 'pnpm@12.14.00', 'false'],
     ['24', undefined, 'false'],
-    [undefined, 'pnpm@12.8.1', 'false'],
+    [undefined, 'pnpm@12.14.0', 'false'],
     ['24', 12, 'false']
   ])('checks manifest Node %s and manager %s before choosing lookup', (node, manager, expected) => {
     expect(resolveMode('auto', node, manager)).toBe(`lookup-only=${expected}\n`)
   })
 
   it('checks uppercase auto requests consistently with GitHub expression comparisons', () => {
-    expect(resolveMode('AUTO', '25', 'pnpm@12.8.1')).toBe('lookup-only=false\n')
+    expect(resolveMode('AUTO', '25', 'pnpm@12.14.0')).toBe('lookup-only=false\n')
   })
 })

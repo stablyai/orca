@@ -7,6 +7,8 @@ import type {
 import { findWorkspace } from '../browser-page-records'
 import { restoreRecentlyClosedTabPosition } from '../recently-closed-tabs'
 import { isLocalBrowserPageOwner } from './browser-host-state'
+import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 
 export function createBrowserTabFocusActions(
   set: BrowserSliceSet,
@@ -34,6 +36,10 @@ export function createBrowserTabFocusActions(
       if (!entryToRestore) {
         return null
       }
+      /** The restored record; a layout-owner build's, before main's frame drew it, as proposed. */
+      const restoredRecord = (restored: BrowserWorkspace): BrowserWorkspace | null =>
+        get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ??
+        (hasPendingEntityTab(worktreeId, restored.id) ? restored : null)
 
       const snap = entryToRestore.workspace
       const pages = entryToRestore.pages
@@ -49,10 +55,12 @@ export function createBrowserTabFocusActions(
           ...(snap.docLocation ? { docLocation: snap.docLocation } : {}),
           targetGroupId: entryToRestore.position?.groupId
         })
-        restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
-        return (
-          get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
+        const position = entryToRestore.position
+        // A layout-owner build's tab moves once main's frame drew it.
+        afterPendingEntityTabs(worktreeId, restored.id, () =>
+          restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, position)
         )
+        return restoredRecord(restored)
       }
 
       // Why: append remaining pages in original order so multi-page workspaces preserve their page sequence.
@@ -67,29 +75,34 @@ export function createBrowserTabFocusActions(
         ...(firstPage.docLocation ? { docLocation: firstPage.docLocation } : {})
       })
 
-      for (const p of restPages) {
-        get().createBrowserPage(restored.id, p.url, {
-          activate: false,
-          title: p.title,
-          browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId,
-          ...(p.docLocation ? { docLocation: p.docLocation } : {})
-        })
-      }
-
-      // Why: duplicate URLs are valid, so matching by URL can pick the wrong copy; restore preserves order, so map by index.
-      const activePageId = snap.activePageId
-      if (activePageId) {
-        const restoredPages = get().browserPagesByWorkspace[restored.id] ?? []
-        const activePageIndex = pages.findIndex((orig) => orig.id === activePageId)
-        const targetPage = activePageIndex !== -1 ? restoredPages[activePageIndex] : null
-        if (targetPage && targetPage.id !== restoredPages[0]?.id) {
-          get().setActiveBrowserPage(restored.id, targetPage.id)
+      const position = entryToRestore.position
+      const selectRestoredPage = (): void => {
+        // Why: duplicate URLs are valid, so matching by URL can pick the wrong copy; restore preserves order, so map by index.
+        const activePageId = snap.activePageId
+        if (activePageId) {
+          const restoredPages = get().browserPagesByWorkspace[restored.id] ?? []
+          const activePageIndex = pages.findIndex((orig) => orig.id === activePageId)
+          const targetPage = activePageIndex !== -1 ? restoredPages[activePageIndex] : null
+          if (targetPage && targetPage.id !== restoredPages[0]?.id) {
+            get().setActiveBrowserPage(restored.id, targetPage.id)
+          }
         }
+
+        restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, position)
       }
-
-      restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
-
-      return get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
+      // A layout-owner build adds the pages once main drew the tab, and selects once it added them.
+      afterPendingEntityTabs(worktreeId, restored.id, () => {
+        for (const p of restPages) {
+          get().createBrowserPage(restored.id, p.url, {
+            activate: false,
+            title: p.title,
+            browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId,
+            ...(p.docLocation ? { docLocation: p.docLocation } : {})
+          })
+        }
+        afterPendingEntityTabs(worktreeId, restored.id, selectRestoredPage)
+      })
+      return restoredRecord(restored)
     },
 
     setActiveBrowserTab: (tabId, targetWorktreeId) => {
@@ -98,9 +111,7 @@ export function createBrowserTabFocusActions(
         if (!browserTab) {
           return s
         }
-        // Why the scope guard: an overlay workspace (the floating panel) activates browser tabs
-        // while another workspace owns global selection; moving activeBrowserTabId/activeTabType
-        // would break the agent-auto-ack invariant pinned in agent-auto-ack-targets.ts.
+        // Floating/background activation must not move global selection or break agent-auto-ack targeting (agent-auto-ack-targets.ts).
         const scopeWorktreeId = targetWorktreeId ?? browserTab.worktreeId
         return {
           ...(scopeWorktreeId === s.activeWorktreeId

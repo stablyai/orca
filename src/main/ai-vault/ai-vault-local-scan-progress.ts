@@ -7,7 +7,6 @@ import type { AiVaultServiceScanListener } from './session-scanner-service-reque
 
 type Listener = (update: AiVaultScanProgressUpdate) => void
 
-/** One local scan from coordinator creation through its service reply. */
 export type LocalAiVaultScanProgressHandle = AiVaultServiceScanListener & {
   finish: (work: AiVaultScanWork | null) => void
   fail: () => void
@@ -15,7 +14,7 @@ export type LocalAiVaultScanProgressHandle = AiVaultServiceScanListener & {
 
 const MAX_PROGRESS_ENTRIES = 8
 const latest = new Map<string, AiVaultScanProgress>()
-// Each key's running scan, with the finished entry its failure puts back.
+// Failed replacements restore the last finished progress for their key.
 const currentScans = new Map<
   string,
   { handle: LocalAiVaultScanProgressHandle; fallback: AiVaultScanProgress | null }
@@ -51,7 +50,7 @@ function publish(scanKey: string, next: AiVaultScanProgress | null): void {
   }
 }
 
-/** A replacement takes over its key at once, so a window never sees the key empty mid-refresh. */
+/** Replacement takes ownership immediately so refresh never leaves the key empty. */
 export function startLocalAiVaultScanProgress(
   scanKey: string,
   scanId: string,
@@ -59,9 +58,7 @@ export function startLocalAiVaultScanProgress(
 ): LocalAiVaultScanProgressHandle {
   const previous = latest.get(scanKey)
   const fallback =
-    previous?.stage === 'finished'
-      ? previous
-      : (currentScans.get(scanKey)?.fallback ?? null)
+    previous?.stage === 'finished' ? previous : (currentScans.get(scanKey)?.fallback ?? null)
   let current: AiVaultScanProgress = {
     scanId,
     stage: 'finding',
@@ -95,7 +92,6 @@ export function startLocalAiVaultScanProgress(
   return handle
 }
 
-/** Runs the scanner service request using the coordinator's progress ownership. */
 export async function requestLocalAiVaultScan<T extends { work: AiVaultScanWork | null }>(
   request: (listener: AiVaultServiceScanListener) => Promise<T>,
   options: {

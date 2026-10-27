@@ -3,7 +3,7 @@ import { closeRuntimeBrowserClientPage } from '../runtime-browser-client-page-cr
 import type { RuntimeBrowserClientPage } from '../runtime-browser-page-registry'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 
-// Why no Electron import: a Node host with no browser engine closes these pages too.
+// Engine-free Node hosts also close client-hosted pages.
 export type BrowserClientPageCloseHost = Pick<
   RuntimeBrowserCommandHost,
   | 'getRuntimeBrowserPageRegistry'
@@ -20,8 +20,7 @@ export async function retireRuntimeBrowserClientPage(
   clientPage: RuntimeBrowserClientPage
 ): Promise<{ closed: true }> {
   const authority = host.getBrowserHostLeaseRegistry()
-  // Why: a retained page whose host quit has no placement left to command, and asking the
-  // absent host first would refuse the close and strand the tab with no way to dismiss it.
+  // Retained tabs outlive placements; requiring an absent host would make them impossible to dismiss.
   if (authority.getPlacement(clientPage.browserPageId)) {
     await closeRuntimeBrowserClientPage(authority, {
       browserPageId: clientPage.browserPageId,
@@ -41,7 +40,48 @@ export async function retireRuntimeBrowserClientPage(
   return { closed: true }
 }
 
-/** Closes a named page this runtime's registry holds; null when the registry has no such page. */
+type LogicalTabQueries = {
+  browserTabList(params: { worktree?: string }): Promise<{ tabs: { browserPageId: string }[] }>
+  browserTabCurrent(params: { worktree?: string }): Promise<{ tab: { browserPageId: string } }>
+}
+
+/** Resolve index/current against the complete logical list so client pages cannot be mistaken for engine tabs. */
+export async function resolveClientPageToClose(
+  host: Pick<
+    BrowserClientPageCloseHost,
+    'getRuntimeBrowserPageRegistry' | 'resolveBrowserWorkspace'
+  >,
+  queries: LogicalTabQueries,
+  params: PageCloseParams & { index?: number }
+): Promise<RuntimeBrowserClientPage | undefined> {
+  const pages = host.getRuntimeBrowserPageRegistry()
+  if (params.page) {
+    const page = pages.getPage(params.page)
+    if (
+      page &&
+      params.worktree &&
+      (await host.resolveBrowserWorkspace(params.worktree)).id !== page.workspaceId
+    ) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${page.browserPageId} was not found in this worktree`
+      )
+    }
+    return page
+  }
+  const workspaceId = params.worktree
+    ? (await host.resolveBrowserWorkspace(params.worktree)).id
+    : undefined
+  if (pages.listPages(workspaceId).length === 0) {
+    return undefined
+  }
+  const tab =
+    params.index !== undefined
+      ? (await queries.browserTabList({ worktree: params.worktree })).tabs[params.index]
+      : (await queries.browserTabCurrent({ worktree: params.worktree })).tab
+  return tab ? pages.getPage(tab.browserPageId) : undefined
+}
+
 export async function closeRegisteredBrowserClientPage(
   host: BrowserClientPageCloseHost,
   params: PageCloseParams
@@ -64,10 +104,7 @@ export async function closeRegisteredBrowserClientPage(
   return retireRuntimeBrowserClientPage(host, clientPage)
 }
 
-/**
- * Page-targeted close on a host with no browser engine. Client-hosted pages and session rows
- * are runtime records, so retiring them never needed the engine; anything else still refuses.
- */
+/** Runtime records can retire without an engine; refuse targets outside those records. */
 export async function closeBrowserPageWithoutEngine(
   host: BrowserClientPageCloseHost,
   params: PageCloseParams,

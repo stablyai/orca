@@ -1,19 +1,15 @@
-// Install's check that an unpacked Antigravity server runs on this host and is the pinned
-// release: one start under a throwaway home, asked `initialize` only, so it never signs in.
+// Initialize under a disposable home to verify the pinned server without signing in.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import {
-  runAgentModelCatalogSession
-} from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import { runAgentModelCatalogSession } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
 
 const PROBE_TIMEOUT_MS = 90_000
 
-/** The pinned release, offering what Orca's chats rely on: load, resume and Google sign-in. */
 function isPinnedServer(initialized: InitializeResponse, version: string): boolean {
   const capabilities = initialized.agentCapabilities
   return (
@@ -27,13 +23,13 @@ function isPinnedServer(initialized: InitializeResponse, version: string): boole
   )
 }
 
-/** Settles only once the server's exit is proven; rejects unless it answered as `version`. */
+/** Require the pinned initialize response and proven exit before accepting an installation. */
 export async function probeAntigravityAcpServer(
   command: string,
   version: string,
   signal: AbortSignal
 ): Promise<void> {
-  // The server's home and its temp unpack (about 1 GB) both live here, so one delete reclaims them.
+  // Keep the server’s home and extracted runtime together for cleanup.
   const home = await mkdtemp(join(tmpdir(), 'orca-antigravity-probe-'))
   const probe: { connection?: AcpAgentConnection } = {}
   let answer: unknown = null
@@ -58,7 +54,6 @@ export async function probeAntigravityAcpServer(
   } catch (error) {
     answer = error
   }
-  // The session runner awaited the close; a child that may still run fails the check.
   const failure =
     probe.connection && !probe.connection.exited
       ? new Error('Its exit was not proven after the check')

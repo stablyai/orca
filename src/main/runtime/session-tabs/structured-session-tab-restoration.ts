@@ -1,11 +1,12 @@
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
-import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { seedStructuredAgentSessionTabIndex } from '../structured-agent-session-tab-index-seed'
+import { seedStructuredAgentSessionTabIndex } from '../agent-session/structured-agent-session-tab-index-seed'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionTabsSnapshot,
@@ -102,11 +103,15 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     notify?: boolean
     /** The host tab id a create reserved; a session that already has a tab keeps its own. */
     tabId?: string
+    /** This machine's window made the create; its own open places the tab. */
+    placedByWindow?: boolean
+    /** Where the creating paired client opens the chat. */
+    /** A ChatTabPlacement, typed in place: this file is at its line limit. */
+    placement?: { groupId?: string; afterTabId?: string }
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
-      // The restore index is bookkeeping: one that cannot be written (a newer Orca's records, a
-      // failing disk) is reported, and the tab still opens.
+      // Restore-index failures (newer records/disk errors) are reported without preventing tab open.
       await host
         .setSessionTabVisibility(input.sessionId, true, ...(input.tabId ? [input.tabId] : []))
         .catch((error: unknown) => {
@@ -117,7 +122,10 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
           })
         })
     }
-    this.saveWindowlessAgentSessionTab(input.workspaceId, input)
+    // Window creates retain the window's own placement decision.
+    if (!(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)) {
+      this.saveWindowlessAgentSessionTab(input.workspaceId, input)
+    }
     this.projectStructuredAgentSessionTab(input)
   }
 
@@ -132,8 +140,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
-      // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
-      // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
+      // Background republish does not write/emit; healing missing client mirrors needs activate or explicit republish.
       if (!input.activate) {
         return
       }
@@ -180,15 +187,19 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         tabOrder: []
       }
     ]
-    const groupId = priorGroups.some((group) => group.id === existing?.activeGroupId)
-      ? existing!.activeGroupId!
-      : priorGroups[0]!.id
+    // Why: the window can list the chat before main restores its row; keep the place it gave it.
+    const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
+    const groupId =
+      listingGroupId ??
+      (priorGroups.some((group) => group.id === existing?.activeGroupId)
+        ? existing!.activeGroupId!
+        : priorGroups[0]!.id)
     const tabGroups = priorGroups.map((group) =>
       group.id === groupId
         ? {
             ...group,
             activeTabId: input.activate ? id : group.activeTabId,
-            tabOrder: [...group.tabOrder, id]
+            tabOrder: listingGroupId ? group.tabOrder : [...group.tabOrder, id]
           }
         : group
     )
@@ -218,9 +229,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       throw new Error('terminal_gone')
     }
     if (this.ptyController.inspectProcess) {
-      // Preserve the legacy one-argument call shape when no incarnation
-      // fence was requested; some providers use arity to distinguish the
-      // compatibility path from the fenced remote inspection.
+      // Preserve one-argument unfenced calls; providers may use arity to select legacy versus fenced inspection.
       const inspection =
         options === undefined
           ? await this.ptyController.inspectProcess(leaf.ptyId)

@@ -57,6 +57,8 @@ function neutralRow(chain: AgentSessionProviderHandleLink[]): unknown {
   return JSON.parse(
     JSON.stringify({
       ...fixture,
+      // Historical leases keep the checkpoint so old readers reach handle validation.
+      lease: { ...fixture.lease, journalCheckpoint: null },
       provider: 'grok',
       accountHome: { variable: 'GROK_HOME', path: '/home/user/.grok' },
       providerHandleChain: encodePersistedAgentSessionProviderHandleChain(chain)
@@ -76,15 +78,24 @@ const REPLACED = [
   })
 ]
 
-function storeMaps(value: unknown) {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('records' in value) ||
-    !(value.records instanceof Map) ||
-    !('unreadableRecords' in value) ||
-    !(value.unreadableRecords instanceof Map)
-  ) {
+type OldStoreMaps = {
+  records: Map<unknown, unknown>
+  unreadableRecords: Map<unknown, unknown>
+}
+
+function hasStoreMaps(value: unknown): value is OldStoreMaps {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'records' in value &&
+    value.records instanceof Map &&
+    'unreadableRecords' in value &&
+    value.unreadableRecords instanceof Map
+  )
+}
+
+function storeMaps(value: unknown): OldStoreMaps {
+  if (!hasStoreMaps(value)) {
     throw new Error('old store must expose its readable and unreadable rows')
   }
   return value
@@ -94,7 +105,7 @@ function legacyRow(provider: 'claude' | 'codex') {
   const fixture = agentSessionRecordFixture(
     agentSessionLeaseFixture({ sessionId: `chat-${provider}` })
   )
-  return encodeAgentSessionRecord({
+  const stored = encodeAgentSessionRecord({
     ...fixture,
     provider,
     accountHome:
@@ -111,10 +122,11 @@ function legacyRow(provider: 'claude' | 'codex') {
       }
     ]
   })
+  // Use the same historical lease format as the neutral rows above.
+  return { ...stored, lease: { ...stored.lease, journalCheckpoint: null } }
 }
 
-// A replacement is stored as it is held, which older builds would refuse; it is safe only because
-// the rows that can hold one are rows they already set aside. Claude and Codex chains refuse it.
+// Older readers refuse replacement handles except in rows they already set aside; Claude/Codex chains remain closed.
 test.each([RELEASE_REF, NEUTRAL_HANDLE_REF])(
   '%s preserves legacy rows and sets aside a replaced neutral row verbatim until re-upgrade',
   async (ref) => {
@@ -208,7 +220,6 @@ test.each([RELEASE_REF, NEUTRAL_HANDLE_REF])(
       ) {
         throw new Error('the preserved row must still contain its chain')
       }
-      // The provider-neutral record reader lands in the consumer PR; this PR owns chain decoding.
       expect(decodePersistedAgentSessionProviderHandleChain(upgraded.providerHandleChain)).toEqual(
         REPLACED
       )

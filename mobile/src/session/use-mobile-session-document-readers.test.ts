@@ -1,8 +1,9 @@
+import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { hookMount, performHookAction } from '../test-support/rpc-recording/hook-mount'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { RpcResponse } from '../transport/types'
-import type { MarkdownDocState } from './mobile-session-route-types'
+import type { FileDocState, MarkdownDocState } from './mobile-session-route-types'
 import { useMobileSessionDocumentReaders } from './use-mobile-session-document-readers'
 
 const META = { runtimeId: 'runtime-1' }
@@ -41,6 +42,54 @@ async function readMarkdown(reply: RpcResponse): Promise<MarkdownDocState | unde
   hook.unmount()
   return docs.get('tab-md')
 }
+
+async function readFile(
+  relativePath: string,
+  reply: RpcResponse
+): Promise<FileDocState | undefined> {
+  let docs = new Map<string, FileDocState>()
+  let readers: ReturnType<typeof useMobileSessionDocumentReaders> | undefined
+  const hook = hookMount(() => {
+    readers = useMobileSessionDocumentReaders(
+      mountFixture<Parameters<typeof useMobileSessionDocumentReaders>[0]>({
+        worktreeId: 'wt-1',
+        client: { sendRequest: vi.fn(async (): Promise<RpcResponse> => reply) },
+        setMarkdownDocs: () => {},
+        setFileDocs: (update) => {
+          docs = typeof update === 'function' ? update(docs) : update
+        }
+      })
+    )
+  })
+  hook.mount()
+  await performHookAction(() =>
+    readers?.readFileTab(
+      mountFixture<Parameters<typeof readers.readFileTab>[0]>({
+        type: 'file',
+        id: 'tab-file',
+        relativePath,
+        isDirty: false
+      })
+    )
+  )
+  hook.unmount()
+  return docs.get('tab-file')
+}
+
+describe('useMobileSessionDocumentReaders file reads', () => {
+  it('explains a desktop tab of a file outside the workspace instead of a generic failure', async () => {
+    const doc = await readFile('/other/report.txt', {
+      id: 'frame-1',
+      ok: false,
+      error: { code: 'runtime_error', message: 'invalid_relative_path' },
+      _meta: META
+    })
+    expect(doc).toEqual({
+      status: 'error',
+      message: 'This file is outside the workspace. Open it on desktop to view it.'
+    })
+  })
+})
 
 function readTabResult(extra: Record<string, unknown> = {}): RpcResponse {
   return {
@@ -313,30 +362,41 @@ describe('useMobileSessionDocumentReaders markdown revalidation', () => {
     }
   })
 
-  it('keeps the newer reread when an older one finishes later', async () => {
-    const initial = readyMarkdown('# head')
-    const older = deferredReply()
-    let calls = 0
-    const harness = mountMarkdownReads(new Map([['tab-md', initial]]), () => {
-      calls += 1
-      return calls === 1
-        ? older.promise
-        : Promise.resolve(readTabResult({ content: '# new', version: 'v2' }))
-    })
-    try {
-      const first = harness.read()
-      const second = harness.read()
-      await second
-      const current = harness.docs.get('tab-md')
-      older.resolve(readTabResult({ content: '# old', version: 'v0' }))
-      await first
-      expect(harness.docs.get('tab-md')).toBe(current)
-      expect(current).toMatchObject({ content: '# new', baseVersion: 'v2' })
-      expect(harness.published.every((doc) => doc.status !== 'loading')).toBe(true)
-    } finally {
-      harness.unmount()
+  it.each([
+    ['changed', '# new', 'v2'],
+    ['unchanged', '# head', 'v1']
+  ] as const)(
+    'keeps the newer reread when an older one finishes later: %s content',
+    async (kind, content, version) => {
+      const initial = readyMarkdown('# head')
+      const older = deferredReply()
+      let calls = 0
+      const harness = mountMarkdownReads(new Map([['tab-md', initial]]), () => {
+        calls += 1
+        return calls === 1
+          ? older.promise
+          : Promise.resolve(
+              readTabResult({ content, version, editable: true, readOnlyReason: undefined })
+            )
+      })
+      try {
+        const first = harness.read()
+        const second = harness.read()
+        await second
+        const current = harness.docs.get('tab-md')
+        older.resolve(readTabResult({ content: '# old', version: 'v0' }))
+        await first
+        expect(harness.docs.get('tab-md')).toBe(current)
+        expect(current).toMatchObject({ content, baseVersion: version })
+        if (kind === 'unchanged') {
+          expect(current).toBe(initial)
+        }
+        expect(harness.published.every((doc) => doc.status !== 'loading')).toBe(true)
+      } finally {
+        harness.unmount()
+      }
     }
-  })
+  )
 
   it('updates from disk without unmounting when the desktop renderer is down', async () => {
     const initial = readyMarkdown('# head')
@@ -398,5 +458,40 @@ describe('useMobileSessionDocumentReaders markdown revalidation', () => {
     } finally {
       harness.unmount()
     }
+  })
+})
+
+describe('useMobileSessionDocumentReaders whitespace setting', () => {
+  it('drops diffs built or loading before desktop says to show whitespace', async () => {
+    let docs = new Map<string, FileDocState>([
+      ['diff', { status: 'ready', kind: 'diff', lines: [], truncated: false }],
+      ['pending', { status: 'loading' }],
+      ['plain', { status: 'ready', kind: 'file', content: 'x', truncated: false, byteLength: 1 }]
+    ])
+    const client = {
+      sendRequest: vi.fn(async (): Promise<RpcResponse> => ({
+        id: 'frame-1',
+        ok: true,
+        result: { settings: { diffShowWhitespace: true } },
+        _meta: META
+      }))
+    }
+    const hook = hookMount(() => {
+      useMobileSessionDocumentReaders(
+        mountFixture<Parameters<typeof useMobileSessionDocumentReaders>[0]>({
+          worktreeId: 'wt-1',
+          connState: 'connected',
+          client,
+          setMarkdownDocs: () => {},
+          setFileDocs: (update) => {
+            docs = typeof update === 'function' ? update(docs) : update
+          }
+        })
+      )
+    })
+    hook.mount()
+    await act(async () => {})
+    hook.unmount()
+    expect([...docs.keys()]).toEqual(['plain'])
   })
 })

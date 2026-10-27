@@ -69,8 +69,6 @@ describe('classifySubprocessCommand', () => {
   })
 
   it('never treats positionals or git-flag values as subcommands for non-subcommand CLIs', () => {
-    // rg's -C takes a number; it must not be consumed as a git-style flag
-    // value, and "3"/"pattern" must not become fake subcommand buckets.
     expect(classifySubprocessCommand('rg', ['-C', '3', 'pattern'])).toBe('rg')
     expect(classifySubprocessCommand('node', ['script.js'])).toBe('node')
   })
@@ -98,8 +96,6 @@ describe('recordSubprocessSpawn', () => {
 })
 
 describe('startMainThreadChurnProbe', () => {
-  // Counters nothing reads are counters nobody can act on: the probe report is what makes
-  // "the diff cache never hit" visible outside a test run.
   it('folds caller-contributed counters into the report line', async () => {
     vi.stubEnv(MAIN_THREAD_DIAGNOSTICS_ENV, '1')
     writeStartupDiagnosticLineMock.mockClear()

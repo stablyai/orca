@@ -1,9 +1,4 @@
-/**
- * What a hidden bridged pane's dropped output must still deliver: terminal queries the window's
- * xterm answers (and the mode-2031 toggles its colour-scheme registry reads), OSC sequences (command marks, titles, cwd, notifications) and bells. None paint,
- * and main holds no model of these terminals to stand in for the window.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
- */
+/** Preserve terminal queries, mode-2031 toggles, OSC metadata and bells while suppressing hidden-pane painting; main cannot answer for xterm. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
 import {
   findCsiFinalByteIndex,
   isStatefulRendererReplyCsiQuery
@@ -11,15 +6,14 @@ import {
 import { isReplayableCsi } from '../../../shared/terminal-reply-query-scan'
 
 const MAX_CSI_CHARS = 64
-// Why bounded: an inline image is one huge OSC, and it paints.
+// Inline images are huge painting OSCs; bound their retained payload.
 const MAX_OSC_CHARS = 4096
 
-/** Carried between chunks: a sequence split across them, or an oversized OSC being skipped. */
+/** Carry split sequences and oversized-OSC skipping across chunks. */
 export type OutputSalvageState = { tail: string; skippingOsc: boolean }
 
 export const EMPTY_OUTPUT_SALVAGE: OutputSalvageState = { tail: '', skippingOsc: false }
 
-/** The OSC terminator's end, or -1 while it is still to come; `aborted` when ESC cut it short. */
 function oscEnd(input: string, from: number): { end: number; aborted: boolean } {
   for (let index = from; index < input.length; index++) {
     const char = input[index]
@@ -46,9 +40,9 @@ function bells(text: string): string {
   return kept
 }
 
-export type OutputSalvage = {
+type OutputSalvage = {
   kept: string
-  /** Queries answered from cursor or mode state, which the window's dropped output left stale. */
+  /** Refresh stale cursor/mode state before these queries reach xterm. */
   stateful: string
   state: OutputSalvageState
 }

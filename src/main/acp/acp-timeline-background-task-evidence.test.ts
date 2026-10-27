@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { backgroundTaskFallbackText } from '../../shared/native-chat-background-task-row'
+import { backgroundTaskFallbackText } from '../../shared/native-chat/input/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { ToolCallUpdate } from './generated/acp-protocol.generated'
@@ -145,7 +145,7 @@ describe('background task outcome evidence', () => {
       await fixture.rig.rows()
       if (boundary === 'eviction') {
         for (let index = 0; index < 200; index += 1) {
-          // Pressure only the translator's snapshots: settled ones go first, the running call stays.
+          // Pressure translator snapshots without evicting the running call.
           fixture.lane().notification(
             'session/update',
             {
@@ -217,7 +217,7 @@ describe('background task outcome evidence', () => {
           true
         )
       } else {
-        // Unmarked: a task notice during a load is history too.
+        // Load-window notices are history even without a replay mark.
         taskNotice(fixture, taskId)
       }
       fixture.finishLoad()

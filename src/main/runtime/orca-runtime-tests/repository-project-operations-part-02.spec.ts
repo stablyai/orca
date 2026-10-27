@@ -43,7 +43,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -123,7 +123,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -379,7 +379,7 @@ describe('OrcaRuntimeService', () => {
     const colorStore = {
       ...store,
       getRepos: () => [existing],
-      updateRepo: (id: string, repoUpdates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, repoUpdates: Record<string, unknown>) => {
         updates.push({ id, updates: repoUpdates })
         return upgraded as never
       }
@@ -676,7 +676,7 @@ describe('OrcaRuntimeService', () => {
     const getReposSpy = vi.spyOn(store, 'getRepos').mockReturnValue([sshProject])
 
     try {
-      // The SSH project's folder is on another machine, so git runs here; this source doesn't exist.
+      // The SSH project's same path must not block a local clone; a missing source makes the attempted clone fail.
       await expect(
         createRuntime().cloneRepo(join(destination, 'missing', 'orca'), destination)
       ).rejects.toThrow('Clone failed')

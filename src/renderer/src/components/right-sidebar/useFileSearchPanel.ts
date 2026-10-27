@@ -199,14 +199,6 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     inputRef.current?.focus()
   }, [activeWorktreeId, fileSearchFocusRequestId])
 
-  const previousExplorerViewRef = useRef(explorerView)
-  useEffect(() => {
-    if (previousExplorerViewRef.current !== 'search' && explorerView === 'search') {
-      focusQueryInput()
-    }
-    previousExplorerViewRef.current = explorerView
-  }, [explorerView, focusQueryInput])
-
   const handleClearSearch = useCallback(() => {
     cancelPendingSearch()
     clearActiveSearch()

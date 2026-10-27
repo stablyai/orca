@@ -11,13 +11,13 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { RepositoryJiraProjectSection } from '@/components/settings/RepositoryJiraProjectSection'
+import { RepositoryJiraProjectSection } from '@/components/settings/repository/RepositoryJiraProjectSection'
 import { useWorkItemSourceSearch } from '@/components/new-workspace/use-work-item-source-search'
 import { useJiraProjectInventory } from '@/components/use-jira-project-inventory'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import type { JiraIssue, JiraProject } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraProject } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -83,8 +83,8 @@ function seedRepos(repos: readonly Repo[] = [localRepo, executionRepo], configur
   useAppStore.setState({
     settings: null,
     repos,
-    projects: [...projection.projects],
-    projectHostSetups: [...projection.setups],
+    endpointProjects: [...projection.projects],
+    endpointProjectHostSetups: [...projection.setups],
     projectGroups: [],
     newWorkspaceDraft: null,
     worktreesByRepo: {},

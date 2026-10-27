@@ -2,10 +2,8 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
-import {
-  useMobileNativeChatSessionOptions,
-  clearMobileSessionOptionRecordsForTests
-} from './use-mobile-native-chat-session-options'
+import { useMobileNativeChatSessionOptions } from './native-chat/input/use-mobile-native-chat-session-options'
+import { clearMobileSessionOptionRecordsForTests } from './mobile-session-option-records'
 
 import type { RpcResponse } from '../transport/types'
 

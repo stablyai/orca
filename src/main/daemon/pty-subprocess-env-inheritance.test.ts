@@ -1,4 +1,3 @@
-// Which daemon process env reaches the spawned shell, and how PATH is composed.
 import { describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
@@ -31,9 +30,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI. The real resolver (which skips the Store App
-// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -66,10 +63,6 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
-// fake timers; default to "shell-only" so the degraded-scan guard falls through
-// to its existing retirement logic (the degraded-scan behavior itself is
-// covered in pty-subprocess-foreground-degraded-scan.test.ts).
 vi.mock('../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
@@ -81,6 +74,11 @@ import {
   stripLegacyTerminalShimEnv
 } from '../pty/legacy-terminal-shim-dir'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import {
+  claimHostMallocTunables,
+  hostMallocTunablesLaunchEnv,
+  resetHostMallocTunablesForTests
+} from '../memory/host-malloc-tunables'
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -155,7 +153,6 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_TAB_ID).toBeUndefined()
     expect(env.ORCA_WORKTREE_ID).toBeUndefined()
     expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
-    // A user's `orcad --port` in this shell must stay operator-run, not client-managed.
     expect(env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT).toBeUndefined()
   })
 
@@ -199,9 +196,7 @@ describe('createPtySubprocess', () => {
   })
 
   it.each([
-    // fish EXPORTS fish_history, so a daemon started from a fish pane would hand
-    // every session the launching worktree's history file (STA-4682). Only the
-    // name this spawn asked for — the isolated one, or the user's — may stand.
+    // Exported fish history must not leak the daemon-launching pane’s history into new panes.
     ['drops an inherited Orca fish_history', undefined, undefined],
     ['keeps the session this spawn injected', 'orca_c0ffee', 'orca_c0ffee'],
     ['keeps a caller-supplied value', 'mine', 'mine']
@@ -229,8 +224,6 @@ describe('createPtySubprocess', () => {
   })
 
   it.each([
-    // HISTFILE is exported too, so a daemon started from an Orca pane would hand
-    // every session the launching worktree's history file.
     ['drops an inherited Orca HISTFILE', undefined, undefined],
     [
       'keeps the path this spawn injected',
@@ -262,10 +255,7 @@ describe('createPtySubprocess', () => {
   })
 
   it.each([
-    // ORCA_HISTFILE is exported into every pane, so a daemon started from an
-    // Orca pane inherits one. Left in place it BOTH re-scopes the pane to
-    // another worktree's history file (#11146) and wraps a zsh pane nothing
-    // asked to wrap, since `history` is selected on its presence.
+    // Inherited ORCA_HISTFILE can select another pane’s history and enable unwanted shell wrapping.
     ['drops an inherited Orca ORCA_HISTFILE', undefined, undefined],
     [
       'keeps the path this spawn injected',
@@ -296,14 +286,14 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ORCA_HISTFILE).toBe(expected)
-    // The wrapping consequence: no inherited value may point a pane at Orca's
-    // ZDOTDIR that the client scoped no history for.
-    expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
+    // History wrapping only sets ORCA_SHELL_FEATURES on the POSIX launch path.
+    expect(env.ORCA_SHELL_FEATURES).toBe(
+      process.platform === 'win32' || expected === undefined ? undefined : 'history'
+    )
   })
 
   it('does not inherit ELECTRON_RUN_AS_NODE from the daemon process env', async () => {
-    // Why: the daemon is forked with ELECTRON_RUN_AS_NODE=1. If that flag
-    // reaches user shells, nested Electron commands run as plain Node.
+    // Leaking the daemon’s ELECTRON_RUN_AS_NODE would make nested Electron apps run as Node.
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const previous = process.env.ELECTRON_RUN_AS_NODE
@@ -323,10 +313,30 @@ describe('createPtySubprocess', () => {
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 
+  it('gives shells the user’s malloc once a host daemon claims its launch tunables', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    for (const [name, value] of hostMallocTunablesLaunchEnv()) {
+      process.env[name] = value
+    }
+    try {
+      claimHostMallocTunables()
+      await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      for (const [name] of hostMallocTunablesLaunchEnv()) {
+        delete process.env[name]
+      }
+      resetHostMallocTunablesForTests()
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    for (const [name] of hostMallocTunablesLaunchEnv()) {
+      expect(env[name]).toBeUndefined()
+    }
+  })
+
   it('does not forward a half-activated conda env from the daemon process env', async () => {
-    // Why here as well as the main process: the daemon fork composes its own
-    // inherited env, which main never sees, so it is the default terminal's
-    // only chance to drop a CONDA_SHLVL sentinel left without a prefix (#14195).
+    // Main never sees the daemon’s inherited environment; sanitize incomplete conda activation here too.
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const saved = {
@@ -388,8 +398,7 @@ describe('createPtySubprocess', () => {
   })
 
   it('does not inherit NODE_ENV from the daemon process env', async () => {
-    // Why: a dev-mode Orca forks the daemon with NODE_ENV=development; leaking
-    // Orca's build mode into user shells breaks `next build` and Vitest.
+    // Orca’s ambient build mode must not affect user build tools.
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const previous = process.env.NODE_ENV
@@ -413,7 +422,6 @@ describe('createPtySubprocess', () => {
   })
 
   it('keeps an explicitly requested NODE_ENV for daemon PTY shells', async () => {
-    // Why: only the ambient value is stripped; a caller-supplied NODE_ENV still wins.
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const previous = process.env.NODE_ENV
@@ -605,8 +613,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
-        // Why: buildPtyHostEnv collapses Windows PATH onto one spelling before the daemon wire;
-        // the daemon then spreads its own block underneath and can re-mint the other one.
+        // Spreading daemon env beneath the caller’s canonical PATH can restore a second spelling.
         env: {
           Path: '/tmp/orca-agent-teams-bin:/usr/bin',
           ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'

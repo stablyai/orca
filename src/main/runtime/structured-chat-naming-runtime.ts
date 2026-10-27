@@ -1,9 +1,11 @@
+import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { StructuredChatNamingDeps } from '../native-chat/structured-chat-naming'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { firstStructuredChatNamingPrompt } from '../../shared/structured-chat-naming-eligibility'
+import { firstStructuredAgentSessionPrompt } from '../../shared/structured-agent-session-first-prompt'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
 import {
   generateConversationNameFromContext,
@@ -37,40 +39,52 @@ export function structuredChatNamingDeps(
         ? firstStructuredChatNamingPrompt(await host.journalSnapshot(sessionId), hostStartedAt)
         : ''
     },
+    readJournalFirstPrompt: async (sessionId) => {
+      const host = getStructuredAgentSessionHost()
+      return host
+        ? firstStructuredAgentSessionPrompt(
+            agentSessionCurrentContextRows((await host.journalSnapshot(sessionId)).items).items
+          )
+        : ''
+    },
     workerTaskTitle: runtime.workerTaskTitle,
-    generate: async (record, firstPrompt) => {
+    generate: async (record, firstPrompt, shouldExecute) => {
+      // Unsupported execution contexts keep the seed regardless of native naming settings.
+      if (record.location.wslDistro !== null) {
+        return null
+      }
+      const workspace = await runtime.resolveWorkspace(record.location.workspaceId)
+      if (workspace.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+        return null
+      }
       const settings = resolveTextGenerationParams(
         getStore().getSettings(),
         LOCAL_COMMIT_MESSAGE_HOST_KEY,
         'conversationName',
         null
       )
+      const log = { scope: 'conversation-name', sessionId: record.sessionId }
       if (!settings.ok) {
-        logger.warn(settings.error, { scope: 'conversation-name', sessionId: record.sessionId })
-        return null
-      }
-      const workspace = await runtime.resolveWorkspace(record.location.workspaceId)
-      // Structured chats execute natively on this host; an SSH workspace must never fall back here.
-      if (
-        workspace.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-        record.location.wslDistro !== null
-      ) {
-        throw new Error('Chat name generation target is not this native execution host')
+        logger.warn(settings.error, log)
+        return { error: settings.error }
       }
       const target = await resolveGenerationTarget(workspace.path, settings.params.agentId, runtime)
       if (!target) {
-        return null
+        const error = 'No chat-name agent can run in this workspace.'
+        logger.warn(error, log)
+        return { error }
       }
       const result = await generateConversationNameFromContext(
         { firstPrompt },
         settings.params,
-        target
+        target,
+        shouldExecute
       )
-      if (!result.success) {
-        logger.warn(result.error, { scope: 'conversation-name', sessionId: record.sessionId })
-        return null
+      if (result.success) {
+        return { name: result.name }
       }
-      return result.name
+      logger.warn(result.error, log)
+      return result.canceled ? null : { error: result.error, failureOutput: result.failureOutput }
     },
     onNamed: (workspaceId, sessionId) => {
       try {

@@ -14,6 +14,7 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
 export type WorktreeCreateParentPick = {
   /** Workspace the create attaches to. Undefined once a stale pick is dropped. */
@@ -33,7 +34,7 @@ export function resolveWorktreeCreateParent(
   executionHostId: ExecutionHostId
 ): WorktreeCreateParentPick {
   const picked = requestedParentWorktreeId
-    ? getIndexedWorktreesById(state.worktreesByRepo, requestedParentWorktreeId).find(
+    ? getIndexedWorktreesById(selectWorktreesByRepo(state), requestedParentWorktreeId).find(
         (candidate) => {
           const repo = state.repos.find((owner) =>
             repoMatchesHostIdentity(owner, candidate.repoId, candidate.hostId ?? executionHostId)
@@ -63,8 +64,7 @@ export function resolveWorktreeCreateParent(
   }
 }
 
-/** Resolved late so the common create path never walks the folder-workspace list, and defensively
- *  so a missing label can never fail a create that already succeeded. */
+/** Resolve label only for warnings; missing labels must never fail an already successful create. */
 function parentLabel(state: AppState, parent: WorktreeCreateParentPick): string | null {
   // Why not truthiness: a picked-but-unnamed worktree must warn unnamed, not name the active folder.
   if (parent.pickedDisplayName !== null) {
@@ -74,7 +74,7 @@ function parentLabel(state: AppState, parent: WorktreeCreateParentPick): string 
   if (scope?.type !== 'folder') {
     return null
   }
-  const workspace = state.folderWorkspaces?.find(
+  const workspace = selectFolderWorkspaces(state)?.find(
     (candidate) => candidate.id === scope.folderWorkspaceId
   )
   return workspace?.name.trim() || null

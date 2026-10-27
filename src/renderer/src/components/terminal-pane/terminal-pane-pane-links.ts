@@ -57,7 +57,6 @@ type PaneLinkContext = {
   ptyStartup: Parameters<typeof seedStartupSessionRestoredBanner>[0]
 }
 
-/** Installs path/URL links, selection capture, and pointer behavior for a pane. */
 export function installTerminalPaneLinkHandling(context: PaneLinkContext): void {
   const {
     pane,

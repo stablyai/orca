@@ -1,6 +1,4 @@
-// The Antigravity ACP server Orca installs for chats when the person asks: Google ships it only as a
-// registry download (no installer, no published checksums), so each archive and both of its
-// executables are pinned by the hashes and sizes Orca verified.
+// No upstream checksums are published; pin each verified archive and executable.
 
 import { join } from 'node:path'
 import type { ManagedRuntime, ManagedRuntimePin } from '../node-runtime/managed-runtime-release'
@@ -60,7 +58,6 @@ const PINNED: Record<string, Pinned> = {
   }
 }
 
-/** This host's pinned server; none where Google publishes no build Orca verified (Windows). */
 function pin(): ManagedRuntimePin | null {
   const pinned = PINNED[`${process.platform}-${process.arch}`]
   return pinned

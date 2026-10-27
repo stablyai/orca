@@ -7,8 +7,7 @@ import {
   type PhysicalModifierToken
 } from '../../../shared/keybindings'
 
-// Partial<> on the key/modifier fields so a synthetic double-tap input (which
-// carries no key/modifier flags) satisfies this shape; target stays required.
+// Allow synthetic double-tap inputs without key/modifier fields, but still require their event target.
 type FloatingWorkspaceShortcutEvent = Partial<
   Pick<KeyboardEvent, 'altKey' | 'code' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>
 > &
@@ -46,10 +45,7 @@ export function isFloatingWorkspacePanelShortcutTarget(
   )
 }
 
-// Which tab-creation/close action the panel claims, without the target gate — the panel's own
-// window-capture dispatch owns chords from anywhere inside the panel (xterm, browser slot, editor),
-// not just its shortcut surface. Returning the identity lets one pass serve both the claim check and
-// the dispatch branch.
+/** Resolve creation/close identity once for claim and dispatch; panel capture owns chords across xterm, browser and editor targets. */
 export function matchFloatingWorkspacePanelOwnedAction(
   event: FloatingWorkspaceShortcutEvent,
   platform: NodeJS.Platform,
@@ -82,11 +78,7 @@ export type FloatingWorkspacePanelShortcutMatch =
   | { readonly kind: 'action'; readonly action: KeybindingActionId }
   | { readonly kind: 'index'; readonly index: number }
 
-// Single source of truth for the panel's non-creation shortcut claims (title rename, indexed switch,
-// window max/min) so the dispatch, its keydown preflight, and App.tsx's yield gate can't drift and
-// silently reintroduce the routing bug. Index precedence is workspace-then-tab, mirroring the
-// main-window resolver. Chrome actions take their own options (under terminal-first a focused xterm
-// resolves them in app context); the index match uses `options`.
+/** Share chrome claims across dispatch/preflight/App yield; workspace indexes precede tab indexes, while chrome actions use their own context options. */
 export function matchFloatingWorkspacePanelShortcut(
   event: FloatingWorkspaceShortcutEvent,
   platform: NodeJS.Platform,
@@ -128,9 +120,7 @@ export function matchFloatingWorkspacePanelShortcut(
   return null
 }
 
-// Everything the panel claims, resolved in one call for claim-only callers like App.tsx's yield gate
-// (which otherwise pairs the two matchers by hand and can drift from the dispatch). Creation chords
-// stay target-gated; chrome chords stay ungated — same order and semantics as the matchers it composes.
+/** Combine target-gated creation and ungated chrome claims in dispatch order so claim-only callers cannot drift. */
 export function matchFloatingWorkspacePanelChord(
   event: FloatingWorkspaceShortcutEvent,
   platform: NodeJS.Platform,

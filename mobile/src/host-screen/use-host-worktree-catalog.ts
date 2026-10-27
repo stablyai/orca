@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { AppState } from 'react-native'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { useFocusEffect } from 'expo-router'
 import { setCachedWorktrees } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
@@ -6,6 +8,7 @@ import type { ConnectionState } from '../transport/types'
 import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
 import { useWorktreeResync } from '../transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../worktree/host-worktree-refresh'
+import type { HostSidebarFeedTriggers } from './host-sidebar-feed-connection'
 import { areWorktreeListsEqual } from '../worktree/worktree-list-snapshot'
 import {
   clearConfirmedActiveWorktreeIdentity,
@@ -28,8 +31,9 @@ export function useHostWorktreeCatalog(args: {
   fetchRepoMetadata: FetchHostRepoMetadata
   hostCapabilities: readonly string[]
   hostId: string | undefined
+  sidebarFeed: HostSidebarFeedTriggers | null
   state: HostScreenState
-  syncViewSettingsFromDesktop: () => Promise<void>
+  syncViewSettingsFromDesktop: (options?: { resend?: boolean }) => Promise<void>
 }) {
   const {
     client,
@@ -38,6 +42,7 @@ export function useHostWorktreeCatalog(args: {
     fetchRepoMetadata,
     hostCapabilities,
     hostId,
+    sidebarFeed,
     state,
     syncViewSettingsFromDesktop
   } = args
@@ -59,7 +64,7 @@ export function useHostWorktreeCatalog(args: {
   // Keyed by client: a fetch still running on a replaced client must not skip the new one's.
   const serverFetchInFlightRef = useRef<RpcClient | null>(null)
 
-  // Why beside worktree.ps, not inside it: a slow server must not hold back the desktop's own rows.
+  // Fetch server rows separately so a slow server cannot delay desktop rows.
   const fetchServerRows = useCallback(
     async (requestClient: RpcClient) => {
       if (!relaysToServers(requestClient, hostCapabilities)) {
@@ -87,16 +92,19 @@ export function useHostWorktreeCatalog(args: {
     [hostCapabilities]
   )
 
+  // A re-read asked for during a flight: that flight may predate the change that asked.
+  const fetchWorktreesQueuedRef = useRef(false)
   const fetchWorktrees = useCallback(
-    async (options: { allowDuringModal?: boolean } = {}) => {
+    async (options: { allowDuringModal?: boolean; queueIfInFlight?: boolean } = {}) => {
       if (!client || connState !== 'connected' || !hostId) {
         return
       }
       if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
         return
       }
-      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
+      // Coalesce overlapping polls so slow remote hosts cannot accumulate worktree.ps requests.
       if (fetchWorktreesInFlightRef.current) {
+        fetchWorktreesQueuedRef.current ||= options.queueIfInFlight === true
         return
       }
       fetchWorktreesInFlightRef.current = true
@@ -112,8 +120,7 @@ export function useHostWorktreeCatalog(args: {
         if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
           return
         }
-        // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
-        // surface it so a broken remote host is diagnosable instead of looking empty.
+        // Report catalog failure rather than zero workspaces so broken remote hosts remain diagnosable (STA-3123).
         if (fetched.kind === 'request_failed') {
           setCatalogError(fetched.code)
           return
@@ -121,15 +128,13 @@ export function useHostWorktreeCatalog(args: {
         if (fetched.pending.admission.kind === 'invalid') {
           setCatalogError('invalid_response')
         }
-        // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
-        // host truth over optimistic local edits regardless of payload size.
+        // Even unchanged replies reassert host truth over optimistic local edits.
         const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
         if (confirmed) {
           setCatalogError(null)
-          // A confirmed list is the host answering, which is the evidence a transient action
-          // failure was about a moment that has passed.
+          // A confirmed catalog proves a transient action failure is no longer current.
           setActionError('')
-          // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
+          // Reuse identical snapshot arrays to avoid rebuilding SectionList/sorts on the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
           )
@@ -137,7 +142,7 @@ export function useHostWorktreeCatalog(args: {
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
           )
           setWorktreesLoaded(true)
-          // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
+          // Replace the home-written cache with confirmed data so reconnect/remount cannot restore stale rows (#8498).
           if (hostId) {
             setCachedWorktrees(hostId, confirmed, { proven: true })
           }
@@ -149,38 +154,49 @@ export function useHostWorktreeCatalog(args: {
           // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
           setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
 
-          // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
+          // Sync server pins only without the feed; feed-built lists keep no local pin cache.
           const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
-          setPinnedIds((prev) => {
-            if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
-              return prev
-            }
-            if (hostId) {
-              void savePinnedIds(hostId, serverPinned)
-            }
-            return serverPinned
-          })
+          if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+            setPinnedIds((prev) => {
+              if (
+                serverPinned.size === prev.size &&
+                [...serverPinned].every((id) => prev.has(id))
+              ) {
+                return prev
+              }
+              if (hostId) {
+                void savePinnedIds(hostId, serverPinned)
+              }
+              return serverPinned
+            })
+          }
         }
       } catch (error) {
-        // Will retry on reconnect
         if (clientRef.current === requestClient && hostId === requestHostId) {
-          // Why the branch: this code is printed to the user verbatim, and a reply the reader
-          // refused is a host-payload defect, not a connectivity one (STA-3123).
+          // Distinguish refused host payloads from connectivity failures; this code is shown verbatim (STA-3123).
           setCatalogError(
             error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
           )
         }
       } finally {
         fetchWorktreesInFlightRef.current = false
+        if (fetchWorktreesQueuedRef.current) {
+          fetchWorktreesQueuedRef.current = false
+          // The latest render's fetch, without this flight's modal override: the client may have changed.
+          void fetchWorktreesRef.current({ queueIfInFlight: true })
+        }
       }
     },
     [client, connState, hostId, fetchServerRows]
   )
+  const fetchWorktreesRef = useRef(fetchWorktrees)
+  useEffect(() => {
+    fetchWorktreesRef.current = fetchWorktrees
+  }, [fetchWorktrees])
 
   useFocusEffect(
     useCallback(() => {
-      // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
-      // 'focus' keeps a healthy relay green — probe, never suspend (S2 grey blink).
+      // Focus must probe half-open sockets without suspending healthy relay sessions; state-dependent focus callbacks would defeat reconnect backoff.
       clientRef.current?.notifyForeground('focus')
     }, [])
   )
@@ -189,32 +205,39 @@ export function useHostWorktreeCatalog(args: {
     if (!client || connState !== 'connected') {
       return
     }
-    void syncViewSettingsFromDesktop()
     return startHostWorktreeRefresh({
       client,
       fetchWorktrees,
       fetchRepoMetadata,
-      syncViewSettings: syncViewSettingsFromDesktop
+      syncViewSettings: syncViewSettingsFromDesktop,
+      sidebarFeed,
+      appState: AppState
     })
-  }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+  }, [
+    client,
+    connState,
+    fetchWorktrees,
+    fetchRepoMetadata,
+    syncViewSettingsFromDesktop,
+    sidebarFeed
+  ])
 
   useFocusEffect(
     useCallback(() => {
-      // The embedded sidebar isn't a routed screen (focus never fires); it refreshes via the mount effect below.
       if (!embedded) {
         return startWorktreeRefresh()
       }
     }, [embedded, startWorktreeRefresh])
   )
 
-  // Why: the embedded sidebar is never the focused route, so wire its refresh lifecycle from a mount effect.
+  // Embedded sidebars never receive route focus; start their refresh lifecycle on mount.
   useEffect(() => {
     if (embedded) {
       return startWorktreeRefresh()
     }
   }, [embedded, startWorktreeRefresh])
 
-  // Why (#8498): steady-state polls miss the transition INTO 'connected' after background/sleep, when the cache is stalest.
+  // Refresh on transition to connected; steady polls can miss the stalest post-sleep cache (#8498).
   const { refreshing, onRefresh } = useWorktreeResync({
     client,
     connState,

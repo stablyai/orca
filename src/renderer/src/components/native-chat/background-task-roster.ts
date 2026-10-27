@@ -1,12 +1,10 @@
-// Desktop words for the background-tasks roster: the shared grouping and state words
-// (`shared/background-task-roster.ts`) said in the reader's language.
+// Localize the shared background-task grouping and state vocabulary.
 
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from '../../../../shared/agent-session-wire'
 import {
-  backgroundTaskCountedState as countedState,
   backgroundTaskGroupLabel as groupLabel,
   backgroundTaskStateReason as stateReason,
   backgroundTaskStateWord as stateWord,
@@ -36,10 +34,6 @@ export function backgroundTaskStateWord(state: RunState): string {
 
 export function backgroundTaskStateReason(state: RunState): string | null {
   return stateReason(state, say)
-}
-
-export function backgroundTaskCountedState(counted: string | number, state: RunState): string {
-  return countedState(counted, state, say)
 }
 
 export function backgroundTaskGroupLabel(kind: TaskKind): string {

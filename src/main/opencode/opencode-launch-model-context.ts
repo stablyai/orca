@@ -13,83 +13,38 @@ import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
+import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
 
 const OPENCODE_PREFLIGHT_KILL_SITE = 'opencode-launch-model-preflight'
-// A supervisor's pipes are its own, so they close as it exits.
 const SUPERVISOR_PIPE_CLOSE_MS = 1_000
 
-const model = z.object({ id: z.string(), providerID: z.string() })
-const availableModel = model.extend({ enabled: z.boolean() })
 const agent = z.object({
-  id: z.string(),
-  mode: z.enum(['primary', 'subagent', 'all']),
-  hidden: z.boolean(),
-  model: model.optional()
+  id: z.string().min(1),
+  mode: z.string().optional(),
+  hidden: z.boolean().optional()
 })
 const location = z.object({ directory: z.string() })
-const modelResponse = z.object({ location, data: availableModel.array() })
-const agentResponse = z.object({ location, data: agent.array() })
-const defaultModelResponse = z.object({ location, data: availableModel.nullable() })
-const configResponse = z.array(
-  z.object({
-    type: z.enum(['directory', 'document']),
-    info: z.object({ default_agent: z.string().optional() }).optional()
-  })
-)
+const agentResponse = z.object({ location, data: z.unknown().array() })
 
 export type OpenCodeLaunchModelContext = {
   primaryAgent: string
-  availableModels: string[]
-  primaryModel: string | null
 }
 
 export function parseOpenCodeLaunchModelContext(options: {
   directory: string
-  models: unknown
   agents: unknown
-  defaultModel: unknown
-  config: unknown
 }): OpenCodeLaunchModelContext | null {
-  const models = modelResponse.safeParse(options.models)
   const agents = agentResponse.safeParse(options.agents)
-  const defaultModel = defaultModelResponse.safeParse(options.defaultModel)
-  const config = configResponse.safeParse(options.config)
-  if (
-    !models.success ||
-    !agents.success ||
-    !defaultModel.success ||
-    !config.success ||
-    models.data.location.directory !== options.directory ||
-    agents.data.location.directory !== options.directory ||
-    defaultModel.data.location.directory !== options.directory ||
-    !defaultModel.data.data?.enabled ||
-    agents.data.data.length === 0
-  ) {
+  if (agents.success && agents.data.location.directory !== options.directory) {
     return null
   }
-  // Installed 2.0.16 returns the selected default first; newer source has a different order.
-  const primary = agents.data.data.find((item) => item.mode !== 'subagent' && !item.hidden)
-  const configured = config.data.reduce<string | undefined>(
-    (value, entry) => entry.info?.default_agent ?? value,
-    undefined
-  )
-  const available = models.data.data.filter((item) => item.enabled)
-  if (
-    !primary ||
-    (configured !== undefined && primary.id !== configured) ||
-    !available.some(
-      (item) =>
-        item.id === defaultModel.data.data?.id &&
-        item.providerID === defaultModel.data.data?.providerID
-    )
-  ) {
-    return null
-  }
-  return {
-    primaryAgent: primary.id,
-    availableModels: available.map((item) => `${item.providerID}/${item.id}`),
-    primaryModel: primary.model ? `${primary.model.providerID}/${primary.model.id}` : null
-  }
+  const primary = agents.success
+    ? agents.data.data
+        .map((item) => agent.safeParse(item))
+        .find((item) => item.success && item.data.mode !== 'subagent' && !item.data.hidden)
+    : undefined
+  const primaryAgent = primary?.success ? primary.data.id : undefined
+  return primaryAgent ? { primaryAgent } : null
 }
 
 export async function probeOpenCodeLaunchModelContext(options: {
@@ -97,8 +52,6 @@ export async function probeOpenCodeLaunchModelContext(options: {
   cwd: string
   env: NodeJS.ProcessEnv
   signal?: AbortSignal
-  expectedPrimaryAgent?: string
-  expectedPrimaryModel?: string
 }): Promise<OpenCodeLaunchModelContext | null> {
   const password = randomBytes(32).toString('base64url')
   const spawnSpec = createProviderSpawnSpec(
@@ -107,9 +60,13 @@ export async function probeOpenCodeLaunchModelContext(options: {
       args: ['serve', '--hostname', '127.0.0.1', '--port', '0'],
       cwd: options.cwd
     },
-    { ...options.env, OPENCODE_SERVER_USERNAME: 'opencode', OPENCODE_SERVER_PASSWORD: password },
+    {
+      ...options.env,
+      OPENCODE_SERVER_USERNAME: 'opencode',
+      OPENCODE_SERVER_PASSWORD: password
+    },
     process.platform,
-    // `opencode serve` never exits on stdin end, so on POSIX only its supervisor stops it with Orca.
+    // opencode serve ignores stdin EOF; POSIX supervision must stop it with Orca.
     { lifetime: 'one-shot' }
   )
   const child = spawnProcess({
@@ -117,7 +74,12 @@ export async function probeOpenCodeLaunchModelContext(options: {
     args: spawnSpec.args,
     cwd: options.cwd,
     env: spawnSpec.env,
-    detached: true
+    detached: true,
+    stdio: ['pipe', 'pipe', 'pipe', ...spawnSpec.groupReportStdio]
+  })
+  guardSupervisedProviderGroup(child, {
+    site: OPENCODE_PREFLIGHT_KILL_SITE,
+    supervised: spawnSpec.supervised
   })
   const output = createOutputSink(4096)
   let childClosed = false
@@ -179,28 +141,12 @@ export async function probeOpenCodeLaunchModelContext(options: {
             await cancelUnreadResponseBody(response)
           }
         }
-        const [models, agents, defaultModel, config] = await Promise.all([
-          read('model'),
-          read('agent'),
-          read('model/default'),
-          read('config')
-        ])
+        const agents = await read('agent')
         context = parseOpenCodeLaunchModelContext({
           directory: options.cwd,
-          models,
-          agents,
-          defaultModel,
-          config
+          agents
         })
-        if (
-          context &&
-          (!options.expectedPrimaryAgent ||
-            context.primaryAgent === options.expectedPrimaryAgent) &&
-          (!options.expectedPrimaryModel || context.primaryModel === options.expectedPrimaryModel)
-        ) {
-          break
-        }
-        context = null
+        break
       }
       await delay(100, undefined, { signal })
     }
@@ -223,17 +169,13 @@ export async function probeOpenCodeLaunchModelContext(options: {
   return stopped ? context : null
 }
 
-/**
- * True only when the server's group is proven gone: the supervisor exited on its own stop or
- * relayed the server's exit. A forced stop proves nothing: its teardown reaches the supervisor's
- * group, not the server's own detached group. Exit 1 can be a group reap that failed.
- */
+/** Only the supervisor’s normal stop/relayed exit proves its detached server group is gone.
+ * Forced supervisor teardown and failed group reap (exit 1) prove nothing. */
 async function stopSupervisedPreflight(
   child: ChildProcessHandle,
   closed: Promise<boolean>
 ): Promise<boolean> {
   if (!child.pid) {
-    // Never started, so there is nothing to stop.
     return true
   }
   const { root, tree } = await stopSupervisedChildProcess(child, {

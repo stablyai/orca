@@ -13,8 +13,6 @@ import {
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
-const MAX_TRACKED_CHILD_SESSIONS = 64
-
 function getMusePaneState(state: HookListenerState, paneKey: string): MusePaneState {
   let pane = state.musePaneStateByPaneKey.get(paneKey)
   if (!pane) {
@@ -24,32 +22,19 @@ function getMusePaneState(state: HookListenerState, paneKey: string): MusePaneSt
   return pane
 }
 
-function rememberChildSession(pane: MusePaneState, childSessionId: string): void {
-  pane.childSessionIds.add(childSessionId)
-  if (pane.childSessionIds.size > MAX_TRACKED_CHILD_SESSIONS) {
-    const oldest = pane.childSessionIds.values().next().value
-    if (oldest !== undefined) {
-      pane.childSessionIds.delete(oldest)
-    }
-  }
-}
-
 function isChildSessionEvent(pane: MusePaneState, hookPayload: Record<string, unknown>): boolean {
   const sessionId = readString(hookPayload, 'session_id')
   if (!sessionId) {
     return false
   }
-  // Why: Muse 1.3 child sessions reuse their session id as turn id; that covers a child whose
-  // SubagentStart predates this listener (Orca restart, relay reconnect).
+  // Muse1.3 children reuse session_id as turn_id, including after a listener restart loses SubagentStart.
   return pane.childSessionIds.has(sessionId) || readString(hookPayload, 'turn_id') === sessionId
 }
 
-/** True while a Muse pane has a known session log the transcript poll can read. */
 export function hasMuseSessionLog(state: HookListenerState, paneKey: string): boolean {
   return state.musePaneStateByPaneKey.get(paneKey)?.log !== undefined
 }
 
-// Muse uses Claude-compatible hook events but retains its own agent identity.
 export function normalizeMuseEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -66,7 +51,7 @@ export function normalizeMuseEvent(
     const childSessionId =
       readString(hookPayload, 'child_session_id') ?? readString(hookPayload, 'session_id')
     if (childSessionId) {
-      rememberChildSession(pane, childSessionId)
+      pane.childSessionIds.add(childSessionId)
     }
     return null
   }
@@ -118,7 +103,7 @@ export function normalizeMuseEvent(
   }
 
   if (stateName === 'working' && pane.log) {
-    // Why: Muse fires no hook for `request_user_input`; its session log is the only structured signal.
+    // Muse emits no request_user_input hook; only the session log proves its wait.
     const pendingInput = readMusePendingUserInput(pane.log, readString(hookPayload, 'turn_id'))
     if (pendingInput) {
       stateName = 'waiting'
@@ -143,7 +128,7 @@ export function normalizeMuseEvent(
 
   return normalizeAgentStatusPayload({
     state: stateName,
-    // Why: Notification's `message` is status copy ("<dir> — waiting for approval"), not the user's prompt.
+    // Notification message is status copy, never the user prompt.
     prompt: resolvePrompt(state, paneKey, eventName === 'Notification' ? '' : promptText, {
       resetOnNewTurn: isNewTurnEvent('muse', eventName)
     }),

@@ -48,8 +48,8 @@ export function buildOnboardingFolderAgentStartup(
     agent,
     prompt: '',
     cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+    agentArgs: resolveTuiAgentLaunchArgs(agent, settings),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings, host.platform),
     ...host,
     allowEmptyPromptLaunch: true
   })
@@ -83,16 +83,4 @@ export function shouldSeedFolderAgentAfterDismissedOnboarding(
     !onboarding.checklist.addedRepo &&
     !onboarding.checklist.addedFolder
   )
-}
-
-export function buildDismissedOnboardingFolderAgentStartup(
-  settings: GlobalSettings | null,
-  onboarding: OnboardingState | null,
-  hasExistingProject: boolean,
-  host: OnboardingStartupHost
-): OnboardingFolderAgentStartup | undefined {
-  if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
-    return undefined
-  }
-  return buildOnboardingFolderAgentStartup(settings, host)
 }

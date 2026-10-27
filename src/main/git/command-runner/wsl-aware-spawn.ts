@@ -2,10 +2,6 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { resolveCommand } from './wsl-command-resolution'
 
-/**
- * Spawn any command with WSL awareness.
- * Used for non-git binaries like `rg` that also need WSL routing.
- */
 export function wslAwareSpawn(
   command: string,
   args: string[],

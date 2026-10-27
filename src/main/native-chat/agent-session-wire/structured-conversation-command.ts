@@ -1,13 +1,13 @@
+import { neverThrowingStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
-} from '../../../shared/agent-session-conversation-command'
+} from '../../../shared/agent-session/agent-session-conversation-command'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
-import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { sendPreparation } from './structured-agent-session-send-preparation'
 import {
@@ -27,7 +27,6 @@ import {
   type AgentSessionConversationClear
 } from '../../runtime/agent-session-conversation-command-record'
 
-/** A command's `error` is the sentence its row shows. */
 export function conversationCommandFailure(
   failure: AgentSessionFailureFact | undefined,
   context: AgentSessionFailureWordsContext = {}
@@ -42,14 +41,10 @@ export function conversationCommandFailure(
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
   command: AgentSessionConversationCommand
-  /** /compact only: wait as a card while the agent works, as a queued send does. /clear is refused
-   *  instead for now: the queue only hands cards to the agent, and a clear is host work (stop the
-   *  agent, reset its context), so queueing it would need the drain to run host commands. */
+  /** Only /compact queues: the drain delivers provider messages; /clear needs host-side execution. */
   delivery?: 'queue-if-active'
-  /** Host-local, set by the client-facing command RPC as for an ordinary send. */
   userSend?: true
 }
-/** Stop the provider and record a fresh-context boundary in the same conversation. */
 export function runStructuredConversationCommand(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -74,7 +69,7 @@ async function clearUnderSerialize(
   const { sessionId, clientOperationId } = envelope
   const store = context.deps.store
   const matching = () => {
-    const record = store.getRecord(sessionId)?.conversationCommand
+    const record = store.getConversation(sessionId)?.conversationCommand
     return record?.operationId === clientOperationId && record.callerKey === caller.callerKey
       ? record
       : null
@@ -87,7 +82,7 @@ async function clearUnderSerialize(
     logger: context.deps.logger,
     callerKey: caller.callerKey,
     envelope,
-    // Starts the agent only to settle a rewind in doubt, as a send does; a /clear itself starts nothing.
+    // /clear starts nothing unless an ambiguous rewind needs settlement first.
     prepareSession: sendPreparation(context, envelope, { refusesInRun: true }, selection),
     journal: () => context.sessions.get(sessionId)?.journal,
     currentWork: () =>
@@ -97,7 +92,7 @@ async function clearUnderSerialize(
     plan: {
       method: 'agentSession.conversationCommand',
       fields: { command },
-      // Written to the conversation, not the agent, so whoever owns the agent does not matter.
+      // This writes the conversation independently of provider ownership.
       conversationWrite: true,
       recoverUnknownFromDurableState: true,
       settlesWithWrite: true,
@@ -118,10 +113,10 @@ async function clearUnderSerialize(
         const prior = matching()
         return prior?.phase === 'committed' ? prior : null
       },
-      // The commit is the only write, so a clear with no committed answer changed nothing.
+      // No committed clear means no effects, so replay can safely rerun it.
       rerunWhenReplayMissing: () => true,
       run: async (ctx) => {
-        const record = store.getRecord(sessionId)!
+        const record = store.requireWritableRecord(sessionId)
         const blocked = conversationCommandBlocked(
           ctx,
           record,
@@ -132,7 +127,7 @@ async function clearUnderSerialize(
           return { ok: false, refusal: blocked }
         }
         await context.stopAgent(sessionId, { cause: 'context-clear' })
-        const stopped = store.getRecord(sessionId)!
+        const stopped = store.requireWritableRecord(sessionId)
         const fence = stopped.lease.runtimeFence
         const rechecked = conversationCommandBlocked(
           { ...ctx, fence },
@@ -157,13 +152,22 @@ async function clearUnderSerialize(
         }
         await ctx.journal.context.clear(
           providerContextBoundaryForClear(clear),
-          ctx.operationReceipt,
-          agentSessionOperationKey(caller.callerKey, clientOperationId)
+          ctx.operationReceipt
         )
         return { ok: true, value: completed }
       }
     }
   })
+  if (result.ok && command === 'clear') {
+    try {
+      context.publishConversationName?.(sessionId)
+    } catch (error) {
+      neverThrowingStructuredAgentSessionLogger(context.deps.logger).warn(
+        'Chat name publication failed',
+        { scope: 'conversation-name', sessionId, error }
+      )
+    }
+  }
   return result.ok &&
     'runtimeFence' in result.value &&
     typeof result.value.runtimeFence === 'number'

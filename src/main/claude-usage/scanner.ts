@@ -16,7 +16,10 @@ import {
   mergeClaudeDailyAggregates,
   mergeClaudeSessions
 } from './usage-aggregation'
-import { projectClaudeUsageScanFile } from './transcript-usage-projection'
+import {
+  CLAUDE_USAGE_PROJECTION_VERSION,
+  projectClaudeUsageScanFile
+} from './transcript-usage-projection'
 import {
   normalizeClaudeUsageSourceFiles,
   type ClaudeUsageVerifiedSources
@@ -41,7 +44,8 @@ async function planClaudeUsageFile(
     Array.isArray(previous.sessions) &&
     Array.isArray(previous.dailyAggregates) &&
     Array.isArray(previous.ownedDedupeKeys) &&
-    typeof previous.hasDeferredClaims === 'boolean'
+    typeof previous.hasDeferredClaims === 'boolean' &&
+    previous.projectionVersion === CLAUDE_USAGE_PROJECTION_VERSION
   const previousId = previous?.physicalFileId ?? previous?.parseResumeState?.physicalFileId
   const reusable = Boolean(
     validProjection &&

@@ -8,8 +8,10 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-targe
 export function subscribeEditorRuntimeFileWatch(
   target: EditorExternalWatchTarget & { runtimeEnvironmentId: string },
   onPayload: (payload: FsChangedPayload) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  onFirstReady?: () => void
 ): () => void {
+  let readySeen = false
   let disposed = false
   let attempt = 0
   let unsubscribe: (() => void) | null = null
@@ -38,6 +40,12 @@ export function subscribeEditorRuntimeFileWatch(
         if (isCurrent()) {
           onError(error)
         }
+      },
+      () => {
+        if (isCurrent() && !readySeen) {
+          readySeen = true
+          onFirstReady?.()
+        }
       }
     )
       .then((stop) => {
@@ -50,7 +58,8 @@ export function subscribeEditorRuntimeFileWatch(
         if (resync) {
           onPayload({
             worktreePath: target.worktreePath,
-            events: [{ kind: 'overflow', absolutePath: target.worktreePath }]
+            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+            resync: true
           })
         }
       })

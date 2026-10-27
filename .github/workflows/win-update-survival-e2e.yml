@@ -1,13 +1,6 @@
 name: Windows Update-Survival E2E (branch build)
 
-# Why: proves the Phase 1 daemon-host relocation actually makes terminal
-# sessions SURVIVE a Windows update. Builds an (unsigned) installer FROM THIS
-# BRANCH, then runs the win-update-e2e harness with --expect survival: install,
-# open a terminal, silently update over it, relaunch, and assert the daemon PID
-# is unchanged and the pre-update terminal is still interactive with no console
-# flashing. Runs from the feature branch via push (workflow_dispatch only works
-# on the default branch); main is never touched. A CI runner is the only safe
-# place to install/update — see the relocation post-mortem.
+# Build/install/update unsigned branch artifact with --expect survival; require same daemon and interactive original terminal without flashes. Feature push tests pre-default-branch workflow; run only on disposable CI (relocation post-mortem).
 
 on:
   push:
@@ -71,16 +64,14 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
           install: false
 
-      # Why: cache the built installer keyed on the inputs that affect it, so a
-      # harness-only edit skips the ~20 min electron-builder build. The daemon
-      # relocation code lives under src/, so changing it correctly rebuilds.
-      # Hash before installation creates native build artifacts under native/.
+      # Cache installer by product inputs so harness-only changes skip ~20min build; hash before native install generates artifacts.
       - name: Cache branch installer
         id: cache-installer
         uses: actions/cache/restore@v4

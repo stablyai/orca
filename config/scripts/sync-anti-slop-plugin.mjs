@@ -1,6 +1,4 @@
-// anti-slop ships raw .ts with no build step, and Node refuses to type-strip anything
-// under node_modules (ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING), so oxlint cannot load
-// it from there. Copy the pinned package's source out to a gitignored dir it can load.
+// Copy pinned anti-slop TS outside node_modules: Node refuses type stripping there, so oxlint cannot load package directly.
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 

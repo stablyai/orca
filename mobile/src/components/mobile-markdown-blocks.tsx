@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type TextStyle
 } from 'react-native'
-import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { mobileMarkdownTableColumnWidths } from './mobile-markdown-table-columns'
 import { mobileMarkdownVisualPlaceholderIndex } from './mobile-markdown-visual-lines'
@@ -21,6 +21,7 @@ import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-st
 import { MarkdownText } from './mobile-markdown-text'
 import { codeFenceClosed, plainText } from './mobile-markdown-tree'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { MobileSourceCopyButton } from './MobileSourceCopyButton'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
@@ -35,6 +36,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   /** Interactive children own their touches and must forward the row action. */
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
+  renderImage?: (href: string, alt: string) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   mermaidOccurrences: Map<string, number>
 }
@@ -43,9 +45,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
 export type ParagraphText = { style: StyleProp<TextStyle>; selectable: boolean }
 
 function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNode {
-  // Mermaid fences render as diagrams (WebView), not as raw code — same as PR sidebar.
-  // Growing or unclosed fences are still streaming: mounting the WebView per tick would
-  // reload its document up to 20x/sec, so they stay raw code until done.
+  // Keep streaming/unclosed Mermaid fences as code; per-tick WebView mounts would reload document up to 20x/sec. Render diagram only once complete.
   if (isMobileMermaidLanguage(node.lang ?? undefined) && !ctx.growing && codeFenceClosed(node)) {
     const occurrence = ctx.mermaidOccurrences.get(node.value) ?? 0
     ctx.mermaidOccurrences.set(node.value, occurrence + 1)
@@ -55,13 +55,18 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
   }
   return (
     <View key={key} style={styles.codeBlock}>
-      {node.lang ? <NativeText style={styles.codeLanguage}>{node.lang}</NativeText> : null}
-      <MarkdownText
-        selectable
-        style={[styles.codeText, scaledMarkdownText(styles.codeText, ctx.textScale)]}
-      >
-        {node.value}
-      </MarkdownText>
+      <View style={styles.codeBody}>
+        {node.lang ? <NativeText style={styles.codeLanguage}>{node.lang}</NativeText> : null}
+        <MarkdownText
+          selectable
+          style={[styles.codeText, scaledMarkdownText(styles.codeText, ctx.textScale)]}
+        >
+          {node.value}
+        </MarkdownText>
+      </View>
+      {node.value ? (
+        <MobileSourceCopyButton text={node.value} accessibilityLabel="Copy code" />
+      ) : null}
     </View>
   )
 }
@@ -152,6 +157,9 @@ function renderBlock(
             {ctx.renderVisual(directive, visual)}
           </Fragment>
         ) : null
+      }
+      if (node.children.length === 1 && only?.type === 'image' && ctx.renderImage) {
+        return <Fragment key={key}>{ctx.renderImage(only.url, only.alt ?? '')}</Fragment>
       }
       if (node.children.length === 1 && only?.type === 'image' && /^https?:\/\//i.test(only.url)) {
         return (

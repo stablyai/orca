@@ -1,5 +1,4 @@
-// Editor tabs under an owner-qualified id (a floating file, a second owner of a path, a tab moved
-// to its file's workspace) keep every fact main matches to their file by id.
+// Owned editor IDs must retain facts main associates with the file for floating, contested and moved files.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
@@ -105,14 +104,9 @@ describe('editor tabs under an owned id, layout-owner build', () => {
     const { layout } = load(session)
     const workspace = layout.workspaces[GIT_KEY]!
 
-    expect(
-      tabExecutionHostId(
-        workspace.tabs[0]!,
-        workspace.editorFiles,
-        LOCAL_EXECUTION_HOST_ID,
-        workspace.worktreeId
-      )
-    ).toBe('runtime:env-1')
+    expect(tabExecutionHostId(workspace.tabs[0]!, workspace, LOCAL_EXECUTION_HOST_ID)).toBe(
+      'runtime:env-1'
+    )
     const closed = applyLayoutCommand(
       layout,
       { type: 'closeTabs', workspace: GIT_KEY, tabIds: [fileId] },

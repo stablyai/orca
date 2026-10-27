@@ -7,7 +7,6 @@ const ECLAIR_NFD = `e${String.fromCodePoint(0x301)}clair`
 
 const eclairRepo = repo('r-eclair', 'Éclair', { projectGroupId: 'pg-eclair-accent' })
 const angstromRepo = repo('r-angstrom', 'ångström', { projectGroupId: 'pg-angstrom-accent' })
-// An SSH project whose name folds equal to the local "Éclair" project.
 const sshRepo = repo('r-ssh', 'eclair', { connectionId: 'gpu-vm' })
 
 const recentTie = { lastActivityAt: GOLDEN_NOW - 1_000 }
@@ -24,10 +23,8 @@ const eclairWorktrees = [
   wt(eclairRepo, 'W2')
 ]
 const angstromSame = wt(angstromRepo, 'angstrom', { lastActivityAt: GOLDEN_NOW - 5_000 })
-// The same workspace id published by two hosts.
 const angstromSameOnSsh: Worktree = { ...angstromSame, ...onSsh }
 const angstromWorktrees = [wt(angstromRepo, 'ångström'), angstromSame, angstromSameOnSsh]
-// Labels identical to local ones, on another host.
 const sshWorktrees = [wt(sshRepo, 'eclair', onSsh), wt(sshRepo, 'w2', onSsh)]
 
 function folderGroup(id: string, name: string) {
@@ -44,8 +41,8 @@ export function goldenNameOrderState(): Partial<AppState> {
       [sshRepo.id]: sshWorktrees
     },
     worktreeLineageById: {},
-    projects: [],
-    projectHostSetups: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     // Equal tabOrder everywhere, so group names decide the order.
     projectGroups: [
       folderGroup('pg-zebra', 'zebra'),

@@ -11,6 +11,8 @@ import {
   mergeMobileSessionTabGroups
 } from '../mobile-session-tab-merge'
 import { terminalLayoutContainsLeaf } from '../../../shared/workspace-session-pane-ownership'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { terminalIsOfTab } from '../session-lifecycle/close/closed-tab-terminal'
 import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
 
 export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends OrcaRuntimeWithSyncMobileSessionTabs {
@@ -54,13 +56,10 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
-    const terminalTabs = tabs.filter(
-      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
-    )
     const tabGroups = mergeMobileSessionTabGroups(
       snapshot.worktree,
       snapshot.tabGroups ?? existing.tabGroups ?? [],
-      terminalTabs,
+      tabs,
       activeTab?.type === 'terminal' ? activeTab : null
     )
     return {
@@ -133,13 +132,15 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     incoming: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined
   ): void {
-    // Why no headless-built exemption: the first renderer publication after a restart lands on a
-    // disk-hydrated base, and skipping it left a retired paired tab owned until the next sync (STA-4897).
+    // First renderer frames after restart must prune disk-hydrated retired tabs too (STA-4897).
     if (!existing) {
       return
     }
     for (const { tab, scope } of this.listRendererRetiredTerminalTabs(incoming, existing)) {
-      if (!this.hasLiveRuntimeSessionOwnedPtyBinding(existing.worktree, tab)) {
+      if (
+        !this.hasLiveRuntimeSessionOwnedPtyBinding(existing.worktree, tab) &&
+        !this.ownsTerminalMainClosed(existing.worktree, tab)
+      ) {
         continue
       }
       if (scope === 'tab') {
@@ -148,12 +149,34 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       }
       for (const ptyId of getMobileTerminalLeafPtyIds(tab)) {
         const pty = this.ptysById.get(ptyId)
-        if (pty?.worktreeId === existing.worktree && pty.tabId === tab.parentTabId) {
+        if (
+          pty?.worktreeId === existing.worktree &&
+          terminalIsOfTab(this.paneOfPty(pty).tabId, tab.parentTabId)
+        ) {
           pty.runtimeSessionOwned = false
           this.setPairedRendererSessionOwnership(ptyId, false)
         }
       }
     }
+  }
+
+  /** Switch-on: the row's live, owned terminal that main's close left in no pane. */
+  private ownsTerminalMainClosed(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    return (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      getMobileTerminalLeafPtyIds(tab).some((ptyId) => {
+        const pty = this.ptysById.get(ptyId)
+        return (
+          pty?.worktreeId === worktreeId &&
+          pty.connected &&
+          pty.runtimeSessionOwned &&
+          this.paneOfPty(pty).tabId === null
+        )
+      })
+    )
   }
 
   protected buildPreservedHeadlessMobileSessionSnapshot(
@@ -168,13 +191,10 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
-    const terminalTabs = tabs.filter(
-      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
-    )
     return {
       ...existing,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
-      // Why: mint a fresh version or clients' same-epoch gate drops the prune frame.
+      // Bump version or clients discard same-epoch prune frames.
       snapshotVersion: existing.snapshotVersion + 1,
       activeGroupId: existing.activeGroupId ?? getHeadlessMobileSessionGroupId(existing.worktree),
       activeTabId: activeTab?.id ?? null,
@@ -183,7 +203,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
         mergeMobileSessionTabGroups(
           existing.worktree,
           existing.tabGroups ?? [],
-          terminalTabs,
+          tabs,
           activeTab?.type === 'terminal' ? activeTab : null
         ),
         existing.tabGroups ?? [],

@@ -5,9 +5,13 @@ import type { RuntimeStore } from './runtime-store-contract'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
+import { makeRuntimeStoreWithWorkspaceSession } from './orca-runtime-test-fixtures.spec'
 
-function createInventoryRuntime(): OrcaRuntimeService {
-  const runtime = new OrcaRuntimeService()
+function createInventoryRuntime(
+  runtimeStore: ConstructorParameters<typeof OrcaRuntimeService>[0] = null
+): OrcaRuntimeService {
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({ listProcesses: vi.fn(async () => []) } as never)
   return runtime
 }
@@ -200,7 +204,10 @@ describe('authoritative session tab inventory publication', () => {
   })
 
   it('restores a renderer-owned PTY discovered by the authoritative inventory refresh', async () => {
-    const runtime = createInventoryRuntime()
+    // Main binds restored panes through the store's workspace session.
+    const runtime = createInventoryRuntime(
+      makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore
+    )
     const ptyId = 'pty-survived-host-relaunch'
     const worktreeId = 'repo::/survived'
     const tabId = '11111111-1111-4111-8111-111111111111'
@@ -216,7 +223,7 @@ describe('authoritative session tab inventory publication', () => {
       runtime as unknown as { refreshMobileSessionPtyInventory: () => Promise<unknown> },
       'refreshMobileSessionPtyInventory'
     ).mockImplementation(async () => {
-      runtime.registerPty(ptyId, worktreeId, null, {
+      registerBoundPty(runtime, ptyId, worktreeId, null, {
         tabId,
         leafId,
         incarnationId: 'incarnation-survived-host-relaunch'

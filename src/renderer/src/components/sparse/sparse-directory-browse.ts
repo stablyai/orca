@@ -2,8 +2,7 @@ import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 
 const HIDDEN_BROWSE_DIRECTORIES = new Set(['.git', 'node_modules'])
 
-/** Directories a sparse preset can name, in display order. Hidden folders and
- *  heavy tool caches are dropped because no cone-mode preset targets them. */
+/** Hide tool caches and hidden directories from browsing; literal preset input remains a separate path. */
 export function listBrowsableDirectories(entries: DirEntry[]): string[] {
   return entries
     .filter(

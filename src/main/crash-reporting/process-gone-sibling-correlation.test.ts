@@ -93,9 +93,6 @@ afterEach(() => {
 })
 
 describe('sibling process-death attribution', () => {
-  // Report a326935a (bundle F0BQMB30GJX, win32 10.0.22631, 1.4.184): the network
-  // service died crashed/-1 21ms before the renderer died the same way, and only
-  // the renderer half reached the crash channel.
   it('attributes a renderer crash to a network service that died 21ms earlier', async () => {
     const store = recorderStore()
     const rendererAt = 1_786_995_438_107
@@ -105,8 +102,6 @@ describe('sibling process-death attribution', () => {
     at(rendererAt)
     record(store, event())
 
-    // The child half is suppressed as recoverable churn, so only the renderer is
-    // reported — and the correlation still saw the suppressed event.
     expect(store.record).toHaveBeenCalledOnce()
     expect(recordedDetails(store)).toMatchObject({
       crashAttribution: CONCURRENT,
@@ -116,9 +111,6 @@ describe('sibling process-death attribution', () => {
     await vi.waitFor(() => expect(store.attachDetails).toHaveBeenCalled())
   })
 
-  // Report 1862f316 (bundle F0BRPP8TC0Y, win32 10.0.26100, 1.4.184): audio service
-  // -2ms, renderer, then GPU +180ms. The GPU half lands after the renderer report
-  // is already on disk, so it has to be folded into the persisted record.
   it('folds a GPU death 180ms after the renderer into the persisted report', async () => {
     const store = recorderStore()
     const rendererAt = 1_787_017_254_450
@@ -164,9 +156,6 @@ describe('sibling process-death attribution', () => {
     expect(siblingAttaches(store)).toEqual([])
   })
 
-  // A child dying long after the renderer is at least as likely to be an effect of
-  // the renderer death as a cause of it, so the lookahead stops at the observed
-  // collateral spread instead of mirroring the 1s lookback.
   it('never retro-labels a persisted crash from a child that died 900ms later', async () => {
     const store = recorderStore()
     const rendererAt = 1_786_995_438_107
@@ -181,8 +170,6 @@ describe('sibling process-death attribution', () => {
     expect(siblingAttaches(store)).toEqual([])
   })
 
-  // Ordinary recoverable churn lands inside the lookback on any host running a
-  // looping child; it is evidence, never a verdict.
   it('keeps a loose in-window child death as evidence without attributing to it', () => {
     const store = recorderStore()
     const rendererAt = 1_786_995_438_107
@@ -210,8 +197,6 @@ describe('sibling process-death attribution', () => {
       record(store, networkServiceCrash)
     }
 
-    // A network service looping at the observed 1459/min cannot keep rewriting the
-    // record, and a repeated identity is a loop rather than one incident.
     await vi.waitFor(() => expect(siblingAttaches(store)).toHaveLength(2))
     expect(siblingAttaches(store)[0]).toMatchObject({ crashAttribution: CONCURRENT })
     expect(siblingAttaches(store)[1]).toMatchObject({ siblingProcessDeathRepeats: 1 })
@@ -274,7 +259,6 @@ describe('sibling process-death attribution', () => {
     const deaths = String(recordedDetails(store).siblingProcessDeaths)
     expect(recordedDetails(store).siblingProcessDeathCount).toBe(12)
     expect(deaths).toMatch(/ \(\+\d+ more\)$/)
-    // Short of the 240-char generic detail cap, so nothing is cut mid-token.
     expect(deaths.length).toBeLessThan(240)
   })
 
@@ -291,8 +275,6 @@ describe('sibling process-death attribution', () => {
 
     expect(recordedDetails(store)).not.toHaveProperty('crashAttribution')
     expect(recordedDetails(store)).not.toHaveProperty('siblingProcessDeathCount')
-    // An in-window death that matches nothing must not rewrite the record with an
-    // empty sibling set either.
     await vi.waitFor(() => expect(store.attachDetails).toHaveBeenCalled())
     expect(siblingAttaches(store)).toEqual([])
   })
@@ -310,8 +292,6 @@ describe('sibling process-death attribution', () => {
     expect(recordedDetails(store)).not.toHaveProperty('crashAttribution')
   })
 
-  // POSIX reports a per-process wait status, so a collateral pair carries two
-  // different codes (utility SIGKILL 9, renderer SIGSEGV 11) for one incident.
   it('correlates a POSIX pair whose per-process wait statuses differ', () => {
     onPlatform('darwin')
     const store = recorderStore()

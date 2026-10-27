@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { extractPendingAsk } from '../../shared/native-chat-ask'
+import { extractPendingAsk } from '../../shared/native-chat/input/native-chat-ask'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 import { readNativeChatTranscript } from './transcript-reader'
 import { readNativeChatTranscriptTail } from './transcript-tail-reader'
@@ -286,5 +286,59 @@ describe('Codex transcript history modes', () => {
 
     expect(call).not.toBeNull()
     expect(extractPendingAsk(call ? [call] : [])).toBeNull()
+  })
+
+  it('keeps an async question pending past its display acknowledgement until the user replies', () => {
+    const lines = [
+      {
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          name: 'request_user_input_async',
+          call_id: 'call-async',
+          arguments:
+            '{"questions":[{"title":"Which color?","options":["Red (Recommended)","Blue"]},{"title":"Any constraints?"}]}'
+        }
+      },
+      completedItem(
+        {
+          type: 'AgentMessage',
+          id: 'call-async',
+          content: [{ type: 'Text', text: 'Which color?\n- Red (Recommended)\n- Blue' }],
+          delivery: 'async'
+        },
+        '2026-10-21T00:00:01.000Z'
+      ),
+      {
+        type: 'response_item',
+        payload: {
+          type: 'function_call_output',
+          call_id: 'call-async',
+          output: '{"accepted":true}'
+        }
+      }
+    ]
+    const messages = lines.flatMap((line, index) => {
+      const message = decodeCodexTranscriptLine(JSON.stringify(line), `line-${index}`)
+      return message ? [message] : []
+    })
+
+    expect(extractPendingAsk(messages)).toEqual({
+      replyAsMessage: true,
+      questions: [
+        {
+          question: 'Which color?',
+          multiSelect: false,
+          options: [{ label: 'Red (Recommended)' }, { label: 'Blue' }]
+        },
+        { question: 'Any constraints?', multiSelect: false, options: [] }
+      ]
+    })
+
+    const reply = decodeCodexTranscriptLine(
+      JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: 'Red' } }),
+      'reply'
+    )
+    expect(extractPendingAsk([...messages, ...(reply ? [reply] : [])])).toBeNull()
   })
 })

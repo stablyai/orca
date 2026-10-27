@@ -13,11 +13,13 @@ import {
   projectWorkerAttentionContext
 } from './orchestration/worker-attention-context'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
+import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
 type RuntimeAgentOrchestrationDependencies = {
   getDb(): OrchestrationDb | null
   getLeaves(): Iterable<RuntimeLeafRecord>
   getPtys(): Iterable<RuntimePtyWorktreeRecord>
+  paneOf: PtyPaneOf
   issueLeafHandle(leaf: RuntimeLeafRecord): string
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string
   makePaneKey(leaf: RuntimeLeafRecord): string
@@ -40,7 +42,7 @@ export class RuntimeAgentOrchestrationProjection {
     const evidenceByPaneKey = new Map(
       this.deps.getAgentStatusSnapshot().map((evidence) => [evidence.activity.paneKey, evidence])
     )
-    // Defer attention to one batched query below; per-pane facts would refetch on every 16ms publish.
+    // Batch attention queries below; per-pane reads would repeat every 16ms publication.
     const batchAttention = typeof db.getWorkerAttentionFactsForDispatches === 'function'
     const queriedHandles = new Set<string>()
     for (const leaf of this.deps.getLeaves()) {
@@ -60,7 +62,8 @@ export class RuntimeAgentOrchestrationProjection {
       }
     }
     for (const pty of this.deps.getPtys()) {
-      if (!pty.paneKey || contexts[pty.paneKey]) {
+      const { paneKey } = this.deps.paneOf(pty)
+      if (!paneKey || contexts[paneKey]) {
         continue
       }
       const handle = this.deps.issuePtyHandle(pty)
@@ -69,12 +72,12 @@ export class RuntimeAgentOrchestrationProjection {
       }
       queriedHandles.add(handle)
       const context = this.getForHandle(handle, db, {
-        paneKey: pty.paneKey,
-        evidence: evidenceByPaneKey.get(pty.paneKey),
+        paneKey,
+        evidence: evidenceByPaneKey.get(paneKey),
         deferAttention: batchAttention
       })
       if (context) {
-        contexts[pty.paneKey] = context
+        contexts[paneKey] = context
       }
     }
     const entries = Object.entries(contexts)
@@ -109,7 +112,7 @@ export class RuntimeAgentOrchestrationProjection {
     handle: string,
     db = this.deps.getDb(),
     options: {
-      // Why: handles are minted per process; after a restart only the pane identity still names the dispatch.
+      // Handles are process-local; pane identity still names the Dispatch after restart.
       paneKey?: string
       evidence?: FleetAgentStatusEvidence
       deferAttention?: boolean
@@ -175,8 +178,7 @@ export class RuntimeAgentOrchestrationProjection {
       task.creator_dispatch_process_incarnation === task.created_by_process_incarnation &&
       parsePaneKey(task.creator_dispatch_pane_key)?.leafId === storedCreatorPane?.leafId
     )
-    // Why: durable Run membership is what makes this pane the child's creator; the live
-    // process-incarnation and handle checks below only decide mutation authority.
+    // Durable Run membership identifies the creator; live incarnation/handle checks only decide mutation authority.
     const creatorLineageInRun = Boolean(
       owningRun?.legacy === 0 &&
       task?.created_by_run_generation === owningRun.consumer_generation &&
@@ -229,12 +231,7 @@ export class RuntimeAgentOrchestrationProjection {
     }
   }
 
-  /**
-   * Resolves a stored (handle, pane key) pair to what this process can address now. A handle
-   * this process never minted is stale and must not reach the renderer; the pane key is the
-   * remint-stable identity, so it is re-resolved to the live pane and published even when no
-   * pane is live yet, so the row nests again as soon as that pane is restored.
-   */
+  /** Never publish stale process-local handles; re-resolve the durable pane key, retaining it while offline so restored rows can nest again. */
   private resolveLivePane(
     storedHandle: string | null | undefined,
     storedPaneKey: string | null

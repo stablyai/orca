@@ -1,6 +1,6 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
-import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start-row'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 

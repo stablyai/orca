@@ -1,14 +1,11 @@
-// The pane identity a new PTY's env carries, stamped from the spawn's own ids, for both spawn lanes.
-
 import { mkdirSync } from 'node:fs'
 import {
   buildJcodeRuntimeDirEnv,
   JCODE_RUNTIME_DIR_ENV_KEY
 } from '../../../shared/jcode-runtime-dir'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { prewarmJcodeDaemon } from '../../jcode/daemon-prewarm'
 
 export type PtySpawnPane = {
   paneKey: string
@@ -16,7 +13,6 @@ export type PtySpawnPane = {
   worktreeId: string | undefined
 }
 
-/** The pane a host spawn's own ids name, or null when they name none. */
 export function ptySpawnPaneFromIds(ids: {
   tabId?: string
   leafId?: string
@@ -38,11 +34,6 @@ type PtySpawnPaneEnvArgs = {
   /** Null when the spawn's own tab+leaf ids don't name a valid pane. */
   pane: PtySpawnPane | null
   jcodeRuntimeDir: string | undefined
-  isDaemonHostSpawn: boolean
-  launchAgent: TuiAgent | undefined
-  cwd: string | undefined
-  /** TEMPORARY (its own stacked PR removes it): only window daemon spawns pre-warm jcode. */
-  prewarmsJcodeOnDaemonHost: boolean
 }
 
 export function stampPtySpawnPaneEnv(
@@ -54,11 +45,12 @@ export function stampPtySpawnPaneEnv(
   }
   const { pane } = args
   if (!pane) {
-    // Why: ORCA_PANE_KEY crosses into shells/hook registries; only a key naming this spawn's own pane may reach it.
+    // Shell/hook identity must name this spawn's own pane, never an unproved renderer key.
     delete env.ORCA_PANE_KEY
     delete env.ORCA_TAB_ID
     delete env.ORCA_WORKTREE_ID
     delete env.ORCA_AGENT_LAUNCH_TOKEN
+    applyScrubSafeAgentEnvAliases(env)
     return
   }
   env.ORCA_PANE_KEY = pane.paneKey
@@ -73,21 +65,11 @@ export function stampPtySpawnPaneEnv(
     delete env.ORCA_WORKTREE_ID
   }
   // A failed managed-dir preparation must leave a working caller directory intact.
-  if (args.jcodeRuntimeDir === undefined) {
-    return
+  if (args.jcodeRuntimeDir !== undefined) {
+    env[JCODE_RUNTIME_DIR_ENV_KEY] = args.jcodeRuntimeDir
   }
-  env[JCODE_RUNTIME_DIR_ENV_KEY] = args.jcodeRuntimeDir
-  // Why here too: daemon-host spawns never reach LocalPtyProvider.spawn, so
-  // without this the pre-warm — the whole point of which is to beat jcode's
-  // 5s socket budget on a cold runtime dir — would not fire for those panes.
-  if (args.isDaemonHostSpawn && args.prewarmsJcodeOnDaemonHost) {
-    prewarmJcodeDaemon({
-      launchAgent: args.launchAgent,
-      runtimeDir: args.jcodeRuntimeDir,
-      cwd: args.cwd,
-      env
-    })
-  }
+  // Why: SSH relay spawns skip the local/daemon env builders that otherwise mirror these.
+  applyScrubSafeAgentEnvAliases(env)
 }
 
 /** Window local providers validate asynchronously; daemon spawns retain their synchronous preparation. */

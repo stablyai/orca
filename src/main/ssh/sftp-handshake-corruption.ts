@@ -1,12 +1,4 @@
-/**
- * An external `sftp-server` is started by sshd through the user's login shell, so anything a
- * startup file prints (a banner, a bare title escape) lands where the SFTP VERSION reply belongs.
- * ssh2 then reads the text as a packet header ("Packet length 1111577416 exceeds max length").
- *
- * ssh2 delivers that parse failure through `client.sftp`'s callback only before the session is
- * ready, and destroys the channel itself. So an error tagged here means no SFTP request beyond
- * INIT was ever sent: nothing was written, and another transfer route cannot race this one.
- */
+/** Login-shell stdout can corrupt SFTP VERSION parsing. Tag only open-callback failures: ssh2 closes before any request beyond INIT, so fallback cannot race remote writes. */
 
 type SftpHandshakeCorruption = Error & { sftpHandshakeCorrupted: true }
 

@@ -1,7 +1,4 @@
-/**
- * A desktop paired to an `orca serve` host: main keeps the server's workspace rows itself, from the
- * server's change events and with no phone asking, and they match the rows the window fetched.
- */
+// Without phone requests, desktop main must retain server rows from change events and agree with its window’s catalog.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -9,7 +6,7 @@ import { z } from 'zod'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { launchPairedElectronClient } from './helpers/paired-electron-client'
-import { SIDEBAR_INPUTS_BUILD, expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import type { Page } from '@stablyai/playwright-test'
 
 test.skip(
@@ -92,7 +89,6 @@ test("main keeps a paired server's rows live, deletions included, and unverifiab
         (await mainServerRows(desktop.page)).keys.every((key) => key.startsWith('runtime:'))
       ).toBe(true)
       expect((await mainServerRows(desktop.page)).health).toBe('available')
-      await expectNoSidebarShadowMismatches(desktop.page)
 
       await host.client.call('worktree.set', { worktree: `id:${removed}`, isPinned: true })
       await expect
@@ -106,7 +102,6 @@ test("main keeps a paired server's rows live, deletions included, and unverifiab
       await expect
         .poll(async () => (await mainServerRows(desktop.page)).names, { timeout: 30_000 })
         .not.toContain('removed')
-      await expectNoSidebarShadowMismatches(desktop.page)
 
       // A server that stops answering keeps its last rows, never read as gone.
       await host.restartServeProcess({
@@ -121,7 +116,6 @@ test("main keeps a paired server's rows live, deletions included, and unverifiab
         .poll(async () => (await mainServerRows(desktop.page)).freshness, { timeout: 90_000 })
         .toBe('live')
       expect((await mainServerRows(desktop.page)).names).toContain('kept')
-      await expectNoSidebarShadowMismatches(desktop.page)
     } finally {
       await desktop.dispose()
     }

@@ -1,39 +1,46 @@
-/** Download, hash-verify and cache the pinned Node runtime, driven only by its pinned asset. */
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { chmod, link, mkdir, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
-import { downloadVerifiedArchive, extractRuntimeArchive } from './runtime-archive-download'
+import {
+  downloadVerifiedArchive,
+  extractRuntimeArchive,
+  ReleaseMismatchError
+} from './runtime-archive-download'
 import { findOrcadCachePath } from './orcad-cache-path'
 import { orcadNodeRuntimeExecutable } from '../../shared/orcad-artifacts'
+import { nodeDistMirrorUrl } from '../../shared/node-dist-mirror'
+import { configuredNodeDistMirror } from './node-dist-mirror-setting'
 import {
+  NODE_RUNTIME_PIN,
   pinnedNodeRuntimeAsset,
   nodeRuntimeExecutablePath,
   nodeRuntimeReleaseUrl,
   type NodeRuntimeTarget
 } from '../../shared/node-runtime-pin'
+import { errorMessage } from '../../shared/error-message'
 
 export type PinnedRuntimeMaterializeOptions = {
   fetcher?: MainHttpClient['fetch']
   signal?: AbortSignal
+  /** Empty disables retries. */
+  retryDelaysMs?: readonly number[]
 }
 
 export type PinnedRuntimeArchive = {
-  /** Shown in errors, e.g. "Node". */
   label: string
   url: string
   archiveSha256: string
-  /** The download's size limit; 200 MiB by default. */
+  /** Defaults to 200 MiB. */
   maxArchiveBytes?: number
 }
 
 export type PinnedRuntimeExecutable = PinnedRuntimeArchive & {
   executableSha256: string
-  /** Archive-relative path of the executable. */
   member: string
   isWindows: boolean
-  /** Where the verified executable is published; `attempt` > 0 names a repair beside it. */
+  /** Repairs use attempt > 0 to publish beside existing readers. */
   cachePath: (attempt: number) => string
 }
 
@@ -41,7 +48,7 @@ function archiveName(archive: PinnedRuntimeArchive): string {
   return basename(new URL(archive.url).pathname)
 }
 
-/** The pinned archive, downloaded once and kept by its own name; its hash is checked on every use. */
+/** Cache archives by pin; verify their hash on every use. */
 export async function materializeVerifiedRuntimeArchive(
   archive: PinnedRuntimeArchive,
   cacheDir: string,
@@ -65,8 +72,11 @@ export async function materializeVerifiedRuntimeArchive(
       archive,
       downloaded,
       options.fetcher ?? getMainHttpClient().fetch,
-      options.signal
-    )
+      options.signal,
+      options.retryDelaysMs
+    ).catch((error: unknown) => {
+      throw unreachableArchiveError(archive, cached.path, error, options.signal)
+    })
     options.signal?.throwIfAborted()
     await publishVerified(
       downloaded,
@@ -77,6 +87,41 @@ export async function materializeVerifiedRuntimeArchive(
     return cached.path
   } finally {
     await rm(temporaryDir, { recursive: true, force: true })
+  }
+}
+
+/** Attribute download failures to this computer and expose the hash-verified offline cache path. */
+function unreachableArchiveError(
+  archive: PinnedRuntimeArchive,
+  cachePath: string,
+  error: unknown,
+  signal: AbortSignal | undefined
+): unknown {
+  const localFailure = error instanceof Error && 'code' in error && typeof error.code === 'string'
+  if (signal?.aborted || error instanceof ReleaseMismatchError || localFailure) {
+    return error
+  }
+  const cause = errorMessage(error)
+  return new DesktopDownloadUnreachableError(
+    `This computer couldn't download ${archive.label} from ${archive.url} (${cause}). ` +
+      `Orca uploads ${archive.label} to the host from this computer, so the host doesn't need ` +
+      `internet access, but this computer must reach that address once. Check this computer's ` +
+      `network connection or proxy and connect again, set a mirror in Settings > Advanced > ` +
+      `Network > Node.js download mirror, or download that file on another machine ` +
+      `and copy it to ${cachePath}`,
+    `${archive.url}: ${cause}`,
+    error
+  )
+}
+
+export class DesktopDownloadUnreachableError extends Error {
+  constructor(
+    message: string,
+    readonly reason: string,
+    cause: unknown
+  ) {
+    super(message, { cause })
+    this.name = 'DesktopDownloadUnreachableError'
   }
 }
 
@@ -106,7 +151,8 @@ export async function materializeCachedRuntimeExecutable(
       runtime,
       archivePath,
       options.fetcher ?? getMainHttpClient().fetch,
-      options.signal
+      options.signal,
+      options.retryDelaysMs
     )
     options.signal?.throwIfAborted()
     const extractedDir = join(temporaryDir, 'extracted')
@@ -136,7 +182,7 @@ export async function materializeCachedRuntimeExecutable(
   }
 }
 
-/** Hard-link publication: a concurrent winner's identical bytes are kept, never replaced. */
+/** Hard-link publication preserves a concurrent winner instead of replacing its bytes. */
 async function publishVerified(
   source: string,
   destination: string,
@@ -164,23 +210,67 @@ function nodeRuntimeArchive(target: NodeRuntimeTarget): PinnedRuntimeArchive {
   }
 }
 
-/** The pinned official archive, uploaded to hosts as published (design D5). */
+async function withNodeDistMirror<T>(
+  target: NodeRuntimeTarget,
+  options: PinnedRuntimeMaterializeOptions,
+  run: (archive: PinnedRuntimeArchive, options: PinnedRuntimeMaterializeOptions) => Promise<T>
+): Promise<T> {
+  const archive = nodeRuntimeArchive(target)
+  const asset = pinnedNodeRuntimeAsset(target)
+  // Mirrors host only the official tree; unofficial builds have one source URL.
+  const mirror = asset.source === 'official' ? configuredNodeDistMirror() : null
+  if (!mirror) {
+    return run(archive, options)
+  }
+  const mirrorUrl = nodeDistMirrorUrl(mirror, NODE_RUNTIME_PIN.version, asset.archive)
+  try {
+    // Do not delay official fallback with mirror retries.
+    return await run({ ...archive, url: mirrorUrl }, { ...options, retryDelaysMs: [] })
+  } catch (mirrorError) {
+    if (options.signal?.aborted) {
+      throw mirrorError
+    }
+    return run(archive, options).catch((error: unknown) => {
+      // Combine network failures only; cancellation/local errors retain their own identity.
+      if (options.signal?.aborted || !(error instanceof DesktopDownloadUnreachableError)) {
+        throw error
+      }
+      const mirrorReason =
+        mirrorError instanceof DesktopDownloadUnreachableError
+          ? mirrorError.reason
+          : `${mirrorUrl}: ${errorMessage(mirrorError)}`
+      throw new DesktopDownloadUnreachableError(
+        `${errorMessage(error)} (the mirror ${mirrorReason} failed too)`,
+        `${mirrorReason}; ${errorReason(error)}`,
+        error
+      )
+    })
+  }
+}
+
+function errorReason(error: unknown): string {
+  return error instanceof DesktopDownloadUnreachableError ? error.reason : errorMessage(error)
+}
+
 export function materializeNodeRuntimeArchive(
   target: NodeRuntimeTarget,
   cacheRoot: string,
   options: PinnedRuntimeMaterializeOptions
 ): Promise<string> {
-  return materializeVerifiedRuntimeArchive(
-    nodeRuntimeArchive(target),
-    join(cacheRoot, 'node', 'archives'),
-    options
+  return withNodeDistMirror(target, options, (archive, download) =>
+    materializeVerifiedRuntimeArchive(archive, nodeRuntimeArchiveDir(cacheRoot), download)
   )
 }
 
-/**
- * Client cache keyed by content (design D2): `node/<executableSha256>/node[.exe]`. Only hosts
- * that cannot extract the archive themselves get the bare executable (Windows SSH vault reads).
- */
+export function nodeRuntimeArchiveCachePath(target: NodeRuntimeTarget, cacheRoot: string): string {
+  return join(nodeRuntimeArchiveDir(cacheRoot), pinnedNodeRuntimeAsset(target).archive)
+}
+
+function nodeRuntimeArchiveDir(cacheRoot: string): string {
+  return join(cacheRoot, 'node', 'archives')
+}
+
+/** Content-keyed executable cache for hosts unable to extract archives, e.g. Windows SSH vault reads. */
 export function materializeCachedNodeRuntime(
   target: NodeRuntimeTarget,
   cacheRoot: string,
@@ -188,21 +278,23 @@ export function materializeCachedNodeRuntime(
 ): Promise<string> {
   const asset = pinnedNodeRuntimeAsset(target)
   const executableName = basename(orcadNodeRuntimeExecutable(target))
-  return materializeCachedRuntimeExecutable(
-    {
-      ...nodeRuntimeArchive(target),
-      executableSha256: asset.executableSha256,
-      member: nodeRuntimeExecutablePath(target, asset.archive),
-      isWindows: target.startsWith('win32-'),
-      cachePath: (attempt) =>
-        join(
-          cacheRoot,
-          'node',
-          asset.executableSha256,
-          `${attempt ? `repair-${attempt}-` : ''}${executableName}`
-        )
-    },
-    options
+  return withNodeDistMirror(target, options, (archive, download) =>
+    materializeCachedRuntimeExecutable(
+      {
+        ...archive,
+        executableSha256: asset.executableSha256,
+        member: nodeRuntimeExecutablePath(target, asset.archive),
+        isWindows: target.startsWith('win32-'),
+        cachePath: (attempt) =>
+          join(
+            cacheRoot,
+            'node',
+            asset.executableSha256,
+            `${attempt ? `repair-${attempt}-` : ''}${executableName}`
+          )
+      },
+      download
+    )
   )
 }
 

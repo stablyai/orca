@@ -1,8 +1,8 @@
-import type * as ExecCommandModule from '../../ssh/remote-exec-command'
+import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 
-vi.mock('../../ssh/remote-exec-command', async (importOriginal) => ({
+vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn(),
   isUnconfirmedSshCommandTermination: (error: unknown) =>
@@ -15,7 +15,7 @@ vi.mock('./remote-install-gc-claim', () => ({
   waitForRelayGcClaimRelease: vi.fn().mockResolvedValue(undefined)
 }))
 
-import { execCommand } from '../../ssh/remote-exec-command'
+import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { acquireInstallLock, RemoteInstallLockBusyError } from './remote-install-lock'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 

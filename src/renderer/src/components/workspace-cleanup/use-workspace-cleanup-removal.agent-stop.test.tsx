@@ -211,7 +211,6 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
       scanWorkspaceCleanup: vi.fn(() => new Promise<never>(() => {})),
       hydrateWorkspaceCleanupFromCache: vi.fn(async () => false),
       hydrateWorkspaceSpaceFromCache: vi.fn(async () => false),
-      // The batch never settles, so it stays in flight across close and reopen.
       removeWorkspaceCleanupCandidates: vi.fn(() => new Promise<never>(() => {}))
     })
     startAgent('b')

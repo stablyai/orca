@@ -8,8 +8,7 @@ const ROW_STATES: readonly AgentRowState[] = [...AGENT_STATUS_STATES, 'idle', 'u
 
 describe('showsAgentToolPreview', () => {
   it('covers exactly the two states whose tool fields describe live work', () => {
-    // Why: enumerate every row state so a new one has to make this decision explicitly
-    // rather than defaulting into showing a stale tool.
+    // Enumerate every state so a new state cannot silently inherit stale tool fields.
     const showing = ROW_STATES.filter((state) => showsAgentToolPreview(state))
 
     expect(showing).toEqual(['working', 'waiting'])
@@ -37,6 +36,23 @@ describe('formatAgentToolPreview', () => {
 
   it('falls back to the bare tool name when the input is not previewable', () => {
     expect(formatAgentToolPreview({ toolName: 'edit' }, 'waiting')).toBe('edit')
+  })
+
+  it("shows a program's bare message when no tool is named", () => {
+    const program = {
+      agentType: 'brew',
+      toolInput: 'Pouring wget',
+      programStatus: { state: 'working' as const, observedAt: 1 }
+    }
+    expect(formatAgentToolPreview(program, 'working')).toBe('Pouring wget')
+    expect(formatAgentToolPreview(program, 'done')).toBe('')
+  })
+
+  it("hides a real agent's tool input that has no tool name", () => {
+    expect(
+      formatAgentToolPreview({ agentType: 'claude', toolInput: 'src/app.ts' }, 'working')
+    ).toBe('')
+    expect(formatAgentToolPreview({ toolInput: 'src/app.ts' }, 'working')).toBe('')
   })
 
   it('ignores whitespace-only fields', () => {

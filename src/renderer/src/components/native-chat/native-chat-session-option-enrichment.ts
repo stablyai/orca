@@ -5,11 +5,11 @@ import {
   mergeDiscoveredAuthoritativeModels,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
-import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 
 type CatalogEnrichmentEntry = {
   agent: AgentType
@@ -107,8 +107,7 @@ export function ensureNativeChatModelEnrichment(args: {
   entry.state = 'pending'
   retainEnrichmentEntry(key, entry)
 
-  // Why: model discovery must never delay rendering or launching; the seed is
-  // immediately usable while this once-per-host probe runs in the background.
+  // Render and launch from the seed while once-per-host discovery runs in the background.
   void args
     .discover()
     .then((discovered) => {

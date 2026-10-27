@@ -48,8 +48,6 @@ it.each([
         git(commit)
       }
       const sourceSha = git(['rev-parse', 'HEAD'])
-      const eventPath = join(root, 'event.json')
-      writeFileSync(eventPath, JSON.stringify({ pull_request: { draft: true } }))
       const result = runProcessSync({
         program: process.execPath,
         args: [fileURLToPath(new URL('./ci-unit-plan.mjs', import.meta.url))],
@@ -59,7 +57,7 @@ it.each([
           ORCA_BACKGROUND_LAUNCH: '1',
           ORCA_UNIT_SELECTION_MODE: 'selected',
           GITHUB_EVENT_NAME: 'pull_request',
-          GITHUB_EVENT_PATH: eventPath,
+          ORCA_PULL_REQUEST_DRAFT: 'true',
           GITHUB_SHA: sourceSha,
           ORCA_SHARD_SOURCE_SHA: sourceSha,
           GITHUB_OUTPUT: join(root, 'outputs'),
@@ -88,15 +86,13 @@ it.each([
   }
 )
 
-it.each(['5', '10', 'invalid'])(
+it.each(['5', '6', '10', 'invalid', '11'])(
   'validates the requested full shard count and keeps fallback coverage: %s',
   (requestedCount) => {
     const root = mkdtempSync(join(tmpdir(), 'orca-unit-count-'))
     try {
       mkdirSync(join(root, 'src'))
       writeFileSync(join(root, 'src/retained.test.ts'), 'export const retained = true')
-      const eventPath = join(root, 'event.json')
-      writeFileSync(eventPath, '{}')
       const result = runProcessSync({
         program: process.execPath,
         args: [fileURLToPath(new URL('./ci-unit-plan.mjs', import.meta.url))],
@@ -106,13 +102,14 @@ it.each(['5', '10', 'invalid'])(
           ORCA_BACKGROUND_LAUNCH: '1',
           ORCA_UNIT_FULL_SHARD_COUNT: requestedCount,
           GITHUB_EVENT_NAME: 'workflow_dispatch',
-          GITHUB_EVENT_PATH: eventPath,
           ORCA_SHARD_SOURCE_SHA: 'full-count-fixture'
         }
       })
-      if (requestedCount === 'invalid') {
+      if (['invalid', '11'].includes(requestedCount)) {
         expect(result.code).not.toBe(0)
-        expect(result.stderr).toContain('ORCA_UNIT_FULL_SHARD_COUNT must be 5 or 10')
+        expect(result.stderr).toContain(
+          'ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 10'
+        )
         return
       }
       expect(result.code, result.stderr).toBe(0)

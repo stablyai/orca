@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { classifyAutomationHostQueryError } from './automation-host-cache-error'
 
 function classify(error: unknown): { code: string; retryable: boolean } {
@@ -7,7 +7,7 @@ function classify(error: unknown): { code: string; retryable: boolean } {
   return { code, retryable }
 }
 
-// Pins the RPC-code mapping of host query failures (round-2 S5), so a dropped code is deliberate.
+// Pin RPC failure-code mapping so dropping a classification is deliberate.
 describe('classifyAutomationHostQueryError code mapping', () => {
   it.each([
     ['runtime_unavailable', 'authority_unavailable', true],

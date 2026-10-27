@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestTerminalTabRename } from './terminal-tab-rename-request'
 
@@ -33,7 +34,7 @@ const storeState = vi.hoisted(
 )
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T>(callback: T) {
@@ -69,6 +70,11 @@ vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
 
 vi.mock('./use-tab-strip-slot-props', () => ({
   useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })
+}))
+
+// Naming failure has its own tests; its hooks need a real React dispatcher.
+vi.mock('./use-native-chat-naming-failure', () => ({
+  useNativeChatNamingFailure: () => null
 }))
 
 vi.mock('@dnd-kit/sortable', () => ({

@@ -42,7 +42,7 @@ export async function createGitHubPullRequest(
   // `gh` runs on this client whatever the host; only the git reads under it are routed.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
 
-  // Why: creation targets the origin owning the unqualified head branch; the shared resolver preserves its host (#7331, #8312).
+  // The unqualified head branch belongs to origin; retain its resolved host.
   const ownerRepo = await getOriginGitHubApiRepository(
     repoPath,
     connectionId,
@@ -55,7 +55,7 @@ export async function createGitHubPullRequest(
       error: 'Creating pull requests requires a GitHub remote.'
     }
   }
-  // The runner host-qualifies --repo from options.host for GHES (#8312).
+  // The runner qualifies --repo using options.host.
   const repoArg = `${ownerRepo.owner}/${ownerRepo.repo}`
 
   const base = normalizeHostedReviewBaseRef(input.base)

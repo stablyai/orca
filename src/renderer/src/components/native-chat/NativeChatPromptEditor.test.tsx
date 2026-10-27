@@ -50,6 +50,13 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe('Please $review $review typed manually')
   })
 
+  it("labels Pi's `/skill:<name>` pill by the skill alone", async () => {
+    const { input, container } = setup('/cav')
+    await act(async () => input.insertSkill!(0, 4, '/skill:caveman'))
+    expect(container.querySelector('[data-native-chat-skill]')?.textContent).toBe('Caveman')
+    expect(input.value).toBe('/skill:caveman ')
+  })
+
   it('shows attached files as filename pills that serialize to the reference the agent reads', async () => {
     const { input, container, onChange } = setup('See  please')
     act(() => input.setSelectionRange(4, 4))

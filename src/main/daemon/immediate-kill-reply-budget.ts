@@ -8,9 +8,7 @@ export const SESSION_FORCE_KILL_RETRY_MS = 250
 // Mirrors DESCENDANT_SNAPSHOT_TIMEOUT_MS, which immediate teardown's initial capture uses.
 export const IMMEDIATE_KILL_CAPTURE_TIMEOUT_MS = 1_000
 
-/** Longest the daemon takes to answer an immediate kill: descendant capture, the shutdown
- *  verification window plus its two overrunning table reads, one failed force-kill's retry wait,
- *  then the root's physical-exit wait. */
+/** Include descendant capture, two overrunning table reads, a force-kill retry and physical-exit verification. */
 export const IMMEDIATE_KILL_REPLY_BUDGET_MS =
   IMMEDIATE_KILL_CAPTURE_TIMEOUT_MS +
   SHUTDOWN_DESCENDANT_VERIFY_MS +

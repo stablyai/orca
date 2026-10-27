@@ -41,13 +41,17 @@ export type ChatSettingsRenderContext = {
   model: Pick<
     SettingsRenderContext['model'],
     | 'settings'
+    | 'fontSuggestions'
     | 'updateSettings'
     | 'setHasUnsavedChatPromptChanges'
     | 'sourceControlAiPromptDiscardSignal'
     | 'hasUnsavedChatPromptChanges'
     | 'showDesktopOnlySettings'
   >
-  interactions: Pick<SettingsRenderContext['interactions'], 'writeSourceControlAiSettingsOrThrow'>
+  interactions: Pick<
+    SettingsRenderContext['interactions'],
+    'writeSourceControlAiSettingsOrThrow' | 'requestFontSuggestions'
+  >
   navigation: Pick<SettingsRenderContext['navigation'], 'getSectionSearchEntries'>
   view: Pick<SettingsRenderContext['view'], 'isSectionMounted'>
 }
@@ -57,6 +61,8 @@ export function renderChatSettingsSection(context: ChatSettingsRenderContext): R
   return (
     <ChatSettingsSection
       settings={model.settings}
+      fontSuggestions={model.fontSuggestions}
+      onRequestFontSuggestions={interactions.requestFontSuggestions}
       updateSettings={model.updateSettings}
       writeSourceControlAiSettings={interactions.writeSourceControlAiSettingsOrThrow}
       onChatPromptDirtyChange={model.setHasUnsavedChatPromptChanges}

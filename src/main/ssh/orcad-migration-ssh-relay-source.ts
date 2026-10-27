@@ -1,5 +1,4 @@
-/** The relay-era SSH target as a migration source: keyed by its target id, paths unchanged. */
-import { ORCAD_MIGRATION_SSH_RELAY_SOURCE_KIND } from '../../shared/orcad-migration-source-kind'
+import { ORCAD_MIGRATION_SSH_RELAY_SOURCE_KIND } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type { SshTarget } from '../../shared/ssh-types'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
 import type { Store } from '../persistence'
@@ -15,25 +14,24 @@ import {
   releaseOrcadMigrationFence,
   resolveOrcadMigrationFence
 } from './orcad-migration-source-fence'
-import { retainOrcadMigrationSource } from './orcad-migration-source-retention'
 import {
   assessOrcadMigrationTerminals,
   retireProvenExitedLeases,
   type CensusHostRelayTerminals
 } from './orcad-migration-terminal-gate'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
+import type { OrcadMigrationPaneLeasePredicate } from './orcad-migration-bridged-panes'
 
 type SshRelayCutoverDeps = {
   userDataPath: string
   store: OrcadMigrationPreflightStore
   claims: SshTargetOrcadClaims
-  /** Rebuilt for every check when `store` is a copy that would never see a later edit. */
+  /** Rebuild copied stores for every check so later edits remain visible. */
   freshSource?: () => OrcadMigrationPreflightStore
   signal?: AbortSignal
 }
 
-/** The fenced SSH target a journaled cutover names. */
 export function sshRelayMigrationCutoverPort(
   deps: SshRelayCutoverDeps
 ): OrcadMigrationSourceCutoverPort {
@@ -43,9 +41,7 @@ export function sshRelayMigrationCutoverPort(
         { userDataPath: deps.userDataPath, store: deps.freshSource?.() ?? deps.store },
         cutover
       ),
-    releaseFence: (cutover) => releaseOrcadMigrationFence(deps, cutover),
-    retireAfterCommit: (migrationId, now) =>
-      retainOrcadMigrationSource(deps.userDataPath, migrationId, now)
+    releaseFence: (cutover) => releaseOrcadMigrationFence(deps, cutover)
   }
 }
 
@@ -56,6 +52,7 @@ export function createSshRelayMigrationSource(
     target: SshTarget
     /** Every relay endpoint on the host's account; without it exit can never be proven. */
     censusHost?: CensusHostRelayTerminals | null
+    isBridgedPaneLease?: OrcadMigrationPaneLeasePredicate
   }
 ): OrcadMigrationSource {
   const { userDataPath, store, target } = deps
@@ -78,6 +75,7 @@ export function createSshRelayMigrationSource(
         store,
         claims: deps.claims,
         targetId: target.id,
+        isBridgedPaneLease: deps.isBridgedPaneLease,
         ...args
       })
   }

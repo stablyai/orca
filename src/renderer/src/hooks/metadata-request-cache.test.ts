@@ -59,13 +59,11 @@ describe('metadata-request-cache', () => {
     await expect(loadMetadata(store, 'repo:labels', fetcher, () => 1_000)).rejects.toThrow(
       'network'
     )
-    // Within the failure TTL the cached rejection is reused without a fetch.
     await expect(loadMetadata(store, 'repo:labels', fetcher, () => 2_000)).rejects.toThrow(
       'network'
     )
     expect(fetcher).toHaveBeenCalledTimes(1)
 
-    // Past the failure TTL the key becomes fetchable again.
     await expect(loadMetadata(store, 'repo:labels', fetcher, () => 11_000)).resolves.toEqual([
       'triage'
     ])
@@ -196,7 +194,6 @@ describe('metadata-request-cache', () => {
       )
     }
 
-    // repo-0 was evicted for capacity, so the gate must point at repo-1's expiry.
     expect(store.nextCacheExpiryAt).toBe(1 + 300_000)
     let reads = 0
     for (const entry of store.cache.values()) {

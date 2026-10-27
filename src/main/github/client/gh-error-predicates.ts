@@ -4,7 +4,7 @@ import {
   safePRRefreshErrorMessage
 } from '../pr-refresh-error-classification'
 import { classifyGhError } from '../gh-utils'
-// Why: import from the lightweight module (not ./gh-utils) so tests mocking gh-utils still get the real functions.
+// Keep real error parsing available when tests mock gh-utils.
 import { extractExecError, parseRetryAfterMs } from '../../git/exec-error'
 export function isNoPullRequestError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
@@ -12,7 +12,7 @@ export function isNoPullRequestError(err: unknown): boolean {
 }
 
 export function isNotFoundGhError(err: unknown): boolean {
-  // Why: execFile keeps the API diagnostic in stderr; err.message is only "Command failed".
+  // Runner diagnostics can exist only on stderr, independently of the exit message.
   return classifyGhError(extractExecError(err).stderr).type === 'not_found'
 }
 
@@ -30,7 +30,7 @@ export function prRefreshUpstreamError(
     message: safePRRefreshErrorMessage(errorType),
     fetchedAt: Date.now()
   }
-  // Why: a Retry-After is a real cooldown — surface it as the retry schedule so the renderer doesn't retry into another 429.
+  // Honor server cooldowns so UI retries cannot immediately hit the same limit.
   if (errorType === 'rate_limited') {
     const retryAfterMs = parseRetryAfterMs(extractExecError(err).stderr)
     if (retryAfterMs !== null && retryAfterMs > 0) {

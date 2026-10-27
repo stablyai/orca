@@ -35,7 +35,7 @@ vi.mock('@/store', async () => {
   }
 })
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null,
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null,
   getExecutionHostIdForWorktree: () => mocks.executionHostId
 }))
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
@@ -155,7 +155,10 @@ describe('deferred browser lifecycle through the overlay and SSH gate', () => {
     mocks.prepare.mockReset().mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { browser: { prepareSshWorkspacePartition: mocks.prepare } }
+      value: {
+        browser: { prepareSshWorkspacePartition: mocks.prepare },
+        ui: { onBrowserPagePointerDown: () => () => {} }
+      }
     })
   })
   afterEach(() => {

@@ -4,7 +4,7 @@ import type {
   BrowserScrollResult
 } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
-import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
+import { iterateBrowserTextInsertionChunks } from '../../shared/browser-text-insertion-chunks'
 import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from './agent-browser-bridge-types'
 import { AgentBrowserBridgeCoreCommands } from './agent-browser-bridge-core-commands'
 
@@ -96,8 +96,6 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
       return await this.execAgentBrowser(sessionName, ['is', what, selector])
     })
   }
-
-  // ── Keyboard commands ──
 
   async keyboardInsertText(
     text: string,

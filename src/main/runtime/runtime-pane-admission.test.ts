@@ -49,6 +49,7 @@ describe('startInAdmittedPane', () => {
     ).rejects.toThrow('mount timed out')
     expect(store.withdrawTerminalPane).toHaveBeenCalledWith(
       { type: 'closePane', workspace: 'wt-1', tabId: 'tab-1', leafId: 'leaf-new' },
+      undefined,
       undefined
     )
   })

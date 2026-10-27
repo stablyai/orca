@@ -45,7 +45,6 @@ describe('listOmpSubagentSessions', () => {
         'Read the DC API spec'
       )
     )
-    // Artifacts are not transcripts; nested files belong to their own parents.
     await writeFile(join(artifactDir, 'notes.md'), 'not a transcript')
     await writeFile(join(artifactDir, 'local', 'plan.jsonl'), '{}')
 
@@ -55,8 +54,6 @@ describe('listOmpSubagentSessions', () => {
     })
 
     expect(result.issues).toEqual([])
-    // Newest first, titled by the coordinator-given task label, each linked to
-    // the parent derived from the layout (not the child's own session record).
     expect(
       result.sessions.map((session) => ({
         title: session.title,

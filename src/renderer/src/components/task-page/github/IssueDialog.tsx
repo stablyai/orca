@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,8 @@ import {
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { translate } from '@/i18n/i18n'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import IssueSourceSelector from '@/components/github/IssueSourceSelector'
 import {
   Select,
@@ -18,7 +20,7 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
-import { resolveUserRepoSwitchReset } from '@/components/task-page-new-issue-draft'
+import { resolveUserRepoSwitchReset } from '@/components/task-page/task-page-new-issue-draft'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { Input } from '@/components/ui/input'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
@@ -76,9 +78,11 @@ export function TaskPageGitHubIssueDialog({
             {translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
           </DialogTitle>
           {(() => {
-            // Why: inline the resolved {owner}/{repo} slug as the source indicator; fall back to displayName when unresolved.
+            // Use the resolved slug as the source indicator, falling back to displayName.
             const entry = newIssueTargetRepo
-              ? perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+              ? perRepoSourceState.find((s) =>
+                  repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
+                )
               : undefined
             const issuesSlug = entry?.sources?.issues
               ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
@@ -92,8 +96,7 @@ export function TaskPageGitHubIssueDialog({
             )
           })()}
           {(() => {
-            // Why: mirror the Tasks-view target selector so a fork contributor can flip target at filing time (fork-routing regression #1076).
-            // Sibling (not nested) because DialogDescription renders a <p> and the selector a <div> — nesting is invalid HTML.
+            // Keep the fork target selector beside DialogDescription; its div cannot nest inside the description’s p.
             if (!newIssueTargetRepo) {
               return null
             }
@@ -119,7 +122,8 @@ export function TaskPageGitHubIssueDialog({
                     void setIssueSourcePreference(
                       newIssueTargetRepo.id,
                       newIssueTargetRepo.path,
-                      next
+                      next,
+                      getRepoExecutionHostId(newIssueTargetRepo)
                     )
                   }}
                 />

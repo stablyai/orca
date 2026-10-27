@@ -1,3 +1,4 @@
+import { readStructuredAgentLaunchRecords } from './agent-session/launch/structured-agent-session-launch-persistence'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
@@ -21,10 +22,7 @@ const WORKSPACE_CHROME_SESSION_FIELDS = [
   'tabGroupLayouts'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
-// Why: unbounded per-worktree history — one entry per worktree ever focused / given default tabs.
-// Folder-key detection still scans them, but repo-enumeration for pre-hydration must NOT: they'd
-// pull in ~every repo the user ever touched and defeat the selective fetch, and they hydrate
-// unfiltered regardless (the post-scan re-prune reaps stale entries).
+// Unbounded history maps hydrate unfiltered; scan folder shapes but never enumerate repos from them, or selective startup fetch expands to every historical repo.
 const WORKSPACE_HISTORY_SESSION_FIELDS = [
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId'
@@ -145,8 +143,7 @@ export function collectWorktreeHydrationRepoIdsFromSession(
     }
   }
 
-  // Why: only chrome-bearing fields — enumerating the unbounded history maps would pull in ~every
-  // repo ever touched and defeat the selective pre-hydration fetch (they hydrate unfiltered).
+  // Enumerate repos only from restorable chrome, never unbounded history that hydrates unfiltered.
   for (const key of collectWorkspaceSessionKeys(
     session,
     WORKSPACE_CHROME_SESSION_FIELDS,
@@ -154,9 +151,13 @@ export function collectWorktreeHydrationRepoIdsFromSession(
   )) {
     addWorktreeRepoId(key)
   }
-  // Why: a repo referenced only by activeRepoId (no active worktree, no tabs) still needs
-  // enumeration so hydrateWorkspaceSession can restore its main worktree from worktreesByRepo.
+  // activeRepoId alone still needs enumeration so hydration can restore its main worktree.
   addWorktreeRepoId(session.activeRepoId)
+  for (const record of readStructuredAgentLaunchRecords()) {
+    if (record.executionHostId === 'local' && record.surfaceAddress) {
+      addWorktreeRepoId(record.surfaceAddress.worktreeId)
+    }
+  }
 
   return [...repoIds].filter(Boolean).sort()
 }

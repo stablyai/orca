@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type { RepoSlug } from '@/lib/github-links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
@@ -30,6 +30,7 @@ export function useWorkItemSourceState(textOnly: boolean, value: string) {
     null
   )
   const [settledLinearUrlQuery, setSettledLinearUrlQuery] = useState<string | null>(null)
+  const [linearReadError, setLinearReadError] = useState<string | null>(null)
   const [jiraLoading, setJiraLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
   const repoSlugCacheRef = useRef<Map<string, RepoSlug>>(new Map())
@@ -67,6 +68,8 @@ export function useWorkItemSourceState(textOnly: boolean, value: string) {
     setLinearUrlLoadingFeedbackQuery,
     settledLinearUrlQuery,
     setSettledLinearUrlQuery,
+    linearReadError,
+    setLinearReadError,
     jiraLoading,
     setJiraLoading,
     commandValue,

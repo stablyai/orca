@@ -12,6 +12,7 @@ import type {
   ProjectUpdateArgs
 } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { ProjectGroupPersistenceOperations } from '../tracking-repos/project-group-operations'
 import { FolderWorkspacePersistenceOperations } from '../restoring-sessions/folder-workspace-operations'
 import { ProjectHostPersistenceOperations } from '../tracking-repos/project-host-operations'
@@ -164,8 +165,8 @@ export class ProjectCollectionOperations {
     return removed
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    return getFolderWorkspaceOperations(this).moveProjectToGroup(repoId, groupId, order)
+  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
+    return getFolderWorkspaceOperations(this).moveProjectToGroup(target, groupId, order)
   }
 }
 
@@ -191,8 +192,8 @@ export function getProjectHostOperations(
           setup,
           updates
         ),
-      removeProjectForHost: (id, hostId) =>
-        owner[projectCollectionOperationsContext].repos.removeProjectForHost(id, hostId),
+      removeProjectForHost: (target) =>
+        owner[projectCollectionOperationsContext].repos.removeProjectForHost(target),
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling)
     })
   return owner[projectCollectionOperationsContext].runtime.projectHostOperations

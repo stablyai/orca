@@ -61,6 +61,31 @@ describe('name-filter filename identity', () => {
     expect(rows.map((row) => row.relativePath)).toEqual(['a\\b/file.txt'])
   })
 
+  it('shows matching files only within the visible, nonignored display scope', () => {
+    const rows = project(
+      '/repo',
+      [
+        'src/nested/visible.txt',
+        'src/visible.txt',
+        'src/nonmatching.ts',
+        'src/.private/hidden.txt',
+        'src/ignored/matching.txt',
+        'other/outside.txt'
+      ],
+      {
+        displayRootPath: '/repo/src',
+        ignoredPaths: ['src/ignored/'],
+        showDotfiles: false
+      }
+    )
+
+    expect(rows.map((row) => row.relativePath)).toEqual([
+      'src/nested',
+      'src/nested/visible.txt',
+      'src/visible.txt'
+    ])
+  })
+
   it('keeps ignored and dotfile identities distinct on POSIX', () => {
     const paths = ['a\\b.txt', 'a/b.txt', 'a\\.hidden.txt', 'a/.hidden.txt']
     const rows = project('/repo', paths, { ignoredPaths: ['a/b.txt'], showDotfiles: false })

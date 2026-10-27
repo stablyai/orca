@@ -8,7 +8,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { SourceControlUncommittedSections } from './uncommitted-sections'
-import type { SourceControlDisplaySection, SourceControlDisplaySectionId } from './section-order'
+import type {
+  SourceControlDisplaySection,
+  SourceControlDisplaySectionId
+} from '../../../../../../shared/source-control-section-order'
 
 afterEach(cleanup)
 
@@ -20,11 +23,9 @@ const UNSTAGED_ENTRY: GitStatusEntry = {
 
 function renderUncommittedSections({
   sections = [{ id: 'unstaged', area: 'unstaged', items: [UNSTAGED_ENTRY] }],
-  isStatusTruncated = false,
   handleStageSectionPaths = vi.fn()
 }: {
   sections?: SourceControlDisplaySection[]
-  isStatusTruncated?: boolean
   handleStageSectionPaths?: (
     sectionId: SourceControlDisplaySectionId,
     paths: readonly string[]
@@ -46,7 +47,6 @@ function renderUncommittedSections({
         requestDiscardAllInArea={vi.fn()}
         handleStageAllPaths={vi.fn()}
         handleStageSectionPaths={handleStageSectionPaths}
-        isStatusTruncated={isStatusTruncated}
         handleUnstagePaths={vi.fn()}
         sourceControlViewMode="list"
         visibleTreeRowsBySection={{}}
@@ -76,26 +76,17 @@ function renderUncommittedSections({
 }
 
 describe('source control section header actions', () => {
-  it('routes the Changes header Stage all through the section handler', () => {
+  it('includes untracked files in the Changes header Stage all', () => {
     const handleStageSectionPaths = vi.fn(async () => {})
-    renderUncommittedSections({ handleStageSectionPaths, isStatusTruncated: true })
+    const changes: SourceControlDisplaySection = {
+      id: 'unstaged',
+      area: 'unstaged',
+      items: [UNSTAGED_ENTRY, { path: 'new.ts', status: 'untracked', area: 'untracked' }]
+    }
+    renderUncommittedSections({ sections: [changes], handleStageSectionPaths })
 
     fireEvent.click(screen.getByRole('button', { name: 'Stage all' }))
 
-    expect(handleStageSectionPaths).toHaveBeenCalledWith('unstaged', ['src/app.ts'])
-  })
-
-  it('hides the Untracked header Stage all when the listing hit its cap', () => {
-    const untracked: SourceControlDisplaySection = {
-      id: 'untracked',
-      area: 'untracked',
-      items: [{ path: 'new.ts', status: 'untracked', area: 'untracked' }]
-    }
-    renderUncommittedSections({ sections: [untracked], isStatusTruncated: true })
-    expect(screen.queryByRole('button', { name: 'Stage all' })).toBeNull()
-
-    cleanup()
-    renderUncommittedSections({ sections: [untracked], isStatusTruncated: false })
-    expect(screen.getByRole('button', { name: 'Stage all' })).toBeInTheDocument()
+    expect(handleStageSectionPaths).toHaveBeenCalledWith('unstaged', ['src/app.ts', 'new.ts'])
   })
 })

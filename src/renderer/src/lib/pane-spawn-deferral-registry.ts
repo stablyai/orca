@@ -53,6 +53,26 @@ export function releasePaneResumeHold(paneKey: string, isHolding: () => boolean)
   }
 }
 
+// An in-place resumed start owns its session until settlement even while main clears the old terminal binding.
+const inPlaceResumesByPaneKey = new Map<string, Set<() => boolean>>()
+
+/** Returns the release; `isLive` lets a disposed pane stop owning a start that never settles. */
+export function holdPaneResumeInPlace(paneKey: string, isLive: () => boolean): () => void {
+  const holds = inPlaceResumesByPaneKey.get(paneKey) ?? new Set()
+  holds.add(isLive)
+  inPlaceResumesByPaneKey.set(paneKey, holds)
+  return () => {
+    holds.delete(isLive)
+    if (holds.size === 0 && inPlaceResumesByPaneKey.get(paneKey) === holds) {
+      inPlaceResumesByPaneKey.delete(paneKey)
+    }
+  }
+}
+
+export function isPaneResumingInPlace(paneKey: string): boolean {
+  return [...(inPlaceResumesByPaneKey.get(paneKey) ?? [])].some((isLive) => isLive())
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => {

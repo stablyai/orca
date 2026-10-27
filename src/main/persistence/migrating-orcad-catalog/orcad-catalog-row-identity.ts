@@ -1,5 +1,4 @@
-/** Catalog merges retain known rows and reject conflicting imported configuration. */
-import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration-manifest'
+import { serializeOrcadMigrationValue } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { Repo } from '../../../shared/repo-types'
 
 export function selectNewRows<T extends { id: string }>(
@@ -32,8 +31,7 @@ function withoutHostProbeCache(repo: Repo, dropIcon: boolean): Partial<Repo> {
 }
 
 export function sameOrcadRepositoryConfiguration(current: Repo, incoming: Repo): boolean {
-  // Git identity is the execution host's cached probe, and identity enrichment rewrites an
-  // automatic GitHub avatar alongside it; reimport must keep that host's result for both.
+  // Preserve this host's Git probe and the automatic avatar enriched alongside it.
   const dropIcon = isAutomaticGitHubIcon(current) && isAutomaticGitHubIcon(incoming)
   return (
     serializeOrcadMigrationValue(withoutHostProbeCache(current, dropIcon)) ===

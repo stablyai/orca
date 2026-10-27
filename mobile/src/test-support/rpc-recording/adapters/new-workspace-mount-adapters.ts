@@ -5,16 +5,10 @@ import type { operationModuleLoader } from '../operation-module-loader'
 
 const REPO = { id: 'repo-1', displayName: 'Repo' }
 
-/**
- * The host screen's New Workspace drawer: the SSH/agent execution target, the repo's setup hook,
- * and the Codex reset-credit capability probe the account rows gate on. The drawer's own repo list
- * is absent because its hook also reads native storage, which no recording may reach.
- */
+// Exclude the drawer’s native-storage repo hook; recordings cover only the declared SSH/agent/setup/capability paths.
 export function newWorkspaceMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  // `connectionId` picks the arm the detection effect takes: an SSH repo detects remote agents,
-  // a repo without a connection detects local ones.
   function executionTargetAdapter(connectionId: string | null): MountAdapter {
     return ({ client }) => {
       const useTarget = modules.load<

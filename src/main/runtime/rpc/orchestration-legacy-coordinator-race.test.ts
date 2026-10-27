@@ -316,8 +316,7 @@ describe('legacy coordinator takeover races', () => {
 
   it('partitions a coordinator group send by legacy recipient contract', async () => {
     const harness = createHarness()
-    // A second worker on the CURRENT contract in the same adopted Run. Group addresses reach a
-    // Run's Dispatches, so the partition needs two Dispatches, not a Dispatch and a loose pane.
+    // Use two current-contract Dispatches in the adopted Run: group mail targets Dispatches, so a loose pane cannot prove partitioning.
     const currentTask = harness.db.createTask({
       runId: harness.adoptedRunId,
       spec: 'current-contract assignment',
@@ -676,8 +675,7 @@ describe('legacy coordinator takeover races', () => {
       () =>
         new Promise<boolean>((resolve, reject) => {
           detectionCalls += 1
-          // Why reject instead of re-arming: a second call would overwrite resolveDetection and
-          // strand the first promise, hanging to a timeout instead of naming what changed.
+          // Reject rearming: replacing resolveDetection would strand the first promise until timeout.
           if (detectionCalls > 1) {
             reject(
               new Error(

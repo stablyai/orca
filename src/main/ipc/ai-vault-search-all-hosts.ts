@@ -47,18 +47,11 @@ type HostWalk = {
   truncated: Truncation
 }
 
-/**
- * Fans one query out to every execution host and merges the pages into one.
- *
- * Relevance scores come from independent indexes and are not comparable, so the
- * two orders are the only two that mean anything across hosts: recency, which
- * every host can be asked for directly, and round-robin over each host's own
- * ranking. Legs are walked page by page, so a hit that lost the cut on one page
- * is emitted on the next instead of being dropped.
- */
+/** Independent relevance scores cannot be compared: merge by recency or host round-robin, retaining page overflow. */
 export async function searchAllExecutionHosts(
   request: AiVaultSearchRequest,
-  legs: readonly SessionSearchHostLeg[]
+  legs: readonly SessionSearchHostLeg[],
+  isActive: () => boolean = () => true
 ): Promise<AiVaultSearchResponse> {
   const startedAt = Date.now()
   const limit = resolveSessionSearchLimit(request.limit)
@@ -76,16 +69,19 @@ export async function searchAllExecutionHosts(
       return { kind: 'malformed-cursor' }
     }
   }
-  // A host absent from the cursor either finished or joined mid-walk; either way
-  // it contributes nothing to this page. Host-id order fixes every tiebreak.
+  // Finished or newly joined hosts contribute nothing to resumed walks; host ID fixes ties.
   const walks = legs
     .filter((leg) => !resumed || resumed.hosts[leg.executionHostId] !== undefined)
     .map((leg) => newHostWalk(leg, legRequest(request, sort)))
     .sort((left, right) => left.executionHostId.localeCompare(right.executionHostId))
   await Promise.all(
-    walks.map((walk) => fetchHostPage(walk, resumed?.hosts[walk.executionHostId] ?? null))
+    walks.map((walk) =>
+      isActive()
+        ? fetchHostPage(walk, resumed?.hosts[walk.executionHostId] ?? null)
+        : Promise.resolve()
+    )
   )
-  const hits = await drainMergedPage(walks, limit, sort)
+  const hits = await drainMergedPage(walks, limit, sort, isActive)
   return mergedSearchResponse(walks, { limit, sort }, hits, Date.now() - startedAt)
 }
 
@@ -139,15 +135,17 @@ async function fetchHostPage(walk: HostWalk, entry: MergedSearchCursorEntry | nu
     endHostWalk(walk, response.reason, false)
     return
   }
-  // A cursor this merge minted can only be refused because the host's index
-  // moved, so both refusals mean the same thing: this host is done for now.
+  // A refused minted cursor means the host index moved; retire its leg.
   if (response.kind !== 'results') {
     endHostWalk(walk, 'stale', false)
     return
   }
   // `e` is an offset into one generation's ranked page, so it is only
   // meaningful while that generation stands. Nothing emitted, nothing to fence.
-  if (walk.emitted > 0 && walk.generation !== response.generation) {
+  if (
+    (walk.emitted > 0 || walk.cursor !== null || walk.pages > 1) &&
+    walk.generation !== response.generation
+  ) {
     endHostWalk(walk, 'stale', false)
     return
   }
@@ -169,8 +167,8 @@ function endHostWalk(walk: HostWalk, outcome: HostOutcome, carry: boolean): void
   walk.carry = carry
 }
 
-async function advanceHostWalk(walk: HostWalk): Promise<void> {
-  while (walk.pending.length === 0 && walk.nextCursor !== null) {
+async function advanceHostWalk(walk: HostWalk, isActive: () => boolean): Promise<void> {
+  while (isActive() && walk.pending.length === 0 && walk.nextCursor !== null) {
     if (walk.pages >= MAX_HOST_PAGES_PER_REQUEST) {
       // Budget spent; the unread page's cursor is already this walk's nextCursor.
       walk.carry = true
@@ -183,14 +181,15 @@ async function advanceHostWalk(walk: HostWalk): Promise<void> {
 async function drainMergedPage(
   walks: readonly HostWalk[],
   limit: number,
-  sort: MergedSort
+  sort: MergedSort,
+  isActive: () => boolean
 ): Promise<AiVaultSearchHit[]> {
   const hits: AiVaultSearchHit[] = []
   let turn = 0
-  while (hits.length < limit) {
+  while (isActive() && hits.length < limit) {
     // Every head must be known before picking, so a lagging host is never skipped.
     for (const walk of walks) {
-      await advanceHostWalk(walk)
+      await advanceHostWalk(walk, isActive)
     }
     const next = sort === 'newest' ? mostRecentWalk(walks) : walkWithTurn(walks, turn)
     if (!next) {

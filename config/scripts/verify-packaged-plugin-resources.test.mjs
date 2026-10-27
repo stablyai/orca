@@ -58,8 +58,7 @@ describe('verify packaged plugin resources', () => {
         await writeFile(path, (await readFile(path, 'utf8')).replace(/\r?\n/g, '\r\n'))
       }
 
-      // Every file is rewritten, so the first mismatch is whichever plugin sorts
-      // first — don't pin a name a later branch can reorder.
+      // Every plugin is rewritten; assert first sorted mismatch without pinning reorderable plugin name.
       expect(() => verifyPackagedPluginResources(resourcesDir)).toThrow(
         /packaged bytes do not match stablyai\./
       )

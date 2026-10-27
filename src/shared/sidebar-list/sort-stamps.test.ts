@@ -1,72 +1,35 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifySortStampEvent,
-  hookRowAgentPhase,
-  nextAgentPaneState,
+  isUnreadNews,
+  enterAgentPaneState,
   RECENT_STAMP_THROTTLE_MS,
-  REST_PANE,
-  titleAgentPhase,
   workspaceSmartStamp,
   type AgentPaneState,
-  type AgentPhase,
   type SortStamps
 } from './sort-stamps'
+import { agentPhaseTransition, type AgentPhase } from '../agent-transitions'
 
 const NOW = 1_000_000
 const IDLE: SortStamps = { recentAt: NOW - 60_000 }
 
-function agentEvent(from: AgentPhase, to: AgentPhase, panes: AgentPaneState[]) {
-  return { kind: 'agent' as const, from, to, panes }
+function agentEvent(
+  from: AgentPhase,
+  to: AgentPhase,
+  panes: AgentPaneState[],
+  transition = agentPhaseTransition(from, to)
+) {
+  return { kind: 'agent' as const, from, to, transition, panes }
 }
 
-describe('hookRowAgentPhase', () => {
-  it('maps hook states to tiers, and a stopped turn to Rest', () => {
-    expect(hookRowAgentPhase({ state: 'working' })).toBe('working')
-    expect(hookRowAgentPhase({ state: 'blocked' })).toBe('needs-you')
-    expect(hookRowAgentPhase({ state: 'waiting' })).toBe('needs-you')
-    expect(hookRowAgentPhase({ state: 'done' })).toBe('done')
-    expect(hookRowAgentPhase({ state: 'done', interrupted: true })).toBe('rest')
-    expect(
-      hookRowAgentPhase({ state: 'done', mainAgent: { state: 'done', outcome: 'cancellation' } })
-    ).toBe('rest')
-    // An error is news: it ranks as Done, like a finish.
-    expect(
-      hookRowAgentPhase({ state: 'done', mainAgent: { state: 'done', outcome: 'failure' } })
-    ).toBe('done')
-  })
-})
-
-describe('titleAgentPhase', () => {
-  it('reads the title heuristic Smart uses', () => {
-    expect(titleAgentPhase('⠋ Codex working')).toBe('working')
-    expect(titleAgentPhase('zsh')).toBe('rest')
-  })
-})
-
-describe('nextAgentPaneState', () => {
-  it('enters a phase at now', () => {
-    expect(nextAgentPaneState(REST_PANE, 'working', NOW)).toEqual({ phase: 'working', at: NOW })
-  })
-
+describe('enterAgentPaneState', () => {
   it('keeps the same object when the phase holds, so running stays running', () => {
     const working = { phase: 'working' as const, at: NOW - 5 }
-    expect(nextAgentPaneState(working, 'working', NOW)).toBe(working)
-  })
-
-  it('reaches Done only from a turn', () => {
-    expect(nextAgentPaneState(REST_PANE, 'done', NOW)).toBe(REST_PANE)
-    expect(nextAgentPaneState({ phase: 'working', at: 1 }, 'done', NOW)).toEqual({
-      phase: 'done',
-      at: NOW
-    })
-    expect(nextAgentPaneState({ phase: 'needs-you', at: 1 }, 'done', NOW)).toEqual({
-      phase: 'done',
-      at: NOW
-    })
+    expect(enterAgentPaneState(working, 'working', NOW)).toBe(working)
   })
 
   it('keeps the time an approval was asked when the turn resumes', () => {
-    expect(nextAgentPaneState({ phase: 'needs-you', at: 7 }, 'working', NOW)).toEqual({
+    expect(enterAgentPaneState({ phase: 'needs-you', at: 7 }, 'working', NOW)).toEqual({
       phase: 'working',
       at: 7
     })
@@ -93,44 +56,6 @@ describe('workspaceSmartStamp', () => {
 })
 
 describe('classifySortStampEvent', () => {
-  it('stamps a prompt from rest: Recent now, Working now', () => {
-    const working = { phase: 'working' as const, at: NOW }
-    expect(classifySortStampEvent(IDLE, agentEvent('rest', 'working', [working]), NOW)).toEqual({
-      recentAt: NOW,
-      smartTier: 'working',
-      smartAt: NOW
-    })
-  })
-
-  it('stamps a finish and a request for input', () => {
-    const current: SortStamps = { recentAt: NOW - 60_000, smartTier: 'working', smartAt: 1 }
-    expect(
-      classifySortStampEvent(
-        current,
-        agentEvent('working', 'done', [{ phase: 'done', at: NOW }]),
-        NOW
-      )
-    ).toEqual({ recentAt: NOW, smartTier: 'done', smartAt: NOW })
-    expect(
-      classifySortStampEvent(
-        current,
-        agentEvent('working', 'needs-you', [{ phase: 'needs-you', at: NOW }]),
-        NOW
-      )
-    ).toEqual({ recentAt: NOW, smartTier: 'needs-you', smartAt: NOW })
-  })
-
-  it('stamps a new prompt after Done', () => {
-    const current: SortStamps = { recentAt: NOW - 60_000, smartTier: 'done', smartAt: 1 }
-    expect(
-      classifySortStampEvent(
-        current,
-        agentEvent('done', 'working', [{ phase: 'working', at: NOW }]),
-        NOW
-      )
-    ).toEqual({ recentAt: NOW, smartTier: 'working', smartAt: NOW })
-  })
-
   it('moves a resumed approval to Working without a Recent stamp, keeping its time', () => {
     const current: SortStamps = { recentAt: NOW - 60_000, smartTier: 'needs-you', smartAt: 7 }
     expect(
@@ -198,5 +123,35 @@ describe('classifySortStampEvent', () => {
         NOW
       )
     ).toBeNull()
+  })
+})
+
+describe('the stamps follow the agent transitions', () => {
+  it('flags a failed turn as news, and a session boundary’s done as none while it still stamps', () => {
+    expect(isUnreadNews(agentEvent('working', 'done', [], 'errored'))).toBe(true)
+    const boundary = agentEvent('working', 'done', [{ phase: 'done', at: NOW }], null)
+    expect(isUnreadNews(boundary)).toBe(false)
+    expect(classifySortStampEvent(IDLE, boundary, NOW)).toEqual({
+      recentAt: NOW,
+      smartTier: 'done',
+      smartAt: NOW
+    })
+  })
+})
+
+describe('workspaceSmartStamp once the workspace is read', () => {
+  it('lets a read Done yield to a Working pane, and keeps a lone read Done', () => {
+    const done = { phase: 'done' as const, at: 100 }
+    const working = { phase: 'working' as const, at: 200 }
+    expect(workspaceSmartStamp([done, working], true)).toEqual({ smartTier: 'done', smartAt: 100 })
+    expect(workspaceSmartStamp([done, working], false)).toEqual({
+      smartTier: 'working',
+      smartAt: 200
+    })
+    expect(workspaceSmartStamp([done], false)).toEqual({ smartTier: 'done', smartAt: 100 })
+    expect(workspaceSmartStamp([done, working, { phase: 'needs-you', at: 50 }], false)).toEqual({
+      smartTier: 'needs-you',
+      smartAt: 50
+    })
   })
 })

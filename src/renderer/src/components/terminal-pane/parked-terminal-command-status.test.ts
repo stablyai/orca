@@ -96,8 +96,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     vi.useRealTimers()
   })
 
-  // #23767: a Codex that exits while parked must not keep its process identity (and sidebar row),
-  // but a nested shell's leaked 133;D under a still-running agent must not drop it either.
+  // Confirmed parked-agent exit must retire identity; a nested shell’s leaked 133;D must not (#23767).
   describe('parked command boundary with a known foreground agent', () => {
     const confirmForegroundProcess = vi.fn<(id: string) => Promise<string | null>>()
     const flushMicrotasks = async (): Promise<void> => {
@@ -360,9 +359,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     policy.dispose()
   })
 
-  // Why: reveal disposes the watcher mid-settle. Flushing would complete the turn early
-  // and the same-prompt-done guard then drops the genuine working repaint, so the window
-  // transfers to the remounted pane instead — the row stays 'working' across the boundary.
+  // Reveal inherits the settle deadline; flushing early would make the same-prompt guard reject a genuine working repaint.
   it('dispose hands the pending settle to the remounted pane instead of completing it early', async () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'working',
@@ -383,8 +380,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
   })
 
-  // Why: the transferred window is still a settle window — a working repaint from the
-  // revealed pane before the original deadline must cancel it, not race it.
+  // A revealed pane’s working repaint before the inherited deadline must still cancel completion.
   it('lets a working repaint after the handoff cancel the transferred settle', async () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'working',
@@ -463,14 +459,34 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry()
     const local = await createPolicy(PTY_ID_LOCAL)
     local.onCommandFinished(0)
-    // Why: local drops need the mounted pane's foreground process-confirm ladder
-    // (leaked nested-shell 133;D protection), so the watcher must not drop them.
+    // Local drops require mounted foreground confirmation to distinguish nested-shell markers from agent exit.
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
     local.dispose()
 
     const ssh = await createPolicy(PTY_ID_SSH)
     ssh.onCommandFinished(0)
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
+    ssh.dispose()
+  })
+
+  it('keeps a finished OSC 7501 program result on SSH command finished until dismissed', async () => {
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+      state: 'done',
+      agentType: 'brew',
+      programStatus: { state: 'done', observedAt: 1000 }
+    })
+    const ssh = await createPolicy(PTY_ID_SSH)
+
+    ssh.onCommandFinished(0)
+    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+
+    const { dismissRetainedProgramResult } = await import('@/lib/program-status/result-retention')
+    const dropAgentStatus = vi.fn<(paneKey: string) => void>()
+    dismissRetainedProgramResult(PANE_KEY, {
+      agentStatusByPaneKey: mockStoreState.agentStatusByPaneKey,
+      dropAgentStatus
+    })
+    expect(dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
     ssh.dispose()
   })
 
@@ -512,8 +528,7 @@ describe('readInFlightCommandCodeTurn', () => {
     })
     expect(readInFlightCommandCodeTurn(PANE_KEY)).toEqual({ prompt: 'Fix the spinner' })
 
-    // Why 'done' excluded: a stale done row would arm the scrape against whatever
-    // process replaced the Command Code TUI.
+    // Done rows cannot seed a live detector: a replacement process could be scraped as Command Code.
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'done',
       prompt: 'Fix the spinner',

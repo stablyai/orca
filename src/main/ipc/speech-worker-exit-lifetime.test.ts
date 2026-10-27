@@ -74,11 +74,14 @@ vi.mock('../speech/model-catalog', () => ({
     streaming: true,
     sampleRate: 16000,
     files: []
-  })
+  }),
+  isLocalSpeechModel: () => true
 }))
 vi.mock('../speech/stt-worker-paths', () => ({
+  LOCAL_SPEECH_UNAVAILABLE_ERROR: 'voice_model_not_ready:unavailable',
   getSttWorkerPath: () => 'unused-worker',
-  getSherpaModulePath: () => 'unused-module'
+  getSherpaModulePath: () => 'unused-module',
+  hasLocalSpeechRecognizer: () => true
 }))
 vi.mock('node:worker_threads', async () => {
   const { EventEmitter: WorkerEvents } = await import('node:events')

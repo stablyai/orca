@@ -8,8 +8,7 @@ import { getApprovedPluginVmRecipes } from './plugin-approved-vm-recipes'
 import { PluginService } from './plugin-service'
 import { hashPluginTree } from './plugin-content-hash'
 
-/** A kill-listed plugin's declarative content must stop reaching the runtime:
- *  VM recipe `create` strings are executed through spawn(..., { shell: true }). */
+// VM recipe create strings execute through a shell; revocation must remove declarative content too.
 
 const roots: string[] = []
 const services: PluginService[] = []

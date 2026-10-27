@@ -9,17 +9,20 @@ This package is a **self-contained Next.js app**. It is intentionally **not** a 
 
 ## Local development
 
+Use Node.js 24 and the pnpm version pinned in `package.json`. CI reads the
+Node.js version from this package's `engines.node` field.
+
 ```bash
 cd docs/site
-pnpm --ignore-workspace install
-pnpm --ignore-workspace dev
+pnpm install
+pnpm dev
 ```
 
 Open [http://localhost:3004/docs](http://localhost:3004/docs).
 
 ## Linting
 
-Run `pnpm --ignore-workspace lint` inside this directory. The isolated Oxlint
+Run `pnpm lint` inside this directory. The isolated Oxlint
 configuration keeps the native equivalents of the previous Next.js, React,
 React hooks and accessibility checks at their existing severities, including
 alt text on Next.js `Image` components. Generated Next.js and MDX output is
@@ -35,9 +38,9 @@ workflow; this is not a claim of complete ESLint rule parity.
 
 ```bash
 cd docs/site
-pnpm --ignore-workspace install
-pnpm --ignore-workspace build
-pnpm --ignore-workspace start
+pnpm install
+pnpm build
+pnpm start
 ```
 
 `pnpm start` serves the production build on port 3004. Paths:
@@ -105,7 +108,8 @@ deployment needs `basePath`, first move the route tree to an unprefixed
    invokes Vercel from `docs/site`, so that directory is already the deployment
    root; setting it again would resolve `docs/site/docs/site`. Leave automatic
    Git deployments disabled so this workflow remains the only deployment path.
-2. Framework preset: Next.js. Use `pnpm --ignore-workspace install --frozen-lockfile` for install and `pnpm --ignore-workspace build` for build; this package has its own lockfile beside the root workspace.
+2. Framework preset: Next.js. This package's `engines.node` selects Node.js 24 for
+   Vercel builds and functions. `vercel.json` pins install (`pnpm install --frozen-lockfile`) and build (`pnpm build`) over the dashboard settings; this package has its own lockfile beside the root workspace.
 3. Set GitHub Actions secrets (required by the production deploy job):
    - `VERCEL_TOKEN`
    - `VERCEL_ORG_ID`
@@ -149,5 +153,5 @@ change.
 ## Isolation from the desktop app
 
 - Own `package.json` + `pnpm-lock.yaml` under `docs/site/`
-- Not listed in the root `pnpm-workspace.yaml`; install with `pnpm --ignore-workspace`
+- Not listed in the root `pnpm-workspace.yaml`; its own `pnpm-workspace.yaml` makes it a separate workspace root and holds its pnpm settings, which pnpm 12 ignores under `--ignore-workspace`
 - Engineering notes remain in repo-root `docs/` — do not confuse with this package

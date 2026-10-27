@@ -71,7 +71,7 @@ export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {
   },
   'set credentials': async ({ flags, client, cwd, json }) => {
     const user = getRequiredStringFlag(flags, 'user')
-    // SetCredentials.pass accepts '' (empty passwords are legal in HTTP basic auth).
+    // HTTP basic auth permits empty passwords.
     const pass = getRequiredStringFlagAllowingEmpty(flags, 'pass')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<unknown>('browser.setCredentials', {

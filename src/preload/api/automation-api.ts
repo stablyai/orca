@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult,
@@ -19,11 +20,7 @@ export type ExternalAutomationManagerResult = {
   updatedAt: number
 }
 
-/**
- * Orca automation CRUD rides the local runtime RPC surface (`runtime:call`),
- * so this IPC api carries only what stays desktop-native: the external-manager
- * scope (probes run on this computer) and the dispatch-loop plumbing.
- */
+// Automation CRUD uses runtime RPC; this IPC API handles desktop probes and dispatch.
 export type AutomationsApi = {
   listExternalManagerForOwner: (
     request: ScopedExternalManagerListRequest
@@ -35,7 +32,11 @@ export type AutomationsApi = {
     runId: string
   }) => Promise<AutomationPrecheckResult | null>
   markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
-  snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
+  snapshotWorkspaceName: (args: {
+    workspaceId: string
+    hostId: ExecutionHostId
+    displayName: string
+  }) => Promise<number>
   rendererReady: () => Promise<void>
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
   onChanged: (callback: (payload: AutomationsChangedPayload) => void) => () => void

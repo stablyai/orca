@@ -1,7 +1,4 @@
-// Window parity: for each stored profile, the window's startup hydration of the session as stored
-// and of the shared Loader's rewrite of it (load then save) must show the same thing. Where they
-// differ today, the difference is listed below with the Loader rule that causes it: as work to
-// do, or as accepted with the reason it is not a bug.
+// Compare window startup from disk with the Loader round trip. Enumerate each divergence as a known defect or accepted difference with its reason.
 
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -16,7 +13,8 @@ import { createTestStore } from '../store/slices/store-test-helpers'
 import {
   ACCEPTED_DIFFERENCES,
   GIT,
-  KNOWN_DIFFERENCES
+  KNOWN_DIFFERENCES,
+  sweptAtStartup
 } from './startup-window-parity-differences.test-fixture'
 import {
   bootWindowFromPartitions,
@@ -24,6 +22,13 @@ import {
   projectStartupWindowView
 } from './startup-window-view.test-fixture'
 
+// Use legacy window boot as the oracle for main-owned layout loading.
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
@@ -32,14 +37,19 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 createStoreSessionMockApi()
 
-/** The shared Loader's round trip, as main would persist it. */
+/** Main's startup sweep, then the shared Loader's round trip, as main would persist it. */
 function normalize(hostId: ExecutionHostId, session: WorkspaceSessionState): WorkspaceSessionState {
   let next = 0
-  const loaded = loadWorkspaceLayout(hostId, structuredClone(session), {
-    mintId: () => `minted-${++next}`,
-    mintLeafId: () => `00000000-0000-4000-9000-${String(++next).padStart(12, '0')}`
-  })
-  return saveWorkspaceLayout(loaded)
+  layoutOwner.isMain = true
+  try {
+    const loaded = loadWorkspaceLayout(hostId, sweptAtStartup(hostId, structuredClone(session)), {
+      mintId: () => `minted-${++next}`,
+      mintLeafId: () => `00000000-0000-4000-9000-${String(++next).padStart(12, '0')}`
+    })
+    return saveWorkspaceLayout(loaded)
+  } finally {
+    layoutOwner.isMain = false
+  }
 }
 
 const PROFILES = [...WORKSPACE_LAYOUT_PROFILES, ...LEGACY_WORKSPACE_LAYOUT_PROFILES]

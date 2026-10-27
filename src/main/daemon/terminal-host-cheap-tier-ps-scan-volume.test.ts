@@ -10,19 +10,9 @@ import type * as CheapReader from '../../shared/cheap-process-table-snapshot-rea
 import type * as TrackerModule from './pty-subprocess/foreground-process-tracker'
 import type * as Inspection from './terminal-host-process-inspection'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-// Measurement for the cheap-tier process inspection. Drives the REAL daemon inspection
-// entrypoint (`inspectTerminalHostProcess`) for 8 idle agent panes over a simulated 60s idle
-// cadence (POLL_TIER_INTERVAL_MS.idle = 2,000ms) and counts `ps` forks BY COLUMN SET: a fork
-// asking for `command=` is the full capture (measured 0.34-0.50s on a 1,900-process Mac, 1.15s
-// on Linux), one without it is the cheap capture (0.03s on both). CI cannot time a real `ps`
-// portably, so fork counts by column set are what this test measures; the per-fork costs above
-// are the numbers measured by hand on the reference hosts.
-//
-// The second test is the zero-trade-off proof: the same tick sequence, including an agent exit
-// and a restart, produces the identical foregroundProcess series with the cheap tier on and off.
+// Count full/cheap ps captures across eight simulated idle panes; avoid timing-dependent assertions.
 
-// Two seams because the two tiers spawn differently: the full evidence reader still forks
-// through node:child_process, the cheap reader through Orca's runProcess entry point.
+// Full and cheap readers use different process entry points, so mock both.
 const { execFileMock, runProcessMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
   runProcessMock: vi.fn()
@@ -237,11 +227,7 @@ describe.each(['darwin', 'linux'])('cheap-tier ps scan volume (%s)', (hostPlatfo
       const names = await runTick(sessions, true)
       expect(names.every((name) => name === 'claude')).toBe(true)
     }
-    // Baseline today: one full capture per tick (TTL-shared across the 8 panes) = TICKS.
-    // Now: the first tick establishes every anchor from one full capture; every later tick is
-    // one TTL-shared cheap capture. Published numbers, from this run:
-    //   before: 30 full (~0.34-0.50s each on macOS, 1.15s Linux) + 0 cheap
-    //   after:   1 full + 29 cheap (~0.03s each)
+    // One shared full capture establishes anchors; later ticks share cheap captures.
     expect(forks.full).toBe(1)
     expect(forks.cheap).toBe(TICKS - 1)
     expect(forks.full + forks.cheap).toBe(TICKS)
@@ -271,10 +257,10 @@ describe.each(['darwin', 'linux'])('cheap-tier ps scan volume (%s)', (hostPlatfo
       for (let tick = 0; tick < TICKS; tick += 1) {
         vi.setSystemTime(1_000_000 + tick * IDLE_POLL_INTERVAL_MS)
         if (tick === 5) {
-          panes[2].agent = false // pane 2's agent exits
+          panes[2].agent = false
         }
         if (tick === 12) {
-          panes[2].agent = true // ...and is restarted with a new start time
+          panes[2].agent = true
           panes[2].agentStart = 'Thu Sep  3 16:30:00 2026'
           panes[2].agentStartTicks = 2_000
         }
@@ -291,7 +277,6 @@ describe.each(['darwin', 'linux'])('cheap-tier ps scan volume (%s)', (hostPlatfo
     forks.full = 0
     const fullOnly = await script(false)
     expect(withCheapTier).toEqual(fullOnly)
-    // And the exit was seen on the very tick it happened, in both modes.
     expect(withCheapTier[4][2]).toBe('claude')
     expect(withCheapTier[5][2]).not.toBe('claude')
     expect(withCheapTier[12][2]).toBe('claude')

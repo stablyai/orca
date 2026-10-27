@@ -3,6 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { getReachableRuntimeSessionMirrorTargets } from '@/lib/runtime-session-mirror-targets'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export type RuntimeSessionMirrorTargetInputs = Pick<
   AppState,
@@ -23,8 +27,8 @@ export function selectRuntimeSessionMirrorTargetInputs(
   return {
     activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId ?? null,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
     projectGroups: state.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
     runtimeEnvironments: state.runtimeEnvironments,
@@ -33,16 +37,9 @@ export function selectRuntimeSessionMirrorTargetInputs(
 }
 
 export type RuntimeSessionMirrorEnvironmentKeys = {
-  /**
-   * Identity of the mirrored set. Every retained-state stamp is cut from these fields, so moving
-   * this key invalidates the mirror -- which is exactly why a flap must not move it (#19647).
-   */
+  // All retained-state stamps derive from this identity; transport flaps must not invalidate it (#19647).
   environmentKey: string
-  /**
-   * Advances when a mirrored host answers again after contact was lost. Purely an effect
-   * dependency: it reinstalls the subscriptions the dead transport took with it, and is
-   * deliberately absent from `environmentKey` so no frame can be stamped with it.
-   */
+  // Reconnect reinstalls dead-transport subscriptions without changing environmentKey or frame stamps.
   resubscribeSignal: string
 }
 
@@ -52,8 +49,8 @@ export function buildRuntimeSessionMirrorEnvironmentKeys(
   const targets = getReachableRuntimeSessionMirrorTargets({
     settings: { activeRuntimeEnvironmentId: inputs.activeRuntimeEnvironmentId },
     repos: inputs.repos,
-    worktreesByRepo: inputs.worktreesByRepo,
-    detectedWorktreesByRepo: inputs.detectedWorktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(inputs),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(inputs),
     projectGroups: inputs.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: inputs.restoredRuntimeHostIdByWorkspaceSessionKey,
     runtimeEnvironments: inputs.runtimeEnvironments,
@@ -73,7 +70,7 @@ export function buildRuntimeSessionMirrorEnvironmentKeys(
 }
 
 export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEnvironmentKeys {
-  // Why: agent/tab writes are hot; scan host ownership only when one of its sources changes.
+  // Agent/tab writes are hot; rescan ownership only when its sources change.
   const inputs = useAppStore(useShallow(selectRuntimeSessionMirrorTargetInputs))
   const {
     activeRuntimeEnvironmentId,

@@ -1,5 +1,6 @@
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess,
@@ -13,13 +14,12 @@ import {
   type JsonlRpcPeerHandlers,
   type JsonlRpcRecord
 } from './peer'
+import type { JsonlRpcRequestOptions } from './peer-oversized-record'
 import { resolveJsonlRpcPeerOptions, type JsonlRpcPeerOptions } from './peer-limits'
 
 export type JsonlRpcAgentConnectionOptions = JsonlRpcPeerHandlers & {
   peer?: JsonlRpcPeerOptions
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
-  /** Any stdout or stderr chunk from the child. */
-  onOutput?: () => void
 }
 
 /** The owning runtime keeps process exit evidence separate from transport closure. */
@@ -38,8 +38,7 @@ export class JsonlRpcAgentConnection {
     const peerOptions = resolveJsonlRpcPeerOptions(options.peer)
     this.managed = spawnManagedProviderProcess(launch, {
       spawnImpl,
-      site: 'jsonl-rpc-agent-teardown',
-      ...(options.onOutput ? { onOutput: options.onOutput } : {})
+      site: 'jsonl-rpc-agent-teardown'
     })
     const managed = this.managed
     this.peer = new JsonlRpcPeer(
@@ -81,10 +80,13 @@ export class JsonlRpcAgentConnection {
     managed.child.stderr.on('error', this.onError)
     managed.onExit((exit) => {
       clearTimeout(this.streamExitTimer)
-      const error = new Error(
-        exit.processless
-          ? 'Agent process could not start'
-          : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
+      const error = withProviderDiagnostic(
+        new Error(
+          exit.processless
+            ? 'Agent process could not start'
+            : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
+        ),
+        providerDiagnostic(managed.stderrTail(), 'person')
       )
       this.peer.finishOnInputEnd(error)
       const stdout = managed.child.stdout
@@ -149,7 +151,7 @@ export class JsonlRpcAgentConnection {
   request(
     command: string,
     params: Record<string, unknown> = {},
-    options: { timeoutMs?: number | null } = {}
+    options: JsonlRpcRequestOptions = {}
   ): Promise<unknown> {
     return this.peer.request(command, params, options)
   }
@@ -166,7 +168,7 @@ export class JsonlRpcAgentConnection {
     this.peer.resumeReading()
   }
 
-  /** Stop sends the dialect's abort first, then closes this connection through the supervisor. */
+  /** The dialect sends abort before the supervisor closes the process connection. */
   close(error?: Error): Promise<ProviderProcessCloseResult> {
     this.closing = true
     clearTimeout(this.streamExitTimer)

@@ -210,12 +210,7 @@ describe('subagentGroupFallbackText', () => {
     ).toBe('Ran 2 subagents (1 stopped)')
   })
 
-  // The sentence is frozen into a durable journal row and replayed on every
-  // reconnect, to clients that draw no roster block and reconcile nothing. It
-  // may therefore only state what a dead process still makes true: the group was
-  // spawned, and whatever outcome had already latched. `Kicked off` vs `Ran`
-  // reports whether an outcome was recorded yet, which is a write-time fact —
-  // saying `Ran` while children were in flight would assert they exited.
+  // Frozen journal text replays to non-reconciling clients. Claim only spawn/latched outcomes; Kicked off versus Ran records write-time outcome presence, never liveness.
   it('makes no liveness claim a replayed row could not still justify', () => {
     const inFlight = subagentGroupFallbackText([
       agent({ id: 'a', state: 'working' }),
@@ -243,10 +238,7 @@ describe('subagentGroupFallbackText', () => {
   })
 })
 
-// Both readers decide "the twin is already printing" with this, so a false
-// positive silently eats a message's real prose and a false negative prints the
-// roster twice. The shape must outlive a byte compare: a roster from a newer
-// build names a state this build never produces.
+// Twin false positives hide real prose; false negatives duplicate rosters. Match shape because newer states cannot reproduce byte-for-byte here.
 describe('isSubagentGroupFallbackText', () => {
   it('recognizes every sentence the producer writes, including an unknown state', () => {
     expect(isSubagentGroupFallbackText(subagentGroupFallbackText([agent({})]))).toBe(true)
@@ -267,10 +259,7 @@ describe('isSubagentGroupFallbackText', () => {
     )
   })
 
-  // Journals written before the twin dropped its live count still hold the old
-  // sentence, and those rows replay forever. A pattern that stopped matching
-  // them would print every one of those rosters twice — once as the block, once
-  // as prose the reader meant to drop.
+  // Legacy dev journals retain live-count twins forever; continue matching them to avoid duplicate replay rows.
   it('still recognizes the legacy twin already frozen into existing journals', () => {
     for (const legacy of [
       'Kicked off 1 subagent — 1 working',

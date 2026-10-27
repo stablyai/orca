@@ -8,6 +8,9 @@ import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { SshTargetRow } from './SshTargetRow'
 import { AddServerSshHostDialog } from './AddServerSshHostDialog'
 import { translate } from '@/i18n/i18n'
+import { useBoundedHostRows } from '../host-picker/use-bounded-host-rows'
+import { HostListSearchField } from '../host-picker/HostListSearchField'
+import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
 
 type RemoteStepProps = {
   sshTargets: (SshTarget & { state?: SshConnectionState })[]
@@ -41,6 +44,10 @@ export function RemoteStep({
 }: RemoteStepProps): React.JSX.Element {
   const [browsing, setBrowsing] = useState(false)
   const [addingServerHost, setAddingServerHost] = useState(false)
+  const targetRows = useBoundedHostRows(
+    sshTargets,
+    new Set(selectedTargetId ? [selectedTargetId] : [])
+  )
   const selectedTarget = selectedTargetId
     ? sshTargets.find((target) => target.id === selectedTargetId)
     : null
@@ -111,7 +118,10 @@ export function RemoteStep({
             </p>
           ) : (
             <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 scrollbar-sleek">
-              {sshTargets.map((target) => (
+              {targetRows.searchable ? (
+                <HostListSearchField value={targetRows.query} onChange={targetRows.setQuery} />
+              ) : null}
+              {targetRows.shown.map((target) => (
                 <SshTargetRow
                   key={target.id}
                   target={target}
@@ -120,6 +130,7 @@ export function RemoteStep({
                   onConnect={onConnectTarget}
                 />
               ))}
+              <HostListOverflowNote hiddenCount={targetRows.hiddenCount} />
             </div>
           )}
           <Button

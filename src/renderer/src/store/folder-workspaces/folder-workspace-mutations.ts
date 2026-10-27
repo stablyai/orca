@@ -21,6 +21,7 @@ import {
 import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
   folderWorkspaceOwnerTarget,
   folderWorkspaceUpdateInvalidatesPathStatus,
@@ -102,6 +103,7 @@ export function createFolderWorkspaceMutationActions(
           folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
           folderWorkspacePathStatuses: {}
         }))
+        holdCreatedSidebarWorkspace({ folderWorkspace: ownedWorkspace })
         return ownedWorkspace
       } catch (err) {
         console.error('Failed to create folder workspace:', err)
@@ -289,9 +291,10 @@ export function createFolderWorkspaceMutationActions(
           folderWorkspacePathStatuses: {}
         }))
         if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
-          // Folder workspaces use the same browser registry key as worktrees;
-          // tear down Chromium guests before purging the remaining renderer state.
-          await get().shutdownWorktreeBrowsers(workspaceKey)
+          // Folder/worktree browser registry keys coincide; retire Chromium guests before renderer cleanup.
+          await Promise.resolve(get().shutdownWorktreeBrowsers(workspaceKey))
+          // Why here too: a server-hosted folder's local pages use this desktop's profile, which the server can't reach.
+          void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: workspaceKey })
           get().purgeWorktreeTerminalState([workspaceKey])
           deleteWorkspaceChatDrafts(chatDraftKeys)
         }

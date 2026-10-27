@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
@@ -76,8 +76,7 @@ describe('browser:publishClientPageMetadata', () => {
     ).resolves.toEqual({ status: 'published', accepted: false })
   })
 
-  // Why the trust check earns a test: this hands a renderer-supplied page identity straight to a
-  // paired runtime's host lease, so an untrusted sender must not reach the lease at all.
+  // Untrusted renderer identities must not reach the paired runtime lease.
   it('refuses an untrusted renderer before touching the lease', async () => {
     mocks.isTrusted.mockReturnValue(false)
 

@@ -1,34 +1,36 @@
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { isUnprovenServerSshRoute } from './resolve-owner'
+import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 export type WorktreeSortOrderHostGroup = {
   hostId: string
   orderedIds: string[]
+  /** Parallel to `orderedIds`: each copy's host as its endpoint stamps it, so twins stay apart. */
+  rowHostIds: string[]
 }
 
-/** Split a worktree sort order into per-owner-host groups (preserving relative
- *  order within each host).
- *
- *  Why: persisted `sortOrder` lives in each host's `worktreeMeta` and is enriched
- *  onto worktrees from their owner host. Stamping the full cross-host id list on
- *  only the focused host loses other hosts' ordering and pollutes the focused
- *  host with foreign ids, so persist each host's ids on that host.
- */
+/** Persist each host’s IDs in its own worktreeMeta, preserving within-host order. Writing all IDs only to focused host loses other owners’ order and pollutes that host; omit unproven owners. */
 export function splitWorktreeSortOrderByHost(
   state: WorktreeRuntimeOwnerState,
   orderedIds: readonly string[]
 ): WorktreeSortOrderHostGroup[] {
-  const groups = new Map<string, string[]>()
+  const groups = new Map<string, { orderedIds: string[]; rowHostIds: string[] }>()
   for (const id of orderedIds) {
-    const environmentId = getRuntimeEnvironmentIdForWorktree(state, id)
-    const hostId = environmentId ? toRuntimeExecutionHostId(environmentId) : LOCAL_EXECUTION_HOST_ID
-    const existing = groups.get(hostId)
-    if (existing) {
-      existing.push(id)
-    } else {
-      groups.set(hostId, [id])
+    const owner = resolveOwnerOrLocal(state, { workspaceId: id })
+    // Why: a twin names no host to write to, and an unproven server route may be another machine.
+    if (owner.kind !== 'resolved' || isUnprovenServerSshRoute(state, id, owner.owner)) {
+      continue
     }
+    const { endpoint, at } = owner.owner
+    const hostId =
+      endpoint.kind === 'environment'
+        ? toRuntimeExecutionHostId(endpoint.environmentId)
+        : LOCAL_EXECUTION_HOST_ID
+    const group = groups.get(hostId) ?? { orderedIds: [], rowHostIds: [] }
+    group.orderedIds.push(id)
+    group.rowHostIds.push(at)
+    groups.set(hostId, group)
   }
-  return [...groups.entries()].map(([hostId, ids]) => ({ hostId, orderedIds: ids }))
+  return [...groups.entries()].map(([hostId, group]) => ({ hostId, ...group }))
 }

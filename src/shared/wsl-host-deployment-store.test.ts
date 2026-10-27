@@ -38,6 +38,7 @@ const pairing = {
   publicKeyB64: Buffer.alloc(32, 1).toString('base64'),
   deviceToken: 'private-device-token'
 }
+const WSL_PAIRING_KEY = Buffer.alloc(32, 2).toString('base64')
 const sshTunnel = {
   sshTargetId: 'target',
   sshTargetGeneration: 3,
@@ -80,12 +81,14 @@ describe('WSL host deployment store', () => {
     })
   }
 
-  // Why a plain pairing: orca-environments.json holds nothing an older build cannot read.
+  // Keep the pairing store readable by older builds.
   function addWslManaged(record = wslRecord()) {
     const environment = addEnvironmentFromPairingCode(userDataPath, {
       name: 'Ubuntu',
+      // Each pairing key identifies one server; duplicate keys are rejected.
       pairingCode: encodePairingOffer({
         ...pairing,
+        publicKeyB64: WSL_PAIRING_KEY,
         endpoint: `ws://127.0.0.1:${record.localPort}/runtime`
       }),
       now: 150
@@ -153,7 +156,6 @@ describe('WSL host deployment store', () => {
       addSshManaged()
       const wslId = addWslManaged()
 
-      // main's readEnvironmentStore: persisted records with their sidecar entries overlaid.
       const sidecar = readRuntimeEnvironmentSidecar(userDataPath)
       const mainView = readPersistedEnvironmentStore(userDataPath).environments.map((entry) =>
         overlayRuntimeEnvironmentSidecar(entry, sidecar.entries[entry.id])
@@ -255,7 +257,6 @@ describe('WSL host deployment store', () => {
       )
     })
 
-    // Regression: with the gate closed a corrupt WSL file must not hide SSH and paired servers.
     it('keeps every other server listed when the file is corrupt and the gate is closed', () => {
       vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
       addSshManaged()
@@ -263,7 +264,6 @@ describe('WSL host deployment store', () => {
       expect(listEnvironments(userDataPath).map((entry) => entry.id)).toEqual(['ssh-managed'])
     })
 
-    // Regression: a stale record must not hide a re-paired loopback server while the gate is closed.
     it('hides nothing for an unreadable record while the gate is closed', () => {
       vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
       const wslId = addWslManaged()
@@ -276,6 +276,7 @@ describe('WSL host deployment store', () => {
         name: 'Remote',
         pairingCode: encodePairingOffer({
           ...pairing,
+          publicKeyB64: Buffer.alloc(32, 3).toString('base64'),
           endpoint: 'wss://build.example.com/runtime'
         }),
         now: 150
@@ -301,6 +302,26 @@ describe('WSL host deployment store', () => {
     const [environment] = listEnvironments(userDataPath)
     expect(environment?.id).toBe(wslId)
     expect(environment?.orcadDeployment).toBeUndefined()
+  })
+
+  it('ignores a record written for another server re-paired under the same id and port', () => {
+    const wslId = addWslManaged(
+      wslRecord({ pairingPublicKeyB64: Buffer.alloc(32, 3).toString('base64') })
+    )
+    const [environment] = listEnvironments(userDataPath)
+    expect(environment?.id).toBe(wslId)
+    expect(environment?.orcadDeployment).toBeUndefined()
+  })
+
+  it('overlays a record bound to the pairing key (keyless records keep port-only binding)', () => {
+    addWslManaged(wslRecord({ pairingPublicKeyB64: WSL_PAIRING_KEY }))
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu-24.04',
+      distroId: '0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f',
+      localPort: 42000,
+      remotePort: 6769
+    })
   })
 
   it('ignores a WSL record on a server that already has an SSH deployment', () => {

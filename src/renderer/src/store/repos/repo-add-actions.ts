@@ -1,3 +1,4 @@
+import { selectCanonicalProjects } from '../project-host-setup-selector'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
@@ -21,6 +22,11 @@ import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
+import {
+  clearPendingRuntimeRepoRemoval,
+  runExclusiveForRuntimeEnvironment
+} from './pending-runtime-repo-removals'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -48,14 +54,20 @@ export function createRepoAddActions(
             }
             repo = result.repo
           } else {
-            repo = (
-              await callRuntimeRpc<{ repo: Repo }>(
-                target,
-                'repo.add',
-                { path, kind, ...(displayName ? { displayName } : {}) },
-                { timeoutMs: 15_000 }
-              )
-            ).repo
+            const environmentId = target.environmentId
+            // Queued behind any replayed removal, so a re-add of the same project is never undone.
+            repo = await runExclusiveForRuntimeEnvironment(environmentId, async () => {
+              const added = (
+                await callRuntimeRpc<{ repo: Repo }>(
+                  target,
+                  'repo.add',
+                  { path, kind, ...(displayName ? { displayName } : {}) },
+                  { timeoutMs: 15_000 }
+                )
+              ).repo
+              clearPendingRuntimeRepoRemoval(environmentId, added.id)
+              return added
+            })
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
@@ -107,7 +119,10 @@ export function createRepoAddActions(
           return {
             repos: nextRepos,
             ...mergeProjectCompatibilityForHostRepoChange({
-              previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
+              previous: {
+                endpointProjects: s.endpointProjects,
+                endpointProjectHostSetups: s.endpointProjectHostSetups
+              },
               nextRepos,
               hostId
             }),
@@ -130,7 +145,11 @@ export function createRepoAddActions(
           // Why: the cross-profile advisory applies to SSH-added projects too; the presence lookup already keys on connection/host.
           await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
           // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
-          warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
+          warnIfProjectCrossesWslFilesystemBoundary(
+            repo,
+            selectCanonicalProjects(get()),
+            get().settings
+          )
         }
         return repo
       } catch (err) {
@@ -172,7 +191,7 @@ export function createRepoAddActions(
         if (!repo) {
           return null
         }
-        await markOnboardingProjectAdded('addedFolder')
+        const onboardingBeforeAdd = await markOnboardingProjectAdded('addedFolder')
         // Why: focus the new folder so the add is visible; lazy-import worktree-activation to avoid a circular module load (it imports the store root).
         const executionHostId =
           options?.runtimeEnvironmentId === undefined
@@ -181,11 +200,10 @@ export function createRepoAddActions(
               ? toRuntimeExecutionHostId(options.runtimeEnvironmentId)
               : LOCAL_EXECUTION_HOST_ID
         await get().fetchWorktrees(repo.id, executionHostId ? { executionHostId } : undefined)
-        const folderWorktree = get().worktreesByRepo[repo.id]?.find(
+        const folderWorktree = selectWorktreesByRepo(get())[repo.id]?.find(
           (worktree) => executionHostId === undefined || worktree.hostId === executionHostId
         )
         if (folderWorktree) {
-          const onboarding = await window.api.onboarding.get().catch(() => null)
           // Why: lazy-import to avoid a circular module load (the launch graph imports the store root).
           const {
             resolveDismissedOnboardingFolderAgentLaunch,
@@ -195,7 +213,7 @@ export function createRepoAddActions(
           const launch = resolveDismissedOnboardingFolderAgentLaunch({
             worktreeId: folderWorktree.id,
             store: get(),
-            onboarding,
+            onboarding: onboardingBeforeAdd,
             hasExistingProject: hadProjectBeforeAdd,
             executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID
           })

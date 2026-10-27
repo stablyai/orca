@@ -1,10 +1,14 @@
+import { ProjectSectionCatalogSchema } from '../../../../shared/project-section-catalog-schema'
+import { resolveServedProjectSectionClaims } from '../../../../shared/project-section-catalog-claims'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import type { ProjectCatalogRows } from '../../../../shared/project-compatibility-merge'
 import {
   buildProjectGroupingIndex,
-  buildProjectSections
+  buildProjectSections,
+  getProjectGroupingForRepo
 } from '../../../../shared/project-section-grouping'
 import {
   getLogicalRepoOrderRankById,
@@ -32,10 +36,7 @@ import { worktree as worktreeFixture } from './worktree-list-groups-test-fixture
 import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
 import { getProjectSectionCatalogFromState } from '../../runtime/sync-runtime-graph/project-section-catalog'
 
-// Why: the phone's Project sections must be the desktop sidebar's by construction. The desktop
-// half answers the renderer's own catalog fetch and runs its merge, selector, repo order and
-// buildRows; the phone half groups what main serves from the renderer's published catalog, and
-// mobile/src/worktree/workspace-list-sections-desktop-parity.test.ts runs buildSections on it.
+// Compare the window’s fetched/merged catalog with main’s phone feed; the mobile parity test also runs buildSections.
 
 const { rpc, assertCapability } = vi.hoisted(() => ({ rpc: vi.fn(), assertCapability: vi.fn() }))
 vi.mock('../../runtime/runtime-rpc-client', () => ({
@@ -86,7 +87,7 @@ async function desktopCatalog(): Promise<{ repos: readonly Repo[]; rows: Project
   let repos: readonly Repo[] = []
   let rows: ProjectCatalogRows = { projects: [], projectHostSetups: [] }
   for (const host of PROJECT_SECTION_PARITY_HOSTS) {
-    const catalog = await fetchRepoCatalogForTarget(host.target)
+    const catalog = await fetchRepoCatalogForTarget(host.target, repos)
     const result = mergeFetchedRepoCatalog(catalog, repos)
     const reconciled = reconcileSupersededSshRepos(result.repos, { pendingSshRepoReadoptions: [] })
     const finalized = applyManualRepoOrder(reconciled.repos, [])
@@ -110,7 +111,11 @@ async function desktopCatalog(): Promise<{ repos: readonly Repo[]; rows: Project
 
 async function desktopHeaders(projectOrderBy: ProjectOrderBy) {
   const { repos, rows } = await desktopCatalog()
-  const projection = getProjectHostSetupProjectionFromState({ repos, ...rows })
+  const projection = getProjectHostSetupProjectionFromState({
+    repos,
+    endpointProjects: rows.projects,
+    endpointProjectHostSetups: rows.projectHostSetups
+  })
   const worktrees: Worktree[] = PROJECT_SECTION_PARITY_ROWS.map((row) => ({
     ...worktreeFixture,
     id: row.id,
@@ -141,13 +146,15 @@ async function desktopHeaders(projectOrderBy: ProjectOrderBy) {
   ).flatMap((row) => (row.type === 'header' ? [{ key: row.key, label: row.label }] : []))
 }
 
-/**
- * What main serves the phone: the renderer's published catalog as JSON crosses the wire. Main
- * stores and answers it unchanged (src/main/ipc/runtime.test.ts, mobile-project-sections.test.ts).
- */
+/** Round-trip the published catalog through JSON as main serves it to the phone. */
 async function servedCatalog(projectOrderBy: ProjectOrderBy): Promise<MobileProjectSectionCatalog> {
   const { repos, rows } = await desktopCatalog()
-  const published = getProjectSectionCatalogFromState({ repos, ...rows, projectOrderBy })
+  const published = getProjectSectionCatalogFromState({
+    repos,
+    endpointProjects: rows.projects,
+    endpointProjectHostSetups: rows.projectHostSetups,
+    projectOrderBy
+  })
   if (!published) {
     throw new Error('the renderer published no catalog')
   }
@@ -192,4 +199,43 @@ describe('the phone groups by Project exactly as the paired desktop sidebar', ()
       expect(phoneHeaders(served)).toEqual(PROJECT_SECTION_PARITY_HEADERS[projectOrderBy])
     }
   )
+})
+
+it('publishes unresolved setups without letting their absent owners demote registered phone checkouts', () => {
+  const repo: Repo = {
+    id: 'a',
+    path: '/a',
+    displayName: 'A',
+    badgeColor: '',
+    addedAt: 1,
+    gitRemoteIdentity: {
+      canonicalKey: 'github.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/acme/app.git'
+    }
+  }
+  const derived = projectHostSetupProjectionFromRepos([repo])
+  const setup = derived.setups[0]
+  if (!setup) {
+    throw new Error('no derived setup')
+  }
+  const published = getProjectSectionCatalogFromState({
+    repos: [repo],
+    endpointProjects: derived.projects,
+    endpointProjectHostSetups: [...derived.setups, { ...setup, id: 'z', repoId: 'z', path: '/z' }],
+    projectOrderBy: 'manual'
+  })
+  const parsed = ProjectSectionCatalogSchema.parse(JSON.parse(JSON.stringify(published)))
+  expect(parsed.setups.map((row) => row.repoId)).toEqual(['a', 'z'])
+  const phone = resolveServedProjectSectionClaims(parsed)
+  expect(
+    getProjectGroupingForRepo(
+      'a',
+      new Map([[repo.id, repo]]),
+      buildProjectGroupingIndex({
+        projects: phone.projects,
+        projectHostSetups: phone.setups
+      })
+    ).key
+  ).toBe(`project:${derived.projects[0].id}`)
 })

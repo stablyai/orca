@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import {
@@ -17,9 +17,18 @@ import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
+import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
+import { getWorktreeOnHostFromState } from '@/store/selectors'
+import {
+  readWorktreeDeleteIdentities,
+  resolveWorktreeBatchDeleteTargets
+} from './worktree-delete-request'
+import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 
 type ForgetSshWorkspaceModalData = {
   worktreeId: string
+  worktreeDeleteIdentities?: unknown
   displayName: string
   resolution: SshWorkspaceForgetResolution
 }
@@ -41,24 +50,54 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     if (!targetId) {
       return ''
     }
-    // Prefer the live label, then the removed target's last known label (ghost
-    // host), then the raw id as a last resort.
+    // Retain removed-host labels for ghost workspaces before falling back to raw IDs.
     return s.sshTargetLabels.get(targetId) ?? s.removedSshTargetLabels.get(targetId) ?? targetId
   })
   const [busy, setBusy] = useState<null | 'reconnect' | 'forget'>(null)
   const mountedRef = useMountedRef()
+  const unsavedTargets = useMemo(
+    () =>
+      isForgetModalData(modalData) && modalData.resolution.kind !== 'not-ssh'
+        ? [
+            {
+              id: modalData.worktreeId,
+              hostId: toSshExecutionHostId(modalData.resolution.targetId)
+            }
+          ]
+        : [],
+    [modalData]
+  )
 
   if (!isForgetModalData(modalData)) {
     return null
   }
   const { worktreeId, displayName, resolution } = modalData
   const canReconnect = resolution.kind === 'disconnected'
-  // This dialog only opens for a workspace pinned to a named SSH target, so that
-  // target IS the host the removal was confirmed against (STA-4343).
+  // This workspace’s named SSH target is the host confirmed for removal.
   const removalTarget: WorktreeRemovalTarget = {
     id: worktreeId,
     executionHostId:
       resolution.kind === 'not-ssh' ? null : toSshExecutionHostId(resolution.targetId)
+  }
+
+  // Why (STA-11912): a replacement at the same host and id must not inherit this confirmation.
+  const selectedIdentities = readWorktreeDeleteIdentities(modalData.worktreeDeleteIdentities)
+  const isSelectedWorkspaceCurrent = (): boolean => {
+    if (selectedIdentities.length !== 1) {
+      return false
+    }
+    const state = useAppStore.getState()
+    const targets = resolveWorktreeBatchDeleteTargets(selectedIdentities, (id, hostId) =>
+      getWorktreeOnHostFromState(state, id, hostId)
+    )
+    return targets?.length === 1
+  }
+  const refuseReplacedSelection = (): void => {
+    showWorkspaceListChangedToast()
+    if (mountedRef.current) {
+      setBusy(null)
+    }
+    closeModal()
   }
 
   const done = (): void => {
@@ -68,11 +107,15 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     }
   }
 
-  // Reconnect the SSH target, then run the normal remote worktree removal.
   const handleReconnectAndDelete = async (): Promise<void> => {
     if (resolution.kind !== 'disconnected') {
       return
     }
+    if (!isSelectedWorkspaceCurrent()) {
+      refuseReplacedSelection()
+      return
+    }
+    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
     setBusy('reconnect')
     try {
       await window.api.ssh.connect({ targetId: resolution.targetId })
@@ -90,21 +133,47 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
       )
       return
     }
-    // Close before the delete toast fires so the two don't overlap.
+    if (!isSelectedWorkspaceCurrent()) {
+      refuseReplacedSelection()
+      return
+    }
+    // Close before the delete toast to avoid overlapping confirmations.
     closeModal()
-    void runWorktreeDeleteWithToast(removalTarget, displayName)
+    void runWorktreeDeleteWithToast(removalTarget, displayName, {
+      confirmedDiscards,
+      assertBeforeDispatch: () => {
+        if (!isSelectedWorkspaceCurrent()) {
+          throw new Error(
+            translate(
+              'auto.components.sidebar.delete.worktree.flow.workspaceListChanged',
+              'Workspace list changed'
+            )
+          )
+        }
+      }
+    }).then((deleted) => {
+      // Why: the refusal's error state is keyed by id and host, which the replacement row shares.
+      if (!deleted && !isSelectedWorkspaceCurrent() && removalTarget.executionHostId) {
+        useAppStore.getState().clearWorktreeDeleteState(worktreeId, removalTarget.executionHostId)
+      }
+    })
     if (mountedRef.current) {
       setBusy(null)
     }
   }
 
-  // Remove Orca's records only — never touches remote files, worktrees, or branches.
+  // Forget only Orca’s records; remote files, worktrees and branches survive.
   const handleForget = async (): Promise<void> => {
+    if (!isSelectedWorkspaceCurrent()) {
+      refuseReplacedSelection()
+      return
+    }
+    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
     setBusy('forget')
     try {
       const result = await useAppStore
         .getState()
-        .removeWorktree(removalTarget, false, { mode: 'forget-local' })
+        .removeWorktree(removalTarget, false, { mode: 'forget-local', confirmedDiscards })
       if (!result.ok) {
         toast.error(result.error)
         if (mountedRef.current) {
@@ -129,7 +198,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
 
   return (
     <Dialog open onOpenChange={(open) => (!open ? closeModal() : undefined)}>
-      <DialogContent className="sm:max-w-md gap-3 p-5" showCloseButton={false}>
+      <DialogContent surface="security" className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader className="gap-1">
           <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
             <ServerOff className="size-4 text-muted-foreground" />
@@ -160,8 +229,9 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
           <span className="min-w-0 flex-1 truncate text-xs font-medium">{hostLabel}</span>
         </div>
 
-        {/* Why: the ghost-host description already states files are untouched, so
-            only repeat the reassurance on the reconnect (disconnected) path. */}
+        <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled />
+
+        {/* Ghost-host copy already promises files survive; repeat only on the reconnect path. */}
         {canReconnect ? (
           <p className="text-[11px] leading-snug text-muted-foreground">{forgetDescription}</p>
         ) : null}

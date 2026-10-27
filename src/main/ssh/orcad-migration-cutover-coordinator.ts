@@ -1,27 +1,21 @@
-/**
- * Staging, committing and aborting a dormant migration on its destination orcad.
- *
- * The source stays authoritative until the destination proves a commit: before every stage and
- * commit the fenced source must still export the journaled manifest and carry no state the
- * manifest cannot. A lost answer is never read as success or as absence; the destination's
- * catalog state is re-read, and only that observation moves the journal, which is on disk before
- * anything is returned. A committed destination is never released.
- */
+/** Keep source authority until durable destination commit. Verify the fenced export before stage/commit; resolve lost replies by catalog reads and persist journal transitions before returning. Never release a committed destination. */
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationSnapshotChunkResult
-} from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type {
   OrcadMigrationSourceCutover,
   OrcadMigrationSourceCutoverPhase
-} from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { resolveDurableOrcadCatalogMutation } from './orcad-catalog-durable-mutation'
 import { ORCAD_MIGRATION_DESTINATION_UNSUPPORTED } from './orcad-migration-catalog-client'
+import { orcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
@@ -31,16 +25,19 @@ import {
   transferOrcadMigrationSnapshots,
   type OrcadMigrationSnapshotSource
 } from './orcad-migration-snapshot-coordinator'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 import { sshRelayMigrationCutoverPort } from './orcad-migration-ssh-relay-source'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
-/** The destination's catalog operations, served by the T6-9 orcad.migration.* client. */
 export type OrcadMigrationDestinationCatalog = {
   readState: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogState>
   stage: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogState>
   commit: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogState>
   abort: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogAbortResult>
+  /** Use identity-only abort when the journal's full manifest cannot fit a request. */
+  abortByReference: (
+    manifest: OrcadMigrationManifest
+  ) => Promise<OrcadMigrationCatalogReferenceAbortResult>
   stageChunk: (
     request: OrcadMigrationSnapshotChunkRequest
   ) => Promise<OrcadMigrationSnapshotChunkResult>
@@ -51,7 +48,7 @@ export type OrcadMigrationCutoverContext = {
   store: OrcadMigrationPreflightStore & OrcadMigrationSnapshotSource
   claims: SshTargetOrcadClaims
   destination: OrcadMigrationDestinationCatalog
-  /** Rebuilt for every check when `store` is a copy that would never see a later edit. */
+  /** Rebuild copied stores for each check so concurrent edits remain visible. */
   freshSource?: () => OrcadMigrationPreflightStore
   /** The fenced source; defaults to the relay-era SSH target the journal names. */
   source?: OrcadMigrationSourceCutoverPort
@@ -103,7 +100,7 @@ export async function commitOrcadMigrationDestination(
   }
   assertSourceUnchanged(context, staged)
   const { destination } = context
-  // Why re-read: a lost commit reply may hide a commit that landed; the read decides.
+  // A lost commit reply may hide success; catalog read decides the next step.
   const state = await resolveDurableOrcadCatalogMutation(
     () => destination.commit(staged.manifest),
     () => destination.readState(staged.manifest),
@@ -119,10 +116,7 @@ export type OrcadMigrationAbortResult =
   | { outcome: 'released'; evidence: 'catalog-absent' | 'destination-unsupported' }
   | { outcome: 'refused'; code: string; reason: string }
 
-/**
- * Releases the source only on proof the destination holds nothing of this migration. `release`
- * defaults to dropping the fence and journal; a delta move keeps the fence instead.
- */
+/** Release only on proven destination absence; default drops journal/fence, while delta moves retain the fence. */
 export async function abortOrcadMigrationCutover(
   context: OrcadMigrationCutoverContext,
   migrationId: string,
@@ -134,11 +128,20 @@ export async function abortOrcadMigrationCutover(
     return committedRefusal()
   }
   const { destination } = context
+  // Older journals can hold oversized manifests; identity-only abort must still release them.
+  if (!orcadMigrationRequestFits({ manifest: cutover.manifest })) {
+    const aborted = await destination.abortByReference(cutover.manifest)
+    if (aborted.state === 'committed') {
+      return committedRefusal()
+    }
+    await release(cutover)
+    return { outcome: 'released', evidence: 'catalog-absent' }
+  }
   let state: OrcadMigrationCatalogState
   try {
     state = await destination.readState(cutover.manifest)
   } catch (error) {
-    // Unsupported means nothing could have been staged, but only if nothing ever was.
+    // Unsupported proves absence only before any stage could have landed.
     if (isDestinationUnsupported(error) && cutover.phase === 'source-fenced') {
       await release(cutover)
       return { outcome: 'released', evidence: 'destination-unsupported' }
@@ -159,10 +162,7 @@ export async function abortOrcadMigrationCutover(
   return { outcome: 'released', evidence: 'catalog-absent' }
 }
 
-/**
- * A committed read may come from memory the server never flushed; only commit()'s acknowledgement,
- * which flushes before it answers, may move the journal to committed.
- */
+/** Committed reads may be unflushed memory; require the idempotent commit acknowledgement to prove durability. */
 async function confirmDurableCommit(
   destination: OrcadMigrationDestinationCatalog,
   manifest: OrcadMigrationManifest
@@ -181,7 +181,7 @@ function assertSourceUnchanged(
   cutoverSource(context).verifyFence(cutover)
 }
 
-/** Moves the journal to what the destination reported; durable before it returns. */
+/** Persist observed state before returning. */
 function recordObservedState(
   context: OrcadMigrationCutoverContext,
   cutover: OrcadMigrationSourceCutover,
@@ -209,7 +209,7 @@ function recordObservedState(
     return cutover
   }
   if (cutover.phase === 'destination-committed' || cutover.phase === 'source-retired') {
-    // Why: a journal never moves back from a proven commit.
+    // Never regress a proven commit.
     return cutover
   }
   const next: OrcadMigrationSourceCutover = {
@@ -234,11 +234,11 @@ async function abortWithRecovery(
         return observed
       }
       if (observed.state === 'absent') {
-        // An absent read may predate the flush; a repeated abort proves it durable.
+        // Absent reads may predate flush; repeat abort to prove durable absence.
         return await destination.abort(manifest)
       }
     } catch {
-      // Still unverifiable: keep the first failure and the fence.
+      // Keep the original failure and fence while abort remains unverifiable.
     }
     throw abortError
   }
@@ -258,7 +258,7 @@ function committedRefusal(): OrcadMigrationAbortResult {
   return {
     outcome: 'refused',
     code: 'orcad_migration_committed_source_cannot_be_released',
-    reason: 'The managed server already holds this migration; it can only move forward.'
+    reason: 'This host’s Orca server already holds this migration; it can only move forward.'
   }
 }
 

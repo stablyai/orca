@@ -17,8 +17,7 @@ const CLI_AGENT_COMMANDS = [
 export function CliFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   const [animatedVisibleCommandCount, setAnimatedVisibleCommandCount] = useState(0)
-  // Why: reduced-motion users should see the static completed state without a
-  // post-render state repair; only the animated path needs timer-backed state.
+  // Show the reduced-motion end state directly; only animation needs timer-backed state.
   const visibleCommandCount = reducedMotion
     ? CLI_AGENT_COMMANDS.length
     : animatedVisibleCommandCount
@@ -34,8 +33,7 @@ export function CliFeatureTipVisual(): JSX.Element {
       timeouts.push(window.setTimeout(() => !cancelled && fn(), ms))
     }
 
-    // Why: terminal lines mirror the orchestration tour beat timings so the
-    // shell shows each command as the parent agent runs it.
+    // Keep terminal commands aligned with the parent agent’s tour beats.
     const runOnce = (): void => {
       setAnimatedVisibleCommandCount(0)
       ORCHESTRATION_CLI_COMMAND_TIMINGS_MS.forEach((ms, index) => {

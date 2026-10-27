@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from './server-layout-apply-routes'
 import { endLayoutFramePositions, noteLayoutFramePosition } from './layout-frame-position'
 import { sendLayoutCommandToOwner } from './layout-owner-command'
 import {
@@ -59,7 +60,9 @@ describe('sendLayoutCommandToOwner', () => {
       command: { ...SPLIT, workspace: 'worktree-1' }
     })
     expect(on.apply).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' }))
+    await vi.waitFor(() =>
+      expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' }, LOCAL_LAYOUT_APPLY_ORIGIN)
+    )
     expect(on.asToday).not.toHaveBeenCalled()
   })
 
@@ -78,7 +81,7 @@ describe('sendLayoutCommandToOwner', () => {
     expect(on.apply).not.toHaveBeenCalled()
 
     noteLayoutFramePosition(5)
-    expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' })
+    expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' }, LOCAL_LAYOUT_APPLY_ORIGIN)
   })
 
   it('changes nothing itself after a refusal', async () => {
@@ -105,36 +108,28 @@ describe('sendLayoutCommandToOwner', () => {
       'main lacks the workspace',
       () => mocks.callRuntimeRpc.mockResolvedValue({ ok: false, code: 'workspace_not_found' })
     ]
-  ])('acts as today when %s', async (_case, arrange) => {
+  ])('refuses, logging it and drawing nothing, when %s', async (_case, arrange) => {
     arrange()
     const on = handlers()
 
     sendLayoutCommandToOwner('worktree-1', SPLIT, on)
 
-    await vi.waitFor(() => expect(on.asToday).toHaveBeenCalledOnce())
-    expect(on.refused).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(on.refused).toHaveBeenCalledOnce())
+    expect(on.asToday).not.toHaveBeenCalled()
+    expect(console.warn).toHaveBeenCalledWith(
+      '[layout-owner] splitPane refused:',
+      expect.stringMatching(/_not_found$/)
+    )
   })
 
   it('refuses, drawing nothing, when the call fails', async () => {
     mocks.callRuntimeRpc.mockRejectedValue(new Error('rpc_failed'))
-    const on = { ...handlers(), unapplied: vi.fn() }
+    const on = handlers()
 
     sendLayoutCommandToOwner('worktree-1', SPLIT, on)
 
     await vi.waitFor(() => expect(on.refused).toHaveBeenCalledWith('call_failed'))
     expect(on.asToday).not.toHaveBeenCalled()
-    expect(on.unapplied).not.toHaveBeenCalled()
-  })
-
-  it('draws nothing for a pane command passing `unapplied` when main lacks the pane', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({ ok: false, code: 'pane_not_found' })
-    const on = { ...handlers(), unapplied: vi.fn() }
-
-    sendLayoutCommandToOwner('worktree-1', SPLIT, on)
-
-    await vi.waitFor(() => expect(on.unapplied).toHaveBeenCalledOnce())
-    expect(on.asToday).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(isTabPaneTreeHeld('tab-1')).toBe(false))
   })
 
   it('keeps the tab’s drawn tree from frames until its answer, and what awaits it, has run', async () => {

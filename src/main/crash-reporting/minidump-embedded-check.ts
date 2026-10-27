@@ -23,12 +23,7 @@ function isPrintableLogByte(value: number): boolean {
   return value === 0x09 || (value >= 0x20 && value <= 0x7e)
 }
 
-/**
- * `lastIndexOf(byte, from)` restricted to `within` bytes before `from`. An
- * unbounded search scans the whole dump backward on a miss only for the result
- * to be thrown away by the same prefix limit; zero-filled regions are normal in
- * a minidump, so that miss is the common case, not the adversarial one.
- */
+// Bound backward searches: missing prefixes in zero-filled dump memory are common.
 function lastIndexOfWithin(dump: Buffer, byte: number, from: number, within: number): number {
   const floor = Math.max(0, from - within)
   for (let at = from; at >= floor; at -= 1) {
@@ -39,7 +34,7 @@ function lastIndexOfWithin(dump: Buffer, byte: number, from: number, within: num
   return -1
 }
 
-/** Electron 43 omits LOG_FATAL but keeps Chromium's formatted log line in memory. */
+/** Recover Chromium log lines from memory when LOG_FATAL is absent. */
 export async function findEmbeddedCheckMessage(
   source: MinidumpSource
 ): Promise<LocatedCheckMessage | undefined> {

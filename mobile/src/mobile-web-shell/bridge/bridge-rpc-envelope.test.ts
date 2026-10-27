@@ -134,15 +134,10 @@ describe('bridge rpc envelope: page side', () => {
 })
 
 describe('bridge rpc envelope: shell side', () => {
-  it('grants every session the envelope', async () => {
-    const pair = createFakeBridgePortPair()
-    await pair.flush()
-    expect(pair.client.getShellSession()?.grants.native).toContain(BRIDGE_RPC_ENVELOPE_GRANT)
-  })
-
   it('hands a request and a subscribe envelope to the native client options', async () => {
     const pair = createFakeBridgePortPair()
     await pair.flush()
+    expect(pair.client.getShellSession()?.grants.native).toContain(BRIDGE_RPC_ENVELOPE_GRANT)
     void pair.client.sendRequest('worktree.ps', { a: 1 }, { timeoutMs: 50, envelope: ENVELOPE })
     void pair.client.sendRequest('worktree.ps', undefined, { envelope: ENVELOPE })
     pair.client.subscribe('terminal.subscribe', { terminal: 't' }, () => undefined, {
@@ -184,7 +179,7 @@ describe('bridge rpc envelope: shell side', () => {
 })
 
 describe('bridge rpc envelope: mixed versions', () => {
-  it('an older page reading the new init ignores a grant name it does not know', () => {
+  it('the current page reader accepts an unknown grant name in init', () => {
     const init = createBridgeInitFrame({
       sessionId: 's',
       buildId: 'b',

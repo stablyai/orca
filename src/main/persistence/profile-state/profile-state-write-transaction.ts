@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { storageCapacityErrorCode } from '../../../shared/storage-capacity-error'
 
 export class ProfileStateIndeterminateWriteError extends Error {
   readonly code = 'profile-state-write-indeterminate' as const
@@ -12,7 +13,7 @@ export class ProfileStateIndeterminateWriteError extends Error {
   }
 }
 
-/** Own the write transaction; joining a caller's transaction would weaken its revision fence. */
+/** Joining an existing transaction would weaken this write's revision fence. */
 export function withProfileStateWriteTransaction<T>(db: Database.Database, write: () => T): T {
   if (db.isTransaction) {
     throw new Error('Profile state write requires an idle database connection')
@@ -26,8 +27,8 @@ export function withProfileStateWriteTransaction<T>(db: Database.Database, write
     return result
   } catch (error) {
     if (!db.isTransaction) {
-      // SQLite can roll back a failed statement itself; a failed COMMIT is ambiguous.
-      if (committing) {
+      // Auto-rollback leaves COMMIT uncertain except SQLITE_FULL: the default powersafe VFS writes its frame last.
+      if (committing && storageCapacityErrorCode(error) !== 'SQLITE_FULL') {
         throw new ProfileStateIndeterminateWriteError(error, undefined)
       }
       throw error

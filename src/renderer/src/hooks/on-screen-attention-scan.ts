@@ -32,6 +32,7 @@ import {
 } from '@/store/slices/workspace-attention/workspace-unread-flag'
 import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/terminal-notification-pane-visibility'
+import type { ClientWorkspaceViewReporter } from './client-workspace-view-report'
 
 type ScanStore = {
   getState: () => AppState
@@ -48,6 +49,8 @@ export type OnScreenAttentionEnvironment = {
   subscribeStructuredViews: (onView: (view: StructuredSubjectRead) => void) => () => void
   /** `onRescan`: visibility/focus changed. `onInput`: trusted input proves presence. */
   subscribePresenceSignals: (onRescan: () => void, onInput: () => void) => () => void
+  /** Where the owning hosts raise the unread flag, they learn what this window shows. */
+  viewReporter?: ClientWorkspaceViewReporter
 }
 
 function hasMarkersOnScreen(s: AppState, targets: readonly AutoAckTabTarget[]): boolean {
@@ -60,18 +63,13 @@ function hasMarkersOnScreen(s: AppState, targets: readonly AutoAckTabTarget[]): 
   )
 }
 
-/**
- * On screen means read: while the window is visible and focused and the user is present, the
- * agents on the visible tabs are acknowledged and every unread marker of those tabs is read.
- * Scans live + retained maps: Codex's title-revert (pty-connection.ts:onAgentExited) migrates `done` rows to retained mid-race — see docs/codex-agent-row-bold-stuck.md.
- */
+/** Visible/focused/present users acknowledge every visible target and unread flag. Scan live and retained rows because Codex exit can migrate done state mid-race (codex-agent-row-bold-stuck.md). */
 export function startOnScreenAttentionScan(
   store: ScanStore,
   env: OnScreenAttentionEnvironment
 ): () => void {
   setPresenceGated(env.readDesktopAway !== null)
-  // Why: the store uses plain create() (no subscribeWithSelector), so manually track the slices we depend on to skip unrelated updates.
-  // Init to undefined so the first maybeAck() (on mount) always passes the ref guard and scans.
+  // Plain Zustand create has no selector subscription; compare slices manually and start undefined so mount always scans.
   let lastActiveView: unknown = undefined
   let lastActiveTabId: unknown = undefined
   let lastActiveWorktreeId: unknown = undefined
@@ -151,12 +149,13 @@ export function startOnScreenAttentionScan(
 
     // Why: tab-active only proxies "seen"; gate on window visible+focused so away-time transitions don't silently clear the bold signal.
     const workspaceIds = isOrcaWindowForegroundFocused() ? onScreenWorkspaceIds(s) : []
+    // An editor, browser or empty workspace has no targets but still reads its flag on arrival.
+    const targets = workspaceIds.length === 0 ? [] : resolveAutoAckTabTargets(s)
+    env.viewReporter?.update(s, workspaceIds, targets)
     if (workspaceIds.length === 0) {
       lastReadScreenKey = null
       return
     }
-    // An editor, browser or empty workspace has no targets but still reads its flag on arrival.
-    const targets = resolveAutoAckTabTargets(s)
     const screenKey = [
       s.activeWorkspaceExecutionHostId,
       ...workspaceIds,
@@ -206,8 +205,7 @@ export function startOnScreenAttentionScan(
     // Why before the writes below: they re-enter this scan synchronously, which must not see an arrival again.
     lastReadScreenKey = screenKey
     pendingPresenceReads = undefined
-    // Why not with no target, nor on a panel close alone: an empty or non-agent view, or the tab
-    // the user just closed the panel on, is not "moved on" — lapsing would drop a mark-unread.
+    // Only movement to another agent lapses explicit unread protection; empty views or closing the panel alone do not count.
     if (targets.length > 0 && !floatingPanelClosed) {
       const activeSubjectKeys = new Set<string>()
       for (const target of targets) {
@@ -216,8 +214,7 @@ export function startOnScreenAttentionScan(
           activeSubjectKeys.add(subjectKey)
         }
       }
-      // Protection lapses when the user moves on to another subject or the agent takes a new
-      // turn; a still-active subject with an unchanged turn keeps its explicit mark-unread.
+      // Keep explicit unread for unchanged active subject/turn; another subject or fresh turn lapses it.
       const lapsedProtections = computeLapsedManualUnreadProtections(
         {
           liveTurns: s.agentStatusByPaneKey,
@@ -232,8 +229,7 @@ export function startOnScreenAttentionScan(
     }
 
     for (const target of targets) {
-      // Why re-read: acking target[0] writes to the store, which re-enters this scan synchronously
-      // and may already have handled target[1]; `s` is a pre-write snapshot that would re-ack it.
+      // Reread after each acknowledgement: synchronous store re-entry may already have handled later targets.
       acknowledgeViewedAutoAckTarget(store.getState(), target, {
         reads,
         readViewed: options?.force
@@ -250,8 +246,8 @@ export function startOnScreenAttentionScan(
     () => maybeAck({ force: true }),
     () => {
       notePresence()
-      // Why only while a presence check is parked: input is the hottest path in the app, and an
-      // unparked rescan would only re-read the screen that store writes and views already read.
+      env.viewReporter?.renewPresence()
+      // Only parked presence checks need input rescans; otherwise views/store writes already cover the screen.
       if (pendingPresenceReads !== undefined) {
         pendingPresenceReads = undefined
         maybeAck({ force: true, presenceConfirmed: true })

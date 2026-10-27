@@ -1,3 +1,4 @@
+import { switchBrowserHostClientProfile } from './browser-host-client-profile-switch'
 import { randomUUID } from 'node:crypto'
 import type {
   BrowserClientHostCommandEvent,
@@ -28,10 +29,7 @@ import type {
 import { requireLiveBrowserClientPage } from './browser-host-page-authority'
 import type { BrowserHostFenceReason } from './browser-host-lease-fence'
 import { dispatchBrowserHostLeaseFence } from './browser-host-lease-fence-dispatch'
-import {
-  BROWSER_HOST_WEBVIEW_CAPABILITY,
-  selectBrowserHostLease
-} from './browser-host-capability-selection'
+import { selectBrowserHostLease } from './browser-host-capability-selection'
 import {
   createBrowserHostClientPage,
   type BrowserClientPageExecutionHostGrant,
@@ -72,17 +70,9 @@ export class BrowserHostLeaseRegistry {
       authorityRuntimeId: string
       authorityEpoch?: string
       reconnectGraceMs?: number
-      /**
-       * Called when a client page stops being reachable -- retired, or fenced with its lease. Runs
-       * even when the client transport is already gone, so runtime-side per-page state (staged
-       * download transfers) is not stranded.
-       */
-      onClientPageReleased?: (browserPageId: string) => void
-      /**
-       * Called when a lease fence takes a client page's placement away. The page itself outlives
-       * the host that placed it, so this hands the runtime its record back to retain rather than
-       * to drop -- a host returning under the same identity recovers it from there.
-       */
+      /** Release staged per-page state even after transport loss; an optional generation scopes cleanup. */
+      onClientPageReleased?: (browserPageId: string, pageHostGeneration?: number) => void
+      /** Retain fenced page records for recovery when the same host identity returns. */
       onClientPageFenced?: (browserPageId: string, placement: RuntimeBrowserClientPlacement) => void
     }
   ) {
@@ -153,6 +143,8 @@ export class BrowserHostLeaseRegistry {
     placement: RuntimeBrowserClientPlacement
     pairedDeviceId: string
     connectionId: string
+    /** File transfers only: a staged profile-switch guest downloads before its generation commits. */
+    admitPendingProfileSwitch?: boolean
   }): RuntimeBrowserClientPlacement {
     return requireBrowserClientPageConnection(input, {
       authorityRuntimeId: this.authorityRuntimeId,
@@ -208,14 +200,25 @@ export class BrowserHostLeaseRegistry {
     options: BrowserHostClientPageCreateOptions
   ): Promise<RuntimeBrowserClientPlacement> {
     return createBrowserHostClientPage(options, {
-      selectLease: (browserHostClientId, requiredCapabilities) =>
-        this.select(browserHostClientId, [
-          BROWSER_HOST_WEBVIEW_CAPABILITY,
-          ...requiredCapabilities
-        ]),
+      selectLease: (clientId, capabilities) => this.select(clientId, capabilities),
       requireLeaseState: (lease) => this.requireLeaseState(lease),
       pagePlacements: this.pagePlacements,
       executionHostGrants: this.clientPageExecutionHostGrants
+    })
+  }
+
+  switchClientPageProfile(
+    authority: BrowserClientPageAuthority,
+    profile: Parameters<typeof switchBrowserHostClientProfile>[1],
+    onLateCommit?: (placement: RuntimeBrowserClientPlacement) => void
+  ): Promise<RuntimeBrowserClientPlacement> {
+    return switchBrowserHostClientProfile(authority, profile, {
+      onLateCommit,
+      registry: this,
+      state: (clientId) => this.requireLeaseState(this.select(clientId, [])),
+      placements: this.pagePlacements,
+      grants: this.clientPageExecutionHostGrants,
+      onCommitted: this.options.onClientPageReleased
     })
   }
 

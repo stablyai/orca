@@ -1,5 +1,8 @@
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { execCommand, isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec-command'
+import {
+  execCommand,
+  isUnconfirmedSshCommandTermination
+} from '../../ssh/remote-exec/remote-exec-command'
 import { remoteInstallGcTombstoneRegex, type RemoteInstallModel } from './remote-install-model'
 import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
 import {
@@ -18,8 +21,7 @@ export async function cleanupRemoteInstallGcTombstones(
   entries: string[],
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<void> {
-  // Why: a confirmed rename isolates these paths from any recreated install.
-  // Strictly named leftovers are safe to retry after an interrupted GC pass.
+  // Confirmed rename isolates tombstones from recreated installs, so interrupted deletion is retryable.
   const tombstoneRegex = remoteInstallGcTombstoneRegex(model)
   for (const name of entries.filter((entry) => tombstoneRegex.test(entry))) {
     const tombstone = joinRemotePath(host, baseDir, name)

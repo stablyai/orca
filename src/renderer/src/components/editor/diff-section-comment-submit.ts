@@ -49,8 +49,7 @@ export async function submitDiffSectionComment({
   if (!worktreeId) {
     return false
   }
-  // Why: await persistence before closing the popover. If the store rolls back
-  // the optimistic insert, keep the user's draft open so they can retry.
+  // Close only after persistence succeeds; rollback must leave the draft available for retry.
   const result = await addDiffComment({
     worktreeId,
     filePath: section.path,

@@ -19,6 +19,7 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.isRunningAgent', { terminal: 'term' }, false],
   ['terminal.agentStatus', { terminal: 'term' }, false],
   ['terminal.rename', { terminal: 'term', title: null }, false],
+  ['terminal.setPaneTitle', { terminal: 'term', title: '' }, false],
   ['terminal.clearBuffer', { terminal: 'term' }, false],
   ['terminal.resetInputModes', { terminal: 'term' }, false],
   ['terminal.readKittyFile', { terminal: 'term', path: '/tmp/image.png' }, false],
@@ -50,7 +51,13 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.unsubscribe', { subscriptionId: 'term' }, false],
   ['terminal.getAutoRestoreFit', {}, false],
   ['terminal.setAutoRestoreFit', { ms: null }, false],
-  ['terminal.setViewerColors', { colors: { foreground: '#ffffff', background: '#000000' } }, false]
+  ['terminal.setViewerColors', { colors: { foreground: '#ffffff', background: '#000000' } }, false],
+  ['terminal.subscribeClaudeAgentViews', null, true],
+  [
+    'terminal.viewClaudeAgent',
+    { terminal: 'term', sessionId: 'session', client: { id: 'test', type: 'desktop' } },
+    false
+  ]
 ]
 
 function schemaFor(name: string) {
@@ -70,12 +77,16 @@ async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntim
 
 describe('terminal RPC manifest characterization', () => {
   it('preserves all method names, order, streaming flags, and parseable minimum inputs', () => {
-    expect(TERMINAL_METHODS).toHaveLength(39)
+    expect(TERMINAL_METHODS).toHaveLength(42)
     expect(TERMINAL_METHODS.map((method) => [method.name, 'stream' in method])).toEqual(
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
-    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(39)
+    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(42)
     for (const [name, params] of METHOD_CASES) {
+      if (params === null) {
+        expect(TERMINAL_METHODS.find((method) => method.name === name)?.params, name).toBeNull()
+        continue
+      }
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }
   })

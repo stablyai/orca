@@ -14,7 +14,6 @@ export type DaemonSpawnCall = {
   terminalWindowsPowerShellImplementation?: string
 }
 
-/** Daemon-backed provider doubles for the "daemon-active provider" spawn-env suites. */
 export function createDaemonActiveProviderFixtures(ctx: {
   handlers: IpcHandlerMap
   mainWindow: unknown
@@ -104,7 +103,6 @@ export function createDaemonActiveProviderFixtures(ctx: {
       httpProxyBypassRules?: string
     },
     processEnvOverrides?: Record<string, string | undefined>,
-    // Why: daemon spawn tests exercise both WSL launch metadata from main and PR #2662 command threading for OMP.
     spawnArgs?: {
       cwd?: string
       worktreeId?: string

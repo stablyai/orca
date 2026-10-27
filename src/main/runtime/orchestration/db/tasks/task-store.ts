@@ -7,8 +7,6 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { selectColumns, TASK_COLUMNS } from '../row-column-lists'
 
-// ── Tasks ──
-
 export function createTask(
   this: OrchestrationDb,
   task: {
@@ -85,11 +83,10 @@ export function createTask(
   return this.db.prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE id = ?`).get(id) as TaskRow
 }
 
-// Why wildcard-free: SyncDatabase refuses to cache any statement containing `*`, so a `SELECT *`
-// here recompiles on every call — including the hot dispatch lookups and the coordinator poll.
+// Explicit projections make hot task lookups and coordinator polls cacheable.
 const TASK_COLUMN_LIST = selectColumns(TASK_COLUMNS)
 
-// Why: hoisted and wildcard-free so the per-publish lineage lookup hits the SyncDatabase statement cache.
+// Hoist the explicit lineage query to reuse its statement-cache entry.
 const TASK_RUNTIME_LINEAGE_SQL = `SELECT ${selectColumns(TASK_COLUMNS, 't')},
          creator.id AS creator_dispatch_id,
          creator.run_id AS creator_dispatch_run_id,
@@ -107,7 +104,7 @@ const TASK_RUNTIME_LINEAGE_SQL = `SELECT ${selectColumns(TASK_COLUMNS, 't')},
        )
        WHERE t.id = ?`
 
-// Why: return the active creator Dispatch proof with the Task read; runtime still owns pane/process currency.
+// Read creator Dispatch proof with the Task; runtime still verifies current pane/process identity.
 export function getTask(this: OrchestrationDb, id: string): TaskRow | undefined
 export function getTask(
   this: OrchestrationDb,
@@ -159,7 +156,7 @@ export function listTasks(
     .all() as TaskRow[]
 }
 
-// Why: the correlated indexed lookup avoids materializing every retained Dispatch before filtering Tasks.
+// Use an indexed correlated lookup instead of materializing every retained Dispatch.
 export function listTasksWithDispatch(
   this: OrchestrationDb,
   filter?: {
@@ -207,7 +204,7 @@ export function listTasksWithDispatch(
   })[]
 }
 
-// Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
+// Promote children inside the completion transaction so ready work cannot be stranded.
 export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tasks schema supplies the same TEXT id/deps columns as TaskRow.
   const candidates = this.db

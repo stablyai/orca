@@ -28,7 +28,6 @@ function fetcherFor(body: Uint8Array, signals: AbortSignal[] = []): typeof fetch
   })
 }
 
-/** A real .tar.gz laid out like the official one, so extraction runs the host's tar. */
 async function nodeDistArchiveFixture(executable: Uint8Array): Promise<Uint8Array> {
   const staging = join(root, 'staging')
   const member = nodeRuntimeExecutablePath(TARGET, NODE_RUNTIME_ASSETS[TARGET].archive)
@@ -149,5 +148,62 @@ describe('pinned runtime archive request ownership', () => {
     expect(parent.signal.reason).toBe(reason)
     expect(cancel).toHaveBeenCalledOnce()
     expect(await readdir(join(cacheRoot, 'node', 'archives'))).toEqual([])
+  })
+})
+
+describe('a pinned runtime archive this computer cannot download', () => {
+  it('says this computer could not reach the download, and where an offline copy goes', async () => {
+    const cacheRoot = join(root, 'cache')
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      throw new Error('net::ERR_CONNECTION_REFUSED')
+    })
+    const error = await materializeNodeRuntimeArchive(TARGET, cacheRoot, {
+      fetcher,
+      retryDelaysMs: [0, 0, 0]
+    }).catch((caught: unknown) => caught)
+    expect(fetcher).toHaveBeenCalledTimes(4)
+    const offlinePath = join(cacheRoot, 'node', 'archives', originalAsset.archive)
+
+    expect(error).toBeInstanceOf(Error)
+    const message = error instanceof Error ? error.message : ''
+    expect(message).toContain("This computer couldn't download Node from https://")
+    expect(message).toContain(`/v${NODE_RUNTIME_PIN.version}/${originalAsset.archive}`)
+    expect(message).toContain('(net::ERR_CONNECTION_REFUSED)')
+    expect(message).toContain("the host doesn't need internet access")
+    expect(message).toContain(`copy it to ${offlinePath}`)
+    expect(error instanceof Error ? error.cause : null).toMatchObject({
+      message: 'net::ERR_CONNECTION_REFUSED'
+    })
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'uses a copy placed at that path without downloading',
+    async () => {
+      const archive = await nodeDistArchiveFixture(new TextEncoder().encode('node'))
+      Object.assign(NODE_RUNTIME_ASSETS[TARGET], { archiveSha256: sha256(archive) })
+      const cacheRoot = join(root, 'cache')
+      const offlinePath = join(cacheRoot, 'node', 'archives', originalAsset.archive)
+      await mkdir(join(offlinePath, '..'), { recursive: true })
+      await writeFile(offlinePath, archive)
+      const fetcher = vi.fn<typeof fetch>(async () => {
+        throw new Error('net::ERR_CONNECTION_REFUSED')
+      })
+
+      expect(await materializeNodeRuntimeArchive(TARGET, cacheRoot, { fetcher })).toBe(offlinePath)
+      expect(fetcher).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps a local filesystem failure as it is', async () => {
+    const cacheRoot = join(root, 'cache')
+    const archiveRoot = join(cacheRoot, 'node', 'archives')
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      const stage = (await readdir(archiveRoot)).find((name) => name.startsWith('.download-'))
+      await mkdir(join(archiveRoot, stage ?? 'missing', originalAsset.archive))
+      return new Response(new ReadableStream(), { status: 200 })
+    })
+    await expect(
+      materializeNodeRuntimeArchive(TARGET, cacheRoot, { fetcher })
+    ).rejects.toMatchObject({ code: 'EEXIST' })
   })
 })

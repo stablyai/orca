@@ -108,7 +108,6 @@ export function registerCommandReceiptTransactionTests(): void {
       })
       await writer.enqueue(
         epochRow,
-        undefined,
         buildCommandReceiptTransaction(scope, (row) => {
           if (!row) {
             throw new Error('expected the committed journal row')
@@ -177,6 +176,7 @@ export function registerCommandReceiptTransactionTests(): void {
         fence: 0,
         items: [],
         queuePause: { lifted: false, liveStop: null, reopened: false },
+        queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
         now: () => 2000,
         mintEpoch: () => 'epoch-2',
         onPublished: () => undefined

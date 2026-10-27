@@ -1,6 +1,5 @@
 import type { AppState } from '../types'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -14,6 +13,7 @@ import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
 import type { GitHubPRFallbackSource } from './cache-model'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
   return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
@@ -35,7 +35,7 @@ const EMPTY_WORKTREE_REPOS: AppState['repos'] = []
 
 export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   const byId = new Map<string, WorktreeLookupEntry>()
-  for (const worktrees of Object.values(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO)) {
+  for (const worktrees of Object.values(selectWorktreesByRepo(state) ?? EMPTY_WORKTREES_BY_REPO)) {
     for (const worktree of worktrees) {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
@@ -67,7 +67,7 @@ const worktreeLookupIndexes = new WeakMap<
 >()
 
 export function getWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
-  const worktreesByRepo = state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO
+  const worktreesByRepo = selectWorktreesByRepo(state) ?? EMPTY_WORKTREES_BY_REPO
   const repos = state.repos ?? EMPTY_WORKTREE_REPOS
   const cached = worktreeLookupIndexes.get(worktreesByRepo)
   if (cached && cached.repos === repos) {
@@ -115,87 +115,6 @@ export function isStaleExactLinkedPRLookup(
     ? (lookupIndex.byId.get(worktreeId)?.first ?? null)
     : findWorktreeById(state, worktreeId)
   return worktree?.linkedPR !== linkedPRNumber
-}
-
-export function shouldClearDivergedLinkedMergedPR(args: {
-  pr: PRInfo | null
-  linkedPRNumber: number | null
-  requestHeadOid: string | null
-}): boolean {
-  const { pr, linkedPRNumber, requestHeadOid } = args
-  return (
-    linkedPRNumber != null &&
-    requestHeadOid !== null &&
-    pr?.number === linkedPRNumber &&
-    pr.state === 'merged' &&
-    // Head-scoped: clear only the worktree whose head diverged, so a PR-number-coalesced broadcast can't clear a sibling still on the PR's line of work.
-    pr.headDivergedFromMergedPRAtOid === requestHeadOid &&
-    pr.headSha !== requestHeadOid &&
-    pr.confirmedContainedHeadOid !== requestHeadOid
-  )
-}
-
-export function shouldApplyDivergedLinkedPRClear(args: {
-  worktree: Pick<Worktree, 'linkedPR' | 'branch' | 'head' | 'isBare' | 'isArchived'> | undefined
-  linkedPRNumber: number
-  branch: string
-  requestHeadOid: string | null
-}): boolean {
-  const { worktree, linkedPRNumber, branch, requestHeadOid } = args
-  return (
-    Boolean(worktree) &&
-    requestHeadOid !== null &&
-    worktree?.linkedPR === linkedPRNumber &&
-    worktree.branch.replace(/^refs\/heads\//, '') === branch &&
-    worktree.head === requestHeadOid &&
-    worktree.isBare !== true &&
-    worktree.isArchived !== true
-  )
-}
-
-// Why: a linked PR is branch-scoped; it's stale once the worktree switched branches with neither push target nor HEAD at the PR head, else Checks stays pinned to the old branch's PR.
-export function shouldClearBranchMismatchedLinkedOpenPR(args: {
-  pr: PRInfo | null
-  linkedPRNumber: number | null
-  branch: string
-  requestHeadOid: string | null
-  pushTargetBranch: string | null
-}): boolean {
-  const { pr, linkedPRNumber, branch, requestHeadOid, pushTargetBranch } = args
-  const headRefName = pr?.headRefName?.trim() ?? ''
-  const currentBranch = branch.replace(/^refs\/heads\//, '').trim()
-  return (
-    linkedPRNumber != null &&
-    pr?.number === linkedPRNumber &&
-    // Draft reviews are open PRs too; don't let their distinct renderer state leave a stale durable link wedged after a branch switch.
-    (pr.state === 'open' || pr.state === 'draft') &&
-    requestHeadOid !== null &&
-    headRefName !== '' &&
-    currentBranch !== '' &&
-    headRefName !== currentBranch &&
-    (pushTargetBranch === null || pushTargetBranch !== headRefName) &&
-    // A worktree parked on the PR's head commit is the same line of work (e.g. renamed local branch); keep the link.
-    !(pr.headSha != null && pr.headSha === requestHeadOid)
-  )
-}
-
-export function shouldApplyBranchMismatchedLinkedPRClear(args: {
-  worktree: Pick<Worktree, 'linkedPR' | 'branch' | 'head' | 'isBare' | 'isArchived'> | undefined
-  linkedPRNumber: number
-  branch: string
-  requestHeadOid: string | null
-}): boolean {
-  const { worktree, linkedPRNumber, branch, requestHeadOid } = args
-  return (
-    Boolean(worktree) &&
-    requestHeadOid !== null &&
-    worktree?.linkedPR === linkedPRNumber &&
-    // Branch-scoped: clear only while still on the branch the mismatch was computed against; a newer switch re-validates.
-    worktree.branch.replace(/^refs\/heads\//, '') === branch.replace(/^refs\/heads\//, '') &&
-    worktree.head === requestHeadOid &&
-    worktree.isBare !== true &&
-    worktree.isArchived !== true
-  )
 }
 
 export function buildPRRefreshCandidate(

@@ -23,7 +23,7 @@ env:
 jobs:
   seed:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -32,6 +32,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           package-manager-cache: false
       - uses: ./.github/actions/prepare-xterm-dependencies
         id: cache

@@ -93,12 +93,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     await this.worktreeBaseReconciliation.reconcile(args)
   }
 
-  /**
-   * Probe how far the worktree's HEAD is behind its tracking remote. Returns
-   * null when the probe cannot establish a signal (no default base ref, or
-   * git failure). Dispatch treats null as "unknown — proceed" (§3.1); only
-   * knowing-and-stale refuses.
-   */
+  /** Null means unknown HEAD drift and permits dispatch; only confirmed staleness refuses (§3.1). */
   async probeWorktreeDrift(worktreeSelector: string): Promise<{
     base: string
     behind: number
@@ -164,20 +159,25 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     })
   }
 
-  persistManagedWorktreeSortOrder(orderedIds: string[]): { updated: number } {
+  persistManagedWorktreeSortOrder(
+    orderedIds: string[],
+    hostIds?: readonly string[]
+  ): { updated: number } {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     return persistRuntimeManagedWorktreeSortOrder({
       orderedIds,
+      hostIds,
       store: this.store,
       invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
       notifyChanged: (repoId, sortOrders) =>
-        this.notifyWorktreesChanged(repoId, {
-          invalidateGitScans: false,
-          sortOrderOnly: true,
+        this.notifyWorktreesChanged(
+          repoId,
           sortOrders
-        })
+            ? { invalidateGitScans: false, sortOrderOnly: true, sortOrders }
+            : { invalidateGitScans: false }
+        )
     })
   }
 

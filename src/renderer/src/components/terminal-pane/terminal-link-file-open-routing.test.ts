@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -49,8 +49,9 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
 installTerminalLinkTestEnvironment(doubles)
 
 describe('handleOscLink', () => {
-  it('opens local .html file paths in Orca browser tabs with the platform modifier', async () => {
+  it('opens local .html file paths in Orca browser tabs when links route to Orca', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
 
     openDetectedFilePath('/tmp/report.html', null, null, deps)
 
@@ -65,15 +66,15 @@ describe('handleOscLink', () => {
       expect.objectContaining({ title: 'report.html', activate: true })
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
-    // Why: the browser tab is the surface — activation must not re-seed a shell into a
-    // workspace whose last terminal the user closed.
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+    // The browser is the surface; activation must not seed a shell into an emptied workspace.
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
     })
   })
 
-  it('also opens local .htm paths in Orca browser tabs with the platform modifier', async () => {
+  it('also opens local .htm paths in Orca browser tabs when links route to Orca', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
 
     openDetectedFilePath('/tmp/legacy.HTM', null, null, deps)
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -88,6 +89,28 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
+  it('opens local .html file paths in the system browser when links route there', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+
+    openDetectedFilePath('/tmp/report.html', null, null, deps)
+    await flushAsyncWork()
+
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/report.html', 'local')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+
+    // Shift takes the other destination, as it does for http links.
+    openDetectedFilePath('/tmp/report.html', null, null, { ...deps, openWithSystemDefault: true })
+    await flushAsyncWork()
+
+    expect(openFilePathMock).toHaveBeenCalledTimes(1)
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'wt-1',
+      'file:///tmp/report.html',
+      expect.objectContaining({ title: 'report.html', activate: true })
+    )
+  })
+
   it('opens local file paths in Orca and reveals default column 1 with the platform modifier', async () => {
     setPlatform('Macintosh')
 
@@ -100,17 +123,21 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/src/main.ts',
-      fileId: '/tmp/src/main.ts',
-      line: 42,
-      column: 1,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '/tmp/src/main.ts',
+        fileId: '/tmp/src/main.ts',
+        line: 42,
+        column: 1,
+        matchLength: 0
+      })
+    )
     expect(openFilePathMock).not.toHaveBeenCalled()
     // Why: the editor file is the surface — the cross-worktree jump must not add a shell.
     expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
+      providesInitialSurface: true,
+      executionHostId: 'local'
     })
   })
 
@@ -168,13 +195,16 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/src/main.ts',
-      fileId: '/tmp/src/main.ts',
-      line: 42,
-      column: 7,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '/tmp/src/main.ts',
+        fileId: '/tmp/src/main.ts',
+        line: 42,
+        column: 7,
+        matchLength: 0
+      })
+    )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
@@ -191,13 +221,15 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(setMarkdownViewModeMock).toHaveBeenCalledWith(fileId, 'source')
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith({
-      filePath,
-      fileId,
-      line: 230,
-      column: 1,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        filePath,
+        fileId,
+        line: 230,
+        column: 1,
+        matchLength: 0
+      })
+    )
   })
 
   it('scopes non-Markdown line reveals to the owner-qualified editor tab', async () => {
@@ -213,13 +245,15 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(setMarkdownViewModeMock).not.toHaveBeenCalled()
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith({
-      filePath,
-      fileId,
-      line: 42,
-      column: 7,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        filePath,
+        fileId,
+        line: 42,
+        column: 7,
+        matchLength: 0
+      })
+    )
   })
 
   it('uses the system default app for shift+cmd/ctrl-click file paths', async () => {
@@ -253,13 +287,16 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/src/main.ts',
-      fileId: '/tmp/src/main.ts',
-      line: 42,
-      column: 7,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '/tmp/src/main.ts',
+        fileId: '/tmp/src/main.ts',
+        line: 42,
+        column: 7,
+        matchLength: 0
+      })
+    )
   })
 
   it('cancels a pending Monaco reveal frame when another file open starts', async () => {
@@ -306,12 +343,15 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
-      filePath: '/tmp/src/second.ts',
-      fileId: '/tmp/src/second.ts',
-      line: 20,
-      column: 3,
-      matchLength: 0
-    })
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filePath: '/tmp/src/second.ts',
+        fileId: '/tmp/src/second.ts',
+        line: 20,
+        column: 3,
+        matchLength: 0
+      })
+    )
   })
 })

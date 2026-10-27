@@ -17,7 +17,7 @@ import {
 
 afterEach(closeProviderTimelineRigs)
 
-/** A person's Stop, settled by the host on the journal, with no word to the assembler. */
+/** Settle Stop directly in the journal without notifying the assembler. */
 async function stop(rig: ProviderTimelineRig, turnKey: string, at = 2_000): Promise<void> {
   const running = await rig.turn(turnKey)
   const identity = parseAgentJournalItemKey(providerTurnItemId(turnKey))
@@ -50,7 +50,6 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     rig.assembler.apply({ type: 'request.open', request: '7', body: pendingApproval })
     await stop(rig, 't1')
 
-    // The provider's trailing end of the turn it was asked to stop, and its withdrawal.
     expect(
       rig.assembler.apply({ type: 'turn.end', turn: 't1', at: 2_100, state: 'interrupted' })
     ).toEqual({ admission: { accepted: true } })
@@ -63,7 +62,6 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     expect((await rig.row(providerItemId('request', '7')))?.body).toMatchObject({
       resolution: { state: 'cancelled' }
     })
-    // The Stop's row stands.
     expect(await rig.turn('t1')).toMatchObject({ state: 'interrupted', completedAt: 2_000 })
     expect(rig.assembler.openTurnId).toBeNull()
   })
@@ -104,7 +102,7 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
     rig.assembler.apply({ type: 'item.open', item: 'call', body: runningTool('read') })
     await stop(rig, 't1')
-    // Its progress, then its completion, both reported between the cancel and the turn's end.
+    // Provider updates can arrive between Stop settlement and its own turn end.
     const progress = { ...runningTool('read'), input: { name: 'read', path: 'a.ts' } }
     expect(
       rig.assembler.apply({
@@ -154,7 +152,6 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     expect((await rig.row(providerItemId('item', 'call')))?.body).toMatchObject({
       state: 'failed'
     })
-    // Ended once: a second unnamed end names no turn.
     expect(rig.assembler.apply({ type: 'turn.end', at: 2_200, state: 'interrupted' }).dropped).toBe(
       'no-turn'
     )
@@ -191,7 +188,7 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     for (let n = 1; n <= MAX_PROVIDER_TIMELINE_OPEN_ENTRIES + 12; n += 1) {
       const turn = `t${n}`
       rig.assembler.apply({ type: 'turn.open', turn, at: n * 10 })
-      // Named messages with no close, as a provider that never closes its text sends them.
+      // Simulate providers that never explicitly close named text.
       expect(
         rig.assembler.apply({
           type: 'text.delta',
@@ -211,7 +208,7 @@ describe('a turn another writer settled stops its text and prompts; its tools wa
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
     rig.assembler.apply({ type: 'turn.open', turn: 't2', at: 1_100 })
-    // Streams joined to turn t1, which is not the open one, so no turn end of this run frees them.
+    // Streams from a non-open turn cannot be freed by this run’s turn end.
     for (let n = 1; n < MAX_PROVIDER_TIMELINE_OPEN_ENTRIES; n += 1) {
       rig.assembler.apply({
         type: 'text.delta',
@@ -260,7 +257,6 @@ describe('text after a person stopped its turn never lands outside that turn', (
     await stop(rig, 't1')
     expect(rig.assembler.apply({ ...delta, text: 'lo' }).dropped).toBe('turn-settled')
     rig.assembler.apply({ type: 'turn.end', at: 2_100, state: 'interrupted' })
-    // The provider's end of the stopped turn is that turn's boundary: its marker is gone.
     expect(rig.assembler.apply({ ...delta, text: 'B' }).dropped).toBeUndefined()
     expect(await texts(rig)).toEqual([
       [{ kind: 'turn', turnItemId: providerTurnItemId('t1') }, 'Hel'],

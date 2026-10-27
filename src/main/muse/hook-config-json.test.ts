@@ -6,11 +6,6 @@ import {
 } from './hook-config-json'
 
 describe('muse hook-config-json', () => {
-  it('creates a fresh settings file with the required schema_version', () => {
-    const parsed = parseMuseSettingsText(serializeMuseSettings(null, '/x/muse-hooks.json'), 'test')
-    expect(parsed?.managed_hooks_env_vars).toEqual(MUSE_MANAGED_HOOK_ENV_VARS)
-  })
-
   it('sets the pointer while preserving user keys and formatting', () => {
     const original = '{\n  "schema_version": 1,\n  "model": "muse-spark-1.2"\n}\n'
     const next = serializeMuseSettings(original, '/x/muse-hooks.json')

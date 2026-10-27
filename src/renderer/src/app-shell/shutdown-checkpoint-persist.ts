@@ -1,5 +1,4 @@
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { formatShutdownCheckpointFailureReason } from '../../../shared/renderer-shutdown-events'
 import type { WorkspaceSessionHostSnapshot } from '../lib/workspace-session-host-persistence'
 import { recordRendererCrashBreadcrumb } from '../lib/crash-breadcrumb-recorder'
@@ -7,21 +6,17 @@ import { recordRendererCrashBreadcrumb } from '../lib/crash-breadcrumb-recorder'
 export type ShutdownCheckpointStageArgs = {
   sessions: WorkspaceSessionHostSnapshot[]
   ui: Partial<PersistedUIState>
-  /** Layout-owner builds: the resume records the quit capture changed, which main records. */
-  sleepRecords?: SleepingAgentSessionRecord[]
 }
 
 export type ShutdownCheckpointPersistDeps = {
   shouldCaptureSession: () => boolean
   /** Per-pane failures are already swallowed inside the capture loop. */
   captureTerminalBuffers: () => void
-  /** Returns the records it changed when main records them (a layout-owner build). */
-  captureSleepingAgentSessions: () => SleepingAgentSessionRecord[] | void
+  captureSleepingAgentSessions: () => void
   buildSessionSnapshots: () => WorkspaceSessionHostSnapshot[]
   buildUiPatch: () => Partial<PersistedUIState>
   hasDirtyOpenFiles: () => boolean
-  /** True during an intentional restart or an app-level quit/close — the unloads
-   *  where losing the full snapshot beats blocking the shutdown outright. */
+  /** Allow durable-session fallback during intentional restart or app quit/close, subject to draft protection. */
   isDegradableShutdownInProgress: () => boolean
   stageBeforeUnloadSync: (args: ShutdownCheckpointStageArgs) => void
 }
@@ -31,38 +26,26 @@ export type ShutdownCheckpointPersist = {
   abandonAttempt: () => void
 }
 
-/** Returns the shutdown checkpoint attempt lifecycle. Running it captures renderer-owned
- *  state, then stages everything durable through one main-process call;
- *  abandonAttempt discards retry state when a shutdown is independently canceled.
- *  Only unstageable data may throw.
- *
- *  A factory rather than a bare function so full-session staging failures can stay
- *  visible-and-retryable on the first attempt and only degrade on a repeat: a
- *  transient failure gets its retry, a deterministic one can't strand the user. */
+/** Capture renderer state and stage it through one main call. Preserve attempt state so full-stage failure blocks once before eligible fallback; abandonAttempt resets it after canceled shutdown. */
 export function createShutdownCheckpointPersist(
   deps: ShutdownCheckpointPersistDeps
 ): ShutdownCheckpointPersist {
   let fullStagingFailedOnPriorAttempt = false
   const run = (): void => {
     const shouldCaptureSession = deps.shouldCaptureSession()
-    let sleepRecords: SleepingAgentSessionRecord[] | void = undefined
     if (shouldCaptureSession) {
       deps.captureTerminalBuffers()
       try {
-        sleepRecords = deps.captureSleepingAgentSessions()
+        deps.captureSleepingAgentSessions()
       } catch (error) {
-        // Why: blocking the shutdown here is what stranded STA-5505. The cost of
-        // continuing is real but bounded — done panes keep their weaker live-origin
-        // record instead of a durable quit capture — and strictly smaller than the
-        // alternative (no update, or a SIGKILL'd quit losing the whole snapshot).
+        // Continue with weaker live-origin records when quit capture fails; blocking stranded updates and forced quits lost more state (STA-5505).
         console.error('[app] Sleeping-agent quit capture failed; continuing checkpoint', error)
         recordRendererCrashBreadcrumb('renderer_shutdown_sleeping_capture_failed', {
           message: formatShutdownCheckpointFailureReason(error)
         })
       }
     }
-    // Why: dirty drafts exist only in the full session snapshot, so their loss is the
-    // one thing this checkpoint may never trade away for an update.
+    // Dirty drafts exist only in the full snapshot and must never be traded for an update.
     const canDegradeToDurableSession = (): boolean =>
       deps.isDegradableShutdownInProgress() && !deps.hasDirtyOpenFiles()
     let sessionSnapshots: WorkspaceSessionHostSnapshot[] = []
@@ -79,19 +62,14 @@ export function createShutdownCheckpointPersist(
     try {
       deps.stageBeforeUnloadSync({
         sessions: degraded ? [] : sessionSnapshots,
-        ui: deps.buildUiPatch(),
-        ...(sleepRecords && sleepRecords.length > 0 && !degraded ? { sleepRecords } : {})
+        ui: deps.buildUiPatch()
       })
     } catch (error) {
       // A durable-only stage has nothing safer left to fall back to.
       if (degraded) {
         throw error
       }
-      // Why retry-then-degrade: the first staging failure stays a visible,
-      // retryable error — degrading immediately would silently drop just-captured
-      // scrollback that a retry may well save. Only a repeat failure trades the
-      // full snapshot for an unblocked shutdown. Non-degradable failures never
-      // arm the flag, so an unrelated unload can't burn a later restart's retry.
+      // Retry once before degrading to preserve fresh scrollback on transient failure. Only eligible shutdowns arm fallback; unrelated unloads cannot consume a later restart’s retry.
       const keepBlocking = !fullStagingFailedOnPriorAttempt || !canDegradeToDurableSession()
       if (canDegradeToDurableSession()) {
         fullStagingFailedOnPriorAttempt = true

@@ -1,8 +1,10 @@
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Link2, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { describeNetworkAddress } from './network-address-label'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseServerShareAddress } from '../../../../shared/network/server-share-address'
 import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
@@ -48,8 +50,43 @@ export function RuntimePairingGeneratorForm({
 }: RuntimePairingGeneratorFormProps): React.JSX.Element {
   const options: AddressOption[] = networkInterfaces.map((networkInterface) => ({
     value: networkInterface.address,
-    label: `${networkInterface.name} (${networkInterface.address})`
+    label: describeNetworkAddress(networkInterface.name, networkInterface.address)
   }))
+  const intentOptions: { value: RuntimePairingIntent; label: string; description: string }[] = [
+    {
+      value: 'another',
+      label: translate(
+        'auto.components.settings.RuntimePairingUrlGenerator.anotherDevice',
+        'Another device'
+      ),
+      description: translate(
+        'auto.components.settings.RuntimePairingUrlGenerator.anotherDeviceHelp',
+        'Tailscale, LAN, or another reachable address'
+      )
+    },
+    {
+      value: 'local',
+      label: translate(
+        'auto.components.settings.RuntimePairingUrlGenerator.thisComputer',
+        'This computer'
+      ),
+      description: translate(
+        'auto.components.settings.RuntimePairingUrlGenerator.localOnlyHelp',
+        'A browser or Orca client on this computer'
+      )
+    },
+    {
+      value: 'custom',
+      label: translate(
+        'auto.components.settings.RuntimePairingUrlGenerator.customAddress',
+        'Custom address'
+      ),
+      description: translate(
+        'auto.components.settings.RuntimePairingUrlGenerator.customAddressHelp',
+        'SSH tunnel, reverse proxy, or custom hostname'
+      )
+    }
+  ]
   const generatedIsCurrent = generatedAddress === selectedAddress
   const staleGeneratedLink = generatedAddress !== null && !generatedIsCurrent
   const customAddressResult =
@@ -60,81 +97,38 @@ export function RuntimePairingGeneratorForm({
   return (
     <>
       <div className="space-y-3">
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">
+        <div className="space-y-2">
+          <div id="runtime-pairing-intent-label" className="text-sm font-medium">
             {translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.intentQuestion',
-              'Where will this link be opened?'
+              'auto.components.settings.RuntimePairingUrlGenerator.whoOpens',
+              'Who will open the link'
             )}
-          </legend>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {(
-              [
-                [
-                  'another',
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.anotherDevice',
-                    'Another device'
-                  ),
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.anotherDeviceHelp',
-                    'Tailscale, LAN, or another reachable address'
-                  )
-                ],
-                [
-                  'local',
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.localOnly',
-                    'This computer only'
-                  ),
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.localOnlyHelp',
-                    'A browser or Orca client on this computer'
-                  )
-                ],
-                [
-                  'custom',
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.customAddress',
-                    'Custom address'
-                  ),
-                  translate(
-                    'auto.components.settings.RuntimePairingUrlGenerator.customAddressHelp',
-                    'SSH tunnel, reverse proxy, or custom hostname'
-                  )
-                ]
-              ] as const
-            ).map(([value, label, description]) => (
-              <label
-                key={value}
-                className="flex cursor-pointer gap-2 rounded-md border border-border p-3 has-[:checked]:border-ring has-[:checked]:ring-1 has-[:checked]:ring-ring"
-              >
-                <input
-                  type="radio"
-                  name="runtime-pairing-intent"
-                  value={value}
-                  checked={intent === value}
-                  onChange={() => onIntentChange(value)}
-                  className="mt-0.5"
-                />
-                <span className="space-y-1">
-                  <span className="block text-xs font-medium">
-                    {label}
-                    {value === 'another' ? (
-                      <span className="ml-1.5 text-[11px] text-muted-foreground">
-                        {translate(
-                          'auto.components.settings.RuntimePairingUrlGenerator.recommended',
-                          'Recommended'
-                        )}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="block text-[11px] text-muted-foreground">{description}</span>
-                </span>
-              </label>
-            ))}
           </div>
-        </fieldset>
+          <ToggleGroup
+            type="single"
+            variant="segmented"
+            size="sm"
+            spacing={1}
+            className="w-full"
+            aria-labelledby="runtime-pairing-intent-label"
+            value={intent}
+            onValueChange={(value) => {
+              const next = intentOptions.find((option) => option.value === value)
+              if (next) {
+                onIntentChange(next.value)
+              }
+            }}
+          >
+            {intentOptions.map((option) => (
+              <ToggleGroupItem key={option.value} value={option.value} className="flex-1">
+                {option.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <p className="text-xs text-muted-foreground">
+            {intentOptions.find((option) => option.value === intent)?.description}
+          </p>
+        </div>
 
         {intent === 'local' ? (
           <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs">
@@ -194,16 +188,14 @@ export function RuntimePairingGeneratorForm({
           <div className="space-y-1">
             <Label id="runtime-pairing-address-label" htmlFor="runtime-pairing-address">
               {translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.de77eb1b65',
-                'Connection address'
+                'auto.components.settings.RuntimePairingUrlGenerator.addressLabel',
+                'Address'
               )}
             </Label>
             <div className="flex flex-wrap items-center gap-2">
               <AddressPicker
                 id="runtime-pairing-address"
-                // Why: bounded width so a short value like "This computer
-                // (127.0.0.1)" doesn't stretch the trigger across the whole card;
-                // the value can grow up to the card edge before truncating.
+                // Bound short labels without stretching the card; let longer values grow before truncating.
                 className="min-w-[240px] max-w-full"
                 triggerAriaLabel={translate(
                   'auto.components.settings.RuntimePairingUrlGenerator.de77eb1b65',
@@ -257,8 +249,7 @@ export function RuntimePairingGeneratorForm({
                   )
                 }}
               />
-              {/* Why: server sharing uses the same interface list as Mobile,
-                and VPN/tailnet addresses can appear after Settings opens. */}
+              {/* Refresh shared Mobile interfaces because VPN/tailnet addresses can appear after opening Settings. */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -299,19 +290,13 @@ export function RuntimePairingGeneratorForm({
         {staleGeneratedLink && selectedAddress !== '' ? (
           <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
             {translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.staleAddress',
-              'The connection address changed. Generate a new link for {{address}}.',
+              'auto.components.settings.RuntimePairingUrlGenerator.staleAddressCreate',
+              'The connection address changed. Create a new link for {{address}}.',
               { address: selectedAddress }
             )}
           </div>
         ) : null}
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.pairedRunsAsYou',
-              'A paired client can run commands as you on this computer.'
-            )}
-          </p>
+        <div className="flex items-center justify-end gap-3">
           <Button
             type="button"
             size="sm"
@@ -319,10 +304,10 @@ export function RuntimePairingGeneratorForm({
             onClick={onGenerate}
             disabled={isGeneratingPairing || !canGenerate}
           >
-            {isGeneratingPairing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {isGeneratingPairing ? <Loader2 className="animate-spin" /> : <Link2 />}
             {translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.8de0f84fff',
-              'Generate Access Link'
+              'auto.components.settings.RuntimePairingUrlGenerator.createLink',
+              'Create link'
             )}
           </Button>
         </div>
@@ -331,8 +316,8 @@ export function RuntimePairingGeneratorForm({
       {generatedIsCurrent && webClientUrl ? (
         <GeneratedUrlRow
           label={translate(
-            'auto.components.settings.RuntimePairingUrlGenerator.6b9ca3e69b',
-            'Open in browser'
+            'auto.components.settings.RuntimePairingUrlGenerator.browserLinkLabel',
+            'Browser link'
           )}
           description={translate(
             'auto.components.settings.RuntimePairingUrlGenerator.1ca2e5194d',
@@ -345,8 +330,8 @@ export function RuntimePairingGeneratorForm({
       ) : generatedIsCurrent && runtimePairingUrl ? (
         <UnavailableUrlRow
           label={translate(
-            'auto.components.settings.RuntimePairingUrlGenerator.6b9ca3e69b',
-            'Open in browser'
+            'auto.components.settings.RuntimePairingUrlGenerator.browserLinkLabel',
+            'Browser link'
           )}
           description={translate(
             'auto.components.settings.RuntimePairingUrlGenerator.f7cafdc9f3',
@@ -358,12 +343,12 @@ export function RuntimePairingGeneratorForm({
       {generatedIsCurrent && runtimePairingUrl ? (
         <GeneratedUrlRow
           label={translate(
-            'auto.components.settings.RuntimePairingUrlGenerator.2e5c4e3c93',
-            'Pair another Orca client'
+            'auto.components.settings.RuntimePairingUrlGenerator.accessLinkLabel',
+            'Access link'
           )}
           description={translate(
-            'auto.components.settings.RuntimePairingUrlGenerator.849825e829',
-            'Paste this pairing URL into another Orca client.'
+            'auto.components.settings.RuntimePairingUrlGenerator.accessLinkHelp',
+            'Paste this into Add server on the other Orca.'
           )}
           value={runtimePairingUrl}
           copied={copiedTarget === 'pairing'}

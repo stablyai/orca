@@ -6,8 +6,8 @@ import type {
 import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
 import {
   queuedMessageEditableText,
-  queuedMessageWithEditedText
-} from '../../../src/shared/queued-message-text-edit'
+  queuedMessageWithEdit
+} from '../../../src/shared/queued-message-edit'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   startMobileQueuedEditLease,
@@ -55,7 +55,7 @@ export function useMobileStructuredQueuedEdit(args: {
     clientRef.current = { sessionKey, client }
   }, [client, sessionKey])
   const active = useRef<Edit | null>(null)
-  /** Save answered `changed`: the editor reopens on the newer text once the card shows it. */
+  // A changed reply reopens the editor once the card publishes its newer text.
   const reopen = useRef<{ scope: string; messageId: string; stale: string } | null>(null)
   const [shown, setShown] = useState<Edit | null>(null)
   const render = useCallback((edit: Edit | null) => {
@@ -137,7 +137,12 @@ export function useMobileStructuredQueuedEdit(args: {
   )
   const save = useCallback(async (): Promise<boolean> => {
     const edit = active.current
-    if (!edit || edit.saving || !sessionId || !queuedMessageWithEditedText(edit.body, edit.text)) {
+    if (
+      !edit ||
+      edit.saving ||
+      !sessionId ||
+      !queuedMessageWithEdit(edit.body, { text: edit.text }).ok
+    ) {
       return false
     }
     if (edit.text === queuedMessageEditableText(edit.body)) {
@@ -152,7 +157,7 @@ export function useMobileStructuredQueuedEdit(args: {
       { messageId: edit.messageId, expectedBodyFingerprint: edit.fingerprint, text: edit.text },
       () => isOpen(active, edit)
     )
-    // A reply landing mid chat switch belongs to the chat being left.
+    // A reply during a chat switch belongs to the outgoing chat.
     if (!isOpen(active, edit) || clientRef.current.sessionKey !== edit.scope) {
       return false
     }
@@ -167,8 +172,7 @@ export function useMobileStructuredQueuedEdit(args: {
         close()
         return false
       }
-      // Someone else's edit landed first: the typing goes to the chat box, and the editor
-      // opens again on the newer text.
+      // Preserve local typing in the composer before reopening a concurrently edited card.
       const typed = edit.text.trim() !== ''
       if (result.value.status === 'changed' && (!typed || args.appendComposerText?.(edit.text))) {
         onSendError(
@@ -216,7 +220,7 @@ export function useMobileStructuredQueuedEdit(args: {
           messageId: shown.messageId,
           text: shown.text,
           saving: shown.saving,
-          canSave: queuedMessageWithEditedText(shown.body, shown.text) !== null,
+          canSave: queuedMessageWithEdit(shown.body, { text: shown.text }).ok,
           change,
           save,
           cancel: () => {

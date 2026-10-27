@@ -24,6 +24,7 @@ type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   ) => OrchestrationMailboxPointerSubmitTarget | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
@@ -41,6 +42,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
     leaf: OrchestrationMailboxLeaf
     mailboxHandle: string
     messages: readonly { id: string; type: string }[]
+    heldDeliveryId?: string
     newestSequence: number
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
@@ -89,10 +91,14 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       if (!exactTarget?.leaf.writable || !sameMailbox) {
         clearAndRedrive = true
       } else if (
-        exactTarget.leaf.lastAgentStatusObservedLive &&
-        exactTarget.leaf.lastAgentStatus === null
+        (exactTarget.leaf.lastAgentStatusObservedLive &&
+          exactTarget.leaf.lastAgentStatus === null) ||
+        deps.isPtyAwaitingUserInput(input.ptyId) ||
+        // As in chat: a mid-turn Enter would spend a held batch's newer mail's only nudge.
+        (input.heldDeliveryId !== undefined && exactTarget.leaf.lastAgentStatus === 'working')
       ) {
-        // A neutral title can outlive the foreground check; no Enter has been attempted yet.
+        // A neutral title can outlive the foreground check, and an open dialog would take the
+        // Enter as its answer; no Enter has been attempted yet.
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deferredUntilIdle = true
@@ -121,8 +127,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
             finalizeReservation = false
             return
           }
-          // An unverifiable Enter stays at ENTER_ATTEMPTED: neither settling it as delivered
-          // nor rolling it back to a state that would send a second Enter is provable here.
+          // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
           if (enterSettlement.outcome === 'refused') {
             releaseWithoutRedrive = true
           }

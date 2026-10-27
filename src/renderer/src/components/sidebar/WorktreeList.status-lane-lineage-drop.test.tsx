@@ -211,8 +211,6 @@ function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
   }
 }
 
-// Grouped by workspace status: parent + its visible lineage child both live in the
-// "in-progress" lane; an unrelated bystander sits in "todo".
 function setStatusLaneState(): void {
   const repo = makeRepo()
   const parent = makeWorktree({
@@ -277,6 +275,8 @@ function setStatusLaneState(): void {
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [repo],
     retainedAgentsByPaneKey: {},
     revealWorktreeInSidebar: vi.fn(),
@@ -295,6 +295,8 @@ function setStatusLaneState(): void {
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    structuredChatSleptAtByPaneKey: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
     updateRepo: vi.fn(),
@@ -329,8 +331,6 @@ async function renderWorktreeList(): Promise<HTMLDivElement> {
   return container
 }
 
-// A minimal DataTransfer stand-in: the native-drop commit path only reads the
-// worktree-id payloads and the type list off it.
 function makeWorktreeIdDataTransfer(worktreeIds: readonly string[]): DataTransfer {
   const [firstId] = worktreeIds
   const data: Record<string, string> = {
@@ -404,7 +404,7 @@ describe('WorktreeList status-lane drop carries visible lineage children (#9083)
     const container = await renderWorktreeList()
     const todoHeader = findStatusLaneHeader(container, 'todo')
 
-    // Only the parent id rides on the native drag payload; the wrapper must expand it.
+    // Native drag carries only the parent ID; the wrapper must add its lineage children.
     await dropWorktreesOnStatusLane(todoHeader, ['parent'])
 
     const updates = committedStatusUpdates()

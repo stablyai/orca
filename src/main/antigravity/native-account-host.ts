@@ -3,9 +3,36 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import type { AntigravityAccountTarget } from '../../shared/antigravity-account-types'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
-import { AntigravityAccountService } from './native-account-service'
+import {
+  AntigravityAccountService,
+  type AntigravityCredentialBackend
+} from './native-account-service'
 
 let service: AntigravityAccountService | null = null
+let credentialChangeListener: () => void = () => {}
+
+export function setAntigravityNativeCredentialChangeListener(listener: () => void): void {
+  credentialChangeListener = listener
+}
+
+// The first read is a baseline: what agy held before Orca looked is unknown.
+function reportingCredentialChanges(
+  backend: AntigravityCredentialBackend
+): AntigravityCredentialBackend {
+  let lastSeen: string | null | undefined
+  return {
+    ...backend,
+    async read() {
+      const current = await backend.read()
+      const contents = current?.contents ?? null
+      if (contents !== null && lastSeen !== undefined && lastSeen !== contents) {
+        credentialChangeListener()
+      }
+      lastSeen = contents
+      return current
+    }
+  }
+}
 
 export function getAntigravityAccountVaultPath(): string {
   return join(getAppEnvironment().getPath('userData'), 'antigravity-accounts', 'vault')
@@ -22,7 +49,7 @@ export function getAntigravityAccountService(
   const env = getAppEnvironment()
   service ??= new AntigravityAccountService(
     createEncryptedAntigravityAccountStore(getAntigravityAccountVaultPath()),
-    createAntigravityHostCredentialBackend(env.getPath('home'))
+    reportingCredentialChanges(createAntigravityHostCredentialBackend(env.getPath('home')))
   )
   return service
 }

@@ -124,6 +124,8 @@ function setFolderWorkspaceFixtureState(
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     retainedAgentsByPaneKey: {},
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
@@ -155,7 +157,6 @@ function setFolderWorkspaceFixtureState(
   return { folderWorkspace, group }
 }
 
-// Why: describe title is shared across the split files so test full names stay stable.
 describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
     await loadWorktreeList()

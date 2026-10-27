@@ -141,7 +141,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       } as StoreState
 
       const pane = createPane(2)
-      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => callback?.())
+      pane.terminal.write.mockImplementation((_data: string | Uint8Array, callback?: () => void) =>
+        callback?.()
+      )
       const manager = createManager(2)
       const deps = createDeps()
 
@@ -262,7 +264,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       } as StoreState
 
       const pane = createPane(1)
-      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => callback?.())
+      pane.terminal.write.mockImplementation((_data: string | Uint8Array, callback?: () => void) =>
+        callback?.()
+      )
       const manager = createManager(1)
       const deps = createDeps({
         restoredLeafId: LEAF_1,
@@ -451,9 +455,10 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       expect(createIpcPtyTransport).toHaveBeenCalled()
     })
 
-    it('uses the focused runtime only for ownerless mixed-version publications', async () => {
+    it('spawns an unstamped local worktree locally while a single server is focused', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -468,13 +473,13 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
 
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
 
-      expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('legacy-hub', expect.any(Object))
+      // Why: the client stamps every server row on arrival, so an unstamped row is this machine's.
+      expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
+      expect(createIpcPtyTransport).toHaveBeenCalled()
     })
 
     it('runs an inline setup terminal locally instead of failing its host closed', async () => {
-      // Regression (#9994 fallout): the branded ephemeral-setup id resolves to no worktree/repo, so
-      // the strict owner resolver reported it unresolved and gave the pane the "Workspace identity is
-      // ambiguous across hosts" error transport instead of a real local PTY.
+      // Synthetic setup IDs have no catalog row; they must resolve locally instead of failing strict ownership as ambiguous (#9994).
       const { connectPanePty } = await import('./pty-connection')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const { createIpcPtyTransport } = await import('./pty-transport')
@@ -529,8 +534,7 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
     })
 
     it('still spawns locally when the worktree row itself proves a local host', async () => {
-      // The hydration guard must key off "nothing names the host", not "no repo row" — a
-      // worktree stamped hostId 'local' is resolved even before its repo merges.
+      // A local-stamped worktree already names its host before its repo hydrates.
       const { connectPanePty } = await import('./pty-connection')
       const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createMockTransport()
@@ -554,9 +558,7 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
     })
 
     it('withholds a local spawn while a repo-backed worktree has no hydrated host', async () => {
-      // Regression: an SSH worktree whose repo row hadn't merged yet resolved to a null
-      // connectionId and spawned on the local daemon with the remote cwd, so the pane never
-      // bound a PTY (Docker SSH watcher-isolation timeout).
+      // Missing SSH repo metadata must defer resolution rather than spawn remote cwd paths on the local daemon.
       const { connectPanePty } = await import('./pty-connection')
       const { createIpcPtyTransport } = await import('./pty-transport')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')

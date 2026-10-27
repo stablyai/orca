@@ -42,7 +42,6 @@ describe('createPreparationActivity', () => {
     refresh.resolve()
     await chained
 
-    // Build is the build alone; idle runs from the refreshed checkout's ready.
     expect(activity.timesAt(9_000)).toEqual({ buildMs: 2_000, idleMs: 4_000 })
     expect(observer.end().preparations).toBe(1)
   })
@@ -63,7 +62,6 @@ describe('createPreparationActivity', () => {
     refresh.resolve()
     await refresh.promise
 
-    // A 40 s build stays 40 s; idle runs from the refresh's ready, not the build's.
     expect(activity.timesAt(113_000)).toEqual({ buildMs: 40_000, idleMs: 10_000 })
     expect(observer.end().preparations).toBe(1)
   })

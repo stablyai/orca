@@ -37,10 +37,7 @@ it('consumes monotonically scanned trust ranges without pairwise deduplication',
   expect(result).toContain('trusted_hash = "updated"')
 })
 
-// Dropping the old dedup+sort is only sound because the scanner advances its
-// cursor past each block it emits. Pin that precondition: if a future scanner
-// change lets ranges repeat or overlap, the upsert below would delete or widen
-// a neighbouring trust block instead of rewriting just the matched one.
+// Upsert relies on ascending, disjoint ranges to preserve neighboring trust blocks.
 it('emits trust ranges with strictly ascending, non-overlapping spans', async () => {
   const { findHookTrustBlockRanges } = await vi.importActual<typeof HookTrustBlocks>(
     './config-toml-hook-trust-blocks'

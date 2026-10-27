@@ -16,6 +16,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 let renderer: ReactTestRenderer | null = null
 
@@ -127,6 +128,12 @@ describe('MobileMarkdown rendering', () => {
     expect(texts(render(content))).toEqual(expected)
   })
 
+  it('gives each code block its own copy button holding only that code', () => {
+    const tree = render('Run this:\n\n```sh\npnpm test\n```\n\nthen:\n\n```\nexit\n```')
+    const buttons = tree.root.findAll((node) => String(node.type) === 'MobileSourceCopyButton')
+    expect(buttons.map((button) => button.props.text)).toEqual(['pnpm test', 'exit'])
+  })
+
   it('C12: opens a link with brackets in it, and one with a title, at their own address', () => {
     const tree = render(
       '[wiki](https://en.wikipedia.org/wiki/Foo_(bar)) and [docs](https://x.com/a "The docs")'
@@ -223,4 +230,19 @@ describe('MobileMarkdown tone', () => {
     expect(styleOf(renderer!.root, 'code').fontSize).toBe(24)
     expect(styleOf(renderer!.root, 'Cell').fontSize).toBe(24)
   })
+})
+
+it('renders document images through the image renderer, including reference syntax', () => {
+  const renderImage = vi.fn((href: string, alt: string) => createElement('View', { href, alt }))
+  act(() => {
+    renderer = create(
+      createElement(MobileMarkdown, {
+        content:
+          '![Architecture](assets/diagram.png)\n\n![Reference][diagram]\n\n[diagram]: assets/other.png',
+        renderImage
+      })
+    )
+  })
+  expect(renderImage).toHaveBeenCalledWith('assets/diagram.png', 'Architecture')
+  expect(renderImage).toHaveBeenCalledWith('assets/other.png', 'Reference')
 })

@@ -20,7 +20,14 @@ afterEach(() => {
   setRuntimeBrowserUnavailableCause(null)
 })
 
-const host: RuntimeBrowserCommandHost = Object.create(null)
+const host: RuntimeBrowserCommandHost = Object.assign(Object.create(null), {
+  getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry(),
+  getBrowserHostLeaseRegistry: () => ({
+    select: () => {
+      throw new Error('browser_host_unavailable')
+    }
+  })
+})
 function delayedProvider() {
   const pending = Promise.withResolvers<OrcadBrowserProvider | null>()
   vi.mocked(resolveOrcadBrowserProvider).mockReturnValueOnce(pending.promise)
@@ -145,7 +152,6 @@ it('refuses a member the provider does not implement instead of invoking it', as
   const commands = createRuntimeBrowserCommands(host)
   pending.resolve(provider)
   await startup.ready
-  // The fixture provider implements only browserTabList.
   expect(() => commands.browserTabCreate({ worktree: 'wt-a' })).toThrow('Unknown browser command')
   await startup.stop()
 })

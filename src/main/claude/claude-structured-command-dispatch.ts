@@ -6,8 +6,7 @@ import type {
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import type { ClaudeSession } from './claude-structured-session-state'
 
-/** Sent like any message, so the slash-command waiter settles it on its result. The translator
- *  makes the command's turn the open one before the send, and that same result ends it. */
+/** Open the command turn before sending; its result settles the waiter and closes that turn. */
 export async function dispatchClaudeCommand(
   session: ClaudeSession,
   command: StructuredAgentSessionCommandRun

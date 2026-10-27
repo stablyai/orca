@@ -132,7 +132,6 @@ describe('real-home user hook trust rebasing', () => {
       trustedHash: 'sha256:disabled',
       enabled: false
     })
-    // Why: an untrusted hook keeps no record, and the key it vacated holds none.
     expect(trust.get(computeTrustKey(stopEntry(2, untrusted)))).toBeUndefined()
     expect(trust.get(computeTrustKey(stopEntry(3, untrusted)))).toBeUndefined()
     expect(readFileSync(configPath, 'utf-8').startsWith('model = "user-model"\n')).toBe(true)
@@ -165,7 +164,7 @@ describe('real-home user hook trust rebasing', () => {
     expect(readFileSync(configPath, 'utf-8')).toBe(before)
   })
 
-  // Why POSIX only: the expected bytes spell the key the way a POSIX path is written.
+  // Expected key bytes use POSIX path spelling.
   it.skipIf(process.platform === 'win32')(
     'rewrites only the moved blocks, carrying each body verbatim and computing nothing',
     () => {
@@ -202,7 +201,7 @@ describe('real-home user hook trust rebasing', () => {
     }
   )
 
-  // Why: Codex's own writes spell the key path quoted (#22592); a missed spelling here leaves a stale table.
+  // Codex writes quoted keys; missed spellings leave stale tables (#22592).
   it.skipIf(process.platform === 'win32')(
     'moves a block in Codex quoted spelling verbatim, leaving no second table behind',
     () => {

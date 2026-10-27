@@ -38,6 +38,54 @@ function sessionWith(input: {
 }
 
 describe('cancelClaudeTurn', () => {
+  it.each(['deadline', 'replacement'])(
+    'bounds the legacy withdrawal sweep and retains confirmed sends: %s',
+    async (mode) => {
+      let current = true
+      const { session, cancelAsyncMessage } = sessionWith({
+        capabilities: ['interrupt_receipt_v1'],
+        interrupt: async () => {
+          vi.setSystemTime(2_900)
+          return { still_queued: ['queued-1', 'queued-2', 'queued-3'] }
+        }
+      })
+      cancelAsyncMessage.mockImplementation(
+        async (uuid: string, options: { timeoutMs: number }) => {
+          if (uuid === 'queued-1') {
+            current = mode !== 'replacement'
+            return true
+          }
+          return runClaudeControl(
+            'cancel_async_message',
+            () => new Promise<boolean>(() => {}),
+            options.timeoutMs
+          )
+        }
+      )
+      const settled = vi.fn()
+      session.connection.send = vi.fn(async () => {
+        throw new Error('lost write')
+      })
+      await dispatchClaudeTurn(session, {
+        clientMessageId: 'client-1',
+        body: userMessage([{ type: 'text', text: 'queued' }])
+      })
+      session.retiredDispatchWaiters[0]!.sentUuid = 'queued-1'
+      vi.useFakeTimers()
+      vi.setSystemTime(0)
+      try {
+        const stopping = cancelClaudeTurn(session, 3_000, () => current, settled, 0)
+        await vi.advanceTimersByTimeAsync(100)
+        expect(await stopping).toEqual({ cancelled: true })
+        expect(cancelAsyncMessage).toHaveBeenCalledTimes(mode === 'deadline' ? 2 : 1)
+        expect(settled).toHaveBeenCalledOnce()
+        expect(session.retiredDispatchWaiters).toEqual([])
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('interrupts without a receipt on an older CLI and reports the turn cancelled', async () => {
     const { session, interrupt, cancelAsyncMessage } = sessionWith({
       interrupt: async () => undefined
@@ -55,7 +103,6 @@ describe('cancelClaudeTurn', () => {
     })
 
     await expect(cancelClaudeTurn(session, 5_000)).resolves.toEqual({ cancelled: true })
-    // No cancel_queued capability, so the queue is swept one uuid at a time.
     expect(interrupt).toHaveBeenCalledWith({ timeoutMs: 5_000 })
     expect(cancelAsyncMessage.mock.calls.map((call) => call[0])).toEqual(['queued-1', 'queued-2'])
   })
@@ -95,6 +142,7 @@ describe('cancelClaudeTurn', () => {
         {
           clientMessageId: 'client-1',
           state: 'rejected',
+          unrun: true,
           reason: 'provider_cancelled_before_start',
           rejection: { kind: 'cancelled' }
         }
@@ -136,6 +184,7 @@ describe('cancelClaudeTurn', () => {
     expect(settled).toHaveBeenNthCalledWith(1, {
       clientMessageId: 'client-0',
       state: 'rejected',
+      unrun: true,
       reason: 'provider_cancelled_before_start',
       rejection: { kind: 'cancelled' }
     })
@@ -170,6 +219,7 @@ describe('cancelClaudeTurn', () => {
     expect(settled).toHaveBeenCalledWith({
       clientMessageId: 'client-ambiguous',
       state: 'rejected',
+      unrun: true,
       reason: 'provider_cancelled_before_start',
       rejection: { kind: 'cancelled' }
     })
@@ -237,6 +287,7 @@ describe('answerClaudePrompt', () => {
     session.translator = {
       handle: vi.fn(),
       openTurnInLiveProviderCycle: false,
+      openTurnHasInputWork: false,
       journalPrompts: {
         resolve: resolvePrompt,
         handOver: () => () => {},
@@ -245,12 +296,14 @@ describe('answerClaudePrompt', () => {
         whenWritten: () => undefined
       },
       currentTurnId: null,
+      currentTurnScope: () => ({ kind: 'thread' }),
       commandTurnId: null,
       beginCommand: vi.fn(),
       forgetCommand: vi.fn(),
       commandInterruptRequested: vi.fn(),
       flush: vi.fn(),
       contextActivity: 0,
+      finalOutputAdmitted: true,
       markContextActivity: vi.fn(),
       subscribeContextUsageRequests: () => () => {},
       recordContextReport: () => {},
@@ -284,7 +337,6 @@ describe('answerClaudePrompt', () => {
 })
 
 describe('stopClaudeBackgroundTasks', () => {
-  /** A decoder holding `ids` live, as backgrounded agents. */
   function liveChildWork(ids: string[]): ClaudeChildWorkDecoder {
     const childWork = new ClaudeChildWorkDecoder()
     for (const id of ids) {
@@ -328,7 +380,7 @@ describe('stopClaudeBackgroundTasks', () => {
       ['task-agent', { timeoutMs: 5_000 }],
       ['task-bash', { timeoutMs: 5_000 }]
     ])
-    // The host settles what was acknowledged; the decoder records nothing of its own.
+    // Stop acknowledgements belong to the host, not the provider decoder.
     expect(childWork.drain(2)).toEqual([])
   })
 
@@ -377,13 +429,11 @@ describe('stopClaudeBackgroundTasks', () => {
       stopClaudeBackgroundTasks(session, undefined, () => true, ['task-1', 'task-2'], acknowledge)
     ).rejects.toBe(lost)
     expect(stopTask.mock.calls.map(([taskId]) => taskId)).toEqual(['task-1', 'task-2'])
-    // The failure is reported, and the stop it did not touch is still named.
     expect(acknowledge.mock.calls).toEqual([[{ taskId: 'task-2' }]])
   })
 
   it('stops asking after a request times out: a CLI not answering costs one deadline, not one per task', async () => {
     const childWork = liveChildWork(['task-0', 'task-1', 'task-2', 'task-3', 'task-4'])
-    // Never answered, behind the real deadline wrapper, with a short deadline.
     const stopTask = vi.fn((taskId: string, options?: { timeoutMs?: number }) =>
       taskId === 'task-0'
         ? Promise.resolve()
@@ -402,7 +452,6 @@ describe('stopClaudeBackgroundTasks', () => {
       )
     ).rejects.toBeInstanceOf(ClaudeControlRequestTimeoutError)
     expect(stopTask).toHaveBeenCalledTimes(2)
-    // What the CLI accepted before it went quiet is still named.
     expect(acknowledge.mock.calls).toEqual([[{ taskId: 'task-0' }]])
     expect(childWork.drain(2)).toEqual([])
   })

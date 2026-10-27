@@ -14,6 +14,7 @@ import {
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { isMissingProviderExecutable } from './provider-executable-missing'
 import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
+import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import {
   acceptProviderRootExit,
   closeProviderProcess,
@@ -38,15 +39,14 @@ type ManagedProviderProcessOptions = {
   spawnImpl?: PipedProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
-  /** Defaults to "the root is gone". */
+  /** Defaults to accepting root exit without descendant proof. */
   acceptClose?: (result: ProviderProcessCloseResult) => boolean
   /** Defaults to `session`; a one-shot's stdin end completes its request instead of stopping it. */
   lifetime?: ProviderSupervisorLifetime
-  /** Any stdout or stderr chunk: the child is doing something. */
   onOutput?: () => void
   /** Each stderr line, `cut` past `stderrLineMaxChars`; true withholds it from the tail. */
   onStderrLine?: (line: string, cut: boolean) => boolean
-  /** How much of one stderr line is kept to classify; the retained tail stays at its own size. */
+  /** Classification prefix cap; independent of the retained stderr tail size. */
   stderrLineMaxChars?: number
 }
 
@@ -62,8 +62,7 @@ export type ManagedProviderProcess = {
   /** The last close that ran the ladder; the already-exited answer only when none did. */
   readonly lastCloseResult: ProviderProcessCloseResult | null
   readonly exitPromise: Promise<void>
-  /** The provider's own executable was not found: a direct spawn's ENOENT, or the one a
-   *  supervisor reported before exiting. */
+  /** Direct or supervisor-reported ENOENT for the provider executable. */
   readonly executableMissing: boolean
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
@@ -72,7 +71,6 @@ export type ManagedProviderProcess = {
   close(tree?: ProviderProcessTree): Promise<ProviderProcessCloseResult>
 }
 
-/** One child owns its exit observation and every retry of an unconfirmed close. */
 export function spawnManagedProviderProcess(
   launch: ProviderProcessLaunch,
   options: ManagedProviderProcessOptions
@@ -80,7 +78,7 @@ export function spawnManagedProviderProcess(
   const platform = options.platform ?? process.platform
   const closePolicy = options.policy ?? rootOnlyProviderClosePolicy
   const spec = createProviderSpawnSpec(launch, options.inheritedEnv ?? process.env, platform, {
-    // A gone owner gets the close this provider's own close would make under the supervisor.
+    // Owner death must request the same close as an explicit provider close.
     closeRequest: closePolicy(true).signalSupervisorOnClose ? 'stdin-end-and-sigterm' : 'stdin-end',
     ...(options.lifetime ? { lifetime: options.lifetime } : {})
   })
@@ -96,8 +94,9 @@ export function spawnManagedProviderProcess(
     cwd: spec.cwd,
     env: spec.env,
     detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
   })
+  guardSupervisedProviderGroup(child, { site: options.site, supervised: spec.supervised })
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false
@@ -108,14 +107,13 @@ export function spawnManagedProviderProcess(
   let stderrLine = ''
   let lineCut = false
   const lineMaxChars = options.stderrLineMaxChars ?? STDERR_TAIL_MAX_CHARS
-  // A line cut at the cap was classified on its prefix only, so an unrecognised one is dropped,
-  // not kept: whatever follows the prefix (a sign-in URL) must never reach the tail.
+  // Drop truncated lines: an unclassified suffix may contain a private sign-in URL.
   const retainLine = (line: string, cut: boolean): void => {
     if (line && !options.onStderrLine?.(line, cut) && !cut) {
       stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_MAX_CHARS)
     }
   }
-  // An undrained stderr pipe blocks the child once it fills.
+  // Drain stderr so a full pipe cannot block the child.
   child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
     if (options.onStderrLine) {
       const lines = (stderrLine + chunk).split('\n')
@@ -197,9 +195,12 @@ export function spawnManagedProviderProcess(
     terminateTree,
     close(tree) {
       return exitProof.run(async () => {
-        // The one already-exited guard. It observed nothing, so an earlier close's findings stay.
+        // An already-exited response must preserve findings from the earlier close.
         if (observed && !tree) {
-          const result: ProviderProcessCloseResult = { root: 'exited', tree: null }
+          const result: ProviderProcessCloseResult = {
+            root: 'exited',
+            tree: null
+          }
           lastCloseResult ??= result
           return result
         }
@@ -219,8 +220,7 @@ export function spawnManagedProviderProcess(
   }
 }
 
-/** Watches stdout only once its reader subscribes: a listener of our own would start the stream
- *  flowing and drop whatever arrived before a reader that subscribes late. */
+/** A premature data listener would drain stdout before a late reader can subscribe. */
 function observeReaderOutput(
   stdout: Pick<NodeJS.ReadableStream, 'on' | 'removeListener'>,
   onOutput: () => void
@@ -230,7 +230,7 @@ function observeReaderOutput(
       return
     }
     stdout.removeListener('newListener', onSubscribe)
-    // After the reader's own listener lands; no chunk can arrive before a microtask runs.
+    // newListener fires before registration; attach after the reader via a microtask.
     queueMicrotask(() => stdout.on('data', onOutput))
   }
   stdout.on('newListener', onSubscribe)

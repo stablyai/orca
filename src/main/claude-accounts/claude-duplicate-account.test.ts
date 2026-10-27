@@ -82,13 +82,11 @@ describe('findDuplicateClaudeAccount', () => {
   })
 
   it('matches a legacy account with undefined runtime against a host candidate', () => {
-    // managedAuthRuntime omitted → undefined normalizes to 'host'.
     const account = makeAccount({ organizationUuid: null })
     expect(findDuplicateClaudeAccount([account], makeCandidate())?.id).toBe('existing-account')
   })
 
   it('treats an existing undefined org as equal to a candidate null org', () => {
-    // organizationUuid omitted → undefined, candidate is explicit null.
     const account = makeAccount({ managedAuthRuntime: 'host' })
     expect(
       findDuplicateClaudeAccount([account], makeCandidate({ organizationUuid: null }))?.id

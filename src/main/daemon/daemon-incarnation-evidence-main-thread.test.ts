@@ -65,7 +65,7 @@ describe('daemon audit evidence main-thread cost', () => {
     )
   })
 
-  // Legacy bare-integer pid files carry no start ticks, so linux falls back to the start time.
+  // Legacy PID records lack start ticks, so Linux falls back to process start time.
   it('reads the linux process start time without a synchronous main-thread spawn', async () => {
     const startedAtMs =
       LINUX_BOOT_TIME_SECONDS * 1000 + (LINUX_START_TICKS / LINUX_CLOCK_TICKS_PER_SECOND) * 1000

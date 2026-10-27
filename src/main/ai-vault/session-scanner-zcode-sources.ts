@@ -7,8 +7,7 @@ import { listZcodeSqliteSessionsViaWorker } from './session-scanner-opencode-sql
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { scopeWalksAgentFiles } from './session-scope-cwd'
 
-// ZCode's CLI stores its OpenCode-shaped history in a separate database.
-// Keep discovery separate so an OpenCode install cannot absorb ZCode rows.
+// Keep ZCode discovery separate so OpenCode cannot absorb its database rows.
 export function zcodeDiscoveries(
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[],
@@ -34,7 +33,12 @@ export function zcodeDiscoveries(
       list(),
       scopeWalksAgentFiles('zcode', options.scopePaths) ? list(options.scopePaths) : undefined
     ])
-    return { agent: 'zcode' as const, rootDir: dbPath, files, ...(scopeFiles ? { scopeFiles } : {}) }
+    return {
+      agent: 'zcode' as const,
+      rootDir: dbPath,
+      files,
+      ...(scopeFiles ? { scopeFiles } : {})
+    }
   })
 }
 

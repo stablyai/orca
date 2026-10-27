@@ -1,8 +1,10 @@
 import { isWebClientLocation } from '@/lib/web-client-location'
+import {
+  logicalKeyTokenFromInput,
+  physicalCodeKeyTokenFromInput
+} from '../../../../shared/keybindings'
 
-// Why: navigator.clipboard only exists in secure contexts. The web client served
-// over plain HTTP (e.g. a LAN address) can reach the clipboard only through the
-// chord's native ClipboardEvent, so Ctrl/Cmd+V must not be preventDefault-ed there.
+// Insecure web origins lack navigator.clipboard; preserve the native paste gesture as their only clipboard path.
 export function shouldUseClipboardEventPaste(args: {
   isWebClient: boolean
   clipboardReadTextAvailable: boolean
@@ -21,22 +23,40 @@ export function getClipboardEventText(event: ClipboardEvent): string {
   return event.clipboardData?.getData('text/plain') ?? ''
 }
 
-type PasteChordEvent = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+type ClipboardChordEvent = Pick<
+  KeyboardEvent,
+  'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+>
 
-// Why: only these chords make the browser dispatch a native `paste` ClipboardEvent,
-// the sole clipboard path on insecure web. A remapped terminal.paste chord (e.g. Ctrl+Y)
-// fires no paste event, so it must still be consumed rather than encoded to the PTY as
-// raw control chars.
-export function firesNativePasteEvent(event: PasteChordEvent, isMac: boolean): boolean {
-  const key = event.key.toLowerCase()
+export type NativeClipboardChordCommand = 'copy' | 'cut' | 'paste'
+
+/** The chords that make Chromium run its native copy, cut or paste command. */
+export function getNativeClipboardChordCommand(
+  event: ClipboardChordEvent,
+  isMac: boolean
+): NativeClipboardChordCommand | null {
+  // Non-Latin layouts report the typed letter in key; Chromium still acts on the physical key.
+  const key = logicalKeyTokenFromInput(event) ?? physicalCodeKeyTokenFromInput(event)
+  const letterCommand = key === 'C' ? 'copy' : key === 'X' ? 'cut' : key === 'V' ? 'paste' : null
   if (isMac) {
-    return key === 'v' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+    return event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+      ? letterCommand
+      : null
   }
-  // Ctrl+V and Ctrl+Shift+V both dispatch a native paste event on Windows/Linux.
-  if (key === 'v' && event.ctrlKey && !event.metaKey && !event.altKey) {
-    return true
+  if (event.ctrlKey && !event.metaKey && !event.altKey) {
+    // Ctrl+Shift+V also pastes on Windows/Linux; Ctrl+Shift+C and X are other browser shortcuts.
+    if (event.shiftKey) {
+      return letterCommand === 'paste' ? 'paste' : null
+    }
+    return letterCommand ?? (event.key === 'Insert' ? 'copy' : null)
   }
-  return (
-    event.key === 'Insert' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey
-  )
+  if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    return event.key === 'Insert' ? 'paste' : event.key === 'Delete' ? 'cut' : null
+  }
+  return null
+}
+
+// Only native paste chords can use ClipboardEvent on insecure web; consume remapped chords to avoid sending control characters.
+export function firesNativePasteEvent(event: ClipboardChordEvent, isMac: boolean): boolean {
+  return getNativeClipboardChordCommand(event, isMac) === 'paste'
 }

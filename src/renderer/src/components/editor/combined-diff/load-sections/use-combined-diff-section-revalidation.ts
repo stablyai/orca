@@ -5,6 +5,8 @@ import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
 } from '../../editor-autosave'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'
 import {
   getCombinedDiffFileTreeSectionKey,
@@ -12,8 +14,7 @@ import {
 } from '../resolve-changes/combined-diff-section-identity'
 import type { CombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 
-// Why: git status and on-disk writes both revalidate loaded rows; one hook owns both watches so
-// they cannot disagree about which sections are eligible.
+// Share status and disk-write watches so both apply identical eligibility rules.
 export function useCombinedDiffSectionRevalidation({
   file,
   gitStatusEntries,
@@ -26,16 +27,15 @@ export function useCombinedDiffSectionRevalidation({
 }: {
   file: OpenFile
   gitStatusEntries: GitStatusEntry[]
-  registry: CombinedDiffSectionLoadRegistry
+  registry: Pick<CombinedDiffSectionLoadRegistry, 'loadedIndicesRef' | 'loadingIndicesRef'>
   requestSectionReload: (index: number) => void
   sectionIndexByKeyRef: React.RefObject<ReadonlyMap<string, number>>
-  // The entry set is structurally stable while individual section content/loading state changes.
-  // Use it for the status signature so progressive loads do not rescan the section array.
+  // Use stable entry paths for status signatures so progressive content loads cannot trigger full rescans.
   sectionEntries: readonly { path: string }[]
   shouldAutoReloadFromGitStatus: boolean
   treeMode: CombinedDiffFileTreeMode
 }): string {
-  const { loadedIndicesRef } = registry
+  const { loadedIndicesRef, loadingIndicesRef } = registry
   const combinedGitStatusSignature = React.useMemo(() => {
     if (!shouldAutoReloadFromGitStatus) {
       return ''
@@ -102,6 +102,37 @@ export function useCombinedDiffSectionRevalidation({
     file.worktreeId,
     requestSectionReload,
     sectionIndexByKeyRef,
+    treeMode
+  ])
+
+  useEffect(() => {
+    if (treeMode !== 'all' && treeMode !== 'uncommitted') {
+      return
+    }
+    // Watch-gap resync has no paths and must refresh loaded snapshot-backed sections too; storm overflow only refreshes status.
+    const handler = (event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]): void => {
+      const { payload, runtimeEnvironmentId } = event.detail
+      if (
+        (runtimeEnvironmentId?.trim() || null) !== (file.runtimeEnvironmentId?.trim() || null) ||
+        normalizeRuntimePathForComparison(payload.worktreePath) !==
+          normalizeRuntimePathForComparison(file.filePath) ||
+        payload.resync !== true
+      ) {
+        return
+      }
+      // Retry in-flight reads too; they may have started before the missed write.
+      for (const index of new Set([...loadedIndicesRef.current, ...loadingIndicesRef.current])) {
+        requestSectionReload(index)
+      }
+    }
+    window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handler)
+    return () => window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handler)
+  }, [
+    file.filePath,
+    file.runtimeEnvironmentId,
+    loadedIndicesRef,
+    loadingIndicesRef,
+    requestSectionReload,
     treeMode
   ])
 

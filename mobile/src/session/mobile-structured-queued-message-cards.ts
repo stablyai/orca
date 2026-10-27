@@ -1,6 +1,4 @@
-// Render models for the host-held queued drafts shown above the composer.
-// The wire carries no hold copy on purpose: the caption is derived here from the
-// draft's own state plus the live facts the client already holds.
+// Derive queue captions from draft/live facts because the host sends no hold copy.
 
 import {
   readWholeAgentSessionFailureFact,
@@ -18,21 +16,18 @@ import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
 } from '../../../src/shared/agent-session-wire'
-import { readAgentMessageSource } from '../../../src/shared/agent-session-message-source'
+import { readAgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 
 export type MobileQueuedMessageCard = {
   messageId: string
-  /** The draft's text blocks joined for display and for Edit's composer copy. */
+  automatic?: true
   text: string
   state: 'waiting' | 'returned'
   paused: boolean
-  /** Returned, or its own send failed: the row leads with an alert. */
   needsAttention: boolean
-  /** Status under the text; null for a card plainly waiting its turn, also behind an open
-   *  question or in a paused queue: the question and the pause row say why. */
+  // Leave plain waits uncaptioned; the question or queue-pause row already explains the hold.
   caption: string | null
-  /** "From <name>" on another agent's card; null on the person's. */
   attribution: string | null
   /** A conversation command such as /compact: it never steers into a running turn. */
   command?: true
@@ -57,8 +52,7 @@ function returnedCaption(
   if (dispatchWasWithdrawn({ dispatchState: 'rejected', reason, rejection })) {
     return 'Stopped before it was sent'
   }
-  // Worded as the desktop card words it: a fact read whole decides, the host's reason is the
-  // fallback, and the card's own Send is the retry, so the words leave out sending again.
+  // Reuse desktop failure wording but omit retry instructions: this card’s Send is the retry.
   return agentSessionWriteNoticeEnglish(
     structuredAgentSessionAttemptFailureParts(
       { kind: 'rejected', reason },
@@ -79,8 +73,7 @@ function pausedCaption(reason: string | undefined, waitsForAgent: boolean): stri
   return 'Paused'
 }
 
-/** Whether Resume would send anything: a waiting card with no hold of its own, ahead of any
- *  returned card. The drain stops at a returned card, so cards behind one never go. */
+// Returned cards stop the drain, so waiting cards behind one cannot make Resume useful.
 export function mobileQueueHasResumableCard(cards: readonly MobileQueuedMessageCard[]): boolean {
   for (const card of cards) {
     if (card.state === 'returned') {
@@ -93,11 +86,7 @@ export function mobileQueueHasResumableCard(cards: readonly MobileQueuedMessageC
   return false
 }
 
-/** Cards in published order. A waiting card is hidden once a live hand-off of it arrived — a
- *  submission naming it as its `queuedMessageId` that was not rejected — as the desktop hides it:
- *  on a multi-page catch-up the shrunk list rides only the final page, so the bubble and the card
- *  would otherwise briefly show together. A rejected hand-off is what sent the draft back, so it
- *  hides nothing. Returned cards always show. */
+// Hide waiting cards with non-rejected hand-offs until catch-up publishes the final queue; rejected hand-offs and returned cards must remain reachable.
 export function mobileQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null,
   submissions: readonly Pick<AgentJournalSubmission, 'queuedMessageId' | 'dispatchState'>[],
@@ -137,6 +126,7 @@ export function mobileQueuedMessageCards(
             : null
     cards.push({
       messageId: draft.messageId,
+      ...(draft.body.from !== undefined ? { automatic: true as const } : {}),
       text: queuedMessageBodyText(draft.body),
       state: draft.state,
       paused,

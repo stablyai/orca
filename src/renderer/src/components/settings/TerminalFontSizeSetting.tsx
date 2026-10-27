@@ -25,8 +25,6 @@ export function TerminalFontSizeSetting({
       keywords={['terminal', 'typography', 'text size']}
       forceVisible={forceVisible}
     >
-      {/* Why: helper text dropped per the copy audit — "Font Size" + px control
-          is self-evident; the search index keeps the longer description. */}
       <SettingsRow
         label={translate(
           'auto.components.settings.TerminalFontSizeSetting.a4a352b1e9',
@@ -45,7 +43,7 @@ export function TerminalFontSizeSetting({
             >
               <Minus className="size-3" />
             </Button>
-            {/* Why: native spin buttons overlap the value and duplicate the −/+ steppers. */}
+            {/* Hide native spinners that overlap values and duplicate the custom steppers. */}
             <Input
               type="number"
               min={10}

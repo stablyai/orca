@@ -1,8 +1,9 @@
-// Why: RN can swallow onclose for a wedged iOS transport, so the client synthesizes the close.
-// These cover the diagnostic clocks that synthesis has to keep honest, and prove synthesis
-// never costs us the auth-failed latch when the real close lands late.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// Pin diagnostic clocks and auth-failed latches when RN omits close and later delivers the stale event.
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { connect } from './rpc-client'
+import { diagnoseConnection } from '../diagnostics/connection-diagnostics-analysis'
+import type { ConnectionLogEntry } from './types'
+import { recordSocketDeadlineAppState } from './socket-deadline-clock'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -23,7 +24,7 @@ vi.mock('./mobile-runtime-capability-negotiation', () => ({
   negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
 }))
 
-// Why: close() deliberately never fires onclose — that is the wedged-transport bug being modelled.
+// Model a wedged native socket whose close() emits no onclose.
 class WedgedWebSocket {
   static CONNECTING = 0
   static OPEN = 1
@@ -62,7 +63,7 @@ class WedgedWebSocket {
     this.onmessage?.({ data: payload })
   }
 
-  // Why: the close event the native layer eventually coughs up, possibly long after we gave up.
+  // Deliver the delayed native close after the client’s own fallback.
   deliverClose(code: number, reason = ''): void {
     this.readyState = WedgedWebSocket.CLOSED
     this.onclose?.({ code, reason, wasClean: true })
@@ -76,18 +77,20 @@ function lastSocket(): WedgedWebSocket {
   return sockets[sockets.length - 1]!
 }
 
-function openConnectionLogs(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown>[] {
+function openConnectionLogs(spy: MockInstance<typeof console.log>): Record<string, unknown>[] {
   return spy.mock.calls
     .filter((call) => call[0] === '[net] openConnection')
-    .map((call) => call[1] as Record<string, unknown>)
+    .map((call) => logFields(call[1]) ?? {})
 }
 
 describe('synthesized close diagnostics', () => {
-  let logSpy: ReturnType<typeof vi.spyOn>
+  let logSpy: MockInstance<typeof console.log>
 
   beforeEach(() => {
     vi.useFakeTimers()
+    recordSocketDeadlineAppState('active')
     sockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = WedgedWebSocket as unknown as typeof WebSocket
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   })
@@ -98,15 +101,124 @@ describe('synthesized close diagnostics', () => {
     globalThis.WebSocket = originalWebSocket
   })
 
+  it.each(['connect', 'handshake'] as const)(
+    'redials a suspended %s deadline without blaming the endpoint',
+    async (kind) => {
+      let elapsed = 0
+      const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
+      const entries: ConnectionLogEntry[] = []
+      const client = connect('ws://desktop.invalid', 'token', 'server-key', {
+        onLog: (entry) => entries.push(entry)
+      })
+      if (kind === 'handshake') {
+        lastSocket().open()
+      }
+      const timeout = kind === 'connect' ? 12_000 : 5_000
+      try {
+        elapsed = 164 * 60_000
+        vi.setSystemTime(Date.now() + elapsed - timeout)
+        await vi.advanceTimersByTimeAsync(timeout)
+        expect(client.getState()).toBe('reconnecting')
+        expect(entries.some((entry) => entry.code === 'suspended-dial')).toBe(true)
+        expect(entries.some((entry) => entry.code === `${kind}-timeout`)).toBe(false)
+        expect(
+          diagnoseConnection({
+            endpoint: 'ws://desktop.invalid',
+            state: client.getState(),
+            entries
+          }).likelyCause
+        ).not.toContain('endpoint did not answer')
+        await vi.advanceTimersByTimeAsync(500)
+        expect(sockets).toHaveLength(2)
+      } finally {
+        client.close()
+        clock.mockRestore()
+      }
+    }
+  )
+
+  it('does not blame the endpoint when device sleep pauses the monotonic clock', async () => {
+    let elapsed = 0
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
+    const entries: ConnectionLogEntry[] = []
+    const client = connect('ws://desktop.invalid', 'token', 'server-key', {
+      onLog: (entry) => entries.push(entry)
+    })
+    try {
+      recordSocketDeadlineAppState('background')
+      elapsed = 12_000
+      vi.setSystemTime(Date.now() + 3 * 60 * 60_000)
+      recordSocketDeadlineAppState('active')
+      await vi.advanceTimersByTimeAsync(12_000)
+      expect(client.getState()).toBe('reconnecting')
+      expect(entries.some((entry) => entry.code === 'suspended-dial')).toBe(true)
+      expect(entries.some((entry) => entry.code === 'connect-timeout')).toBe(false)
+    } finally {
+      client.close()
+      clock.mockRestore()
+    }
+  })
+
+  it('lets the next on-time failure replace a delayed deadline diagnosis', async () => {
+    let elapsed = 0
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
+    const entries: ConnectionLogEntry[] = []
+    const client = connect('ws://desktop.invalid', 'token', 'server-key', {
+      onLog: (entry) => entries.push(entry)
+    })
+    try {
+      elapsed = 164 * 60_000
+      await vi.advanceTimersByTimeAsync(12_000)
+      expect(entries.some((entry) => entry.code === 'suspended-dial')).toBe(true)
+      elapsed += 500
+      await vi.advanceTimersByTimeAsync(500)
+      expect(sockets).toHaveLength(2)
+      elapsed += 12_000
+      await vi.advanceTimersByTimeAsync(12_000)
+      expect(entries.filter((entry) => entry.code === 'connect-timeout')).toHaveLength(1)
+      expect(
+        diagnoseConnection({
+          endpoint: 'ws://desktop.invalid',
+          state: client.getState(),
+          entries
+        }).likelyCause
+      ).toContain('endpoint did not answer')
+    } finally {
+      client.close()
+      clock.mockRestore()
+    }
+  })
+
+  it.each([3 * 60 * 60_000, -3 * 60 * 60_000])(
+    'keeps an on-time connect timeout when the wall clock shifts by %i ms',
+    async (wallShift) => {
+      let elapsed = 0
+      const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
+      const entries: ConnectionLogEntry[] = []
+      const client = connect('ws://desktop.invalid', 'token', 'server-key', {
+        onLog: (entry) => entries.push(entry)
+      })
+      try {
+        elapsed = 12_000
+        vi.setSystemTime(Date.now() + wallShift)
+        await vi.advanceTimersByTimeAsync(12_000)
+        expect(client.getState()).toBe('reconnecting')
+        expect(entries.some((entry) => entry.code === 'connect-timeout')).toBe(true)
+        expect(entries.some((entry) => entry.code === 'suspended-dial')).toBe(false)
+      } finally {
+        client.close()
+        clock.mockRestore()
+      }
+    }
+  )
+
   it('records the close clock when a handshake timeout synthesizes the close', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     lastSocket().open()
 
-    // 5s handshake budget elapses with no e2ee_ready — the client closes and synthesizes onclose.
     await vi.advanceTimersByTimeAsync(5_000)
     expect(client.getState()).toBe('reconnecting')
 
-    // 500ms is the first reconnect delay; the redial log must date the close it just made.
     await vi.advanceTimersByTimeAsync(500)
     expect(sockets).toHaveLength(2)
 
@@ -131,22 +243,21 @@ describe('synthesized close diagnostics', () => {
     replacement.receive(JSON.stringify({ type: 'e2ee_ready' }))
     replacement.receive('encrypted:{"type":"e2ee_authenticated"}')
 
-    // The native layer finally reports the dead socket's close, 200ms into the replacement's life.
+    // Deliver the old close during the replacement socket’s lifetime.
     await vi.advanceTimersByTimeAsync(200)
     wedged.deliverClose(1006)
-    const staleCloseLog = logSpy.mock.calls.findLast(
-      (call) => call[0] === '[net] ws.onclose'
-    )?.[1] as Record<string, unknown> | undefined
+    const staleCloseLog = logFields(
+      logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1]
+    )
     expect(staleCloseLog?.constructToCloseMs).toBe(5_700)
     expect(staleCloseLog?.aliveMs).toBeNull()
     expect(staleCloseLog?.inboundIdleMs).toBe(5_600)
 
-    // The replacement's own close must still be able to date itself against its open.
     await vi.advanceTimersByTimeAsync(300)
     lastSocket().deliverClose(1006)
-    const closeLog = logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1] as
-      | Record<string, unknown>
-      | undefined
+    const closeLog = logFields(
+      logSpy.mock.calls.findLast((call) => call[0] === '[net] ws.onclose')?.[1]
+    )
     expect(closeLog?.constructToCloseMs).toBe(500)
     expect(closeLog?.aliveMs).toBe(500)
     expect(closeLog?.inboundIdleMs).toBe(500)
@@ -185,7 +296,6 @@ describe('synthesized close diagnostics', () => {
     expect(client.getState()).toBe('auth-failed')
     expect(sockets).toHaveLength(3)
 
-    // A latched client must stay latched and stop redialling.
     const dialCount = sockets.length
     await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(sockets).toHaveLength(dialCount)
@@ -225,3 +335,9 @@ describe('synthesized close diagnostics', () => {
     client.close()
   })
 })
+
+function logFields(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value))
+    : undefined
+}

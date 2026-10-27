@@ -182,8 +182,9 @@ describe('NativeChatImageAttachmentPreview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: example.png' }))
     expect(
       within(screen.getByRole('dialog'))
-        .getByRole('img')
-        .getAttribute('data-native-chat-copy-image-src')
+        .getByTestId('pan-zoom-image-canvas')
+        .closest('[data-native-chat-copy-image-src]')
+        ?.getAttribute('data-native-chat-copy-image-src')
     ).toBe('blob:on-disk-1')
     const menu = document.body.appendChild(document.createElement('div'))
     menu.setAttribute('data-native-chat-context-menu', '')

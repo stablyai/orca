@@ -32,6 +32,7 @@ import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams
 } from './ai-vault'
+import { orcadAiVaultSessionSources } from '../../../orcad/orcad-session-search'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { recordStructuredAgentSessionHostInstallRefusal } from '../../structured-agent-session-host-refusal'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -207,8 +208,7 @@ describe('aiVault.listSessions params schema', () => {
   })
 
   it('clamps scopePaths past the cap instead of rejecting', () => {
-    // Why: uncapped producers (web client, pre-cap desktop parents) may exceed
-    // the bound; scope paths only widen discovery, so truncation is safe.
+    // Older/web producers may exceed this bound; truncation only narrows optional discovery paths.
     const scopePaths = Array.from({ length: 65 }, (_, index) => `/p/${index}`)
     const parsed = AiVaultListSessionsParams.safeParse({ scopePaths })
     expect(parsed.success).toBe(true)
@@ -336,8 +336,7 @@ describe('aiVault.prepareSessionResume for a chat whose host makes the copy', ()
   })
 })
 
-// Session history and terminal resume are not chats: a process whose chats are refused still
-// serves them, while any other host failure still fails the request.
+// Chat-host refusal must not disable transcript history or terminal resume; other host failures still propagate.
 describe('aiVault methods without a structured host', () => {
   const refusal = agentSessionRefusalError(
     'agent_session_journal_unreadable',
@@ -587,9 +586,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
 
   it('shares one cache between the IPC entry point and the RPC method', async () => {
     const dispatcher = makeDispatcher()
-    // First call via the shared module (what the desktop IPC handler invokes).
     await listAiVaultSessions({ limit: 500 })
-    // Second call via the RPC method with the same cache key.
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
     expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
   })
@@ -640,26 +637,20 @@ describe('aiVault.listSessions handler + shared cache', () => {
   })
 
   it('keeps a newer different-key scan dedupable after an older scan resolves', async () => {
-    // Why: the resolving scan's cleanup must not clear tracking a concurrent
-    // different-key scan replaced, or re-requests start a duplicate rescan.
+    // A completed scan must not clear a different pending key and permit duplicate work.
     const deferreds: ((result: AiVaultListResult) => void)[] = []
     scanAiVaultSessionsInService.mockImplementation(
       () => new Promise<AiVaultListResult>((resolve) => deferreds.push(resolve))
     )
-    // The scanner is invoked a microtask after the call (WSL-home await), so
-    // wait for each deferred to register before driving resolution order.
+    // WSL-home resolution defers scanner invocation; wait for registration before resolving scans.
     const scanA = listAiVaultSessions({ limit: 100 })
     await vi.waitFor(() => expect(deferreds).toHaveLength(1))
     const scanB = listAiVaultSessions({ limit: 200 })
     await vi.waitFor(() => expect(deferreds).toHaveLength(2))
     deferreds[0]?.(makeResult())
     await scanA
-    // Re-request key B while its first scan is still pending: must dedupe.
     const scanBAgain = listAiVaultSessions({ limit: 200 })
-    // Flush a macrotask so that a wrongly-started duplicate scan would reach the
-    // mock (it fires a microtask after the WSL-home await): guarded stays 2, a
-    // reverted guard reads 3, so this assertion — not a Promise.all hang — pins
-    // the fix.
+    // Flush a macrotask so an erroneous duplicate scan reaches the mock; assert the call count instead of hanging on its unresolved promise.
     await new Promise((resolve) => setTimeout(resolve))
     expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
     deferreds[1]?.(makeResult())
@@ -673,11 +664,9 @@ describe('aiVault.listSessions handler + shared cache', () => {
       scannedAt: SCANNED_AT
     })
     const dispatcher = makeDispatcher()
-    // A mobile-style caller (no executionHostId) primes the shared cache…
     const localResponse = (await dispatcher.dispatch(
       makeRequest('aiVault.listSessions', { limit: 500 })
     )) as { ok: boolean; result: AiVaultListResult }
-    // …then a desktop/web caller addressing this host by runtime id reuses it.
     const runtimeResponse = (await dispatcher.dispatch(
       makeRequest('aiVault.listSessions', {
         limit: 500,
@@ -685,8 +674,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
       })
     )) as { ok: boolean; result: AiVaultListResult }
 
-    // Why: the host id must never change what is scanned — one host-local scan
-    // (and one cache entry) serves every caller; only the stamps differ.
+    // Host identity changes response stamps, never host-local scan/cache identity.
     expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
     expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
       executionHostId: 'local'
@@ -707,16 +695,75 @@ describe('aiVault.listSessions handler + shared cache', () => {
     const dispatcher = makeDispatcher()
     await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
     const options = scanAiVaultSessionsInService.mock.calls[0]?.[0]
-    // Why: the codex-home is sourced from the runtime, not the window-only
-    // registerCoreHandlers path, so it survives in serve mode.
+    // Serve mode must source Codex homes from runtime, without window-only handler registration.
     expect(options?.additionalCodexSessionsDirs).toContain('/runtime/codex/home/sessions')
     expect(options?.wslHomeDirs).toEqual([])
   })
 
+  it('constructs ordinary ownership independently of Codex homes or search enablement and forwards RPC intent', async () => {
+    const capture = vi.fn(() => ({
+      repos: [{ id: 'source', path: '/tmp', displayName: 'source', badgeColor: '', addedAt: 1 }],
+      projects: [],
+      projectHostSetups: [],
+      worktreeMeta: {},
+      settings: { workspaceDir: '', nestWorkspaces: false }
+    }))
+    const orcadStore = {
+      getRepos: () => capture().repos,
+      getProjects: () => [],
+      getProjectHostSetups: () => [],
+      getAllWorktreeMeta: () => ({}),
+      getSettings: () => capture().settings
+    }
+    const clientHomes = { listSessionHomes: () => ['/client'] }
+    const deps = orcadAiVaultSessionSources(orcadStore, clientHomes, null)
+    expect(deps.getAdditionalAiVaultCodexHomePaths?.()).toEqual(['/client'])
+    expect(
+      orcadAiVaultSessionSources(orcadStore, clientHomes, {
+        listCodexSessionHomes: () => ['/managed']
+      }).getAdditionalAiVaultCodexHomePaths?.()
+    ).toEqual(['/client', '/managed'])
+    new OrcaRuntimeService(null, undefined, {
+      getProjectOwnershipCatalog: deps.getProjectOwnershipCatalog
+    })
+    scanAiVaultSessionsInService.mockResolvedValue({
+      sessions: [makeSession()],
+      issues: [],
+      scannedAt: SCANNED_AT
+    })
+    const dispatcher = makeDispatcher()
+    expect(
+      await dispatcher.dispatch(
+        makeRequest('aiVault.listSessions', {
+          historyOwnership: {},
+          limit: 2,
+          executionHostId: 'runtime:addressed',
+          afterFingerprint: null
+        })
+      )
+    ).toMatchObject({
+      ok: true,
+      result: {
+        sessions: [
+          {
+            projectOwnerKey: 'repo:source',
+            executionHostId: 'runtime:addressed',
+            cwd: '/tmp',
+            filePath: '/tmp/t.jsonl'
+          }
+        ],
+        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      }
+    })
+    expect(capture).toHaveBeenCalledTimes(2)
+    expect(
+      await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 2 }))
+    ).toMatchObject({ ok: true, result: { sessions: [makeSession()] } })
+    expect(capture).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
+  })
   it('forwards codex-home through the real OrcaRuntimeService construction path', async () => {
-    // Why: the dispatcher test above seeds the cache module directly, so it would
-    // still pass if OrcaRuntimeService stopped forwarding the codex-home source.
-    // Construct the real runtime to lock that cross-layer wiring in place.
+    // Use a real runtime to prove constructor-to-cache forwarding; directly seeding cache would miss a broken link.
     const runtime = new OrcaRuntimeService(null, undefined, {
       getAdditionalAiVaultCodexHomePaths: () => ['/ctor/codex/home']
     })

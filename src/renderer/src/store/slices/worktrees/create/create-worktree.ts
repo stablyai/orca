@@ -1,3 +1,4 @@
+import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
@@ -7,7 +8,6 @@ import {
 import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import {
   pickClientWorktreeCreateSettings,
   type ClientWorktreeCreateSettings
@@ -20,25 +20,26 @@ import {
 } from '../../../../../../shared/new-workspace/worktree-create-retry-policy'
 import {
   assertRuntimeEnvironmentCapability,
-  callRuntimeRpc
+  runtimeEnvironmentSupportsCapability
 } from '../../../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import { WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '../../../../runtime/local-runtime-capabilities'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
-import { requestCreationFromHost } from '@/lib/sidebar-shadow/host-creation-requests'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
 import {
   buildLocalWorktreeCreateArgs,
-  buildRuntimeWorktreeCreateParams,
+  type CreatedWorktreeResult,
   type WorktreeCreateAttempt,
   type WorktreeCreateRequest
 } from './worktree-create-payload'
+import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
   notifyWorktreeParentDropped,
   resolveWorktreeCreateParent,
@@ -48,7 +49,7 @@ import {
 type RuntimeTarget = RuntimeClientTarget
 
 type CreateAttemptOutcome = {
-  result: CreateWorktreeResult
+  result: CreatedWorktreeResult
   /** The host had no such parent, so this attempt was retried unattached. */
   droppedParent: boolean
 }
@@ -62,7 +63,7 @@ async function runCreateAttempt(
   const provisionedRoot = request.options?.provisionedRoot
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
-  ): Promise<CreateWorktreeResult> =>
+  ): Promise<CreatedWorktreeResult> =>
     provisionedRoot
       ? target.kind === 'environment'
         ? await adoptRuntimeProvisionedRoot(
@@ -77,25 +78,14 @@ async function runCreateAttempt(
           })
       : target.kind === 'local'
         ? // Why local can still reject on the parent: paired web clients route this API to their host.
-          // Switch point: only a build where main lists creations tracks the requests it serves.
-          ORCA_SIDEBAR_INPUTS_IS_MAIN
-          ? await requestCreationFromHost(request, () =>
-              window.api.worktrees.create(
-                buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
-              )
-            )
-          : await window.api.worktrees.create(
-              buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
-            )
-        : await callRuntimeRpc<CreateWorktreeResult>(
-            target,
-            'worktree.create',
-            {
-              ...buildRuntimeWorktreeCreateParams(request, { ...attempt, parentWorkspace }),
-              // Why: the host's own store defaults would otherwise override the user's choices.
-              ...clientCreateSettings
-            },
-            { timeoutMs: 10 * 60_000 }
+          await window.api.worktrees.create(
+            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
+          )
+        : await createWorktreeOnRuntimeHost(
+            target.environmentId,
+            request,
+            { ...attempt, parentWorkspace },
+            clientCreateSettings
           )
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
@@ -205,6 +195,20 @@ export function createCreateWorktree(
         requestedHostId: options?.executionHostId,
         resolveOwnHostId: () => repoHostId(get(), repoId)
       })
+      if (options?.branchIntent === 'open-existing') {
+        const supported =
+          target.kind === 'environment'
+            ? await runtimeEnvironmentSupportsCapability(
+                target.environmentId,
+                WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY
+              ).catch(() => false)
+            : (await ensureLocalRuntimeCapabilities())?.includes(
+                WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY
+              ) === true
+        if (supported) {
+          request.branchIntent = 'open-existing'
+        }
+      }
       // Why outside the retry loop: a branch-name conflict retry must not re-warn about the same dropped pick.
       const parent = resolveWorktreeCreateParent(get(), options?.parentWorktreeId, creationHostId)
       let warnedParentDropped = false
@@ -258,8 +262,15 @@ export function createCreateWorktree(
             warnParentDroppedOnce()
           }
           applyCreatedWorktree(set, repoId, outcome.result, creationHostId)
+          const created = get().getKnownWorktreeById(outcome.result.worktree.id, creationHostId)
+          if (created) {
+            holdCreatedSidebarWorkspace({ worktree: created })
+          }
           const { result } = outcome
-          showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
+          showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
+            updateSettings: get().updateSettings,
+            executionHostId: creationHostId
+          })
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
           }
@@ -272,7 +283,8 @@ export function createCreateWorktree(
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          const shouldRetry = isRetryableWorktreeCreateConflict(message)
+          const shouldRetry =
+            request.branchIntent !== 'open-existing' && isRetryableWorktreeCreateConflict(message)
           if (!shouldRetry || attempt === CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS - 1) {
             throw error
           }

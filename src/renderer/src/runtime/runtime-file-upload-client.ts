@@ -1,6 +1,10 @@
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import type { StagedRuntimeUploadFileIdentity } from '../../../shared/runtime-upload-staging-contract'
+import {
+  DROP_STAGING_GITIGNORE_CONTENT,
+  DROP_STAGING_RELATIVE_DIR
+} from '../../../shared/drop-staging-ignore'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import {
   callRuntimeFileImportMutation,
@@ -35,8 +39,7 @@ export async function uploadRuntimeFileWithoutClobber(
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
     session.assertCurrent()
-    // Why: main owns the file handle and the runtime socket, so it streams the
-    // body in slices; the renderer never holds the whole file.
+    // Main owns file/socket handles and streams slices; renderer never loads the whole body.
     try {
       await window.api.fs.uploadExternalFileToRuntime({
         environmentId: session.target.environmentId,
@@ -52,8 +55,7 @@ export async function uploadRuntimeFileWithoutClobber(
         expectedEnvironmentRuntimeId: session.expectedEnvironmentRuntimeId
       })
     } catch (error) {
-      // Why: this surfaces in the import result as-is, and Electron wraps a
-      // main-process throw in "Error invoking remote method '…'".
+      // Import results expose this text directly; remove Electron’s remote-method wrapper.
       throw new Error(extractIpcErrorMessage(error, 'Upload failed'))
     }
     await callRuntimeFileImportMutation(
@@ -127,5 +129,49 @@ export async function ensureRuntimeDirectory(
       }),
       15_000
     )
+  }
+}
+
+/**
+ * Keeps uploaded drops out of `git status`, so they never block a plain workspace delete
+ * or get swept into `git add -A`. Best effort: a failure here must not fail the drop.
+ */
+export async function ensureRuntimeDropStagingIgnored(
+  context: RuntimeFileOperationArgs,
+  destinationDir: string,
+  session: RuntimeFileImportSession
+): Promise<void> {
+  const destinationArgs = getRemoteFileArgs(context, destinationDir)
+  if (
+    !destinationArgs ||
+    normalizeRelativePath(destinationArgs.relativePath) !== DROP_STAGING_RELATIVE_DIR
+  ) {
+    return
+  }
+  const ignoreRelativePath = joinRuntimeRelativePath(DROP_STAGING_RELATIVE_DIR, '.gitignore')
+  try {
+    session.assertCurrent()
+    // A user-edited ignore file is theirs to keep; a concurrent drop can only rewrite the same content.
+    if (
+      await runtimePathExists(
+        context,
+        joinPath(context.worktreePath ?? '', ignoreRelativePath),
+        session.expectedEnvironmentPairingRevision
+      )
+    ) {
+      return
+    }
+    await callRuntimeFileImportMutation(
+      session,
+      'files.write',
+      withSshMutationExpectation(context, {
+        worktree: destinationArgs.worktreeSelector,
+        relativePath: ignoreRelativePath,
+        content: DROP_STAGING_GITIGNORE_CONTENT
+      }),
+      15_000
+    )
+  } catch {
+    // The caller re-checks the session right after, so a stale host still fails there.
   }
 }

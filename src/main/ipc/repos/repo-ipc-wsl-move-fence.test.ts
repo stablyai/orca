@@ -3,7 +3,7 @@ import { BrowserWindow } from 'electron'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -16,6 +16,7 @@ import {
 import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
 import { registerFolderWorkspaceHandlers } from './folder-workspace-handlers'
 import { registerRepoCatalogHandlers } from './repo-catalog-handlers'
+import { runtimeRepoSelectorText } from '../../runtime/runtime-repo-selector'
 
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>()
@@ -112,7 +113,7 @@ describe('projects:update under a WSL move', () => {
     store.addRepo(repo('repo-1'))
     store.addRepo(repo('repo-2'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerRepoCatalogHandlers(new BrowserWindow(), store)
+    registerRepoCatalogHandlers(new BrowserWindow(), store, { removeProject: vi.fn() })
     const projectFor = (repoId: string) =>
       store.getProjects().find((project) => project.sourceRepoIds.includes(repoId))
     const updates = { localWindowsRuntimePreference: { kind: 'windows-host' } }
@@ -133,7 +134,7 @@ describe('RuntimeRepositorySettingsController under a WSL move', () => {
     const notifyReposChanged = vi.fn()
     const controller = new RuntimeRepositorySettingsController({
       getStore: () => store,
-      resolveRepo: async (id) => repo(id),
+      resolveRepo: async (selector) => repo(runtimeRepoSelectorText(selector)),
       forgetTerminalTopology: vi.fn(),
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),

@@ -137,8 +137,7 @@ describe('mostRecentAttentionInHistory', () => {
   })
 
   it('skips history rows with non-finite startedAt', () => {
-    // Why: NaN passes through > silently; Infinity would pin the worktree
-    // at the top of Class 3 forever. Treat non-finite as missing.
+    // Treat nonfinite timestamps as missing: NaN defeats comparisons and Infinity pins Class 3 forever.
     expect(
       mostRecentAttentionInHistory([
         makeHistory('done', Number.NaN),
@@ -163,8 +162,7 @@ describe('resolveAttention', () => {
     })
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 60_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 60_000
     })
   })
 
@@ -412,14 +410,12 @@ describe('resolveAttention', () => {
     })
     expect(resolveAttention(hookPanes([olderBlocked, newerBlocked]), NOW)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 5_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 5_000
     })
   })
 
   it('skips entries with non-finite stateStartedAt', () => {
-    // Why: NaN > anything === false, so without the guard a corrupted entry
-    // would silently sink the worktree to the bottom of its class.
+    // NaN defeats comparisons and sinks corrupted entries within their class.
     const corrupted = makeEntry({
       paneKey: 't:1',
       state: 'blocked',
@@ -435,7 +431,7 @@ describe('resolveAttention', () => {
         [{ kind: 'title', status: 'permission', worktreeLastActivityAt: NOW - 60_000 }],
         NOW
       )
-    ).toEqual({ cls: 1, attentionTimestamp: NOW, cause: 'title-heuristic' })
+    ).toEqual({ cls: 1, attentionTimestamp: NOW })
   })
 
   it('title-heuristic working maps to Class 3 with ts = worktree.lastActivityAt', () => {
@@ -460,9 +456,7 @@ describe('resolveAttention', () => {
   })
 
   it('hook entry overrides title heuristic on the same pane (hook wins when fresh)', () => {
-    // Why: per-pane authority means a fresh hook entry beats whatever the
-    // title says — a 'done' hook plus a 'working'-classified title stays
-    // Class 2.
+    // Fresh hooks win over title heuristics on the same pane.
     const done = makeEntry({
       paneKey: 't:1',
       state: 'done',
@@ -481,8 +475,7 @@ describe('resolveAttention', () => {
   })
 
   it('per-pane authority across panes: pane A hook=done, pane B title=permission → Class 1', () => {
-    // Why: hook authority is per-pane, not per-worktree. A hookless pane
-    // showing 'permission' must still promote the whole worktree to Class 1.
+    // Hook authority is per pane; another pane’s permission title still promotes the workspace.
     const done = makeEntry({
       paneKey: 'tab:1',
       state: 'done',
@@ -497,7 +490,7 @@ describe('resolveAttention', () => {
         ],
         NOW
       )
-    ).toEqual({ cls: 1, attentionTimestamp: NOW, cause: 'title-heuristic' })
+    ).toEqual({ cls: 1, attentionTimestamp: NOW })
   })
 })
 
@@ -567,8 +560,7 @@ describe('buildAttentionByWorktree', () => {
 
     expect(buildAttentionByWorktree([w], {}, entries, {}, {}, NOW).get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 5_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 5_000
     })
   })
 
@@ -600,8 +592,7 @@ describe('buildAttentionByWorktree', () => {
     expect(attention.get(stale.id)).toEqual(IDLE)
     expect(attention.get(current.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 5_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 5_000
     })
   })
 
@@ -625,8 +616,7 @@ describe('buildAttentionByWorktree', () => {
     const map = buildAttentionByWorktree([w], { [w.id]: [tab] }, entries, {}, ptyMap([tab.id]), NOW)
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 5_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 5_000
     })
   })
 
@@ -664,8 +654,7 @@ describe('buildAttentionByWorktree', () => {
     )
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW,
-      cause: 'title-heuristic'
+      attentionTimestamp: NOW
     })
   })
 
@@ -731,8 +720,7 @@ describe('buildAttentionByWorktree', () => {
 
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW,
-      cause: 'title-heuristic'
+      attentionTimestamp: NOW
     })
   })
 
@@ -779,8 +767,7 @@ describe('buildAttentionByWorktree', () => {
 
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW,
-      cause: 'title-heuristic'
+      attentionTimestamp: NOW
     })
   })
 
@@ -808,15 +795,12 @@ describe('buildAttentionByWorktree', () => {
     )
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW,
-      cause: 'title-heuristic'
+      attentionTimestamp: NOW
     })
   })
 
   it('does not fire title fallback for tabs without a live PTY', () => {
-    // Why: runtimePaneTitlesByTabId is preserved under sleep; without the
-    // tabHasLivePty gate, a slept tab whose preserved title still matches a
-    // working pattern would leak into the comparator.
+    // Titles survive sleep; require live PTY evidence before they can affect attention.
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
     const map = buildAttentionByWorktree(
@@ -833,9 +817,7 @@ describe('buildAttentionByWorktree', () => {
 })
 
 describe('resolveAttention reads the combined state, not the main agent fact', () => {
-  // The classes name what the sidebar row shows (Needs you / Done / Working), so the sort must
-  // rank by the same combined state the row displays. A settled main agent whose subagent still runs
-  // shows Working; ranking it as Done would file a working row among the finished ones.
+  // Sort the combined state the row displays: a settled main agent with working subagents remains Working.
   const key = paneKey('tab-1', LEAF_1)
 
   it('ranks a row held working by a subagent as Working, not Done', () => {

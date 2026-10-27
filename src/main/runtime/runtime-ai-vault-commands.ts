@@ -14,6 +14,11 @@ import {
   type AiVaultHistoryReadResult,
   type AiVaultHistorySearchResult
 } from '../ai-vault/session-history'
+import { deleteAiVaultSessionForRemoteClient } from '../ai-vault/host-session-delete'
+import type {
+  AiVaultDeleteSessionArgs,
+  AiVaultDeleteSessionResult
+} from '../../shared/ai-vault-session-deletion'
 import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
 import type {
   ConversationKnowledgeIndexStatus,
@@ -31,10 +36,10 @@ export class RuntimeAiVaultCommands {
     private readonly getPrepareResume: () =>
       | ((args: AiVaultPrepareSessionResumeArgs) => Promise<AiVaultPrepareSessionResumeResult>)
       | null,
-    private readonly getUserDataPath: () => string,
+    private readonly getUserDataPath: () => string = () => '',
     private readonly getEnvironmentResolvers: () =>
       | CommitMessageAgentEnvironmentResolvers
-      | undefined
+      | undefined = () => undefined
   ) {}
 
   list(args?: AiVaultListArgs, signal?: AbortSignal): Promise<AiVaultListResult> {
@@ -88,6 +93,12 @@ export class RuntimeAiVaultCommands {
     signal?: AbortSignal
   ): Promise<AiVaultSessionTitlesResult> {
     return resolveLocalAiVaultSessionTitles(requests, signal)
+  }
+
+  delete(
+    args: Omit<AiVaultDeleteSessionArgs, 'executionHostId'>
+  ): Promise<AiVaultDeleteSessionResult> {
+    return deleteAiVaultSessionForRemoteClient(args)
   }
 
   prepare(args: AiVaultPrepareSessionResumeArgs): Promise<AiVaultPrepareSessionResumeResult> {

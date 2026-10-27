@@ -1,3 +1,4 @@
+import { nativeChatContinuationSendText } from '../../../../shared/native-chat-continuation-send'
 import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
@@ -96,8 +97,6 @@ export function advancedNativeChatUserContentCounts(
   return advanced
 }
 
-/** A transcript user turn, kept identifiable so a caller can decide which
- *  pending sends it is allowed to represent. */
 export type NativeChatUserRow = { id: string; text: string }
 
 /** User rows that already have a later non-user turn (ready to prune echoes). */
@@ -120,7 +119,6 @@ export function advancedNativeChatUserRows(
   return advanced
 }
 
-/** All user rows (for hiding optimistic echoes once the turn exists). */
 export function matchingNativeChatUserRows(
   messages: readonly NativeChatMessage[]
 ): readonly NativeChatUserRow[] {
@@ -134,15 +132,7 @@ export function matchingNativeChatUserRows(
   return rows
 }
 
-/**
- * How many leading pending texts concatenate to exactly `userText`, allowing at
- * most one collapsed space at each send boundary. Covers rapid-send glue
- * ("joke"+"continue" → "joke continue") while still requiring the whole row to
- * be consumed, so unrelated prefixes never match ("hi" ↛ "history").
- *
- * Greedy is exact here: both sides are whitespace-normalized, so a piece never
- * starts with a space and at most one of the two boundary forms can apply.
- */
+/** Require the whole row with optional collapsed send-boundary spaces; normalized pieces make greedy matching exact. */
 export function countLeadingPendingTextsGluedToUserText(
   pendingTexts: readonly string[],
   userText: string
@@ -170,55 +160,81 @@ export function countLeadingPendingTextsGluedToUserText(
   return 0
 }
 
-/** A transcript row a glue match may consume, carrying the send boundaries it
- *  satisfies — this matcher has no clock of its own. */
+// Continuations can finish outside this queue, so only their prefix must be represented.
+function countLeadingPendingTextsRepresentedByUserText(
+  pieces: readonly { text: string; literal: string; continuation: boolean }[],
+  userText: string
+): number {
+  let cursor = 0
+  let opened = 0
+  for (let index = 0; index < pieces.length; index += 1) {
+    const piece = pieces[index]
+    if (!piece?.text) {
+      return opened
+    }
+    const at = index > 0 && userText[cursor] === ' ' ? cursor + 1 : cursor
+    const literal = piece.continuation && userText.startsWith(piece.literal, at)
+    const text = literal ? piece.literal : piece.text
+    if (!userText.startsWith(text, at)) {
+      return opened
+    }
+    cursor = at + text.length
+    if (
+      piece.continuation &&
+      !literal &&
+      (cursor === userText.length || userText[cursor] === ' ')
+    ) {
+      opened = index + 1
+    }
+    if (cursor === userText.length) {
+      return index > 0 ? index + 1 : opened
+    }
+  }
+  return opened
+}
+
+/** Carry per-send boundaries from the caller; this matcher owns no clock. */
 export type NativeChatGluedUserRow = {
   text: string
-  /** Indices into `pending` this row landed after. A row that already existed
-   *  when a send was issued can never be that send's echo. */
+  /** A row may represent only sends issued before it existed. */
   representablePendingIndices: ReadonlySet<number>
 }
 
-/**
- * Mark pending entries represented only by multi-send glue (2+ consecutive
- * optimistic texts concatenated into one transcript user row). Exact single
- * matches stay in the content-key/occurrence path so repeated prompts and
- * send boundaries keep their existing semantics.
- */
+/** Match multi-send glue and continuations here; exact single sends retain content-key/occurrence semantics. */
 export function selectPendingIndicesRepresentedByUserRows(
   pending: readonly NativeChatPendingOccurrence[],
   rows: readonly NativeChatGluedUserRow[]
 ): Set<number> {
   const represented = new Set<number>()
-  if (pending.length < 2 || rows.length === 0) {
+  const remaining = pending.map((entry, index) => {
+    const continuation = nativeChatContinuationSendText(entry.text)
+    return {
+      index,
+      literal: normalizeNativeChatPendingText(entry.text),
+      text: continuation ?? normalizeNativeChatPendingText(entry.text),
+      continuation: continuation !== null
+    }
+  })
+  if (rows.length === 0 || (pending.length < 2 && !remaining.some((entry) => entry.continuation))) {
     return represented
   }
-  const remaining = pending.map((entry, index) => ({
-    index,
-    text: normalizeNativeChatPendingText(entry.text)
-  }))
   for (const row of rows) {
     const open: typeof remaining = []
     for (const entry of remaining) {
       if (represented.has(entry.index) || entry.text.length === 0) {
         continue
       }
-      // Glue consumes a leading run, so a send this row predates ends the run
-      // rather than being skipped over — adjacency is what makes it glue.
+      // A row predating a send ends the adjacent run; skipping it would glue across an invalid boundary.
       if (!row.representablePendingIndices.has(entry.index)) {
         break
       }
       open.push(entry)
     }
-    const gluedCount = countLeadingPendingTextsGluedToUserText(
-      open.map((entry) => entry.text),
-      row.text
-    )
-    // Why: gluedCount === 1 is an exact match — leave it to occurrence counting.
-    if (gluedCount < 2) {
+    const matched = countLeadingPendingTextsRepresentedByUserText(open, row.text)
+    if (matched === 0) {
       continue
     }
-    for (let i = 0; i < gluedCount; i += 1) {
+    for (let i = 0; i < matched; i += 1) {
       const entry = open[i]
       if (!entry) {
         continue
@@ -250,8 +266,7 @@ export function assignNativeChatPendingOccurrence<T extends NativeChatPendingOcc
     ...matching.map((candidate, index) => candidate.matchingOccurrence ?? index + 1)
   )
   const first = matching[0]
-  // Why: pruning an earlier echo must not let a later identical send reuse the
-  // same transcript occurrence, even after the read pages out its boundary.
+  // Pruning earlier echoes must not let later identical sends reuse their transcript occurrence, even after paging.
   return {
     ...entry,
     matchingOccurrence: previousOccurrence + 1,

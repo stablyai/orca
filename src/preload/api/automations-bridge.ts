@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import { ipcRenderer } from 'electron'
 import type { ExternalAutomationManagerResult, PreloadApi } from '../api-types'
 import type {
@@ -29,8 +30,11 @@ export const automationsApi = {
     ipcRenderer.invoke('automations:runPrecheck', args),
   markDispatchResult: (result: AutomationDispatchResult): Promise<AutomationRun> =>
     ipcRenderer.invoke('automations:markDispatchResult', result),
-  snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }): Promise<number> =>
-    ipcRenderer.invoke('automations:snapshotWorkspaceName', args),
+  snapshotWorkspaceName: (args: {
+    workspaceId: string
+    hostId: ExecutionHostId
+    displayName: string
+  }): Promise<number> => ipcRenderer.invoke('automations:snapshotWorkspaceName', args),
   rendererReady: (): Promise<void> => ipcRenderer.invoke('automations:rendererReady'),
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>

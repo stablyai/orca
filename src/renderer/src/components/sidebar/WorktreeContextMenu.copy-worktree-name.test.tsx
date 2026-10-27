@@ -12,6 +12,7 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const state = {
+  unifiedTabsByWorktree: {},
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [],
@@ -117,7 +118,7 @@ function clickMenuItem(label: string): void {
     (element) => element.textContent === label
   )
   expect(item, `menu item "${label}"`).toBeTruthy()
-  // Why: the menu swallows clicks until a primary pointerdown proves they aren't the opening right-click.
+  // Primary pointerdown distinguishes selection from the opening right-click, which the menu ignores.
   act(() => {
     item?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     item?.click()

@@ -96,7 +96,6 @@ describe('structured agent-session transitions', () => {
       publish: true,
       steps: [
         itemStep(() => ({ identity: first, body: tool('read', 'running') })),
-        // Reads the row the step before it wrote.
         itemStep((view) => {
           const before = view.itemBody(agentJournalItemKey(first))
           return before?.kind === 'tool-call'
@@ -186,7 +185,6 @@ describe('structured agent-session transitions', () => {
       publish: true,
       steps: [
         itemStep(() => ({ identity: identity('before'), body: tool('read', 'completed') })),
-        // Names one item twice, which the journal refuses.
         {
           kind: 'settlement',
           settlementId: 'settle',
@@ -208,7 +206,7 @@ describe('structured agent-session transitions', () => {
   it('writes nothing after a step whose row the database refused', async () => {
     const { root, journal, deferred, sink, bind } = await rig()
     bind()
-    // Refuses only the second step's row, so the third would land in its place.
+    // Fail step two to verify step three never fills its place.
     openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_step
 BEFORE INSERT ON main.journal_rows WHEN instr(NEW.row_json, 'refused-step') > 0
 BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
@@ -265,7 +263,7 @@ BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
             kind: 'settlement',
             settlementId: 'settle-all',
             reservedBytes: 1,
-            // The settled row is a candidate too; the fold, not the caller, rules it out.
+            // Include an already-settled candidate so the fold must exclude it.
             resolve: (view) =>
               [...running, identity('done')].flatMap((id) => {
                 const body = view.itemBody(agentJournalItemKey(id))
@@ -298,7 +296,6 @@ BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
     expect(
       items.find((item) => item.itemId === agentJournalItemKey(identity('done')))?.body
     ).toMatchObject({ state: 'completed' })
-    // Two batch rows, back to back, between the last append before it and the first after it.
     expect(sequenceOf('after') - sequenceOf('done')).toBe(3)
     expect(publishes).toHaveLength(1)
   })
@@ -312,7 +309,7 @@ BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
     }
     await deferred.drained()
     const before = journal.cursor().sequence
-    // The settlement needs two rows; the second one's insert aborts inside the transaction.
+    // Abort the second insert to verify settlement transaction atomicity.
     openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_chunk
 BEFORE INSERT ON main.journal_rows WHEN NEW.seq = ${before + 2}
 BEGIN SELECT RAISE(ABORT, 'second chunk refused'); END`)
@@ -363,7 +360,7 @@ BEGIN SELECT RAISE(ABORT, 'second chunk refused'); END`)
       publish: false,
       steps: [
         itemStep(() => {
-          // Another writer, reached from inside the step: it waits for the transition's turn to end.
+          // Nested writes must wait until the whole transition finishes.
           sink.tryAppendItem?.(identity('nested'), tool('nested', 'running'), {
             turnScope: AGENT_JOURNAL_THREAD_SCOPE
           })

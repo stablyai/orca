@@ -19,16 +19,12 @@ const localWindowsConpty = {
 
 describe('shouldDisableKittyKeyboardForTerminal', () => {
   it('disables Kitty keyboard for a local native Windows ConPTY pane', () => {
-    // Regression for #2434: local Windows CLIs (e.g. Antigravity agy) read the
-    // advertisement but do not decode CSI-u, so enhanced reporting swallows
-    // Enter/Up/Down navigation. The advertisement must be withheld here.
+    // Withhold KKP for local ConPTY CLIs that advertise interest but ignore CSI-u navigation (e.g. Antigravity, #2434).
     expect(shouldDisableKittyKeyboardForTerminal(localWindowsConpty)).toBe(true)
   })
 
   it('keeps Kitty keyboard for Grok on a local Windows ConPTY pane', () => {
-    // Why: Grok needs KKP to distinguish Ctrl+Enter (interject) / Shift+Enter
-    // from plain Enter. Global ConPTY withhold must not apply when the pane's
-    // known agent is Grok (Orca launchAgent or equivalent).
+    // Grok needs KKP for Ctrl+Enter/Shift+Enter; known-agent evidence overrides normal ConPTY withholding.
     expect(
       shouldDisableKittyKeyboardForTerminal({
         ...localWindowsConpty,
@@ -73,9 +69,7 @@ describe('shouldDisableKittyKeyboardForTerminal', () => {
   })
 
   it('keeps Kitty keyboard for a serve/remote-runtime pane on a Windows client', () => {
-    // A serve pane has no SSH connectionId and a Linux cwd, so the raw Windows
-    // heuristic matches; the execution-host gate must still preserve enhanced
-    // reporting for the remote Linux PTY that decodes CSI-u correctly.
+    // Serve panes look local to the raw Windows heuristic; execution-host gating must preserve KKP for remote Linux.
     expect(
       shouldDisableKittyKeyboardForTerminal({
         userAgent: WINDOWS_UA,

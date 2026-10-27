@@ -28,7 +28,6 @@ export type ResolvePathInputArgs = {
   setPreview: Dispatch<SetStateAction<PreviewState | null>>
 }
 
-// Resolve a path-mode input into preview state; publishes intermediate loading/error states as it walks.
 export async function resolvePathInput({
   raw,
   resolvedPath,
@@ -56,7 +55,7 @@ export async function resolvePathInput({
     return
   }
 
-  // Pick the base path; `~` needs the resolved home, so fetch and cache it once before resolving.
+  // Resolve and cache the remote home before walking a home-relative path.
   let basePath: string
   if (parsed.base === 'root') {
     basePath = '/'

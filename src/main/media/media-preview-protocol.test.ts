@@ -23,7 +23,7 @@ describe('media preview protocol', () => {
   const event = {
     sender: {
       id: 24859,
-      once: vi.fn().mockImplementation((name, callback) => emitter.once(name, callback)),
+      on: vi.fn().mockImplementation((name, callback) => emitter.on(name, callback)),
       removeListener: vi
         .fn()
         .mockImplementation((name, callback) => emitter.removeListener(name, callback))

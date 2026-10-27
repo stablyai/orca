@@ -84,8 +84,7 @@ describe('relayHostReachabilityForFailure', () => {
 })
 
 describe('RelayReconnectController relay host reachability', () => {
-  // The user's export: 25 dials over 25 h, every one relay_outer_4404, and the
-  // row said "Connecting via Relay…" throughout. Two are enough to say why.
+  // Two matching offline closes must explain the outage before hours of generic relay retry copy accumulate.
   it('reports host-offline on the second consecutive 4404, not the first', () => {
     const reported: RelayHostReachability[] = []
     const controller = controllerReportingTo(changesReportedTo(reported))
@@ -97,8 +96,7 @@ describe('RelayReconnectController relay host reachability', () => {
     expect(reported).toEqual(['connecting', 'host-offline'])
   })
 
-  // The gate short-circuits registerFailure after a 4401; the verdict must be
-  // banked before that return, exactly like the pairing-rejection latch.
+  // Bank verdicts before the credential gate returns early.
   it('still latches credential-refused while the credential gate holds', () => {
     const reported: RelayHostReachability[] = []
     const controller = controllerReportingTo(changesReportedTo(reported))
@@ -113,7 +111,7 @@ describe('RelayReconnectController relay host reachability', () => {
     const reported: RelayHostReachability[] = []
     const controller = controllerReportingTo(changesReportedTo(reported))
     controller.registerFailure(hostOffline(), false)
-    controller.setActiveSession({ getFailure: () => null })
+    controller.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
     controller.registerFailure(hostOffline(), false)
     controller.registerFailure(hostOffline(), false)
     expect(reported).toEqual(['connecting'])
@@ -124,7 +122,7 @@ describe('RelayReconnectController relay host reachability', () => {
     const controller = controllerReportingTo(changesReportedTo(reported))
     controller.registerFailure(hostOffline(), false)
     controller.registerFailure(hostOffline(), false)
-    controller.setActiveSession({ getFailure: () => null })
+    controller.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
     expect(reported).toEqual(['connecting', 'host-offline', 'connecting'])
   })
 
@@ -165,7 +163,6 @@ describe('classifyConnection with a relay host verdict', () => {
     })
   })
 
-  // Amber, not red: a transport close says nothing about the desktop.
   it('blames the connection, softly, on a transport close', () => {
     expect(classifyConnection({ ...base, relayHostReachability: 'unreachable' })).toEqual({
       kind: 'warning',
@@ -180,7 +177,6 @@ describe('classifyConnection with a relay host verdict', () => {
     )
   })
 
-  // A 4401 clears the relay recovery path; the direct retry loop must not hide it.
   it('does not depend on the relay path still being pending', () => {
     expect(
       classifyConnection({

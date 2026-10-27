@@ -5,9 +5,7 @@ type TerminalWithOscLinks = Terminal & {
   _core?: {
     _oscLinkService?: {
       getLinkData: (linkId: number) => { uri?: string } | undefined
-      // Why read it: xterm registers every OSC 8 id here, so an empty registry
-      // proves the buffer holds no hyperlink and the per-cell scan can be skipped.
-      // Optional because it is private — an xterm that renames it just scans.
+      // An empty private registry rules out live links; fall back to scanning if xterm changes it.
       _dataByLinkId?: { size?: number }
     }
   }
@@ -18,7 +16,6 @@ type CellWithOscLink = {
   hasExtendedAttrs?: () => boolean
 }
 
-/** True when xterm holds no OSC 8 registration at all, so no cell can carry one. */
 function hasNoRegisteredOscLinks(service: { _dataByLinkId?: { size?: number } }): boolean {
   return service._dataByLinkId?.size === 0
 }
@@ -34,7 +31,7 @@ export function collectHeadlessOscLinkRanges(
   return collectOscLinkRangesInRows(terminal, buffer, startRow, buffer.length, restoredLinks)
 }
 
-/** Links in normal-buffer rows [0, endRow), whichever buffer is active. */
+/** Read normal-buffer rows [0, endRow), even while the alternate buffer is active. */
 export function collectNormalBufferOscLinkRanges(
   terminal: Terminal,
   endRow: number
@@ -50,22 +47,17 @@ function collectOscLinkRangesInRows(
   endRow: number,
   restoredLinks: TerminalOscLinkRange[]
 ): TerminalOscLinkRange[] {
-  // Why: headless xterm exposes OSC 8 metadata only via this private service.
-  // Keep this boundary explicit so xterm upgrades are audited here.
+  // Headless xterm exposes OSC 8 metadata only through this private service.
   const service = (terminal as TerminalWithOscLinks)._core?._oscLinkService
   if (!service) {
     return []
   }
-  // Why before the scan: the walk below reads every cell of every row, and a
-  // session that never emitted a hyperlink — the overwhelming majority — would
-  // pay that for a guaranteed-empty result. `restoredLinks` still needs mapping.
+  // Skip the per-cell walk only if neither xterm nor restored metadata holds links.
   if (hasNoRegisteredOscLinks(service) && restoredLinks.length === 0) {
     return []
   }
   const ranges: TerminalOscLinkRange[] = []
-  // Why one cell for the whole walk: xterm's getCell allocates a fresh CellData
-  // per call unless handed a target, which is a per-cell allocation across the
-  // entire scrollback. See the IBufferLine.getCell docs.
+  // Reuse a cell to avoid allocating for every scrollback position.
   const scratchCell = buffer.getNullCell()
   for (let row = startRow; row < endRow; row += 1) {
     const line = buffer.getLine(row)
@@ -123,6 +115,5 @@ function dedupeOscLinkRanges(ranges: TerminalOscLinkRange[]): TerminalOscLinkRan
 
 function getOscLinkIdAtCell(line: IBufferLine, col: number, scratchCell: IBufferCell): number {
   const cell = line.getCell(col, scratchCell) as (IBufferCell & CellWithOscLink) | undefined
-  // Why: OSC link IDs live in extended cell attrs; missing attrs means no link.
   return cell?.hasExtendedAttrs?.() && cell.extended?.urlId ? cell.extended.urlId : 0
 }

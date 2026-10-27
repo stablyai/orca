@@ -1,7 +1,3 @@
-// A write has landed in the fold when its call returns. A write issued from inside a running write
-// joins the line behind it, never nested.
-// A read in the queue always settles: behind a write that failed, and refused once closed.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -97,7 +93,7 @@ export function registerJournalWriteQueueTests(): void {
       let inner: Promise<unknown> | null = null
       let innerLandedDuringOuter = false
 
-      // Issued from inside the outer write, before that write has committed its row.
+      // Reentrant writes must queue rather than nesting inside the uncommitted write.
       const outer = journal.appendResolvedItem(() => {
         inner = journal.appendItem(item(2), reply('inner'), OPTIONS)
         innerLandedDuringOuter = journal.itemBody(agentJournalItemKey(item(2))) !== null
@@ -198,7 +194,6 @@ export function registerJournalWriteQueueTests(): void {
       const queue = new JournalWriteQueue('session-1')
       let failed: Promise<unknown> = Promise.resolve()
       let read: Promise<string> = Promise.resolve('')
-      // Issued from inside a running write, so both join the line.
       await queue.serialize(() => {
         failed = queue.serialize(() => {
           throw new Error('disk I/O error')

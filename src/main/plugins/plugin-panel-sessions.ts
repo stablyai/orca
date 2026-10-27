@@ -23,8 +23,7 @@ function bindingKey(ownerKey: string, binding: PluginPanelSessionBinding): strin
   ])
 }
 
-/** Opaque bearer sessions bind a loaded panel to its transport owner without
- *  accepting a plugin identity on later action calls. */
+/** Bind bearer sessions to transport owners; later actions cannot choose a plugin identity. */
 export class PluginPanelSessions {
   private readonly sessions = new Map<string, PluginPanelSession>()
   private readonly tokensByBinding = new Map<string, string>()

@@ -20,6 +20,10 @@ import type {
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
+} from '../../shared/file-write-disk-precondition'
+import type {
   CreateVenvResult,
   KernelFrameEvent,
   KernelStartResult,
@@ -55,17 +59,22 @@ export type FilesystemApi = {
       access?: LocalFileAccess
       offset: number
       length: number
+      wakeWslDistro?: boolean
     }) => Promise<RuntimeFileReadChunkResult>
     readDir: (args: {
       dirPath: string
       connectionId?: string
       followSymlinks?: boolean
+      /** A user act (open or Retry); may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
     }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string
       connectionId?: string
       includeLocalLogMetadata?: boolean
       access?: LocalFileAccess
+      /** A user act (open, expand, Retry); may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
     }) => Promise<{
       content: string
       isBinary: boolean
@@ -114,8 +123,9 @@ export type FilesystemApi = {
         content: string
         connectionId?: string
         access?: LocalFileAccess
+        diskPrecondition?: FileWriteDiskPrecondition
       } & SshMutationExpectation
-    ) => Promise<void>
+    ) => Promise<FileWriteResult>
     createFile: (
       args: {
         filePath: string
@@ -149,12 +159,14 @@ export type FilesystemApi = {
         targetPath: string
         connectionId?: string
         recursive?: boolean
+        permanent?: boolean
       } & SshMutationExpectation
     ) => Promise<void>
     stat: (args: {
       filePath: string
       connectionId?: string
       access?: LocalFileAccess
+      wakeWslDistro?: boolean
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
     pathsExist?: (args: {
       filePaths: string[]
@@ -194,6 +206,7 @@ export type FilesystemApi = {
     ) => Promise<{ results: ImportItemResult[] }>
     stageExternalPathsForRuntimeUpload: (args: {
       sourcePaths: string[]
+      nameExtensionlessImages?: boolean
     }) => Promise<{ sources: StagedExternalImportSource[] }>
     uploadExternalFileToRuntime: (
       args: RuntimeUploadFileStreamRequest
@@ -205,7 +218,7 @@ export type FilesystemApi = {
         connectionId?: string
       } & SshMutationExpectation
     ) => Promise<ResolveDroppedPathsResult>
-    /** Uploads client-local files into a paired server's store for one structured chat. */
+    /** Uploads client-local files to the paired server owning the chat. */
     uploadPathsToAgentSessionAttachments: (
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ) => Promise<AgentSessionAttachmentPathUploadResult>

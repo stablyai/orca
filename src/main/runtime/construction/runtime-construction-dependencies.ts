@@ -1,7 +1,12 @@
+import type { AiVaultSessionSources } from '../../ai-vault/cached-session-list'
+import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
-import type { RuntimeTerminalAgentStatusEvent } from '../runtime-terminal-contracts'
+import type {
+  RuntimeTerminalAgentStatusEvent,
+  RuntimeTerminalProgramStatusFacetEvent
+} from '../runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
 import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
@@ -13,8 +18,9 @@ import type {
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault-resume-preparation'
 import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
-import type { AgentSessionClaimSigner } from '../agent-session-claim-identity'
+import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
+import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
 import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
@@ -22,6 +28,7 @@ export type RuntimeConstructionDependencies = {
   prepareClaudeAuth?: PrepareClaudeAuth
   onPtyStopped?: (ptyId: string) => void
   onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
+  onTerminalProgramStatusFacet?: (event: RuntimeTerminalProgramStatusFacetEvent) => void
   onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
@@ -30,6 +37,9 @@ export type RuntimeConstructionDependencies = {
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
   getAgentProviderSessionSnapshot?: () => AgentStatusIpcPayload[]
   getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+  subscribeAgentProviderSessionChanges?: (
+    listener: (sessions: readonly { paneKey: string; sessionId: string }[]) => void
+  ) => () => void
   attestAgentHookCompatibilityAuthority?: (candidate: {
     paneKey: string
     launchTokenHash: string
@@ -37,6 +47,7 @@ export type RuntimeConstructionDependencies = {
     terminalProvenance: 'current_runtime' | 'restored'
   }) => AgentHookAuthorityAttestation | null
   retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+  readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */
   checkHookAgentPresence?: (
     paneKey: string,
@@ -48,6 +59,7 @@ export type RuntimeConstructionDependencies = {
   dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
   canRecoverPersistentLocalPtys?: () => boolean
   getPairedDeviceName?: (pairedDeviceId: string) => string | null
+  getProjectOwnershipCatalog?: AiVaultSessionSources['getProjectOwnershipCatalog']
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -65,6 +77,7 @@ export type RuntimeConstructionDependencies = {
   skillTransactionRecovery?: Promise<unknown>
   applySessionSearchSettings?: SessionSearchSettingsApply
   orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
+  workspaceSleepPlatform?: WorkspaceSleepPlatform
 }
 
 export type RuntimeConstructionBindings = Required<RuntimeConstructionDependencies>

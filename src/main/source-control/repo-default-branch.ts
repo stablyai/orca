@@ -5,8 +5,7 @@ import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { hostedReviewRepoScope, scopeGeneration } from './hosted-review-scope-generations'
 import type { HostedReviewLocalGitOptions } from './hosted-review-git-options'
 
-// Why: bounded like TRACKED_UPSTREAM_SNAPSHOT_CACHE in github/client.ts — PR
-// refresh ticks re-ask per repo, and worktree churn can mint unbounded keys.
+// Bound short-lived entries because worktree churn can mint unlimited repo/host keys.
 const REPO_DEFAULT_BRANCH_CACHE_TTL_MS = 30_000
 const REPO_DEFAULT_BRANCH_CACHE_MAX_ENTRIES = 512
 const REPO_DEFAULT_BRANCH_RESOLUTION_BUDGET_MS = 15_000
@@ -24,8 +23,7 @@ function getRepoDefaultBranchCacheKey(
   connectionId?: string | null,
   localGitOptions: HostedReviewLocalGitOptions = {}
 ): string {
-  // Why: scope per executing git host (native/WSL/SSH) so hosts with
-  // different clones of the "same" path cannot cross-contaminate.
+  // Namespace by native/WSL/SSH host so identical paths in different clones cannot share answers.
   const runtimeKey = connectionId
     ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
@@ -48,7 +46,6 @@ function pruneRepoDefaultBranchCache(now: number): void {
   }
 }
 
-/** Local git for the hosted-review call; null for an SSH repo, which this process cannot reach. */
 function createRepoGitExec(
   repoPath: string,
   connectionId: string | null | undefined,
@@ -59,8 +56,7 @@ function createRepoGitExec(
     return null
   }
   const resolutionDeadline = Date.now() + REPO_DEFAULT_BRANCH_RESOLUTION_BUDGET_MS
-  // Why: the resolver can try five refs; share one deadline so an unhealthy
-  // local/WSL host cannot multiply the refresh delay per fallback probe.
+  // Share one deadline across five fallback refs to bound unhealthy native/WSL hosts.
   return (argv) => {
     const timeoutMs = resolutionDeadline - Date.now()
     if (timeoutMs <= 0) {
@@ -75,11 +71,7 @@ function createRepoGitExec(
   }
 }
 
-/**
- * Resolve the repository's default branch NAME (`main`, `master`, …) over the
- * transport the surrounding hosted-review call already uses. Returns null when
- * unresolvable so callers fail open (#9171 guard skipped, current behavior).
- */
+/** Resolve through the caller's Git transport; null skips the default-branch guard when unresolvable. */
 export function getRepoDefaultBranchName(
   repoPath: string,
   connectionId?: string | null,
@@ -96,7 +88,6 @@ export function getRepoDefaultBranchName(
   )
 }
 
-/** Branch the remote's own HEAD names; null when Git has not recorded it. */
 export function getRemoteHeadBranchName(
   repoPath: string,
   remoteName: string,
@@ -126,8 +117,7 @@ async function resolveCachedBranchName(
     return pending
   }
 
-  // Why: simultaneous refresh paths for one checkout should share the same
-  // Git/SSH subprocess chain instead of multiplying cold-cache probes.
+  // Coalesce cold-cache subprocess chains across concurrent refreshers.
   const resolution = (async (): Promise<string | null> => {
     let branchName: string | null = null
     try {
@@ -136,9 +126,7 @@ async function resolveCachedBranchName(
       branchName = null
     }
     const completedAt = Date.now()
-    // Why: null (failure or genuinely no default) is cached too — the resolver
-    // cannot tell them apart, and the short TTL bounds the fail-open window
-    // without re-probing git on every refresh tick.
+    // Cache null briefly too; failure and missing default are indistinguishable, but TTL bounds fail-open behavior.
     pruneRepoDefaultBranchCache(completedAt)
     repoDefaultBranchCache.set(cacheKey, {
       branchName,
@@ -157,13 +145,7 @@ async function resolveCachedBranchName(
   }
 }
 
-/**
- * #9171 invariant, applied by every provider client at its branch-lookup choke
- * point: an implicit branch-name match on the repository's default branch must
- * never surface a non-open review. The explicitly linked review is exempt.
- * Resolves the default branch lazily — only for non-open, non-linked results —
- * so the common refresh path adds zero git calls.
- */
+/** #9171: implicit default-branch matches never expose non-open reviews; explicit links are exempt. Resolve lazily only for candidate non-open results. */
 export async function shouldHideNonOpenReviewOnDefaultBranch(input: {
   /** Provider-normalized review state; 'closed' / 'merged' / 'locked' count as non-open. */
   state: string

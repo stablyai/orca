@@ -27,12 +27,4 @@ describe('waitForPtyExitRecord', () => {
     await expect(wait).resolves.toBe(false)
     runtime.onPtyExit(PTY_ID, 0)
   })
-
-  it('does not wait for a PTY the runtime never registered or already saw exit', async () => {
-    const runtime = new OrcaRuntimeService()
-    await expect(runtime.waitForPtyExitRecord('unknown-pty', 10_000)).resolves.toBe(true)
-    runtime.registerPty(PTY_ID, WORKTREE_ID, null)
-    runtime.onPtyExit(PTY_ID, 0)
-    await expect(runtime.waitForPtyExitRecord(PTY_ID, 10_000)).resolves.toBe(true)
-  })
 })

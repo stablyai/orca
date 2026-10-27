@@ -30,6 +30,11 @@
       "types": "./dist/process-tree-termination.d.ts",
       "default": "./dist/process-tree-termination.js"
     },
+    "./windows-tree-kill": {
+      "orca-source": "./src/windows-tree-kill.ts",
+      "types": "./dist/windows-tree-kill.d.ts",
+      "default": "./dist/windows-tree-kill.js"
+    },
     "./process-tree-kill-gate": {
       "orca-source": "./src/process-tree-kill-gate.ts",
       "types": "./dist/process-tree-kill-gate.d.ts",

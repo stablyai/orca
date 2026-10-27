@@ -1,18 +1,8 @@
 // Saved replies contain only filenames, so pre-rename visuals must move before the host serves reads.
-// Conflicting files stay in a recovery subfolder governed by the chat's existing retention.
+// Conflicting files stay in a recovery subfolder inside the chat's folder, so they live as long as it.
 
 import { constants } from 'node:fs'
-import {
-  copyFile,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readdir,
-  rename,
-  rmdir,
-  unlink,
-  utimes
-} from 'node:fs/promises'
+import { copyFile, lstat, mkdir, mkdtemp, readdir, rename, rmdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
@@ -26,7 +16,7 @@ const SCOPE = 'nativeChatVisuals.migration'
 
 type Presence = 'absent' | 'directory' | 'other'
 
-/** What sits at `path` without following it: a link is never a place this host moves files into. */
+/** Never move into symlinks. */
 async function presenceOf(path: string): Promise<Presence> {
   try {
     return (await lstat(path)).isDirectory() ? 'directory' : 'other'
@@ -81,19 +71,35 @@ async function mergeFolder(from: string, to: string): Promise<void> {
   }
 }
 
-/** Best effort: failed work stays under the legacy root for the next install to retry. */
+/** Best effort: failed work stays at its source for the next install to retry. */
 export async function migrateLegacyNativeChatVisualsFolders(
   stateDirectory: string,
   logger: StructuredAgentSessionLogger
 ): Promise<void> {
-  const legacyRoot = join(stateDirectory, LEGACY_ROOT_NAME)
   const root = nativeChatScratchRootFor(stateDirectory)
+  for (const [sourceRoot, suffix] of [
+    [join(stateDirectory, LEGACY_ROOT_NAME), ''],
+    [root, '.expired']
+  ] as const) {
+    await migrateFolders(sourceRoot, root, suffix, logger)
+  }
+}
+
+async function migrateFolders(
+  legacyRoot: string,
+  root: string,
+  suffix: string,
+  logger: StructuredAgentSessionLogger
+): Promise<void> {
   try {
     if ((await presenceOf(legacyRoot)) !== 'directory') {
       return
     }
     const folders = (await readdir(legacyRoot, { withFileTypes: true })).filter(
-      (entry) => entry.isDirectory() && isNativeChatScratchFolderName(entry.name)
+      (entry) =>
+        entry.isDirectory() &&
+        entry.name.endsWith(suffix) &&
+        isNativeChatScratchFolderName(suffix ? entry.name.slice(0, -suffix.length) : entry.name)
     )
     if (folders.length > 0) {
       if ((await presenceOf(root)) === 'other') {
@@ -107,13 +113,10 @@ export async function migrateLegacyNativeChatVisualsFolders(
     }
     for (const folder of folders) {
       const from = join(legacyRoot, folder.name)
-      const to = join(root, folder.name)
+      const to = join(root, suffix ? folder.name.slice(0, -suffix.length) : folder.name)
       try {
         const destination = await presenceOf(to)
         if (destination === 'absent') {
-          // Set grace before moving so a timestamp failure leaves the source retryable.
-          const now = new Date()
-          await utimes(from, now, now)
           await rename(from, to)
         } else if (destination === 'directory') {
           await mergeFolder(from, to)
@@ -126,7 +129,9 @@ export async function migrateLegacyNativeChatVisualsFolders(
         })
       }
     }
-    await removeIfEmpty(legacyRoot)
+    if (legacyRoot !== root) {
+      await removeIfEmpty(legacyRoot)
+    }
   } catch (error) {
     logger.warn('pre-rename chat visuals folders could not be moved', { scope: SCOPE, error })
   }

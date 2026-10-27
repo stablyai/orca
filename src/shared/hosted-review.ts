@@ -16,8 +16,7 @@ export type HostedReviewProvider =
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 
-// Why: Bitbucket Cloud's API has no draft pull requests, so offering the toggle
-// there would either publish a live PR or fail at submit.
+// Bitbucket Cloud has no draft API; offering the toggle would publish live or fail.
 export function hostedReviewProviderSupportsDraft(provider: HostedReviewProvider): boolean {
   return provider !== 'bitbucket'
 }
@@ -44,8 +43,7 @@ export type HostedReviewInfo = {
   headSha?: string
   /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
   githubRepository?: GitHubRepositoryIdentity
-  // Why: mirrors PRInfo.confirmedContainedHeadOid so merged-review staleness
-  // checks accept a worktree head confirmed to be part of the merged PR.
+  // Mirror PRInfo containment proof so merged-review cache checks retain confirmed worktree heads.
   confirmedContainedHeadOid?: string
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
@@ -68,11 +66,7 @@ export type HostedReviewForBranchArgs = {
   linkedGiteaPR?: number | null
   // The worktree's checked-out HEAD oid (GitHub merged-at-head visibility).
   currentHeadOid?: string | null
-  /**
-   * Set only by surfaces scoped to the selected worktree. That tier is O(1), so
-   * the host re-checks it per minute; the worktree list is O(N) and is paced far
-   * more slowly to stay inside the shared API budget (#11532).
-   */
+  /** Only selected-worktree surfaces set active: O(1) checks refresh per minute; O(N) lists refresh more slowly within the shared API budget (#11532). */
   active?: boolean
 }
 
@@ -151,9 +145,7 @@ export type HostedReviewCreationBlockedReason =
   | 'fork_head_unsupported'
   | 'unsupported_provider'
   | 'existing_review'
-  // Why: a stacked worktree's local-only parent base is unresolvable on the
-  // remote; blocked at create-time so the submit fails with actionable copy
-  // instead of the provider's opaque error.
+  // Reject local-only stack bases before submission so unresolvable remote refs get actionable copy.
   | 'base_not_on_remote'
   | null
 
@@ -166,12 +158,7 @@ export type HostedReviewCreationNextAction =
   | 'open_existing_review'
   | null
 
-/**
- * Records whether the eligibility result observed an authoritative existing-review
- * lookup. `found` / `not_found` come only from an accepted provider lookup;
- * `unavailable` marks a local-blocker fallback returned after a swallowed or
- * skipped lookup, so it can never masquerade as authoritative no-review evidence.
- */
+/** Only accepted provider lookups yield found/not_found. Unavailable marks skipped/swallowed lookups and cannot prove no review exists. */
 export type HostedReviewLookupOutcome = 'found' | 'not_found' | 'unavailable'
 
 export type HostedReviewCreationEligibility = {

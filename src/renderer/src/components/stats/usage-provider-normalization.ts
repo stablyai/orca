@@ -53,7 +53,7 @@ export function createClaudeProvider(input: UsageOverviewInput['claude']): Usage
     cacheTokens: summary ? summary.cacheReadTokens + summary.cacheWriteTokens : 0,
     reasoningTokens: 0,
     estimatedCostUsd: summary?.estimatedCostUsd ?? null,
-    hasPartialCost: false,
+    hasPartialCost: summary?.hasUnpricedModels ?? false,
     topModel: summary?.topModel ?? null,
     topProject: summary?.topProject ?? null,
     activeDays: countActiveDays(dailyActiveDays)

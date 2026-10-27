@@ -18,6 +18,7 @@ import {
 import { getRateLimit } from '../github/rate-limit'
 import { resolveGhAccountRequiredHost } from '../github/account-binding-required-host'
 import { getWorkItemDetails } from '../github/work-item-details'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
@@ -43,7 +44,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       query,
       page,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       noCache,
       ...this.deps.getLocalGitArgs(repo)
     )
@@ -58,7 +59,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.path,
       limit,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
     return result.items
@@ -74,7 +75,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.path,
       number,
       type,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference
     )
@@ -92,7 +93,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       ownerRepo,
       number,
       type,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -107,7 +108,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.path,
       number,
       type,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference
     )
@@ -119,7 +120,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.path,
       query,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -129,7 +130,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     return listLabels(
       repo.path,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -141,7 +142,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     return listAssignableUsers(
       repo.path,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }

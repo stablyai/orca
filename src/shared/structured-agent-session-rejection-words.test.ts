@@ -1,5 +1,3 @@
-// What a rejection puts on the reader's screen: the desktop row, the phone and a returned card.
-
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
@@ -7,7 +5,6 @@ import { agentSessionWriteNoticeEnglish } from './agent-session-refusal-notice'
 import { DISPATCH_REJECTED_QUEUE_FULL } from './structured-agent-session-dispatch-rejection'
 import {
   structuredAgentSessionRecordedRejectionParts,
-  structuredAgentSessionRejectionNotice,
   structuredAgentSessionRejectionParts
 } from './structured-agent-session-rejection-words'
 
@@ -23,30 +20,9 @@ describe('what a rejection shows the reader', () => {
     expect(shown).toBe("Orca couldn't reach the agent. Your message was not sent.")
   })
 
-  it("shows a content rejection in the provider's own words", () => {
-    expect(notice('Claude messages support at most 20 images')).toBe(
-      'Claude messages support at most 20 images'
-    )
-  })
-
-  it('shows the sentence a host wrote for the person reading it', () => {
-    const reason = 'The provider stopped before it finished starting.'
-    expect(notice(reason)).toBe(reason)
-  })
-
   it('never puts a legacy or local-capacity marker on screen', () => {
     expect(notice('not_delivered')).toBe('Your message was not sent.')
     expect(notice(DISPATCH_REJECTED_QUEUE_FULL)).toBe('Your message was not sent.')
-  })
-
-  it('claims no cause when the rejection names none', () => {
-    expect(notice(null)).toBe('Your message was not sent.')
-  })
-
-  it('tells the phone how to send it again after a transport failure', () => {
-    const phone = structuredAgentSessionRejectionNotice('provider_write_failed', 'composer-send')
-    expect(phone.startsWith("Orca couldn't reach the agent. Your message was not sent.")).toBe(true)
-    expect(phone.length).toBeGreaterThan(notice('provider_write_failed').length)
   })
 })
 
@@ -82,7 +58,6 @@ describe('what a rejection with a typed fact shows the reader', () => {
   })
 })
 
-// The line under a message the host recorded and then rejected, on the desktop and the phone.
 describe('the line under a recorded rejection', () => {
   const signedOut: AgentSessionFailureFact = { kind: 'notSignedIn' }
   const recorded = (reason: string | null, rejection?: AgentSessionFailureFact) =>

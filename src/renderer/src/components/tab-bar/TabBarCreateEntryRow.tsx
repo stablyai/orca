@@ -20,8 +20,7 @@ import { BrowserFavicon } from '@/components/browser-favicon'
 
 export const RESULT_LISTBOX_ID = 'tab-create-entry-results'
 
-// Index-based (not the option id, which may contain spaces/slashes from file
-// paths) so it is always a valid aria-activedescendant IDREF.
+// Use index-based DOM IDs because option paths can contain spaces invalid in aria-activedescendant references.
 export function resultOptionDomId(index: number): string {
   return `tab-create-entry-result-${index}`
 }
@@ -101,7 +100,7 @@ export function EntryActionRow({
   )
 
   // Only the filename-first rows hide information. Every other row already shows
-  // its detail in full, and STYLEGUIDE.md:162 rules out labelling those.
+  // its detail in full, and the STYLEGUIDE tooltip rule rules out labelling those.
   if (!presentation.prioritizeFilename) {
     return row
   }
@@ -181,8 +180,7 @@ function getActionPresentation(
     const { entry } = option.option
     const url = formatBrowserHistoryUrl(entry.url)
     return {
-      // Why the title is detail, not label: the label span is shrink-0 whenever a
-      // detail shows, so a variable-length title there would refuse to truncate.
+      // Put variable titles in the truncating detail slot; labels with detail cannot shrink.
       detail: entry.title ? `${entry.title} · ${url}` : url,
       icon: <BrowserFavicon faviconUrl={entry.faviconUrl} className="size-3.5" />,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.openPage', 'Open page'),
@@ -191,7 +189,7 @@ function getActionPresentation(
   }
   if (option.kind === 'agent') {
     return {
-      detail: option.option.label,
+      detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
       icon: <AgentIcon agent={option.option.agent} size={14} />,
       label:
         labelOverride ??
@@ -221,12 +219,16 @@ function getActionPresentation(
       showDetail: true
     }
   }
-  if (classification.kind === 'existing-file' || classification.kind === 'absolute-file') {
+  if (
+    classification.kind === 'existing-file' ||
+    classification.kind === 'absolute-file' ||
+    classification.kind === 'html-file-url'
+  ) {
     return {
       detail:
-        classification.kind === 'absolute-file'
-          ? classification.filePath
-          : classification.relativePath,
+        classification.kind === 'existing-file'
+          ? classification.relativePath
+          : classification.filePath,
       icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
       prioritizeFilename: true,

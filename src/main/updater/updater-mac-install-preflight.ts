@@ -25,7 +25,7 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
       blockers = await recoverMacBrowserSidecars(process.execPath, blockers)
     } catch {
       this.resetQuitForUpdateState()
-      this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+      this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
         version: pendingVersion,
@@ -36,7 +36,7 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
       recordUpdaterLifecycle('macos_running_instances_check_failed')
       return false
     }
-    // Why: registered `orca serve --supervise` services can pause their server for us; anything else is refused as before.
+    // Registered serve supervisors can park their servers; other blockers remain refused.
     const park =
       blockers.length > 0
         ? await parkServeSupervisorsForInstall(process.execPath, blockers, {
@@ -47,7 +47,7 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
     if (park && park.kind === 'refused') {
       const instances = await describeMacUpdateBlockers(process.execPath, park.pids)
       this.resetQuitForUpdateState()
-      this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+      this.sendToMainWindow('updater:quitAndInstallAborted')
       this.sendInstallFailureStatus({
         state: 'error',
         version: pendingVersion,

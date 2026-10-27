@@ -1,12 +1,168 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { AppState } from '@/store/types'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
+import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
+type DrawnStore = { getState: () => AppState }
+const drawn = vi.hoisted((): { store: DrawnStore | null; main: TabsDrawnFromMain | null } => ({
+  store: null,
+  main: null
+}))
+
+async function drawFromMain(): Promise<{
+  store: DrawnStore
+  sent: () => readonly { type: string }[]
+}> {
+  createStoreCascadesMockApi()
+  const store = createTestStore()
+  const unifiedTabsByWorktree = Object.fromEntries(
+    Object.entries(mockStoreState.unifiedTabsByWorktree).map(([worktreeId, tabs]) => [
+      worktreeId,
+      tabs.map((tab): Tab => ({
+        entityId: tab.id,
+        label: 'Mobile Emulator',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1,
+        worktreeId,
+        ...tab,
+        contentType: 'simulator'
+      }))
+    ])
+  )
+  const groupsByWorktree = Object.fromEntries(
+    Object.entries(mockStoreState.groupsByWorktree).map(([worktreeId, groups]) => [
+      worktreeId,
+      groups.map(({ id }): TabGroup => ({
+        id,
+        worktreeId,
+        activeTabId: null,
+        tabOrder: (unifiedTabsByWorktree[worktreeId] ?? [])
+          .filter((tab) => tab.groupId === id)
+          .map((tab) => tab.id)
+      }))
+    ])
+  )
+  store.setState({
+    activeWorktreeId: mockStoreState.activeWorktreeId,
+    activeWorkspaceExecutionHostId: mockStoreState.activeWorkspaceExecutionHostId,
+    // One repo per row, so same-id rows on two hosts stay apart.
+    worktreesByRepo: Object.fromEntries(
+      mockStoreState
+        .allWorktrees()
+        .map((row, index) => [
+          `repo-${index}`,
+          [makeWorktree({ ...row, repoId: `repo-${index}`, path: `/path/${index}` })]
+        ])
+    ),
+    folderWorkspaces: [],
+    groupsByWorktree,
+    layoutByWorktree: Object.fromEntries(
+      Object.entries(groupsByWorktree).map(([worktreeId, [first, second]]) => [
+        worktreeId,
+        second
+          ? {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', groupId: first!.id },
+              second: { type: 'leaf', groupId: second.id }
+            }
+          : { type: 'leaf', groupId: first!.id }
+      ])
+    ),
+    activeGroupIdByWorktree: { ...mockStoreState.activeGroupIdByWorktree },
+    unifiedTabsByWorktree
+  })
+  drawn.main = await drawTabsFromMain(store)
+  drawn.store = store
+  return { store, sent: () => layoutApplyTestTransport.sent }
+}
+
+async function openThroughMain(open: () => string | null): Promise<{
+  tabId: string | null
+  tab: Tab | undefined
+  sent: { type: string; groupId?: string; split?: unknown }[]
+  store: DrawnStore
+}> {
+  const { store, sent } = await drawFromMain()
+  const tabId = open()
+  await drawn.main!.settle()
+  return {
+    tabId,
+    tab: store.getState().unifiedTabsByWorktree['wt-1']?.find((entry) => entry.id === tabId),
+    sent: sent().filter((command) => command.type === 'openSimulatorTab'),
+    store
+  }
+}
+
+// Open locally in group-1 without selection; the active paired-server twin must not redirect ownership.
+async function expectBackgroundLocalOpen(viaMain: boolean): Promise<void> {
+  const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
+  const { tabId, tab, sent, store } = await openThroughMain(() =>
+    ensureSimulatorTab('wt-1', { surfacePane: false, executionHostId: 'local' })
+  )
+  expect(sent).toEqual(viaMain ? [expect.objectContaining({ tabId, groupId: 'group-1' })] : [])
+  expect(tab).toMatchObject({
+    contentType: 'simulator',
+    label: 'Mobile Emulator',
+    groupId: 'group-1',
+    executionHostId: 'local'
+  })
+  expectNotSurfaced(store, tab!)
+}
+
+function expectSurfaced(store: DrawnStore, tab: Tab): void {
+  const state = store.getState()
+  const group = state.groupsByWorktree['wt-1']?.find((entry) => entry.id === tab.groupId)
+  expect(group?.activeTabId).toBe(tab.id)
+  expect(group?.recentTabIds).toContain(tab.id)
+  expect(state.activeGroupIdByWorktree['wt-1']).toBe(tab.groupId)
+  expect(state.activeTabType).toBe('simulator')
+}
+
+function expectNotSurfaced(store: DrawnStore, tab: Tab): void {
+  const state = store.getState()
+  const group = state.groupsByWorktree['wt-1']?.find((entry) => entry.id === tab.groupId)
+  expect(group?.recentTabIds ?? []).not.toContain(tab.id)
+  expect(tab.lastFocusedAt).toBeUndefined()
+  expect(state.activeTabType).not.toBe('simulator')
+}
+
+type MockWorktreeRow = { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
+type MockTabRow = {
+  id: string
+  groupId: string
+  worktreeId?: string
+  executionHostId?: ExecutionHostId
+  contentType: string
+  label?: string
+}
 
 const mockStoreState = vi.hoisted(() => ({
   activeGroupIdByWorktree: {} as Record<string, string>,
-  activeWorkspaceExecutionHostId: null as string | null,
+  activeWorkspaceExecutionHostId: ((): ExecutionHostId | null => null)(),
   activeWorktreeId: 'wt-1',
-  allWorktrees: vi.fn(
-    () => [] as { id: string; hostId?: string; runtimeOwnerEnvironmentId?: string }[]
-  ),
+  allWorktrees: vi.fn((): MockWorktreeRow[] => []),
   activateTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
   createUnifiedTab: vi.fn(),
@@ -30,17 +186,7 @@ const mockStoreState = vi.hoisted(() => ({
   settings: { mobileEmulatorEnabled: true },
   setActiveTab: vi.fn(),
   setActiveTabType: vi.fn(),
-  unifiedTabsByWorktree: {} as Record<
-    string,
-    {
-      id: string
-      groupId: string
-      worktreeId?: string
-      executionHostId?: string
-      contentType: string
-      label?: string
-    }[]
-  >
+  unifiedTabsByWorktree: ((): Record<string, MockTabRow[]> => ({}))()
 }))
 
 function stubCreatedSimulatorTab(groupId: string): void {
@@ -60,7 +206,7 @@ function createdSimulatorTabId(): string {
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => mockStoreState
+    getState: () => drawn.store?.getState() ?? mockStoreState
   }
 }))
 
@@ -89,7 +235,15 @@ describe('ensureSimulatorTab', () => {
     mockStoreState.focusGroup.mockReset()
     mockStoreState.setActiveTab.mockReset()
     mockStoreState.setActiveTabType.mockReset()
-    vi.resetModules()
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      vi.resetModules()
+    }
+  })
+
+  afterEach(() => {
+    drawn.main?.close()
+    drawn.main = null
+    drawn.store = null
   })
 
   it('activates an existing simulator tab through unified tab state', async () => {
@@ -123,6 +277,17 @@ describe('ensureSimulatorTab', () => {
     stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const { tabId, tab, sent } = await openThroughMain(() => ensureSimulatorTab('wt-1'))
+      expect(tabId).not.toBe('sim-local')
+      expect(sent).toEqual([])
+      expect(tab).toMatchObject({
+        contentType: 'simulator',
+        groupId: 'group-1',
+        executionHostId: 'runtime:host-b'
+      })
+      return
+    }
     expect(ensureSimulatorTab('wt-1')).toBe(createdSimulatorTabId())
     expect(mockStoreState.createUnifiedTab).toHaveBeenCalled()
   })
@@ -232,6 +397,19 @@ describe('ensureSimulatorTab', () => {
     })
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const { tab, sent, store } = await openThroughMain(() =>
+        ensureSimulatorTab('wt-1', { placement: 'rightSplit' })
+      )
+      expect(sent).toEqual([
+        expect.objectContaining({ split: { besideGroupId: 'group-1', direction: 'right' } })
+      ])
+      expect(tab).toMatchObject({ contentType: 'simulator', label: 'Mobile Emulator' })
+      expect(tab!.groupId).not.toBe('group-1')
+      expect(sent[0]).toMatchObject({ groupId: tab!.groupId })
+      expectSurfaced(store, tab!)
+      return
+    }
     expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe('sim-2')
 
     expect(mockStoreState.createEmptySplitGroup).not.toHaveBeenCalled()
@@ -268,6 +446,16 @@ describe('ensureSimulatorTab', () => {
     stubCreatedSimulatorTab('group-2')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const { tab, sent, store } = await openThroughMain(() =>
+        ensureSimulatorTab('wt-1', { placement: 'rightSplit' })
+      )
+      expect(sent).toEqual([expect.objectContaining({ groupId: 'group-2' })])
+      expect(sent[0]).not.toHaveProperty('split')
+      expect(tab).toMatchObject({ label: 'Mobile Emulator', groupId: 'group-2' })
+      expectSurfaced(store, tab!)
+      return
+    }
     expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe(createdSimulatorTabId())
 
     expect(mockStoreState.createUnifiedTabInSplit).not.toHaveBeenCalled()
@@ -288,6 +476,17 @@ describe('ensureSimulatorTab', () => {
     stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const { tabId, tab, sent, store } = await openThroughMain(() =>
+        ensureSimulatorTab('wt-1', { placement: 'rightSplit' })
+      )
+      expect(sent).toEqual([
+        expect.objectContaining({ tabId, split: { besideGroupId: 'group-1', direction: 'right' } })
+      ])
+      expect(tab).toMatchObject({ contentType: 'simulator', label: 'Mobile Emulator' })
+      expectSurfaced(store, tab!)
+      return
+    }
     expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe(createdSimulatorTabId())
 
     expect(mockStoreState.createUnifiedTabInSplit).toHaveBeenCalledWith(
@@ -317,6 +516,16 @@ describe('ensureSimulatorTab', () => {
     stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const { tabId, tab, sent, store } = await openThroughMain(() =>
+        ensureSimulatorTab('wt-1', { placement: 'rightSplit', surfacePane: false })
+      )
+      expect(sent).toEqual([expect.objectContaining({ tabId, groupId: 'group-1' })])
+      expect(sent[0]).not.toHaveProperty('split')
+      expect(tab).toMatchObject({ label: 'Mobile Emulator', groupId: 'group-1' })
+      expectNotSurfaced(store, tab!)
+      return
+    }
     expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit', surfacePane: false })).toBe(
       createdSimulatorTabId()
     )
@@ -345,6 +554,10 @@ describe('ensureSimulatorTab', () => {
     stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      await expectBackgroundLocalOpen(true)
+      return
+    }
     expect(ensureSimulatorTab('wt-1', { surfacePane: false, executionHostId: 'local' })).toBe(
       createdSimulatorTabId()
     )
@@ -374,6 +587,10 @@ describe('ensureSimulatorTab', () => {
     stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      await expectBackgroundLocalOpen(false)
+      return
+    }
     expect(ensureSimulatorTab('wt-1', { surfacePane: false, executionHostId: 'local' })).toBe(
       createdSimulatorTabId()
     )

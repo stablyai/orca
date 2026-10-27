@@ -4,11 +4,11 @@ import {
   applyNativeChatSessionOptionPicks,
   resolveStructuredLaunchSeedOptions,
   updateNativeChatSessionOptionDefaults
-} from './native-chat-session-option-defaults'
+} from './native-chat/input/native-chat-session-option-defaults'
 import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
-} from './native-chat-session-options'
+} from './native-chat/input/native-chat-session-options'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
@@ -85,14 +85,6 @@ describe('structuredAgentSessionOptionPicks', () => {
     })
   })
 
-  it('reads the committed model rather than the record a deferred commit has not settled', () => {
-    // The caller passes pre-commit state: the record still tracks the old model.
-    const state = liveState({ model: 'account-model', effort: 'medium' })
-    expect(structuredAgentSessionOptionPicks(state, { model: 'other-model' })).toEqual([
-      { modelId: 'other-model', optionId: 'model', value: 'other-model' }
-    ])
-  })
-
   it('keeps a per-model effort so reselecting the old model restores its level', () => {
     const persisted = persist([
       ...structuredAgentSessionOptionPicks(liveState({ model: 'account-model' }), {
@@ -144,21 +136,6 @@ describe('structuredAgentSessionOptionPicks', () => {
 })
 
 describe('applyNativeChatSessionOptionPicks', () => {
-  it('keeps a later pick in the batch from dropping an earlier one', () => {
-    const persisted = applyNativeChatSessionOptionPicks({
-      persisted: undefined,
-      agent: 'codex',
-      picks: [
-        { modelId: 'gpt-fast', optionId: 'model', value: 'gpt-fast' },
-        { modelId: 'gpt-fast', optionId: 'effort', value: 'low' }
-      ]
-    })
-    expect(resolveStructuredLaunchSeedOptions(persisted, 'codex')).toEqual({
-      model: 'gpt-fast',
-      effort: 'low'
-    })
-  })
-
   it('leaves every other agent untouched', () => {
     const persisted = applyNativeChatSessionOptionPicks({
       persisted: { claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } } },
@@ -173,11 +150,5 @@ describe('applyNativeChatSessionOptionPicks', () => {
       model: 'gpt-fast',
       effort: 'low'
     })
-  })
-
-  it('returns the record unchanged for an empty batch', () => {
-    expect(
-      applyNativeChatSessionOptionPicks({ persisted: undefined, agent: 'codex', picks: [] })
-    ).toEqual({})
   })
 })

@@ -24,6 +24,7 @@ export function firstStructuredAgentSessionPrompt(
       continue
     }
     let prompt = ''
+    const imageCount = body.blocks.filter((block) => block.type === 'image-ref').length
     for (const block of body.blocks) {
       if (block.type === 'text') {
         if (prompt) {
@@ -31,7 +32,7 @@ export function firstStructuredAgentSessionPrompt(
         }
         // A title names what was asked; `[Image #N]` only says where an image sat.
         prompt += sliceAtCodeUnitLimit(
-          stripSentImagePromptMarkers(block.text),
+          stripSentImagePromptMarkers(block.text, imageCount),
           STRUCTURED_CHAT_NAME_PROMPT_LIMIT - prompt.length
         )
         if (prompt.length >= STRUCTURED_CHAT_NAME_PROMPT_LIMIT) {

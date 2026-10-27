@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
+import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-prompt-submit'
 import {
   CLAUDE_AGENT_PROMPT_RENDER_MARKER,
   CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
@@ -8,8 +8,9 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../../../shared/runtime-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithWriteTerminalAgentPrompt {
+export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number
@@ -26,8 +27,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     let observedMarker = false
     let settled = false
     let ingested = pasteIngestMs <= 0
-    // Why absolute: the ingest clock starts once, here, but the cap is armed twice (at arm()
-    // and again on the marker). Re-adding the whole window would charge ingest twice.
+    // Arm and marker both set this cap; use an absolute deadline to avoid charging ingest twice.
     const ingestDeadlineAt = Date.now() + pasteIngestMs
     let markerCarry = ''
     let quietTimer: NodeJS.Timeout | null = null
@@ -61,8 +61,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       resolveRender()
     }
     const armQuietTimer = (): void => {
-      // Why: the quiet window measures the agent going still after a *complete* paste.
-      // Silence during ingest is not settlement, so it cannot start the clock.
+      // Quiet starts after complete ingestion; silence during paste cannot settle it.
       if (!ingested) {
         return
       }
@@ -139,6 +138,25 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       launchReadiness?: boolean
     }
   ): Promise<RuntimeTerminalWait> {
+    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
+    const starting = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? this.startRestoredHandlePane(handle, options ?? {})
+      : null
+    if (starting) {
+      const startedAt = Date.now()
+      return starting.then(async (target) => {
+        // The start spent part of the caller's deadline.
+        const timeoutMs = options?.timeoutMs
+        const left = timeoutMs && timeoutMs > 0 ? timeoutMs - (Date.now() - startedAt) : timeoutMs
+        if (timeoutMs && timeoutMs > 0 && left !== undefined && left <= 0) {
+          throw new Error('timeout')
+        }
+        return {
+          ...(await this.terminalWait.wait(target, { ...options, timeoutMs: left })),
+          handle
+        }
+      })
+    }
     return this.terminalWait.wait(handle, options)
   }
 }

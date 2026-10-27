@@ -1,14 +1,11 @@
 import { agentDeliversDraftViaNativePrefill } from '@/lib/agent-native-draft-prefill'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
-import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
+import { canMirrorLaunchDraftToNativeChat } from '../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
 import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
-/** Seed the chat-composer copy of launch context that reaches only the TUI
- *  input (argv prefill or startup paste). No-op for agents without a
- *  native-chat renderer, or for text `canMirrorLaunchDraftToNativeChat`
- *  rejects — the same predicate that decides whether the tab opens in chat. */
+/** Mirror TUI-only launch context into supported native-chat composers, using the same eligibility predicate as chat opening. */
 export function seedNativeChatLaunchDraftForAgentTab(args: {
   tabId: string
   agent: TuiAgent
@@ -53,8 +50,7 @@ export function deliverLaunchPromptToAgentTab(args: {
         createdAt: Date.now()
       })
     } else if (submit !== true) {
-      // Why: an unsubmitted draft lives only in the TUI input buffer; seed the
-      // chat-composer copy so the context isn't invisible in the GUI view.
+      // Unsubmitted TUI input is otherwise invisible in chat; seed its composer copy.
       seedNativeChatLaunchDraftForAgentTab({ tabId, agent, text: content })
     }
   }
@@ -69,9 +65,7 @@ export function deliverLaunchPromptToAgentTab(args: {
     seedChatCopy()
   }
 
-  // Why: native-prefill agents (claude/openclaude etc.) get the prompt at launch,
-  // so pasteDraftWhenAgentReady returns false without pasting. That is a successful
-  // native delivery, not a failure — don't flag the seeded bubble in that case.
+  // Native-prefill agents already received the draft; paste returning false must not flag their seeded bubble as failed.
   const deliversViaNativePrefill = agentDeliversDraftViaNativePrefill(agent, forcePaste)
 
   return pasteDraftWhenAgentReady({

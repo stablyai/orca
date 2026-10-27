@@ -1,8 +1,18 @@
+import { buildMobileProjectSectionCatalog } from '../../../src/shared/mobile-project-sections-contract'
+import { resolveProjectHostSetupProjection } from '../../../src/shared/project-catalog-canonical-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
+import {
+  buildProjectGroupingIndex,
+  getProjectGroupingForRepo
+} from '../../../src/shared/project-section-grouping'
+import type { Repo } from '../../../src/shared/repo-types'
+import { resolveServedProjectSectionClaims } from '../../../src/shared/project-section-catalog-claims'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { describe, expect, it } from 'vitest'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import {
   PROJECT_SECTION_PARITY_HEADERS,
+  OLD_PROJECT_SECTION_PARITY_SERVED,
   PROJECT_SECTION_PARITY_ROWS,
   PROJECT_SECTION_PARITY_SERVED
 } from '../../../src/shared/project-section-parity.test-fixture'
@@ -14,9 +24,7 @@ import {
 } from './project-sections-operations'
 import { buildSections, type Worktree } from './workspace-list-sections'
 
-// The desktop half lives in src/renderer/src/components/sidebar/
-// worktree-list-groups-mobile-parity.test.ts: buildRows renders these headers, and main serves
-// PROJECT_SECTION_PARITY_SERVED for the same host answers.
+// Counterpart: renderer sidebar/worktree-list-groups-mobile-parity.test.ts uses the same served project fixtures.
 
 function served(): ServedProjectSections | null {
   const verdict = projectSectionsRead.interpret({
@@ -76,6 +84,36 @@ describe('Project grouping on the phone', () => {
     }
   )
 
+  it.each(['recent', 'manual'] as const)(
+    'normalizes an accepted old %s snapshot without losing independent clones or concrete targets',
+    (order) => {
+      const verdict = projectSectionsRead.interpret({
+        id: 'old',
+        ok: true,
+        result: { catalog: OLD_PROJECT_SECTION_PARITY_SERVED }
+      })
+      expect(verdict.accepted).toBe(true)
+      if (!verdict.accepted || !verdict.value) {
+        throw new Error('old catalog refused')
+      }
+      const canonical = resolveServedProjectSectionClaims(verdict.value)
+      expect(resolveServedProjectSectionClaims(canonical)).toBe(canonical)
+      const catalog = buildProjectSectionCatalog(verdict.value, [], null, order)
+      expect(headers(catalog)).toEqual(PROJECT_SECTION_PARITY_HEADERS[order])
+      expect(catalog.repos.map((repo) => repo.id)).toEqual(
+        PROJECT_SECTION_PARITY_SERVED.repos.map((repo) => repo.id)
+      )
+      expect(
+        canonical.setups.map(({ repoId, hostId, path }) => ({ repoId, hostId, path }))
+      ).toEqual(verdict.value.setups.map(({ repoId, hostId, path }) => ({ repoId, hostId, path })))
+      expect(
+        canonical.setups
+          .filter((setup) => setup.projectId.startsWith('repo:'))
+          .map((setup) => setup.repoId)
+      ).toEqual(['local-assets', 'local-workspace', 'm4-orca-two'])
+    }
+  )
+
   it("groups by repo from an older desktop's own repos when it serves no catalog", () => {
     const desktopRepos = PROJECT_SECTION_PARITY_SERVED.repos.filter(
       (repo) => repo.executionHostId === 'local'
@@ -84,8 +122,8 @@ describe('Project grouping on the phone', () => {
     expect(headers(buildProjectSectionCatalog(null, desktopRepos, null, 'manual'))).toEqual([
       { key: 'repo:m4-orca-two', label: 'orca' },
       { key: 'repo:win-orca', label: 'orca' },
-      { key: 'repo:local-workspace', label: 'Users/jinwoo/orca/workspaces/orca/orca' },
-      { key: 'repo:local-stably', label: 'Users/jinwoo/stably/orca' },
+      { key: 'repo:local-workspace', label: 'orca/orca' },
+      { key: 'repo:local-stably', label: 'stably/orca' },
       { key: 'repo:m4-orca', label: 'orca' },
       { key: 'repo:local-assets', label: 'design-assets' }
     ])
@@ -145,4 +183,94 @@ describe('readServedProjectSections', () => {
     ).toEqual({ kind: 'kept' })
     expect(readServedProjectSections(null)).toEqual({ kind: 'kept' })
   })
+})
+
+it('keeps published desktop affiliation through phone parsing when a setup has no registered owner', () => {
+  const repo: Repo = {
+    id: 'a',
+    path: '/a',
+    displayName: 'A',
+    badgeColor: '',
+    addedAt: 1,
+    gitRemoteIdentity: {
+      canonicalKey: 'github.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/acme/app.git'
+    }
+  }
+  const derived = projectHostSetupProjectionFromRepos([repo])
+  const firstSetup = derived.setups[0]
+  if (!firstSetup) {
+    throw new Error('no derived setup')
+  }
+  const orphan = {
+    ...firstSetup,
+    id: 'z',
+    repoId: 'z',
+    path: '/z',
+    displayName: 'Z',
+    createdAt: 0,
+    updatedAt: 0
+  }
+  const projection = resolveProjectHostSetupProjection([repo], derived.projects, [
+    ...derived.setups,
+    orphan
+  ])
+  const published = buildMobileProjectSectionCatalog([repo], projection, 'manual')
+  const repoMap = new Map([[repo.id, repo]])
+  const desktop = getProjectGroupingForRepo(
+    'a',
+    repoMap,
+    buildProjectGroupingIndex({
+      projects: published.projects,
+      projectHostSetups: published.setups
+    })
+  )
+  expect(desktop.key).toBe(`project:${derived.projects[0].id}`)
+  for (const extraRepos of [[], [{ id: 'z', displayName: 'Z', path: 42, addedAt: 0 }]]) {
+    const verdict = projectSectionsRead.interpret({
+      id: 'sections',
+      ok: true,
+      result: { catalog: { ...published, repos: [...published.repos, ...extraRepos] } }
+    })
+    if (!verdict.accepted || !verdict.value) {
+      throw new Error('catalog refused')
+    }
+    expect(verdict.value.repos.map((row) => row.id)).toEqual(['a'])
+    expect(verdict.value.setups.map((row) => row.repoId)).toEqual(['a', 'z'])
+    const phone = buildProjectSectionCatalog(verdict.value, [], null, 'manual')
+    if (!phone.grouping) {
+      throw new Error('No served project grouping')
+    }
+    expect(
+      getProjectGroupingForRepo('a', repoMap, buildProjectGroupingIndex(phone.grouping)).key
+    ).toBe(desktop.key)
+    expect(
+      phone.grouping?.projectHostSetups?.map(({ repoId, hostId, path }) => ({
+        repoId,
+        hostId,
+        path
+      }))
+    ).toEqual(verdict.value.setups.map(({ repoId, hostId, path }) => ({ repoId, hostId, path })))
+  }
+  const old = projectSectionsRead.interpret({
+    id: 'old',
+    ok: true,
+    result: {
+      catalog: {
+        ...published,
+        repos: [...published.repos, { id: 'z', displayName: 'Z', path: '/z' }]
+      }
+    }
+  })
+  if (!old.accepted || !old.value) {
+    throw new Error('old catalog refused')
+  }
+  const phone = buildProjectSectionCatalog(old.value, [], null, 'manual')
+  if (!phone.grouping) {
+    throw new Error('No served project grouping')
+  }
+  expect(
+    getProjectGroupingForRepo('a', repoMap, buildProjectGroupingIndex(phone.grouping)).key
+  ).toBe('project:repo:a')
 })

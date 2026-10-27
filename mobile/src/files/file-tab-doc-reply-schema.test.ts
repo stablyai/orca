@@ -10,7 +10,6 @@ describe('file tab doc reply schemas', () => {
   it('requires the three members the tab publishes into a ready document', () => {
     const ready = { content: 'a', truncated: false, byteLength: 1 }
     expect(fileTabTextSchema.safeParse(ready).success).toBe(true)
-    // One at a time, so a sibling requirement cannot stand in for the member under test.
     for (const member of ['content', 'truncated', 'byteLength'] as const) {
       const { [member]: _dropped, ...without } = ready
       expect(fileTabTextSchema.safeParse(without).success).toBe(false)
@@ -28,26 +27,24 @@ describe('file tab doc reply schemas', () => {
   })
 
   it('refuses a wrong-typed mimeType rather than salvaging it', () => {
-    // Main threw on `mimeType?.startsWith`, and readFileTab's catch showed
-    // "Couldn't load file preview"; salvaging to absent would have shown the binary copy instead.
+    // Wrong-typed mimeType must fail like the caller’s optional startsWith; salvaging it would change load-error copy to binary-unavailable copy.
     expect(fileTabImageSchema.safeParse({ content: 'aGk=', mimeType: 7 }).success).toBe(false)
   })
 
   it('reads a text diff only when both sides are strings', () => {
-    expect(
-      fileTabTextDiffSchema.safeParse({ kind: 'text', originalContent: 'a', modifiedContent: 'b' })
-        .success
-    ).toBe(true)
-    expect(fileTabTextDiffSchema.safeParse({ kind: 'text', originalContent: 'a' }).success).toBe(
-      false
-    )
+    const ready = { kind: 'text', originalContent: 'a', modifiedContent: 'b' }
+    expect(fileTabTextDiffSchema.safeParse(ready).success).toBe(true)
+    for (const member of ['originalContent', 'modifiedContent'] as const) {
+      const { [member]: _dropped, ...without } = ready
+      expect(fileTabTextDiffSchema.safeParse(without).success).toBe(false)
+      expect(fileTabTextDiffSchema.safeParse({ ...ready, [member]: 7 }).success).toBe(false)
+    }
   })
 
   it('routes an unknown diff arm to the binary reader and never the text one', () => {
     expect(fileTabBinaryDiffSchema.parse({ kind: 'submodule' }).kind).toBe('binary')
     expect(fileTabBinaryDiffSchema.parse({ kind: 'binary' }).kind).toBe('binary')
-    // A text diff whose contents did not arrive must not be re-read as binary: the tab would name
-    // the file unpreviewable instead of naming the reply.
+    // Missing text diff content is a reply failure, not evidence of a binary file.
     expect(fileTabBinaryDiffSchema.safeParse({ kind: 'text' }).success).toBe(false)
   })
 

@@ -58,12 +58,9 @@ function blocks(id: string, command: string, output: string): NativeChatBlock[] 
 }
 
 async function update(next: NativeChatBlock[]): Promise<ReactTestRenderer> {
+  const mounting = !tree
   await act(async () => {
-    const element = createElement(ToolRun, {
-      blocks: next,
-      defaultExpanded: true,
-      expandChildren: false
-    })
+    const element = createElement(ToolRun, { blocks: next })
     if (tree) {
       tree.update(element)
     } else {
@@ -72,6 +69,9 @@ async function update(next: NativeChatBlock[]): Promise<ReactTestRenderer> {
   })
   if (!tree) {
     throw new Error('Tool run did not mount.')
+  }
+  if (mounting) {
+    await act(async () => tree?.root.findAllByType('button')[0]?.props.onPress())
   }
   return tree
 }

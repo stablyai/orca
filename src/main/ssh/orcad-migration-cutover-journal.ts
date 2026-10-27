@@ -1,23 +1,16 @@
-/**
- * The cutover journal sidecar: one durable, owner-only file per migration beside the profile.
- *
- * Why not the profile store: shipped builds rewrite orca-data.json and the profile database with
- * schemas that drop unknown fields, so a journal kept there would vanish across a downgrade while
- * the target's `orcadFence`, which shipped builds keep, survived it. A missing journal must
- * never look like "no migration"; an unreadable one fails closed.
- */
+/** Persist journals in owner-only profile sidecars: older profile schemas drop unknown fields but retain fences, so an in-profile journal could vanish on downgrade. Unreadable journals fail closed. */
 import {
   MAX_ORCAD_MIGRATION_SOURCE_CUTOVERS,
   isRetainedOrcadMigrationSourceCutover,
   parseOrcadMigrationSourceCutover,
   type OrcadMigrationSourceCutover
-} from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import {
   createMigrationJournalDirectory,
   orderMigrationJournalChain
 } from '../persistence/migrating-orcad-catalog/migration-journal-directory'
 
-export class OrcadMigrationCutoverJournalUnreadableError extends Error {
+class OrcadMigrationCutoverJournalUnreadableError extends Error {
   constructor(detail: string) {
     super(`The migration journal cannot be read, so the SSH host stays fenced: ${detail}`)
     this.name = 'OrcadMigrationCutoverJournalUnreadableError'
@@ -27,7 +20,6 @@ export class OrcadMigrationCutoverJournalUnreadableError extends Error {
 type JournalChangeListener = (userDataPath: string) => void
 let journalChangeListener: JournalChangeListener | null = null
 
-/** Persistence state that follows the journal (scrollback retention) re-syncs on every change. */
 export function setOrcadMigrationJournalChangeListener(
   listener: JournalChangeListener | null
 ): void {
@@ -47,14 +39,13 @@ export function orcadMigrationCutoverJournalDirectory(userDataPath: string): str
   return journals.directory(userDataPath)
 }
 
-/** Every journaled cutover; throws rather than skipping a file it cannot trust. */
+/** Never skip an unreadable or untrusted journal. */
 export function listOrcadMigrationSourceCutovers(
   userDataPath: string
 ): OrcadMigrationSourceCutover[] {
   return journals.list(userDataPath)
 }
 
-/** The target's current cutover: the head of its chain, which no later delta move supersedes. */
 export function findOrcadMigrationSourceCutoverForTarget(
   userDataPath: string,
   sshTargetId: string
@@ -78,14 +69,14 @@ export function listOrcadMigrationCutoverChainForTarget(
   )
 }
 
-/** Durable before it returns: a fence written after this always has its journal on disk. */
+/** Flush before returning so later fence writes always have a durable journal. */
 export function writeOrcadMigrationSourceCutover(
   userDataPath: string,
   cutover: OrcadMigrationSourceCutover
 ): void {
   const parsed = parseOrcadMigrationSourceCutover(cutover)
   const existing = listOrcadMigrationSourceCutovers(userDataPath)
-  // Why in flight only: a retained cutover is finished and may wait two releases for retirement.
+  // Finished retained cutovers can wait two releases; only in-flight journals count toward the bound.
   const inFlight = existing.filter(
     (entry) => entry.phase !== 'source-retired' && !isRetainedOrcadMigrationSourceCutover(entry)
   )
@@ -102,7 +93,6 @@ export function removeOrcadMigrationSourceCutover(userDataPath: string, migratio
   journals.remove(userDataPath, migrationId)
 }
 
-/** Every journal a host's stopped or never-registered server leaves behind; they grant nothing. */
 export function removeOrcadMigrationJournalsForDestination(
   userDataPath: string,
   sshTargetId: string,

@@ -1,8 +1,4 @@
-/**
- * The destination's resumable staging files, shared by scrollback snapshots and migration blobs:
- * fsync'd appends whose retried ranges must match, size-as-progress, digest-checked hard-link
- * commits, and per-migration staging directories that abort and prune remove whole.
- */
+// Fsync staged appends, verify retried ranges, and commit digest-checked files by hard link.
 import { createHash } from 'node:crypto'
 import {
   closeSync,
@@ -19,12 +15,12 @@ import {
   writeSync
 } from 'node:fs'
 import { join } from 'node:path'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { syncDirectoryDurablySync } from '../../durable-file-write'
 
 export const ORCAD_MIGRATION_STAGING_DIRECTORY = '.orcad-migration-staging'
 
-/** Names the error codes, e.g. `orcad_migration_<channel>_offset_invalid`. */
+/** Selects error codes such as orcad_migration_<channel>_offset_invalid. */
 export type OrcadMigrationStagingChannel = 'snapshot' | 'blob'
 
 export type OrcadMigrationRequestIdentity = { migrationId: string; manifestSha256: string }
@@ -39,7 +35,7 @@ export type OrcadMigrationStagedChunk = {
   byteLength: number
 }
 
-/** Appends one chunk, or confirms an identical retry; returns the staged size afterwards. */
+/** Retried ranges must match; returns staged size. */
 export function appendOrcadMigrationStagedChunk(chunk: OrcadMigrationStagedChunk): number {
   const { channel, path, offset, bytes } = chunk
   const descriptorFd = openStagedFile(path)
@@ -103,10 +99,7 @@ export function inspectOrcadMigrationFinalFile(
   return orcadMigrationFileMatches(path, expected) ? 'matching' : 'conflict'
 }
 
-/**
- * Hard-links a verified staged file into place, then drops the staged name. A final file that
- * already holds the same bytes (an earlier commit attempt) counts as done; different bytes refuse.
- */
+/** An identical final file makes a retried hard-link commit succeed; different bytes refuse. */
 export function linkOrcadMigrationStagedFile(args: {
   stagedPath: string
   finalPath: string
@@ -148,7 +141,6 @@ export function removeOrcadMigrationStagingDirectory(
   syncDirectoryDurablySync(join(root, ORCAD_MIGRATION_STAGING_DIRECTORY))
 }
 
-/** Removes staging for every migration the importer no longer holds staged. */
 export function pruneOrcadMigrationStagingDirectories(
   root: string,
   stagedManifests: readonly OrcadMigrationManifest[]
@@ -159,7 +151,6 @@ export function pruneOrcadMigrationStagingDirectories(
   )
 }
 
-/** Removes every per-migration directory under `parent` whose migration is not retained. */
 export function pruneOrcadMigrationKeyedDirectories(
   parent: string,
   retainedMigrations: readonly OrcadMigrationRequestIdentity[]
@@ -178,7 +169,7 @@ export function pruneOrcadMigrationKeyedDirectories(
   }
 }
 
-/** The importer's staged manifest for this request, or the channel's own refusal. */
+/** Refuse through the channel's error if its staged manifest does not match. */
 export function requireStagedOrcadMigrationManifest(
   staged: OrcadMigrationManifest | null,
   request: OrcadMigrationRequestIdentity,

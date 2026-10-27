@@ -2,8 +2,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-// Baselines shared by the ratchet gates. An entry baseline lists one allowed entry per line; a
-// count baseline holds `<count> <path> [# note]` rows. `#` lines and blanks are ignored in both.
+// Entry baselines allow one item per line; count baselines use <count> <path> [# note]. Both ignore blank/# lines.
 
 /** Tracked files under `pathspecs`, so build output and untracked scratch are never scanned. */
 export function listTrackedFiles(root, pathspecs) {
@@ -53,10 +52,7 @@ function writeEntryBaseline(root, ratchet, entries) {
   )
 }
 
-/**
- * Gate for an entry ratchet `{ name, baselinePath, header, collect(root), fix }`: a new entry
- * fails with `fix`, a stale one fails until pruned. `--prune` drops stale entries only.
- */
+// Entry ratchet fails new/stale entries; --prune only removes stale entries, never grants new allowances.
 export function runEntryRatchet(ratchet, root, arg) {
   const baselineFile = path.join(root, ratchet.baselinePath)
   const prune = `pnpm check:${ratchet.name}-ratchet --prune`
@@ -171,4 +167,40 @@ export function pruneCountBaseline(root, baselinePath, header, current) {
   )
   fs.writeFileSync(file, formatCountBaseline(pruned, header, parseCountNotes(text)))
   return totalCount(pruned)
+}
+
+// Count ratchet fails growth/shrinkage; --prune only lowers allowances, while growth needs a code fix.
+export function runCountRatchet(ratchet, root, arg) {
+  const current = ratchet.collect(root)
+  if (arg === '--prune') {
+    const total = pruneCountBaseline(root, ratchet.baselinePath, ratchet.header, current)
+    console.log(`${ratchet.name} baseline pruned to ${total}.`)
+    return 0
+  }
+  const baselineFile = path.join(root, ratchet.baselinePath)
+  const baseline = parseCountBaseline(
+    fs.existsSync(baselineFile) ? fs.readFileSync(baselineFile, 'utf8') : ''
+  )
+  const inScope = ratchet.scope?.(root)
+  const keep = (counts) => (inScope ? new Map([...counts].filter(([key]) => inScope(key))) : counts)
+  const { grown, shrunk } = diffCounts(keep(current), keep(baseline))
+  for (const { file, now, allowed } of grown) {
+    console.error(`${file}: ${now} ${ratchet.unit}, baseline allows ${allowed}.`)
+  }
+  if (grown.length > 0) {
+    console.error(ratchet.fix.join('\n'))
+  }
+  for (const { file, now, allowed } of shrunk) {
+    console.error(`${file}: now ${now}, baseline ${allowed}.`)
+  }
+  if (shrunk.length > 0) {
+    console.error(
+      `The baseline may only shrink. Fix it: pnpm check:${ratchet.name}-ratchet --prune`
+    )
+  }
+  if (grown.length + shrunk.length > 0) {
+    return 1
+  }
+  console.log(`${ratchet.name} ratchet OK — ${totalCount(current)} grandfathered ${ratchet.unit}.`)
+  return 0
 }

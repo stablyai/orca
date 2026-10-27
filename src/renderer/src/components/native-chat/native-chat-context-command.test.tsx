@@ -188,6 +188,7 @@ describe('host-answered /context in the composer', () => {
   function composerArgs(answerCommandLocally: NativeChatLocalCommandAnswer) {
     return {
       agent: 'omp' as const,
+      draftScopeKey: 'terminal-test-scope',
       disabled: false,
       isDispatchingSessionOption: false,
       resolveTarget: () => target,

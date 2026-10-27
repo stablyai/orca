@@ -2,7 +2,6 @@ import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 
 export const sessionApi = {
-  // hostId is optional; main defaults it to 'local' so existing omitting call sites keep the local session partition.
   get: (hostId) => ipcRenderer.invoke('session:get', hostId),
   listHostIds: () => ipcRenderer.invoke('session:list-host-ids'),
   set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),

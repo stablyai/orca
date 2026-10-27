@@ -3,9 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -301,9 +298,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:jumpToTabIndex', 4)
   })
 
-  // While the floating panel owns the keyboard, L1 yields the initial indexed-switch keydown to the
-  // renderer (no preventDefault, no dispatch) so L2 selects a floating tab, and it contains held-key
-  // repeats in main (preventDefault, no dispatch) since the renderer skips e.repeat.
+  // Floating-panel index keydowns yield to renderer; repeats stay in main because renderer skips e.repeat.
   it('yields indexed-switch chords to the floating panel and contains their repeats', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -349,8 +344,6 @@ describe('createMainWindow', () => {
 
     const beforeInputEvent = windowHandlers['before-input-event']
     const isDarwin = process.platform === 'darwin'
-    // jumpToTabIndex chord (Ctrl+digit on mac, Alt+digit elsewhere) and jumpToWorktreeIndex chord
-    // (Mod+digit) both yield while the panel owns focus.
     const tabIndexInput = isDarwin
       ? { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: true, alt: false }
       : { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: false, alt: true }
@@ -359,12 +352,10 @@ describe('createMainWindow', () => {
       : { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: true, alt: false }
 
     for (const input of [tabIndexInput, worktreeIndexInput]) {
-      // Initial (non-repeat) keydown: yielded to the renderer — neither prevented nor dispatched.
       const yieldPreventDefault = vi.fn()
       beforeInputEvent({ preventDefault: yieldPreventDefault } as never, input as never)
       expect(yieldPreventDefault).not.toHaveBeenCalled()
 
-      // Held-key repeat: contained in main — prevented, still not dispatched.
       const repeatPreventDefault = vi.fn()
       beforeInputEvent(
         { preventDefault: repeatPreventDefault } as never,
@@ -377,8 +368,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalledWith('ui:jumpToWorktreeIndex', expect.anything())
   })
 
-  // Held-key repeats are contained in main whether or not the floating panel has focus: every
-  // renderer index path skips e.repeat, so yielding one would leak a raw digit to xterm.
+  // Contain indexed-switch repeats even without floating focus or raw digits leak to xterm.
   it('contains indexed-switch repeats without dispatching them', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

@@ -45,7 +45,8 @@ function requireFileChannelPage(
     browserPageId: params.browserPageId,
     placement,
     pairedDeviceId,
-    connectionId
+    connectionId,
+    admitPendingProfileSwitch: true
   })
   if (
     leases.requireLease({

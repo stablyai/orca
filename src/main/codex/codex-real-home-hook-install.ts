@@ -50,32 +50,23 @@ import {
 } from './config-toml-trust'
 
 type ReconcileArgs = {
-  /** Codex's hashes; null while Codex has not answered, when Orca keeps or computes its own. */
+  /** Null uses existing or locally computed hashes until Codex answers. */
   hashes: CodexHookHashes | null
   isEnabled: () => boolean
-  /** App start and the setting turning on; a launch never fights a running older build. */
+  /** Convert older forms at startup/opt-in, never on launch. */
   convertOlderForms: boolean
 }
 
 type SettlePlan = Extract<RealHomeCodexHookEntryPlan, { kind: 'settle' }>
 
-// Why a bound: each pass either prunes Orca's extra copies or settles; a concurrent save costs one more.
+// Allow pruning, settlement and concurrent-save retries without looping indefinitely.
 const MAX_PASSES = 4
 
-/**
- * Makes ~/.codex hold Orca's entry alone, last unless already in place, in each
- * event Codex lists, with Codex's hash for it approved and enabled. Writes only
- * what differs; an approval goes in before its entry and is taken back if the
- * entry write fails. Never throws.
- */
+/** Approve before writing entries; roll back approvals if the entry write fails. */
 export async function reconcileRealHomeCodexHookEntries(args: ReconcileArgs): Promise<void> {
   await reconcileCodexHookEntriesInHome(getRealHomeCodexHookHome(), args, { pristineBackup: true })
 }
 
-/**
- * The same for another home Orca edits in place, such as a managed account's on a WSL host:
- * only Orca's entry and its approvals change.
- */
 export async function reconcileCodexHookEntriesInHome(
   home: CodexHookHome,
   args: ReconcileArgs,
@@ -92,7 +83,7 @@ export async function reconcileCodexHookEntriesInHome(
             return
           }
         } catch (error) {
-          // Why: a user's save landed between Orca's read and write; the next pass reads it.
+          // Retry from the user's latest save.
           if (!(error instanceof HooksJsonChangedError)) {
             throw error
           }
@@ -108,7 +99,7 @@ export async function reconcileCodexHookEntriesInHome(
   }
 }
 
-/** 'pruned' when another pass must settle what this one left; else 'settled', even when ~/.codex cannot take the entry. */
+// Settlement also covers homes that cannot accept Orca's entry.
 function reconcilePass(
   home: CodexHookHome,
   args: ReconcileArgs,
@@ -116,15 +107,14 @@ function reconcilePass(
 ): 'settled' | 'pruned' {
   const { hooksJsonPath, tomlPath, keySourcePaths: sourcePaths } = home
   const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
-  // Why: the pre-write guard compares against these bytes; a separate later
-  // read would let a concurrent save land between parse and write.
+  // Guard the exact bytes parsed so a concurrent save cannot be overwritten.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
   if (!isAddableHooksFile(config)) {
     return 'settled'
   }
   const hooks = config.hooks ?? {}
   const material = getCodexManagedHookInstallMaterial()
-  // Why only listed events: an entry Codex has no hash for would wait for review.
+  // Unlisted events lack a Codex hash and would wait for review.
   const listed = args.hashes
   const events = listed
     ? material.events.filter((eventName) => listed[CODEX_EVENT_LABEL[eventName]] !== undefined)
@@ -141,12 +131,10 @@ function reconcilePass(
       backupRealHomeHooksJsonOnce(getOrcaUserDataPath(), previousRaw)
     }
     assertHooksJsonGeneration(hooksJsonPath, hooksWritePath, previousRaw)
-    // Why: unknown fields inside the file belong to the user; preserve them verbatim.
     writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
   }
   if (plan.kind === 'prune') {
-    // Why its own write: dropping a copy shifts user hooks, whose approvals must move
-    // before Orca writes an approval at a slot one of them still holds.
+    // Move shifted user approvals before writing Orca approvals into their former slots.
     mutateRealHomeHooksPreservingUserTrust({
       sourcePaths,
       tomlPath,
@@ -159,7 +147,7 @@ function reconcilePass(
 
   const trustStates = readHookTrustEntries(tomlPath)
   const knownOrcaHashes = readKnownOrcaHashes(home, material.command)
-  // Why the stopgap: an entry already in place keeps its approval, so nothing changes.
+  // Preserve installed approvals while waiting for Codex to report hashes.
   const hashes =
     args.hashes ??
     findStopgapOrcaHashes({
@@ -172,7 +160,7 @@ function reconcilePass(
   const approvals = sourcePaths.flatMap((keySource) =>
     plan.managedEntries.flatMap((entry) => {
       const trustedHash = hashes[entry.eventLabel]
-      // Why none for null: that Codex lists the entry with no hash, so it runs unapproved.
+      // Null means Codex runs this entry without requiring approval.
       return typeof trustedHash === 'string'
         ? [{ ...entry, sourcePath: keySource, trustedHash, enabled: true }]
         : []
@@ -201,21 +189,16 @@ function reconcilePass(
     hooksJsonPath
   )
   try {
-    // Why read again: approvals Orca just wrote, or a user's moved one, may sit at a key read stale before.
+    // Re-read because approval writes and moves can reuse formerly stale keys.
     removeHookTrustEntries(tomlPath, findStale(readHookTrustEntries(tomlPath)))
   } catch (error) {
-    // Why still written: the entry and its approval are in place; a leftover approval matches no hook.
+    // The installed entry remains valid; leftover approvals match no hook.
     console.warn('[codex-real-home-hooks] could not drop stale Orca approvals:', error)
   }
   return 'settled'
 }
 
-/**
- * Approvals Orca left at a slot its entry no longer holds, such as a copy it
- * removed from a user's group. Owned only while they hold a hash Orca writes.
- * Never at a slot Orca's entry holds, whatever its hash, nor in an event this
- * run did not plan or left alone: its entries keep theirs.
- */
+// Preserve held and untouched slots; stale approvals must carry a known Orca hash.
 function findStaleOrcaApprovals(
   trustStates: ReadonlyMap<string, CodexHookTrustState>,
   events: CodexManagedHookInstallMaterial['events'],
@@ -244,11 +227,7 @@ function findStaleOrcaApprovals(
   })
 }
 
-/**
- * The user's explicit opt-out: strips Orca's entry and its approvals from the
- * real ~/.codex, moving the approvals of user hooks whose positions shift.
- * Never throws.
- */
+/** Opt-out must move shifted user approvals when removing Orca entries. */
 export async function removeRealHomeCodexHookForOptOut(
   codexHashes: readonly CodexHookHashes[],
   home: CodexHookHome = getRealHomeCodexHookHome()
@@ -256,10 +235,9 @@ export async function removeRealHomeCodexHookForOptOut(
   try {
     return await runExclusivelyForCodexTrustConfig(home.tomlPath, async () => {
       const lane = sweepRealHomeCodexHook(home)
-      // Why 'removed' only: an unread or malformed file may still hold the entry,
-      // so its approvals and the ledger that proves ownership wait for a later pass.
+      // Unreadable hooks may still need their approvals and ownership ledger; retry cleanup later.
       if (lane === 'removed') {
-        // Why: Codex's own hashes prove Orca's approvals, including ones a sweep with no entry left to remove skips.
+        // Codex hashes prove ownership even when the hook entry is already gone.
         removeSystemManagedHookTrustEntries(
           home.homePath,
           home.keySourcePaths,

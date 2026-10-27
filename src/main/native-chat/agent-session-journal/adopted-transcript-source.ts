@@ -28,7 +28,7 @@ export function assertAdoptedSourceIdentity(
   }
 }
 
-/** Metadata is observed from the same lines that become the imported journal. */
+// Observe metadata from the same lines imported into the journal.
 export function adoptedTranscriptSourceObserver(input: {
   agent: AgentType
   filePath: string
@@ -36,7 +36,9 @@ export function adoptedTranscriptSourceObserver(input: {
   maxSourceBytes: number
 }) {
   let sessionId: string | null =
-    input.agent === 'claude' || input.agent === 'codex' ? sessionIdFromFileName(input.filePath) : null
+    input.agent === 'claude' || input.agent === 'codex'
+      ? sessionIdFromFileName(input.filePath)
+      : null
   let cwd: string | null = null
   let sawCodexMetadata = false
   return {

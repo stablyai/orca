@@ -31,6 +31,7 @@ import {
   takePendingImageWithReferences
 } from './native-chat-composer-image-references'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import { useNativeChatPastedTextAdmission } from './native-chat-pasted-text-state'
 
 export type UseNativeChatComposerAttachmentsArgs = {
   attachmentScopeKey: string
@@ -64,6 +65,8 @@ export function useNativeChatComposerAttachments({
   setNotice
 }: UseNativeChatComposerAttachmentsArgs): {
   imageAttachments: NativeChatComposerImageAttachment[]
+  /** A long paste in this scope is still being saved as a file; Send waits for it. */
+  pastedTextSaving: boolean
   attachResolvedPaths: (
     paths: string[],
     connectionId?: string | null,
@@ -82,6 +85,8 @@ export function useNativeChatComposerAttachments({
   revealPendingImageAttachment: (id: string, previewUrl?: string) => void
   dropPendingImageAttachment: (id: string) => boolean
   pendingChips: NativeChatPendingAttachmentChips
+  /** The editor while it shows this scope; null once it went or shows another. */
+  scopeEditor: () => NativeChatComposerInput | null
 } {
   const { imageAttachments, setPreview, releasePreview, releaseAllPreviews } =
     useNativeChatComposerImageChips(attachmentScopeKey)
@@ -103,8 +108,7 @@ export function useNativeChatComposerAttachments({
   const nextAttachmentId = useCallback(() => createUuidV4(), [])
   const serverOwnedPendingIds = useMemo(() => new Set<string>(), [])
 
-  // Client-local paths cannot cross into a runtime target; workspace-owned
-  // paths may only bypass this after the internal drop ownership gate.
+  // Only provenance-checked workspace paths may bypass the ban on client-local files crossing runtime targets.
   const attachmentTargetBlocked = useCallback(
     (targetOwned = false): boolean => {
       const target = resolveTarget()
@@ -120,8 +124,7 @@ export function useNativeChatComposerAttachments({
     setNotice(nativeChatLocalAttachmentUnsupportedNotice())
   }, [setNotice])
 
-  // Why the scope's own editor: an upload outlives a switch to another conversation, which the
-  // editor then shows; this scope's chips are then in its stored draft.
+  // Uploads outlive conversation switches; target only this scope’s editor or stored draft.
   const scopeEditor = useCallback(
     () => (mountedRef.current ? textareaRef.current : null),
     [mountedRef, textareaRef]
@@ -172,8 +175,7 @@ export function useNativeChatComposerAttachments({
       textareaRef
     })
 
-  // Placeholder chip shown the instant a paste starts, so a clipboard image that
-  // takes a beat to save (or upload over SSH) never reads as a dropped paste.
+  // Show pending chips immediately so slow saves/uploads do not look like lost pastes.
   const beginPendingImageAttachment = useCallback(
     (previewUrl?: string, pendingName?: string, serverOwned = false): string | null => {
       if (disabledRef.current) {
@@ -270,8 +272,7 @@ export function useNativeChatComposerAttachments({
     [attachmentScopeKey, setPreview]
   )
 
-  // A pending chip was never saved, so dropping one, even late from a replaced composer, leaves
-  // the draft alone.
+  // Unsaved pending-chip removal must not modify the draft, even from a replaced composer.
   const dropPendingImageAttachment = useCallback(
     (id: string): boolean => {
       releasePreview(id)
@@ -286,8 +287,7 @@ export function useNativeChatComposerAttachments({
       begin: beginPendingImageAttachment,
       resolve: resolvePendingImageAttachment,
       drop: dropPendingImageAttachment,
-      // At the caret, as every attach does; mid-composition or once the composer is gone, into the
-      // scope's draft, which keeps it until the composition settles or the composer comes back.
+      // Use the caret while mounted; persist into the scope draft through IME composition and unmounts.
       attachReferences: attachPendingReferences
     }),
     [
@@ -298,9 +298,13 @@ export function useNativeChatComposerAttachments({
     ]
   )
 
+  const pastedTextSaving = useNativeChatPastedTextAdmission(attachmentScopeKey) === 'saving'
+
   return {
     pendingChips,
+    scopeEditor,
     imageAttachments,
+    pastedTextSaving,
     attachResolvedPaths,
     clearImageAttachments: () => {
       releaseAllPreviews()

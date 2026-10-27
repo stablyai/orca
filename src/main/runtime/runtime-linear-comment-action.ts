@@ -1,5 +1,5 @@
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { linearError, type LinearAgentAccessError } from '../linear/issue-context-errors'
+import { linearError, type LinearAgentAccessError } from '../linear/issue-context/errors'
 import { LinearWriteFailure } from '../linear/linear-issue-write-support'
 
 export async function runLinearCommentAction<Owner, Result>(

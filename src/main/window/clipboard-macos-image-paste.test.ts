@@ -42,7 +42,6 @@ vi.mock('./clipboard-remote-file-copy', () => ({
 }))
 vi.mock('./native-chat-paste-files', () => ({
   restoreNativeChatPastes: vi.fn(),
-  sweepExpiredNativeChatPastes: vi.fn(),
   nativeChatPasteFolder: () => '/tmp/native-chat-pastes'
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))

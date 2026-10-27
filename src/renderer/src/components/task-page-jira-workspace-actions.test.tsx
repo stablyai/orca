@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { TaskPageJiraIssueList } from './task-page-jira-issue-list'
 import { defaultJiraListColumnIds, visibleJiraListColumns } from './jira-list-columns'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const issue: JiraIssue = {

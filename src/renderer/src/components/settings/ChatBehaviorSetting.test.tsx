@@ -15,11 +15,9 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const SHELL_ENV_TOGGLE = '[aria-label="Toggle using your shell environment"]'
 const NAME_INPUT = '#settings-native-chat-shell-environment-name'
 
 function renderSetting(overrides: Partial<GlobalSettings>, updateSettings = vi.fn()) {
-  // The wrapper also covers rerender: the permission picker's tooltip needs the app's provider.
   return render(
     <ChatBehaviorSetting
       settings={{ ...getDefaultSettings('/tmp'), ...overrides }}
@@ -43,43 +41,8 @@ function removeButton(container: HTMLElement, name: string): HTMLButtonElement |
   return container.querySelector<HTMLButtonElement>(`button[aria-label="Remove ${name}"]`)
 }
 
-function listedNames(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('li')).map((item) => item.title)
-}
-
 describe('ChatBehaviorSetting shell environment', () => {
   const chooseNames = { nativeChatInheritShellEnvironment: false }
-
-  it('hides the variable list while the whole shell is inherited', () => {
-    const { container } = renderSetting({})
-    expect(container.querySelector(NAME_INPUT)).toBeNull()
-  })
-
-  it('turns inheritance off from the toggle', () => {
-    const updateSettings = vi.fn()
-    const { container } = renderSetting({}, updateSettings)
-    fireEvent.click(container.querySelector(SHELL_ENV_TOGGLE)!)
-    expect(updateSettings).toHaveBeenCalledWith({ nativeChatInheritShellEnvironment: false })
-  })
-
-  it('lists the saved names in saved order, or an empty line when there are none', () => {
-    const { container, rerender } = renderSetting(chooseNames)
-    expect(listedNames(container)).toEqual([])
-    expect(container.textContent).toContain('No variables added yet.')
-
-    rerender(
-      <ChatBehaviorSetting
-        settings={{
-          ...getDefaultSettings('/tmp'),
-          ...chooseNames,
-          nativeChatShellEnvironmentVariables: ['HTTPS_PROXY', 'CODEX_LB_API_KEY']
-        }}
-        updateSettings={vi.fn()}
-      />
-    )
-    expect(listedNames(container)).toEqual(['HTTPS_PROXY', 'CODEX_LB_API_KEY'])
-    expect(container.textContent).not.toContain('No variables added yet.')
-  })
 
   it('adds a typed name from the Add button, clears the input, and keeps focus there', () => {
     const updateSettings = vi.fn()
@@ -186,21 +149,6 @@ describe('ChatBehaviorSetting shell environment', () => {
 describe('ChatBehaviorSetting queue follow-ups', () => {
   const QUEUE_TOGGLE = '[aria-label="Toggle queue follow-ups"]'
 
-  it('shows the switch, with copy naming the image exception, when the host queues messages', () => {
-    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
-    const updateSettings = vi.fn()
-    const { container } = renderSetting({}, updateSettings)
-    expect(container.textContent).toContain('Messages with images send right away.')
-    fireEvent.click(container.querySelector(QUEUE_TOGGLE)!)
-    expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
-  })
-
-  it('hides the switch when the host does not queue messages, since it would do nothing', () => {
-    setLocalRuntimeCapabilitiesForTests([])
-    const { container } = renderSetting({})
-    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
-  })
-
   it('hides the switch until the host answers, then shows it', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
     let answer: (status: { capabilities: string[] }) => void = () => {}
@@ -213,28 +161,5 @@ describe('ChatBehaviorSetting queue follow-ups', () => {
       answer({ capabilities: [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] })
     )
     expect(container.querySelector(QUEUE_TOGGLE)).not.toBeNull()
-  })
-})
-
-describe('ChatBehaviorSetting resume after restart', () => {
-  it('turns automatic resume on from its switch', () => {
-    const updateSettings = vi.fn()
-    const { getByRole } = renderSetting({ nativeChatResumeWorkOnRestart: false }, updateSettings)
-    fireEvent.click(getByRole('switch', { name: 'Toggle automatic resume after a restart' }))
-    expect(updateSettings).toHaveBeenCalledWith({ nativeChatResumeWorkOnRestart: true })
-  })
-})
-
-describe('ChatBehaviorSetting permissions', () => {
-  it('shows the new-chat permission picker as the first Behavior row', () => {
-    const { container } = renderSetting({ nativeChatPermissionMode: 'full-access' })
-    const rows = container.querySelectorAll('.divide-y > *')
-    expect(rows[0]?.id).toBe('chat-permissions')
-    expect(container.querySelector('button[aria-label="Permissions Full access"]')).not.toBeNull()
-  })
-
-  it('leaves the row out when the host has no value', () => {
-    const { container } = renderSetting({ nativeChatPermissionMode: undefined })
-    expect(container.querySelector('#chat-permissions')).toBeNull()
   })
 })

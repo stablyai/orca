@@ -46,7 +46,11 @@ export async function getRuntimeGitBranchCompare(
   return callRuntimeRpc<GitBranchCompareResult>(
     target,
     'git.branchCompare',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), baseRef, admissionTier },
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      baseRef,
+      admissionTier
+    },
     { timeoutMs: 15_000 }
   )
 }

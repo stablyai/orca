@@ -10,6 +10,7 @@ import {
 import {
   cancelTerminalLivePendingFlush,
   createTerminalLivePendingFlushState,
+  queueTerminalLiveControlSend,
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
@@ -37,10 +38,12 @@ type TerminalLivePendingInputFlush = {
     composing?: boolean
   ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
+  readonly endLiveInputSessionThenSend: (handle: string, bytes: string) => Promise<boolean>
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
+  readonly queueLiveInputControl: (handle: string, bytes: string) => Promise<boolean>
   readonly sentLiveInputTextRef: RefObject<string>
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
@@ -101,9 +104,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
           activeSessionTabTypeRef.current !== 'terminal') ||
         !liveInputTerminalHandlesRef.current.has(handle)
       ) {
-        // Why: a stale handle must not keep local mirror state alive — the next
-        // active terminal would inherit wrong erase counts. A null tab type is
-        // "unknown" during tab-list lag, not "left the terminal", so it must not trip.
+        // Stale handles must drop mirror erase counts, but null tab type during list lag does not prove departure.
         resetMirrorState()
         return false
       }
@@ -116,12 +117,14 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       heldLiveInputTextRef.current = step.heldText
       liveInputComposingRef.current = composing
       pendingLiveInputHandleRef.current =
-        step.heldText.length > 0 || step.nextSentText.length > 0 ? handle : null
+        step.heldText.length > 0 ||
+        step.nextSentText.length > 0 ||
+        pendingLiveInputFlushRef.current.current
+          ? handle
+          : null
 
       clearHeldCommitTimer()
-      // Why: text the platform positively marked as preedit is not text yet, so
-      // no idle timer may commit it. Only an unreported hold is a guess that has
-      // to settle on its own.
+      // Reported preedit must never idle-commit; only unreported heuristic holds may settle on a timer.
       if (step.heldText.length > 0 && composing === undefined) {
         heldCommitTimerRef.current = setTimeout(() => {
           heldCommitTimerRef.current = null
@@ -151,8 +154,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       waitForPendingLiveInputFlush
     ]
   )
-  // Why: assigning during render is not replay-safe. The only read is inside a
-  // held-commit timer, which fires long after commit, so an effect is soon enough.
+  // Commit the timer’s input ref in an effect; render writes would leak discarded work.
   useEffect(() => {
     runMirrorStepRef.current = runMirrorStep
   }, [runMirrorStep])
@@ -180,12 +182,63 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
           ? await runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
           : await waitForPendingLiveInputFlush()
 
-      // Why: an explicit flush ends the field's editing session; the echoed PTY
-      // text stays, so local mirror state must restart from empty.
+      // Flush ends the field session while retaining PTY echo, so local mirror state restarts empty.
       clearPendingLiveInputCommit()
       return result
     },
     [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
+  )
+
+  // Queue at key time; waiting for the drain would let text typed meanwhile go first.
+  const queueLiveInputControl = useCallback(
+    (handle: string, bytes: string): Promise<boolean> => {
+      // Own the queued bytes so a terminal switch retires them even with an empty field.
+      pendingLiveInputHandleRef.current = handle
+      return queueTerminalLiveControlSend(
+        pendingLiveInputFlushRef.current,
+        handle,
+        bytes,
+        sendQueuedMirrorPayload
+      )
+    },
+    [sendQueuedMirrorPayload]
+  )
+
+  // Queue held text and the control synchronously so the next keystroke follows them.
+  const endLiveInputSessionThenSend = useCallback(
+    (handle: string, bytes: string): Promise<boolean> => {
+      const pendingHandle = pendingLiveInputHandleRef.current
+      const flushState = pendingLiveInputFlushRef.current
+      if (pendingHandle && pendingHandle !== handle) {
+        // Never drain another terminal’s queued deltas into the current one.
+        cancelTerminalLivePendingFlush(flushState)
+      } else if (pendingHandle === handle && heldLiveInputTextRef.current.length > 0) {
+        const sentText = sentLiveInputTextRef.current
+        const payload = buildTerminalLiveMirrorPayload(
+          computeTerminalLiveMirrorStep(sentText, sentText + heldLiveInputTextRef.current, {
+            commitHeld: true
+          })
+        )
+        if (payload.length > 0) {
+          void queueTerminalLiveMirrorSend(flushState, handle, payload, sendQueuedMirrorPayload)
+        }
+      }
+      const sent = queueLiveInputControl(handle, bytes)
+      clearHeldCommitTimer()
+      heldLiveInputTextRef.current = ''
+      liveInputComposingRef.current = undefined
+      sentLiveInputTextRef.current = ''
+      setLiveInputCapture('')
+      writeTerminalLiveInputText(liveInputRef, '')
+      return sent
+    },
+    [
+      clearHeldCommitTimer,
+      liveInputRef,
+      queueLiveInputControl,
+      sendQueuedMirrorPayload,
+      setLiveInputCapture
+    ]
   )
 
   useEffect(() => {
@@ -205,10 +258,12 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   return {
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
+    endLiveInputSessionThenSend,
     flushPendingLiveInputText,
     heldLiveInputTextRef,
     liveInputComposingRef,
     pendingLiveInputHandleRef,
+    queueLiveInputControl,
     sentLiveInputTextRef,
     waitForPendingLiveInputFlush
   }

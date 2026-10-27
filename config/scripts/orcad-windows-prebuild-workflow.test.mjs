@@ -150,6 +150,17 @@ describe('Windows server prebuild cache workflow', () => {
     expect(actionSteps.some((step) => step.uses === 'actions/cache/save@v5')).toBe(false)
     expect(build.if).toBeUndefined()
     expect(build['continue-on-error']).toBeUndefined()
+    for (const command of [
+      'pnpm build:orcad',
+      'pnpm test:node-server --artifact ${{ runner.os',
+      'node out/orcad/orcad.js --orcad-smoke-load-check'
+    ]) {
+      const gate = steps.find((step) => {
+        const firstLine = step.run?.split('\n')[0]
+        return firstLine === command || firstLine?.startsWith(`${command} `)
+      })
+      expect(gate, command).toBeDefined()
+    }
     for (const gate of steps.filter((step) =>
       /require-slots|--smoke|pnpm build:orcad$|test:node-server|--orcad-smoke-load-check/.test(
         step.run ?? ''
@@ -426,3 +437,20 @@ describe.skipIf(process.platform === 'win32')('Windows prebuild Bash fallback', 
     expect(commands.at(-1)).toBe('pnpm build:orcad-prebuilds')
   })
 })
+
+it.each(['X64', 'ARM64'])(
+  'reuses exact native slots in fast %s qualification but saves only after success',
+  (arch) => {
+    const ctx = context('Windows', arch, 'workflow_dispatch', 'refs/heads/feature', true)
+    ctx.inputs.fast_runners = true
+    ctx.inputs.ref = 'a'.repeat(40)
+    expect(evaluate(identity.if, actionContext(ctx))).toBe(true)
+    expect(evaluate(restore.if, actionContext(ctx))).toBe(true)
+    expect(evaluate(save.if, ctx)).toBe(true)
+    ctx.success = () => false
+    expect(evaluate(save.if, ctx)).toBe(false)
+    ctx.success = () => true
+    ctx.github.event_name = 'pull_request'
+    expect(evaluate(save.if, ctx)).toBe(false)
+  }
+)

@@ -127,8 +127,7 @@ export function useNativeChatComposerPaste({
 
   const handlePaste = useCallback(
     (event: ClipboardEventLike) => {
-      // Dedupe: the pane-level capture listener runs first and preventDefaults
-      // images, so the textarea's bubble-phase onPaste must not attach again.
+      // Pane capture claims image pastes first; bubble handlers must not attach them twice.
       if (event.defaultPrevented) {
         return
       }
@@ -150,9 +149,7 @@ export function useNativeChatComposerPaste({
         copiesFiles && isMacPlatform() && clipboardEventImageFile(event)
           ? resolveAttachmentOwner()
           : null
-      // This event hides Finder's file names, so the native clipboard tells a file copy from a
-      // screenshot's picture. One chip per file holds Send meanwhile, and whichever wins settles
-      // those same chips, so removing one cancels it and an unmount still finishes into the draft.
+      // Finder events may hide file names; reserve chips before native clipboard reads so all outcomes settle the same operations across removals/unmounts.
       if (macOwner && ownerAcceptsClipboardImage(macOwner)) {
         const chips = startClipboardCandidateChips(macOwner, copiedFilePaths)
         const [primary, ...extras] = chips.reserved
@@ -205,11 +202,10 @@ export function useNativeChatComposerPaste({
         return
       }
       if (owner.kind === 'not-ready') {
-        setNotice(nativeChatWorktreeNotReadyNotice())
+        setNotice(owner.notice ?? nativeChatWorktreeNotReadyNotice())
         return
       }
-      // Why: snapshot the caret before the async temp-file round-trip — `caret`
-      // state can move (further typing/selection) while the await is in flight.
+      // Capture the caret before async saving; typing/selection can move it during the await.
       const caretAtPaste = caret
       // Wait for server acceptance before minting a preview; the operation is visible from the start.
       const awaitServer = Boolean(text) && owner.kind === 'runtime-session'
@@ -265,7 +261,6 @@ export function useNativeChatComposerPaste({
           return null
         }
       )
-      // A file manager's copy pastes the files themselves, exactly as dropping them does.
       if (read && read.copiedFilePaths.length > 0) {
         if (canPaste()) {
           attachCopiedFiles(read.copiedFilePaths, { focus: false })
@@ -285,7 +280,7 @@ export function useNativeChatComposerPaste({
           setNotice(
             owner.kind === 'remote'
               ? nativeChatLocalAttachmentUnsupportedNotice()
-              : nativeChatWorktreeNotReadyNotice()
+              : (owner.notice ?? nativeChatWorktreeNotReadyNotice())
           )
         }
         return

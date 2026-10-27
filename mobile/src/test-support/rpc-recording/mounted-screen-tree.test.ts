@@ -1,12 +1,7 @@
 import { resolve } from 'node:path'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
-import {
-  hookScreenMount,
-  projectMountedScreen,
-  renderedElementProps,
-  screenMount
-} from './mounted-screen-tree'
+import { hookScreenMount, projectMountedScreen, screenMount } from './mounted-screen-tree'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { runRecording } from './run-recording'
 import { readScenarios } from './scenario-input'
@@ -22,7 +17,6 @@ function Broken(): never {
   throw new Error('a reply took the screen down')
 }
 
-/** Collects what an adapter would have handed the recorder, so a crash effect is observable here. */
 function effectSink(): {
   calls: { name: string; value: unknown }[]
   effect: (name: string, value: unknown) => void
@@ -43,47 +37,13 @@ describe('a mounted screen', () => {
     })
   })
 
-  it('projects the elements, copy and labels of what rendered', () => {
-    const screen = screenMount(
-      () =>
-        createElement(
-          'View',
-          null,
-          createElement('Text', { accessibilityLabel: 'title' }, 'Files'),
-          createElement('Text', null, 'orca-files')
-        ),
-      effectSink().effect
-    )
-    screen.mount()
-    expect(projectMountedScreen(screen)).toEqual({
-      elements: { View: 1, Text: 2 },
-      text: ['Files', 'orca-files'],
-      labels: ['title'],
-      crash: null
-    })
-  })
-
-  it('reads the props an inert element was handed, which is all a list ever renders', () => {
-    const screen = screenMount(
-      () => createElement('View', null, createElement('FlatList', { data: [{ id: 'row-1' }] })),
-      effectSink().effect
-    )
-    screen.mount()
-    expect(renderedElementProps(screen.tree(), 'FlatList')).toEqual([{ data: [{ id: 'row-1' }] }])
-    expect(renderedElementProps(screen.tree(), 'SectionList')).toEqual([])
-  })
-
-  /**
-   * A hook mount projects the hook's own value, never a crash, so the boundary reporting through the
-   * effect sink is the only thing that puts a crash the adapter ignores into a golden.
-   */
+  // Hook projections omit crashes; the effect sink must record them independently.
   it('reports a crash through the effect sink with no adapter cooperation', () => {
     const sink = effectSink()
     let renders = 0
     const screen = hookScreenMount(() => {
       renders++
-      // From the second render on, not only on it: React retries a failed concurrent render
-      // synchronously, and a hook that recovers on the retry never reaches the boundary.
+      // Keep throwing on retries too; React’s synchronous retry would otherwise recover before the boundary.
       if (renders >= 2) {
         throw new Error('the second render threw')
       }
@@ -96,11 +56,7 @@ describe('a mounted screen', () => {
     ])
   })
 
-  /**
-   * The screen-mount capability end to end: the real panel, over the real host-client context, over
-   * the scripted socket. Both worktree values on the wire are the adapter's declared prop, and the
-   * fallback is reached only because the first request was refused.
-   */
+  // Drive the real panel/context/socket so declared props reach wire params and refusal triggers fallback.
   it('sends what the screen sends, with no substitute shaping a param', async () => {
     const scenario = manifest.find(
       (candidate) => candidate.id === 'files-explorer-legacy-fallback'

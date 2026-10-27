@@ -8,7 +8,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import {
@@ -25,6 +25,8 @@ export type OrcadMigrationSourceAutomationInspection = {
   automationRuns: AutomationRun[]
   blockedAutomationCount: number
   blockedRunCount: number
+  /** Automations held back only by a run still in flight; they move once it finishes. */
+  runningAutomationNames: string[]
 }
 
 export function collectOrcadMigrationSourceAutomationState(
@@ -46,14 +48,18 @@ export function collectOrcadMigrationSourceAutomationState(
   const automationRuns: AutomationRun[] = []
   let blockedAutomationCount = 0
   let blockedRunCount = 0
+  const runningAutomationNames: string[] = []
 
   for (const [automationId, matching] of automationsById) {
     const runs = runsByAutomationId.get(automationId) ?? []
-    const eligible =
+    const transferable =
       matching.length === 1 &&
       automationCanTransfer(matching[0], scope) &&
-      runs.every((run) => runCanTransfer(run, scope))
-    if (!eligible) {
+      runs.every((run) => runContextCanTransfer(run, scope))
+    if (!transferable || !runs.every((run) => isFinalAutomationRunStatus(run.status))) {
+      if (transferable) {
+        runningAutomationNames.push(matching[0].name)
+      }
       blockedAutomationCount += matching.length
       blockedRunCount += runs.length
       continue
@@ -69,7 +75,13 @@ export function collectOrcadMigrationSourceAutomationState(
   }
   automations.sort((left, right) => compareKeys(left.id, right.id))
   automationRuns.sort((left, right) => compareKeys(left.id, right.id))
-  return { automations, automationRuns, blockedAutomationCount, blockedRunCount }
+  return {
+    automations,
+    automationRuns,
+    blockedAutomationCount,
+    blockedRunCount,
+    runningAutomationNames: runningAutomationNames.sort(compareKeys)
+  }
 }
 
 export function automationTouchesScope(
@@ -78,7 +90,7 @@ export function automationTouchesScope(
 ): boolean {
   return (
     (automation.executionTargetType === 'ssh' && automation.executionTargetId === scope.targetId) ||
-    // Why the target too: a generation is per target, so another host's can share the number.
+    // Generations are target-local; another host can share the same number.
     (scope.targetGeneration !== null &&
       automation.executionTargetId === scope.targetId &&
       automation.executionTargetGeneration === scope.targetGeneration) ||
@@ -99,7 +111,6 @@ function runTouchesScope(run: AutomationRun, scope: OrcadMigrationSourceScope): 
 
 function automationCanTransfer(automation: Automation, scope: OrcadMigrationSourceScope): boolean {
   return (
-    automation.enabled === false &&
     automation.executionTargetType === 'ssh' &&
     automation.executionTargetId === scope.targetId &&
     automation.schedulerOwner === 'ssh_bridge' &&
@@ -112,9 +123,8 @@ function automationCanTransfer(automation: Automation, scope: OrcadMigrationSour
   )
 }
 
-function runCanTransfer(run: AutomationRun, scope: OrcadMigrationSourceScope): boolean {
+function runContextCanTransfer(run: AutomationRun, scope: OrcadMigrationSourceScope): boolean {
   return (
-    isFinalAutomationRunStatus(run.status) &&
     ownerCanTransfer(run.workspaceId, scope) &&
     contextCanTransfer(run.runContext, scope) &&
     contextCanTransfer(run.sourceContext, scope)
@@ -158,6 +168,8 @@ function projectAutomationToDestination(source: Automation): Automation {
     executionTargetType: 'local',
     executionTargetId: 'local',
     schedulerOwner: 'remote_host_service',
+    // Servers accept only dormant rows; the desktop re-enables moved ones after commit.
+    enabled: false,
     workspaceId: projectOwnerToDestination(source.workspaceId)
   }
   delete destination.executionTargetGeneration

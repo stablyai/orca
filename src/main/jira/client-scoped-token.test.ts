@@ -91,7 +91,7 @@ describe('scoped Jira Cloud tokens over HTTP', () => {
     if (!client) {
       throw new Error('Expected connected Jira client')
     }
-    const cache = await import('./attachment-image-cache')
+    const cache = await import('./attachments/image-cache')
     cache.setCachedAttachmentDataUrl({
       siteId: client.site.id,
       attachmentId: 'image',

@@ -11,6 +11,10 @@ export const GROK_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     resolveGrokHomeDir()
   ],
   findTranscript: async ({ providerSessionId, store, workspaceCwd, strictErrors }) =>
-    (await findGrokChatHistoryByCwd({ sessionId: providerSessionId, cwd: workspaceCwd, sessionsDir: store })) ??
+    (await findGrokChatHistoryByCwd({
+      sessionId: providerSessionId,
+      cwd: workspaceCwd,
+      sessionsDir: store
+    })) ??
     resolveSessionFilePath('grok', providerSessionId, { grokSessionsDir: store, strictErrors })
 })

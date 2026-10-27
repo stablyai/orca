@@ -15,6 +15,7 @@ import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agen
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
+import { pickCloseIntents, type CloseIntentFields } from './workspace-session-close-intents'
 
 export { buildActiveConnectionIdsAtShutdown }
 
@@ -57,14 +58,14 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
-> & {
-  activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
-  sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
-  clientHostedBrowserCloseIntentsByEnvironment?: AppState['clientHostedBrowserCloseIntentsByEnvironment']
-  /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
-  pendingReconnectPtyIdByTabId?: AppState['pendingReconnectPtyIdByTabId']
-  deferredSshSessionIdsByTabId?: AppState['deferredSshSessionIdsByTabId']
-}
+> &
+  CloseIntentFields & {
+    activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
+    sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
+    /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
+    pendingReconnectPtyIdByTabId?: AppState['pendingReconnectPtyIdByTabId']
+    deferredSshSessionIdsByTabId?: AppState['deferredSshSessionIdsByTabId']
+  }
 
 // Why: shallow-equality gate for the debounced session writer; _exhaustive below keeps it in sync with the snapshot type.
 export const SESSION_RELEVANT_FIELDS = [
@@ -101,6 +102,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'defaultTerminalTabsAppliedByWorktreeId',
   'sleepingAgentSessionsByPaneKey',
   'clientHostedBrowserCloseIntentsByEnvironment',
+  'pairedTerminalTabCloseIntentsByEnvironment',
   'pendingReconnectPtyIdByTabId',
   'deferredSshSessionIdsByTabId'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
@@ -140,6 +142,7 @@ export function buildEditorSessionData(
       language: f.language,
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
+      ...(f.mirroredFromRuntimeSession === true ? { mirroredFromRuntimeSession: true } : {}),
       externalSshTargetId: f.externalSshTargetId,
       // Why: persist readOnly only when true; absence is the writable default on restore.
       ...(f.readOnly === true ? { readOnly: true } : {}),
@@ -157,10 +160,7 @@ export function buildEditorSessionData(
 
   const activeFileEntries: [string, string][] = []
   for (const [worktreeId, fileId] of Object.entries(activeFileIdByWorktree)) {
-    if (!fileId) {
-      continue
-    }
-    if (editFileIdsByWorktree[worktreeId]?.has(fileId)) {
+    if (fileId && editFileIdsByWorktree[worktreeId]?.has(fileId)) {
       activeFileEntries.push([worktreeId, fileId])
     }
   }
@@ -238,12 +238,7 @@ export function buildTerminalSessionData(
 
   // Why: relay reconnect keeps lastKnown but clears tab.ptyId; the !tab.ptyId guard excludes slept tabs (which keep ptyId as a wake hint).
   const lastKnown = snapshot.lastKnownRelayPtyIdByTabId
-  // Why the two reconnect maps (#17743): hydration nulls tab.ptyId, empties ptyIdsByTabId, and
-  // never restores lastKnown, so on a fresh process they are the ONLY surviving handle for a
-  // relay-backed tab between restore and rebind. Persisting without them republishes the nulled
-  // row over the id the file (and the relay snapshot) still held, which is the client's own
-  // bookkeeping being read as evidence the remote PTY is gone. Both already count as live
-  // ownership for the orphan sweep (terminal-orphan-helpers) and for retirement planning.
+  // During fresh hydration reconnect maps alone retain relay handles after live/tab bindings clear (#17743); omitting them republishes temporary absence over surviving sessions.
   const pendingReconnect = snapshot.pendingReconnectPtyIdByTabId ?? {}
   const deferredSshSessions = snapshot.deferredSshSessionIdsByTabId ?? {}
   const restoredSessionId = (tabId: string): string | undefined =>
@@ -262,8 +257,7 @@ export function buildTerminalSessionData(
   )
   const repoById = new Map(snapshot.repos.map((repo) => [repo.id, repo]))
 
-  // Why: derive here to avoid a fragile sync IPC round-trip during beforeunload (Chromium can drop it under shutdown pressure).
-  // Why: pre-indexed above so large workspaces don't rescan every repo/worktree per terminal tab while the renderer is quitting.
+  // Derive reconnect targets locally with preindexed ownership; fragile synchronous IPC can drop under shutdown pressure, while per-tab catalog rescans delay quit.
   const remoteSessionIdsByTabId: Record<string, string> = {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const worktree = worktreeById.get(worktreeId)
@@ -338,10 +332,7 @@ export function buildWorkspaceSessionPayload(
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined,
     ...buildSleepingAgentSessionData(snapshot),
-    // Why unconditional rather than omit-when-empty: a full write replaces the persisted object,
-    // so an emptied map has to be written as empty or the last replay never sticks.
-    clientHostedBrowserCloseIntentsByEnvironment:
-      snapshot.clientHostedBrowserCloseIntentsByEnvironment
+    ...pickCloseIntents(snapshot)
   }
 
   return pruneLocalTerminalScrollbackBuffers(payload, snapshot.repos)

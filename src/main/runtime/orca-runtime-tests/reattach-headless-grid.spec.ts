@@ -4,7 +4,7 @@ import { createRuntime, syncSinglePty } from '../orca-runtime-test-fixtures.spec
 describe('headless model grid after a reattach', () => {
   it('reflows a model that live bytes created at the 80x24 default onto the PTY grid', async () => {
     const runtime = createRuntime()
-    // No controller size: mirrors a reattach whose real grid main only learns from the reply.
+    // Model a reattach whose real grid is learned only from the reply.
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -38,8 +38,7 @@ describe('headless model grid after a reattach', () => {
     runtime.reflowHeadlessTerminalToPtyGrid('pty-1', 211, 57)
     runtime.onPtyData('pty-1', 'hello\r\n', 100)
 
-    // Why it matters: commit reflows every reattach, and pre-creating here would defeat the
-    // renderer-authority gate that deliberately leaves the model unseeded.
+    // Pre-creating the model would bypass the renderer-authority gate.
     await expect(
       runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 100 })
     ).resolves.toMatchObject({ cols: 80, rows: 24 })

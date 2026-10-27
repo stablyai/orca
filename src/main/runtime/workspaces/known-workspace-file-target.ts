@@ -15,6 +15,7 @@ import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import type { PtyIncarnationId } from '../../../shared/pty-incarnation'
+import { forgetPtySurface } from '../pty-recorded-surface-topology'
 
 export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeWithPersistHeadlessTerminalTitle {
   protected abstract listResolvedWorktrees(
@@ -79,9 +80,7 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
       ) {
         continue
       }
-      // Why: `getRepo(id)` is host-blind, so a candidate on one SSH host could be filed under
-      // another's key and then answer for a path it does not hold. Rival rows that disagree with
-      // no worktree host name no single filesystem authority, so that candidate is dropped.
+      // Host-blind repo ids can misroute SSH paths; drop candidates with no unambiguous filesystem owner.
       const routing = resolveWorktreeHostRouting(repos, worktree)
       if (routing.kind === 'ambiguous') {
         continue
@@ -126,16 +125,12 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
     listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void,
     clientNavigationId?: string
   ): () => void {
-    // Why: a notify coalesced before this subscriber existed is already folded
-    // into the initial snapshot it was just sent. Draining it here — before the
-    // listener joins — keeps that pending timer from landing as a redundant
-    // `updated` frame carrying pre-subscribe state. Mirrors the unsubscribe flush.
+    // Drain coalesced notifications before subscribing: the initial snapshot already includes them.
     this.mobileSessionTabsNotifyCoalescer.flushAll()
     const subscription = { listener, clientNavigationId }
     this.mobileSessionTabListeners.add(subscription)
     return () => {
-      // Why: flush pending coalesced notifies before dropping this listener so a
-      // subscriber closing mid-window still receives the latest settled state.
+      // Flush before removal so this listener receives the latest settled state.
       this.mobileSessionTabsNotifyCoalescer.flushAll()
       this.mobileSessionTabListeners.delete(subscription)
       if (this.mobileSessionTabListeners.size === 0) {
@@ -148,10 +143,7 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
     this.clientSessionTabSelections.forgetClient(clientNavigationId)
   }
 
-  // Why: terminal handles are normally created lazily when first referenced via
-  // RPC, but agents need their own handle at spawn time (via ORCA_TERMINAL_HANDLE
-  // env var) so they can self-identify in orchestration messages without an
-  // extra RPC round-trip. Pre-allocating by ptyId lets issueHandle reuse it.
+  // Allocate before spawn so ORCA_TERMINAL_HANDLE lets agents self-identify; lazy RPC allocation reuses it.
   preAllocateHandleForPty(ptyId: string): string {
     const existing = this.handleByPtyId.get(ptyId)
     if (existing) {
@@ -177,8 +169,7 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
     for (const handle of staleHandles) {
       merged.add(handle)
     }
-    // A PTY normally has one direct and one renderer alias. Keep a small bound
-    // in case a malformed provider emits an unbounded alias stream.
+    // Bound aliases in case a malformed provider emits an unbounded stream.
     while (merged.size > 16) {
       const oldest = merged.values().next().value
       if (typeof oldest !== 'string') {
@@ -228,8 +219,7 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
     if (changedIncarnation) {
       const priorHandle = this.handleByPtyId.get(ptyId)
       this.invalidateAllHandlesForPty(ptyId)
-      pty!.tabId = null
-      pty!.paneKey = null
+      forgetPtySurface(pty!)
       // Reusing an exported handle would make stale client metadata name the replacement process.
       if (priorHandle === trimmed) {
         return
@@ -244,8 +234,7 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
         return
       }
     }
-    // Why: after an app/runtime restart, the live PTY child still has its
-    // original ORCA_TERMINAL_HANDLE, but the runtime's in-memory map is gone.
+    // After runtime restart, surviving PTYs still carry their original exported handle.
     this.registerPreAllocatedHandleForPty(ptyId, trimmed)
   }
 }

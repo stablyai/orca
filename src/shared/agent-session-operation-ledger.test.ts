@@ -156,6 +156,7 @@ describe('retention', () => {
     const late = agentSessionOperationExpiry(NOW + 10_000, NOW)
     expect(late).toBe(agentSessionOperationExpiry(NOW + 10_000, NOW + 10_000))
     expect(late).toBeGreaterThan(agentSessionOperationExpiry(NOW, NOW))
+    expect(agentSessionOperationExpiry(NOW, NOW + 10_000)).toBe(late)
   })
 
   it('drops only rows past their own expiry', () => {

@@ -4,11 +4,11 @@ const MAX_SITES = 12
 const MAX_STACK_FRAMES = 4
 const MAX_FUNCTION_NAME_LENGTH = 48
 const MAX_FILE_NAME_LENGTH = 64
-// Why: crumb strings are cut at 240 characters; whole caller frames are dropped first, never half of one.
+// Drop whole caller frames before the breadcrumb string cap can truncate a frame.
 const MAX_STACK_TEXT_LENGTH = 225
 const BUNDLE_FILE_NAME = /^[\w.-]+\.[cm]?js$/
 const CODE_IDENTIFIER = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
-// V8's own runtime frames (no script) report fixed parenthesized labels such as "(GC)" or "(V8 API)".
+// V8 runtime frames without scripts use labels such as (GC) and (V8 API).
 const RUNTIME_LABEL = /^\([A-Za-z0-9 _-]{1,24}\)$/
 
 type CallFrame = {
@@ -25,11 +25,7 @@ type SamplingProfileNode = {
 }
 export type SamplingProfile = { head: SamplingProfileNode }
 
-/**
- * Top allocation sites by sampled live bytes, as `KB fn@file:line:col < caller@file:line:col`.
- * Only frames from the window's own bundle (`trustedScriptPrefix`) and V8 builtins keep a name;
- * every other frame becomes a fixed label, so no user-derived name, path or content can leak.
- */
+/** Retain names only for trusted bundle frames and V8 builtins; replace all others with fixed labels. */
 export function summarizeSamplingProfile(
   profile: SamplingProfile,
   trustedScriptPrefix: string | null
@@ -78,7 +74,7 @@ function joinFrames(described: string[]): string {
 function describeFrame(frame: CallFrame, trustedScriptPrefix: string | null): string {
   const { functionName, url, scriptId, lineNumber, columnNumber } = frame
   if (!url) {
-    // Why scriptId '0': eval'd code also has no URL but gets a real script id and user-derived names.
+    // URL-less eval code has real script IDs and potentially user-derived names.
     if (scriptId !== '0') {
       return '(other script)'
     }
@@ -98,7 +94,7 @@ function describeFrame(frame: CallFrame, trustedScriptPrefix: string | null): st
   ) {
     return '(other script)'
   }
-  // Why replace rather than strip: stripping characters would hide secrets from the report redactor.
+  // Replace invalid names; stripping characters could evade report redaction.
   const name =
     CODE_IDENTIFIER.test(functionName) && functionName.length <= MAX_FUNCTION_NAME_LENGTH
       ? functionName
@@ -106,7 +102,7 @@ function describeFrame(frame: CallFrame, trustedScriptPrefix: string | null): st
   return `${name}@${fileName}:${lineNumber + 1}:${columnNumber + 1}`
 }
 
-/** The bundle folder next to the window's page, e.g. `file:///…/out/renderer/assets/`; null if unknown. */
+/** Bundle assets URL beside the window's page, or null for unsupported page URLs. */
 export function trustedScriptPrefixFor(pageUrl: string): string | null {
   try {
     const prefix = new URL('assets/', pageUrl)

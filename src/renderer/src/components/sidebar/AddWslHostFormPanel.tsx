@@ -93,7 +93,7 @@ export function AddWslHostFormPanel({
         </div>
         <Select
           value={selectedDistro}
-          // Why: Radix reports '' when its hidden native select resets; that is not a user choice.
+          // Radix resets its hidden native select to empty; ignore this non-user choice.
           onValueChange={(name) => name && onSelectDistro(name)}
           disabled={adding || loading || serverFilesMissing}
         >

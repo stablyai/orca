@@ -1,22 +1,10 @@
-// What this window asked main to do to a tab's panes, in a layout-owner build: main's frames say
-// which panes a tab has, these say what the window wants done when one appears or goes (its
-// spawn inputs, its close) and keep a tab's drawn tree while the window's own command is in
-// flight. A pane a frame adds or drops with no intent here is left to main's notice to the window.
+// Track window pane-close reason, moved-tab selection and in-flight drawn-tree holds while main owns frame structure. Unrequested drops await main’s notice; added panes mount/focus unless a local split requested retained focus.
 
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
-
-export type PaneAppearIntent = {
-  tabId: string
-  cwd?: string
-  cwdPromise?: Promise<string>
-  telemetry: { source: TerminalPaneSplitSource; direction: 'vertical' | 'horizontal' }
-}
 
 /** Intents outlive their frame only when a tab never mounts again; keep the newest few. */
 const MAX_INTENTS = 64
 
-const appearing = new Map<string, PaneAppearIntent>()
 /** 'user': the user's close, with its status and launch clean-up. 'exit': its terminal ended. */
 export type PaneCloseKind = 'user' | 'exit'
 
@@ -30,24 +18,6 @@ function remember<T>(map: Map<string, T>, key: string, value: T): void {
   }
 }
 
-export function expectPaneToAppear(leafId: string, intent: PaneAppearIntent): () => void {
-  remember(appearing, leafId, intent)
-  return () => {
-    if (appearing.get(leafId) === intent) {
-      appearing.delete(leafId)
-    }
-  }
-}
-
-export function takePaneAppearIntent(tabId: string, leafId: string): PaneAppearIntent | null {
-  const intent = appearing.get(leafId)
-  if (intent?.tabId !== tabId) {
-    return null
-  }
-  appearing.delete(leafId)
-  return intent
-}
-
 export function expectPaneToClose(tabId: string, leafId: string, kind: PaneCloseKind): () => void {
   const intent = { tabId, kind }
   remember(closing, leafId, intent)
@@ -56,6 +26,26 @@ export function expectPaneToClose(tabId: string, leafId: string, kind: PaneClose
       closing.delete(leafId)
     }
   }
+}
+
+const unfocused = new Map<string, string>()
+
+/** A split of the window's that leaves focus on its source pane (a tab's startup split). */
+export function expectPaneToMountUnfocused(tabId: string, leafId: string): () => void {
+  remember(unfocused, leafId, tabId)
+  return () => {
+    if (unfocused.get(leafId) === tabId) {
+      unfocused.delete(leafId)
+    }
+  }
+}
+
+export function takePaneMountUnfocused(tabId: string, leafId: string): boolean {
+  if (unfocused.get(leafId) !== tabId) {
+    return false
+  }
+  unfocused.delete(leafId)
+  return true
 }
 
 /** Of these panes, how many no close of this window's is about to take. */
@@ -90,6 +80,45 @@ export function takeTabRowFields(tabId: string): TabRowFields | null {
   const fields = rowFields.get(tabId) ?? null
   rowFields.delete(tabId)
   return fields
+}
+
+/**
+ * A tab the user moved out of `fromGroupId`, selected in the frame flush that shows it moved (L120).
+ * `selection` is the workspace's selection the move left (null until known); any other selection
+ * by then means the user chose since, and the intent is dropped.
+ */
+export type MovedTabSelection = {
+  worktreeId: string
+  tabId: string
+  fromGroupId: string
+  selection: string | null
+}
+
+const movedTabSelections = new Map<string, MovedTabSelection>()
+
+/** A newer move in the workspace replaces any older one's; the returned call drops this one. */
+export function expectMovedTabSelection(intent: MovedTabSelection): () => void {
+  for (const [tabId, other] of movedTabSelections) {
+    if (other.worktreeId === intent.worktreeId) {
+      movedTabSelections.delete(tabId)
+    }
+  }
+  remember(movedTabSelections, intent.tabId, intent)
+  return () => {
+    if (movedTabSelections.get(intent.tabId) === intent) {
+      movedTabSelections.delete(intent.tabId)
+    }
+  }
+}
+
+export function pendingMovedTabSelections(): readonly MovedTabSelection[] {
+  return [...movedTabSelections.values()]
+}
+
+export function dropMovedTabSelection(intent: MovedTabSelection): void {
+  if (movedTabSelections.get(intent.tabId) === intent) {
+    movedTabSelections.delete(intent.tabId)
+  }
 }
 
 const heldTabs = new Map<string, number>()
@@ -131,9 +160,10 @@ export function onTabPaneTreeRedraw(listener: (tabId: string) => void): () => vo
 }
 
 export function _resetLayoutOwnerPaneIntentsForTests(): void {
-  appearing.clear()
   closing.clear()
+  unfocused.clear()
   rowFields.clear()
+  movedTabSelections.clear()
   heldTabs.clear()
   redrawListeners.clear()
 }

@@ -53,8 +53,7 @@ async function main(): Promise<void> {
     spawnSubprocess: async (options) => {
       const subprocess = await createPtySubprocess(options)
       if (refuseDispose) {
-        // Why: models an access-denied/unreapable Windows PTY while keeping the
-        // real child and ConPTY handle inside this disposable fixture tree.
+        // Model an unreapable Windows PTY while retaining the real child/ConPTY inside the disposable fixture.
         subprocess.kill = () => {}
         subprocess.forceKill = () => {}
       }

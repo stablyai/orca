@@ -15,6 +15,7 @@ export type OrcaCloudAuthConfig = {
   orgEndpoint: string
   logoutEndpoint: string
   relayTokenEndpoint: string
+  connectorTokenEndpoint: string
   relayDirectorUrl: string
   clientId: string
   scope: string
@@ -25,8 +26,7 @@ const PRODUCTION_API_BASE_URL = 'https://login.onorca.dev'
 const PRODUCTION_CLIENT_ID = 'orca-desktop'
 const PRODUCTION_RELAY_DIRECTOR_URL = 'https://relay.onorca.dev'
 
-// Why: packaged main bundles never define NODE_ENV, so packaged-ness is the
-// only reliable production signal for gating dev-only auth escape hatches.
+// Packaged main omits NODE_ENV; use packaged status to gate development auth overrides.
 function isPackagedOrcaBuild(): boolean {
   try {
     return app?.isPackaged === true
@@ -43,14 +43,12 @@ export function getOrcaCloudAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
   packaged: boolean = isPackagedOrcaBuild()
 ): { configured: true; config: OrcaCloudAuthConfig } | { configured: false; setupMessage: string } {
-  // Why: loopback HTTP endpoints are a local-development convenience only;
-  // packaged builds must not accept plain-HTTP token endpoints via env vars.
+  // Plain HTTP token endpoints are development-only.
   const allowLoopbackHttp = !packaged
   const cleanEndpointUrl = (value: string | undefined): string | null =>
     cleanUrl(value, allowLoopbackHttp)
   const configuredApiBaseUrl = env.ORCA_CLOUD_API_URL?.trim()
-  // Why: packaged releases cannot depend on launch-time environment injection;
-  // these first-party endpoints and the public OAuth client ID are not secrets.
+  // Packaged builds need defaults; first-party endpoints and public client IDs are not secrets.
   const apiBaseUrl = configuredApiBaseUrl
     ? cleanEndpointUrl(configuredApiBaseUrl)
     : packaged
@@ -92,6 +90,9 @@ export function getOrcaCloudAuthConfig(
       relayTokenEndpoint:
         cleanEndpointUrl(env.ORCA_CLOUD_RELAY_TOKEN_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/relay-token'),
+      connectorTokenEndpoint:
+        cleanEndpointUrl(env.ORCA_CLOUD_CONNECTOR_TOKEN_URL) ??
+        endpoint(apiBaseUrl, '/v1/desktop/auth/connector-token'),
       relayDirectorUrl:
         cleanOrigin(env.ORCA_RELAY_URL, allowLoopbackHttp) ?? PRODUCTION_RELAY_DIRECTOR_URL,
       clientId,
@@ -100,11 +101,7 @@ export function getOrcaCloudAuthConfig(
   }
 }
 
-/**
- * Where the host registers phones for background push. Deliberately outside
- * OrcaCloudAuthConfig: the push gateway authenticates with the host keypair, so an
- * accountless host reaches it on exactly the same path as a signed-in one.
- */
+/** Host-key authentication keeps phone push available without a signed-in account. */
 export function getOrcaPushGatewayUrl(
   env: NodeJS.ProcessEnv = process.env,
   packaged: boolean = isPackagedOrcaBuild()

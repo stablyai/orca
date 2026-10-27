@@ -4,7 +4,10 @@ import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compat
 import { WORKTREE_REFRESH_CONCURRENCY } from './worktrees'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
+import { makeDetectedResult, qualifyDetectedResult } from './worktrees-detected-listing-fixtures'
+import { purgeHydratedWorktrees } from './worktrees/listing/hydrated-worktree-purge'
+import { worktreeCatalogVersionKey } from './worktrees/listing/worktree-catalog-version-state'
+import { makeTab } from './store-session-test-harness'
 import { makeFolderWorkspace, makeLineage, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
@@ -13,7 +16,8 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
   runtimeEnvironmentCall,
-  runtimeEnvironmentTransportCall
+  runtimeEnvironmentTransportCall,
+  worktreeListMock
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -55,6 +59,60 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     badgeColor: '#111',
     addedAt: 0
   }
+
+  it.each(['unchanged', 'newer catalog', 'new owner', 'unloaded runtime'])(
+    'reuses startup scan evidence after session restoration: %s',
+    async (change) => {
+      const store = createTestStore()
+      const live = makeWorktree({ id: 'repoA::/a/live', repoId: 'repoA', path: '/a/live' })
+      mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+        qualifyDetectedResult(
+          args,
+          makeDetectedResult(repoA.id, [live], {
+            catalogVersion: { epoch: 'startup', sequence: 1 }
+          })
+        )
+      )
+      store.setState({
+        repos: [repoA],
+        hydrationSucceeded: false,
+        workspaceSessionReady: false
+      })
+      const results = await store.getState().fetchAllWorktrees({
+        visibilityOwnerHostId: 'local',
+        hydrationPurge: 'defer'
+      })
+      expect(store.getState().hasHydratedWorktreePurge).toBe(false)
+      store.setState({
+        hydrationSucceeded: true,
+        workspaceSessionReady: true,
+        tabsByWorktree: {
+          'repoA::/a/stale': [makeTab({ id: 'saved', worktreeId: 'repoA::/a/stale' })]
+        }
+      })
+      if (change === 'newer catalog') {
+        store.setState({
+          worktreeCatalogVersionByRepoHost: {
+            [worktreeCatalogVersionKey(repoA.id, 'local')]: { epoch: 'startup', sequence: 2 }
+          }
+        })
+      } else if (change === 'new owner') {
+        store.setState({ repos: [repoA, repoB] })
+      } else if (change === 'unloaded runtime') {
+        store.setState({
+          restoredRuntimeHostIdByWorkspaceSessionKey: {
+            'remote-repo::/remote/saved': 'runtime:offline'
+          }
+        })
+      }
+      purgeHydratedWorktrees(store.setState, store.getState, results)
+      expect(store.getState().hasHydratedWorktreePurge).toBe(change === 'unchanged')
+      expect(store.getState().tabsByWorktree['repoA::/a/stale'] === undefined).toBe(
+        change === 'unchanged'
+      )
+      expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it.each([false, true])(
     'hydrates connecting SSH worktrees with hydration purge completed=%s',
@@ -103,7 +161,12 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       await store.getState().fetchAllWorktrees()
 
       expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
-        { ...queued, hostId: 'ssh:ssh-1' }
+        {
+          ...queued,
+          hostId: 'ssh:ssh-1',
+          projectId: 'repo:repo-ssh',
+          projectHostSetupId: 'repo-ssh'
+        }
       ])
       expect(listKnownForExecutionHostMock).toHaveBeenCalledWith({
         repoId: sshRepo.id,
@@ -177,7 +240,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
 
     // repoA succeeds, repoB throws; a stale tabsByWorktree entry must NOT be purged while any repo fetch is degraded.
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) => {
       if (repoId === 'repoA') {
         return [wtA]
       }
@@ -202,7 +265,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     })
 
     // After repoB recovers, the deferred purge fires for genuinely stale ids.
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) => {
       if (repoId === 'repoA') {
         return [wtA]
       }
@@ -221,7 +284,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const store = createTestStore()
 
     // Empty valid-id union (both repos newly-cloned, empty) isn't authoritative — defer instead of wiping tabsByWorktree.
-    mockApi.worktrees.list.mockResolvedValue([])
+    worktreeListMock.mockResolvedValue([])
 
     store.setState({
       repos: [repoA, repoB],
@@ -245,7 +308,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const folderWorkspace = makeFolderWorkspace({ id: 'folder-keep' })
     const folderKey = folderWorkspaceKey(folderWorkspace.id)
 
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) =>
       repoId === 'repoA' ? [wtA] : [wtB]
     )
 
@@ -269,7 +332,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     await store.getState().fetchAllWorktrees()
 
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
-    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(2)
+    expect(worktreeListMock).toHaveBeenCalledTimes(2)
     expect(store.getState().tabsByWorktree).toEqual({
       'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
       'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }],
@@ -291,7 +354,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
     await store.getState().fetchAllWorktrees()
 
-    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(4)
+    expect(worktreeListMock).toHaveBeenCalledTimes(4)
     expect(store.getState().tabsByWorktree['repoA::/a/new-zombie']).toBeDefined()
   })
 
@@ -300,7 +363,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
     const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
 
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) =>
       repoId === 'repoA' ? [wtA] : [wtB]
     )
 
@@ -332,7 +395,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
     const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
 
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) =>
       repoId === 'repoA' ? [wtA] : [wtB]
     )
 
@@ -374,7 +437,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
 
     // repoB reports zero worktrees this round (host briefly empty), repoA fine.
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) =>
       repoId === 'repoA' ? [wtA] : []
     )
 
@@ -476,9 +539,11 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(refreshed).toHaveLength(2)
     expect(refreshed).toEqual(
       expect.arrayContaining([
-        localWorktree,
+        { ...localWorktree, projectId: 'repo:same-repo', projectHostSetupId: 'same-repo' },
         {
           ...refreshedRemoteWorktree,
+          projectId: 'repo:same-repo',
+          projectHostSetupId: 'same-repo',
           hostId: 'runtime:env-1',
           runtimeOwnerEnvironmentId: 'env-1'
         }
@@ -517,7 +582,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     let activeScans = 0
     let maxActiveScans = 0
 
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) => {
       activeScans += 1
       maxActiveScans = Math.max(maxActiveScans, activeScans)
       await new Promise((resolve) => setTimeout(resolve, 5))
@@ -530,7 +595,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     await store.getState().fetchAllWorktrees()
 
     expect(maxActiveScans).toBeLessThanOrEqual(WORKTREE_REFRESH_CONCURRENCY)
-    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
+    expect(worktreeListMock).toHaveBeenCalledTimes(repos.length)
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   })
 
@@ -546,7 +611,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     let activeScans = 0
     let maxActiveScans = 0
 
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) => {
       activeScans += 1
       maxActiveScans = Math.max(maxActiveScans, activeScans)
       await new Promise((resolve) => setTimeout(resolve, 5))
@@ -562,7 +627,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     await store.getState().fetchAllWorktrees()
 
     expect(maxActiveScans).toBeLessThanOrEqual(WORKTREE_REFRESH_CONCURRENCY)
-    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
+    expect(worktreeListMock).toHaveBeenCalledTimes(repos.length)
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   })
 
@@ -676,7 +741,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       mode: 'edit' as const
     }
 
-    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+    worktreeListMock.mockImplementation(async ({ repoId }: { repoId: string }) =>
       repoId === 'repoA' ? [wtA] : [wtB]
     )
 

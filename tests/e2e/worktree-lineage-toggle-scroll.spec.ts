@@ -1,5 +1,6 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'
+import { addRepoWithWorkspaces, writeWorkspaceMeta } from './helpers/repo-with-workspaces'
 import { seedLineageScenario } from './worktree-lineage-state'
 import { waitForLineageScrollFixtureReady } from './worktree-lineage-scroll-readiness'
 
@@ -19,45 +20,22 @@ test('keyboard and chip preserve the scrolled parent, and unfolding opens the si
   await orcaPage.emulateMedia({ reducedMotion: 'reduce' })
   await orcaPage.setViewportSize({ width: 1200, height: 800 })
   const family = await seedLineageScenario(orcaPage)
-  await orcaPage.evaluate(async ({ parentId, childId }) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Missing store')
-    }
-    const state = store.getState()
-    const parent = Object.values(state.worktreesByRepo)
-      .flat()
-      .find((row) => row.id === parentId)
-    if (!parent) {
-      throw new Error('Missing parent')
-    }
-    const surrounding = Array.from({ length: 40 }, (_, index) => ({
-      ...parent,
-      id: `scroll-card-${index}`,
-      instanceId: `scroll-instance-${index}`,
-      displayName: `Surrounding workspace ${index}`,
-      isMainWorktree: false,
-      isPinned: false,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      sortOrder: 40 - index
-    }))
-    store.setState({
-      sortBy: 'manual',
-      worktreesByRepo: {
-        ...state.worktreesByRepo,
-        [parent.repoId]: [
-          ...state.worktreesByRepo[parent.repoId].map((row) => ({
-            ...row,
-            sortOrder: row.id === parentId ? 16.5 : row.id === childId ? 16.4 : row.sortOrder
-          })),
-          ...surrounding
-        ]
-      }
-    })
-    await store.getState().setKeybindingOverride('sidebar.childWorkspaces.toggle', ['Mod+Alt+H'])
-  }, family)
+  const surrounding = await addRepoWithWorkspaces(orcaPage, testInfo, 40)
+  const order = (worktreeId: string, rank: number, displayName?: string) => ({
+    worktreeId,
+    updates: { sortOrder: rank, manualOrder: rank, ...(displayName ? { displayName } : {}) }
+  })
+  await writeWorkspaceMeta(orcaPage, [
+    order(family.parentId, 16.5),
+    order(family.childId, 16.4),
+    order(surrounding.mainId, 0),
+    ...surrounding.ids.map((id, index) => order(id, 40 - index, `Surrounding workspace ${index}`))
+  ])
+  await orcaPage.evaluate(async () => {
+    const state = window.__store!.getState()
+    state.setSortBy('manual')
+    await state.setKeybindingOverride('sidebar.childWorkspaces.toggle', ['Mod+Alt+H'])
+  })
 
   const sidebar = orcaPage.locator('[data-worktree-sidebar]')
   const parentRow = sidebar

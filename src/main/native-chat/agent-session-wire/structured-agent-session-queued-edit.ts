@@ -1,6 +1,4 @@
-// Editing a queued card in place: Save is a compare-and-set on the card's body fingerprint, and
-// an edit lease keeps automatic delivery from sending the card while someone types. The card keeps
-// its id, position, sender and attachments; only its text changes.
+// Save compares body fingerprints without changing card identity/order/sender; edit leases block automatic delivery.
 
 import type {
   AgentSessionMutationEnvelope,
@@ -9,49 +7,63 @@ import type {
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
 } from '../../../shared/agent-session-wire'
-import { queuedMessageEditableText } from '../../../shared/queued-message-text-edit'
-import { queuedMessageTextUpdateDecision } from '../agent-session-journal/queued-message-text-update'
+import { queuedMessageEditableText } from '../../../shared/queued-message-edit'
+import {
+  queuedMessageUpdateDecision,
+  type QueuedMessageUpdate
+} from '../agent-session-journal/queued-message-update'
+import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
+import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import { mutateQueued } from './structured-agent-session-queued-mutations'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
 
-/** Save. Editing sends nothing, so it pays no send admission, like Delete. A resend under the
- *  same id simply runs again: the compare-and-set answers it from the card as it stands. */
+/** Editing sends nothing and needs no send admission; compare-and-set handles same-ID retries. */
 export function updateQueuedStructuredAgentMessage(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: {
+  params: QueuedMessageUpdate & {
     envelope: AgentSessionMutationEnvelope
-    messageId: string
-    expectedBodyFingerprint: string
-    text: string
+    /** Host-local queued-image capability. */
+    queuedImageCards?: boolean
   }
 ): Promise<AgentSessionMutationResult<AgentSessionQueuedMessageUpdateResult>> {
-  const { envelope, ...fields } = params
+  const { envelope, queuedImageCards, ...fields } = params
   const plan: MutationPlan<AgentSessionQueuedMessageUpdateResult> = {
     method: 'agentSession.queuedMessageUpdate',
     fields,
     conversationWrite: true,
     run: async (ctx) => {
       const queued = ctx.journal.queuedMessages
-      const decision = queuedMessageTextUpdateDecision(
+      const decision = queuedMessageUpdateDecision(
         queued.get(fields.messageId),
         ctx.sessionId,
-        fields
+        fields,
+        queuedImageCards !== false
       )
       if (decision.status !== 'ready') {
         return { ok: true, value: decision }
       }
-      // Editing an agent's card is still the person's action, so it may use their reserve.
+      // Personal edits may use the user’s byte reserve, even for agent-origin cards.
       const refusal = queuedMessagesPublishedBytesRefusal(
         ctx.journal,
         decision.body,
         true,
         fields.messageId
       )
-      return refusal ? { ok: false, refusal } : { ok: true, value: await queued.update(fields) }
+      if (refusal) {
+        return { ok: false, refusal }
+      }
+      try {
+        return { ok: true, value: await queued.update(fields) }
+      } catch (error) {
+        if (isAgentSessionAttachmentExpiredError(error)) {
+          return agentSessionAttachmentExpiredRefusal()
+        }
+        throw error
+      }
     },
     replay: () => null,
     rerunWhenReplayMissing: () => true
@@ -59,8 +71,7 @@ export function updateQueuedStructuredAgentMessage(
   return mutateQueued(context, caller, envelope, plan)
 }
 
-/** Acquire, renew and release an edit lease. Ephemeral: no ledger row, no agent started, and a
- *  release never opens a conversation (a closed one already dropped its leases). */
+/** Ephemeral edit lease, without ledger/startup; release never opens a closed conversation. */
 export function holdQueuedStructuredAgentMessageEdit(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -83,8 +94,7 @@ export function holdQueuedStructuredAgentMessageEdit(
     }
     const queued = session.journal.queuedMessages
     if (params.action !== 'acquire') {
-      // Holds nothing new, so nothing to publish (a lapsed lease it prunes wakes the queue itself);
-      // and a publish is idle-sweep activity, which an editor left open must not renew forever.
+      // Renewal adds no hold; avoid publication that would keep an unattended editor’s agent alive.
       return queued.editLeases.renew(key, messageId)
     }
     const row = queued.get(messageId)
@@ -97,8 +107,7 @@ export function holdQueuedStructuredAgentMessageEdit(
   })
 }
 
-/** Leases live outside the journal, so no commit announces them: publish the next card to send
- *  and wake the drain here. A failed publish is logged; the lease still stands. */
+/** Publish/wake explicitly for nonjournaled leases; publication failure cannot revoke them. */
 export function republish(
   context: StructuredAgentSessionMutationContext,
   sessionId: string,

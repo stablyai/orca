@@ -1,7 +1,4 @@
-// A Codex chat is Working while Codex still holds a send, never while Orca merely waits for a
-// delivery row: a turn that completes without taking a send (a hook blocked it) ends Working with
-// no row written, and a client already following the chat reads it from the frames it is sent.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake.
+// Exercise shipped host/journal/adapter with fake Codex: Working follows provider-held sends, including completion without delivery rows; subscribers read real frames.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,9 +6,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
@@ -278,5 +275,34 @@ describe('a Codex send whose turn completes without taking it', () => {
       expect((await rawSubmission(taken)).dispatchState).toBe('accepted')
     )
     expect(host.currentWork(SESSION)?.working()).toBe(false)
+  })
+})
+
+describe('a Codex receipt whose first save fails', () => {
+  it('saves from the second echo of the same message', async () => {
+    const sent = await send('look around')
+    await vi.waitFor(() => expect(answers).toBe(1))
+    turns.start()
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const accept = vi.spyOn(journal, 'acceptLate').mockRejectedValueOnce(new Error('disk full'))
+    const echo = {
+      threadId: THREAD,
+      turnId: turns.turnId,
+      item: { type: 'userMessage', id: 'item-user', clientId: sent, content: [] }
+    }
+
+    // Codex echoes a recorded message as its item starts and again as it completes.
+    handlers?.onNotification?.('item/started', echo)
+    await vi.waitFor(() => expect(accept).toHaveBeenCalledOnce())
+    expect((await rawSubmission(sent)).dispatchState).toBe('pending')
+    handlers?.onNotification?.('item/completed', echo)
+
+    await vi.waitFor(async () =>
+      expect(await rawSubmission(sent)).toMatchObject({
+        dispatchState: 'accepted',
+        providerItemId: expect.stringMatching(/^codex:/)
+      })
+    )
+    expect(lastPublished(sent)).toMatchObject({ dispatchState: 'accepted' })
   })
 })

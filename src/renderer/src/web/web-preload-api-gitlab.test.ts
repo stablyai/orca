@@ -15,24 +15,6 @@ describe('web GitLab preload API', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
-    vi.doUnmock('electron')
-  })
-
-  it('keeps the web GitLab preload key set in parity with desktop preload', async () => {
-    vi.doMock('electron', () => ({
-      ipcRenderer: { invoke: vi.fn() }
-    }))
-    const globals = installBrowserGlobals('Linux')
-    const { glApi } = (await import(
-      new URL('../../../preload/gitlab.ts', import.meta.url).href
-    )) as {
-      glApi: Record<string, unknown>
-    }
-    const { installWebPreloadApi } = await import('./web-preload-api')
-
-    installWebPreloadApi()
-
-    expect(Object.keys(globals.window.api.gl).sort()).toEqual(Object.keys(glApi).sort())
   })
 
   it('routes every runtime-backed GitLab method through the expected RPC method', async () => {

@@ -65,7 +65,7 @@ async function prepared() {
 }
 
 describe('WSL SQLite runtime preparation', () => {
-  it('returns immediately, coalesces distro aliases, and uses an actual guest SQLite probe', async () => {
+  it('returns immediately, coalesces distro aliases, and requests the guest SQLite probe', async () => {
     let release: (value: ReturnType<typeof success>) => void = () => {}
     mocks.run.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -128,7 +128,7 @@ describe('WSL SQLite runtime preparation', () => {
     await prepared()
   })
 
-  it('rejects a guest Node without the SyncDatabase surface and tolerates its stderr warning', async () => {
+  it('checks the generated SQLite probe against missing API and stderr warnings locally', async () => {
     await prepared()
     const probe = mocks.run.mock.calls.find(([spec]) => spec.program === 'node')?.[0]
     expect(probe?.args[0]).toBe('-e')
@@ -161,7 +161,7 @@ describe('WSL SQLite runtime preparation', () => {
     }
   })
 
-  it('falls back to the pinned Node in the runtimes/ store, verified in the guest, with literal argv', async () => {
+  it('requests pinned runtime verification and preserves literal argv', async () => {
     const expected = NODE_RUNTIME_ASSETS['linux-arm64-musl'].executableSha256
     mocks.run.mockImplementation(async (spec) => {
       if (spec.script?.startsWith('data=')) {
@@ -178,8 +178,14 @@ describe('WSL SQLite runtime preparation', () => {
           `/mnt/c/${spec.args.at(-1).includes('.tar.gz') ? 'node $literal.tar.gz' : 'reader $literal.cjs'}`
         )
       }
-      if (spec.script?.startsWith('getconf')) {
-        return success('musl libc')
+      if (
+        spec.script?.includes('getconf GNU_LIBC_VERSION') ||
+        spec.script?.includes('ldd --version')
+      ) {
+        return success('')
+      }
+      if (spec.script?.includes('/lib/ld-musl-')) {
+        return success('musl libc (aarch64)\nVersion 1.2.5')
       }
       if (spec.script?.startsWith('printf')) {
         return success('/home/ada $literal')
@@ -229,7 +235,7 @@ describe('WSL SQLite runtime preparation', () => {
       if (spec.program === 'wslpath') {
         return success('/mnt/c/reader.cjs')
       }
-      if (spec.script?.startsWith('getconf')) {
+      if (spec.script?.includes('getconf GNU_LIBC_VERSION')) {
         return success('glibc 2.31')
       }
       if (spec.script?.startsWith('printf')) {
@@ -272,7 +278,7 @@ describe('WSL SQLite runtime preparation', () => {
   })
 
   it.skipIf(process.platform === 'win32').each(['opencode', 'zcode'] as const)(
-    'prepares a %s-only distro despite unrelated OpenCode overrides',
+    'presence script finds %s-only data despite unrelated OpenCode overrides',
     async (agent) => {
       await prepared()
       const script = mocks.run.mock.calls[0]?.[0].script

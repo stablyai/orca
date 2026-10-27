@@ -13,7 +13,6 @@ import {
   SERVER_KEY,
   SSH_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
 import { loadWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
 import {
@@ -21,6 +20,7 @@ import {
   type PublishedWorkspaceLayout
 } from '../../shared/workspace-layout/workspace-layout-published'
 import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'
 const SERVER_HOST: ExecutionHostId = 'runtime:env-1'
@@ -39,17 +39,14 @@ function fakeStore(partitions: Map<ExecutionHostId, WorkspaceSessionState>) {
       onWorkspaceSessionWritten
     },
     listeners,
-    /** A save that names the partition it wrote. */
     write(hostId: ExecutionHostId, session: WorkspaceSessionState) {
       partitions.set(hostId, session)
       listeners.forEach((listener) => listener(hostId))
     },
-    /** A save that names no partition, so every partition may have changed. */
     writeUnnamed(hostId: ExecutionHostId, session: WorkspaceSessionState) {
       partitions.set(hostId, session)
       listeners.forEach((listener) => listener(null))
     },
-    /** A removed host's partition, named by the save that drops it. */
     removePartition(hostId: ExecutionHostId) {
       partitions.delete(hostId)
       listeners.forEach((listener) => listener(hostId))
@@ -57,7 +54,7 @@ function fakeStore(partitions: Map<ExecutionHostId, WorkspaceSessionState>) {
   }
 }
 
-/** Today's projection: every partition loaded with its save-and-diff report, then filtered by home. */
+/** Full uncached projection is the reference for partition-scoped updates. */
 function fullProjection(
   partitions: Map<ExecutionHostId, WorkspaceSessionState>,
   homeHostId: (key: string) => ExecutionHostId | null
@@ -85,7 +82,6 @@ function setup() {
     [FOLDER_KEY]: LOCAL_EXECUTION_HOST_ID,
     [SSH_KEY]: SSH_HOST
   }
-  /** Each terminal's live title; none until a test sets one. */
   const liveTitles = new Map<string, string>()
   const liveTitle = vi.fn((ptyId: string) => liveTitles.get(ptyId) ?? null)
   const stream = new WorkspaceLayoutStream({
@@ -97,6 +93,13 @@ function setup() {
 }
 
 const flush = () => new Promise<void>((resolve) => queueMicrotask(resolve))
+
+function subscribeEvents(stream: WorkspaceLayoutStream) {
+  const collector = collectLayoutEvents()
+  const subscription = stream.subscribe(collector.listener)
+  collector.seed(subscription.snapshot)
+  return { events: collector.events, collector, subscription }
+}
 
 describe('WorkspaceLayoutStream', () => {
   it('does nothing until someone subscribes, and stops when the last one leaves', () => {
@@ -114,14 +117,13 @@ describe('WorkspaceLayoutStream', () => {
   it('snapshots each workspace from its owning partition only', () => {
     const { stream, homes } = setup()
     const { snapshot } = stream.subscribe(() => {})
-    // Each workspace's tabs run on the partition that published it.
     const hostOf = (entry: (typeof snapshot)[number]) => entry.layout.tabs[0]?.executionHostId
     expect(snapshot.map((entry) => [entry.key, hostOf(entry)])).toEqual([
       [GIT_KEY, LOCAL_EXECUTION_HOST_ID],
       [FOLDER_KEY, LOCAL_EXECUTION_HOST_ID],
       [SSH_KEY, SSH_HOST]
     ])
-    // A copy in a partition that does not own the workspace is a stray and is not shown.
+    // A non-owning partition's stray copy must not publish.
     homes[SSH_KEY] = LOCAL_EXECUTION_HOST_ID
     const strayless = new WorkspaceLayoutStream({
       store: () => setup().store,
@@ -133,8 +135,7 @@ describe('WorkspaceLayoutStream', () => {
 
   it('publishes a workspace when a write changes it by value, and its removal', async () => {
     const { stream, write } = setup()
-    const events: WorkspaceLayoutEvent[] = []
-    stream.subscribe((event) => events.push(event))
+    const { events } = subscribeEvents(stream)
     const session = localDesktopSession()
     write(LOCAL_EXECUTION_HOST_ID, session)
     await flush()
@@ -142,7 +143,6 @@ describe('WorkspaceLayoutStream', () => {
 
     session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
     write(LOCAL_EXECUTION_HOST_ID, session)
-    // A burst of writes in one task is one projection.
     write(LOCAL_EXECUTION_HOST_ID, session)
     await flush()
     expect(events.map((event) => [event.type, event.key])).toEqual([['workspace', GIT_KEY]])
@@ -157,10 +157,24 @@ describe('WorkspaceLayoutStream', () => {
     expect(events.at(-1)).toEqual({ type: 'removed', key: FOLDER_KEY, seq: events[0]!.seq! + 1 })
   })
 
+  it("publishes nothing for a pane's grid, which is main's own record", async () => {
+    const { stream, write } = setup()
+    const { events } = subscribeEvents(stream)
+    const session = localDesktopSession()
+    const [tabId, layout] = Object.entries(session.terminalLayoutsByTabId).find(
+      ([, candidate]) => candidate.root?.type === 'leaf'
+    )!
+    const leafId = layout.root!.type === 'leaf' ? layout.root!.leafId : ''
+    layout.lastGridsByLeafId = { [leafId]: { cols: 91, rows: 33 } }
+    write(LOCAL_EXECUTION_HOST_ID, session)
+    await flush()
+    expect(session.terminalLayoutsByTabId[tabId]?.lastGridsByLeafId).toBeDefined()
+    expect(events).toEqual([])
+  })
+
   it('numbers each change frame, so a reply can name the frame holding its write', async () => {
     const { stream, write } = setup()
-    const events: WorkspaceLayoutEvent[] = []
-    const first = stream.subscribe((event) => events.push(event))
+    const { events, subscription: first } = subscribeEvents(stream)
     const session = localDesktopSession()
     write(LOCAL_EXECUTION_HOST_ID, session)
     await flush()
@@ -176,7 +190,6 @@ describe('WorkspaceLayoutStream', () => {
     await flush()
     expect(events).toHaveLength(1)
 
-    // A later subscriber starts where the stream is; positions never restart.
     first.unsubscribe()
     const second = stream.subscribe(() => {})
     expect(second.seq).toBeGreaterThanOrEqual(replySeq)
@@ -203,11 +216,10 @@ describe('WorkspaceLayoutStream', () => {
   it('keeps delivering to every listener when one throws', async () => {
     const { stream, write } = setup()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const events: WorkspaceLayoutEvent[] = []
     stream.subscribe(() => {
       throw new Error('listener failed')
     })
-    stream.subscribe((event) => events.push(event))
+    const { events } = subscribeEvents(stream)
     const session = localDesktopSession()
     session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
     write(LOCAL_EXECUTION_HOST_ID, session)
@@ -220,7 +232,7 @@ describe('WorkspaceLayoutStream', () => {
   })
 
   it('keeps every invented id when an earlier workspace or tab goes away', async () => {
-    // Rows a headless host saved with no tab bar or pane layout: their groups and panes are invented.
+    // Headless rows without tab-bar or pane layout require synthesized groups and panes.
     const rowsOnly = (keys: string[], tabs: string[]): WorkspaceSessionState => {
       const session = emptySession()
       for (const key of keys) {
@@ -244,11 +256,9 @@ describe('WorkspaceLayoutStream', () => {
       homeHostId: () => LOCAL_EXECUTION_HOST_ID,
       liveTitle: () => null
     })
-    const events: WorkspaceLayoutEvent[] = []
+    const { events, subscription } = subscribeEvents(stream)
     const before = new Map(
-      stream
-        .subscribe((event) => events.push(event))
-        .snapshot.map((entry) => [entry.key, JSON.stringify(entry.layout)])
+      subscription.snapshot.map((entry) => [entry.key, JSON.stringify(entry.layout)])
     )
     fake.write(LOCAL_EXECUTION_HOST_ID, rowsOnly(keys.slice(1), ['t1', 't2']))
     await flush()
@@ -286,20 +296,11 @@ describe('WorkspaceLayoutStream', () => {
   it('publishes what a full re-projection with the load report would, write after write', async () => {
     const { stream, write, writeUnnamed, removePartition, homes, partitions } = setup()
     const homeHostId = (key: string) => homes[key] ?? null
-    let cache = new Map<string, PublishedWorkspaceLayout>()
-    const { snapshot } = stream.subscribe((event) => {
-      if (event.type === 'removed') {
-        cache.delete(event.key)
-      } else {
-        cache.set(event.key, event.layout)
-      }
-    })
-    cache = new Map(snapshot.map((entry) => [entry.key, entry.layout]))
+    const { collector } = subscribeEvents(stream)
     const expectFullProjection = async (): Promise<void> => {
       await flush()
       const expected = fullProjection(partitions, homeHostId)
-      expect(Object.fromEntries(cache)).toEqual(Object.fromEntries(expected))
-      // A late subscriber's snapshot keeps today's order too.
+      expect(Object.fromEntries(collector.layouts)).toEqual(Object.fromEntries(expected))
       const late = stream.subscribe(() => {})
       expect(late.snapshot.map((entry) => [entry.key, entry.layout])).toEqual(expected)
       late.unsubscribe()
@@ -334,8 +335,7 @@ describe('WorkspaceLayoutStream', () => {
   it('re-projects every partition after a failed projection', async () => {
     const { stream, store, write } = setup()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const events: WorkspaceLayoutEvent[] = []
-    stream.subscribe((event) => events.push(event))
+    const { events } = subscribeEvents(stream)
     store.getWorkspaceSession.mockImplementationOnce(() => {
       throw new Error('read failed')
     })
@@ -344,7 +344,7 @@ describe('WorkspaceLayoutStream', () => {
     write(LOCAL_EXECUTION_HOST_ID, local)
     await flush()
     expect(events).toEqual([])
-    // The local edit the failed projection missed is published by a write elsewhere.
+    // A later write elsewhere must recover the local edit missed by the failed projection.
     write(SSH_HOST, relaySshSession('target-1'))
     await flush()
     expect(events.map((event) => [event.type, event.key])).toEqual([['workspace', GIT_KEY]])
@@ -372,7 +372,6 @@ describe('WorkspaceLayoutStream', () => {
       const byPty = new Map(panesOf(git).map((pane) => [pane.ptyId, pane.liveTitle]))
       expect(byPty.get(first)).toBe('claude: working')
       expect(byPty.get(second)).toBe('vim')
-      // Removing the live titles leaves exactly the layout published without them.
       const stripped = titled.map((entry) => ({
         key: entry.key,
         layout: JSON.parse(
@@ -384,8 +383,10 @@ describe('WorkspaceLayoutStream', () => {
 
     it('publishes a title change without reading the Store, one frame per burst', async () => {
       const { stream, store, liveTitles, write } = setup()
-      const events: WorkspaceLayoutEvent[] = []
-      const { snapshot } = stream.subscribe((event) => events.push(event))
+      const {
+        events,
+        subscription: { snapshot }
+      } = subscribeEvents(stream)
       const [ptyId] = ptyIdsOf(snapshot.find((entry) => entry.key === GIT_KEY)!.layout)
       store.getWorkspaceSession.mockClear()
       for (let frame = 0; frame < 50; frame++) {
@@ -414,7 +415,6 @@ describe('WorkspaceLayoutStream', () => {
         rewritten.type === 'workspace' && panesOf(rewritten.layout).find((p) => p.ptyId === ptyId)
       ).toMatchObject({ liveTitle: 'build 49' })
 
-      // A title that goes away is dropped from the pane.
       liveTitles.delete(ptyId)
       stream.markLiveTitlesDirty()
       await flush()

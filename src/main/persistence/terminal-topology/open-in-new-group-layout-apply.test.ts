@@ -14,7 +14,7 @@ import {
 } from './terminal-topology-profile-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -72,7 +72,6 @@ describe.each([
         split: { besideGroupId: 'terminal-split', direction: 'down' }
       })
     ).resolves.toMatchObject({ ok: true, result: { tabId: 'editor-tab' } })
-    // Beside a split main lacks: refused, nothing written.
     await expect(
       store.applyLayoutCommand({
         type: 'openEditorTab',

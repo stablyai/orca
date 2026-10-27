@@ -17,7 +17,7 @@ export function appendDaemonStreamData(
   options: DaemonStreamEnqueueOptions
 ): number {
   const last = batch.queue.at(-1)
-  // Why: control and transformed spans mark indivisible source-stream positions.
+  // Control and transformed spans mark indivisible source-stream positions.
   if (
     last?.sessionId === sessionId &&
     !last.control &&

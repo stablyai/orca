@@ -30,17 +30,12 @@ describe('CliInstaller', () => {
     vi.restoreAllMocks()
   })
 
-  // Why: on Apple Silicon, /usr/local/bin does not exist by default. The installer
-  // must fall back to ~/.local/bin (user-writable, no sudo) rather than failing
-  // silently when the parent directory is absent.
   it.skipIf(process.platform === 'win32')(
     'falls back to ~/.local/bin/orca on macOS when /usr/local/bin does not exist',
     async () => {
       const fixture = await makeFixture()
       const homePath = join(fixture.root, 'home')
       const resourcesPath = await createPackagedMacLauncher(fixture.root)
-      // Simulate arm64: point defaultMacCommandPath at a dir that does not exist
-      // in the fixture so existsSync(dirname(...)) returns false.
       const absentUsrLocalBin = join(fixture.root, 'usr', 'local', 'bin', 'orca')
       const installer = new CliInstaller({
         platform: 'darwin',
@@ -66,8 +61,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: on Intel Macs /usr/local/bin exists, so the installer must keep using
-  // it as the canonical path and not regress to ~/.local/bin.
   it.skipIf(process.platform === 'win32')(
     'uses /usr/local/bin/orca on macOS when /usr/local/bin exists',
     async () => {
@@ -95,8 +88,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: users can have a managed Orca command in ~/.local/bin even when
-  // /usr/local/bin exists; Settings must follow the shell-visible command.
   it.skipIf(process.platform === 'win32')(
     'uses an existing managed macOS orca command from the shell PATH before /usr/local/bin',
     async () => {
@@ -136,8 +127,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: POSIX command lookup skips broken symlinks and keeps searching PATH,
-  // so a stale earlier artifact must not steal status from the install path.
   it.skipIf(process.platform === 'win32')(
     'skips a broken managed macOS orca symlink before /usr/local/bin',
     async () => {
@@ -181,8 +170,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: PATH lookup stops at the first existing command; a later managed
-  // ~/.local/bin/orca must not steal status from /usr/local/bin/orca.
   it.skipIf(process.platform === 'win32')(
     'keeps the default macOS command when a managed orca appears later on PATH',
     async () => {
@@ -217,8 +204,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: shells skip missing PATH entries, so a managed command later in PATH
-  // is still the shell-visible Orca command until the default path is installed.
   it.skipIf(process.platform === 'win32')(
     'uses a later managed macOS orca command when the default command is missing',
     async () => {
@@ -256,8 +241,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: bash/zsh skip non-executable PATH entries even at Orca's configured
-  // install slot, then keep looking for a runnable command later in PATH.
   it.skipIf(process.platform === 'win32')(
     'uses a later managed macOS orca command when the default command is not executable',
     async () => {
@@ -296,8 +279,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: a non-Orca command after an empty default install slot can be shadowed
-  // by installing the default path without replacing the user's command.
   it.skipIf(process.platform === 'win32')(
     'installs the default macOS command instead of replacing an unmanaged later command',
     async () => {
@@ -340,8 +321,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: an off-PATH ~/.local/bin/orca must not hijack CLI registration and
-  // leave the shell-visible /usr/local/bin command missing.
   it.skipIf(process.platform === 'win32')(
     'ignores managed macOS orca commands that are not visible on the shell PATH',
     async () => {
@@ -420,8 +399,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: bash/zsh skip non-executable PATH entries, so reporting them as a
-  // conflict would block a valid later install path the shell would use.
   it.skipIf(process.platform === 'win32')(
     'skips a non-executable unmanaged macOS orca before the install path',
     async () => {
@@ -461,8 +438,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: when macCommandPath falls back to ~/.local/bin/orca on arm64, commandName
-  // must still be 'orca' (not 'orca-ide' which is Linux-only).
   it.skipIf(process.platform === 'win32')(
     'reports commandName as orca (not orca-ide) when falling back to ~/.local/bin on macOS',
     async () => {
@@ -487,8 +462,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: macCommandPath is resolved at construction — getStatus() must return the
-  // same commandPath on repeated calls without re-running existsSync.
   it.skipIf(process.platform === 'win32')(
     'resolves macCommandPath once at construction — commandPath stable across repeated getStatus()',
     async () => {
@@ -519,7 +492,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: the arm64 fallback must apply for packaged builds, not just dev launchers.
   it.skipIf(process.platform === 'win32')(
     'resolves to ~/.local/bin/orca on arm64 even when isPackaged is true',
     async () => {

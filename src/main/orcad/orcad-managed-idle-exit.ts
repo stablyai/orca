@@ -1,20 +1,11 @@
-/**
- * What a managed orcad counts as "in use" before an idle stop, and the stop itself.
- *
- * The stop is the ordinary graceful shutdown, which disconnects from the terminal daemon and
- * never shuts it down, so no terminal can be killed by it. Terminals are still a blocker: a
- * host with live terminals keeps its server so a returning client finds it serving.
- */
+// Live terminals block idle exit; ordinary shutdown disconnects without killing their daemon.
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { RELAY_INSTALL_LOCK_NAME } from '../../shared/relay-install-lock-name'
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 import type { RuntimeRpcClientActivity } from '../runtime/runtime-rpc/runtime-rpc-shutdown'
-import {
-  ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
-  ORCAD_IDLE_EXIT_TIMEOUT_MS,
-  readOrcadE2EIdleTimeoutMs
-} from '../../shared/orcad-idle-exit'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
+import { ORCAD_IDLE_EXIT_TIMEOUT_MS, readOrcadE2EIdleTimeoutMs } from '../../shared/orcad-idle-exit'
 import {
   OrcadIdleExitMonitor,
   type OrcadIdleExitEvidence,
@@ -24,7 +15,7 @@ import {
 
 export type OrcadManagedIdleExitConfig = { timeoutMs: number; activationRoot: string }
 
-/** Null for any orcad a client did not launch: a user-started or paired server never idles out. */
+/** User-started/paired servers never idle out; only client-managed launches opt in. */
 export function resolveOrcadManagedIdleExit(
   env: NodeJS.ProcessEnv
 ): OrcadManagedIdleExitConfig | null {
@@ -40,17 +31,17 @@ export function resolveOrcadManagedIdleExit(
 
 export type OrcadManagedIdleExitPorts = {
   readClientActivity: () => RuntimeRpcClientActivity
-  /** Every terminal the PTY provider knows, daemon-owned or in-process. */
   listTerminals: () => Promise<readonly unknown[]>
-  /** Live daemon sessions across generations; null when a daemon did not answer. */
+  /** Null means some daemon generation did not answer. */
   countDaemonSessions: () => Promise<number | null>
   hasDaemon: () => boolean
   agentStates: () => readonly { state: string }[]
   hasChatProviders: () => boolean
   hasStagedMigration: () => boolean
-  /** An enabled schedule or an unsettled run; nothing would fire either once the host exits. */
+  /** Enabled schedules or unsettled runs would be lost on exit. */
   automationsBusy: () => boolean
-  /** Exists while a client holds the host's activation fence (update, rollback, decommission). */
+  /** Exit would shut down the emulators Orca started for a workspace. */
+  emulatorsBusy: () => Promise<boolean>
   activationFenceExists: (root: string) => Promise<boolean>
 }
 
@@ -73,7 +64,7 @@ export function createOrcadIdleProbes(
         if ((await ports.listTerminals()).length > 0) {
           return 'busy'
         }
-        // Why read the daemon too: it outlives this process and may hold sessions no provider lists.
+        // Daemons may retain sessions absent from this process’s provider inventory.
         if (!ports.hasDaemon()) {
           return 'idle'
         }
@@ -88,6 +79,7 @@ export function createOrcadIdleProbes(
     { name: 'chat-providers', read: () => verdict(ports.hasChatProviders()) },
     { name: 'migration', read: () => verdict(ports.hasStagedMigration()) },
     { name: 'automations', read: () => verdict(ports.automationsBusy()) },
+    { name: 'emulators', read: async () => verdict(await ports.emulatorsBusy()) },
     {
       name: 'activation',
       read: async () => verdict(await ports.activationFenceExists(config.activationRoot))
@@ -95,7 +87,7 @@ export function createOrcadIdleProbes(
   ]
 }
 
-/** The client holds the fence only while the lock exists; a bare root is an interrupted acquire. */
+/** A bare activation root may be interrupted acquisition; only its lock proves a held fence. */
 export async function activationFenceExists(root: string): Promise<boolean> {
   try {
     await stat(join(root, RELAY_INSTALL_LOCK_NAME))
@@ -111,7 +103,6 @@ export async function activationFenceExists(root: string): Promise<boolean> {
 export function installOrcadManagedIdleExit(input: {
   config: OrcadManagedIdleExitConfig
   ports: OrcadManagedIdleExitPorts
-  /** Records the clean stop, then runs the same graceful shutdown as SIGTERM. */
   stop: (evidence: OrcadIdleExitEvidence) => void | boolean | Promise<void | boolean>
 }): () => void {
   const monitor = new OrcadIdleExitMonitor({

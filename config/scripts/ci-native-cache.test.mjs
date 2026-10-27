@@ -71,6 +71,7 @@ function resolveIdentity({
 
 describe('CI native cache ownership', () => {
   it('routes every configured native cache input to native preparation', () => {
+    expect(inputs.length).toBeGreaterThan(0)
     for (const file of inputs) {
       expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
     }
@@ -187,7 +188,6 @@ describe('CI native cache ownership', () => {
     const cliWait = steps.find((step) => step.wait === 'e2e-cli')
     const electron = steps.find((step) => step.id === 'electron-native-runtime')
     const upload = steps.find((step) => step.name === 'Upload E2E build output')
-    const uploadWait = steps.find((step) => step.wait === upload.id)
     expect(install.with).toMatchObject({
       'native-runtime': 'node',
       'persist-native-cache': 'false',
@@ -199,11 +199,11 @@ describe('CI native cache ownership', () => {
       key: '${{ steps.deps.outputs.native-cache-key }}',
       path: '${{ steps.deps.outputs.native-cache-path }}'
     })
-    const ordered = [install, save, build, cliWait, upload, electron, uploadWait]
+    const ordered = [install, save, build, cliWait, upload, electron]
     expect(ordered.map((step) => steps.indexOf(step))).toEqual(
       ordered.map((step) => steps.indexOf(step)).sort((left, right) => left - right)
     )
-    expect(upload.background).toBe(true)
+    expect(upload.background).toBeUndefined()
     expect(upload.if).toBeUndefined()
     expect(electron.background).toBeUndefined()
     expect(electron.uses).toBe('./.github/actions/prepare-native-runtime')
@@ -211,7 +211,6 @@ describe('CI native cache ownership', () => {
       'native-runtime': 'electron',
       'node-version': '${{ steps.deps.outputs.node-version }}'
     })
-    expect(uploadWait).toEqual({ wait: upload.id })
     for (const name of ['e2e', 'changed-e2e', 'orcad-serve-mode-switch', 'orcad-ssh-docker']) {
       expect(e2e.jobs[name].needs, name).toEqual(['build'])
       expect(
@@ -272,6 +271,11 @@ describe('CI native cache ownership', () => {
       try {
         const log = join(directory, 'commands')
         writeFileSync(log, '')
+        mkdirSync(join(directory, '.github/scripts'), { recursive: true })
+        writeFileSync(
+          join(directory, '.github/scripts/prepare-ubuntu-apt.sh'),
+          readFileSync('.github/scripts/prepare-ubuntu-apt.sh')
+        )
         const step = e2e.jobs.build.steps.find(
           (candidate) => candidate.name === 'Install native build tools'
         )
@@ -285,12 +289,14 @@ describe('CI native cache ownership', () => {
             `
             command() { [ "$TOOLS_PRESENT" = true ]; }
             sudo() { printf 'sudo %s\\n' "$*" >> "$COMMAND_LOG"; cat >/dev/null; }
+            export -f sudo
             timeout() {
               printf 'timeout %s\\n' "$*" >> "$COMMAND_LOG"
               if [ "$4" = "$FAIL_OPERATION" ]; then return 7; fi
             }
             ${step.run}`
           ],
+          cwd: directory,
           env: {
             ...process.env,
             TOOLS_PRESENT: present,

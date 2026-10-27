@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
@@ -10,17 +11,17 @@ import type { Repo } from '../repo-types'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
 import { getWorkspaceAttachments } from '../workspace-attachments'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
-import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
 import { SMART_TIERS } from './sort-stamps'
 
-/**
- * One workspace this host lists, as the sidebar reads it: catalog, metadata and the host's sort
- * stamps. Activity and PR state are their own domains, so plain terminal output never changes a row.
- */
-const WorkspaceRowSchema = z.object({
+/** Catalog/metadata/sort stamps only; separate activity and review domains keep terminal output from invalidating rows. */
+export const WorkspaceRowSchema = z.object({
   id: z.string(),
   hostId: z.string(),
   kind: z.enum(['git', 'folder']),
@@ -30,7 +31,7 @@ const WorkspaceRowSchema = z.object({
   displayName: z.string(),
   isMainWorktree: z.boolean(),
   instanceId: z.string().optional(),
-  /** The stored lineage record's edge; the builder decides whether it is valid. */
+  /** Stored lineage edge; the builder validates it. */
   lineage: z
     .object({
       parentWorktreeId: z.string(),
@@ -44,6 +45,8 @@ const WorkspaceRowSchema = z.object({
   workspaceStatus: z.string(),
   comment: z.string(),
   manualOrder: z.number().optional(),
+  /** Manual fallback for rows lacking manualOrder; old hosts omit it. */
+  sortOrder: z.number().optional(),
   createdAt: z.number().optional(),
   creatorProvenance: z
     .union([
@@ -52,7 +55,7 @@ const WorkspaceRowSchema = z.object({
     ])
     .optional(),
   linkedIssue: z.number().nullable(),
-  /** The linked PR number from metadata; a branch's PR from the cache is the review domain. */
+  /** Metadata link only; cached branch PR belongs to the review domain. */
   linkedPR: z.number().nullable(),
   linkedLinearIssue: z.string().nullable(),
   linkedGitLabMR: z.number().nullable(),
@@ -63,15 +66,15 @@ const WorkspaceRowSchema = z.object({
   automationName: z.string().optional(),
   cliCreated: z.literal(true).optional(),
   detachedHead: z.literal(true).optional(),
-  /** Main's alone: the platform a terminal in the workspace runs on. */
+  /** Main-owned terminal platform. */
   terminalPlatform: z.string().optional(),
-  /** The owning host's sort stamps (sort-stamps.ts); optional, as older hosts write no tier. */
+  /** Host-owned sort stamps (sort-stamps.ts); old hosts omit tiers. */
   recentAt: z.number().optional(),
   smartTier: z.enum(SMART_TIERS).optional(),
   smartAt: z.number().optional()
 })
 
-/** Keyed by host-qualified id, the form the frozen sort order and paired-server rows use. */
+/** Legacy local rows without metadata host retain `|id` keys even when hostId names their owner. */
 export const WorkspaceRowsSnapshotSchema = z.object({
   revision: z.number(),
   rows: z.record(z.string(), WorkspaceRowSchema)
@@ -111,6 +114,7 @@ function toWorkspaceRow(
     workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     comment: worktree.comment,
     ...(worktree.manualOrder !== undefined ? { manualOrder: worktree.manualOrder } : {}),
+    sortOrder: worktree.sortOrder,
     ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
     ...(worktree.creatorProvenance ? { creatorProvenance: worktree.creatorProvenance } : {}),
     linkedIssue: worktree.linkedIssue,
@@ -128,41 +132,77 @@ function toWorkspaceRow(
   }
 }
 
-/**
- * Every workspace this host lists, from its own catalog: git worktrees (folder projects included)
- * and folder workspaces. A paired server's rows are another domain, so they are left out.
- */
+type ListedRow = { identity: HostScopedWorktreeKey; hostId: ExecutionHostId }
+type ListedWorktree = Pick<Worktree, 'id' | 'repoId' | 'hostId'>
+type ListedRepo = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+
+/** Null for rows this host does not list, such as paired-server workspaces. */
+function listedRow(worktree: ListedWorktree, repo: ListedRepo | undefined): ListedRow | null {
+  const hostId = worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+  if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
+    return null
+  }
+  // Match window ownership: stamp remote hosts always, local hosts only when metadata names one.
+  const identityHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
+  return { identity: composeWorktreeHostIdentity(identityHostId, worktree.id), hostId }
+}
+
+/** Resolve each row’s own repo; repo IDs can collide across hosts. */
+export function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
+  worktrees: readonly W[],
+  repos: readonly R[]
+): { worktree: W; repo: R | undefined }[] {
+  const reposById = new Map<string, R[]>()
+  for (const repo of repos) {
+    reposById.set(repo.id, [...(reposById.get(repo.id) ?? []), repo])
+  }
+  return worktrees.map((worktree) => {
+    const owners = reposById.get(worktree.repoId) ?? []
+    const repo =
+      owners.find((owner) => getRepoExecutionHostId(owner) === worktree.hostId) ??
+      (worktree.hostId === undefined && owners.length === 1 ? owners[0] : undefined)
+    return { worktree, repo }
+  })
+}
+
+/** Listed git worktrees with their own repos and buildWorkspaceRows keys. */
+export function listGitWorkspaceRows<W extends ListedWorktree, R extends ListedRepo>(
+  worktrees: readonly W[],
+  repos: readonly R[]
+): { identity: HostScopedWorktreeKey; worktree: W; repo: R | undefined }[] {
+  return withOwnerRepos(worktrees, repos).flatMap(({ worktree, repo }) => {
+    const listed = listedRow(worktree, repo)
+    return listed ? [{ identity: listed.identity, worktree, repo }] : []
+  })
+}
+
+export function listGitWorkspaceRowKeys(
+  worktrees: readonly Worktree[],
+  repos: readonly Repo[]
+): HostScopedWorktreeKey[] {
+  return listGitWorkspaceRows(worktrees, repos).map(({ identity }) => identity)
+}
+
+/** Own catalog only, including folder projects/workspaces; paired-server rows use another domain. */
 export function buildWorkspaceRows(catalog: {
   worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
   repos: readonly Repo[]
   lineageById: Readonly<Record<string, WorktreeLineage>>
-}): Map<string, WorkspaceRow> {
-  const reposById = new Map<string, Repo[]>()
-  for (const repo of catalog.repos) {
-    reposById.set(repo.id, [...(reposById.get(repo.id) ?? []), repo])
-  }
-  const rows = new Map<string, WorkspaceRow>()
+}): Map<HostScopedWorktreeKey, WorkspaceRow> {
+  const rows = new Map<HostScopedWorktreeKey, WorkspaceRow>()
   const add = (
     worktree: Worktree,
     kind: WorkspaceRow['kind'],
     repo?: Repo,
     lineage?: WorktreeLineage
   ): void => {
-    const hostId = worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
-    if (hostId && parseExecutionHostId(hostId)?.kind !== 'runtime') {
-      rows.set(
-        composeWorktreeHostIdentity(hostId, worktree.id),
-        toWorkspaceRow(worktree, hostId, kind, repo, lineage)
-      )
+    const listed = listedRow(worktree, repo)
+    if (listed) {
+      rows.set(listed.identity, toWorkspaceRow(worktree, listed.hostId, kind, repo, lineage))
     }
   }
-  for (const worktree of catalog.worktrees) {
-    const owners = reposById.get(worktree.repoId) ?? []
-    // The same repo id can be registered on two hosts; the row's host picks its owner.
-    const repo =
-      owners.find((owner) => getRepoExecutionHostId(owner) === worktree.hostId) ??
-      (worktree.hostId === undefined && owners.length === 1 ? owners[0] : undefined)
+  for (const { worktree, repo } of withOwnerRepos(catalog.worktrees, catalog.repos)) {
     add(worktree, 'git', repo, catalog.lineageById[worktree.id])
   }
   for (const folderWorkspace of catalog.folderWorkspaces) {

@@ -29,9 +29,7 @@ export function NativeChatSessionGate({
       previousResolution.sessionId &&
       !currentResolution.sessionId
     ) {
-      // Why: reconnect snapshots can retain a pane/agent fallback while briefly
-      // omitting provider-session metadata. Keep the conversation generation
-      // stable so transcript IO and the composer do not reset mid-reconnect.
+      // Preserve session identity through partial reconnect snapshots so transcript IO and the composer do not reset.
       return {
         ...currentResolution,
         sessionId: previousResolution.sessionId,
@@ -42,8 +40,7 @@ export function NativeChatSessionGate({
   })()
   useEffect(() => {
     if (resolution) {
-      // Why: hook and title evidence are transport-fed and can vanish between a
-      // disconnect and replay. Commit the last rendered conversation identity.
+      // Retain the rendered identity because hook/title evidence can disappear before transport replay.
       lastResolutionRef.current = resolution
     }
   }, [resolution])

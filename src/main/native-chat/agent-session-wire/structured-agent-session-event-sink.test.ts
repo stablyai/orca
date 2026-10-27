@@ -20,7 +20,10 @@ import {
 } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
@@ -52,10 +55,7 @@ type Recorded = {
   activity?: AgentSessionTurnActivity | null
 }
 
-/** The journal's OWN append options, captured beside the call log rather than on
- *  it: a double that omits the third parameter makes every assertion about what
- *  the sink forwards pass against `undefined`, which is how this went unnoticed
- *  before. Kept separate so the call-order assertions stay about call order. */
+/** Capture actual append options separately so call-order tests cannot hide missing forwarded fields. */
 const journalAppendOptions: Partial<JournalItemAppendOptions>[] = []
 
 function target(
@@ -90,15 +90,13 @@ function target(
       return { epoch: 'e', sequence: 0 }
     }),
     appendLifecycleBatch: vi.fn(async (input: JournalLifecycleBatchInput) => {
-      // A batch carries no producer linkage by design, so the fence is all
-      // there is to record — see the batch row builder.
+      // Lifecycle batches carry linkage per mutation, not on their row.
       journalAppendOptions.push({ fence: input.fence })
       log.push({ call: 'appendLifecycleBatch', fence, settlementId: input.settlementId })
       return { epoch: 'e', sequence: 0 }
     }),
     latestItemMatching: vi.fn(() => null),
     readInOrder: vi.fn(async <T>(read: () => T) => read()),
-    // The journal resolves at the write's place in its queue; this double has no queue to wait on.
     appendResolvedItem: vi.fn(
       async (
         resolve: () => { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null,
@@ -145,7 +143,6 @@ describe('deferred structured agent-session event sink', () => {
     deferred.bind(target(1, log))
 
     deferred.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    // The re-attach that raised the fence.
     deferred.bind(target(2, log))
     deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await deferred.drained()
@@ -456,7 +453,6 @@ describe('deferred structured agent-session event sink', () => {
   })
 
   it('applies the first lifecycle batch for a settlement once, in the journal', async () => {
-    // The journal applies a settlement id once; the sink hands both over in order.
     const root = await mkdtemp(join(tmpdir(), 'orca-event-sink-settlement-'))
     const journal = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
@@ -484,11 +480,11 @@ describe('deferred structured agent-session event sink', () => {
       agentJournalItemKey(identity(0))
     ])
     await journal.close()
+    closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
 
   it('keeps a rewritten streamed row in its place ahead of what was issued after it', async () => {
-    // A Codex reply checkpointed, then another row, then the reply's next checkpoint.
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const window: (() => void)[] = []
@@ -532,7 +528,6 @@ describe('deferred structured agent-session event sink', () => {
         : []
     })
     const [reply, aside] = written
-    // The reply's row is created before the aside and rewritten after it; never moved behind it.
     expect(reply?.startsWith('reply')).toBe(true)
     expect(written).toEqual([reply, aside, reply])
   })
@@ -584,8 +579,7 @@ describe('producer linkage reaches the journal through every append path', () =>
   })
 
   it('forwards it on the resolved-append and lifecycle-transition paths', async () => {
-    // The resolved paths lost it once before; a transition is how a Codex
-    // child's goal row is written, so dropping it there files the goal as root.
+    // Goal rows use resolved transitions; lost linkage would misattribute them to root.
     for (const append of [
       'tryAppendResolvedItem',
       'tryAppendResolvedItemAndPublish',
@@ -608,9 +602,7 @@ describe('producer linkage reaches the journal through every append path', () =>
   })
 
   it('does NOT forward it on the lifecycle-batch path, which is one row for N mutations', async () => {
-    // A batch row carries one producer for every mutation in it, so forwarding
-    // would stamp whoever opened the batch onto all of them. Both callers are
-    // single-producer today; a mixed batch would have to stamp per mutation.
+    // Mixed-agent batches need per-mutation linkage; row-level stamping would misattribute their contents.
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind(target(5, log))
@@ -622,7 +614,6 @@ describe('producer linkage reaches the journal through every append path', () =>
 
     await deferred.drained()
 
-    // The fence and nothing else: no linkage key reaches the batch row.
     expect(journalAppendOptions).toEqual([{ fence: 5 }])
     deferred.close()
   })
@@ -634,10 +625,8 @@ describe('producer linkage reaches the journal through every append path', () =>
     deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await deferred.drained()
 
-    // A control, not a pin. Absence is the claim, so the keys must be missing
-    // rather than present-and-undefined: a reader holding this options object
-    // would read `agentId: undefined` as a key that exists.
-    // A provider observation names the generation that produced it: the bound fence.
+    // Presence matters: root writes must omit linkage keys, not set them undefined.
+    // Provider observations still stamp their bound execution fence.
     expect(journalAppendOptions).toEqual([
       { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     ])

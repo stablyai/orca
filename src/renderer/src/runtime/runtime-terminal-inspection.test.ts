@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  inspectRuntimeTerminalProcess,
-  recordRuntimeTerminalInputForPtyId,
-  sendRuntimePtyInput,
-  sendRuntimePtyInputVerified
-} from './runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess, sendRuntimePtyInput } from './runtime-terminal-inspection'
+import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
+import { sendRuntimePtyInputVerified } from './runtime-terminal-verified-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -142,10 +139,7 @@ describe('runtime terminal owner routing', () => {
     expect(localHasChildren).not.toHaveBeenCalled()
   })
 
-  // Why these exist: the close guards ask the host to pay for a real child-process read, and the
-  // environment path used to drop the option before it reached the wire. The host then declined to
-  // scan and answered `unverifiable`, which the guard reads as running work -- a confirmation
-  // dialog on every idle close of a remote Windows pane. Found by review on #18591.
+  // Forward close guards’ real-process-read option or hosts return unverifiable and confirm every idle remote Windows close (#18591).
   it('forwards scanChildProcesses to the PTY owning environment', async () => {
     await inspectRuntimeTerminalProcess('remote:env-1@@terminal-1', { scanChildProcesses: true })
 

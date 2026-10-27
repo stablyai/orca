@@ -6,7 +6,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../src/shared/agent-session-journal-types'
-import * as toolFold from '../../../src/shared/native-chat-tool-fold'
+import * as toolFold from '../../../src/shared/native-chat/tools/native-chat-tool-pairs'
 import { projectStructuredItemsToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
@@ -68,6 +68,10 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import {
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosures
+} from './mobile-native-chat-disclosure-store'
 
 function message(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'source', role: 'assistant', blocks, timestamp: 1, source: 'transcript' }
@@ -89,7 +93,6 @@ function button(root: ReactTestInstance, label: string): ReactTestInstance {
   return root.find((node) => String(node.type) === 'Pressable' && textIn(node).includes(label))
 }
 
-/** A run's own rows: the presses inside its opened box. */
 function toolLines(root: ReactTestInstance): ReactTestInstance[] {
   return root
     .findAll((node) => String(node.type) === 'ScrollView')
@@ -111,7 +114,6 @@ describe('mobile tool result availability', () => {
     vi.restoreAllMocks()
   })
 
-  /** The row with its run opened by its header, its lines left closed. */
   function render(row: NativeChatMessage, openRun = true): ReactTestRenderer {
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message: row }))
@@ -126,6 +128,51 @@ describe('mobile tool result availability', () => {
     }
     return renderer!
   }
+
+  // The page's window unmounts a row scrolled past; older messages joining its fold change its id.
+  it('keeps what the reader opened in a windowed-out row by its row key', () => {
+    const row = message([
+      { type: 'tool-call', callId: 'one', name: 'Bash', input: 'first input' },
+      { type: 'tool-result', callId: 'one', output: 'first output' },
+      { type: 'tool-call', callId: 'two', name: 'Bash', input: 'second input' },
+      { type: 'tool-result', callId: 'two', output: 'second output' }
+    ])
+    function Window({ shown, id }: { shown: boolean; id: string }) {
+      const disclosures = useMobileNativeChatDisclosures('chat')
+      return createElement(
+        MobileNativeChatDisclosureContext.Provider,
+        { value: disclosures },
+        shown
+          ? createElement(MobileNativeChatMessage, {
+              message: { ...row, id },
+              rowKey: 'kept'
+            })
+          : null
+      )
+    }
+    const draw = (shown: boolean, id = 'source') =>
+      act(() => {
+        const element = createElement(Window, { shown, id })
+        if (renderer) {
+          renderer.update(element)
+        } else {
+          renderer = create(element)
+        }
+      })
+    const header = () =>
+      renderer!.root.find(
+        (node) =>
+          String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
+      )
+    draw(true)
+    press(header())
+    press(button(renderer!.root, 'first input'))
+    draw(false)
+    draw(true, 'older-head')
+    expect(toolLines(renderer!.root)).toHaveLength(2)
+    expect(textIn(renderer!.root)).toContain('first output')
+    expect(textIn(renderer!.root)).not.toContain('second output')
+  })
 
   it('draws each orphan output as its own Result row under one Result header', () => {
     const raw = message(
@@ -166,7 +213,6 @@ describe('mobile tool result availability', () => {
     press(button(tree.root, 'command 17'))
     expect(textIn(tree.root)).toContain('late named output')
     press(button(tree.root, 'command 17'))
-    // A call with no result has nothing to open.
     expect(button(tree.root, 'command 0').props.disabled).toBe(true)
   })
 
@@ -268,8 +314,7 @@ describe('mobile tool result availability', () => {
               key: row.id,
               message: row,
               ...disclosure.resolveRow(index, row),
-              structuredActivityUi: true,
-              toolsExpanded: true
+              structuredActivityUi: true
             })
           )
         )
@@ -278,6 +323,17 @@ describe('mobile tool result availability', () => {
         renderer = create(createElement(Phone, { journal: items }))
       })
       const tree = renderer!
+      const headers = () =>
+        tree.root.findAll(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
+        )
+      for (let index = 0; index < headers().length; index += 1) {
+        press(headers()[index]!)
+      }
+      for (let index = 0; index < toolLines(tree.root).length; index += 1) {
+        press(toolLines(tree.root)[index]!)
+      }
       const orphan = drawn.find((row) => row.role === 'tool')!
       expect(orphan.id).not.toBe('source')
       expect(orphan.journalPosition).toEqual({ sequence: 5, index: 0 })

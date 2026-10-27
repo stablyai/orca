@@ -7,11 +7,7 @@ export type StructuredSessionLaunchDirectory = {
   launchDirectory: string
 }
 
-/**
- * The directory the host holds each structured chat tab's session to, mirrored from the host
- * status feed. Absent means the host resolves the tab's workspace id, except for a floating chat,
- * whose directory stays unknown until its pin arrives.
- */
+/** Mirror host-pinned chat directories; absent uses workspace resolution except floating chats, which remain unknown until pinned. */
 export type StructuredSessionLaunchDirectorySlice = {
   structuredSessionLaunchDirectoryByTabId: Record<string, StructuredSessionLaunchDirectory>
   setStructuredSessionLaunchDirectory: (

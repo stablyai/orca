@@ -22,28 +22,20 @@ import {
   runWorktreeDeletesInParallel,
   runWorktreeDeleteWithToast
 } from './worktree-delete-execution'
+import { collectRemovalUnsavedFiles } from '@/components/editor/removal-unsaved-editor-files'
 
 export { runWorktreeDeletesInParallel, runWorktreeDeleteWithToast }
 
-/**
- * Shared funnel for the standard (non-folder) delete decision tree (WorktreeContextMenu,
- * MemoryStatusSegment); branches on the `skipDeleteWorktreeConfirm` preference.
- *
- * The missing-record and instance guards reject stale actions after concurrent state changes.
- */
+/** Standard Git-worktree deletion funnel; stale record/instance guards precede confirmation preferences. */
 export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOptions = {}): void {
   const state = useAppStore.getState()
-  // Why (STA-4343): the id-keyed map keeps one row per `repoId::path`, so a caller
-  // acting on a specific sidebar row has to name that row's host — otherwise
-  // deleting the SSH row destroys the local checkout at the same path. A caller
-  // that names no host keeps the old first-wins behaviour.
+  // Qualify row actions by host; an unqualified id shared by two hosts resolves to nothing, never the first copy.
   const target = getWorktreeOnHostFromState(state, worktreeId, options.expectedHostId) ?? null
   const instanceChanged =
     Object.hasOwn(options, 'expectedInstanceId') &&
     target?.instanceId !== options.expectedInstanceId
   if (!target || instanceChanged) {
-    // Why: folder workspaces are never in the worktree map — their callers own that route, so a
-    // miss there is a routing gap, not a stale list, and must not claim the workspace is gone.
+    // Folder callers own another deletion route; missing Git records cannot establish that those workspaces vanished.
     if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
       showWorkspaceListChangedToast()
     }
@@ -54,7 +46,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
       hostId: target.hostId,
       settings: state.settings
     })
-    // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
+    // Git cannot remove primary checkouts; offer project removal while retaining files on disk.
     state.openModal('confirm-remove-folder', {
       repoId: target.repoId,
       displayName: repo?.displayName ?? target.displayName,
@@ -68,8 +60,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     state.clearWorktreeDeleteState(worktreeId)
   }
 
-  // Why: a disconnected SSH host has no provider, so worktrees:remove throws; route to reconnect-and-delete or local-only forget.
-  // Skip on paired web/mobile clients: SSH state is desktop-only, so empty sshTargetLabels misclassifies SSH repos as ghosts; their worktree.rm RPC still handles the delete.
+  // Disconnected SSH needs reconnect/forget; paired clients lack desktop SSH metadata, so their RPC must handle deletion instead.
   const matchingRepos = state.repos.filter((entry) => entry.id === target.repoId)
   const repo = target.hostId
     ? findRepoForHost(matchingRepos, target.repoId, { hostId: target.hostId })
@@ -84,9 +75,11 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
         sshTargetLabels: state.sshTargetLabels
       })
   if (sshResolution.kind === 'ghost' || sshResolution.kind === 'disconnected') {
-    // Why no lineage-children warning: forget-local is metadata-only per-worktree, so it can't fail on a still-registered child.
+    // Metadata-only forgetting cannot fail on registered lineage children, so skip their removal warning.
     state.openModal('forget-ssh-workspace', {
       worktreeId,
+      // Why (STA-11912): the reconnect awaits a connection, so the removal must stay pinned to this incarnation.
+      worktreeDeleteIdentities: toWorktreeDeleteIdentities([target]),
       displayName: target.displayName,
       resolution: sshResolution
     })
@@ -99,7 +92,10 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     state.worktreeLineageById
   )
   const hasLineageChildren = deleteLineage.descendants.length > 0
-  const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
+  // Skip-confirm preferences never authorize discarding unsaved editor text.
+  const skipConfirm =
+    (state.settings?.skipDeleteWorktreeConfirm ?? false) &&
+    collectRemovalUnsavedFiles(useAppStore.getState, [target]).length === 0
   if (skipConfirm && !hasLineageChildren) {
     void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName)
     return
@@ -142,7 +138,7 @@ export function runWorktreeBatchDelete(
     }
   }
 
-  // Why: bulk cleanup can destroy many directories at once, so batch/Space deletes keep an explicit confirmation step.
+  // Bulk removal can destroy multiple directories; retain explicit confirmation.
   const singleTargetLineage =
     targets.length === 1
       ? getWorkspaceDeleteLineage(
@@ -156,7 +152,8 @@ export function runWorktreeBatchDelete(
     !options.forceConfirm &&
     targets.length === 1 &&
     !singleTargetHasLineageChildren &&
-    (state.settings?.skipDeleteWorktreeConfirm ?? false)
+    (state.settings?.skipDeleteWorktreeConfirm ?? false) &&
+    collectRemovalUnsavedFiles(useAppStore.getState, targets).length === 0
   if (skipConfirm) {
     void runWorktreeDeletesInParallel(targets, {
       onForceDeleted: (deletedTarget) => options.onDeleted?.([deletedTarget])

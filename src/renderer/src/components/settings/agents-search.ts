@@ -1,3 +1,8 @@
+import {
+  getClaudeSubagentNavigationTitle,
+  getClaudeSubagentNavigationDescription,
+  getClaudeSubagentNavigationSearchKeywords
+} from './claude-subagent-navigation-copy'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   getAgentAwakeDescription,
@@ -45,6 +50,8 @@ function buildAgentSettingsKeywords(): string[] {
     { key: 'auto.components.settings.agents.search.permissions', fallback: 'permissions' },
     { key: 'auto.components.settings.agents.search.yolo', fallback: 'yolo', englishOnly: true },
     { key: 'auto.components.settings.agents.search.manual', fallback: 'manual' },
+    { key: 'settings.agents.autoPermissions', fallback: 'Auto' },
+    { key: 'settings.agents.approveForMe', fallback: 'approve for me' },
     {
       key: 'auto.components.settings.agents.search.e2b7c0dcd7',
       fallback: 'github',
@@ -123,6 +130,12 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentStatusHooksSearchKeywords()
   },
   {
+    id: 'claude-subagent-navigation',
+    title: getClaudeSubagentNavigationTitle(),
+    description: getClaudeSubagentNavigationDescription(),
+    keywords: getClaudeSubagentNavigationSearchKeywords()
+  },
+  {
     title: getAgentWorkspaceTrustTitle(),
     id: AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID,
     description: getAgentWorkspaceTrustDescription(),
@@ -151,8 +164,8 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       'Agent Permissions'
     ),
     description: translate(
-      'auto.components.settings.agents.search.agentPermissionsDescription',
-      'Switch agent permission defaults between Yolo and Manual.'
+      'settings.agents.permissionsSearchDescription',
+      'Launch agents with Manual, Auto, or Yolo permissions.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.agents.search.permission', 'permission'),
@@ -162,6 +175,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.agents.search.yolo', 'yolo'),
       ...translateSearchKeyword('auto.components.settings.agents.search.manual', 'manual'),
+      ...translateSearchKeyword('settings.agents.autoPermissions', 'Auto'),
       ...translateSearchKeyword('auto.components.settings.agents.search.skip', 'skip'),
       ...translateSearchKeyword('auto.components.settings.agents.search.checks', 'checks')
     ]

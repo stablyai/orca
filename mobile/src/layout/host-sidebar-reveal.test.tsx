@@ -1,5 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { Pressable } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { RpcClientProvider } from '../transport/client-context.web'
@@ -94,10 +95,14 @@ function headerController(): MobileSessionController {
 
 describe('host sidebar reveal in the session header', () => {
   let renderer: ReactTestRenderer | null = null
+  let activePair: ReturnType<typeof createFakeBridgePortPair> | null = null
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    activePair?.client.close()
+    activePair?.host.dispose()
+    activePair = null
   })
 
   function tree(): ReactTestRenderer {
@@ -112,6 +117,7 @@ describe('host sidebar reveal in the session header', () => {
       route: { pathname: '/h/host/session/workspace' },
       ownsHostArea
     })
+    activePair = pair
     await pair.flush()
     const client = pair.client
     await act(async () => {
@@ -124,7 +130,9 @@ describe('host sidebar reveal in the session header', () => {
   }
 
   function buttons(label: string) {
-    return tree().root.findAllByProps({ accessibilityLabel: label })
+    return tree().root.findAll(
+      (node) => node.type === Pressable && node.props.accessibilityLabel === label
+    )
   }
 
   it('offers no reveal in a page beside the native sidebar, which it does not draw', async () => {

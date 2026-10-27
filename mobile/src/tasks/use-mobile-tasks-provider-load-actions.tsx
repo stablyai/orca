@@ -1,6 +1,5 @@
 import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration'
 import { readJiraConnection, reconcileJiraConnection } from './jira-mobile-connection'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   type GitHubIssueSourceError,
@@ -9,7 +8,10 @@ import {
   type RpcClient,
   extractGitHubIssueSourceError,
   extractGitHubIssueSourceFallback,
+  getTaskPagePerRepoLimit,
+  getWorkItemCountedTotalPages,
   isGitHubWorkItemsSshRemoteRequiredError,
+  taskPageToGitHubApiPage,
   useCallback
 } from './mobile-tasks-dependencies'
 import {
@@ -22,8 +24,7 @@ import {
   createGitHubTask,
   mapWithConcurrency,
   reconcileTeamSelection,
-  scopeGitHubTaskSearch,
-  taskTime
+  scopeGitHubTaskSearch
 } from './mobile-tasks-legacy-foundation'
 import {
   githubWorkItemCountRead,
@@ -72,7 +73,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     taskUiReady,
     tasksSupported
   } = model
-  // Desktop connection changes need an explicit status refresh on mobile.
+  // Mobile needs explicit status refreshes to observe desktop connection changes.
   const refreshJiraConnection = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
@@ -119,11 +120,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
-      // Fire-and-forget: the reply is never interpreted, so no acceptance policy applies here.
       void taskSettingsWrite
         .request(client, { defaultLinearTeamSelection: selection })
         .catch(() => {
-          // Best-effort preference persistence; the local picker state already changed.
+          // Preference persistence is best-effort; the local picker already changed.
         })
     },
     [client, taskUiReady]
@@ -133,7 +133,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     async (
       requestClient: RpcClient,
       queriedRepos: RepoSummary[],
-      before?: string
+      taskPage = 0
     ): Promise<{
       items: Array<Extract<TaskItem, { provider: 'github' }>>
       failedCount: number
@@ -141,26 +141,22 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       sourceErrors: GitHubIssueSourceError[]
       sourceFallbacks: GitHubIssueSourceFallback[]
     }> => {
+      const perRepoLimit = getTaskPagePerRepoLimit(
+        queriedRepos.length,
+        PER_REPO_FETCH_LIMIT,
+        CROSS_REPO_DISPLAY_LIMIT
+      )
       const results = await mapWithConcurrency(
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            // `before` is the list's pagination cursor, and github.listWorkItems' params schema
-            // does not declare it, so the host has always dropped it. Sent verbatim anyway:
-            // removing it would change the bytes, and making the host honour the cursor is a
-            // product fix with its own recording, not part of this migration.
-            const pageParams = {
+            const reply = await githubWorkItemSearchRead.request(requestClient, {
               repo: `id:${repo.id}`,
-              limit: PER_REPO_FETCH_LIMIT,
+              limit: perRepoLimit,
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
-              before
-            }
-            const reply = await githubWorkItemSearchRead.request(
-              requestClient,
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `before` is the undeclared key described above; every other field matches the schema.
-              pageParams as RpcSendParams<'github.listWorkItems'>
-            )
+              page: taskPageToGitHubApiPage(taskPage)
+            })
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and each row's `labels`, and types the other eight (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `author`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
             const envelope = githubWorkItemSearchRead.interpret(reply) as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
@@ -208,10 +204,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
 
       return {
+        // Host pagination orders by issue number; merge in that order so rows cannot reshuffle between pages.
         items: results
           .flatMap((result) => result.items)
-          .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
-          .slice(0, CROSS_REPO_DISPLAY_LIMIT),
+          .sort((a, b) => b.source.number - a.source.number),
         failedCount: results.filter((result) => result.error).length,
         sourcesByRepoId,
         sourceErrors,
@@ -221,7 +217,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     [appliedQuery, githubKind]
   )
 
-  const countGitHubItems = useCallback(
+  const countGitHubItemPages = useCallback(
     async (requestClient: RpcClient, queriedRepos: RepoSummary[]): Promise<number> => {
       const counts = await mapWithConcurrency(
         queriedRepos,
@@ -236,9 +232,6 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
               },
               { timeoutMs: 30_000 }
             )
-            // The reader answers the number, so the `typeof` fallback this call site kept is gone:
-            // a reply that is not one reaches the catch below, which already counts a failed repo
-            // as zero and now says which repo and why.
             return githubWorkItemCountRead.interpret(reply)
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
@@ -252,7 +245,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
           }
         }
       )
-      return counts.reduce((sum, count) => sum + count, 0)
+      return getWorkItemCountedTotalPages(
+        counts,
+        getTaskPagePerRepoLimit(queriedRepos.length, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT)
+      )
     },
     [appliedQuery, githubKind]
   )
@@ -261,7 +257,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     loadLinearContext,
     persistLinearTeamSelection,
     fetchGitHubItemsPage,
-    countGitHubItems
+    countGitHubItemPages
   })
 }
 

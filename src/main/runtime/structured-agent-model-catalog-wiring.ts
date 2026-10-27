@@ -1,3 +1,4 @@
+import { agentSessionPinnedLaunchDirectory } from './agent-session-record-launch-directory'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogFilePersistence } from '../native-chat/agent-model-catalog/agent-model-catalog-persistence'
 import {
@@ -20,22 +21,15 @@ import { agentDrivesSession } from '../native-chat/agent-session-wire/structured
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 // The store is process-global; hydrate it from disk at most once per process.
-let persistenceAttached = false
+let persistenceAttached: Promise<void> | null = null
 
 export async function attachAgentModelCatalogPersistenceOnce(
   stateDirectory: string
 ): Promise<void> {
-  if (persistenceAttached) {
-    return
-  }
-  persistenceAttached = true
-  try {
-    await agentModelCatalogStore.attachPersistence(
-      createAgentModelCatalogFilePersistence(stateDirectory)
-    )
-  } catch {
-    // A missing or unreadable file only costs the warm start.
-  }
+  persistenceAttached ??= agentModelCatalogStore
+    .attachPersistence(createAgentModelCatalogFilePersistence(stateDirectory))
+    .catch(() => {})
+  await persistenceAttached
 }
 
 type CatalogRegistration = Pick<StructuredAgentRuntimeRegistration, 'definition' | 'modelCatalog'>
@@ -47,9 +41,11 @@ export function registeredModelCatalogDiscovery(
 ): {
   probes: Record<string, AgentModelCatalogProbe>
   listingNamesConfiguredModel: Set<string>
+  listsInChatFolder: Set<string>
 } {
   const probes: Record<string, AgentModelCatalogProbe> = {}
   const listingNamesConfiguredModel = new Set<string>()
+  const listsInChatFolder = new Set<string>()
   for (const registration of registrations) {
     const { agent } = registration.definition
     const discovery = registration.modelCatalog(context)
@@ -58,19 +54,17 @@ export function registeredModelCatalogDiscovery(
       if (discovery.listingNamesConfiguredModel) {
         listingNamesConfiguredModel.add(agent)
       }
+      if (discovery.listsInChatFolder) {
+        listsInChatFolder.add(agent)
+      }
     }
   }
-  return { probes, listingNamesConfiguredModel }
+  return { probes, listingNamesConfiguredModel, listsInChatFolder }
 }
 
-/**
- * The host-deps slice for the catalog surface: hydrates the store from disk
- * once, then builds the service — or nothing, when the runtime cannot name
- * the currently selected account, in which case every catalog read answers
- * `unknown` rather than guessing a key.
- */
+/** Hydrate once and build catalog service only with a known selected account; otherwise answer unknown rather than guess its key. */
 export async function modelCatalogHostDeps(input: {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'listRecords'>
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'getConversation' | 'listConversations'>
   agents: Pick<StructuredAgentRegistry, 'definition'>
   registrations: readonly CatalogRegistration[]
   deps: StructuredAgentModelCatalogContext['deps']
@@ -83,16 +77,17 @@ export async function modelCatalogHostDeps(input: {
   }
   const modelCatalog = createAgentModelCatalogService({
     store: agentModelCatalogStore,
+    getConversation: (id) => input.store.getConversation(id) ?? undefined,
     getRecord: (sessionId) => input.store.getRecord(sessionId) ?? undefined,
     drivesRecord: (record) => agentDrivesSession(input.agents, record),
     resolveAccountHome: deps.resolveAgentAccountHome,
     recordWorkspacePath: async (record) =>
-      record.launchDirectory ??
+      agentSessionPinnedLaunchDirectory(record) ??
       (await deps.resolveWorkspacePath(record.location.workspaceId).catch(() => null)),
     agentReadsProjectModelConfig,
     workspaceMayOverrideDefaultModel,
     hasChatRecords: (agent) =>
-      input.store.listRecords().some((record) => record.provider === agent),
+      input.store.listConversations().some((record) => record.provider === agent),
     ...registeredModelCatalogDiscovery(input.registrations, {
       deps,
       environment: input.environment

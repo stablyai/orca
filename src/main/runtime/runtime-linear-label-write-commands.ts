@@ -4,9 +4,9 @@ import {
   type LinearIssueTaskUpdateResult,
   type LinearIssueSummary,
   getLinearTeamLabelsOrThrow,
-  linearError,
   sameStringSet
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import { RuntimeLinearProjectWriteCommands } from './runtime-linear-project-write-commands'
 
 export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCommands {

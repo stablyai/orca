@@ -42,18 +42,15 @@ export function bindBrowserPageWebviewListeners({
     activeLoadFailureRef,
     recoveryNavigationValidationRef,
     keepAddressBarFocusRef,
-    paneZoomLevelRef,
     viewportPresetIdRef,
     onUpdatePageStateRef,
     setGuestRecoveryGeneration,
-    setBrowserZoomPercent,
     focusAddressBarNow,
     syncNavigationState,
     syncBrowserAnnotationViewportBridge,
     faviconUrlRef,
     addressBarInputRef,
     lastKnownWebviewUrlRef,
-    trackNextLoadingEventRef,
     invalidateBrowserAnnotationDocumentRef,
     onSetUrlRef,
     setBrowserOverlayViewport,
@@ -81,36 +78,30 @@ export function bindBrowserPageWebviewListeners({
       activeLoadFailureRef,
       recoveryNavigationValidationRef,
       keepAddressBarFocusRef,
-      paneZoomLevelRef,
       viewportPresetIdRef,
       onUpdatePageStateRef,
       setGuestRecoveryGeneration,
-      setBrowserZoomPercent,
       focusAddressBarNow,
       syncNavigationState,
       syncBrowserAnnotationViewportBridge
     })
 
-  const { handleDidStartLoading, handleDidStopLoading, handleFailLoad } =
-    createBrowserPageWebviewLoadingHandlers({
-      webview,
-      browserTabId,
-      faviconUrlRef,
-      browserTabUrlRef,
-      addressBarValueRef,
-      addressBarInputRef,
-      activeLoadFailureRef,
-      lastKnownWebviewUrlRef,
-      trackNextLoadingEventRef,
-      keepAddressBarFocusRef,
-      recoveryNavigationValidationRef,
-      invalidateBrowserAnnotationDocumentRef,
-      onUpdatePageStateRef,
-      onSetUrlRef,
-      setBrowserOverlayViewport,
-      setAddressBarValue,
-      focusAddressBarNow
-    })
+  const { handleDidStopLoading, handleFailLoad } = createBrowserPageWebviewLoadingHandlers({
+    webview,
+    browserTabId,
+    faviconUrlRef,
+    browserTabUrlRef,
+    addressBarValueRef,
+    addressBarInputRef,
+    activeLoadFailureRef,
+    lastKnownWebviewUrlRef,
+    keepAddressBarFocusRef,
+    recoveryNavigationValidationRef,
+    onUpdatePageStateRef,
+    onSetUrlRef,
+    setAddressBarValue,
+    focusAddressBarNow
+  })
 
   const {
     handleDidStartNavigation,
@@ -147,7 +138,6 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('render-process-gone', guestRecovery.recoverRenderer)
   webview.addEventListener('destroyed', handleGuestDestroyed)
   webview.addEventListener('focus', dismissAddressBarSuggestions)
-  webview.addEventListener('did-start-loading', handleDidStartLoading)
   webview.addEventListener('did-start-navigation', handleDidStartNavigation)
   webview.addEventListener('did-redirect-navigation', handleDidRedirectNavigation)
   webview.addEventListener('did-stop-loading', handleDidStopLoading)
@@ -165,10 +155,9 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('console-message', handleAnnotationViewportMessage)
 
   if (needsInitialNavigation) {
-    // Why: set src only after listeners attach so a fast localhost failure isn't missed; only non-blank tabs show the loading indicator.
+    // Why: set src only after listeners attach so a fast localhost failure isn't missed.
     const initialUrl =
       normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
-    trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.src = initialUrl
   } else if (isPaintableRef.current) {
@@ -185,7 +174,6 @@ export function bindBrowserPageWebviewListeners({
     webview.removeEventListener('render-process-gone', guestRecovery.recoverRenderer)
     webview.removeEventListener('destroyed', handleGuestDestroyed)
     webview.removeEventListener('focus', dismissAddressBarSuggestions)
-    webview.removeEventListener('did-start-loading', handleDidStartLoading)
     webview.removeEventListener('did-start-navigation', handleDidStartNavigation)
     webview.removeEventListener('did-redirect-navigation', handleDidRedirectNavigation)
     webview.removeEventListener('did-stop-loading', handleDidStopLoading)

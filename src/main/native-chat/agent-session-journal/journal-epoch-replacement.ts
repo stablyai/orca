@@ -1,12 +1,18 @@
-// Republishing a live item set into a fresh epoch.
-//
-// One transaction: discard the old epoch's rows, insert the epoch row plus the
-// replacement items, and move the session projection.
+import {
+  journalItemEchoFields,
+  journalItemEchoRestatement,
+  type JournalItemEcho
+} from './journal-item-echo'
 
+import { sameJournalConversation } from './journal-history-origin'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session-journal-item-key'
 
 import type {
+  AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalProducerLinkage,
@@ -26,6 +32,8 @@ import {
   buildJournalSubmissionRow,
   journalRowBase
 } from './journal-row-builders'
+import { buildJournalQueueRow } from './journal-queue-events'
+import type { JournalQueueRestatement } from './journal-queued-messages'
 import {
   buildJournalQueueReopenRow,
   buildJournalQueueClearRow,
@@ -41,18 +49,17 @@ import {
 } from './journal-row-table'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 import { assertJournalFence } from './journal-write-guards'
+import type { JournalOperationReceipt } from './journal-row-writer'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
+  echoOf?: JournalItemEcho['echoOf']
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   observedAt?: number
-  /** Absent for history rebuilt from a source that never stated one: derived from position, as
-   *  a legacy row's is, and then written down. */
+  /** Derive absent legacy scopes from timeline position before persisting them. */
   turnScope?: AgentJournalTurnScope
-  /** Carried from the epoch it came from (`JournalItemRow.ownerFence`), never the replacing
-   *  writer's fence: replacing history does not make it the current generation's work. */
+  /** Preserve original execution provenance; history replacement is not new work. */
   ownerFence: number
-  /** Carried the same way (`JournalItemRow.executionOwner`). */
   executionOwner?: number
 }
 
@@ -62,21 +69,34 @@ export function replaceJournalEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   items: readonly JournalReplacementItem[]
+  receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
   previous?: JournalReducerState
-  /** Restated in the new epoch, or the rewind would release cards the person stopped, or bring
-   *  back a /clear pause they already lifted. */
+  /** Preserve Stop/Resume state so rewinds cannot release held cards or resurrect lifted pauses. */
   queuePause: JournalQueuePauseRestatement
+  /** Restate cards before carried submissions relink their handoffs. */
+  queue: JournalQueueRestatement
   now: () => number
   mintEpoch: () => string
-  /** Called the instant the transaction commits, before any fallible follow-up. */
+  /** Adopt committed state before fallible follow-up work. */
   onPublished: (loaded: JournalLoad) => void
 }): void {
   const epoch = input.mintEpoch()
   const state = createJournalReducerState(input.identity.sessionId, epoch)
+  const providerHandle = agentSessionJournalProviderHandle(input.identity)
+  const previousOrigin = input.previous?.historyOrigin
+  const restate =
+    input.reason !== 'legacy_import' &&
+    input.reason !== 'session_created' &&
+    previousOrigin &&
+    sameJournalConversation(previousOrigin.providerHandle, providerHandle)
   const epochRow: JournalRow = {
     kind: 'epoch',
-    reason: input.reason,
-    providerHandle: agentSessionJournalProviderHandle(input.identity),
+    reason:
+      input.reason === 'legacy_import' && input.items.length === 0
+        ? 'session_created'
+        : input.reason,
+    providerHandle,
+    ...(restate ? { historyOrigin: previousOrigin.raw } : {}),
     ...journalRowBase(epoch, 1, input.fence, input.now())
   }
   const rows: JournalRow[] = [epochRow]
@@ -86,6 +106,14 @@ export function replaceJournalEpoch(input: {
       state,
       identity: item.identity,
       body: item.body,
+      ...journalItemEchoFields(item),
+      ...(input.previous && input.reason !== 'legacy_import' && input.reason !== 'session_created'
+        ? journalItemEchoRestatement(
+            input.previous.itemEchoes,
+            input.previous.aliases.get(agentJournalItemKey(item.identity)) ??
+              agentJournalItemKey(item.identity)
+          )
+        : {}),
       seq: state.lastSequence + 1,
       fence: input.fence,
       ownerFence: item.ownerFence,
@@ -98,7 +126,20 @@ export function replaceJournalEpoch(input: {
     applyJournalRow(state, row)
     rows.push(row)
   }
-  // An accepted message that never reached the agent survives a provider history replacement.
+  for (const { messageId, change } of input.queue.cards) {
+    if (change) {
+      const row = buildJournalQueueRow(
+        state,
+        messageId,
+        change,
+        state.lastSequence + 1,
+        input.now()
+      )
+      applyJournalRow(state, row)
+      rows.push(row)
+    }
+  }
+  // Accepted-but-unhanded messages must survive provider history replacement.
   const queued = [...(input.previous?.submissions.values() ?? [])]
     .filter(isQueuedAgentJournalSubmission)
     .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
@@ -145,6 +186,7 @@ export function replaceJournalEpoch(input: {
   }
 
   const { sessionId } = input.identity
+  const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
   input.database.transaction((db) => {
     const retired = readJournalSessionEpoch(db, sessionId)
     if (retired !== null) {
@@ -153,12 +195,14 @@ export function replaceJournalEpoch(input: {
     for (const row of rows) {
       insertJournalRow(db, sessionId, row)
     }
+    input.queue.receipt.write(db)
     publishJournalSessionEpoch(db, input.identity, epoch)
+    receipt?.write(db)
   })
+  input.queue.receipt.committed()
 
-  // COMMIT landed: on disk the superseded rows are gone and this epoch is the
-  // live one. The caller adopts that immediately, or a later failure leaves the
-  // live store writing into an epoch whose rows were just deleted.
+  // Adopt the committed epoch immediately; later failures must not leave writers targeting deleted rows.
   state.oldestSequence = 1
   input.onPublished({ state, newer: null, damage: null })
+  receipt?.committed()
 }

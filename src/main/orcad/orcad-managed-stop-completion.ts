@@ -1,12 +1,4 @@
-/**
- * Asking one orcad instance to stop and proving that it did.
- *
- * Runs as a short-lived command on the execution host. It never signals: it writes the
- * instance-bound request the running orcad watches for, then observes until the instance is
- * gone. `exited` needs proof — no process with that PID, or a PID whose kernel identity or owner
- * uid shows it now belongs to another process. A wall-clock disagreement, or anything the host
- * cannot answer, is `unverifiable`, never exit.
- */
+// Request shutdown without signaling; only kernel identity, owner change or PID absence proves exit.
 import { setTimeout as delay } from 'node:timers/promises'
 import { writeDurableSecureJsonFile } from '../../shared/secure-file'
 import {
@@ -37,7 +29,7 @@ import {
   ORCAD_STOP_COMPLETION_POLL_MS
 } from './orcad-stop-deadlines'
 
-export type OrcadProcessProbe = (pid: number) => 'alive' | 'missing' | 'unverifiable'
+type OrcadProcessProbe = (pid: number) => 'alive' | 'missing' | 'unverifiable'
 
 export type OrcadManagedStopCompletionOptions = OrcadProcessIdentityReaders & {
   probeProcess?: OrcadProcessProbe
@@ -61,12 +53,12 @@ function observeInstance(
   if (probe !== 'alive') {
     return probe === 'missing' ? 'exited' : 'unverifiable'
   }
-  // Only a kernel identity, stored creation time or owner uid proves reuse; unknown stays live.
+  // Wall-clock drift alone cannot prove PID reuse.
   const identity = compareOrcadProcessIdentity(instance.pid, recorded, options)
   return identity === 'differs' ? 'exited' : identity === 'unproven' ? 'unverifiable' : 'live'
 }
 
-/** An older client's request lacks the incarnation; the lock still naming the instance has it. */
+/** Recover incarnation data from the lock for older clients that omit it. */
 function recordedIdentity(instance: OrcadManagedStopInstance): OrcadRecordedIdentity {
   if (recordedOrcadProcessIncarnation(instance)) {
     return instance
@@ -80,11 +72,9 @@ function recordedIdentity(instance: OrcadManagedStopInstance): OrcadRecordedIden
   if (!record) {
     return instance
   }
-  // The lock's identity lets a reused PID be proven by its owner uid.
   return { ...instance, ...recordedOrcadProcessIncarnation(record), identity: record.identity }
 }
 
-/** Writes the request only while the lock still names this instance, then waits for exit. */
 export async function completeOrcadManagedStop(
   input: OrcadManagedStopRequest,
   options: OrcadManagedStopCompletionOptions = {}
@@ -104,11 +94,10 @@ export async function completeOrcadManagedStop(
     return verdict === 'exited' ? completed() : verdict
   }
   if (!lockStillNamesInstance(request.instance)) {
-    // The process lives but no longer owns the lock it published: it is not ours to address.
+    // A live process that relinquished its lock is no longer ours to address.
     return 'unverifiable'
   }
   if (readOrcadManagedStopDecision(request) === 'canceled') {
-    // A cancelled transaction is never reissued; its orcad keeps running.
     return 'live'
   }
   const requestPath = orcadManagedStopRequestPath(request.instance)
@@ -118,7 +107,7 @@ export async function completeOrcadManagedStop(
   if (!writeDurableSecureJsonFile(requestPath, request)) {
     throw new Error('orcad_managed_stop_request_permissions_unconfirmed')
   }
-  // A cancel that won between the check above and this write found no file to remove.
+  // A cancel between the first check and write had no request file to remove.
   if (readOrcadManagedStopDecision(request) === 'canceled') {
     withdrawOrcadManagedStopRequest(request)
     return 'live'
@@ -141,7 +130,6 @@ function lockStillNamesInstance(instance: OrcadManagedStopInstance): boolean {
   }
 }
 
-/** A request already present must be this one; another transaction's request is not ours. */
 function existingRequestMatches(path: string, request: OrcadManagedStopRequest): boolean {
   try {
     return (

@@ -1,3 +1,4 @@
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -12,11 +13,11 @@ import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result
 import { nextLookupGeneration } from '../lookup-generation-sequence'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getGitHubSourceTarget, settingsForGitHubRepoOwner } from './work-item-routing'
+import { findWorktreeById } from './worktree-refresh'
 import {
-  findWorktreeById,
   shouldApplyDivergedLinkedPRClear,
   shouldClearDivergedLinkedMergedPR
-} from './worktree-refresh'
+} from '../../../../shared/github/linked-pr-staleness'
 import { startPullRequestLookup } from './pull-request-execution'
 
 export const createPullRequestActions = (
@@ -88,7 +89,7 @@ export const createPullRequestActions = (
         ) {
           void get().updateWorktreeMeta(
             options.worktreeId,
-            { linkedPR: null },
+            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
             {
               shouldApply: (worktree) =>
                 shouldApplyDivergedLinkedPRClear({

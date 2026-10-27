@@ -1,3 +1,4 @@
+import type { PtyRegistrationClaim } from '../../runtime/runtime-terminal-state-records'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { classifyError } from '../../telemetry/classify-error'
@@ -5,28 +6,26 @@ import { track } from '../../telemetry/client'
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { agentKindSchema } from '../../../shared/telemetry-events'
 import { normalizeNodePtySpawnError } from './provider/liveness'
-import { ptySizes } from './delivery/visibility-state'
+import { restoreProvisionalPtySize, type PtySpawnSizeSeed } from './spawn-options-assembly'
 import { clearProviderPtyState } from './provider/state-cleanup'
 
-/** What both spawn lanes' execute step claims before the provider call, under the same names. */
 type PtySpawnExecuteState = {
   deps: { runtime?: OrcaRuntimeService }
   isClaudeLaunch: boolean
   effectiveSessionAppId: string | undefined
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
+  provisionalPtySize: PtySpawnSizeSeed | undefined
   preparedProvisionalExecutionContext: boolean
   pendingRegistrationPtyId: string | null
+  pendingRegistrationClaim?: PtyRegistrationClaim
   rejectedRegistrationCandidate: PtySpawnResult | null
 }
 
-/** Undoes what the execute step claimed for a start that threw, and returns the error to rethrow. */
 export function failPtySpawnExecute(
   ctx: PtySpawnExecuteState,
   err: unknown,
   lane: {
     sessionId: string | undefined
-    /** This spawn minted the session id, so the state built for it must go. */
+    /** This start owns the new incarnation, including a fresh process using a supplied id. */
     ownsNewSession: boolean
     telemetry: { agent_kind?: unknown } | undefined
     /** This request awaited another request's claimed start, whose own catch records its failure. */
@@ -42,34 +41,23 @@ export function failPtySpawnExecute(
       resetIncarnation: true
     })
   }
-  const rawMessage = err instanceof Error ? err.message : String(err)
-  if (rawMessage === 'agent_session_exited_during_start' && ctx.rejectedRegistrationCandidate) {
-    runtime?.releaseRejectedPtyRegistrationFence?.(
-      ctx.rejectedRegistrationCandidate.id,
-      ctx.rejectedRegistrationCandidate.incarnationId
-    )
-  }
   if (ctx.pendingRegistrationPtyId) {
     runtime?.cancelPendingPtyRegistration?.(
       ctx.pendingRegistrationPtyId,
-      ctx.rejectedRegistrationCandidate?.incarnationId
+      ctx.rejectedRegistrationCandidate?.incarnationId,
+      ctx.pendingRegistrationClaim
     )
     ctx.pendingRegistrationPtyId = null
   }
   const spawnError = normalizeNodePtySpawnError(err)
   const exitedBeforeSpawnReply = ctx.rejectedRegistrationCandidate?.exitedBeforeSpawnReply === true
-  if (ctx.effectiveSessionAppId !== undefined) {
-    if (ctx.hadSessionSizeBeforeAttach && ctx.sessionSizeBeforeAttach && !exitedBeforeSpawnReply) {
-      ptySizes.set(ctx.effectiveSessionAppId, ctx.sessionSizeBeforeAttach)
-    } else {
-      ptySizes.delete(ctx.effectiveSessionAppId)
-    }
-  }
-  // Why: provider state the env build materialized for this minted id leaks if spawn failed.
+  // Preparation for an unaccepted new incarnation must not leak into a later start.
   if (lane.ownsNewSession && lane.sessionId !== undefined) {
     clearProviderPtyState(lane.sessionId)
   }
-  // Why: telemetry-plan.md§agent_error — attribute the error to the threaded agent_kind, else sniff the command for `claude`; raw messages are dropped at the validator boundary.
+  // Restore the pre-start grid after teardown, which also clears its provisional cache entry.
+  restoreProvisionalPtySize(ctx, { exitedBeforeSpawnReply })
+  // Attribute validated agent identity; telemetry never receives raw provider errors.
   const threadedKind =
     lane.telemetry?.agent_kind !== undefined
       ? agentKindSchema.safeParse(lane.telemetry.agent_kind)

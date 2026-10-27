@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { StrictMode } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { toast } from 'sonner'
+import { permissionNotice } from './__fixtures__/permission-notice-test-fixture'
+import userEvent from '@testing-library/user-event'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   projectAgentLaunchSettings,
@@ -9,14 +12,27 @@ import {
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
 import { TooltipProvider } from '../ui/tooltip'
 import type { AgentPermissionsRenderer } from './AgentLaunchSettingsCatalog'
-import { AgentsPane } from './AgentsPane'
+import { AgentPermissionsSetting, AgentsPane } from './AgentsPane'
 import { useAppStore } from '@/store'
+import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 
-const transport = vi.hoisted(() => ({ read: vi.fn(), mutate: vi.fn(), detection: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() } }))
+
+const transport = vi.hoisted(() => ({
+  read: vi.fn(),
+  mutate: vi.fn(),
+  detection: vi.fn(),
+  auto: vi.fn(),
+  native: vi.fn(),
+  own: vi.fn()
+}))
 vi.mock('./agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: transport.read,
-  mutateHostAgentLaunchSettings: transport.mutate
+  mutateHostAgentLaunchSettings: transport.mutate,
+  hostSupportsAutoPermissions: transport.auto,
+  hostSupportsNativeChatPermissions: transport.native,
+  hostSupportsOwnChatPermissions: transport.own
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: (target: unknown) => {
@@ -34,8 +50,8 @@ const host = () =>
     agentDefaultArgs: { claude: '--host-marker' },
     agentDefaultEnv: { claude: { API_KEY: 'host-secret' } }
   })
-const renderPermissions: AgentPermissionsRenderer = (_mode, change) => (
-  <button onClick={() => change('manual')}>Manual</button>
+const renderPermissions: AgentPermissionsRenderer = ({ onChange }) => (
+  <button onClick={() => onChange('manual')}>Manual</button>
 )
 const pane = (revision: number) => (
   <TooltipProvider>
@@ -51,12 +67,200 @@ const pane = (revision: number) => (
 
 afterEach(cleanup)
 beforeEach(() => {
+  vi.mocked(toast.success).mockClear()
   transport.read.mockReset().mockResolvedValue(host())
   transport.mutate.mockReset().mockResolvedValue(host())
   transport.detection.mockClear()
+  transport.auto.mockReset().mockResolvedValue(true)
+  transport.native.mockReset().mockResolvedValue(true)
+  transport.own.mockReset().mockResolvedValue(false)
 })
 
 describe('host launch settings form', () => {
+  it.each([false, true])(
+    'describes Own for the selected host capability: %s',
+    async (supported) => {
+      transport.own.mockResolvedValue(supported)
+      transport.read.mockResolvedValue(
+        projectAgentLaunchSettings({ agentPermissionDefault: 'own' })
+      )
+      render(pane(17))
+      await screen.findByText("Each agent's own settings")
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Permissions' }))
+      await screen.findByText(
+        supported
+          ? 'Terminals and chats follow the agent’s own permission settings.'
+          : 'Orca adds no permission flag in terminals; chats use Settings → Chat.'
+      )
+      expect(transport.own).toHaveBeenCalledWith({ environmentId: 'ssh-host', pairingRevision: 17 })
+    }
+  )
+
+  it('shows resolved launch defaults in a collapsed legacy host row', async () => {
+    transport.read.mockResolvedValue(projectAgentLaunchSettings({ agentDefaultArgs: {} }))
+    render(pane(17))
+    const installed = (await screen.findByText('Installed')).closest('section')
+    if (!installed) {
+      throw new Error('missing installed agents section')
+    }
+    expect(within(installed).getByText('--dangerously-skip-permissions')).toBeTruthy()
+    expect(transport.mutate).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])(
+    'offers automatic permissions only when supported: %s',
+    async (supported) => {
+      transport.auto.mockResolvedValue(supported)
+      render(
+        <TooltipProvider>
+          <HostAgentLaunchSettings
+            environmentId="ssh-host"
+            pairingRevision={17}
+            hostName="SSH host"
+            renderPermissions={(props) => <AgentPermissionsSetting {...props} />}
+          />
+        </TooltipProvider>
+      )
+      await screen.findByDisplayValue('--host-marker')
+      const auto = screen.getByRole('radio', { name: 'Auto' })
+      expect(auto.getAttribute('aria-disabled') === 'true').toBe(!supported)
+      fireEvent.click(auto)
+      if (supported) {
+        await waitFor(() =>
+          expect(transport.mutate).toHaveBeenCalledWith(
+            { environmentId: 'ssh-host', pairingRevision: 17 },
+            { type: 'permissions', mode: 'auto', syncNativeChat: true },
+            expect.any(AbortSignal)
+          )
+        )
+      } else {
+        expect(transport.mutate).not.toHaveBeenCalled()
+      }
+    }
+  )
+
+  it.each([false, true])(
+    'sends native synchronization only when the host supports it: %s',
+    async (nativeSupported) => {
+      transport.native.mockResolvedValue(nativeSupported)
+      render(
+        <TooltipProvider>
+          <HostAgentLaunchSettings
+            environmentId="ssh-host"
+            pairingRevision={17}
+            hostName="SSH host"
+            renderPermissions={(props) => <AgentPermissionsSetting {...props} />}
+          />
+        </TooltipProvider>
+      )
+      await screen.findByDisplayValue('--host-marker')
+      fireEvent.click(screen.getByRole('radio', { name: 'Manual' }))
+      await waitFor(() =>
+        expect(transport.mutate).toHaveBeenCalledWith(
+          { environmentId: 'ssh-host', pairingRevision: 17 },
+          {
+            type: 'permissions',
+            mode: 'manual',
+            ...(nativeSupported ? { syncNativeChat: true } : {})
+          },
+          expect.any(AbortSignal)
+        )
+      )
+    }
+  )
+
+  const fullPane = () => (
+    <TooltipProvider>
+      <HostAgentLaunchSettings
+        environmentId="ssh-host"
+        pairingRevision={17}
+        hostName="SSH host"
+        renderPermissions={(props) => <AgentPermissionsSetting {...props} />}
+      />
+    </TooltipProvider>
+  )
+
+  it('changes only the agents Auto does not cover from the Other agents control', async () => {
+    const automatic = projectAgentLaunchSettings(
+      applyAgentPermissionMode({ mode: 'auto', ...applyAgentPermissionMode({ mode: 'yolo' }) })
+    )
+    transport.read.mockResolvedValue(automatic)
+    transport.mutate.mockResolvedValue(automatic)
+    render(fullPane())
+    const others = await screen.findByRole('radiogroup', { name: 'Permissions for other agents' })
+    fireEvent.focus(screen.getByRole('button', { name: 'Supported agents' }))
+    expect((await screen.findByRole('tooltip')).textContent).toContain(
+      'Claude, Claude Agent Teams, and Codex'
+    )
+    expect(within(others).getByRole('radio', { name: 'Yolo' }).getAttribute('aria-checked')).toBe(
+      'true'
+    )
+    fireEvent.click(within(others).getByRole('radio', { name: 'Manual' }))
+    await waitFor(() =>
+      expect(transport.mutate).toHaveBeenCalledWith(
+        { environmentId: 'ssh-host', pairingRevision: 17 },
+        { type: 'permissions', mode: 'manual', exceptAuto: true, syncNativeChat: true },
+        expect.any(AbortSignal)
+      )
+    )
+  })
+
+  it('marks an exception and opens its own permission control from the badge', async () => {
+    const yolo = applyAgentPermissionMode({ mode: 'yolo' })
+    const settings = projectAgentLaunchSettings({
+      ...yolo,
+      agentDefaultArgs: { ...yolo.agentDefaultArgs, claude: '' }
+    })
+    transport.read.mockResolvedValue(settings)
+    transport.mutate.mockResolvedValue(settings)
+    render(fullPane())
+    fireEvent.click(await screen.findByRole('button', { name: 'Claude permissions: Manual' }))
+    const control = await screen.findByRole('radiogroup', { name: 'Claude permissions' })
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(control).getByRole('radio', { name: 'Manual' }))
+    )
+    fireEvent.click(within(control).getByRole('radio', { name: 'Auto' }))
+    await waitFor(() =>
+      expect(transport.mutate).toHaveBeenCalledWith(
+        { environmentId: 'ssh-host', pairingRevision: 17 },
+        { type: 'permissions', agent: 'claude', mode: 'auto', syncNativeChat: true },
+        expect.any(AbortSignal)
+      )
+    )
+  })
+
+  it('replaces custom arguments with the expected mode from the row', async () => {
+    render(fullPane())
+    await screen.findByDisplayValue('--host-marker')
+    fireEvent.click(screen.getByRole('button', { name: 'Replace with Manual' }))
+    await waitFor(() =>
+      expect(transport.mutate).toHaveBeenCalledWith(
+        { environmentId: 'ssh-host', pairingRevision: 17 },
+        { type: 'arguments', agent: 'claude', value: '' },
+        expect.any(AbortSignal)
+      )
+    )
+  })
+
+  it('offers the most common mode for a custom-argument row', async () => {
+    const yolo = applyAgentPermissionMode({ mode: 'yolo' })
+    const settings = projectAgentLaunchSettings({
+      ...yolo,
+      agentDefaultArgs: { ...yolo.agentDefaultArgs, claude: '--model sonnet', codex: '' }
+    })
+    transport.read.mockResolvedValue(settings)
+    transport.mutate.mockResolvedValue(settings)
+    render(fullPane())
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace with Yolo' }))
+    await waitFor(() =>
+      expect(transport.mutate).toHaveBeenCalledWith(
+        { environmentId: 'ssh-host', pairingRevision: 17 },
+        { type: 'arguments', agent: 'claude', value: '--dangerously-skip-permissions' },
+        expect.any(AbortSignal)
+      )
+    )
+  })
+
   it.each(['pill', 'row'] as const)(
     'clears the selected default through its %s',
     async (surface) => {
@@ -152,11 +356,7 @@ describe('host launch settings form', () => {
       </TooltipProvider>
     )
     const args = await screen.findByDisplayValue('--host-marker')
-    expect(
-      screen.getByText(
-        'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
-      )
-    ).toBeTruthy()
+    expect(screen.getByText(/How much agents can do without asking you/)).toBeTruthy()
     expect(screen.queryByDisplayValue('--desktop-marker')).toBeNull()
     fireEvent.change(args, { target: { value: '--r10-marker' } })
     fireEvent.blur(args)
@@ -173,7 +373,7 @@ describe('host launch settings form', () => {
     await waitFor(() =>
       expect(transport.mutate).toHaveBeenCalledWith(
         { environmentId: 'ssh-host', pairingRevision: 17 },
-        { type: 'permissions', mode: 'manual' },
+        { type: 'permissions', mode: 'manual', syncNativeChat: true },
         expect.any(AbortSignal)
       )
     )
@@ -193,7 +393,7 @@ describe('host launch settings form', () => {
     await waitFor(() =>
       expect(transport.mutate).toHaveBeenCalledWith(
         { environmentId: 'ssh-host', pairingRevision: 17 },
-        { type: 'permissions', mode: 'manual' },
+        { type: 'permissions', mode: 'manual', syncNativeChat: true },
         expect.any(AbortSignal)
       )
     )
@@ -237,8 +437,44 @@ describe('host launch settings form', () => {
     expect(transport.mutate).toHaveBeenCalledTimes(1)
     finishArguments(projectAgentLaunchSettings({ agentDefaultArgs: { claude: '--next-marker' } }))
     await waitFor(() => expect(transport.mutate).toHaveBeenCalledTimes(2))
-    expect(transport.mutate.mock.calls[1]?.[1]).toEqual({ type: 'permissions', mode: 'manual' })
+    expect(transport.mutate.mock.calls[1]?.[1]).toEqual({
+      type: 'permissions',
+      mode: 'manual',
+      syncNativeChat: true
+    })
   })
+
+  it.each([false, true])(
+    'retains failed Arguments and follows acknowledged host text (typed=%s)',
+    async (typed) => {
+      const settings = (value: string) =>
+        projectAgentLaunchSettings({
+          ...(typed ? { agentPermissionDefault: 'ask' as const } : {}),
+          agentDefaultArgs: { claude: value }
+        })
+      transport.read.mockResolvedValue(settings('--host-marker'))
+      transport.mutate
+        .mockRejectedValueOnce(new Error('unknown acknowledgement'))
+        .mockResolvedValue(settings('--host-normalized'))
+      const view = render(pane(17))
+      const args = await screen.findByDisplayValue('--host-marker')
+      fireEvent.change(args, { target: { value: '--next-marker' } })
+      fireEvent.blur(args)
+      await screen.findByRole('alert')
+      expect(args).toHaveProperty('value', '--next-marker')
+      fireEvent.blur(args)
+      await screen.findByDisplayValue('--host-normalized')
+      expect(transport.mutate.mock.calls[1]?.[1]).toEqual({
+        type: typed ? 'user-arguments' : 'arguments',
+        agent: 'claude',
+        value: '--next-marker'
+      })
+      fireEvent.change(args, { target: { value: '--unsubmitted' } })
+      view.rerender(pane(18))
+      await screen.findByDisplayValue('--host-marker')
+      expect(screen.queryByDisplayValue('--unsubmitted')).toBeNull()
+    }
+  )
 
   it('does not display launch controls or local defaults for an old server', async () => {
     transport.read.mockResolvedValue(null)
@@ -288,4 +524,38 @@ describe('host launch settings form', () => {
     await screen.findByDisplayValue('--host-marker')
     expect(transport.read.mock.calls.at(-1)?.[1].aborted).toBe(false)
   })
+})
+
+it('shows vanished and retained overrides together and only makes the retained agent inherit', async () => {
+  const before = {
+    agentPermissionDefault: 'full-access' as const,
+    agentPermissionOverrides: { codex: 'full-access' as const, claude: 'full-access' as const }
+  }
+  transport.read.mockResolvedValue(projectAgentLaunchSettings(before))
+  transport.mutate
+    .mockResolvedValueOnce(
+      projectAgentLaunchSettings({
+        ...before,
+        agentPermissionDefault: 'ask',
+        agentPermissionOverrides: { claude: 'full-access' }
+      })
+    )
+    .mockResolvedValueOnce(projectAgentLaunchSettings({ agentPermissionDefault: 'ask' }))
+  render(pane(17))
+  await screen.findByRole('button', { name: 'Permissions' })
+  await userEvent.click(screen.getByRole('button', { name: 'Permissions' }))
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: /Ask for approval/ }))
+  await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(toast.success).mock.calls[0]?.[0]).toBe(
+    '1 agent still uses their own permission setting:'
+  )
+  const { details, follow } = permissionNotice()
+  expect(details.textContent).toContain('Claude · Full access')
+  expect(details.textContent).toContain('Codex now follows Ask for approval')
+  await follow()
+  await waitFor(() => expect(transport.mutate).toHaveBeenCalledTimes(2))
+  expect(transport.mutate.mock.calls.map((call) => call[1])).toEqual([
+    { type: 'permission', choice: 'ask' },
+    { type: 'permission', agent: 'claude', choice: 'default' }
+  ])
 })

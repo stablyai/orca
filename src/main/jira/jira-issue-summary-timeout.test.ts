@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from './authenticated-request'
-import { getJiraSummaryLookupErrorCode } from '../../shared/jira-summary-lookup'
+import { getJiraSummaryLookupErrorCode } from '../../shared/jira/jira-summary-lookup'
 
 const { acquireMock, getClientsMock, jiraRequestMock, releaseMock } = vi.hoisted(() => ({
   acquireMock: vi.fn().mockResolvedValue(undefined),

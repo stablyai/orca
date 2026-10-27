@@ -140,7 +140,6 @@ describe('useNativeChatComposerPaste', () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
     expect(setNotice).toHaveBeenCalledWith('Disk full.')
-    // The optimistic chip must not outlive a failed save.
     expect(store.chips).toHaveLength(0)
   })
 
@@ -181,6 +180,19 @@ describe('useNativeChatComposerPaste', () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
     expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ forNativeChatDraft: true })
+  })
+
+  it("keeps a local structured chat's paste where that chat's send claims it", async () => {
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'local', structuredSessionId: 'session-1' })
+    })
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      forNativeChatDraft: true,
+      forStructuredChat: true
+    })
   })
 
   it('shows a pending chip before the save resolves', async () => {
