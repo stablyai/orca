@@ -27,6 +27,8 @@ describe('system language detection', () => {
     ['en-US', 'en', 'supported'],
     ['fr_CA.UTF-8', 'fr', 'supported'],
     ['pt-PT', 'pt', 'supported'],
+    ['it-IT', 'it', 'supported'],
+    ['it_CH.UTF-8', 'it', 'supported'],
     ['zh-Hans-TW', 'zh', 'supported'],
     ['zh-Hant-CN', 'en', 'unsupported'],
     ['zh-Latn-CN', 'en', 'unsupported'],

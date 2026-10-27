@@ -113,7 +113,8 @@
         "japanese": "日本語",
         "spanish": "Español",
         "french": "Français",
-        "portuguese": "Português (Brasil)"
+        "portuguese": "Português (Brasil)",
+        "italian": "Italiano"
       },
       "statusBar": {
         "claudeToggleDescription": "Muestra el consumo de tokens y el costo de Claude para el espacio de trabajo activo.",

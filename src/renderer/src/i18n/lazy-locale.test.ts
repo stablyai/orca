@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_ITALIAN,
   UI_LANGUAGE_PORTUGUESE,
   UI_LANGUAGE_SPANISH
 } from '../../../shared/ui-language'
@@ -36,6 +37,12 @@ describe('renderer i18n lazy locale loading', () => {
     await setRendererUiLanguage(UI_LANGUAGE_PORTUGUESE)
     expect(i18n.language).toBe('pt')
     expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+  })
+
+  it('lazy-loads Italian via setRendererUiLanguage before it resolves', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_ITALIAN)
+    expect(i18n.language).toBe('it')
+    expect(i18n.t('menu.edit', { defaultValue: 'Edit' })).toBe('Modifica')
   })
 
   it.each(['network', 'http', 'invalid-json'] as const)(

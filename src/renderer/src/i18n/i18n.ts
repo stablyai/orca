@@ -9,6 +9,7 @@ import { initReactI18next } from 'react-i18next'
 import enRuntimeRequired from './en-runtime-required.json'
 import esCatalogUrl from './locales/es.json?url'
 import frCatalogUrl from './locales/fr.json?url'
+import itCatalogUrl from './locales/it.json?url'
 import jaCatalogUrl from './locales/ja.json?url'
 import koCatalogUrl from './locales/ko.json?url'
 import ptCatalogUrl from './locales/pt.json?url'
@@ -30,6 +31,7 @@ export const i18n: I18nInstance = i18next.createInstance()
 const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> = {
   es: esCatalogUrl,
   fr: frCatalogUrl,
+  it: itCatalogUrl,
   ja: jaCatalogUrl,
   ko: koCatalogUrl,
   pt: ptCatalogUrl,
