@@ -8,22 +8,14 @@ export type SessionOptionSelectChoice = {
   description?: string
 }
 
-/** `default` is the catalog's own value shown before anything is observed —
- *  truthful to display, but never evidence about a running agent. `dispatched`
- *  is sent-but-unread: the pill shows it, and a later report that disagrees is
- *  what corrects it. Both transports emit it, so it alone names neither — see
- *  `transport` on the descriptor. */
+/** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.
+ * Both transports emit dispatched; inspect descriptor.transport to distinguish lanes. */
 export type SessionOptionValueSource = 'applied' | 'dispatched' | 'reported' | 'default' | 'unknown'
 
-/** How a live value reaches the agent. `catalog` types the catalog's command into
- *  the agent's terminal and can only learn the outcome by parsing the screen back;
- *  `agent-session` writes over the structured protocol, which reports every turn. */
+/** catalog types PTY commands and confirms by reading the screen; agent-session uses structured per-turn reports. */
 export type NativeChatLiveOptionTransport = 'catalog' | 'agent-session'
 
-/** Closed set of reasons an option is not settable in the current mode. A key
- *  (not free English) so the producer and the localized label stay in sync —
- *  an exhaustive switch turns any drift into a type error instead of leaking
- *  untranslated text. */
+/** Closed localized reason keys: exhaustive handling catches drift without leaking untranslated English. */
 export type SessionOptionDisabledReason =
   | 'available-after-session-start'
   | 'set-when-session-starts'
@@ -39,39 +31,28 @@ export type SessionOptionDescriptor = {
         currentValue?: string
         choices: SessionOptionSelectChoice[]
       }
-    /** Required, unlike the select's: a switch has no third position, so a value
-     *  the producer left unset would render as `false` and assert the opposite of
-     *  the catalog default. Whether anything confirmed it is `valueSource`'s job. */
+    /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
         type: 'boolean'
         currentValue: boolean
       }
   valueSource: SessionOptionValueSource
-  /** Required so a new producer cannot inherit the wrong lane's rendering by
-   *  omission — `dispatched` is emitted identically by both and cannot discriminate. */
+  /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
-  /** Why: picker-only and toggle-only PTY commands cannot be represented as
-   * a truthful radio/checkbox state, so the producer exposes an action row. */
+  /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }
 
-/** A value we typed at the agent and have never read back. Both lanes write
- *  `dispatched` on a set, so the source alone does not name one — the transport
- *  check is what limits the caption to the terminal, where reading the screen
- *  back is the only confirmation available. */
+/** Sent-but-unread PTY value. Both lanes emit dispatched, so transport must restrict the caption to terminal screen-read confirmation. */
 export function sessionOptionDispatchUnconfirmed(
   descriptor: Pick<SessionOptionDescriptor, 'valueSource' | 'transport'>
 ): boolean {
   return descriptor.valueSource === 'dispatched' && descriptor.transport === 'catalog'
 }
 
-/** Why a boolean row needs a marker at all: the switch always renders a value, so
- *  the row is the only place that can say where the value came from. `default` and
- *  `unreported` are opposite claims — the first says the catalog value is what a
- *  launch will send, the second says nothing has told us anything and the agent may
- *  be running something else entirely — so they never share one label. */
+/** Switches always display values: distinguish launch-sent catalog defaults from unreported running state, which may differ. */
 export type SessionOptionValueMarker = 'default' | 'unreported'
 
 /** Display-only: it labels a rendered value and never gates what is sent, which

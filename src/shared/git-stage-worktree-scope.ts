@@ -1,10 +1,6 @@
 import { encodeGitPathspecs } from './git-pathspec-stdin'
 
-/**
- * Host-side "stage everything" for a Source Control listing that hit the status
- * cap: the renderer only holds the first rows, so it cannot name every path.
- * `all` stages tracked and untracked changes; `tracked` stages only tracked ones.
- */
+/** Host-side staging covers paths omitted by capped status listings: all includes untracked, tracked excludes them. */
 export type GitStageWorktreeScope = 'all' | 'tracked'
 
 /** What a host that ran a scoped stage replies with; a host without scope support replies without it. */
@@ -17,10 +13,7 @@ export function parseGitStageWorktreeScope(value: unknown): GitStageWorktreeScop
 export const GIT_STAGE_WORKTREE_SCOPE_UNSUPPORTED_MESSAGE =
   'The Orca version running this workspace cannot stage changes beyond the ones listed, so nothing was staged. Update Orca on that host, or stage from a terminal.'
 
-/**
- * Why: an older host strips `scope` and stages only `filePaths`, which scoped callers send empty,
- * so a missing receipt means nothing was staged — never report that as a successful "stage all".
- */
+/** Older hosts strip scope and stage the empty filePaths list; require a receipt before reporting stage-all success. */
 export function requireGitStageWorktreeScopeReceipt(
   reply: unknown,
   scope: GitStageWorktreeScope
@@ -53,7 +46,7 @@ export async function stageGitWorktreeScope(
   options: StageGitWorktreeScopeOptions = {}
 ): Promise<GitStageWorktreeScopeReceipt> {
   const excluded = scope === 'all' ? (options.excludedUntrackedPaths ?? []) : []
-  // Why: --relative keeps a folder workspace inside a larger repo from staging outside its folder.
+  // --relative keeps folder workspaces inside their own portion of a larger repo.
   const unresolved = nulSeparatedPaths(
     (await runGit(['diff', '--name-only', '--relative', '-z', '--diff-filter=U'])).stdout
   )

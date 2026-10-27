@@ -1,8 +1,3 @@
-// The queue has no card count limit; only the bytes its cards publish are bounded, because every
-// card rides each opening frame a remote client reads. Past that bound a send is refused in words
-// that say what to do, deleting a card makes room again, and other agents' cards always leave room
-// for the person's largest message.
-
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { agentSessionRefusalNotice } from '../../../shared/agent-session-refusal-notice'
 import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-params'
@@ -24,7 +19,6 @@ beforeEach(async () => {
 
 afterEach(() => rig.dispose())
 
-/** Text whose message body (or, with `blocksOnly`, whose blocks) serializes to exactly `bytes`. */
 function textOfBytes(bytes: number, blocksOnly = false): string {
   const empty = hostTestMessage('')
   const overhead = Buffer.byteLength(JSON.stringify(blocksOnly ? empty.blocks : empty), 'utf8')

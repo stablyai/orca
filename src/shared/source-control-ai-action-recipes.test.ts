@@ -7,6 +7,7 @@ import {
   resolveSourceControlAiForOperation
 } from './source-control-ai'
 import type { GlobalSettings } from './global-settings-types'
+import type { SourceControlActionRecipe } from './source-control-ai-actions'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
@@ -144,6 +145,40 @@ describe('source-control AI action recipes', () => {
       commandInputTemplate: '{basePrompt}\n\nrepo',
       agentArgs: '--model gpt-5.5'
     })
+  })
+
+  it('gives a repository owning its agent its own default, and partial overrides global ownership', () => {
+    const base = settings()
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        fixChecks: {
+          agentId: 'codex',
+          launchPreferences: { agentId: 'codex' as const, model: 'gpt-5.6-terra' }
+        }
+      }
+    }
+    const resolve = (fixChecks: SourceControlActionRecipe) =>
+      resolveSourceControlActionRecipe({
+        settings: base,
+        repo: { sourceControlAi: { actionOverrides: { fixChecks } } },
+        actionId: 'fixChecks'
+      })
+
+    expect(resolve({ agentId: 'codex', agentArgs: '--search' }).launchPreferences).toBeUndefined()
+    expect(resolve({ agentId: null }).launchPreferences).toBeUndefined()
+    expect(resolve({ agentArgs: '--search' }).launchPreferences).toEqual({
+      agentId: 'codex',
+      model: 'gpt-5.6-terra'
+    })
+    expect(resolve({ agentId: 'claude' })).not.toHaveProperty('launchPreferences')
+    expect(
+      resolve({
+        agentId: 'codex',
+        launchPreferences: { agentId: 'codex', model: 'gpt-5.5', options: { effort: 'high' } }
+      }).launchPreferences
+    ).toEqual({ agentId: 'codex', model: 'gpt-5.5', options: { effort: 'high' } })
   })
 
   it('lets repo action recipes explicitly clear inherited CLI args', () => {

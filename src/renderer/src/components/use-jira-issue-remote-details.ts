@@ -4,7 +4,7 @@ import {
   jiraListTransitionsForTarget
 } from '@/runtime/runtime-jira-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira-types'
+import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
 
 export function useJiraIssueRemoteDetails(
   target: RuntimeClientTarget,

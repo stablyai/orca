@@ -39,7 +39,7 @@ describe('nativeChatSubagentGroupHeader', () => {
     expect(header).toMatchObject({ alertState: 'failed', alert: '1 failed' })
   })
 
-  it('settles to the worst verdict, the run length and the tokens', () => {
+  it('summarizes completed siblings with the run length and tokens', () => {
     const header = nativeChatSubagentGroupHeader(
       [
         child('a', 'completed', { startedAt: 0, settledAt: 60_000, tokens: 9_000 }),

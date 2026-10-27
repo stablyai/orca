@@ -23,7 +23,7 @@ describe('session search public contract', () => {
   ])('clamps %s to %s', (limit, expected) => {
     expect(AiVaultSearchRequestSchema.parse({ query: 'needle', limit }).limit).toBe(expected)
   })
-  it('allows the engine to report long-query truncation', () => {
+  it('preserves long query text in the request schema', () => {
     const query = 'needle '.repeat(100)
     expect(AiVaultSearchRequestSchema.parse({ query }).query).toBe(query)
   })

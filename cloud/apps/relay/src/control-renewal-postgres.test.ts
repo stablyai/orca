@@ -449,9 +449,7 @@ describePostgres('PostgreSQL control renewal', () => {
   it('renews both of one host\u2019s control leases in a single batch', async () => {
     const store = new RelayAssignmentStore(database, () => now)
     const identity = identities[13]!
-    // Two live control leases on one host. Written directly because
-    // activateControl retires the prior generation, and what is under test is the
-    // statement's row-wise behaviour, not how the second lease came to exist.
+    // Seed duplicate live controls directly; activateControl retires predecessors, but this case tests row-wise batch behavior.
     await database.query(
       `INSERT INTO relay_assignment_activity_leases
          (user_id, relay_host_id, activity_id, activity_kind, cell_id,

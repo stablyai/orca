@@ -177,13 +177,11 @@ async function preparePullRequestBranch(
     base,
     await getPullRequestRemoteRefState(execGit, base, MAX_PULL_REQUEST_CONTEXT_BYTES)
   )
-  // Why: PR generation only needs the selected base branch. A repo-wide
-  // `fetch --all` makes stale contributor fork remotes block unrelated PRs.
+  // Fetch only selected base; unrelated stale contributor remotes must not block generation.
   await fetchComparisonBase(execGit, fetchTarget)
   return {
     comparisonBase,
-    // Why: Generate must be read-only. Rebasing the live worktree can rewrite
-    // files under the running dev app and trigger a full Electron/Vite reload.
+    // Generation must be read-only: rebase can mutate the live app worktree and trigger Electron/Vite reload.
     branchChanged: false
   }
 }

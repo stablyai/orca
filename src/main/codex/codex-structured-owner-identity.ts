@@ -5,20 +5,11 @@ import {
 } from '../../shared/agent-session-provider-handle'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
-import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
-
-// What the lease records about the child Codex just handed back: the process it
-// will later re-prove, and the provider handle link the journal binds to. Both
-// must describe the thread Codex actually opened, never the one a client asked
-// for.
+import { readProcessStartTimeMs } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
 const START_TIME_READ_ATTEMPTS = 3
 
-/**
- * The child's identity, read once. The real connection reports its spawn before the handshake, and
- * `onSpawned` makes it durable there, so a crash mid-start leaves an owner recovery can stop; a
- * connection that reports no spawn is identified once it is open.
- */
+/** Persist spawn identity before handshake so recovery can stop a child that crashes during startup. */
 export function codexSpawnedProcessIdentity(
   input: {
     identity: AgentSessionJournalIdentity
@@ -51,8 +42,7 @@ export async function codexProcessIdentity(
   if (input.pid === undefined) {
     throw new Error('codex app-server started without a pid')
   }
-  // Best-effort: without it a later owner probe is indeterminate, and recovery releases such an
-  // owner without signalling it, so an unreadable start time must not refuse the session.
+  // Missing start time leaves recovery indeterminate; it releases the owner without signalling it.
   let processStartTimeMs: number | null = null
   for (
     let attempt = 0;
@@ -76,7 +66,7 @@ type CodexProviderHandleLinkInput = {
   observedAt: number
 } & (
   | { origin?: 'adopted'; resumed: boolean; supersedesThreadId?: never }
-  /** A new thread started in place of this unsaved one; only a creation can supersede. */
+  /** Only a newly created thread can supersede an unsaved predecessor. */
   | { origin?: never; resumed: false; supersedesThreadId: string }
 )
 

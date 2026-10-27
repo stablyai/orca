@@ -48,9 +48,6 @@ describe('doc preview grants', () => {
 })
 
 describe('resolveDocPreviewTargetPath', () => {
-  // A grant whose root IS its request base — a document at the workspace root, or outside any
-  // workspace — starts with the entry file alone: that directory is where secrets live, and a
-  // DNS-prefetch beacon needs no click, so nothing beside the entry reads without the reader.
   it('reads only the entry document until the reader approves its directory', () => {
     const grant = mintPosixGrant()
 
@@ -106,10 +103,7 @@ describe('resolveDocPreviewTargetPath', () => {
     expect(resolveDocPreviewTargetPath(grant, 'index.html\0.png')).toBeNull()
   })
 
-  // Why this is a traversal test and not a containment test: every request path that names a
-  // sibling directory has to climb out of the root first, so the `..` segment guard answers it
-  // before the prefix check runs. Sibling containment is exercised where it is reachable —
-  // against a canonicalized path, below.
+  // Traversal is rejected first; canonical-path tests exercise sibling-prefix containment.
   it('refuses a sibling directory by refusing the traversal that reaches it', () => {
     const grant = mintPosixGrant()
 
@@ -210,9 +204,6 @@ describe('resolveDocPreviewTargetPath', () => {
 })
 
 describe('resolveCanonicalDocPreviewPath', () => {
-  // Why here and not above: a canonical path is the one input that can name a sibling directory
-  // without traversing — the host resolved a symlink to it — so this is where the prefix check
-  // is the only thing standing between the grant and `/srv/repo/docs-private`.
   it('refuses a canonical path in a sibling directory that shares the root prefix', async () => {
     const grant = mintPosixGrant()
 

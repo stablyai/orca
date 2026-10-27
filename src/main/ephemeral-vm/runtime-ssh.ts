@@ -11,7 +11,6 @@ import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 export type RuntimeOwnedSshConnectionResult = {
   targetId: string
   target: SshTarget
-  /** The managed Orca server that serves this host. */
   environmentId: string
 }
 
@@ -30,14 +29,12 @@ export async function connectRuntimeOwnedSshTarget(args: {
     if (state.status !== 'connected') {
       throw new Error(state.error || `SSH target did not connect: ${state.status}`)
     }
-    // Why no wait: only a managed server can serve the host, so an unserved connect fails now.
     if (state.managedServer?.kind !== 'managed') {
       throw new SshHostNotServedError(target.id)
     }
     environmentId = state.managedServer.environmentId
   } catch (error) {
-    // The target is persisted at upsert, so a failed connect would orphan it;
-    // remove it (idempotent) before rethrowing so cleanup is complete.
+    // Upsert persisted the target; remove it on failure to avoid orphaning it.
     await removeRuntimeOwnedSshTarget(target.id).catch(() => undefined)
     throw error
   }

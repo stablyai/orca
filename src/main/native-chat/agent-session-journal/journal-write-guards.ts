@@ -1,7 +1,4 @@
-// Guards an append clears before it becomes durable.
-//
-// Both refuse loudly rather than degrade: a silent drop here is a message
-// missing from the transcript with nothing to explain it.
+// Refuse invalid appends loudly; silent drops would leave unexplained transcript gaps.
 
 export class AgentSessionJournalError extends Error {
   constructor(
@@ -19,8 +16,6 @@ export class AgentSessionJournalError extends Error {
   }
 }
 
-/** A newer Orca's database is never written: this host cannot represent rows it does not
- *  understand. */
 export function assertJournalWritable(readOnly: boolean, sessionId: string): void {
   if (readOnly) {
     throw new AgentSessionJournalError(
@@ -30,8 +25,7 @@ export function assertJournalWritable(readOnly: boolean, sessionId: string): voi
   }
 }
 
-/** A write from a superseded owner is rejected outright — merging it would let
- *  two writers share one sequence space. */
+/** Reject superseded writers so owners cannot share a sequence space. */
 export function assertJournalFence(fence: number, highestFence: number): void {
   if (fence < highestFence) {
     throw new AgentSessionJournalError(
@@ -41,8 +35,7 @@ export function assertJournalFence(fence: number, highestFence: number): void {
   }
 }
 
-/** One id, one delivery: a second submission row under an id would reset its
- *  settled answer to pending and hand the message over again. */
+/** Reusing a submission ID would reset settled state and deliver twice. */
 export function assertSubmissionIdUnused(
   submissions: ReadonlyMap<string, unknown>,
   clientMessageId: string

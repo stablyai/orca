@@ -2,24 +2,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 
-/**
- * Carry this client's captured scrollback into the host's layout for a replaced tab.
- *
- * Why: the pull replaces a replaced tab's layout wholesale, and a park capture does not bump
- * `tab.generation`, so a just-parked tab is not in `locallyPreservedTabIds` and its
- * `buffersByLeafId` — the only client-side copy of a remote pane's scrollback — goes with it.
- * The host is authoritative for structure and never mints scrollback of its own: its copy is
- * only ever some client's earlier upload. So take `root`, `ptyIdsByLeafId`, titles and the
- * active/expanded leaves from the host verbatim, and let the client fill in content the host's
- * copy lacks. Structure from the host, bytes from whoever still has them.
- *
- * Why local wins a conflict: neither copy is then the only one, so neither choice destroys
- * evidence — but remote-wins would overwrite the tail captured since this client's last upload
- * and then propagate that regression back on the next replace-session patch.
- *
- * Why filtered to the host's leaves: it keeps the client from resurrecting a leaf the host
- * retired, and from contributing anything for a split the host added while we were away.
- */
+/** Host owns layout structure; preserve local captured bytes only for its surviving leaves. Park does not bump generation, so wholesale pulls otherwise erase newer local tails and propagate stale uploads. */
 export function retainLocalScrollbackInRemoteLayout(
   local: TerminalLayoutSnapshot | undefined,
   remote: TerminalLayoutSnapshot

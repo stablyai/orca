@@ -3,12 +3,7 @@ export function textContent(node: Node): string {
   return (node.textContent ?? '').replace(/ /g, ' ')
 }
 
-/**
- * One node of the editable surface as inline markdown.
- *
- * A task item's `<label>` is the checkbox's chrome rather than content, so it serializes to
- * nothing and the list writer supplies the marker instead.
- */
+// Serialize task label as empty: checkbox chrome is replaced by list writer’s Markdown marker.
 export function inlineMarkdown(node: Node | null | undefined): string {
   if (!node) {
     return ''

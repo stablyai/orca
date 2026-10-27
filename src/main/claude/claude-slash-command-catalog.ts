@@ -6,7 +6,6 @@ const MAX_NAME_LENGTH = 200
 const MAX_DESCRIPTION_LENGTH = 200
 const MAX_ARGUMENT_HINT_LENGTH = 100
 
-/** The provider's own row text for one command, absent when it reported none. */
 type CommandDetail = Pick<AgentSessionSlashCommand, 'description' | 'argumentHint'>
 
 function commandName(value: unknown): string | undefined {
@@ -31,7 +30,6 @@ function names(value: unknown): string[] {
   return [...seen]
 }
 
-/** A single picker row's worth of provider text: unusable values are dropped, not truncated. */
 function rowText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string' || value.length > maxLength) {
     return undefined
@@ -88,8 +86,7 @@ function carriesCommandCatalog(message: Record<string, unknown>): boolean {
   )
 }
 
-/** What the session reports it can run, terminal-only commands included: chat runs them too, and
- *  that list arrives only with a turn, so hiding it made the menu change mid-chat. */
+// Chat also runs terminal-only commands; filtering them makes the menu change after a turn.
 export function readClaudeSlashCommands(
   message: Record<string, unknown>
 ): AgentSessionSlashCommand[] {
@@ -100,11 +97,9 @@ export function readClaudeSlashCommands(
   }))
 }
 
-/** Per-session catalog seeded during acquisition and refreshed by provider frames. */
 export class ClaudeSlashCommandCatalog {
   private entries: AgentSessionSlashCommand[] | undefined
   private hasSkillClassification = false
-  /** The folder the first catalog frame reported: the one the session's own `/` list was loaded for. */
   private launchCwd: string | undefined
   private commandNames = new Set<string>()
   private details = new Map<string, CommandDetail>()
@@ -136,8 +131,7 @@ export class ClaudeSlashCommandCatalog {
     return this.entries
   }
 
-  /** Why: the CLI lists `skills` for the frame's `cwd`, which follows the agent's `cd`, but
-   *  `slash_commands` for the session, so only a launch-folder frame may change a known kind. */
+  // skills follows cwd after cd; slash_commands remains session-wide, so preserve launch-folder kinds.
   private classify(message: Record<string, unknown>): AgentSessionSlashCommand[] {
     const reported = readClaudeSlashCommands(message)
     const cwd = typeof message.cwd === 'string' ? message.cwd : undefined
@@ -153,12 +147,11 @@ export class ClaudeSlashCommandCatalog {
     return reported.map((entry) => ({ ...entry, kind: known.get(entry.name) ?? entry.kind }))
   }
 
-  /** Provider row text, carried across the name-only frames that never restate it. */
+  // Name-only frames do not repeat descriptor text.
   private describe(entries: AgentSessionSlashCommand[]): AgentSessionSlashCommand[] {
     return entries.map((entry) => ({ ...entry, ...this.details.get(entry.name) }))
   }
 
-  /** True when this frame replaced the catalog with a different one. */
   observe(message: Record<string, unknown>): boolean {
     let next: AgentSessionSlashCommand[]
     if (carriesCommandCatalog(message)) {

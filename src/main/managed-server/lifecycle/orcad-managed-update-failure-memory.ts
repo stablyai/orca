@@ -1,7 +1,4 @@
-/**
- * Hosts whose orcad update to this app's build failed during this launch, SSH and WSL alike: the
- * update decision's `failedBefore` input. Session-only, so a restart retries once.
- */
+// Remember failures only for this session so restarting retries once.
 export type OrcadUpdateFailureHost = { kind: 'ssh' | 'wsl'; id: string }
 
 export type OrcadUpdateFailure = { code: string; reason: string }

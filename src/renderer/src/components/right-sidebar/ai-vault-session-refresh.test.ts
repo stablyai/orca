@@ -30,7 +30,6 @@ const THROTTLE_MS = 30_000
 const listSessionsMock = vi.fn<(args: AiVaultListArgs) => Promise<AiVaultListResult>>()
 const cancelListSessionsMock = vi.fn<(args: { requestToken: string }) => Promise<void>>()
 
-// Captures the hook's subscription to the main-process window-focus push.
 let windowFocusCallback: (() => void) | null = null
 const onWindowFocusedMock = vi.fn((callback: () => void) => {
   windowFocusCallback = callback
@@ -275,52 +274,39 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(lastCallArgs()).toMatchObject({ limit: 250, scopePaths: ['/repo'] })
   })
 
-  it('reuses a loaded larger depth when lowering and raising within its coverage', async () => {
+  it('shows cached coverage while revalidating each selected depth', async () => {
     const loaded = {
       ...EMPTY_RESULT,
       sessions: Array.from({ length: 600 }, (_, index) => makeVaultSession(index))
     }
-    listSessionsMock.mockResolvedValueOnce(loaded)
+    listSessionsMock.mockImplementation(async (args) => ({
+      ...loaded,
+      sessions: loaded.sessions.slice(0, args.limit)
+    }))
     await renderHook([], 'ssh:dev-box', 1000)
     await flushMicrotasks()
-
     await rerenderHook([], 'ssh:dev-box', 250)
     await flushMicrotasks()
     expect(latest?.sessions).toHaveLength(250)
-
     await rerenderHook([], 'ssh:dev-box', 500)
     await flushMicrotasks()
     expect(latest?.sessions).toHaveLength(500)
-    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+    expect(listSessionsMock).toHaveBeenCalledTimes(3)
+    expect(listSessionsMock.mock.calls.every(([args]) => args.force === false)).toBe(true)
   })
 
-  it('reuses the rendered result after the panel remounts on a tab switch', async () => {
-    const loaded = { ...EMPTY_RESULT, sessions: [makeVaultSession(1)] }
-    listSessionsMock.mockResolvedValueOnce(loaded)
-    await renderHook(['/repo'], 'ssh:dev-box', 250)
-    await flushMicrotasks()
-
-    roots.splice(0).forEach((root) => act(() => root.unmount()))
-    await renderHook(['/repo'], 'ssh:dev-box', 250)
-    await flushMicrotasks()
-
-    expect(listSessionsMock).toHaveBeenCalledTimes(1)
-    expect(latest?.sessions).toEqual(loaded.sessions)
-  })
-
-  it('reuses each workspace result when switching back across tabs', async () => {
-    listSessionsMock
-      .mockResolvedValueOnce({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
-      .mockResolvedValueOnce({ ...EMPTY_RESULT, sessions: [makeVaultSession(2)] })
+  it('revalidates each workspace when switching back across tabs', async () => {
+    listSessionsMock.mockImplementation(async (args) => ({
+      ...EMPTY_RESULT,
+      sessions: [makeVaultSession(args.scopePaths?.[0] === '/repo-a' ? 1 : 2)]
+    }))
     await renderHook(['/repo-a'], 'ssh:dev-box', 250)
     await flushMicrotasks()
-
     await rerenderHook(['/repo-b'], 'ssh:dev-box', 250)
     await flushMicrotasks()
     await rerenderHook(['/repo-a'], 'ssh:dev-box', 250)
     await flushMicrotasks()
-
-    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(listSessionsMock).toHaveBeenCalledTimes(3)
     expect(latest?.sessions[0]?.id).toBe('session-1')
   })
 
@@ -433,7 +419,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     await flushMicrotasks()
     const firstResult = latest?.scanResult
 
-    // Same scannedAt = the snapshot already on screen was replayed.
+    // Repeated stamp and equal content reuse the snapshot already on screen.
     listSessionsMock.mockResolvedValueOnce({ ...EMPTY_RESULT })
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()
@@ -451,8 +437,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
 
   // An 'all' result is a merge of legs on independent clocks, stamped with the
   // newest leg. A paired host whose clock lags the desktop can return new
-  // sessions while the merged stamp repeats, so the stamp guard above must not
-  // decide anything under 'all' — only the structural reconcile may.
+  // sessions while the merged stamp repeats; final content decides publication.
   it('applies a changed all-host result whose merged scannedAt stood still', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
     listSessionsMock.mockResolvedValueOnce({
@@ -477,8 +462,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
   })
 
   // The main process routes an empty or unrecognized scope to the same all-host
-  // merge, so the renderer has to read those as merged too or the guard returns
-  // for exactly the results it cannot reason about.
+  // merge; its changed content must also reach reconciliation.
   it('treats a scope that normalizes to all-host as merged', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
     listSessionsMock.mockResolvedValueOnce({
@@ -514,8 +498,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     const applied = latest?.scanResult
     const appliedSessions = latest?.sessions
 
-    // Dropping the stamp guard for 'all' must not reintroduce the churn: the
-    // reconcile still has to recognise an independently cloned identical body.
+    // Reconciliation recognises an independently cloned identical body.
     listSessionsMock.mockResolvedValueOnce(structuredClone(first))
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()
@@ -792,8 +775,7 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     await setAgentStatuses({ 'pane-1': makeAgentEntry('sess-1', 'working') })
     expect(listSessionsMock).toHaveBeenCalledTimes(2)
 
-    // Message/tool pings and state transitions on a known session must not
-    // re-trigger — only a session id we haven't seen does.
+    // Only new session IDs rescan; known-session pings and state transitions must not.
     await advance(THROTTLE_MS + 1)
     await setAgentStatuses({ 'pane-1': makeAgentEntry('sess-1', 'done') })
     expect(listSessionsMock).toHaveBeenCalledTimes(2)
@@ -807,12 +789,7 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     expect(listSessionsMock).toHaveBeenCalledTimes(3)
   })
 
-  // Reported against an adhoc build: a workspace whose editor was loading files fine still showed
-  // "SSH relay is not ready" with "0 shown · 0 recent" in this panel. That error is what the relay
-  // throws before it is ready, which is ordinary at startup and for the window a reconnect leaves it
-  // not-ready — but nothing here retried on the relay simply becoming ready. The remaining triggers
-  // are mount, window refocus and a new agent session id, so the error stuck while the rest of the
-  // workspace worked. The file explorer already recovers off this same signal.
+  // Startup/reconnect relay failures need readiness-triggered recovery; mount/refocus/new-session events may never recur.
   it('retries after a not-ready failure once the SSH connection lands', async () => {
     listSessionsMock.mockRejectedValueOnce(new Error('SSH relay is not ready'))
     await renderHook(['/home/neil/projects/orca'])
@@ -835,8 +812,7 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
   })
 
   it('does not rescan on a connection bump when the last listing succeeded', async () => {
-    // Gated on a prior error so a local workspace, or one that already listed fine, does not rescan
-    // every time some unrelated host connects.
+    // Successful listings must not rescan when unrelated hosts connect.
     listSessionsMock.mockResolvedValue(EMPTY_RESULT)
     await renderHook(['/home/neil/projects/orca'])
     await flushMicrotasks()
@@ -853,9 +829,7 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
   })
 })
 
-// Regression for #18096: over plain HTTP the browser hides crypto.randomUUID, so minting
-// the request token with a raw call threw during render and the panel showed "The right
-// sidebar hit an error". The fallback must still be a well-formed v4 UUID.
+// Plain HTTP hides crypto.randomUUID; fallback tokens must remain v4 UUIDs (#18096).
 describe('useAiVaultSessionRefresh in a non-secure context', () => {
   it('mints a request token when crypto.randomUUID is unavailable', async () => {
     await withNonSecureContextCrypto(async () => {

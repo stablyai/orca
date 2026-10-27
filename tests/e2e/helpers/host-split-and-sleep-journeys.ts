@@ -1,8 +1,3 @@
-/**
- * Host-created manual split restore, and an
- * agent pane slept through the sidebar so quit and relaunch resume it.
- */
-
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -18,7 +13,6 @@ import { splitActiveTerminalPane, waitForActiveTerminalManager } from './termina
 import { waitForBoundPanes, type FolderWorkspaceSetup } from './terminal-layout-journeys'
 import { bootstrapFirstLaunch, seededRepoPathOrSkip } from './terminal-restart-persistence'
 
-/** Create and split a host terminal, then leave it for the reactivation layout check. */
 export async function addHostCreatedSplitWorktree(
   page: Page,
   userDataDir: string
@@ -42,10 +36,20 @@ export async function addHostCreatedSplitWorktree(
   const created = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
     repo: `id:${added.result.repo.id}`,
     name: 'parity-setup',
+    branchNameOverride: 'parity-setup',
     noParent: true,
     activate: false,
     setupDecision: 'skip'
   })
+  console.log(
+    '[host-split-created]',
+    JSON.stringify({
+      repoId: added.result.repo.id,
+      worktreeId: created.result.worktree.id,
+      path: created.result.worktree.path,
+      branch: created.result.worktree.branch
+    })
+  )
   const terminals = await client.call<RuntimeTerminalListResult>('terminal.list', {
     worktree: `id:${created.result.worktree.id}`
   })
@@ -66,24 +70,88 @@ export async function addHostCreatedSplitWorktree(
   }
 }
 
-/** Reopens the host-split worktree once both terminals are running. */
 export async function openHostSplitWorktree(page: Page, userDataDir: string): Promise<string> {
   let setupWorktreeId: string | undefined
-  await expect
-    .poll(async () => {
-      setupWorktreeId = await page.evaluate(async () => {
-        const store = window.__store!
-        await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
-        for (const repo of store.getState().repos) {
-          await store.getState().fetchWorktrees(repo.id)
-        }
-        return Object.values(store.getState().worktreesByRepo)
-          .flat()
-          .find((worktree) => worktree.branch === 'refs/heads/parity-setup')?.id
+  let lastListing: unknown
+  try {
+    await expect
+      .poll(async () => {
+        const observed = await page.evaluate(async () => {
+          const store = window.__store!
+          await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
+          const listings: { repoId: string; fetchResult: boolean }[] = []
+          for (const repo of store.getState().repos) {
+            listings.push({
+              repoId: repo.id,
+              fetchResult: await store.getState().fetchWorktrees(repo.id)
+            })
+          }
+          const state = store.getState()
+          const worktrees = Object.values(state.worktreesByRepo).flat()
+          return {
+            setupWorktreeId: worktrees.find(
+              (worktree) => worktree.branch === 'refs/heads/parity-setup'
+            )?.id,
+            listings,
+            repos: state.repos.map(({ id, path, executionHostId, connectionId }) => ({
+              id,
+              path,
+              executionHostId,
+              connectionId
+            })),
+            endpointProjects: state.endpointProjects.map(({ id, sourceRepoIds }) => ({
+              id,
+              sourceRepoIds
+            })),
+            endpointSetups: state.endpointProjectHostSetups.map(
+              ({ id, repoId, projectId, hostId, executionHostId }) => ({
+                id,
+                repoId,
+                projectId,
+                hostId,
+                executionHostId
+              })
+            ),
+            detected: Object.entries(state.detectedWorktreesByRepo).map(([repoId, result]) => ({
+              repoId,
+              authoritative: result.authoritative,
+              source: result.source,
+              catalogVersion: result.catalogVersion,
+              failureKind: result.failureKind,
+              worktrees: result.worktrees.map(
+                ({ id, branch, visible, ownership, hostId, projectId, projectHostSetupId }) => ({
+                  id,
+                  branch,
+                  visible,
+                  ownership,
+                  hostId,
+                  projectId,
+                  projectHostSetupId
+                })
+              )
+            })),
+            stored: worktrees.map(
+              ({ id, repoId, branch, hostId, projectId, projectHostSetupId }) => ({
+                id,
+                repoId,
+                branch,
+                hostId,
+                projectId,
+                projectHostSetupId
+              })
+            ),
+            catalogVersions: state.worktreeCatalogVersionByRepoHost
+          }
+        })
+        setupWorktreeId = observed.setupWorktreeId
+        lastListing = observed
+        return setupWorktreeId
       })
-      return setupWorktreeId
-    })
-    .toBeDefined()
+      .toBeDefined()
+  } catch (error) {
+    console.log('[host-split-listing-failure]', JSON.stringify(lastListing))
+    throw error
+  }
   const client = new RuntimeClient(userDataDir, 30_000)
   // Main has spawned the first terminal and its manual split before the user opens the worktree.
   let hostPtyIds: string[] = []
@@ -103,7 +171,6 @@ export async function openHostSplitWorktree(page: Page, userDataDir: string): Pr
   return setupWorktreeId!
 }
 
-/** A slept agent pane, through the user's sidebar Sleep, so the quit and relaunch resume it. */
 export async function sleepAgentPane(page: Page, worktreeId: string): Promise<void> {
   await splitActiveTerminalPane(page, 'vertical')
   await waitForBoundPanes(page, 2)

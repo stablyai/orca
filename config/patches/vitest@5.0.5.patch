@@ -1,0 +1,84 @@
+diff --git a/dist/chunks/cli-api.De07GUeT.js b/dist/chunks/cli-api.De07GUeT.js
+index ff6e63043ff8fa0b821d4b0b382d1fd998d85dbb..157ee220f1011328522bafa72f1e87fa92e60be4 100644
+--- a/dist/chunks/cli-api.De07GUeT.js
++++ b/dist/chunks/cli-api.De07GUeT.js
+@@ -10250,6 +10250,7 @@ function groupFilters(filters) {
+ * Finds test specifications that loaded any of the changed files during their last recorded run.
+ * A specification without a record is always affected.
+ */
++const UNRECORDED_RUN_LIMIT = 100;
+ class RecordedModulesResolver {
+ 	vitest;
+ 	related;
+@@ -10267,13 +10268,30 @@ class RecordedModulesResolver {
+ 			projectSpecs.push(spec);
+ 		}
+ 		const affected = /* @__PURE__ */ new Set();
+-		for (const [project, projectSpecs] of specsByProject) this.findAffectedInProject(project, projectSpecs).forEach((spec) => affected.add(spec));
++		const unrecorded = [];
++		for (const [project, projectSpecs] of specsByProject) {
++			const result = this.findAffectedInProject(project, projectSpecs);
++			result.affected.forEach((spec) => affected.add(spec));
++			unrecorded.push(...result.unrecorded);
++		}
++		// Orca: running a few unrecorded files records them; many (a fresh checkout) use the static graph instead of running everything.
++		const unrecordedAffected = unrecorded.length > UNRECORDED_RUN_LIMIT ? await new AffectedModulesResolver(this.vitest, this.related).resolve(unrecorded) : unrecorded;
++		unrecordedAffected.forEach((spec) => affected.add(spec));
+ 		return specs.filter((spec) => affected.has(spec));
+ 	}
+ 	findAffectedInProject(project, specs) {
+-		if (this.dependsOnConfig(project.vite.config.configFileDependencies) || this.dependsOnConfig(getEnvFiles(project))) return specs;
++		if (this.dependsOnConfig(project.vite.config.configFileDependencies) || this.dependsOnConfig(getEnvFiles(project))) return {
++			affected: specs,
++			unrecorded: []
++		};
+ 		const dependencies = this.vitest.cache._dependencies.get(project);
+-		if (!dependencies) return specs;
++		if (!dependencies) return project.config.globalSetup.length ? {
++			affected: specs,
++			unrecorded: []
++		} : {
++			affected: [],
++			unrecorded: specs
++		};
+ 		const changed = /* @__PURE__ */ new Set();
+ 		for (const file of this.related) {
+ 			const index = dependencies.moduleIndex.get(file);
+@@ -10281,13 +10299,23 @@ class RecordedModulesResolver {
+ 		}
+ 		if (project.config.globalSetup.length) {
+ 			const globalSetup = dependencies.globalSetup;
+-			if (!globalSetup || globalSetup.some((index) => changed.has(index))) return specs;
++			if (!globalSetup || globalSetup.some((index) => changed.has(index))) return {
++				affected: specs,
++				unrecorded: []
++			};
+ 		}
+ 		const root = this.vitest.config.root;
+-		return specs.filter((spec) => {
++		const affected = [];
++		const unrecorded = [];
++		for (const spec of specs) {
+ 			const loaded = dependencies.files.get(getRootRelativePath(root, spec.moduleId));
+-			return !loaded || loaded.some((index) => changed.has(index));
+-		});
++			if (!loaded) unrecorded.push(spec);
++			else if (loaded.some((index) => changed.has(index))) affected.push(spec);
++		}
++		return {
++			affected,
++			unrecorded
++		};
+ 	}
+ 	dependsOnConfig(configDependencies) {
+ 		return !!configDependencies?.some((file) => this.related.includes(file));
+@@ -11817,7 +11845,8 @@ class TestRun {
+ 				else error.stacks = parseErrorStacktrace(error, {
+ 					frameFilter: project.config.onStackTrace,
+ 					getSourceMap(file) {
+-						if (!project.vite.moduleGraph.getModuleById(file)?.transformResult && existsSync(file)) {
++						// Orca: stack frames can name a directory; existsSync accepts it and readFileSync then throws EISDIR, failing a green run.
++						if (!project.vite.moduleGraph.getModuleById(file)?.transformResult && statSync(file, { throwIfNoEntry: false })?.isFile()) {
+ 							const code = readFileSync(file, "utf-8");
+ 							return extractSourcemapFromFile(code, file)?.map;
+ 						}

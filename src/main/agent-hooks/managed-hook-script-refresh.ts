@@ -61,7 +61,7 @@ async function writeScriptWithAclRetry(
   }
 }
 
-// Why: refresh must not block Electron's main thread or create state for an absent CLI.
+// Refresh asynchronously without creating state for an absent CLI.
 export async function refreshManagedScriptIfPresent(
   scriptPath: string,
   content: string | Buffer,

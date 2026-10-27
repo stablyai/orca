@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from './check-details-model'
+import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
@@ -46,7 +46,6 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
   } = useChecksListState(props)
   return (
     <>
-      {/* Checks Summary */}
       {checks.length > 0 && (
         <button
           type="button"
@@ -87,8 +86,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
               )}
             </span>
           )}
-          {/* Why: without this chip a list of only unresolved checks rendered a header with no
-              counts at all, so nothing said why the pill was grey. */}
+          {/* Name unresolved counts so an all-neutral list still explains its grey pill. */}
           {neutralCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleDashed className="size-3 text-muted-foreground" />
@@ -104,7 +102,6 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         </button>
       )}
 
-      {/* Checks List */}
       {checksLoading && checks.length === 0 ? (
         <div className="flex items-center justify-center py-8">
           <LoaderCircle className="size-5 animate-spin text-muted-foreground" />

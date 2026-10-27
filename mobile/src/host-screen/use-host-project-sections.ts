@@ -12,11 +12,7 @@ import type { HostScreenState } from './use-host-screen-state'
 
 const PROJECT_SECTIONS_REFRESH_MS = 60_000
 
-/**
- * The desktop sidebar's Project catalog, refreshed with repo metadata but as its own read, so a
- * slow or missing answer never holds the repo labels back. Skipped while the host's sidebar feed
- * carries the catalog, which installs it with the rows.
- */
+// Refresh Project catalog independently so slow/missing replies do not hold back repo labels; skip while the sidebar feed supplies it with the rows.
 export function useHostProjectSections(args: {
   client: RpcClient | null
   connState: ConnectionState
@@ -70,7 +66,6 @@ export function useHostProjectSections(args: {
         }
         return true
       }
-      // Reads again while a read queued during the last one; each read waits on the one before.
       const readUntilCurrent = async (): Promise<void> => {
         queued.current.delete(client)
         if ((await readOnce()) && queued.current.has(client)) {

@@ -10,9 +10,7 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
-// Frame orders are real sessions', scrubbed. A resumed agent's frames still name its ORIGINAL
-// spawn call while the announcement names the message call that resumed it, and a new provider
-// run knows neither unless it reads what the earlier run journaled.
+// Captured restart order: resumed frames retain original spawn IDs while announcements name new resume calls.
 
 const journals = createTrackedJournalOpener()
 let root: string
@@ -104,7 +102,6 @@ async function openJournal(): Promise<AgentSessionJournal> {
   })
 }
 
-/** One provider process: a fresh sink and translator over the session's journal. */
 function acquire(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
@@ -172,7 +169,7 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     )
     second.translator.handle(taskStarted('agent-b', 'toolu_message_b', 'Follow-up B'))
     second.translator.handle(toolResult('resumed-b', 'toolu_message_b', '{"success":true}'))
-    // Interleaved, as the two resumed agents were: neither may take the other's id.
+    // Preserve captured interleaving to catch cross-child identity swaps.
     second.translator.handle(childSays('a-2', 'toolu_spawn_a', 'A restarts the receiver'))
     second.translator.handle(childSays('b-2', 'toolu_spawn_b', 'B checks the rig'))
     await second.settle()
@@ -186,7 +183,6 @@ describe('a Claude subagent resumed after its provider restarted', () => {
       agentId: 'agent-b',
       providerParentRef: 'toolu_spawn_b'
     })
-    // Its rows say which run of it they are.
     expect(proseRow(journal, 'A reads the rig recipes')?.attempt).toBeUndefined()
     expect(proseRow(journal, 'A restarts the receiver')?.attempt).toBe(2)
     expect(proseRow(journal, 'B checks the rig')?.attempt).toBe(2)
@@ -206,7 +202,6 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     second.translator.handle(childSays('c-1', 'toolu_unknown', 'nobody named me'))
     await second.settle()
 
-    // A control: nothing recalled for an id the journal never resolved, so no id is invented.
     expect(proseRow(journal, 'nobody named me')).toMatchObject({
       agentId: 'toolu_unknown',
       providerParentRef: 'toolu_unknown'

@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -6,7 +6,7 @@ import { X, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
-import { getGitHubProjectSourceSummary } from '../task-page-source-context'
+import { getGitHubProjectSourceSummary } from './task-page-source-context'
 import {
   Select,
   SelectTrigger,
@@ -69,7 +69,6 @@ export function TaskPageSourceBar({
         className="flex min-w-0 flex-wrap items-center gap-2"
         data-contextual-tour-target="tasks-source-filters"
       >
-        {/* Why: Close is anchored left with the source icons for one compact band, clear of the app sidebar on the right. */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

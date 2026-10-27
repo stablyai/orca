@@ -1,6 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// A Codex rewind whose outcome only the provider can prove, found on a chat at rest: nothing on
-// screen will start the agent that settles it, so the next send does, and its message is kept.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -163,7 +161,6 @@ function sendParams(text: string) {
   }
 }
 
-/** A chat whose rewind the provider applied, whose Orca side never finished, reopened at rest. */
 async function interruptedRewindAtRest(): Promise<void> {
   expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const drop = { ...KEPT, turnId: 'drop' }
@@ -203,7 +200,6 @@ describe('an interrupted Codex rewind on a chat at rest (R16)', () => {
         ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
         : []
     )
-    // The recovered history, then the new message — nothing the rewind dropped, nothing lost.
     expect(texts).toEqual(['verified history', 'after the rewind'])
     expect(snapshot.submissions.at(-1)?.dispatchState).toBe('accepted')
   })

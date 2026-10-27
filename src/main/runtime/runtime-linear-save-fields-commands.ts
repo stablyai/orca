@@ -8,14 +8,31 @@ import { linearError } from '../linear/issue-context/errors'
 import { RuntimeLinearTaskFieldCommands } from './runtime-linear-task-fields-commands'
 
 export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldCommands {
-  public linearSavedIssueMatchesIntent(
+  public async linearSavedIssueMatchesIntent(
+    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
+    fields: LinearIssueUpdate
+  ): Promise<boolean> {
+    if (!this.linearSavedIssueFieldsMatchIntent(issue, fields)) {
+      return false
+    }
+    const description = issue.description ?? ''
+    if (fields.description === undefined || description === fields.description) {
+      return true
+    }
+    // Why dynamic: keeps the Markdown parser off startup while every bundle (Electron, orcad) inlines it.
+    const { linearIssueDescriptionComparisonKey } =
+      await import('./linear-issue-description-comparison')
+    return (
+      linearIssueDescriptionComparisonKey(description) ===
+      linearIssueDescriptionComparisonKey(fields.description)
+    )
+  }
+
+  private linearSavedIssueFieldsMatchIntent(
     issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
     fields: LinearIssueUpdate
   ): boolean {
     if (fields.title !== undefined && issue.title !== fields.title) {
-      return false
-    }
-    if (fields.description !== undefined && (issue.description ?? '') !== fields.description) {
       return false
     }
     if (fields.parentId !== undefined && (issue.parent?.id ?? null) !== fields.parentId) {

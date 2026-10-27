@@ -14,6 +14,7 @@ import type {
   TerminalSubscribeBinaryState,
   TerminalSubscriptionArgs
 } from './terminal-subscribe-types'
+import { deepenHeadlessCopyToDesktopDepth } from './headless-copy-desktop-depth'
 
 const MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS = 3_000
 
@@ -38,7 +39,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
   if (isMobile && clientId) {
     await registration.addMobilePresence(ptyId, clientId, params.viewport)
   } else if (clientId && params.viewport) {
-    // Why: terminal.subscribe records geometry without taking ownership; only an explicit activity/claim frame may suppress the host.
+    // Subscribe observes geometry; only explicit activity/claim may suppress the host.
     state.registeredRemoteDesktopDriver = true
     state.pendingRemoteDesktopViewport = params.viewport
   }
@@ -46,7 +47,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     return
   }
 
-  // Why after the fit: the seed reflows the pane's screen onto the grid the phone now owns.
+  // Fit first so the seed uses the phone-owned grid.
   const hydratedFromRenderer =
     missingHeadlessStateBeforeMobileFit &&
     (await runtime.maybeHydrateHeadlessFromRenderer?.(ptyId)) === true
@@ -54,10 +55,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     return
   }
   let read = await runtime.readTerminal(params.terminal)
-  // One object for the budget and the frame it approves. Written out twice, the two drifted: the
-  // budget measured a `scrollback` and the publication sent a `resized` with a `reason` beside it.
-  // `displayMode` is not in here because the flow re-reads it below, after the snapshot is
-  // serialized; the budget takes it at its widest instead.
+  // Share metadata with publication; re-read displayMode is omitted here and budgeted at its widest.
   const scrollbackFrame = { kind: 'scrollback' } as const
   let serialized = await serializeBudgetedMobileSnapshot(
     runtime,
@@ -67,7 +65,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
   if (state.closed) {
     return
   }
-  // Why: missing model state (not blank snapshot text) signals a never-attached PTY; any renderer answer proves a pane, and the answer is null when the host's flag is unset or stale after a pane closed over a live PTY, which falls back to the mount wait.
+  // Missing model state, unlike blank text, means never-attached; null renderer answers fall back to mount wait even for stale host flags.
   const needsRendererScreen =
     missingHeadlessStateBeforeMobileFit &&
     !hydratedFromRenderer &&
@@ -83,7 +81,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     !rendererReady &&
     (rendererMountRequestedBeforePty || runtime.requestRendererTerminalTabMount(params.terminal))
   if (mountRequested) {
-    // Why: an idle PTY emits no later byte, so wait for a settle proving this remount completed before replaying its screen.
+    // Idle PTYs emit no later bytes; wait for evidence this remount settled before replay.
     const mountWaitController = new AbortController()
     const abortMountWait = (): void => mountWaitController.abort()
     state.abortRendererMountWait = abortMountWait
@@ -122,24 +120,23 @@ export async function publishTerminalSubscribeBinarySnapshot(
       return
     }
     if (!rendererReady) {
-      // Why: a renderer can settle after the bounded initial response; keep observing so an idle PTY self-heals without bytes.
+      // Observe after the bounded initial response too, so an idle PTY can recover without output.
       state.lateRendererReadyPromise = rendererReadyPromise
     }
   }
+  let rendererSeed: { seq?: number } | null = null
   if (rendererReady) {
     read = await runtime.readTerminal(params.terminal)
     const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
       runtime,
       ptyId,
-      // The same frame, because this snapshot is published by the scrollback send below rather
-      // than by one of its own: the `resized` it used to name is a frame nothing here sends.
+      // Budget the scrollback frame actually sent below.
       mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, scrollbackFrame)
     )
     if (state.closed) {
       return
     }
-    // Why: a blank screen may be a parked pane that has not hydrated, and a seq-less screen has no
-    // seam against buffered output, so it is safe only when nothing is pending to replay twice.
+    // Blank may mean unhydrated; seq-less snapshots are safe only with no pending bytes that replay could duplicate.
     if (
       stableRendererSnapshot?.data.length &&
       (typeof stableRendererSnapshot.seq === 'number' || state.pendingOutput.length === 0)
@@ -155,6 +152,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
         stableRendererSnapshot,
         trailingOutput
       )
+      rendererSeed = stableRendererSnapshot
     }
   }
   let initialOutputOverflowed = false
@@ -183,9 +181,9 @@ export async function publishTerminalSubscribeBinarySnapshot(
   }
   const size = runtime.getTerminalSize(ptyId)
   state.displayMode = runtime.getMobileDisplayMode(ptyId)
-  // Why: layout seq is the mobile stale-event filter's high-water mark (undefined pre-transition is fail-open). See docs/mobile-terminal-layout-state-machine.md.
+  // Layout seq is the mobile stale-event high-water; undefined is fail-open (docs/mobile-terminal-layout-state-machine.md).
   const layoutSeq = runtime.getLayout(ptyId)?.seq
-  // Why: only an output offset can cover buffered chunks; layout versions are a separate sequence domain.
+  // Only output offsets cover buffered bytes; layout versions use a separate domain.
   let snapshotOutputSeq = serialized?.seq
   emit({
     type: 'subscribed',
@@ -199,8 +197,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
   })
   const snapshotStats = sendSnapshotFrames(state.sendFrame, {
     ...scrollbackFrame,
-    // Why: prefer the subscriber's viewport over the 80x24 stopgap when the PTY has
-    // no size yet — the mismatch made mobile burn its resubscribe budget (STA-3337).
+    // Prefer client viewport to the unsized PTY's 80x24 stopgap, which exhausted mobile resubscribe attempts (STA-3337).
     cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols ?? 80,
     rows: serialized?.rows ?? size?.rows ?? params.viewport?.rows ?? 24,
     displayMode: state.displayMode,
@@ -222,13 +219,15 @@ export async function publishTerminalSubscribeBinarySnapshot(
     scrollbackRows: serialized?.scrollbackRows,
     truncatedByByteBudget: serialized?.truncatedByByteBudget === true
   })
-  // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
+  if (rendererSeed) {
+    void deepenHeadlessCopyToDesktopDepth(runtime, ptyId, rendererSeed, () => !state.closed)
+  }
+  // Initial replay already rewrapped to these columns; seed resize replay gating.
   state.lastResizeCols = serialized?.cols ?? size?.cols
   let recoveryAttempts = 0
-  // The recovery's own frame, for the same reason: this one really is a `resized`, and it is the
-  // budget and the publication that have to agree on that, not a reader comparing two literals.
+  // Use the recovery's actual resized frame for its budget.
   const recoveryFrame = { kind: 'resized', reason: 'pending-output-overflow' } as const
-  // Why: if the bounded pre-subscribe tail overflowed, only a fresh model snapshot covers the dropped middle without replay gaps.
+  // Pre-subscribe overflow dropped a middle segment; only a fresh model snapshot covers it.
   while (state.pendingOutputOverflowed && recoveryAttempts < 2) {
     state.pendingOutputOverflowed = false
     recoveryAttempts += 1
@@ -243,11 +242,11 @@ export async function publishTerminalSubscribeBinarySnapshot(
     if (!recovery) {
       break
     }
-    // Why: without an output seq (renderer fallback) covered chunks can't be trimmed exactly, so keep the bounded replay over an unverifiable snapshot.
+    // Without output seq, retain bounded replay rather than an unverifiable renderer snapshot.
     if (typeof recovery.seq !== 'number') {
       break
     }
-    // Why: clients drop a repeat scrollback snapshot but apply 'resized' inline; omit seq so output-byte seqs don't pollute the layout-seq filter.
+    // Clients ignore repeat scrollback but apply resized inline; omit output seq to avoid polluting layout seq filtering.
     const recoveryStats = sendSnapshotFrames(state.sendFrame, {
       ...recoveryFrame,
       cols: recovery.cols,
@@ -285,7 +284,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
         .map((query) => query.data)
         .join('')
   if (queryReplayData) {
-    // Why: snapshots omit control queries but their seq trims the live chunk; replay the post-snapshot query so the mobile xterm answers once.
+    // Snapshots omit queries but trim their live chunks by seq; replay the post-snapshot query for one mobile response.
     state.outputBatcher.push(queryReplayData)
   }
   if (!initialOutputOverflowed) {

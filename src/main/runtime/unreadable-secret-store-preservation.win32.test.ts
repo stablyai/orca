@@ -5,24 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { loadWindowsSecurity, type WindowsSecurity } from '../../shared/windows-security-addon'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
-/**
- * What a *successful* harden does to a reader that cannot read.
- *
- * Path hardening writes a protected DACL granting only the SIDs the running process holds. Where
- * the data root came from somewhere else — a relocated `ORCA_USER_DATA_PATH`, a share, a roaming
- * profile, a backup restored under a recreated local account, or a harden whose `/reset` landed
- * and whose grant did not — the file ends up granting a SID this process does not have. It then
- * reads as `EPERM` while its *directory* stays writable, because file hardening is synchronous on
- * the write path and directory hardening is fire-and-forget.
- *
- * Every store below used to treat any read failure as "malformed — regenerate", and the
- * regeneration succeeds: `renameSync` over an unreadable file needs `FILE_DELETE_CHILD` on the
- * parent, not `DELETE` on the file. So the healing path destroyed the thing it could not read.
- * Before hardening actually applied, this failed open — the file was simply readable.
- *
- * These assert the file is still the same, untouched inode afterwards. Runs only on win32, where a
- * DACL is the mechanism; skipped elsewhere.
- */
+/** A foreign-SID file DACL can deny reads while its writable parent still permits replacement; stores must refuse unreadable secrets instead of regenerating them. Assert inode preservation on Windows. */
 
 /** Whether a DACL that omits this token actually denies it a read. */
 function readDenied(filePath: string): boolean {
@@ -34,13 +17,7 @@ function readDenied(filePath: string): boolean {
   }
 }
 
-/**
- * An elevated token logged in as the built-in Administrator reads straight through a DACL that
- * grants it nothing, so on such a host every assertion here would pass while proving nothing.
- * Probe once and skip rather than assert vacuously -- the same trade the ACL suite makes for its
- * unelevated-only case. `isUnreadableError` has its own unit tests on every platform; this suite
- * carries the stores' refusal wherever a denial is actually reproducible.
- */
+/** Built-in Administrator can bypass denial; probe and skip rather than claim vacuous preservation. Unit tests cover unreadable classification on every platform. */
 function canDenyReads(): boolean {
   if (process.platform !== 'win32') {
     return false
@@ -56,12 +33,7 @@ function canDenyReads(): boolean {
   }
 }
 
-/**
- * BUILTIN\Guests: a real, always-resolvable group that no interactive token is a member of.
- * `S-1-5-32-544` looks foreign only until the suite meets a host that is elevated AND logged
- * in as the built-in Administrator -- a CI runner -- where it grants the reader full control
- * and every assertion below goes vacuous.
- */
+/** BUILTIN Guests is resolvable but absent from interactive tokens; Administrators would grant CI's elevated reader access. */
 const FOREIGN_SID = 'S-1-5-32-546'
 
 function addon(): WindowsSecurity['addon'] {
@@ -72,12 +44,7 @@ function addon(): WindowsSecurity['addon'] {
   return loaded.addon
 }
 
-/**
- * Protected, so nothing inherited from %TEMP% keeps the file readable. The OWNER RIGHTS rule
- * withdraws the owner's implicit READ_CONTROL and WRITE_DAC: this process created the file, but
- * the case being modelled is one owned by another account (a restored backup, a share), which
- * Orca's read-path hardening cannot simply take back. Its parent stays ours, so it still deletes.
- */
+/** Block inheritance and implicit owner ACL rights to model foreign-owned restored data; retain parent deletion rights. */
 function lockAgainstThisProcess(filePath: string): void {
   addon().setDaclSddl(filePath, `D:P(A;;FA;;;${FOREIGN_SID})(A;;0x100000;;;OW)`)
 }
@@ -233,10 +200,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
     expectUntouched(filePath, locked)
   })
 
-  /**
-   * The one site that *deletes* rather than overwrites: a refresh failure plus an unreadable
-   * session used to fall past the `status === 'found'` guard into `clearOrcaCloudSession`.
-   */
+  /** Refresh failures must not delete unreadable account sessions; only found sessions permit that path. */
   it('does not delete the account session it could not read', async () => {
     vi.doMock('electron', () => ({
       safeStorage: {

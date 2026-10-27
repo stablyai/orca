@@ -8,7 +8,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import { toRemoteRuntimePtyId } from '../remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../ssh-pty-id'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import {
@@ -40,7 +40,7 @@ export function sleepingRecord(
   }
 }
 
-/** The desktop's own partition: a git worktree split into two groups, and a folder workspace. */
+/** Desktop partition with git and folder workspaces, including split groups. */
 export function localDesktopSession(): WorkspaceSessionState {
   const session = addWorkspace(emptySession(), GIT_KEY, [
     {
@@ -264,7 +264,6 @@ export type WorkspaceLayoutProfile = {
   build: () => WorkspaceSessionState
 }
 
-/** One stored partition per kind of writer today. */
 export const WORKSPACE_LAYOUT_PROFILES: readonly WorkspaceLayoutProfile[] = [
   {
     name: 'local desktop (git worktree, folder workspace, all tab kinds)',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   PENDING_PANE_TITLE_HOLD_MS,
   requeuePendingPaneTitleRenames,

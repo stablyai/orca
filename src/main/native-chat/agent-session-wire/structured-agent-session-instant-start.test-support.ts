@@ -1,5 +1,3 @@
-// Fake providers publish their generation and return protocol facts from host-awaited open.
-
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
 type InstantStartAdapter = Omit<StructuredAgentSessionAdapter, 'open'> &

@@ -4,7 +4,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalToolCallState
 } from './agent-session-journal-types'
-import { describeToolInput } from './native-chat-tool-summary'
+import { describeToolInput } from './native-chat/tools/native-chat-tool-summary'
 import {
   projectStructuredAgentSessionStatusSummary,
   projectStructuredItemsToNativeChat

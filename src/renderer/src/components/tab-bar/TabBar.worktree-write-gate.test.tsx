@@ -1,15 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The tab strip must not wake on worktree writes. `projects`/`repos`/`worktreesByRepo`
- * exist in the runtime model only to build the Windows shell menu's local project
- * runtime; `worktreesByRepo` gets a new identity on every poller result, head-identity
- * refresh and git-status write, so an ungated subscription re-renders and re-commits
- * every mounted tab strip continuously on a large install.
- *
- * Runs as a non-Windows client. The menu-on branch is exercised through a `win32`
- * host platform, which is how a paired web client on macOS legitimately gets the menu.
- */
+/** Gate worktree subscriptions behind the Windows shell menu so unrelated poll/status writes cannot rerender every tab strip. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 import {
@@ -75,7 +66,12 @@ describe('TabBar worktree-write gate (non-Windows client)', () => {
     probeWindowsCapabilities.hostPlatform = 'darwin'
     tabBarSurfaceRenders.count = 0
     localProjectRuntimeSpy.mockClear()
-    ;(await createTabBarProbeStore()).setState({ worktreesByRepo: {}, projects: [], repos: [] })
+    ;(await createTabBarProbeStore()).setState({
+      worktreesByRepo: {},
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
+      repos: []
+    })
   })
 
   afterEach(() => {

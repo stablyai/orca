@@ -57,6 +57,7 @@ on:
       - 'tests/e2e/helpers/compiled-orca-cli.ts'
       - 'tests/e2e/helpers/windows-host-orcad-processes.ts'
       - 'config/ci/windows-ssh-provider/**'
+      - 'config/ci/windows-lifecycle-receipt.ps1'
       - '.github/workflows/ssh-windows-hosts.yml'
       - '.github/actions/prepare-orcad-prebuilds/**'
       - '.github/actions/restore-pnpm-verification/**'
@@ -89,7 +90,7 @@ concurrency:
 jobs:
   mobile_web_bundle:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6

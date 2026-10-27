@@ -109,8 +109,7 @@ describe('web rate limits and accounts preload API', () => {
     writeStoredRuntimeEnvironment(globals.storage)
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
-    // Why wrapped: window.api is a fallback proxy that answers `then`, so
-    // returning it bare from an async function would never settle.
+    // Wrap the fallback proxy: its synthetic then property would keep a bare async return pending forever.
     return { api: globals.window.api }
   }
 

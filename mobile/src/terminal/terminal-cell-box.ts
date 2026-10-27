@@ -1,19 +1,12 @@
-/**
- * The cell box xterm laid out in one document, so the first subscribe after ready carries the phone's dims.
- *
- * The document builds its terminal before it reports ready, puts that box in `web-ready`, and
- * reports it again whenever xterm lays out a different one.
- */
+// Report xterm’s measured box at ready so the first subscription uses phone dimensions.
 export type TerminalCellBox = { fontScale: number; cellWidth: number; cellHeight: number }
 
-/** A box xterm laid out, with the grid it was laid out at: the document's own record. */
 export type TerminalLaidOutCellBox = { cellBox: TerminalCellBox; cols: number; rows: number }
 
 function positive(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
-/** The notify's `cellBox` when well formed; null when absent or malformed. */
 export function readTerminalCellBox(msg: Record<string, unknown>): TerminalCellBox | null {
   const box = msg.cellBox
   if (

@@ -30,8 +30,7 @@ type PRCommentsListSelectionState = {
 }
 
 const EMPTY_SELECTED_GROUP_IDS = new Set<string>()
-// Why: queued selections need to survive sidebar remounts, but old PR/MR
-// contexts can disappear without another clear signal in a long renderer run.
+// Bound persisted selections because PR/MR contexts can vanish without clearing during long renderer sessions.
 export const MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS = 1024
 const persistedSelectionByContextKey = new Map<
   string,
@@ -99,7 +98,7 @@ export function getPRCommentsListSelectionCountForTests(): number {
   return persistedSelectionByContextKey.size
 }
 
-// Why: bound/LRU tests need to fill the cache without 1024 React mounts per case.
+// Seed LRU tests without 1024 React mounts per case.
 export function seedPRCommentsListSelectionForTests(
   contextKey: string,
   selectedGroupIds: Iterable<string>,
@@ -130,8 +129,7 @@ export function usePRCommentsListSelection(
   }, [])
 
   useEffect(() => {
-    // Why: only a committed context may affect LRU order; render can be
-    // abandoned or replayed by Strict Mode/Suspense.
+    // Update LRU only after commit; StrictMode/Suspense may abandon or replay render.
     refreshPersistedSelectionContext(selectionContextKey)
   }, [selectionContextKey])
 
@@ -152,8 +150,7 @@ export function usePRCommentsListSelection(
     commitSelectionState(next)
   }, [clearRequest, commitSelectionState, selectionContextKey])
 
-  // Why: selectable groups come from the unfiltered list so switching the
-  // audience filter doesn't silently drop already-selected comments.
+  // Use unfiltered groups so audience changes cannot silently discard queued selections.
   const canonicalGroups = useMemo(() => groupPRComments(comments), [comments])
   const selectableGroups = useMemo(
     () => canonicalGroups.filter(isPRCommentGroupQueueableForAI),

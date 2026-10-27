@@ -59,9 +59,7 @@ export async function addLocalRepoFromPath(
     return { repo: existingAtRealPath, alreadyExisted: true }
   }
 
-  // Why: a linked worktree reports itself as its own toplevel, so the path checks above can't see that
-  // it belongs to an already-tracked repo. Adding it anyway yields a second "ready" host setup on the
-  // same project and host — a duplicate run-target row that resolves to a transient worktree path.
+  // Linked worktrees report their own toplevel; resolve the main checkout to avoid duplicate host setups.
   let mainRepoKey: string | null = null
   if (repoKind === 'git') {
     const mainRepoRoot = gitInfo?.mainRepoPath
@@ -69,8 +67,7 @@ export async function addLocalRepoFromPath(
       : null
     if (mainRepoRoot) {
       mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
-      // Why !isFolderRepo: only a git-kind main checkout projects onto the same project as its
-      // worktree, so matching a folder record would suppress the add without deduping anything.
+      // Only Git checkouts share project identity with their worktrees; folder records do not deduplicate them.
       const trackedMainRepo = store
         .getRepos()
         .find(
@@ -116,7 +113,7 @@ export async function addLocalRepoFromPath(
     ...(repoKind === 'git'
       ? {
           externalWorktreeVisibilityLegacy: false,
-          // Why: new Add Project imports are explicit ready host setups; 'legacy-repo' is reserved for older records/projection.
+          // Explicit imports are ready host setups; legacy-repo is reserved for migrated records.
           projectHostSetupMethod: 'imported-existing-folder' as const
         }
       : {})

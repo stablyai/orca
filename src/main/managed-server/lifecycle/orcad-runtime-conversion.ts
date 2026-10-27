@@ -1,12 +1,5 @@
-/**
- * Converting a relay-hosted SSH target that holds Orca state into a managed orcad server:
- * fence the source, deploy and pair the server, stage and commit the dormant catalog, then keep
- * the source rows, hidden, for a downgraded build.
- *
- * Every step is keyed by the journal, so calling this again after a crash or lost contact resumes
- * the same migration instead of starting another. The source stays authoritative until the
- * destination proves its commit, and is never deleted afterwards.
- */
+// Resume journaled migrations after lost contact; source rows stay authoritative until proven commit.
+// Retain source rows afterwards for downgrade compatibility.
 import { randomUUID } from 'node:crypto'
 import type { OrcadManagedConversionResult } from '../../../shared/orcad-managed-runtime'
 import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
@@ -38,7 +31,12 @@ import {
   onlyLeavableOrcadMigrationBlockers
 } from '../../ssh/targets/ssh-target-orcad-preflight'
 import { ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON } from '../../ssh/orcad-migration-source-fence'
+import type { OrcadMigrationPaneLeasePredicate } from '../../ssh/orcad-migration-bridged-panes'
 import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
+import {
+  enableMovedOrcadAutomations,
+  type EnableServerAutomation
+} from '../../ssh/orcad-migration-moved-automations'
 import {
   linkedOrcadMigrationCutoverPort,
   linkedOrcadMigrationProjects,
@@ -50,18 +48,18 @@ import type { OrcadServerFolderCatalog } from '../../ssh/orcad-server-folder-wor
 export type OrcadManagedConversionArgs = {
   sshTargetId: string
   name: string
-  /** The census of the host's relay endpoints that must prove exit. */
   censusHost?: ((target: SshTarget) => ReturnType<CensusHostRelayTerminals>) | null
-  /** The destination's T6-9 catalog client, reached through the server's tunnel. */
+  isBridgedPaneLease?: OrcadMigrationPaneLeasePredicate
   destinationFor: (environment: KnownRuntimeEnvironment) => OrcadMigrationDestinationCatalog
-  /** The server's own projects, so ones this host already holds at the same path link to them. */
+  /** Link matching host paths to existing server projects. */
   serverRepositoriesFor?: (environment: KnownRuntimeEnvironment) => Promise<OrcadServerRepository[]>
-  /** The server's folder workspaces, so ones an earlier move left there link to them. */
+  /** Link folder workspaces already present from earlier moves. */
   serverFolderCatalogFor?: (
     environment: KnownRuntimeEnvironment
   ) => Promise<OrcadServerFolderCatalog>
-  /** Releases the direct SSH session after the terminal check, before the fence. */
   releaseDirectSession?: (sshTargetId: string) => Promise<void>
+  /** Re-enables moved automations that ran on this desktop. */
+  serverAutomationEnablerFor?: (environment: KnownRuntimeEnvironment) => EnableServerAutomation
   now?: () => Date
   signal?: AbortSignal
 }
@@ -81,7 +79,7 @@ export async function convertSshTargetToManagedOrcad(
     signal: args.signal
   })
   if (deployed.outcome === 'deferred') {
-    return deployed // The fence and journal stay; a later call resumes here.
+    return deployed // Retain fence and journal for a later resume.
   }
   const environment = listEnvironments(userDataPath).find(
     (entry) => entry.id === fenced.destinationEnvironmentId
@@ -89,14 +87,13 @@ export async function convertSshTargetToManagedOrcad(
   if (!environment || !environmentMatchesManagedOrcadCutover(environment, fenced)) {
     throw new Error('orcad_migration_destination_environment_mismatch')
   }
-  // Before any commit can land, so a crash after it still blocks rollbacks across it.
+  // Record before commit so crashes cannot allow rollback across migrated state.
   recordManagedOrcadMigration(
     userDataPath,
     environment.id,
     (args.now ?? (() => new Date()))().toISOString()
   )
-  // Why the record ensure returns: a re-pair while the tunnel stands replaces the credentials
-  // every request below must carry; it keeps the migration mark recorded above.
+  // Tunnel repair may replace pairing credentials; use its returned environment for every request.
   const marked = await ensureOrcadManagedTunnel(userDataPath, environment.id)
   const { claims, targetStore } = requireManagedOrcadInfrastructure()
   const store = targetStore.getOrcadMigrationSource()
@@ -139,15 +136,27 @@ export async function convertSshTargetToManagedOrcad(
   if (committed.phase !== 'destination-committed' && committed.phase !== 'source-retired') {
     throw new Error(`orcad_migration_commit_not_proven:${committed.phase}`)
   }
+  let automationsLeftDisabled = 0
   if (committed.phase === 'destination-committed') {
     await retainOrcadMigrationSource(userDataPath, committed.migrationId, store, args.now)
+    if (args.serverAutomationEnablerFor) {
+      automationsLeftDisabled = await enableMovedOrcadAutomations(
+        userDataPath,
+        committed.migrationId,
+        args.serverAutomationEnablerFor(marked)
+      ).catch((error: unknown) => {
+        console.warn('[ssh] Could not re-enable moved automations:', error)
+        return 0
+      })
+    }
   }
   const linkedProjects = linkedOrcadMigrationProjects(store, linked)
   return {
     outcome: 'converted',
     environment: redactRuntimeEnvironment(marked),
     migrationId: committed.migrationId,
-    ...(linkedProjects.length > 0 ? { linkedProjects } : {})
+    ...(linkedProjects.length > 0 ? { linkedProjects } : {}),
+    ...(automationsLeftDisabled > 0 ? { automationsLeftDisabled } : {})
   }
 }
 
@@ -169,7 +178,8 @@ async function fenceOrResume(
     store,
     claims,
     target,
-    censusHost: censusHost ? () => censusHost(target) : null
+    censusHost: censusHost ? () => censusHost(target) : null,
+    isBridgedPaneLease: args.isBridgedPaneLease
   })
   const existing = source.resolveFence()
   if (existing.state === 'fenced') {
@@ -177,7 +187,6 @@ async function fenceOrResume(
   }
   const stale = existing.state === 'stale-journal' ? existing.cutover : null
   if (stale && !isRegistered(userDataPath, stale.destinationEnvironmentId)) {
-    // Its fence is gone and its server unregistered, so nothing it records can still be acted on.
     removeOrcadMigrationJournalsForDestination(
       userDataPath,
       target.id,
@@ -190,7 +199,7 @@ async function fenceOrResume(
   if (converted) {
     return refuse('live', 'orcad_migration_already_managed', 'Orca already runs on this SSH host.')
   }
-  // The fence re-checks leases once it holds.
+  // Source fencing rechecks leases after acquisition.
   const terminalProof = await source.assessTerminals()
   if (terminalProof.verdict === 'live' || terminalProof.verdict === 'unverifiable') {
     return refuse(terminalProof.verdict, 'orcad_migration_terminals', terminalProof.reason)
@@ -210,7 +219,7 @@ async function fenceOrResume(
     return result.cutover
   }
   if (result.blockers?.length) {
-    // Why logged: the connect surfaces only the reason, and support needs which state blocked.
+    // Surface blocked state in logs because connect shows only the summary reason.
     console.warn(
       '[ssh] Conversion refused by:',
       JSON.stringify(
@@ -222,13 +231,20 @@ async function fenceOrResume(
       )
     )
   }
-  // Already moving anyway: what still refuses is what can't be left behind.
   const leavable =
     result.blockers &&
     onlyLeavableOrcadMigrationBlockers(result.blockers) &&
     !target.managedServerLeaveBehind
-  if (leavable && terminalProof.verdict !== 'exited') {
-    // Why no offer: leaving tabs behind would strand terminals the relay bridge still serves.
+  const canLeaveBehind =
+    leavable &&
+    leaveBehindClearsOrcadMigrationBlockers(
+      store,
+      target.id,
+      terminalProof.verdict === 'bridged' ? terminalProof.bridgedPtyIds : [],
+      args.isBridgedPaneLease
+    )
+  if (leavable && terminalProof.verdict !== 'exited' && !canLeaveBehind) {
+    // Leaving tabs behind would strand terminals still served by the legacy bridge.
     return refuse(
       result.verdict,
       result.code,
@@ -237,10 +253,8 @@ async function fenceOrResume(
   }
   return {
     ...refuse(result.verdict, result.code, result.reason),
-    // Why previewed: an offer the confirmed export would refuse again is a dead end.
-    ...(leavable && leaveBehindClearsOrcadMigrationBlockers(store, target.id)
-      ? { canLeaveBehind: true }
-      : {})
+    // Preview confirmation to avoid offering an export the confirmed path would refuse.
+    ...(canLeaveBehind ? { canLeaveBehind: true } : {})
   }
 }
 

@@ -1,6 +1,3 @@
-// Native images require advertised support and bounded materialization; host paths retain
-// their ordinary file-reference representation whenever native delivery cannot fit.
-
 import { extname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -28,14 +25,14 @@ import { acpSessionAcceptsImages } from './acp-structured-options'
 import type { ContentBlock } from './generated/acp-protocol.generated'
 
 const ACP_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
-/** A prompt is one JSON-RPC line; this leaves room for the request around its blocks. */
+// Reserve space for the JSON-RPC envelope around the prompt blocks.
 const ACP_PROMPT_LINE_BUDGET = resolveAcpPeerOptions().maxLineBytes - 64 * 1024
-/** One message's images together, raw: base64 makes each 4 bytes of them 3 more. */
+// Budget raw images for base64's 4:3 expansion and leave room for text.
 export const ACP_PROMPT_IMAGE_MAX_BYTES = Math.floor((ACP_PROMPT_LINE_BUDGET * 3) / 4) - 1024 * 1024
 const MAX_IMAGE_COUNT = 20
 const READ_TIMEOUT_MS = 15_000
 
-/** Why Orca did not send a message; never the agent's refusal. */
+/** A local dispatch refusal, distinct from an agent rejection. */
 export class AcpPromptContentError extends Error {
   constructor(readonly failure: SubmissionRejectionFact) {
     super(`ACP prompt refused: ${failure.kind}`)
@@ -47,7 +44,6 @@ function attachmentProblem(attachment: AgentSessionAttachmentProblem): AcpPrompt
   return new AcpPromptContentError(agentSessionFailureFact('attachmentInvalid', { attachment }))
 }
 
-/** The image's absolute path on this host, from its path or a `file:` URL. */
 function hostImagePath(block: NativeChatImageRefBlock): string | null {
   let path = block.path
   if (!path && block.url?.startsWith('file:')) {
@@ -121,12 +117,11 @@ async function imageBlock(
   return { block: { type: 'image', mimeType, data: data.toString('base64') }, bytes: data.length }
 }
 
-/** The prompt for `body`; throws `AcpPromptContentError` for what Orca will not send. */
 export async function acpPromptBlocks(
   body: AgentJournalMessageItem,
   acceptsImages: boolean
 ): Promise<ContentBlock[]> {
-  // Reserve text and path slots, including those after each optional native image.
+  // Reserve later text and file references before allocating image capacity.
   const blocks: ContentBlock[] = body.blocks.map((block) => {
     if (block.type === 'text') {
       return { type: 'text', text: block.text }
@@ -148,7 +143,6 @@ export async function acpPromptBlocks(
       throw attachmentProblem({ reason: 'unsupportedType' })
     }
     if (!acceptsImages) {
-      // As the composer would have written it, had it known before the agent's start answered.
       const path = hostImagePath(block)
       if (!path) {
         throw attachmentProblem({ reason: 'unsupportedType' })
@@ -180,22 +174,18 @@ export async function acpPromptBlocks(
     blocks[index] = image.block
     encodedBytes += blockBytes(image.block) - previousBytes
   }
-  // Only images can carry a message past one line here; their words are the refusal's.
   if (imageCount > 0 && Buffer.byteLength(JSON.stringify(blocks)) > ACP_PROMPT_LINE_BUDGET) {
     throw attachmentProblem({ reason: 'totalTooLarge', limit: ACP_PROMPT_IMAGE_MAX_BYTES })
   }
   return blocks
 }
 
-/** A message that is only one of the dialect's withheld commands, with no attachment. */
 function isWithheldCommand(body: AgentJournalMessageItem, withheld: readonly string[]): boolean {
   const [block, ...rest] = body.blocks
   const text = block?.type === 'text' && rest.length === 0 ? block.text.trim() : ''
   return text.startsWith('/') && withheld.includes(text.slice(1))
 }
 
-/** The prompt for `body` to `session`'s agent, or Orca's refusal of it in words that name the
- *  agent. Images go only where `acpSessionAcceptsImages` allows them. */
 export async function acpDispatchPrompt(
   body: AgentJournalMessageItem,
   session: {

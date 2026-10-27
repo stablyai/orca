@@ -4,6 +4,7 @@ import { act, type ReactNode, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import BrowserAddressBar from './BrowserAddressBar'
 
 const mocks = vi.hoisted(() => {
@@ -14,6 +15,9 @@ const mocks = vi.hoisted(() => {
     browserPagesByWorkspace: Record<string, { id: string; worktreeId: string; url: string }[]>
     openPageUrl: string | null
     activateBrowserPage: ReturnType<typeof vi.fn>
+    removeBrowserHistoryEntry: ReturnType<typeof vi.fn>
+    removeWorkspaceDocHistoryEntry: ReturnType<typeof vi.fn>
+    requestBrowserFocus: ReturnType<typeof vi.fn>
   } = {
     browserUrlHistory: [],
     browserDefaultSearchEngine: null,
@@ -22,7 +26,10 @@ const mocks = vi.hoisted(() => {
       'workspace-1': [{ id: 'page-1', worktreeId: 'wt-1', url: 'about:blank' }]
     },
     openPageUrl: null,
-    activateBrowserPage: vi.fn()
+    activateBrowserPage: vi.fn(),
+    removeBrowserHistoryEntry: vi.fn(),
+    removeWorkspaceDocHistoryEntry: vi.fn(),
+    requestBrowserFocus: vi.fn()
   }
   return state
 })
@@ -50,7 +57,7 @@ vi.mock('@/lib/browser-page-palette-activation', () => ({
   activateBrowserPagePaletteResult: mocks.activateBrowserPage
 }))
 
-vi.mock('../host-guest/browser-focus', () => ({ requestBrowserFocus: vi.fn() }))
+vi.mock('../host-guest/browser-focus', () => ({ requestBrowserFocus: mocks.requestBrowserFocus }))
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((selector: (state: typeof mocks) => unknown) => selector(mocks), {
@@ -103,10 +110,12 @@ function typeInto(input: HTMLInputElement, value: string, inputType: string): vo
 
 function AddressBarHarness({
   initialValue,
+  committedValue = initialValue,
   onNavigate,
   onSubmit
 }: {
   initialValue: string
+  committedValue?: string
   onNavigate: (url: string) => void
   onSubmit: () => void
 }): React.ReactElement {
@@ -114,17 +123,18 @@ function AddressBarHarness({
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   return (
-    <>
+    <TooltipProvider>
       <BrowserAddressBar
         pageId="page-1"
         value={value}
+        committedValue={committedValue}
         onChange={setValue}
         onSubmit={onSubmit}
         onNavigate={onNavigate}
         inputRef={inputRef}
       />
       <span data-current-address-value="true">{value}</span>
-    </>
+    </TooltipProvider>
   )
 }
 
@@ -388,42 +398,128 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('dismisses suggestions when Escape is pressed outside React input handling', async () => {
-    const onNavigate = vi.fn()
-    const onSubmit = vi.fn()
-
+  it('backs Escape out one step at a time, in Chrome order', async () => {
     await act(async () => {
       root.render(
-        <AddressBarHarness initialValue="local" onNavigate={onNavigate} onSubmit={onSubmit} />
+        <AddressBarHarness
+          initialValue="http://localhost:3000/"
+          onNavigate={vi.fn()}
+          onSubmit={vi.fn()}
+        />
       )
     })
-
-    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
-    expect(input).not.toBeNull()
-
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
+    const shown = (): string | null | undefined =>
+      container.querySelector('[data-current-address-value="true"]')?.textContent
+    const press = async (key: string): Promise<void> => {
+      await act(async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+      })
+    }
     await act(async () => {
-      input?.focus()
+      input.focus()
+      typeInto(input, 'review', 'insertText')
+    })
+    await press('ArrowDown')
+    expect(shown()).toBe('http://localhost:3000/review-one')
+
+    await press('Escape')
+    expect(shown()).toBe('review')
+    expect(input.getAttribute('aria-expanded')).toBe('true')
+
+    await press('Escape')
+    expect(shown()).toBe('review')
+    expect(input.getAttribute('aria-expanded')).toBe('false')
+
+    await press('Escape')
+    expect(shown()).toBe('http://localhost:3000/')
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, shown()!.length])
+    expect(mocks.requestBrowserFocus).not.toHaveBeenCalled()
+
+    await press('Escape')
+    expect(mocks.requestBrowserFocus).toHaveBeenCalledWith({ pageId: 'page-1', target: 'webview' })
+  })
+
+  it('keeps focus in the bar when the typed text is the page address retyped', async () => {
+    await act(async () => {
+      root.render(
+        <AddressBarHarness
+          initialValue="local"
+          committedValue="localhost"
+          onNavigate={vi.fn()}
+          onSubmit={vi.fn()}
+        />
+      )
+    })
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
+    await act(async () => {
+      input.focus()
+      typeInto(input, 'localhost', 'insertText')
+    })
+    for (const _ of [1, 2]) {
+      await act(async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      })
+    }
+    expect(mocks.requestBrowserFocus).not.toHaveBeenCalled()
+  })
+
+  it('removes the highlighted history row on Shift+Delete and puts back what was typed', async () => {
+    await act(async () => {
+      root.render(
+        <AddressBarHarness initialValue="local" onNavigate={vi.fn()} onSubmit={vi.fn()} />
+      )
+    })
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
+    await act(async () => {
+      input.focus()
     })
     await act(async () => {
-      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
     })
-
-    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
-      'http://localhost:3000/review-one'
-    )
-
+    const removal = new KeyboardEvent('keydown', {
+      key: 'Delete',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      input.dispatchEvent(removal)
     })
 
+    expect(mocks.removeBrowserHistoryEntry).toHaveBeenCalledWith('http://localhost:3000/review-one')
+    expect(removal.defaultPrevented).toBe(true)
     expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
       'local'
     )
-    expect(onNavigate).not.toHaveBeenCalled()
-    expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('dismisses suggestions when focus moves into an Electron webview guest', async () => {
+  it('leaves Shift+Delete to the text field when the highlighted row is not history', async () => {
+    mocks.browserUrlHistory = []
+    await act(async () => {
+      root.render(
+        <AddressBarHarness initialValue="local" onNavigate={vi.fn()} onSubmit={vi.fn()} />
+      )
+    })
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
+    await act(async () => {
+      input.focus()
+    })
+    const removal = new KeyboardEvent('keydown', {
+      key: 'Delete',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    await act(async () => {
+      input.dispatchEvent(removal)
+    })
+
+    expect(removal.defaultPrevented).toBe(false)
+    expect(mocks.removeBrowserHistoryEntry).not.toHaveBeenCalled()
+  })
+
+  it('dismisses suggestions on a webview focusin event', async () => {
     const onNavigate = vi.fn()
     const onSubmit = vi.fn()
     const webview = document.createElement('webview')
@@ -460,7 +556,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('lets the second press of a double-click select a word instead of the whole URL', async () => {
+  it('clears the whole-URL selection on the second double-click press', async () => {
     const url = 'https://github.com/stablyai/orca/pull/27021'
     await act(async () => {
       root.render(<AddressBarHarness initialValue={url} onNavigate={vi.fn()} onSubmit={vi.fn()} />)

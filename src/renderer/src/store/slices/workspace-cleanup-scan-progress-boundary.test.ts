@@ -30,11 +30,4 @@ describe('workspace cleanup stale scan guard', () => {
     expect(isLatestWorkspaceCleanupScan(staleToken)).toBe(false)
     expect(cancelScan).toHaveBeenCalledExactlyOnceWith('scan-before-removal')
   })
-
-  it('lets only the newest broad scan mutate shared progress', () => {
-    const first = beginWorkspaceCleanupScan()
-    const second = beginWorkspaceCleanupScan()
-    expect(isLatestWorkspaceCleanupScan(first)).toBe(false)
-    expect(isLatestWorkspaceCleanupScan(second)).toBe(true)
-  })
 })

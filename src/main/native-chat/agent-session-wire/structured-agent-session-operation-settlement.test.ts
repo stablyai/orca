@@ -137,8 +137,6 @@ it.each([
   }
 )
 
-// A send's plan only accepts: it records the submission and never reaches the provider. Handing
-// it over is the delivery loop's.
 it('accepts without touching the provider', async () => {
   const ctx = await context()
   const { store } = hostTestState()

@@ -42,7 +42,7 @@ describe('HostTerminalLedger', () => {
       pid,
       now: () => now,
       isProcessAlive: (candidate) => alive.has(candidate),
-      // Why: the private-dir check rejects a shared parent such as Linux's /tmp.
+      // Inject creation because the production guard rejects shared parents such as /tmp.
       createDir,
       log: vi.fn()
     })

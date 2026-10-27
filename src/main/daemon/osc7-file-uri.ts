@@ -41,8 +41,7 @@ export function parseFileUriPathParts(
     if (/^\/[A-Za-z]:/.test(decodedPath)) {
       return { path: decodedPath.slice(1), hostname }
     }
-    // Why: localhost/empty-host OSC-7 URIs are POSIX paths even when parsed by
-    // a Windows app; only non-local hosts describe Windows UNC shares.
+    // Local and remote-POSIX authorities keep POSIX paths; other nonlocal Windows authorities become UNC.
     if (hostname && hostname !== 'localhost' && !options.remotePosixAuthority) {
       return { path: `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`, hostname }
     }

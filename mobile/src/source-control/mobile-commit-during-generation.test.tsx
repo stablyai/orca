@@ -1,10 +1,9 @@
 import { createElement, useRef, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
 import type { MobileGenerateCommitMessageResult } from './mobile-commit-message-ai'
 
-// Why: react-native is Flow source vitest will not parse; haptics reaches expo-haptics through it.
+// Mock haptics because react-native is Flow source Vitest cannot parse.
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios },
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
@@ -39,9 +38,9 @@ vi.mock('./mobile-commit-message-ai', () => ({
 
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked AI module and the injected senders are the only things that would reach the client.
-const client = {} as RpcClient
+const client = stubRpcClient()
 type Runners = ReturnType<typeof useMobileSourceControlRunners>
 const view: {
   message: string

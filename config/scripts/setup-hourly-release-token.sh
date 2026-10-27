@@ -1,28 +1,12 @@
 #!/usr/bin/env bash
-#
-# Provisions the credentials hourly-mac-build.yml uses to publish into
-# stablyai/orca-hourly. GITHUB_TOKEN cannot be used: it is scoped to the repo
-# running the workflow, and hourly artifacts are published to a different one.
-#
-# A GitHub App is used rather than a PAT because its private key does not expire
-# — no yearly rotation — and it belongs to the org rather than to the person who
-# created it, so it survives that person leaving.
-#
-# The same App also serves adhoc-mac-build.yml and daily-mac-build.yml, which
-# read these same two secrets: one credential, one rotation, all dev channels.
-# Widening it to cover stablyai/orca-adhoc / orca-daily is
-# setup-adhoc-release-repo.sh / setup-daily-release-repo.sh's job.
-#
-# The key is read from a file and piped straight into `gh secret set`. It is never
-# echoed, never passed as a command-line argument (argv is world-readable via
-# `ps`), and never copied anywhere on disk.
-#
-# Usage:  bash config/scripts/setup-hourly-release-token.sh [path/to/key.pem]
+# Provision the org-owned, non-expiring App key for hourly/adhoc/daily releases; GITHUB_TOKEN cannot publish cross-repo.
+# setup-{adhoc,daily}-release-repo.sh widen the installation. Read the key file directly into gh secret set’s stdin,
+# never echoing it, exposing it in argv, or copying it to disk.
+# Usage: bash config/scripts/setup-hourly-release-token.sh [path/to/key.pem]
 #
 set -euo pipefail
 
-# Guard: xtrace would echo the key to stderr on every expansion. Test before
-# disabling, or the check reads the state this line just cleared and never fires.
+# Check xtrace before disabling it; otherwise the guard misses key exposure.
 if [[ -o xtrace ]]; then
   echo "Refusing to run with xtrace enabled; it would echo the private key." >&2
   exit 1

@@ -148,9 +148,7 @@ export function PluginSettingsRow({
   const switchDisabled =
     busy || needsReview || plugin.status === 'invalid' || Boolean(plugin.blockedByKillList)
 
-  // Why: the wide primary action ("Review & enable") renders on its own footer
-  // row so it never wraps the compact toggle + overflow cluster to an
-  // inconsistent position between card types.
+  // Keep wide Review & enable actions in a footer so compact toggle/overflow positions remain consistent.
   const reviewAction = needsReview ? (
     <Button
       variant="secondary"

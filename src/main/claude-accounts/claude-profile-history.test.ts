@@ -33,7 +33,7 @@ afterEach(() => {
   }
 })
 
-// Why: these create real symlinks, which Windows needs privilege for.
+// Real symlinks require additional privileges on Windows.
 const itLinks = it.skipIf(process.platform === 'win32')
 
 describe('Claude profile history sharing', () => {

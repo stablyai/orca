@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../../shared/jira-agent-capability'
+import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../../shared/jira/jira-agent-capability'
 import { RuntimeClientError } from '../runtime-client'
 import { JIRA_WRITE_HANDLERS } from './jira-write'
 
@@ -31,7 +31,6 @@ async function clearAssigneeAfter(failure: Error): Promise<unknown> {
   throw new Error('expected the write to fail')
 }
 
-// Pins which write failures say "may have been applied" (round-2 S5), so a dropped code is deliberate.
 describe('Jira write outcome-unknown codes', () => {
   it.each([
     'runtime_timeout',

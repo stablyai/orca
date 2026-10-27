@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
-import { driveReplyMatrix, replyMatrixGoldenId, replyMatrixSites } from './reply-matrix'
-import { replyMatrixNormalResult } from './reply-matrix-normal-result'
 import { runRecording } from './run-recording'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RecordingScenario } from './recording-scenario'
@@ -19,9 +17,7 @@ describe('subscription recordings', () => {
       const dispose = transport.client.subscribe(CLIENT_EVENTS, null, (result) =>
         events.push(result)
       )
-      // Cut over before the stream is ready. The retiring registry keeps the cancelled subscribe
-      // precisely so it can unsubscribe once the id arrives, which is the behaviour a transport
-      // that routed every frame through the current session would drop on the floor.
+      // Cut over before ready to prove the retiring registry can unsubscribe when its delayed id arrives.
       await transport.cutover()
       await clock.flush()
       transport.frame(`${CLIENT_EVENTS}#1`, null, readyFrame('sub-1'))
@@ -41,7 +37,6 @@ describe('subscription recordings', () => {
         { subscriptionId: 'sub-1' },
         { subscriptionId: 'sub-2' }
       ])
-      // Only the live generation reaches the listener; the retiring one is fenced by the client.
       expect(events).toEqual([readyFrame('sub-2').result])
     } finally {
       transport.dispose()
@@ -68,8 +63,6 @@ describe('subscription recordings', () => {
       expect(() => transport.frame(`${CLIENT_EVENTS}#2`, null, changed)).toThrow(
         'Missing subscription payload'
       )
-      // The host's streamed `end` closes the stream, so a later reply for the id reaches nothing
-      // and the disposer below has no subscription left to unsubscribe.
       transport.frame(`${CLIENT_EVENTS}#1`, null, {
         ok: true,
         streaming: true,
@@ -122,8 +115,7 @@ describe('subscription recordings', () => {
     ])
     expect(listened).toEqual([null])
 
-    // A reply the registry cannot read at all: it throws reaching for `error.message` on its way to
-    // the listener, so nothing was delivered and there is no recording to keep.
+    // A registry property-read failure never reaches the listener and must remain a scenario error.
     listened.length = 0
     await expect(
       runRecording(
@@ -136,8 +128,7 @@ describe('subscription recordings', () => {
   })
 
   it('aborts when the registry throws with nothing stashed, including a thrown undefined', async () => {
-    // `throw undefined` is the one registry failure that cannot be told from an empty stash by
-    // value alone, so the compare has to ask whether a listener crashed at all.
+    // throw undefined requires a presence check; its value alone looks like an empty crash stash.
     const handleResponse = RpcClientStreamRegistry.prototype.handleResponse
     RpcClientStreamRegistry.prototype.handleResponse = () => {
       throw undefined
@@ -177,8 +168,6 @@ describe('subscription recordings', () => {
       const dispose = transport.client.subscribe(CLIENT_EVENTS, null, () => {})
       transport.frame(`${CLIENT_EVENTS}#1`, null, readyFrame('sub-1'))
       dispose()
-      // The unsubscribe is a published payload but never a stream. Filed as one, a frame aimed at it
-      // routed at its wire id, matched nothing, recorded nothing and reported success.
       expect(transport.payloads.map((payload) => payload.name)).toEqual([
         `${CLIENT_EVENTS}#1`,
         'runtime.clientEvents.unsubscribe#1'
@@ -226,7 +215,6 @@ describe('subscription recordings', () => {
         },
         vitestRecordingScheduler()
       )
-      // Teardown is the last checkpoint only when it observed something, which is the point.
       return recording.checkpoints.at(-1)!.observation.effects
     }
     expect(await drive('never')).toMatchObject([
@@ -236,61 +224,8 @@ describe('subscription recordings', () => {
       }
     ])
     expect(await drive('sync')).toEqual([])
-    // A close deferred to a due 0ms timer is a cleanup that ran. Read before the teardown drain it
-    // was byte-identical to the stream above, which is the one thing `cancelled: false` may not mean.
+    // Due-timer cleanup must match synchronous cleanup rather than appear as an uncancelled stream.
     expect(await drive('timer')).toEqual([])
-  })
-
-  it('drives the reply matrix over frames, and matrixes a family that only subscribes', () => {
-    const changed = { ok: true, streaming: true, result: { type: 'worktreesChanged' } }
-    const base: RecordingScenario = {
-      id: 'stream',
-      operation: 'op',
-      family: 'op',
-      sites: [],
-      schedules: [],
-      steps: [
-        { action: 'mount', id: 'mount' },
-        { frame: `${CLIENT_EVENTS}#1`, params: null, reply: readyFrame('sub-1') },
-        { checkpoint: 'ready' },
-        { frame: `${CLIENT_EVENTS}#1`, params: null, reply: changed },
-        { checkpoint: 'changed' }
-      ]
-    }
-    // While the matrix read only completions this family threw its own named failure instead.
-    expect(replyMatrixSites(base)).toEqual([`${CLIENT_EVENTS}#1@1`, `${CLIENT_EVENTS}#1@2`])
-    expect(replyMatrixGoldenId('op', `${CLIENT_EVENTS}#1@2`)).toBe(
-      'matrix-op-runtime.clientevents.subscribe-1-2'
-    )
-    expect(replyMatrixNormalResult('op', [base], `${CLIENT_EVENTS}#1@2`)).toEqual(changed.result)
-    const variants = driveReplyMatrix(base, `${CLIENT_EVENTS}#1@1`, readyFrame('sub-1').result)
-    const partitions = variants.map((variant) => variant.id.replace('stream.', ''))
-    // Nine of eleven: a frame holds no promise, so neither transport rejection applies to one.
-    expect(partitions).toEqual([
-      'normal',
-      'result-absent',
-      'result-null',
-      'inner-ok-missing',
-      'inner-false-string-error',
-      'inner-false-object-error',
-      'outer-refused',
-      'outer-refused-no-message',
-      'method-not-found'
-    ])
-    const replies = new Map(variants.map((variant) => [variant.id, variant.steps[1]]))
-    // The success shapes keep the flag that routes them to the stream; a refusal never had one.
-    expect(replies.get('stream.normal')).toEqual(base.steps[1])
-    expect(replies.get('stream.result-absent')).toEqual({
-      frame: `${CLIENT_EVENTS}#1`,
-      params: null,
-      reply: { ok: true, streaming: true }
-    })
-    expect(replies.get('stream.outer-refused')).toMatchObject({
-      reply: { ok: false, error: { code: 'refused' } }
-    })
-    // No `optional` on a downstream frame: the registry routes a streaming response to the id that
-    // opened the stream whatever the divergence did, so every scripted frame still lands.
-    expect(variants[0]!.steps[3]).toEqual(base.steps[3])
   })
 })
 

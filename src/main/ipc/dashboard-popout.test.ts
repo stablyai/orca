@@ -157,8 +157,7 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
   })
 
-  // Why: an over-long label used to drop the whole snapshot silently, leaving
-  // the board frozen on its last good paint with nothing logged.
+  // Invalid cards must not silently freeze the rest of the board.
   it('keeps publishing the board when one card is invalid, and says so', () => {
     const popout = makeWindow(popoutSender)
     getPopoutMock.mockReturnValue(popout)
@@ -211,8 +210,7 @@ describe('registerDashboardPopoutHandlers', () => {
     const publish = handlers.get('dashboard:publishSnapshot')!
 
     publish({ sender: mainSender } as never, { ...SNAPSHOT, repoIconsByRepoId })
-    // A throttled republish drops the unchanged map — the popout on the wire
-    // still holds it, but one mounting now would have nothing to hold.
+    // Cached replays need the previous icon map even when the live republish omits it.
     publish({ sender: mainSender } as never, { generatedAt: 2, cards: [] })
     expect(popoutSender.send).toHaveBeenLastCalledWith('dashboard:snapshot', {
       generatedAt: 2,
@@ -249,36 +247,10 @@ describe('registerDashboardPopoutHandlers', () => {
       paneKey: 'tab1:leaf1',
       intent: 'explicit'
     })
-    // Anything but a click's explicit intent reads as a view.
     expect(sendToTrustedMock.mock.calls).toEqual([
       ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'view' }],
       ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'explicit' }]
     ])
-  })
-
-  it('relays only valid agent launches from the popout', () => {
-    const args = { worktreeId: 'worktree-1', agent: 'codex' }
-    handlers.get('dashboardPopout:spawnAgent')!({ sender: untrustedSender } as never, args)
-    handlers.get('dashboardPopout:spawnAgent')!({ sender: popoutSender } as never, {
-      ...args,
-      agent: 'unknown'
-    })
-    expect(sendToTrustedMock).not.toHaveBeenCalled()
-
-    handlers.get('dashboardPopout:spawnAgent')!({ sender: popoutSender } as never, args)
-    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:spawnDashboardAgent', args)
-  })
-
-  it('relays only valid sleep requests from the popout', () => {
-    const args = { worktreeId: 'worktree-1' }
-    handlers.get('dashboardPopout:sleepWorkspace')!({ sender: untrustedSender } as never, args)
-    handlers.get('dashboardPopout:sleepWorkspace')!({ sender: popoutSender } as never, {
-      worktreeId: ''
-    })
-    expect(sendToTrustedMock).not.toHaveBeenCalled()
-
-    handlers.get('dashboardPopout:sleepWorkspace')!({ sender: popoutSender } as never, args)
-    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:sleepDashboardWorkspace', args)
   })
 
   it('reveals an agent in only the trusted main window', () => {

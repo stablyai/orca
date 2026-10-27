@@ -65,7 +65,6 @@ function translator(tap: ReturnType<typeof recorder>) {
   })
 }
 
-/** Every lifecycle write for a turn, in order: what a reader could observe. */
 function turnWrites(rows: readonly Row[], turnId: string) {
   return rows.flatMap((row) =>
     row.body.kind === 'turn' && row.body.turnId === turnId ? [row.body] : []
@@ -76,14 +75,12 @@ function terminalWrites(rows: readonly Row[], turnId: string) {
   return turnWrites(rows, turnId).filter((body) => body.state !== 'running')
 }
 
-/** The body the journal reducer keeps for a turn's lifecycle row. */
 function settledRecord(rows: readonly Row[], turnId: string) {
   return rows
     .map((row) => row.body)
     .findLast((body) => body.kind === 'turn' && body.turnId === turnId)
 }
 
-/** Codex's frames for a turn that fails: the error, then the failed completion. */
 function runFailedTurn(handle: (event: CodexStructuredSessionEvent) => unknown) {
   handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
   handle(
@@ -153,8 +150,6 @@ describe('a Codex turn ends once, on its completion', () => {
   })
 
   it('records an exit between the error and the completion as interrupted, with no verdict', () => {
-    // Orca records only an end it observed. The exit is that end; the failure
-    // Codex would have named arrives only in the completion, which never came.
     const tap = recorder()
     const codex = translator(tap)
     const events: CodexStructuredSessionEvent[] = []
@@ -190,8 +185,7 @@ describe('a Codex turn ends once, on its completion', () => {
   })
 
   it('revises the still-open turn with a send Codex echoes between the error and the completion', () => {
-    // Codex records a failed turn's pending input after its `error` frame and
-    // before `turn/completed`, so the echo belongs to a turn that is still open.
+    // Codex can echo pending input between its error and failed completion.
     const tap = recorder()
     const codex = translator(tap)
     const events: CodexStructuredSessionEvent[] = []
@@ -219,8 +213,6 @@ describe('a Codex turn ends once, on its completion', () => {
   })
 
   it('settles once when the sink refuses the completion and its retry lands', () => {
-    // A refused frame is Orca's only redelivery of a completion, and a refused
-    // end changes nothing, so the retry settles the turn exactly once.
     const tap = recorder()
     const codex = translator(tap)
     const completion = notification(

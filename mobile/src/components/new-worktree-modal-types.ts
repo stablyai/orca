@@ -2,12 +2,14 @@ import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { Repo as SharedRepo } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { SetupHookTrust } from '../tasks/setup-hook-trust'
-import { repoColor } from '../worktree/repo-color'
+import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
 
 export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'> &
   Partial<
     Pick<
       SharedRepo,
+      | 'addedAt'
+      | 'projectHostSetupMethod'
       | 'badgeColor'
       | 'connectionId'
       | 'executionHostId'
@@ -50,5 +52,5 @@ export type SetupHookDetails = {
 }
 
 export function getMobileWorkspaceRepoBadgeColor(repo: MobileWorkspaceRepo | null): string {
-  return repo?.badgeColor || repoColor(repo?.displayName ?? 'repository')
+  return resolveRepoBadgeColor(repo?.badgeColor)
 }

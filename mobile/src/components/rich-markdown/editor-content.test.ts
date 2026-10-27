@@ -6,14 +6,7 @@ import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 import type { RichMarkdownEditorDocument } from './document-host-seams'
 
-/**
- * What the host sets, what it gets back, and the generation that tells the two apart.
- *
- * The host replaces the content while the user is typing into it, so every change carries the
- * generation the content was set under and a reply from before a replacement is one the host can
- * drop. The document's own rewrites are not changes at all, which is what makes a replacement
- * silent rather than a change the host would apply back to itself.
- */
+// Round-trip host generation unchanged so pre-replacement changes can be discarded; suppress document’s own rewrites to avoid echo.
 const started: RichMarkdownEditorDocument[] = []
 
 function editorDocument() {
@@ -76,8 +69,7 @@ describe('the editor document content', () => {
   })
 
   it('says nothing while it is rewriting itself', () => {
-    // `setMarkdown` replaces the markup, which a live browser reports as input; a change posted
-    // from it would send the host back the content the host just set.
+    // setMarkdown’s DOM rewrite must not echo host’s content as new user change.
     const editor = editorDocument()
     editor.handle.setMarkdown('# Title', 2)
     expect(editor.posted).toEqual([])
@@ -116,8 +108,7 @@ describe('the editor document content', () => {
   })
 
   it('reports one change for a checkbox tap, not one per event the tap raises', () => {
-    // One tap raises click, input and change, and all three bubble to `#editor`: the recorded
-    // sequence is the precondition, so a count of one cannot pass by the events going missing.
+    // Assert click/input/change all bubble for one tick, then prove only one report; missing events cannot satisfy count accidentally.
     const editor = editorDocument()
     editor.handle.setMarkdown('- [ ] Open', 1)
     const reached: string[] = []

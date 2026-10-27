@@ -2,11 +2,12 @@ import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { supportsStructuredAgentSessionCliSource } from '@/runtime/structured-agent-session-client'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { toHostSessionPaneKey } from '../../../../shared/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
 import { reportCliChatResumeFailure } from './cli-chat-resume-feedback'
 import { adoptingAgentOnHost } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
@@ -38,11 +39,11 @@ export async function runCliChatResume(
   openOwner = false
 ): Promise<void> {
   const key = keyFor(source)
-  if (pending.has(key)) {
+  if (pending.has(key) || source.hostUpdateRequired) {
     return
   }
   const target = structuredAgentSessionTargetForHost(source.executionHostId)
-  if (!target || target.kind !== 'local') {
+  if (!target) {
     return
   }
   const controller = new AbortController()
@@ -105,7 +106,7 @@ export async function runCliChatResume(
       return
     }
     const agent = await waitForPromiseWithSignal(
-      adoptingAgentOnHost(source.agent, source.workspaceId),
+      adoptingAgentOnHost(source.agent, source.workspaceId, source.executionHostId),
       controller.signal
     )
     if (!isCurrent()) {
@@ -119,8 +120,14 @@ export async function runCliChatResume(
       executionHostId: source.executionHostId,
       resumeFrom: {
         providerSessionId: source.providerSessionId,
+        // The host matches its own pane keys, not this client's mirrored ones.
         ...(cliSourceSupported
-          ? { cliSource: { workspaceId: source.workspaceId, paneKey: source.paneKey } }
+          ? {
+              cliSource: {
+                workspaceId: source.workspaceId,
+                paneKey: toHostSessionPaneKey(source.paneKey)
+              }
+            }
           : {})
       }
     })

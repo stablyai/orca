@@ -5,10 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
-// Scan-level coverage for the canonical-root rule when one physical Codex
-// rollout is visible through both the real ~/.codex and the managed runtime
-// home (the layout the session backfill and bridge produce via hardlinks).
-
 let tempRoots: string[] = []
 
 afterEach(async () => {
@@ -21,8 +17,6 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-dedup-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
-    // Sandbox "real ~/.codex" and Orca managed runtime home, hardlinked the
-    // same way the session backfill links managed rollouts into the real home.
     const realHome = join(root, 'real-codex-home')
     const realSessionsDir = join(realHome, 'sessions')
     const managedHome = join(root, 'codex-runtime-home', 'home')
@@ -54,8 +48,7 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
       join(managedSessionsDir, '2026', '07', '01', rolloutName),
       join(realSessionsDir, '2026', '07', '01', rolloutName)
     )
-    // A managed-only session (e.g. a backfill copy failure) must keep its
-    // managed-home stamp so resume still targets the home that has it.
+    // A rollout absent from the real home must retain its managed home for resume.
     await mkdir(join(managedSessionsDir, '2026', '07', '02'), { recursive: true })
     await writeFile(
       join(

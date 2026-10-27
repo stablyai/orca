@@ -3,8 +3,7 @@ import type { SshTranscriptLocation } from './ssh-transcript-path'
 
 export type SshTranscriptHandle = { sshTranscript: SshTranscriptLocation }
 
-// Why: this process serves no SSH filesystem, so an SSH transcript throws instead of reading
-// anything on this machine.
+// This process serves no SSH filesystem; refuse rather than probe the local machine.
 export async function statSshTranscript(location: SshTranscriptLocation): Promise<{
   size: number
   mtimeMs: number

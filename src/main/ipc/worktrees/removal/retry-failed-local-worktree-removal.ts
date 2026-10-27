@@ -14,10 +14,7 @@ import {
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
 
-/**
- * Delete on the leftover of a local delete that failed after Git dropped the registration: runs the
- * recorded removal again with this handler's bookkeeping. Undefined when there is none.
- */
+/** Retry recorded leftovers after Git deregistration, retaining IPC bookkeeping; return undefined if none exist. */
 export function retryFailedLocalWorktreeRemoval(
   context: WorktreeIpcContext,
   args: RemoveWorktreeArgs,

@@ -18,19 +18,14 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './protocol-version'
 
-/**
- * What the renderer's chat implements. The desktop window and the browser client run the same
- * chat over `agentSession.*`, so every handshake they send names this one list: a copy per
- * client once left the browser client without `agent-session.structured.v1`, and its host
- * refused every chat.
- */
+/** Desktop/browser chats share one handshake list; separate copies once omitted structured.v1 in browsers and made hosts refuse every chat. */
 export const STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  // It reads each host's `agentSession.agents` and renders a chat of any agent listed there.
+  // Render every agent listed by the owning host.
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
-  // It picks each launch's mode from its own settings before asking the host.
+  // Client settings choose launch mode before asking the host.
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
@@ -38,10 +33,9 @@ export const STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES = [
   AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
   AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
-  // It settles acknowledged echoes from the read cursor even when a snapshot skips them.
+  // Read cursors settle acknowledged echoes even when snapshots omit their rows.
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
-  // Its queued cards show their images, and Edit keeps them.
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,

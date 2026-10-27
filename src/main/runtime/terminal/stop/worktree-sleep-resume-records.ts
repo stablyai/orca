@@ -10,6 +10,7 @@ import type { AgentProcessVerdict } from '../../../../shared/agent-process-prese
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
@@ -27,12 +28,7 @@ export type WorktreeSleepResumeRecorder = {
   ): Promise<void>
 }
 
-/**
- * Builds the records a host-driven sleep leaves behind, from the host's own hook store.
- * Why: a paired client's sleep stops the host's PTYs, but the record its renderer writes never
- * reaches the host — and the host is the side that answers the tab open (session.tabs.activate),
- * so without these the reopened tab is a plain shell.
- */
+/** Capture resume records on the host: paired-renderer saves never reach the host that later reopens the tab, leaving a plain shell without them. */
 export async function captureWorktreeSleepResumeRecords(args: {
   worktreeId: string
   paneKeysByPtyId: ReadonlyMap<string, Iterable<string>>
@@ -108,8 +104,7 @@ export function applyWorktreeSleepResumeRecords(
   for (const ptyId of stoppedPtyIds) {
     const entry = capture.get(ptyId)
     for (const paneKey of entry?.retiredPaneKeys ?? []) {
-      // Why: only hook evidence retires an older capture; a missing hook row (an agent still
-      // starting after a resume) is no evidence the session left the pane.
+      // Only hook evidence retires captures; missing rows during agent startup cannot prove the session left.
       if (next[paneKey]) {
         delete next[paneKey]
         changed = true
@@ -117,7 +112,7 @@ export function applyWorktreeSleepResumeRecords(
     }
     for (const record of entry?.records ?? []) {
       const previous = next[record.paneKey]
-      // Why: a reattached PTY forgets its launch recipe; the earlier capture of this session kept it.
+      // Reattach can lose launch recipes; retain an earlier capture's config for the same session.
       const keptLaunchConfig =
         !record.launchConfig &&
         previous?.launchConfig &&
@@ -163,4 +158,22 @@ export function clearClosedWorktreeResumeRecords(
   return hasChanges
     ? { ...session, sleepingAgentSessionsByPaneKey, terminalPtyIncarnationsByPaneKey }
     : null
+}
+
+/** The session without a workspace-sleep record whose tab it no longer lists, or null when the record is still placed. */
+export function dropStrandedSleepRecord(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  paneKey: string
+): WorkspaceSessionState | null {
+  const record = session.sleepingAgentSessionsByPaneKey?.[paneKey]
+  const tabId = record?.tabId ?? parsePaneKey(paneKey)?.tabId
+  const tabListed = Object.values(session.tabsByWorktree).some((tabs) =>
+    tabs.some((tab) => tab.id === tabId)
+  )
+  if (!record || record.worktreeId !== worktreeId || !isWorkspaceSleepRecord(record) || tabListed) {
+    return null
+  }
+  const { [paneKey]: _dropped, ...rest } = session.sleepingAgentSessionsByPaneKey ?? {}
+  return { ...session, sleepingAgentSessionsByPaneKey: rest }
 }

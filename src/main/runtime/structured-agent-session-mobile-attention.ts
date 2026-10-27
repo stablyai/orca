@@ -1,13 +1,5 @@
-// The execution host's own delivery of structured-chat attention to the phones paired with it.
-//
-// WHY THE HOST: a structured session runs here and its attention edges are derived here, so a phone
-// paired to this host (a headless `orca serve` or `orcad` included) must not depend on some desktop
-// keeping a chat tab open to relay them. Desktops keep presentation only: unread, focus suppression
-// and their own OS banner. A local desktop marks its request so main does not push the phone twice.
-//
-// SENT AT THE COMMIT THAT RAISED IT: labels come from metadata already in memory, never a disk or
-// Git lookup, so the alert can't arrive after the prompt was answered. Each notification is keyed by
-// the edge's identity, which delivery dedupes on and retirement addresses.
+// Push phone attention from the execution host so headless sessions need no desktop relay. Desktop retains presentation and marks local delivery to avoid duplicate pushes.
+// Read labels synchronously at the raising commit so alerts cannot outlive prompts; edge ids dedupe delivery and address retirement.
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import {
   agentSessionAttentionKey,
@@ -21,6 +13,10 @@ import type {
   NotificationDispatchRequest,
   NotificationSettings
 } from '../../shared/notification-settings-types'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { buildNotificationOptions } from '../ipc/notification-options'
@@ -47,7 +43,7 @@ export type StructuredAttentionMobileDelivery = {
   reconcile: (state: StructuredAttentionState) => void
 }
 
-/** The labels the desktop shows for a workspace, from the host's persisted metadata alone. */
+/** Read display labels from persisted host metadata without disk/Git lookups. */
 export function readStructuredAttentionWorkspaceLabels(
   store: Pick<RuntimeStore, 'getRepo' | 'getWorktreeMeta' | 'getFolderWorkspaces'>,
   scope: AgentSessionExecutionLocation
@@ -88,7 +84,7 @@ export function createStructuredAttentionMobileDelivery(
       if (!news) {
         return
       }
-      const scope = edge.type === 'prompt' ? edge.prompt.scope : edge.completion.scope
+      const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
       if (deps.isWorkspaceMuted(scope)) {
         return
       }
@@ -111,7 +107,7 @@ export function createStructuredAttentionMobileDelivery(
         request,
         getRuntimeDesktopSurface().translateNotification
       )
-      // The same eligibility the desktop's own fan-out applies: these preferences gate the phone too.
+      // Apply the desktop fan-out preferences to phone delivery too.
       const desktopAllowed = settings.enabled && settings.agentTaskComplete
       deps.dispatch({
         type: 'notification',
@@ -121,6 +117,8 @@ export function createStructuredAttentionMobileDelivery(
         title,
         body,
         worktreeId: scope.workspaceId,
+        // The host has no window tab id; the phone matches this session-derived key to the chat.
+        paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
         notificationId: attentionKey,
         attentionKey,
         ...(structuredAttentionOrigin(edge)

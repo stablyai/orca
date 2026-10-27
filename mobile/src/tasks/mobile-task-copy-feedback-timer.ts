@@ -18,8 +18,7 @@ export function scheduleMobileTaskCopyFeedbackReset(
   setCopiedKey: SetCopiedTaskKey,
   delayMs = 1500
 ): void {
-  // Why: task copy actions share one copied key; replacing the timer prevents
-  // an older copy from clearing newer feedback or surviving unmount.
+  // Replace the shared feedback timer so older copies cannot clear newer feedback or outlive unmount.
   clearMobileTaskCopyFeedbackTimer(timerRef)
   timerRef.current = setTimeout(() => {
     timerRef.current = null

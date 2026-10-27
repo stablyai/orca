@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   ensureRemoteOrcadNodeRuntime,
   NODE_RUNTIME_PROMOTE_TIMEOUT_MS
@@ -15,6 +14,7 @@ import {
 import { RUNTIME_STORE_LOCK_NAME } from './remote-node-runtime-store-lock'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
@@ -24,8 +24,7 @@ vi.mock('./remote-install-transfers', () => ({
   uploadRemoteInstallDirectory: vi.fn(async () => {})
 }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
 const store = '/home/u/.orca-remote/runtimes'
 const lock = `${store}/${RUNTIME_STORE_LOCK_NAME}`
@@ -87,7 +86,7 @@ describe('ensureRemoteOrcadNodeRuntime promotion lock', () => {
   it('re-hashes and promotes in one host command that the host lock release covers', async () => {
     answer(() => REMOTE_NODE_RUNTIME_MISSING)
     await ensure()
-    // Why one command: a re-hash the client stops waiting on must not orphan the lock (HH-3).
+    // Under-lock hashing and release must stay one host command even if the client stops observing.
     const locked = commands.filter((c) => c.includes('sha256sum'))
     expect(locked).toHaveLength(2)
     const [, recheck] = locked
@@ -120,7 +119,7 @@ describe('ensureRemoteOrcadNodeRuntime promotion lock', () => {
       return base!(c, command, options)
     })
     await expect(ensure()).rejects.toBe(lost)
-    // The promote itself frees the lock on the host when its work exits; the client sends no release.
+    // Promotion owns host-side release; the client must not remove a lock still guarding work.
     const releases = commands.filter((c) => c.includes(`rm -rf '${lock}'`))
     expect(releases).toHaveLength(1)
     expect(releases[0]).toContain('tar -xzf')

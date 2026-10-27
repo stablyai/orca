@@ -1,6 +1,4 @@
-/** Window-level safety net for a tab drag whose end/cancel event never arrives.
- *  Electron/dnd-kit can occasionally miss drag end; a stuck drag ref makes all
- *  later tab clicks look like drag releases. Returns the release function. */
+/** Recover missed Electron/dnd-kit drag endings so stale drag state cannot consume later clicks; return cleanup. */
 export function installTabDragMissedEndListeners(onMissedEnd: () => void): () => void {
   let cleanupTimer: number | null = null
 

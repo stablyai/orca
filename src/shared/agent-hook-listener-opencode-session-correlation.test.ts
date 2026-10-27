@@ -138,6 +138,13 @@ describe('correlateOpenCodeSessionOwners', () => {
       knownOwners: new Map()
     })
     expect(results).toEqual([])
+    const expired = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [{ paneKey: 'pane-a', directory: DIR }],
+      clients: [client('pane-a', NOW - 120_000, NOW - 90_000)],
+      knownOwners: new Map()
+    })
+    expect(expired).toEqual([])
   })
 
   it('breaks a same-directory tie by client evidence', () => {

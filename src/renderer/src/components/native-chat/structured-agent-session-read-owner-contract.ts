@@ -9,8 +9,7 @@ export type StructuredAgentSessionReadSnapshot = {
   /** Bumped whenever older-page reads are invalidated (open, snapshot, reset, dispose). */
   olderHistoryGeneration: number
   providerSession?: AgentProviderSessionMetadata
-  /** Whether `state` is the host's present: false from when reading stops or contact is lost
-   *  until the read has caught up again. */
+  /** False from lost contact/read stop until state catches up to the host’s present. */
   current: boolean
 }
 

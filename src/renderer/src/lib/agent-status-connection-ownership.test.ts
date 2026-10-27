@@ -75,6 +75,9 @@ describe('agent status connection ownership', () => {
     })
     state.terminalLayoutsByTabId['tab-1'].ptyIdsByLeafId[LEAF] = toAppSshPtyId('ssh-b', 'pty-1')
     expect(resolveLiveAgentStatusConnectionRouting({ state, paneKey: PANE, ptyId })).toBeUndefined()
+    state.terminalLayoutsByTabId['tab-1'].ptyIdsByLeafId[LEAF] = ptyId
+    state.ptyIdsByTabId['tab-1'] = []
+    expect(resolveLiveAgentStatusConnectionRouting({ state, paneKey: PANE, ptyId })).toBeUndefined()
   })
 
   it('rejects stale SSH routing after clear and throughout transient reconnect', () => {

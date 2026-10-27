@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
 import {
-  OMP_SESSION_ARTIFACT_DIR_PATTERN,
   countOmpSubagentTranscripts,
+  isOmpConversationDirectory,
   partitionOmpSubagentTranscriptPaths
 } from './session-scanner-omp-subagent-transcripts'
 
@@ -24,23 +24,20 @@ async function makeWorkspaceDir(): Promise<string> {
   return root
 }
 
-describe('OMP_SESSION_ARTIFACT_DIR_PATTERN', () => {
-  it('matches session artifact dir names and nothing else in the layout', () => {
-    expect(OMP_SESSION_ARTIFACT_DIR_PATTERN.test(SESSION_STEM)).toBe(true)
-    // Task children are label-named.
-    expect(OMP_SESSION_ARTIFACT_DIR_PATTERN.test('AuthAndPreflight')).toBe(false)
-    expect(OMP_SESSION_ARTIFACT_DIR_PATTERN.test('local')).toBe(false)
-    // Workspace dir names OMP encodes from a cwd (relative to home, relative to
-    // tmp, absolute, or slug-hashed) never collide with a session stem. The
-    // local prune doesn't depend on this — it skips depth 0 — but the remote
-    // partition has no root to measure depth against, so it does.
+describe('isOmpConversationDirectory', () => {
+  it('skips session artifact dirs below the workspace and nothing else in the layout', () => {
+    expect(isOmpConversationDirectory(SESSION_STEM, 0)).toBe(true)
+    expect(isOmpConversationDirectory(SESSION_STEM, 1)).toBe(false)
+    expect(isOmpConversationDirectory('AuthAndPreflight', 1)).toBe(true)
+    expect(isOmpConversationDirectory('local', 1)).toBe(true)
+    // Remote partitioning has no depth context, so encoded workspace names must not match session stems.
     for (const workspaceDirName of [
       `-${SESSION_STEM}`,
       `-tmp-${SESSION_STEM}`,
       `--${SESSION_STEM}--`,
       'home-app-85dfa2f063812c58976deb581167a634a4'
     ]) {
-      expect(OMP_SESSION_ARTIFACT_DIR_PATTERN.test(workspaceDirName)).toBe(false)
+      expect(isOmpConversationDirectory(workspaceDirName, 1)).toBe(true)
     }
   })
 })
@@ -54,7 +51,6 @@ describe('countOmpSubagentTranscripts', () => {
     await writeFile(parentPath, '')
     await writeFile(join(artifactDir, 'AuthAndPreflight.jsonl'), '')
     await writeFile(join(artifactDir, 'BitbucketDcApi.jsonl'), '')
-    // Artifacts are not transcripts; nested files belong to their own parents.
     await writeFile(join(artifactDir, 'notes.md'), '')
     await writeFile(join(artifactDir, 'local', 'plan.jsonl'), '')
 
@@ -79,8 +75,7 @@ describe('partitionOmpSubagentTranscriptPaths', () => {
       parent,
       `${workspace}/${SESSION_STEM}/AuthAndPreflight.jsonl`,
       `${workspace}/${SESSION_STEM}/BitbucketDcApi.jsonl`,
-      // A grandchild attributes to its own parent, not the top-level session —
-      // and never surfaces as a candidate.
+      // Nested grandchildren must not count toward the top-level parent or become top-level candidates.
       `${workspace}/${SESSION_STEM}/AuthAndPreflight/Nested.jsonl`,
       sibling
     ])
@@ -128,8 +123,7 @@ describe('withOmpSubagentTranscriptCount host gating', () => {
   it('never counts a local artifact dir for a remote-host transcript', async () => {
     const workspace = await makeWorkspaceDir()
     const parentPath = join(workspace, `${SESSION_STEM}.jsonl`)
-    // A local artifact dir exists at the same path, but the content came from
-    // an SSH host — its real task children live on that host, not on this disk.
+    // A same-path local artifact directory must not enrich a transcript fetched from an SSH host.
     await mkdir(join(workspace, SESSION_STEM), { recursive: true })
     await writeFile(join(workspace, SESSION_STEM, 'AuthAndPreflight.jsonl'), '')
     const file = { path: parentPath, mtimeMs: 0, modifiedAt: '2026-05-01T10:00:00.000Z' }

@@ -5,9 +5,8 @@ import { createLocalDetectedAgentState } from './local-detected-agent-state'
 import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
 
 export type DetectedAgentsSlice = LocalDetectedAgentState & {
-  // Why: remote worktrees need per-connection agent detection. The local
-  // detectedAgentIds field is connection-unaware, so remote state lives in a
-  // separate map keyed by SSH connectionId.
+  // Local detection lacks connection identity; cache remote results per SSH connection.
+  remoteAgentInventoryOutcome: (key: string) => 'pending' | 'successful' | 'failed'
   remoteDetectedAgentIds: Record<string, TuiAgent[] | null>
   isDetectingRemoteAgents: Record<string, boolean>
   ensureRemoteDetectedAgents: (
@@ -19,9 +18,9 @@ export type DetectedAgentsSlice = LocalDetectedAgentState & {
   clearRemoteDetectedAgents: (connectionId: string) => void
 }
 
-// Why: these are module-scoped (not in the store) so we can deduplicate
-// concurrent callers without storing a Promise in Zustand state.
+// Keep dedupe promises outside Zustand state.
 const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+const latestOutcome = new Map<string, 'pending' | 'successful' | 'failed'>()
 const remoteRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
 
 export function _getRemoteDetectPromiseCountForTest(): number {
@@ -34,14 +33,13 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   store
 ) => ({
   ...createLocalDetectedAgentState(set, get, store),
+  remoteAgentInventoryOutcome: (key) => latestOutcome.get(key) ?? 'pending',
   remoteDetectedAgentIds: {},
   isDetectingRemoteAgents: {},
 
   ensureRemoteDetectedAgents: (connectionId: string, options?: { force?: boolean }) => {
     const existing = get().remoteDetectedAgentIds[connectionId]
-    // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
-    // must not be treated as cached — re-detect so a later install / PATH fix is
-    // picked up without a reconnect. Non-empty results still short-circuit.
+    // Cache only nonempty detections; retry [] so install/PATH fixes need no reconnect.
     if (existing?.length && options?.force !== true) {
       return Promise.resolve(existing)
     }
@@ -50,6 +48,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       return inflight
     }
 
+    latestOutcome.set(connectionId, 'pending')
     set((s) => ({
       isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: true }
     }))
@@ -59,6 +58,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       .then((ids) => {
         const typed = ids as TuiAgent[]
         if (remoteDetectPromises.get(connectionId) === pending) {
+          latestOutcome.set(connectionId, 'successful')
           set((s) => ({
             remoteDetectedAgentIds: { ...s.remoteDetectedAgentIds, [connectionId]: typed },
             isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: false }
@@ -69,6 +69,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       .catch(() => {
         // Why: allow retry on next call (SSH may reconnect). Do not cache failure.
         if (remoteDetectPromises.get(connectionId) === pending) {
+          latestOutcome.set(connectionId, 'failed')
           set((s) => ({
             isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: false }
           }))
@@ -76,9 +77,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
         return [] as TuiAgent[]
       })
       .finally(() => {
-        // Why: this map is only for in-flight dedupe. Successful results live
-        // in remoteDetectedAgentIds, so keeping resolved promises duplicates
-        // one entry per SSH connection for the rest of the renderer session.
+        // Retain only pending promises; resolved results already live in remoteDetectedAgentIds and would leak duplicate entries.
         if (remoteDetectPromises.get(connectionId) === pending) {
           remoteDetectPromises.delete(connectionId)
         }
@@ -109,11 +108,9 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     return pending
   },
 
-  // Why: the remote agent list is tied to a live SSH connection. On disconnect
-  // the relay is gone, so clear both the cached result and the deduplication
-  // promise. When the user reconnects and opens the quick-launch menu,
-  // ensureRemoteDetectedAgents will re-detect against the new relay.
+  // Disconnect retires relay: clear results and pending dedupe so quick-launch redetects after reconnect.
   clearRemoteDetectedAgents: (connectionId: string) => {
+    latestOutcome.delete(connectionId)
     remoteDetectPromises.delete(connectionId)
     remoteRefreshPromises.delete(connectionId)
     set((s) => {

@@ -101,8 +101,7 @@ export function renderAgentComboboxItem({
     </CommandItem>
   )
   return (
-    // Why: z-[70] sits above PopoverContent's z-[60] so the right-click menu
-    // renders in front of the still-open combobox popover instead of behind it.
+    // Keep the default context menu above the still-open combobox popover (z-70 over z-60).
     <AgentDefaultContextMenu key={key} isDefault={isDefault} onSetDefault={onSetDefault}>
       {row}
     </AgentDefaultContextMenu>

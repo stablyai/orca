@@ -183,8 +183,7 @@ function createFixture(
     getRuntimeId: () => 'test-runtime',
     listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
     getClientSettings: () => ({
-      // Why: defaults on, so a fixture that says nothing about the setting exercises capability
-      // gating alone; callers opt into the off case explicitly.
+      // Default-on settings isolate capability gating; opt explicitly into off cases.
       experimentalNativeChat: options.structuredNativeChatEnabled !== false
     }),
     ...calls

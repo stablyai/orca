@@ -7,9 +7,7 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { eraseRpcMethods } from '../../../core'
 import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
 
-// The federation host runs its own copy of the observation and stop logic, so
-// it needs the same rule: lost contact with a worker's host is not an exit, and
-// a close it could not confirm must not be relayed home as a settled stop.
+// Host contact loss never proves worker exit; relay only confirmed stops as settled.
 
 const HOME_FINGERPRINT = 'home-peer-fingerprint'
 const DISPATCH_ID = 'ctx_federation_verdict'
@@ -263,7 +261,6 @@ describe('federation host liveness verdicts', () => {
         archive: { source: 'terminal', status: 'empty' }
       })
       expect(host.hostDb.getWorkerTerminalArchive(DISPATCH_ID)).toBeDefined()
-      // The exited worker still owns a terminal record and tab; release must close it.
       expect(closeTerminal).toHaveBeenCalledOnce()
     } finally {
       host.hostDb.close()
@@ -285,8 +282,7 @@ describe('federation host liveness verdicts', () => {
     }
   })
 
-  // Why: the verdict register only fills on the first inventory sweep, so a PTY this host just
-  // spawned has none for minutes; the fleet row read host_indeterminate the whole time.
+  // New local PTYs lack register verdicts until inventory; fleet must use host-owned evidence meanwhile.
   it('reads a freshly spawned local pane from its own connected flag before any verdict', async () => {
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: HANDLE,
@@ -337,8 +333,7 @@ describe('federation host liveness verdicts', () => {
   })
 
   it('keeps an old peer without a liveness verdict unverifiable', async () => {
-    // Legacy hosts can return an exited-looking terminal summary but have no
-    // verdict API; relay/contact state is not proof that the process exited.
+    // Legacy terminal summaries can look exited without verdict proof; contact state is not death evidence.
     Object.defineProperty(runtime, 'getTerminalLivenessVerdict', { value: undefined })
 
     await expect(
@@ -353,8 +348,7 @@ describe('federation host liveness verdicts', () => {
   })
 
   it('still serves output for a terminal we merely lost stop-contact with', async () => {
-    // Why this matters: the read gate used to reject every status except live, which
-    // would refuse a connected terminal the moment a stop lost contact with it.
+    // An unverifiable but connected terminal remains readable after stop loses contact.
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: HANDLE,
       worktreeId: 'repo::remote-worktree',
@@ -390,7 +384,6 @@ describe('federation host liveness verdicts', () => {
       lastError?: string
     }
 
-    // Losing contact is a reason to report honestly, never to stop trying.
     expect(closeTerminal).toHaveBeenCalledWith(HANDLE)
     expect(stopped.state).not.toBe('stopped')
     expect(stopped.lastError).toContain('could not be confirmed stopped')

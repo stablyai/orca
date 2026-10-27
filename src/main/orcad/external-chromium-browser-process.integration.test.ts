@@ -7,11 +7,7 @@ import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 
 const executablePath = process.env.ORCA_BROWSER_EXECUTABLE
 
-// Why 120s rather than the 30s global default: one macOS run took 30s and timed out,
-// while a Linux run with an empty ~/.agent-browser was 2.8s — so the cost looks like a
-// one-time Gatekeeper/codesign verification of the Rust binary, not a Linux cold start.
-// Sized for the slow observation anyway: headroom on a passing test is free, and a
-// timeout here would land as a flaky required check.
+// Allow slow first-run macOS binary verification beyond the default test timeout.
 const COLD_BROWSER_START_TIMEOUT_MS = 120_000
 
 describe('ExternalChromiumBrowserProcess integration', () => {
@@ -22,7 +18,7 @@ describe('ExternalChromiumBrowserProcess integration', () => {
       const fixturePath = join(root, 'fixture.html')
       await writeFile(
         fixturePath,
-        '<!doctype html><title>External Chromium</title><main>external-ready</main>'
+        '<!doctype html><title>External Chromium</title><main>external-ready</main><input>'
       )
       const provider = await resolveOrcadBrowserProvider({
         userDataPath: root,
@@ -38,8 +34,6 @@ describe('ExternalChromiumBrowserProcess integration', () => {
           getAgentBrowserBridge: () => null,
           resolveWorktreeSelector: async (selector) => ({ id: selector }),
           resolveBrowserWorkspace: async (selector) => ({ id: selector }),
-          // Unused by the sidecar command paths under test; the daemon's real host is
-          // OrcaRuntimeService, which owns the client-hosted registries.
           resolveBrowserNetworkExecutionHost: () => {
             throw new Error('No browser network execution host')
           },
@@ -70,6 +64,19 @@ describe('ExternalChromiumBrowserProcess integration', () => {
             expression: 'document.querySelector("main")?.textContent'
           })
         ).resolves.toMatchObject({ result: 'external-ready' })
+        const page = 'external-page'
+        const inputValue = (): Promise<unknown> =>
+          commands.browserEval({ page, expression: 'document.querySelector("input").value' })
+        for (const text of ['--help', '-x', '--', 'a -- b', '--json --session other']) {
+          await commands.browserFill({ page, element: 'input', value: text })
+          await expect(inputValue()).resolves.toMatchObject({ result: text })
+          await commands.browserFill({ page, element: 'input', value: '' })
+          await commands.browserKeyboardInsertText({ page, text })
+          await expect(inputValue()).resolves.toMatchObject({ result: text })
+          await commands.browserFill({ page, element: 'input', value: '' })
+          await commands.browserType({ page, input: text })
+          await expect(inputValue()).resolves.toMatchObject({ result: text })
+        }
         await expect(
           commands.browserScreenshot({ page: 'external-page', format: 'png' })
         ).resolves.toMatchObject({ data: expect.stringMatching(/\S+/), format: 'png' })

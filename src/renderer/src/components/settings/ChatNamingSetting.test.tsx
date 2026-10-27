@@ -57,7 +57,7 @@ function changeTemplate(value: string): void {
 }
 
 function changeAgentArgs(value: string): void {
-  const input = screen.getByText('CLI arguments').nextElementSibling
+  const input = screen.getByText('Arguments').nextElementSibling
   if (!(input instanceof HTMLInputElement)) {
     throw new Error('CLI arguments input is missing')
   }

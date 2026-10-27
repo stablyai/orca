@@ -1,27 +1,4 @@
-/**
- * Which runtime-owned workspaces already have an initial-terminal bootstrap in flight.
- *
- * The bootstrap used to be latched by a `let` inside the session-tabs subscription closure, which
- * made "one focus creates at most one terminal" true only for as long as that one closure lived.
- * Its effect re-runs whenever the environment, connection generation, pairing revision, or
- * session-ready flag settles — all of which move during a workspace switch — so a second closure
- * re-armed the flag while the first create was still in flight and seeded a second terminal
- * (STA-6173). This latch outlives the closures.
- *
- * It is keyed by environment AND worktree, not worktree alone: a worktree id is `repoId::path` with
- * no host component, so the same id can be live on two paired runtimes at once (STA-4343). Keying
- * per environment lets a per-environment teardown release only its own in-flight keys — clearing
- * every environment's latch would release a sibling environment's pending create and let a new
- * subscription for it seed a duplicate, which is this very bug through another door.
- *
- * `creating` blocks every other closure while the create RPC is in flight. `awaiting-mirror` is a
- * create that resolved without the mirror yet holding a row for the worktree: the host may have the
- * tab and the frame simply has not landed, so the latch stays held — releasing here is what let the
- * next empty frame seed a duplicate. The next frame the mirror accepts for that worktree is its
- * answer either way (a row now exists and the predicate declines on its own, or the host genuinely
- * has no terminal and a retry is right), so that frame releases it. Without that release a create
- * whose frame never lands would suppress every later auto-seed until environment teardown.
- */
+/** Share bootstrap latches across subscription closures to prevent duplicate creates on workspace switches (STA-6173). Key by environment AND worktree: repoId::path collides across hosts, and teardown must not release sibling claims (STA-4343). creating blocks all closures; success without a mirrored row enters awaiting-mirror. The next accepted frame releases only awaiting-mirror so missing publication cannot suppress retries until teardown. */
 type InitialTerminalBootstrapPhase = 'creating' | 'awaiting-mirror'
 
 const phaseByWorktreeByEnvironment = new Map<string, Map<string, InitialTerminalBootstrapPhase>>()
@@ -33,7 +10,6 @@ export function isWebRuntimeInitialTerminalBootstrapInFlight(
   return phaseByWorktreeByEnvironment.get(environmentId)?.has(worktreeId) ?? false
 }
 
-/** Claims the bootstrap for this environment's worktree; false when another closure already holds it. */
 export function beginWebRuntimeInitialTerminalBootstrap(
   environmentId: string,
   worktreeId: string
@@ -75,10 +51,7 @@ export function endWebRuntimeInitialTerminalBootstrap(
   }
 }
 
-/**
- * Release a bootstrap that was only waiting on the mirror. A create still in flight keeps its claim:
- * releasing it on a frame is exactly the re-armed-closure race this latch exists to close.
- */
+/** Release only awaiting-mirror; releasing an in-flight create on a frame lets reinstalled closures create duplicates. */
 export function releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame(
   environmentId: string,
   worktreeId: string

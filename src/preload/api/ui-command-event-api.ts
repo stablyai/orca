@@ -2,8 +2,11 @@ import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../shared/runtime-file-contracts'
-import type { JiraQuickFilterState } from '../../shared/jira-quick-filters'
-import type { JiraSavedFilterState, JiraSavedFilterMutation } from '../../shared/jira-saved-filters'
+import type { JiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
+import type {
+  JiraSavedFilterState,
+  JiraSavedFilterMutation
+} from '../../shared/jira/jira-saved-filters'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -13,11 +16,16 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
 } from '../../shared/terminal-pane-reveal'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type {
+  ProjectMovePauseRequest,
+  ProjectMovePauseResponse
+} from '../../shared/project-move-pause'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -29,7 +37,8 @@ import type { KeybindingActionId } from '../../shared/keybindings'
 import type { BrowserFindSource } from '../../shared/browser-find-source'
 import type {
   BrowserHistoryNavigateCommand,
-  BrowserPageCommandTarget
+  BrowserPageCommandTarget,
+  BrowserPageTabShortcut
 } from '../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
 import type {
@@ -97,9 +106,6 @@ export type UiCommandEventApi = {
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
-  onNewBrowserTab: (callback: () => void) => () => void
-  onNewMarkdownTab: (callback: () => void) => () => void
-  onNewSimulatorTab: (callback: () => void) => () => void
   onRequestTabCreate: (
     callback: (data: {
       requestId: string
@@ -134,13 +140,15 @@ export type UiCommandEventApi = {
     error?: string
     code?: 'browser_tab_not_found'
   }) => void
-  onNewTerminalTab: (callback: () => void) => () => void
+  onBrowserPageTabShortcut: (callback: (input: BrowserPageTabShortcut) => void) => () => void
   onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
+  onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
   onReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onBrowserHistoryNavigate: (
     callback: (command: BrowserHistoryNavigateCommand) => void
   ) => () => void
+  onBrowserPagePointerDown: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onZoomBrowserPage: (callback: (command: BrowserPageZoomCommand) => void) => () => void
   onScrollBrowserPage?: (
     callback: (event: { browserPageId: string; deltaX: number; deltaY: number }) => void
@@ -149,10 +157,7 @@ export type UiCommandEventApi = {
   onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
-  onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
-  onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
-  onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
   onCtrlTabKeyUp: (callback: () => void) => () => void
   onToggleStatusBar: (callback: () => void) => () => void
@@ -210,6 +215,7 @@ export type UiCommandEventApi = {
   onPublishAgentLaunchTab: (callback: (data: AgentLaunchTabPublishRequest) => void) => () => void
   replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply) => void
   onAgentLaunchPaneVerdict: (callback: (data: AgentLaunchPaneVerdictEvent) => void) => () => void
+  onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void) => () => void
   onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void) => () => void
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
   onSplitTerminal: (
@@ -280,6 +286,8 @@ export type UiCommandEventApi = {
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   /** Follow main's workspace sleep even when another client requested it. */
   onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
+  onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
+  respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onSystemResumed: (callback: () => void) => () => void

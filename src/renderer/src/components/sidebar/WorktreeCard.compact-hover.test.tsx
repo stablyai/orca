@@ -33,6 +33,9 @@ let mockInlineAgentRows: DashboardAgentRowData[] = []
 
 vi.mock('@/store', () => {
   const getState = () => ({
+    repos: [makeRepo()],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     browserTabsByWorktree: {},
     agentActivityDisplayMode,
     createBrowserTab: vi.fn(),
@@ -293,7 +296,8 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('data-hover-open-delay="100"')
     expectIdentityBodyIsHoverTrigger(markup)
     expect(markup).toContain('Issue #123')
-    expect(markup).toContain('ENG-123 · Linear')
+    expect(markup).toContain('ENG-123</span>')
+    expect(markup).toContain('· Linear')
     expect(markup).toContain('Reviewer handoff note')
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')

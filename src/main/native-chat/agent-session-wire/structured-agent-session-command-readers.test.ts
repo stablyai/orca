@@ -1,5 +1,4 @@
-// After `/compact`, every reader that reports on the user's requests reads past the command: the
-// sidebar's prompt, preview, verdict and instant, restart resume, and an older client's label.
+// Command turns must not replace user-request summaries, resume markers or legacy labels.
 
 import { describe, expect, it } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -51,7 +50,6 @@ function accepted(clientMessageId: string): AgentJournalSubmission {
   }
 }
 
-/** "List three fruits", answered, then `/compact` in its own turn. */
 function compactedAfterARealTurn(commandState: 'running' | 'completed' = 'completed') {
   sequence = 0
   const items: AgentJournalRenderItem[] = [
@@ -124,7 +122,6 @@ describe('the sidebar after /compact (B7)', () => {
 })
 
 describe('the completion feed around /compact (B6)', () => {
-  // The feed announces on a change of latest request; /compact running or settled leaves it be.
   it.each(['running', 'completed'] as const)(
     'keeps the last real turn latest while it is %s',
     (state) => {
@@ -161,7 +158,6 @@ describe('restart resume around /compact (B14)', () => {
   it('anchors a settled lead with live children on its last real turn', () => {
     const marker = markerFor(compactedAfterARealTurn().items, true)
     expect(marker?.work).toEqual({ kind: 'turn', id: 'turn-1' })
-    // The newest user message is still the last real prompt, as before commands were messages.
     expect(marker?.latestUserItemId).toBe(PROMPT)
   })
 })

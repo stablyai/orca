@@ -73,11 +73,11 @@ export function WslHostsSection({
 }: {
   onChanged: () => void
 }): React.JSX.Element | null {
-  // Why the store: the remote-server catalog leaves WSL hosts out, so this reads them itself.
+  // Read WSL hosts directly because the remote-server catalog excludes them.
   const environments = useAppStore((s) => s.runtimeEnvironments)
   const enabled = useWslHostsEnabled()
   const serverFilesMissing = useWslHostServerFilesMissing()
-  // Why one line for both: a host that cannot run says why, wherever it is listed.
+  // Share unavailable reasons across every listing of the host.
   const unavailableLabel = serverFilesMissing
     ? getWslHostServerFilesMissingLabel()
     : enabled
@@ -88,7 +88,7 @@ export function WslHostsSection({
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const hosts = environments.filter(isWslHostRuntimeEnvironment)
-  // Why hosts while off: their projects must not seem to vanish; the rows say why they are idle.
+  // Retain disabled hosts so projects cannot appear to vanish; rows explain their idle state.
   if (!wslHostsAvailable() || (!enabled && hosts.length === 0)) {
     return null
   }

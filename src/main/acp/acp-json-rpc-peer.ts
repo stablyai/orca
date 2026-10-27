@@ -22,13 +22,12 @@ import {
 export type { AcpJsonRpcMessage } from './acp-rpc-envelope'
 export type AcpRequestContext = { id: string | number | null; signal: AbortSignal }
 export type AcpPeerHandlers = {
-  // Void means handled; unsupported methods must throw AcpRpcError(-32601). The handler owns its
-  // request: once the signal aborts it still answers, or throws (-32800); unanswered ends at close().
+  // Void is handled; unsupported methods throw -32601. Aborted handlers still reply or throw -32800.
   onRequest?: (method: string, params: unknown, context: AcpRequestContext) => unknown
   onNotification?: (method: string, params: unknown) => void
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
-  /** A line on the input that is not a protocol message, including an unterminated last one. */
+  /** Includes non-protocol output and unterminated final lines. */
   onOtherLine?: (line: string, cut?: boolean) => void
 }
 export class AcpJsonRpcPeer {
@@ -163,7 +162,7 @@ export class AcpJsonRpcPeer {
     return this.send({ jsonrpc: '2.0', method, params })
   }
 
-  /** Aborts every open agent request's signal; each handler still sends its own answer. */
+  /** Aborts signals; handlers still own replies. */
   cancelIncomingRequests(): void {
     this.incoming.cancel()
   }

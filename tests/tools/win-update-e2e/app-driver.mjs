@@ -1,19 +1,5 @@
-// Drive the installed, packaged Orca app with Playwright's Electron driver.
-//
-// This targets a PRODUCTION build, so it must NOT depend on the e2e-only store
-// exposure (window.__store / window.__paneManagers) — those exist only under a
-// `--mode e2e` / VITE_EXPOSE_STORE build. Everything here uses ARIA/DOM
-// selectors that ship in production (matching tests/e2e/helpers/terminal.ts and
-// terminal-attention.spec.ts) and proves interactivity through filesystem
-// sentinels rather than by reading the WebGL-rendered xterm buffer:
-//   - typed commands write a marker FILE; the harness checks the file. This
-//     proves keystrokes reached the shell AND executed — stronger, and robust,
-//     than scraping canvas-rendered terminal text.
-//
-// The long-running marker also sets a unique window-title canary and writes a
-// heartbeat file every ~500ms: the canary lets the window watch attribute any
-// real console flash to our child, and the heartbeat proves the session is
-// live and streaming.
+// Drive packaged production DOM/ARIA without E2E-only stores. Prove input through command-written filesystem sentinels rather than canvas scraping.
+// Marker canary attributes console flashes; ~500ms heartbeat proves the session remains active.
 
 import { _electron as electron } from '@stablyai/playwright-test'
 import { execFileSync } from 'node:child_process'
@@ -26,8 +12,7 @@ const NEW_TAB_BUTTON = { role: 'button', name: 'New tab' }
 const NEW_TERMINAL_ITEM = /New Terminal/i
 const NEW_WORKSPACE_BUTTON = { role: 'button', name: 'New workspace' }
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
-// Why: the layout mounts hidden duplicate panes; only the visible one is the
-// live terminal, so target `:visible` to avoid focusing/measuring a hidden copy.
+// Target :visible because hidden duplicate panes must not receive focus or measurements.
 const TERMINAL_SURFACE_VISIBLE = '[data-terminal-tab-id]:visible'
 const XTERM_CONTAINER_VISIBLE = '.xterm:visible'
 const XTERM_INPUT = '.xterm-helper-textarea'
@@ -40,14 +25,7 @@ const RESTRICTED_E2E_ENV_KEYS = new Set([
   'ORCA_E2E_USER_DATA_DIR'
 ])
 
-/**
- * Launch the installed Orca.exe. Pointing userDataDir at a harness-owned temp
- * dir isolates this run's daemon (its socket/token path becomes unique), so
- * daemon lookups never collide with other Orca installs/daemons on the box.
- * Pass `seedProfile` (a buildFreshProfile object) to write orca-data.json
- * BEFORE this launch — do so only on the FIRST launch, never before the
- * post-update relaunch, or the persisted session under test is destroyed.
- */
+// Launch with harness-owned userData for unique daemon scope; optional seedProfile writes only before FIRST launch, preserving later restore evidence.
 export async function launchInstalledApp({
   exePath,
   userDataDir,
@@ -73,13 +51,10 @@ export async function launchInstalledApp({
   if (seedProfile) {
     seedFreshProfile(userDataDir, seedProfile)
   }
-  // Why: userData relocation does not change Node's home; the packaged E2E
-  // must not resolve the default Codex account against the runner's profile.
+  // Isolate Codex home separately: relocating userData does not change Node home.
   const requestedIsolatedHome = path.join(userDataDir, 'home')
   mkdirSync(requestedIsolatedHome, { recursive: true })
-  // Why: temp paths on runners use 8.3 aliases (RUNNER~1). Git canonicalizes
-  // worktree paths, so a non-canonical HOME makes created worktrees invisible
-  // to the app's listing comparisons.
+  // Canonicalize Windows 8.3 home aliases so Git worktree paths match Orca’s comparisons.
   const isolatedHome = realpathSync.native(requestedIsolatedHome)
   const app = await electron.launch({
     executablePath: exePath,
@@ -97,9 +72,7 @@ export async function launchInstalledApp({
       ORCA_E2E_HOME_DIR: isolatedHome
     }
   })
-  // If firstWindow times out (the launched main never shows a window), the
-  // Electron process is still running — force-kill its tree before rethrowing so
-  // a driving failure never leaks an orphaned main to the CI job timeout.
+  // Kill launch tree if firstWindow fails; Electron may still run after the driver times out.
   let page
   try {
     page = await app.firstWindow({ timeout: 120_000 })
@@ -125,13 +98,11 @@ export async function resolveElectronMainPid(
 ) {
   let timeout
   try {
-    // Why: packaged launchers can re-exec, leaving app.process() pointing at a
-    // dead stub while evaluate runs in the authoritative Electron main.
+    // app.evaluate resolves authoritative main after packaged launcher re-exec; app.process may point at a dead stub.
     const pid = await Promise.race([
       app.evaluate(() => process.pid),
       new Promise((_, reject) => {
-        // Why: a wedged main connection is common on cleanup paths; resolving
-        // its authoritative PID must not consume the entire CI job timeout.
+        // Bound main PID resolution because cleanup often has a wedged connection.
         timeout = setTimeout(() => reject(new Error('main PID resolution timed out')), timeoutMs)
         timeout.unref?.()
       })
@@ -144,8 +115,7 @@ export async function resolveElectronMainPid(
   } finally {
     clearTimeout(timeout)
   }
-  // Why: crash proofs must fail closed rather than kill a packaged launcher stub
-  // and mistake its death for the authoritative Electron main crashing.
+  // Crash proofs must reject unavailable main identity rather than kill a stub and falsely prove crash.
   if (!allowLauncherFallback) {
     return null
   }
@@ -153,12 +123,7 @@ export async function resolveElectronMainPid(
   return Number.isInteger(fallbackPid) && fallbackPid > 0 ? fallbackPid : null
 }
 
-/**
- * Best-effort diagnostics dump when driving fails: a screenshot, the visible
- * body text, and whether the e2e store is exposed (it is not in production
- * builds). Written under `dir` so CI can upload it and reveal the actual
- * post-launch DOM state. Never throws.
- */
+// Best-effort screenshot/body/store-exposure diagnostics under dir; production omits stores and driver failures must retain original assertions.
 export async function captureFailureDiagnostics(page, dir, label) {
   const out = {}
   try {
@@ -228,19 +193,9 @@ export async function waitForTerminalReady(page, timeoutMs = 60_000, terminalTab
   })
 }
 
-/**
- * Get the app to an interactive terminal.
- *   - `allowCreate` true (first launch): if no terminal is visible, create a
- *     workspace from the seeded repo (or a new tab if a workspace already
- *     exists) — the drivable composer, not the native folder dialog.
- *   - `allowCreate` false (post-update relaunch): the session should be
- *     RESTORED, so only wait for the restored terminal — never create a second
- *     workspace (which would mask a broken restore).
- */
+// Create only on first launch when no terminal exists; post-update relaunch must wait for restore without masking failure with a new workspace.
 export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_000 } = {}) {
-  // Why: a feature-tip modal can already be up at first interaction
-  // (it renders off an async capability check that races app launch). Use the
-  // Escape-free dismissal so we never inject a keypress into a restored terminal.
+  // Dismiss late feature tips without Escape so restored terminal receives no unsolicited keystroke.
   await dismissKnownOverlays(page)
   const visibleTerminal = page.locator(TERMINAL_SURFACE_VISIBLE).first()
   if (await visibleTerminal.isVisible().catch(() => false)) {
@@ -248,8 +203,7 @@ export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_
     return
   }
   if (!allowCreate) {
-    // Wait for the restored terminal to appear; a timeout here is a real
-    // (asserted) failure of session restore, not a driving gap.
+    // Restored-terminal timeout is restore failure, not an excuse to create.
     await waitForTerminalReady(page, timeoutMs)
     return
   }
@@ -262,29 +216,20 @@ export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_
   await waitForTerminalReady(page, timeoutMs)
 }
 
-/**
- * Drive the "New workspace" composer to create a worktree from the single
- * seeded project. The composer is in-app DOM (unlike the native Add-Project
- * dialog): open it, choose the "Blank Terminal" mode so the worktree opens a
- * plain terminal (not an agent), then submit "Create worktree".
- */
+// Use seeded-project composer’s Blank Terminal path so probes reach a shell rather than an agent/native folder dialog.
 async function createWorkspaceFromSeededRepo(page, timeoutMs) {
-  // One shared deadline so the whole create path stays within the caller's
-  // budget instead of granting each later step a fresh fixed window.
+  // Share one deadline across creation rather than reset each step’s budget.
   const deadline = Date.now() + timeoutMs
   const newWorkspace = page
     .getByRole(NEW_WORKSPACE_BUTTON.role, { name: NEW_WORKSPACE_BUTTON.name })
     .first()
   if (!(await tryClickWithKnownOverlayRetry(page, newWorkspace, deadline - Date.now()))) {
-    // Preserve Playwright's locator diagnostics without exceeding the caller's
-    // timeout by another full click attempt.
+    // Keep locator diagnostics without spending another full click timeout.
     await newWorkspace.click({ timeout: 1 })
   }
   const composer = page.getByRole('dialog', { name: 'Create worktree' }).last()
   await composer.waitFor({ state: 'visible', timeout: Math.max(1, deadline - Date.now()) })
-  // Submit. The create button's accessible name carries the shortcut hint
-  // ("Create worktreeCtrl"), so match by prefix; fall back to the documented
-  // Ctrl+Enter shortcut if the button is not directly clickable.
+  // Match Create by prefix for appended shortcut hints; fall back to Ctrl+Enter.
   const created = await tryClickWithKnownOverlayRetry(
     page,
     composer.getByRole('button', { name: /^Create worktree/ }).last(),
@@ -351,12 +296,7 @@ async function tryClickWithKnownOverlayRetry(page, locator, timeoutMs) {
   return false
 }
 
-/**
- * Best-effort dismissal of the modals/banners that appear after creating a
- * worktree (a full-screen "Got it" feature-tip modal, the setup-script prompt,
- * update banner) and intercept all input over the terminal. Loops because tips
- * can appear in sequence. Never throws.
- */
+// Dismiss sequential feature tips/setup/update overlays best-effort so they cannot intercept terminal input.
 export async function dismissOverlays(page, rounds = 3) {
   for (let i = 0; i < rounds; i++) {
     const acted = await dismissKnownOverlays(page)
@@ -395,26 +335,18 @@ export async function listTabIds(page) {
     )
 }
 
-/**
- * Focus the live terminal so keystrokes reach the shell. Clicking the visible
- * xterm surface is what actually gives xterm keyboard focus — focusing the
- * off-screen helper textarea alone does not, which is why typed input was being
- * dropped. Click the pane, then focus the helper textarea as a belt-and-braces.
- */
+// Click the live pane then focus its scoped textarea; offscreen textarea focus alone previously dropped input.
 export async function focusActiveTerminal(page, terminalTabId = null) {
-  // A feature-tip modal can appear late and swallow keystrokes; clear any before
-  // focusing so typed commands actually reach the shell.
+  // Clear late feature tips before focusing so keystrokes reach the shell.
   await dismissKnownOverlays(page)
   const selector = terminalTabId
     ? `[data-terminal-tab-id="${String(terminalTabId)}"]:visible`
     : TERMINAL_SURFACE_VISIBLE
   const surface = page.locator(selector).first()
   const click = surface.click({ position: { x: 24, y: 24 }, timeout: 15_000 })
-  // Why: an exact-tab proof must fail closed if that restored surface vanishes;
-  // typing into whichever element retained focus could falsely target another tab.
+  // Fail if the expected restored tab vanishes rather than type into whatever retained focus.
   await (terminalTabId ? click : click.catch(() => {}))
-  // Scope the helper textarea to the visible surface so focus can't land on a
-  // hidden duplicate pane's textarea (which would silently swallow keystrokes).
+  // Scope textarea to the visible pane, excluding hidden duplicates.
   const input = surface.locator(XTERM_INPUT).last()
   const focus = input.focus()
   await (terminalTabId ? focus : focus.catch(() => {}))
@@ -434,25 +366,14 @@ export async function sendCtrlC(page, terminalTabId = null) {
   await page.keyboard.press('Control+C')
 }
 
-/**
- * Run a PowerShell command inside the active terminal by invoking a nested
- * powershell.exe. The command is wrapped in double quotes for the OUTER
- * interactive shell (also pwsh), which would otherwise expand `$var`, `$(...)`
- * and consume backticks before the nested shell sees them — so escape backticks,
- * quotes, and `$`. Without the `$` escape, `while($true)` reaches the nested
- * shell as `while(True)` and never runs (the bug that silently broke every
- * loop/heartbeat probe while simple `$`-free commands worked).
- */
+// Escape backticks, quotes and $ through the outer PowerShell double-quoted argument to nested powershell.exe.
+// Without $ escaping, while($true) becomes while(True), silently breaking loop/heartbeat probes.
 export async function runShellCommand(page, psCommand) {
   const escaped = psCommand.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')
   await typeLine(page, `powershell.exe -NoProfile -NonInteractive -Command "${escaped}"`)
 }
 
-/**
- * Start the long-running marker in the active terminal: sets the canary window
- * title, records its own PID, and heartbeats a file every 500ms. Returns the
- * command string (the caller reads the pid file to learn the marker PID).
- */
+// Start title-canary/PID/500ms heartbeat marker; return command while caller reads its PID file.
 export async function startMarker(page, { canary, pidFile, heartbeatFile }) {
   const script = [
     `$host.UI.RawUI.WindowTitle='${canary}'`,
@@ -463,12 +384,7 @@ export async function startMarker(page, { canary, pidFile, heartbeatFile }) {
   return script
 }
 
-/**
- * Best-effort read of the active terminal's visible text, for the cold-restore
- * scrollback fidelity check. Prefers the SerializeAddon when the build happens
- * to expose paneManagers; falls back to DOM rows (populated only under the DOM
- * renderer, so this may be empty under WebGL — hence best-effort).
- */
+// Read scrollback best-effort through exposed SerializeAddon, else DOM rows; WebGL without exposure may return empty.
 export async function readTerminalTextBestEffort(page) {
   return page.evaluate(() => {
     const managers = window.__paneManagers
@@ -574,8 +490,7 @@ export async function closeApp(
       }
     }
   } finally {
-    // Why: successful closes must not retain a timeout closure or keep a shared
-    // harness process alive until the failure deadline expires.
+    // Clear successful-close timers so shared harnesses do not retain timeout closures/handles.
     clearTimeout(closeTimeout)
   }
 }

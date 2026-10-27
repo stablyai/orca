@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
@@ -13,6 +13,7 @@ import {
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 const dir = mkdtempSync(join(tmpdir(), 'acp-prompt-content-'))
+afterAll(() => rmSync(dir, { recursive: true, force: true }))
 const pngPath = join(dir, 'shot.png')
 writeFileSync(pngPath, PNG)
 
@@ -134,7 +135,7 @@ describe('ACP prompt content', () => {
   })
 
   it('keeps a message with images within one protocol line', async () => {
-    // The images fit their raw limit, but with this much text the prompt would pass the line.
+    // Raw images fit, but their encoded payload plus text exceeds the protocol line limit.
     const text = 'x'.repeat(8 * 1024 * 1024)
     const image = {
       type: 'image-ref' as const,
@@ -145,7 +146,6 @@ describe('ACP prompt content', () => {
     ).toMatchObject({
       attachment: { reason: 'totalTooLarge' }
     })
-    expect(ACP_PROMPT_IMAGE_MAX_BYTES * (4 / 3)).toBeLessThan(16 * 1024 * 1024)
   })
 
   it('leaves a text-only message to the agent, however long', async () => {

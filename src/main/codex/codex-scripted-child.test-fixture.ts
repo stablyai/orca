@@ -1,9 +1,7 @@
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
-import type {
-  CodexAppServerConnection,
-  openCodexAppServerConnection
-} from './codex-app-server-connection'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
@@ -14,12 +12,12 @@ const THREAD = CODEX_SCRIPTED_THREAD
 type ScriptedCodexRoute = (params: Record<string, unknown> | undefined) => unknown
 
 export type ScriptedCodexChild = ScriptedAgentChild & {
-  /** Every request any spawn received, in order. */
+  notify(method: string, params: unknown): void
+  closeEvidence: NonNullable<CodexAppServerConnection['closeResult']>
   requests(): readonly { method: string; params?: Record<string, unknown> }[]
 }
 
-/** A held answer gives up on the request's own deadline, as the real connection's does (30 s when
- *  the caller names none, never when it passes null). */
+/** Mirror connection deadlines: undefined uses 30 s; null disables the timer. */
 function heldAnswer(
   answer: Promise<unknown>,
   method: string,
@@ -44,10 +42,12 @@ function heldAnswer(
   return Promise.race([answer, timedOut]).finally(() => clearTimeout(timer))
 }
 
-/** `routes` answers methods the script does not, such as the history reads a rewind makes. */
+/** Routes override built-in replies except the initialization gate. */
 export const codexScriptedChild = (
   routes: Readonly<Record<string, ScriptedCodexRoute>> = {}
 ): ScriptedCodexChild => {
+  let notify: ScriptedCodexChild['notify'] = () => {}
+  let closeEvidence: ScriptedCodexChild['closeEvidence'] = { root: 'exited', tree: 'exited' }
   let holdHandshakes = true
   let completeTurns = true
   let spawned = 0
@@ -57,6 +57,7 @@ export const codexScriptedChild = (
   const requests: { method: string; params?: Record<string, unknown> }[] = []
   let newest: ReturnType<typeof Promise.withResolvers<unknown>> | undefined
   const open: typeof openCodexAppServerConnection = async (_launch, handlers = {}) => {
+    notify = (method, params) => handlers.onNotification?.(method, params)
     spawned += 1
     const gate = Promise.withResolvers<unknown>()
     newest = gate
@@ -84,7 +85,8 @@ export const codexScriptedChild = (
           resumed += 1
         }
         if (route) {
-          return route(params)
+          const answer = route(params)
+          return answer instanceof Promise ? heldAnswer(answer, method, options?.timeoutMs) : answer
         }
         if (method === 'thread/start' || method === 'thread/resume') {
           return { thread: { id: THREAD }, model: 'scripted-model' }
@@ -138,6 +140,9 @@ export const codexScriptedChild = (
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      get closeResult() {
+        return ended ? closeEvidence : undefined
+      },
       close: async () => {
         if (!ended) {
           ended = true
@@ -154,6 +159,13 @@ export const codexScriptedChild = (
     return connection
   }
   return {
+    notify: (method, params) => notify(method, params),
+    get closeEvidence() {
+      return closeEvidence
+    },
+    set closeEvidence(value) {
+      closeEvidence = value
+    },
     deps: {
       openCodexConnection: open,
       readProcessStartTime: async () => 1_700_000_000_000,

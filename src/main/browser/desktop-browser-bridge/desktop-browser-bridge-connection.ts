@@ -1,19 +1,15 @@
-/**
- * One desktop's attachment to one managed SSH host's orcad: a long-lived subscription over the
- * paired, end-to-end encrypted runtime connection. orcad pushes forwarded commands down it, and
- * each answer goes back over the same socket, the only one orcad accepts answers from.
- */
+// Forwarded commands and results share the host-bound runtime subscription.
 import {
   DesktopBrowserBridgeEvent,
   type DesktopBrowserBridgeRequest,
   type DesktopBrowserBridgeResultParams
 } from '../../../shared/desktop-browser-bridge-protocol'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { DesktopBrowserBridgeOutcome } from './desktop-browser-bridge-executor'
 
 const RESULT_TIMEOUT_MS = 30_000
-// Why: orcad's result schema bounds both; an over-long browser error must still reach the CLI.
+// Keep browser errors within orcad's result-schema limits.
 const MAX_ERROR_CODE_LENGTH = 128
 const MAX_ERROR_MESSAGE_LENGTH = 4096
 
@@ -33,7 +29,7 @@ export class DesktopBrowserBridgeConnection {
   constructor(
     private readonly options: {
       subscribe: DesktopBrowserBridgeSubscribe
-      /** `hostRevoked` fires only when this attachment ends, never at one command's cancel. */
+      /** hostRevoked ends the attachment; signal also covers per-command cancellation. */
       execute(
         request: DesktopBrowserBridgeRequest,
         signal: AbortSignal,
@@ -90,7 +86,7 @@ export class DesktopBrowserBridgeConnection {
     }
     const parsed = DesktopBrowserBridgeEvent.safeParse(response.result)
     if (!parsed.success) {
-      // Why lose rather than skip: a malformed frame means the peer is not speaking this protocol.
+      // A malformed event indicates an incompatible peer protocol.
       this.lose(new Error('desktop_browser_bridge_invalid_event'))
       return
     }
@@ -113,7 +109,7 @@ export class DesktopBrowserBridgeConnection {
   }
 
   private async answer(attachmentId: string, request: DesktopBrowserBridgeRequest): Promise<void> {
-    // Why: once orcad has stopped waiting, a command still queued here must not run late.
+    // Cancel queued commands once orcad has stopped waiting.
     const cancelled = new AbortController()
     this.cancellations.set(request.requestId, cancelled)
     const signals = [this.revoked.signal, cancelled.signal]
@@ -146,7 +142,7 @@ export class DesktopBrowserBridgeConnection {
     if (await this.sendResult(sendRequest, params)) {
       return
     }
-    // Why: the command already ran; the host must hear that now, not at its own timeout.
+    // Report delivery failure now because the command already ran.
     await this.sendResult(sendRequest, {
       attachmentId,
       requestId: request.requestId,
@@ -159,7 +155,7 @@ export class DesktopBrowserBridgeConnection {
     })
   }
 
-  /** True only when orcad accepted the result; a thrown or refused submission is false. */
+  /** False when result submission throws or the host refuses it. */
   private async sendResult(
     sendRequest: NonNullable<RemoteRuntimeSubscription['sendRequest']>,
     params: DesktopBrowserBridgeResultParams

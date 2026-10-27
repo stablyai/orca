@@ -6,13 +6,7 @@ import {
 
 type MutableRef<T> = { current: T }
 
-/**
- * Keeps the displayed pairing QR consistent with the selected path and sign-in
- * state. Signing out of Anywhere clears the Relay QR (Step 2 does not re-mint a
- * local-only code under the Relay label), signing in mints Relay, and a path
- * change (local or cross-window) invalidates the encoded policy — otherwise the
- * shown code silently mismatches what it actually encodes.
- */
+/** Keep QR policy aligned with mode/auth changes, including other windows; Relay sign-out clears instead of falling back to local-only. */
 export function useMobilePairingQrInvalidation(params: {
   connectionMode: MobilePairingConnectionMode
   signedIn: boolean
@@ -42,14 +36,10 @@ export function useMobilePairingQrInvalidation(params: {
     regenerate
   } = params
   const wasSignedInRef = useRef(signedIn)
-  // Tracks the mode we last acted on so the mode effect can tell a cross-window
-  // preference sync apart from an already-handled change.
+  // Distinguish new cross-window mode preferences from changes already handled here.
   const handledModeRef = useRef(connectionMode)
 
-  // Sign-in/out edges on Anywhere: signing out clears the Relay QR without
-  // re-minting (a local-only code must not appear under the Relay label);
-  // signing in mints Relay. Anywhere stays selected across both edges. Clear
-  // loading too so a superseded in-flight generate can't leave a stuck spinner.
+  // On Relay auth changes, clear old QR/loading; sign-in may remint, but sign-out cannot silently mint a local-only code.
   useEffect(() => {
     const wasSignedIn = wasSignedInRef.current
     wasSignedInRef.current = signedIn
@@ -64,8 +54,7 @@ export function useMobilePairingQrInvalidation(params: {
     setPairQrSize(null)
     setRelayMintFailure?.(null)
     if (signedIn && canMintMobilePairingOffer({ connectionMode, signedIn })) {
-      // Why: rotate on the sign-in edge — the token behind the QR cleared at
-      // sign-out may have been exposed, so the fresh session mints fresh.
+      // Rotate after sign-in because the token cleared at sign-out may already have been exposed.
       regenerate(connectionMode, { rotate: true })
     } else {
       setPairLoading(false)
@@ -84,12 +73,7 @@ export function useMobilePairingQrInvalidation(params: {
     regenerate
   ])
 
-  // Any path change — a user pick or another window persisting a new default —
-  // invalidates the prior request before rotating so a late response cannot
-  // restore a QR for the old policy. No updateSettings here (the caller/other
-  // window already wrote it) so there is no cross-window loop.
-  // Why: remint only when the new path may honestly encode a QR. Switching into
-  // signed-out Anywhere must clear, not mint a local-only code under Relay.
+  // Invalidate late old-policy responses before reminting; the preference is already saved, so do not write it back across windows.
   useEffect(() => {
     if (connectionMode === handledModeRef.current) {
       return
@@ -104,13 +88,9 @@ export function useMobilePairingQrInvalidation(params: {
     setPairQrSize(null)
     setRelayMintFailure?.(null)
     if (shouldRegenerate && canMintMobilePairingOffer({ connectionMode, signedIn })) {
-      // Why: no rotate here — the main process rotates exactly once when the
-      // requested mode differs from the pending token's minted mode, so the
-      // initiating window and windows reacting to a cross-window preference
-      // sync converge on the same fresh token instead of racing rotations.
+      // Main rotates once on mode mismatch so windows reacting to the same preference share one new token.
       regenerate(connectionMode, { rotate: false })
     } else {
-      // No honest re-mint (blocked path or nothing pending); drop spinner.
       setPairLoading(false)
     }
   }, [

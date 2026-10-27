@@ -48,8 +48,7 @@ export function useDiffSectionLayoutMetrics({
     }
     return (section.added ?? 0) + (section.removed ?? 0)
   }, [lineStats, section.added, section.removed, isLargeDiffLimited])
-  // Why: image diffs need document-flow height in the combined view; the text
-  // fallback only knows line counts and would squash screenshots into one row.
+  // Use intrinsic image height because line-count fallback would squash screenshots in combined diffs.
   const useIntrinsicImageHeight = isIntrinsicHeightImageDiff(section.diffResult)
   const sectionBodyHeight = isLargeDiffLimited
     ? getLargeDiffFallbackBodyHeight()

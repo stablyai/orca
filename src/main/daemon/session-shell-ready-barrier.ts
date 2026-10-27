@@ -31,14 +31,11 @@ export type SessionShellReadyBarrierDeps = {
   installDeviceAttributesFilter(): void
   releaseDeviceAttributesFilter(): void
   acceptStartupIngress(data: string): void
-  /** Reports a readiness outcome worth diagnosing. Why injected rather than
-   *  console: the daemon runs detached with stdio 'ignore', so console output
-   *  goes nowhere -- the only durable sink is the daemon's NDJSON file log. */
+  /** Use an injected file-log sink because detached daemon stdio is ignored. */
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
 }
 
-/** The startup gate every byte of PTY output passes through: it strips the shell-ready marker, holds
- *  stdin until the shell can accept it, and owns DA1 authority for as long as the gate is closed. */
+/** Strip startup markers and gate stdin; hold DA1 authority until shell readiness resolves. */
 export class SessionShellReadyBarrier {
   private _state: ShellReadyState
   private scanState: ShellStartupOutputScanState | null = null
@@ -53,9 +50,7 @@ export class SessionShellReadyBarrier {
     if (deps.shellReadySupported) {
       this._state = 'pending'
       this.scanState = createShellStartupOutputScanState()
-      // Why: `write` queues everything until the ready marker, including the renderer's DA1
-      // reply — and a shell that withholds its first prompt until DA1 is answered (fish) then
-      // never emits the marker that would release it. Answer from the daemon, past the queue.
+      // Answer DA1 past queued stdin, or a shell waiting for that reply can never emit its ready marker.
       this.releaseDeviceAttributesResponder = installDeviceAttributesResponder({
         parser: deps.responderParser,
         response: STARTUP_DA1_RESPONSE,
@@ -79,12 +74,12 @@ export class SessionShellReadyBarrier {
     return this._state
   }
 
-  /** True while stdin must be queued: pre-marker, or inside the post-ready flush-gate window. */
+  /** Keep queuing through the post-marker flush window to preserve input order. */
   get isGatingWrites(): boolean {
     return this._state === 'pending' || this.postReadyFlushGate.isPending
   }
 
-  /** Started after the startup ingress exists, matching the order the probe's callbacks assume. */
+  /** Start after startup ingress exists, because probe callbacks may emit immediately. */
   startPromptReadinessProbe(): void {
     if (this._state !== 'pending') {
       return
@@ -99,7 +94,6 @@ export class SessionShellReadyBarrier {
     })
   }
 
-  /** Queues `data` when the gate is closed; false means the caller must write it through. */
   tryEnqueue(data: string): boolean {
     if (!this.isGatingWrites) {
       return false
@@ -139,12 +133,12 @@ export class SessionShellReadyBarrier {
     }
     const heldBytes = drainShellStartupOutputScanState(this.scanState)
     this.scanState = null
-    // Why: scanning strips marker bytes before fan-out; if readiness never completes, release any held prefix before timeout/exit discards it.
+    // Preserve an incomplete marker prefix when timeout or exit ends scanning.
     this.deps.acceptStartupIngress(heldBytes)
     return heldBytes
   }
 
-  /** Hands DA1 back to the renderer once the barrier is done, however it ended. */
+  /** Release startup DA1 authority on every completion path. */
   releaseDeviceAttributes(): void {
     this.releaseDeviceAttributesResponder?.()
     this.releaseDeviceAttributesResponder = null
@@ -163,7 +157,6 @@ export class SessionShellReadyBarrier {
     }
   }
 
-  /** Drops queued stdin and the flush gate; teardown does this, and dispose repeats it defensively. */
   clearPendingWrites(): void {
     this.preReadyStdinQueue = []
     this.postReadyFlushGate.clear()
@@ -191,9 +184,7 @@ export class SessionShellReadyBarrier {
     this.postReadyFlushGate.arm(postMarkerBytesObserved)
   }
 
-  /** Why the shell basename and not its path: the path can carry a home dir, and
-   *  the basename is all a diagnosis needs. The session id is already logged by
-   *  the daemon's session lifecycle events, so it is only correlation here. */
+  // Log only the shell basename to avoid disclosing home-directory paths.
   private reportReadiness(event: string, details: Record<string, unknown>): void {
     const shellPath = this.deps.subprocess.shellPath
     try {
@@ -203,10 +194,7 @@ export class SessionShellReadyBarrier {
         ...details
       })
     } catch {
-      // Why swallow: this runs before the state transition that releases held
-      // PTY bytes and flushes queued stdin, and the ready timer is already
-      // cleared. A throwing sink must never strand the barrier in `pending`
-      // with nothing left to wake it -- diagnostics cannot break the terminal.
+      // A throwing diagnostic sink must not strand the barrier after its ready timer is cleared.
     }
   }
 
@@ -215,10 +203,6 @@ export class SessionShellReadyBarrier {
     if (this._state !== 'pending') {
       return
     }
-    // Why report: this path costs every startup command the full timeout, and it
-    // used to fail silently -- a wrapper that never emits the marker looks
-    // identical to a slow shell. Name the shell so the next report can be
-    // diagnosed from the log alone.
     this.reportReadiness('shell-ready-timeout', {
       timeoutMs: this.deps.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS
     })
@@ -233,7 +217,6 @@ export class SessionShellReadyBarrier {
     if (this._state !== 'pending') {
       return
     }
-    // Same sink as the timeout above: console goes nowhere in the detached daemon.
     this.reportReadiness('shell-ready-wrapper-replaced', {})
     this.releaseHeldBytes()
     this.transitionToReady(true)

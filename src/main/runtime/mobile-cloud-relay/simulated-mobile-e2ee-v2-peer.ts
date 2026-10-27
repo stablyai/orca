@@ -12,8 +12,7 @@ import {
 import { deriveSharedKey } from '../../../shared/e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
 
-// Why: desktop-side tests need an independent mobile-side wire peer
-// without importing Expo modules into the desktop Node TypeScript project.
+// Independent mobile wire peer for desktop tests, avoiding Expo imports.
 export class SimulatedMobileE2EEV2Peer {
   readonly hello: MobileE2EEV2Hello
   private inboundCounter = 0n
@@ -23,7 +22,7 @@ export class SimulatedMobileE2EEV2Peer {
   constructor(
     private readonly clientKeys: nacl.BoxKeyPair,
     private readonly desktopPublicKey: Uint8Array,
-    // null = a direct (LAN) socket.
+    // null denotes a direct LAN socket.
     relayHostId: string | null,
     clientNonce = nacl.randomBytes(32)
   ) {

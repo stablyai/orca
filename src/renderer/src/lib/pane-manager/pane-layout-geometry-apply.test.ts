@@ -40,7 +40,7 @@ describe('PaneManager.applyLayoutGeometry', () => {
     clearCallbacks()
   }
 
-  // Why: mounting itself fires these, so only calls made by the apply count.
+  // Mounting emits too; count only notifications caused by apply.
   function clearCallbacks(): void {
     onLayoutChanged.mockClear()
     onPaneCreated.mockClear()

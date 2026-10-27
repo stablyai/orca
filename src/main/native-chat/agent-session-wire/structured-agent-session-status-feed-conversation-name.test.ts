@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,12 +35,13 @@ async function namedFeed() {
     stateDirectory: directory,
     now: () => 100
   })
-  let record: AgentSessionRecord = agentSessionRecordFixture()
+  let record: AgentSessionRecord = { ...agentSessionRecordFixture(), sessionId: 'session' }
   let failure: StructuredChatNamingFailure | undefined
   const sessions = new Map([['session', indexedStatusFeedSession({ journal })]])
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
-    getRecord: () => record,
+    getConversation: (id) =>
+      id === record.sessionId ? agentSessionConversationView(record) : null,
     namingFailure: () => failure,
     now: () => 100,
     logger: createStructuredAgentSessionLogger()
@@ -105,6 +107,33 @@ it('publishes naming activity without needing a chat summary', async () => {
   feed.publishConversationName('unknown-session')
   expect(events).toHaveLength(count + 1)
   expect(events.at(-1)).toEqual({ type: 'snapshot', sessions: [], namingActiveSessionIds: [] })
+})
+
+it('publishes cold names from durable records across a host restart without a status row', () => {
+  let record = { ...agentSessionRecordFixture(), conversationName: 'Before' }
+  const open = () =>
+    new StructuredAgentSessionStatusFeed({
+      sessions: new Map(),
+      getConversation: () => agentSessionConversationView(record),
+      listConversations: () => [agentSessionConversationView(record)],
+      now: () => 100,
+      logger: createStructuredAgentSessionLogger()
+    })
+  const feed = open()
+  const events: AgentSessionStatusEvent[] = []
+  feed.subscribe({ id: 'existing', emit: (event) => events.push(event) })
+  record = { ...record, conversationName: 'After' }
+  feed.publishConversationName(record.sessionId)
+  expect(events.at(-1)).toMatchObject({
+    type: 'snapshot',
+    sessions: [],
+    conversationNames: [{ sessionId: record.sessionId, conversationName: 'After' }]
+  })
+  expect(feed.readPublished(record.sessionId)).toBeUndefined()
+  const restarted: AgentSessionStatusEvent[] = []
+  open().subscribe({ id: 'reconnect', emit: (event) => restarted.push(event) })
+  expect(restarted[0]).toMatchObject({ conversationNames: [{ conversationName: 'After' }] })
+  expect(restarted.at(-1)).toMatchObject({ sessions: [] })
 })
 
 it('shows a closed chat its naming failure only while it keeps the name that failed', async () => {

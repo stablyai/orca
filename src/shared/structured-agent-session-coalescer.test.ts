@@ -81,7 +81,6 @@ describe('structured agent session event coalescer', () => {
 
     coalescer.push({ ...batch(1), queuedMessages: [draft], queuePause: { reason: 'stopped' } })
     coalescer.push({ ...batch(2), queuedMessages: [], queuePause: null })
-    // A later frame with no list leaves the delivered ones as they are.
     coalescer.push(batch(3))
     coalescer.flush()
 
@@ -110,7 +109,7 @@ describe('structured agent session event coalescer', () => {
       ],
       queuePause: null
     })
-    // No wait for the coalescing delay: the card lands with the frame that carries it.
+    // Queue cards must bypass the coalescing delay.
     expect(events.map((event) => event.type === 'batch' && event.batch.cursor.sequence)).toEqual([
       1, 2
     ])
@@ -207,7 +206,7 @@ describe('structured agent session event coalescer', () => {
       turn: { turnId: 'turn-1', state: 'running' as const }
     }
 
-    // The second frame is an older host's: rows, and no answer to keep the first one alive.
+    // Old-host rows without latestTurn must clear the prior claim.
     coalescer.push({ ...token(1), latestTurn: running })
     coalescer.push(token(2))
     coalescer.flush()

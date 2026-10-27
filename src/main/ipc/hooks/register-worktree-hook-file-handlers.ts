@@ -28,7 +28,6 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
       }
       const connectionId = getRepoDialableSshTargetId(repo)
       if (connectionId) {
-        // Why: this process serves no SSH filesystem.
         return {
           status: 'error',
           localContent: null,

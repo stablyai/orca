@@ -1,3 +1,4 @@
+import { structuredLaunchRequestedOptions } from '../../../../shared/native-chat-session-option-defaults'
 import { useCallback } from 'react'
 import { structuredAgentSessionSendSelection } from '../../../../shared/structured-agent-session-option-view'
 import { getStructuredAgentSessionLaunchSelection } from '@/lib/structured-agent-session-launch-options'
@@ -18,9 +19,17 @@ export function useStructuredAgentSessionSendOptions(
     if (!takesSendOptions) {
       return undefined
     }
-    // Read, not rendered: a pick the launch just took is not in this render's props yet.
+    // Read held picks directly because launch acceptance can precede this render’s props.
     const selection = getStructuredAgentSessionLaunchSelection(sessionId)
-    // A pick on its way resolves as the picker shows it.
+    const requested = structuredLaunchRequestedOptions({
+      seed: selection?.seed ?? launch?.seedOptions,
+      explicit: selection?.explicit ?? launch?.explicitOptions,
+      held: { ...(selection?.held ?? launch?.heldOptions), ...pendingOptionsRef.current }
+    })
+    if (requested?.model !== undefined) {
+      return requested
+    }
+    // A pick on its way resolves as the picker shows it, keeping the model it names.
     const view = optionView(optionStateRef.current, selection?.seed ?? launch?.seedOptions, {
       ...(selection?.held ?? launch?.heldOptions),
       ...pendingOptionsRef.current

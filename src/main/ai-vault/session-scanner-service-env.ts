@@ -1,14 +1,6 @@
-/**
- * Environments for the AI Vault service children.
- *
- * Deliberately allowlists, never `...process.env` (the plugin worker takes the
- * same stance): the children are forked with a heap cap and no loader, and an
- * ambient NODE_OPTIONS would raise the cap or `--require` code straight into
- * them. Shell-exported secrets have no business in a transcript reader either.
- */
+/** Allowlist child environments to exclude secrets and Node flags that override heap caps or load code. */
 
-// What Node and libuv need to start and resolve a home, temp dir and locale.
-// Exported for sibling plain-node forks (the WSL transcript fs process).
+// Also used by the plain-node WSL transcript filesystem process.
 export const RUNTIME_ENV_ALLOWLIST = [
   'PATH',
   'HOME',
@@ -20,7 +12,7 @@ export const RUNTIME_ENV_ALLOWLIST = [
   'TMPDIR',
   'TEMP',
   'TMP',
-  // Why: Windows Node/libuv need these to resolve DLLs and the machine root.
+  // Windows Node/libuv need these to resolve DLLs and the machine root.
   'SYSTEMROOT',
   'SYSTEMDRIVE',
   'WINDIR',
@@ -30,11 +22,9 @@ export const RUNTIME_ENV_ALLOWLIST = [
   'NUMBER_OF_PROCESSORS'
 ] as const
 
-// Why: the desktop child resolves agent roots from its own environment, so
-// dropping one hides every session of a user who relocated that agent's home.
+// Preserve relocated agent homes for desktop discovery.
 const AGENT_ROOT_ENV_ALLOWLIST = [
-  // Why: Devin's Windows data root resolves under %APPDATA%, which managed
-  // machines relocate away from the profile default.
+  // Managed Windows profiles can relocate Devin’s data through APPDATA.
   'APPDATA',
   'CLAUDE_CONFIG_DIR',
   'CODEX_HOME',
@@ -54,8 +44,7 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   'PRIME_AGENT_CODING_AGENT_DIR',
   'PRIME_AGENT_CODING_AGENT_SESSION_DIR',
   'PRIME_AGENT_SESSION_DIR',
-  // Why: OpenCode and migrated OMP session stores use the XDG data dir,
-  // so this one is an agent root here rather than generic runtime state.
+  // OpenCode and migrated OMP stores follow the XDG data root.
   'XDG_DATA_HOME'
 ] as const
 
@@ -66,9 +55,7 @@ export function pickAllowedEnv(
 ): NodeJS.ProcessEnv {
   const windowsLookup = new Map<string, string>()
   if (platform === 'win32') {
-    // Why: Windows resolves env names case-insensitively, so a lowercased
-    // `codex_home` still reaches the child; folding on POSIX instead would
-    // promote an attacker-set `path` over the real one.
+    // Fold Windows env names only; POSIX path must not override PATH.
     for (const [key, value] of Object.entries(baseEnv)) {
       if (typeof value === 'string') {
         windowsLookup.set(key.toUpperCase(), value)
@@ -99,7 +86,7 @@ export function buildAiVaultServiceEnv(
   return env
 }
 
-/** Relay: home comes from init; OpenCode also supports host-side data overrides. */
+/** Relay init supplies most roots; preserve host-side Kiro and OpenCode overrides. */
 export function buildRelayAiVaultServiceEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform

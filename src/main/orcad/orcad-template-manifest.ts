@@ -9,10 +9,15 @@ const TemplateTargetSchema = z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u)
       .optional(),
-    browserSha256: Sha256Schema.optional()
+    browserSha256: Sha256Schema.optional(),
+    /** The driver is the app's own `resources/<browserName>`, not a template copy. */
+    packagedBrowser: z.literal(true).optional()
   })
   .refine((target) => Boolean(target.browserName) === Boolean(target.browserSha256), {
     message: 'browserName and browserSha256 must either both be present or both be absent'
+  })
+  .refine((target) => !target.packagedBrowser || Boolean(target.browserName), {
+    message: 'packagedBrowser requires browserName'
   })
 export const OrcadTemplateManifestSchema = z.object({
   schemaVersion: z.union([z.literal(3), z.literal(4)]),

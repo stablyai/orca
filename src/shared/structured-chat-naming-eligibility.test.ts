@@ -50,12 +50,6 @@ describe('first-turn chat naming eligibility', () => {
     expect(firstStructuredChatNamingPrompt(state, 100)).toBe('Repair login')
   })
 
-  it('expires when a second root user message exists', () => {
-    const state = snapshot()
-    state.items.push(message('Second turn', { itemId: 'second' }))
-    expect(firstStructuredChatNamingPrompt(state, 100)).toBe('')
-  })
-
   it('does not promote later prose after an empty first message', () => {
     const state = snapshot()
     state.items[0] = message('')

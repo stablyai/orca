@@ -1,6 +1,5 @@
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
 import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
-// The chat protocol saves an independent conversation; its ordinary CLI opens that copy.
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import {
   agentSessionAccountHomesEqual,
@@ -132,7 +131,7 @@ async function forkAdvertised(
   return connection.forkSession(sessionId, cwd)
 }
 
-/** Rederive selection at the fork boundaries; ordinary terminals still own their normal routing. */
+/** Recheck the selected account at fork boundaries. */
 async function assertCopyAccountSelected(
   { spec, dataDirectory }: Pick<AcpStructuredSessionAdapterDeps, 'spec' | 'dataDirectory'>,
   home: AgentSessionAccountHome,

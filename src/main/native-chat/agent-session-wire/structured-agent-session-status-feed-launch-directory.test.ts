@@ -72,7 +72,7 @@ async function feedFor(location: AgentSessionExecutionLocation) {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, { journal, params: { location, provider: 'codex' } }]]),
-    getRecord: (sessionId) => store.getRecord(sessionId),
+    getConversation: (sessionId) => store.getConversation(sessionId),
     now: () => NOW
   })
   const events: AgentSessionStatusEvent[] = []

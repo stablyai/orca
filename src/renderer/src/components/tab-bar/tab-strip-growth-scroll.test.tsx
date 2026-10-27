@@ -23,7 +23,7 @@ function rect(left: number, width: number): DOMRect {
   return DOMRect.fromRect({ x: left, y: 0, width, height: 20 })
 }
 
-/** 100px tabs in a 300px strip; a tab's x is its index minus the strip's scroll, clamped into view when docked. */
+/** Model 100px tabs in a 300px viewport, including scroll offsets and sticky active slots. */
 function installStripLayout(): void {
   Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
     configurable: true,

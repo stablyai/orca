@@ -77,7 +77,7 @@ describe.skipIf(process.platform === 'win32')('relocated endpoint binds (#17840)
     try {
       rmdirSync(dirname(shortDaemonSocketDir(runtimeDir, uid)))
     } catch {
-      // Not empty: another Orca on this machine uses it.
+      // Another Orca instance may still use the shared parent.
     }
   })
 
@@ -113,7 +113,7 @@ describe.skipIf(process.platform === 'win32')('relocated endpoint binds (#17840)
     const socketPath = getDaemonSocketPath(runtimeDir, 99)
     const tokenPath = getDaemonTokenPath(runtimeDir, 99)
     writeFileSync(tokenPath, 'secret-token')
-    // Stands in for another user's pre-created, traversable dir; mode is what the guard sees.
+    // Shared permissions model an untrusted directory despite the test owning it.
     mkdirSync(shortDaemonSocketDir(runtimeDir, uid), { recursive: true, mode: 0o700 })
     chmodSync(shortDaemonSocketDir(runtimeDir, uid), 0o777)
     const received: string[] = []

@@ -20,7 +20,7 @@ describe("a stream writes only while its row's turn runs", () => {
     assembler.apply({ type: 'text.delta', item: { id: 'm' }, channel: 'assistant', text: 'Hel' })
     assembler.flush()
     assembler.apply({ type: 'turn.end', turn: 't1', at: 2_000, state: 'completed' })
-    // Admitted before bind: only its write can see that the turn is over.
+    // Deferred writes must recheck turn state after bind.
     expect(
       assembler.apply({ type: 'text.delta', item: { id: 'm' }, channel: 'assistant', text: 'lo' })
         .dropped
@@ -50,7 +50,7 @@ describe("a stream writes only while its row's turn runs", () => {
     if (!running || !identity) {
       throw new Error('the turn row is written')
     }
-    // A person's Stop, settled by the host on the journal, with no word to the assembler.
+    // Settle Stop without notifying the assembler.
     await rig.journal.appendItem(
       identity,
       agentJournalTurnBody({ ...running, state: 'interrupted', completedAt: 2_000 }),
@@ -60,7 +60,6 @@ describe("a stream writes only while its row's turn runs", () => {
     rig.assembler.flush()
     expect(messageText((await rig.row(providerItemId('item', 'm')))?.body)).toBe('Hel')
 
-    // The open turn is over for the assembler too: new work is no longer that turn's.
     expect(rig.assembler.openTurnId).toBeNull()
   })
 

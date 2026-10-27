@@ -1,6 +1,4 @@
-// Layout-owner builds bind a terminal's pane before they register it (L80): the PTY host's spawn
-// commit writes the binding, then registers. Fixtures that register terminals themselves, or fake
-// the spawn, stand in for that commit here. Window-owned builds write nothing, as before.
+// L80: emulate the PTY host's binding commit before registration in layout-owner builds; switch-off writes nothing.
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -18,13 +16,10 @@ export type BoundPane = {
   tabId: string
   leafId: string
   ptyId: string
-  /** The new tab's view mode, as the creating client saved it. */
   viewMode?: 'chat' | 'terminal'
-  /** The process the spawn commit stamps on the pane. */
   incarnationId?: string
 }
 
-/** The pane's incarnation stamped, and a reused id unbound from older panes, as the commit does. */
 function stampedSession(
   session: WorkspaceSessionState,
   pane: BoundPane,
@@ -40,7 +35,6 @@ function stampedSession(
   }
 }
 
-/** The session with the pane bound to its terminal: the tab and leaf added when missing. */
 export function withBoundPane(
   given: WorkspaceSessionState,
   pane: BoundPane
@@ -89,10 +83,7 @@ export function withBoundPane(
   }
 }
 
-/**
- * As the spawn commit: binds the pane in the runtime's store session before registration. A
- * store with no session gets an in-memory one, as a profile always has. No-op with the switch off.
- */
+/** Bind before registration, creating an in-memory session when absent; no-op with the switch off. */
 export function bindPaneFirst(
   runtime: OrcaRuntimeService,
   pane: BoundPane,
@@ -110,7 +101,6 @@ export function bindPaneFirst(
   session.set(withBoundPane(current, pane), hostId)
 }
 
-/** As main's pane move to a new tab: the pane leaves `fromTabId` (a tab left empty goes) first. */
 export function movePaneFirst(
   runtime: OrcaRuntimeService,
   fromTabId: string,
@@ -142,7 +132,6 @@ export function movePaneFirst(
   bindPaneFirst(runtime, pane, hostId)
 }
 
-/** registerPty as the PTY host's commit runs it: the pane is bound first. */
 export function registerBoundPty(
   runtime: OrcaRuntimeService,
   ptyId: string,
@@ -161,10 +150,7 @@ export function registerBoundPty(
   runtime.registerPty(ptyId, worktreeId, connectionId, binding)
 }
 
-/**
- * A live terminal in a layout-owner build: bound and registered, as the spawn commit or a daemon
- * reattach leaves it. Window-owned suites prove liveness through the window graph, so this is a no-op.
- */
+/** Layout-owner builds prove liveness by binding/registration; window-owned builds use the window graph. */
 export function registerLivePty(
   runtime: Parameters<typeof registerBoundPty>[0],
   ptyId: string,
@@ -177,7 +163,6 @@ export function registerLivePty(
   }
 }
 
-/** A fake PTY host spawn that commits as the real one does: it binds the pane, then answers. */
 export function committingSpawn<
   Args extends { worktreeId?: string; tabId?: string; leafId?: string },
   Result extends { id: string }
@@ -204,10 +189,7 @@ export function committingSpawn<
   }
 }
 
-/**
- * As the PTY host's commit, for a store with sessions: binds the pane the runtime wrote before the
- * spawn, and refuses one closed since. A store that cannot write panes gets the one it would have.
- */
+/** Bind the pre-spawn pane, refusing one closed since; emulate it for stores without pane writes. */
 function commitIntoWrittenPane(
   runtime: OrcaRuntimeService,
   args: SpawnArgs,
@@ -232,7 +214,6 @@ function commitIntoWrittenPane(
       layoutContainsLeafId(session?.terminalLayoutsByTabId?.[tabId]?.root ?? null, leafId)
     )
   }
-  // The partition the runtime wrote the pane in; with no admission, the one bindPaneFirst uses.
   const hostId = !Reflect.has(store, 'admitTerminalPane')
     ? 'local'
     : [getConnectionExecutionHostId(args.connectionId), 'local'].find(holdsPane)
@@ -247,31 +228,25 @@ type PtyControllerRuntimePrototype = {
   setPtyController: (this: OrcaRuntimeService, controller: RuntimePtyController | null) => void
 }
 
-// Controllers a test keeps from the stand-in commit, to drive a path that registers unbound.
 const uncommittedControllers = new WeakSet<RuntimePtyController>()
 
-/** Keeps commitFakeSpawnsInRuntimeTests from binding this controller's spawns. */
 export function leaveSpawnsUncommitted(controller: RuntimePtyController): RuntimePtyController {
   uncommittedControllers.add(controller)
   return controller
 }
 
-/**
- * Gives every fake PTY controller a suite installs the real controller's spawn commit, which binds
- * the pane before the runtime registers it. A spawn already committing binds the same pane again.
- */
+/** Give fake spawns production's pre-registration binding commit; repeated binding is safe. */
 export function commitFakeSpawnsInRuntimeTests(prototype: PtyControllerRuntimePrototype): void {
   const setPtyController = prototype.setPtyController
   prototype.setPtyController = function (controller) {
-    // No spawn, nothing to commit: the suite's own object, so its methods see themselves as `this`.
+    // Preserve the fixture object as this for its methods.
     if (typeof controller?.spawn !== 'function' || uncommittedControllers.has(controller)) {
       setPtyController.call(this, controller)
       return
     }
     const commit = (args: SpawnArgs, result: unknown): void =>
       commitIntoWrittenPane(this, args, result)
-    // An accessor on the suite's own object, not a copy: a suite that swaps its spawn later
-    // (a spy, a reassignment) still has its new spawn committed.
+    // Wrap via accessor so later spy/reassignment spawns also commit.
     type Spawn = NonNullable<RuntimePtyController['spawn']>
     const committed = new WeakMap<Spawn, Spawn>()
     let current: Spawn = controller.spawn
@@ -299,11 +274,8 @@ export function commitFakeSpawnsInRuntimeTests(prototype: PtyControllerRuntimePr
   }
 }
 
-/**
- * A recoverable pane's terminal as production loses it: the host's inventory answers without it
- * and reports no exit, so the record disconnects and main keeps the pane. Window-owned builds keep
- * the exit (code 0) these suites drove before.
- */
+/** Inventory loss without an exit disconnects and retains recoverable panes.
+ * Switch-off builds retain their existing code-0 exit behavior. */
 export async function dropFromHostInventory(
   runtime: OrcaRuntimeService,
   ptyId: string
@@ -320,7 +292,6 @@ export async function dropFromHostInventory(
     kill: () => false,
     getForegroundProcess: async () => null
   }
-  // Inherits the suite's controller, so its other methods keep their own `this`.
   const inventory: RuntimePtyController = Object.assign(Object.create(base), {
     listProcesses: async () => [],
     listProcessesWithHostScope: async () => ({ processes: [], hostIds: ['local', hostId] }),

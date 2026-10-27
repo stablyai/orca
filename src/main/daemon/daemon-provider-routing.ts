@@ -35,7 +35,7 @@ export function getAllDaemonAdapters(provider: DaemonProvider): readonly DaemonP
     : [provider]
 }
 
-// Why: an inventory is authoritative only if every generation answered; otherwise unverifiable.
+// Partial generation inventories cannot authorize cleanup.
 export async function listEveryDaemonGeneration<T>(
   provider: DaemonProvider,
   list: (adapter: DaemonPtyAdapter) => Promise<T[]>

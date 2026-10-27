@@ -5,7 +5,6 @@ const { statSyncMock } = vi.hoisted(() => ({ statSyncMock: vi.fn() }))
 
 vi.mock('node:fs', () => ({ statSync: statSyncMock }))
 
-// Executables the fake filesystem exposes, keyed by absolute path.
 let executables: Map<string, { file: boolean; mode: number }>
 
 function install(absolutePath: string, options?: { file?: boolean; mode?: number }): void {
@@ -122,7 +121,7 @@ describe('resolveTrustedExecutable', () => {
 
 describe('buildLinuxPackageInstallCommand', () => {
   it('refuses a non-absolute package path before looking for anything', async () => {
-    // Why: zypper/dnf/yum/rpm take no `--`, so a relative or dash-leading path would become an option.
+    // Managers without -- support require absolute paths to prevent option injection.
     install('/usr/bin/sudo')
     install('/usr/bin/apt')
     const { buildLinuxPackageInstallCommand } = await loadCommandModule()
@@ -265,7 +264,7 @@ describe('hasTrustedPackageManagerFor', () => {
     expect(hasTrustedPackageManagerFor('deb')).toBe(true)
   })
 
-  // The #17702 case: an Arch rebuild of the .deb inherits the marker but has no deb tooling.
+  // Repackagers can inherit deb/rpm markers without the corresponding tooling (#17702).
   it('rejects a deb marker on a host with only pacman', async () => {
     install('/usr/bin/pacman')
     install('/usr/bin/sudo')

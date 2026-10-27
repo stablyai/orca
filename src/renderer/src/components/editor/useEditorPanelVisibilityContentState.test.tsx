@@ -410,8 +410,7 @@ describe('useEditorPanelContentState visibility', () => {
 
     await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
     dispatchExternalChange(file)
-    // Why: the viewers render "Loading diff…" purely on a missing entry, so a
-    // retained (stale-marked) entry is what keeps the pane painted.
+    // Retaining a stale entry prevents the missing-entry Loading diff state while reload is pending.
     expect(snapshots.get('main')?.diffContents[file.id]?.modifiedContent).toBe('old diff')
     expect(snapshots.get('main')?.diffContents[file.id]?.isStale).toBe(true)
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledOnce()

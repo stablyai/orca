@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
+import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cancelGenerateCommitMessageLocal,
@@ -11,6 +12,7 @@ import {
 import {
   createChildTerminationExpectation,
   createMockDiscoveryChild,
+  spawnedAgentArgv,
   withPlatform
 } from './commit-message-text-generation-test-harness'
 
@@ -34,9 +36,7 @@ const spawnMock = vi.mocked(spawn)
 
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
 
-// These suites drive fake children down the Windows direct-child path, taskkill included. The POSIX
-// supervised stop with the Codex home lock (generation: timeout, cancel, output limit; discovery:
-// timeout, output limit) is in source-control-local-process.test.ts.
+// Fake Windows direct-child/taskkill paths here; source-control-local-process.test.ts covers supervised POSIX stop and managed-home lock release.
 const hostPlatform = process.platform
 
 afterEach(() => {
@@ -46,7 +46,7 @@ afterEach(() => {
 
 beforeEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-  // Windows resolves a bare agent name on PATH; the host's own installs must not answer it.
+  // Clear PATH so host agent installations cannot answer the fake Windows binary lookup.
   vi.stubEnv('PATH', '')
   terminateWindowsProcessTreeMock.mockClear()
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
@@ -54,23 +54,73 @@ beforeEach(() => {
 })
 
 describe('generateCommitMessageFromContext on the Windows direct-child path', () => {
-  it('fails clearly before spawning when a jcode argv prompt exceeds the Windows command line', async () => {
-    await withPlatform('win32', async () => {
-      const pending = generateCommitMessageFromContext(
+  const largePatch = Array.from(
+    { length: 40 },
+    (_, i) => `diff --git a/f${i}.ts b/f${i}.ts\n${`+${'x'.repeat(99)}\n`.repeat(25)}`
+  ).join('')
+  const pullRequestContext = {
+    branch: 'feature/large',
+    base: 'main',
+    branchChangedByPreparation: false,
+    currentTitle: '',
+    currentBody: '',
+    currentDraft: false,
+    commitSummary: '- feat: large change',
+    changeSummary: 'M\tf0.ts',
+    patch: largePatch
+  }
+  const local = { kind: 'local' as const, cwd: '/repo', env: { ...process.env } }
+
+  it.each(['plain', 'quote-heavy'])(
+    'fits a %s jcode pull-request diff to the quoted Windows command line',
+    async (content) => {
+      await withPlatform('win32', async () => {
+        await generatePullRequestFieldsFromContext(
+          {
+            ...pullRequestContext,
+            patch: content === 'quote-heavy' ? largePatch.replaceAll('x', '"') : largePatch
+          },
+          // Settings always resolve an action template; this is the default one.
+          { agentId: 'jcode', model: 'default', commandInputTemplate: '{basePrompt}' },
+          local
+        )
+
+        expect(spawnMock).toHaveBeenCalledTimes(1)
+        const argv = spawnedAgentArgv(spawnMock.mock.calls[0]).map(String)
+        expect(argv.map(quoteWindowsArgument).join(' ').length).toBeLessThanOrEqual(30_000)
+        expect(argv.join(' ')).toContain('diff truncated')
+      })
+    }
+  )
+
+  it('truncates a multi-byte diff so a jcode commit prompt fits the Linux single-argument cap', async () => {
+    await withPlatform('linux', async () => {
+      // Three UTF-8 bytes per character: the cap is in bytes, the diff budget in characters.
+      await generateCommitMessageFromContext(
         {
           branch: 'main',
-          stagedSummary: 'M\tREADME.md',
-          stagedPatch: `+${'x'.repeat(40_000)}`
+          stagedSummary: 'M\tf0.ts',
+          stagedPatch: largePatch.replaceAll('x', '\u4e2d').repeat(4)
         },
-        {
-          agentId: 'jcode',
-          model: 'default'
-        },
-        {
-          kind: 'local',
-          cwd: '/repo',
-          env: { ...process.env }
-        }
+        { agentId: 'jcode', model: 'default' },
+        local
+      )
+
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      const argv = spawnedAgentArgv(spawnMock.mock.calls[0]).map(String)
+      expect(Math.max(...argv.map((arg) => Buffer.byteLength(arg)))).toBeLessThanOrEqual(120 * 1024)
+      const prompt = argv.join(' ')
+      expect(prompt).toContain('diff truncated')
+      expect(prompt.split('diff --git').length - 1).toBeGreaterThan(100)
+    })
+  })
+
+  it('leaves a WSL argv prompt to the guard because the WSL launcher re-wraps the command', async () => {
+    await withPlatform('win32', async () => {
+      const pending = generatePullRequestFieldsFromContext(
+        pullRequestContext,
+        { agentId: 'jcode', model: 'default' },
+        { ...local, wslDistro: 'Ubuntu' }
       )
 
       await expect(pending).resolves.toMatchObject({
@@ -81,18 +131,29 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     })
   })
 
-  it('fails clearly before spawning when a jcode argv prompt exceeds the Linux single-argument cap', async () => {
-    await withPlatform('linux', async () => {
-      const pending = generateCommitMessageFromContext(
-        {
-          branch: 'main',
-          stagedSummary: 'M\tREADME.md',
-          // Why past 120 KiB and not the Windows 30k: Linux fails on ONE argument
-          // over MAX_ARG_STRLEN, which is far larger than the Windows line budget.
-          stagedPatch: `+${'x'.repeat(140_000)}`
-        },
+  it('fails clearly before spawning when the rest of an argv prompt exceeds the Windows command line', async () => {
+    await withPlatform('win32', async () => {
+      const pending = generatePullRequestFieldsFromContext(
+        { ...pullRequestContext, currentBody: 'x'.repeat(40_000) },
         { agentId: 'jcode', model: 'default' },
-        { kind: 'local', cwd: '/repo', env: { ...process.env } }
+        local
+      )
+
+      await expect(pending).resolves.toMatchObject({
+        success: false,
+        error: expect.stringContaining('too large for the Windows command line')
+      })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('fails clearly before spawning when the rest of an argv prompt exceeds the Linux single-argument cap', async () => {
+    await withPlatform('linux', async () => {
+      const pending = generatePullRequestFieldsFromContext(
+        // Exceed Linux's per-argument MAX_ARG_STRLEN, not merely Windows' smaller total command budget.
+        { ...pullRequestContext, currentBody: 'x'.repeat(140_000) },
+        { agentId: 'jcode', model: 'default' },
+        local
       )
 
       await expect(pending).resolves.toMatchObject({
@@ -103,10 +164,9 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     })
   })
 
-  it('still spawns on Linux for a prompt that only Windows would refuse', async () => {
+  it('still spawns on Linux with the whole diff for a prompt that only Windows would refuse', async () => {
     await withPlatform('linux', async () => {
-      // 40k chars trips the Windows line budget but is far under the Linux per-arg cap,
-      // so the guard must not have become a lowest-common-denominator limit.
+      // Stay below Linux argument capacity while exceeding Windows line budget; do not impose one platform's minimum on all.
       await generateCommitMessageFromContext(
         {
           branch: 'main',
@@ -114,9 +174,10 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
           stagedPatch: `+${'x'.repeat(40_000)}`
         },
         { agentId: 'jcode', model: 'default' },
-        { kind: 'local', cwd: '/repo', env: { ...process.env } }
+        local
       )
       expect(spawnMock).toHaveBeenCalled()
+      expect(spawnedAgentArgv(spawnMock.mock.calls[0]).join(' ')).not.toContain('diff truncated')
     })
   })
 
@@ -396,8 +457,9 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       expect(outcome).toBe('canceled')
       expect(listeners.has('stdout:data')).toBe(false)
       expect(listeners.has('stderr:data')).toBe(false)
-      expect(listeners.has('error')).toBe(false)
-      expect(listeners.has('close')).toBe(false)
+      expect(listeners.has('error')).toBe(true)
+      expect(listeners.has('close')).toBe(true)
+      listeners.get('close')?.(null)
     } finally {
       vi.useRealTimers()
     }
@@ -441,7 +503,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
   })
 
-  it('releases the Codex home lock when the child exits with a descendant holding its stdio', async () => {
+  it('releases the Codex home on root exit when a descendant holds stdio open', async () => {
     const firstChild = createMockDiscoveryChild()
     const secondChild = createMockDiscoveryChild()
     spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
@@ -459,8 +521,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     await expect(first).resolves.toMatchObject({ canceled: true })
     await expectChildTerminated(firstChild)
 
-    // SIGKILL reaches the codex process but not a grandchild that inherited its
-    // stdout, so 'exit' arrives and 'close' never does.
+    // A grandchild retains stdout after root exit, so close never arrives.
     firstChild.emit('exit', null, 'SIGKILL')
 
     const second = generateCommitMessageFromContext(context, params, {

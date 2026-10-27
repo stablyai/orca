@@ -3,11 +3,13 @@ import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-ty
 
 const mocks = vi.hoisted(() => ({
   callRuntimeEnvironment: vi.fn(),
-  listEnvironments: vi.fn()
+  listEnvironments: vi.fn(),
+  resolveEnvironment: vi.fn()
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
-  listEnvironments: mocks.listEnvironments
+  listEnvironments: mocks.listEnvironments,
+  resolveEnvironment: mocks.resolveEnvironment
 }))
 
 vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
@@ -15,6 +17,7 @@ vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () 
 }))
 
 const {
+  deleteRuntimeAiVaultSession,
   getSavedRuntimeAiVaultHostInfos,
   prepareRuntimeAiVaultSessionResume,
   scanRuntimeAiVaultSessions
@@ -23,6 +26,9 @@ const {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.listEnvironments.mockReturnValue([])
+  mocks.resolveEnvironment.mockImplementation(() => {
+    throw new Error('not saved')
+  })
   mocks.callRuntimeEnvironment.mockResolvedValue({
     ok: true,
     result: result([session('runtime:env-1', 'session-1')])
@@ -53,6 +59,7 @@ describe('runtime AI Vault session scanner', () => {
       {
         limit: 25,
         force: true,
+        historyOwnership: {},
         scopePaths: ['/srv/app']
       },
       { timeoutMs: 3000 }
@@ -65,6 +72,7 @@ describe('runtime AI Vault session scanner', () => {
       {
         limit: 25,
         force: true,
+        historyOwnership: {},
         scopePaths: ['/srv/app'],
         executionHostId: 'runtime:env-1'
       },
@@ -72,13 +80,20 @@ describe('runtime AI Vault session scanner', () => {
     )
   })
 
-  it('surfaces project scope truncation from the runtime transport bound', async () => {
+  it('caps forwarded project paths and reports scope truncation', async () => {
     const scopePaths = Array.from({ length: 80 }, (_, index) => `/srv/repo-${index}`)
 
     const scanResult = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {
       scopePaths
     })
 
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'aiVault.listSessions',
+      expect.objectContaining({ scopePaths: scopePaths.slice(0, 64) }),
+      undefined
+    )
     expect(scanResult.issues).toContainEqual(
       expect.objectContaining({
         kind: 'scope',
@@ -293,3 +308,82 @@ function session(
     subagent: null
   }
 }
+
+describe('deleteRuntimeAiVaultSession', () => {
+  const args = {
+    agent: 'claude' as const,
+    sessionId: 'session-1',
+    filePath: '/home/ada/.claude/projects/-repo/session-1.jsonl',
+    executionHostId: 'runtime:env-1' as const
+  }
+
+  it('sends only the row identity; the owning host validates the path', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({ ok: true, result: { outcome: 'deleted' } })
+
+    await expect(deleteRuntimeAiVaultSession('/user-data', 'env-1', args)).resolves.toEqual({
+      outcome: 'deleted'
+    })
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'aiVault.deleteSession',
+      { agent: 'claude', sessionId: 'session-1', filePath: args.filePath },
+      undefined,
+      undefined
+    )
+  })
+
+  it('fences the delete to the pairing the user confirmed against', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({ ok: true, result: { outcome: 'deleted' } })
+
+    await deleteRuntimeAiVaultSession('/user-data', 'env-1', {
+      ...args,
+      expectedEnvironmentPairingRevision: 7
+    })
+
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'aiVault.deleteSession',
+      { agent: 'claude', sessionId: 'session-1', filePath: args.filePath },
+      undefined,
+      7
+    )
+  })
+
+  it('asks for a host update only when the host lacks this exact RPC', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'method_not_found', message: 'Unknown method: aiVault.deleteSession' }
+    })
+    await expect(deleteRuntimeAiVaultSession('/user-data', 'env-1', args)).resolves.toEqual({
+      outcome: 'rejected',
+      agent: 'claude',
+      reason: 'host-update-required'
+    })
+
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'unavailable', message: 'Remote Orca server is unavailable.' }
+    })
+    await expect(deleteRuntimeAiVaultSession('/user-data', 'env-1', args)).resolves.toEqual({
+      outcome: 'failed',
+      agent: 'claude',
+      error: 'Remote Orca server is unavailable.'
+    })
+  })
+})
+
+describe('runtime row pairing stamp', () => {
+  it("stamps rows with this desktop's pairing, never the host's own claim", async () => {
+    mocks.resolveEnvironment.mockReturnValue({ id: 'env-1', createdAt: 1, pairingRevision: 9 })
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: result([{ ...session('runtime:env-1', 'session-1'), hostPairingRevision: 3 }])
+    })
+
+    const listed = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {})
+
+    expect(listed.sessions.map((row) => row.hostPairingRevision)).toEqual([9])
+  })
+})

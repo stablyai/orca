@@ -107,8 +107,7 @@ export function ensureNativeChatModelEnrichment(args: {
   entry.state = 'pending'
   retainEnrichmentEntry(key, entry)
 
-  // Why: model discovery must never delay rendering or launching; the seed is
-  // immediately usable while this once-per-host probe runs in the background.
+  // Render and launch from the seed while once-per-host discovery runs in the background.
   void args
     .discover()
     .then((discovered) => {

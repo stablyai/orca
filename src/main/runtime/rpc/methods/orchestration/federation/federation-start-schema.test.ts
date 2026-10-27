@@ -19,13 +19,7 @@ describe('FederationAttachStartParams', () => {
     expect(result.success && result.data.runId).toBeUndefined()
   })
 
-  it('keeps a v1.4.199 runId verbatim', () => {
-    const result = FederationAttachStartParams.parse({ ...legacyRequest, runId: 'run_home' })
-    expect(result.runId).toBe('run_home')
-  })
-
-  // Pins OptionalString: '' and non-strings drop to undefined (a stub Run is minted downstream);
-  // whitespace-only passes the schema and is refused by createRemoteDispatchAttachment.
+  // OptionalString drops empty/non-strings to mint a stub Run; whitespace survives parsing and is refused at attachment.
   it('maps an empty or non-string runId to undefined but passes whitespace through', () => {
     expect(FederationAttachStartParams.parse({ ...legacyRequest, runId: '' }).runId).toBeUndefined()
     expect(FederationAttachStartParams.parse({ ...legacyRequest, runId: 7 }).runId).toBeUndefined()

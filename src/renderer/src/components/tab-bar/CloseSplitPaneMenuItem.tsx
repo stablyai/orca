@@ -2,7 +2,6 @@ import { X } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 
-/** The pane action is also available from any tab's context menu. */
 export function CloseSplitPaneMenuItem({
   onCloseSplitPane
 }: {

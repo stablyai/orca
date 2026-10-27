@@ -14,8 +14,7 @@ import { guardSupervisedProviderGroup } from '../provider-process/provider-group
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 const BACKFILL_RECOVERY_KILL_SITE = 'codex-state-db-backfill-recovery'
-// Codex drains on its stdin end, as the Codex connection's root-only close asks; one value
-// for the spawn spec (a gone Orca) and the stop (Orca stopping it), so they cannot drift.
+// Keep owner-death and explicit shutdown on the same stdin-drain policy.
 const BACKFILL_RECOVERY_CLOSE_REQUEST: ProviderCloseRequest = 'stdin-end'
 
 export type CodexBackfillRecoveryProcess = {
@@ -23,7 +22,6 @@ export type CodexBackfillRecoveryProcess = {
   supervised: boolean
 }
 
-/** Starts the read-only app-server whose presence lets Codex finish its own backfill. */
 export function spawnCodexBackfillRecoveryProcess(
   codexHomePath: string,
   spawnProcess: CodexAppServerSpawn,
@@ -48,7 +46,7 @@ export function spawnCodexBackfillRecoveryProcess(
     return { child, supervised: false }
   }
   const command = resolveCommand()
-  // Kept alive up to an hour; on POSIX the supervisor stops it with Orca, however Orca exits.
+  // The POSIX supervisor stops this long-lived child even if Orca crashes.
   const spawnSpec = createProviderSpawnSpec(
     { command, args: [...CODEX_READ_ONLY_APP_SERVER_ARGS], cwd: codexHomePath },
     withCliRuntimeOnPath(command, {
@@ -77,7 +75,6 @@ export async function stopCodexBackfillRecoveryProcess(
   supervised: boolean
 ): Promise<void> {
   if (supervised) {
-    // A session supervisor turns stdin end into its group stop, as a Codex connection close does.
     await stopSupervisedChildProcess(child, {
       site: BACKFILL_RECOVERY_KILL_SITE,
       closeRequest: BACKFILL_RECOVERY_CLOSE_REQUEST

@@ -179,8 +179,7 @@ describe('getWslFilesystemBoundaryDistro', () => {
     ).toBeNull()
   })
 
-  // The UNC spelling of drvfs is still the Windows drive, so it crosses the boundary even though
-  // the path names no runtime preference at all.
+  // UNC drvfs paths cross onto the Windows drive regardless of runtime preference.
   it('names the path distro for the UNC spelling of a drvfs mount', () => {
     expect(
       getWslFilesystemBoundaryDistro({
@@ -201,7 +200,7 @@ describe('isDrvfsLinuxPath', () => {
     expect(isDrvfsLinuxPath('/mnt/c')).toBe(true)
     expect(isDrvfsLinuxPath('/mnt/c/Users')).toBe(true)
     expect(isDrvfsLinuxPath('/mnt/cdrom')).toBe(false)
-    // Why: /MNT and /mnt/C are ordinary case-sensitive Linux directories, not the drvfs automount.
+    // /MNT and /mnt/C are case-sensitive Linux directories, not drvfs automounts.
     expect(isDrvfsLinuxPath('/MNT/c')).toBe(false)
     expect(isDrvfsLinuxPath('/mnt/C/Users')).toBe(false)
   })

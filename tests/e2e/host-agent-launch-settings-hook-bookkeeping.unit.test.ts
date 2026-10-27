@@ -27,6 +27,7 @@ vi.mock('../../src/main/agent-hooks/managed-agent-hook-controls', () => ({
 vi.mock('../../src/renderer/src/components/settings/agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: transport.read,
   mutateHostAgentLaunchSettings: transport.mutate,
+  hostSupportsOwnChatPermissions: async () => true,
   hostSupportsAutoPermissions: async () => true,
   hostSupportsNativeChatPermissions: async () => true
 }))
@@ -62,7 +63,7 @@ describe('host form and committed-settings contract', () => {
     render(
       createElement(
         TooltipProvider,
-        {},
+        null,
         createElement(HostAgentLaunchSettings, {
           environmentId: 'ssh-host',
           pairingRevision: 17,

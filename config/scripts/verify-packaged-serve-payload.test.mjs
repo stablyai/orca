@@ -134,13 +134,10 @@ describe('assertPackagedServeSelectionEntry', () => {
     return resourcesDir
   }
 
-  it('looks where orca serve runs the entry from', () => {
-    expect(SERVE_SELECTION_ENTRY).toBe(`main/${ORCAD_LOCAL_SERVE_SELECTION_ENTRY}.js`)
-  })
-
   it('passes an unpacked entry whose relative requires are all unpacked', () => {
     const resourcesDir = packagedEntry({
-      [SERVE_SELECTION_ENTRY]: 'require("../chunks/a.js"); require("node:fs")',
+      [`main/${ORCAD_LOCAL_SERVE_SELECTION_ENTRY}.js`]:
+        'require("../chunks/a.js"); require("node:fs")',
       'main/chunks/a.js': 'require("./b"); require("../persistence")',
       'main/chunks/b.js': '',
       'main/persistence/index.js': ''

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem, AgentJournalRenderItem } from './agent-session-journal-types'
-import type { AgentMessageSource } from './agent-session-message-source'
+import type { AgentMessageSource } from './agent-session/agent-session-message-source'
 import { projectStructuredItemToNativeChat } from './structured-agent-session-projection'
 
 const FROM: AgentMessageSource = {

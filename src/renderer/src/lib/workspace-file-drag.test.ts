@@ -95,6 +95,11 @@ describe('workspace file drag payloads', () => {
       paths: ['/repo/src', '/repo/README.md'],
       status: 'accepted'
     })
+    const selected = readWorkspaceFileDragPaths(transfer, { collapseDescendantsForMove: false })
+    if (selected.status !== 'accepted') {
+      throw new Error('Expected selected resources to be accepted')
+    }
+    expect(selected.paths).toEqual(['/repo/src', '/repo/src/index.ts', '/repo/README.md'])
   })
 
   it('keeps sibling paths whose names only share a prefix', () => {

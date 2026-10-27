@@ -1,6 +1,4 @@
-// A create on a paired server whose repo and path also exist on another host (a "twin"): seeding
-// resolves the owner by the host the create went to, so the desktop lays out no second set of the
-// server's default tabs (ledger L277).
+// Resolve seeding by the create’s host when repo/path has a twin; desktop must not duplicate the paired server’s default tabs (ledger L277).
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as WebRuntimeSessionModule from '@/runtime/web-runtime-session-environment'

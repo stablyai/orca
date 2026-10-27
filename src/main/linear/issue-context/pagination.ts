@@ -19,8 +19,7 @@ export async function readConnectionPages<T>(
   let hasMore = false
 
   while (nodes.length < limit) {
-    // Why: Linear caps connection page sizes, so the CLI's larger context caps
-    // must be reached by cursor walking rather than one oversized request.
+    // Walk capped backend pages to satisfy larger context limits.
     const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - nodes.length)
     const connection = await loadConnection(after ? { first, after } : { first })
     const pageNodes = connection?.nodes ?? []

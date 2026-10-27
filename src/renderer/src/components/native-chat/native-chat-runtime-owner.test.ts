@@ -19,8 +19,7 @@ function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
-/** A worktree record with a host id but deliberately no `path` — the owner
- *  selector must not depend on path resolution (KTD-1). */
+/** Omit path deliberately: transport ownership must resolve independently (KTD-1). */
 function worktreeRecord(hostId: string): NativeChatRuntimeOwnerState['worktreesByRepo'] {
   return { repo: [{ id: 'wt-1', repoId: 'repo', hostId } as never] }
 }

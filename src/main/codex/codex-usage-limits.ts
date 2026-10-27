@@ -23,24 +23,20 @@ function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? { ...value } : null
 }
 
-/**
- * The account's usage as Codex last reported it (`account/rateLimits/updated`), so a turn its usage
- * limit ended can say which limit and when it resets.
- */
 export class CodexUsageLimits {
   private snapshot: CodexAccountRateLimits = {}
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  /** Whether the frame was a usage report, which this keeps and nothing else journals. */
+  /** Consume usage reports without journaling them as generic frames. */
   observe(kind: string, payload: unknown): boolean {
     if (kind !== RATE_LIMITS_UPDATED) {
       return false
     }
     const update = record(record(payload)?.rateLimits)
-    // Another limit id is one model's own bucket, not the account's session or weekly limit.
+    // Model-specific buckets do not describe the account's session or weekly limits.
     if (update && (update.limitId == null || update.limitId === 'codex')) {
-      // An update may carry only the fields that changed.
+      // Reports may omit unchanged fields.
       this.snapshot = {
         ...this.snapshot,
         ...Object.fromEntries(Object.entries(update).filter(([, value]) => value !== undefined))
@@ -49,7 +45,6 @@ export class CodexUsageLimits {
     return true
   }
 
-  /** The fact for an `error` frame that Codex's usage limit ended the turn with; null otherwise. */
   failure(payload: unknown) {
     const error = readCodexErrorInfo(payload)?.error
     if (!error || !USAGE_LIMIT_ERRORS.includes(error)) {
@@ -67,8 +62,7 @@ export class CodexUsageLimits {
     })
   }
 
-  /** Every spent window must reset before a turn can run, so the latest reset is the one; none
-   *  when any spent window gave no reset. */
+  /** All spent windows must reset; report the latest only if every reset is known. */
   private limit(): AgentSessionUsageLimit | null {
     const monthlyPlan = this.snapshot.planType === 'free' || this.snapshot.planType === 'go'
     const spent = (

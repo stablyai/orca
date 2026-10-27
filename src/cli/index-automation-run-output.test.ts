@@ -237,18 +237,22 @@ describe('automation run command output', () => {
   it('prints no acknowledgment until the host returns a delayed result', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     queueFixtures(callMock, okFixture('req_owner', { automation: { id: AUTOMATION_ID } }))
-    let respond: (value: ReturnType<typeof okFixture>) => void = () => {}
-    callMock.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          respond = resolve
-        })
-    )
+    const requested = Promise.withResolvers<void>()
+    const response = Promise.withResolvers<ReturnType<typeof okFixture>>()
+    callMock.mockImplementationOnce(() => {
+      requested.resolve()
+      return response.promise
+    })
     const command = main(['automations', 'run', AUTOMATION_ID], '/tmp/repo')
-    await vi.waitFor(() => expect(callMock).toHaveBeenCalledTimes(2))
-    expect(log).not.toHaveBeenCalled()
-    respond(okFixture('req_run', { run: run({ status: 'dispatched' }) }))
-    await command
+    try {
+      await requested.promise
+      expect(callMock).toHaveBeenCalledTimes(2)
+      expect(callMock).toHaveBeenNthCalledWith(2, 'automation.runNow', { id: AUTOMATION_ID })
+      expect(log).not.toHaveBeenCalled()
+    } finally {
+      response.resolve(okFixture('req_run', { run: run({ status: 'dispatched' }) }))
+      await command
+    }
     expect(log).toHaveBeenCalledTimes(1)
     expect(String(log.mock.calls[0]?.[0]).split('\n')[0]).toBe(
       `Started run ${RUN_ID} (dispatched).`

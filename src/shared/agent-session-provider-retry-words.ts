@@ -1,5 +1,4 @@
-// The words for a provider retry: which retry it is and what last failed, from the provider's
-// own fields, for a provider that wrote none of its own for a person.
+// Word retries from provider fields only when it supplied no person-facing account.
 
 import type { AgentSessionProviderRetry } from './agent-session-failure'
 import type {

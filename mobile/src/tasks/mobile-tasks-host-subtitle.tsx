@@ -5,7 +5,6 @@ import { loadHosts } from '../transport/host-store'
 import type { HostProfile } from '../transport/types'
 import { useHostDisplay } from '../transport/use-host-display'
 
-/** The desktop these tasks belong to, in the host screen's subtitle line. */
 export function MobileTasksHostSubtitle({ hostId }: { hostId: string }) {
   const [host, setHost] = useState<HostProfile | null>(null)
   useEffect(() => {
@@ -17,7 +16,6 @@ export function MobileTasksHostSubtitle({ hostId }: { hostId: string }) {
           setHost(hosts.find((profile) => profile.id === hostId) ?? null)
         }
       },
-      // An unreadable profile leaves the line blank; the screen itself reports connection trouble.
       () => {}
     )
     return () => {
@@ -25,8 +23,7 @@ export function MobileTasksHostSubtitle({ hostId }: { hostId: string }) {
     }
   }, [hostId])
   const title = useHostDisplay(host).title
-  // The line is reserved before the read so the title does not jump; it stays blank for an
-  // unknown host, which would otherwise show the generic "Host".
+  // Reserve the line before load to prevent a title jump; unknown hosts stay blank instead of showing generic Host.
   return (
     <Text
       style={[hostScreenStyles.hostPlatformText, styles.reserved]}

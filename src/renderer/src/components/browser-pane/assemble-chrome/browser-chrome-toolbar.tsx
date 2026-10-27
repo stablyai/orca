@@ -35,12 +35,7 @@ export type BrowserChromeMarkupTool = {
   active: boolean
   disabled: boolean
   onToggle: () => void
-  /**
-   * Whether this surface may spend the draw tool's one-per-install discovery popover. False on a
-   * hidden pane (a portaled layer would anchor to a zero-size trigger) and false on any surface
-   * that does not own the nudge — a preview consuming it would burn the single view on a reader
-   * who came for a document, before the browsing pane ever offered it.
-   */
+  /** Only the owning visible browser pane may consume the discovery hint; hidden panes misplace it and previews would spend it prematurely. */
   canShowDiscoveryHint: boolean
 }
 
@@ -80,14 +75,7 @@ function BrowserChromeActionButton({
   )
 }
 
-/**
- * The whole browser chrome bar — history, identity, tools — for every surface that renders guest
- * content: the browsing pane and the workspace document preview.
- *
- * Why one component and not a shared row plus two tool clusters: a tool added here has to appear
- * on both surfaces to stay honest, and a per-surface cluster is exactly how they drift apart. A
- * surface omits a tool only by passing null, and each null below says why that tool cannot apply.
- */
+/** Use one toolbar for browsing and document previews so tools cannot drift; each surface explicitly omits inapplicable tools. */
 export function BrowserChromeToolbar({
   controls,
   addressSlot,

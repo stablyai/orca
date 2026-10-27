@@ -1,11 +1,7 @@
-// Whether a structured chat offers Stop, and what Stop does, from what this view knows of the chat.
-
 export function structuredAgentSessionStopControl(input: {
-  /** The host has published this chat to this view. */
   published: boolean
   /** Temporary: hosts without create.message.v1 still leave the prompt on this client. */
   legacyLaunch?: { takeBackText: () => void }
-  /** The Stop the host is asked for once it has published this chat. */
   host: {
     /** The host takes a Stop naming no turn (and this view holds its fence). */
     stopsConversation: boolean
@@ -13,7 +9,6 @@ export function structuredAgentSessionStopControl(input: {
   }
   transportState: { turnId: string | null; isWorking: boolean }
   sends: {
-    /** The chat's one send is out and unsettled. */
     sending: boolean
     /** A Stop's part of that send: what has not gone out goes no further. */
     stopSends: () => void

@@ -18,7 +18,7 @@ export type WebSocketConnectionCloseHandler = (
   hasOtherConnections: boolean
 ) => void
 
-// Why: WS connections are long-lived and multiplex many RPCs by `id`; auth and dispatch are delegated to the message handler.
+// Long-lived sockets multiplex RPC ids; message handlers own auth and dispatch.
 export function attachNodeWebSocketLifecycle(args: {
   ws: WebSocket
   heartbeat: RemoteRuntimeServerHeartbeat
@@ -26,22 +26,22 @@ export function attachNodeWebSocketLifecycle(args: {
   preAuthTimers: WeakMap<WebSocket, ReturnType<typeof setTimeout>>
   clientIds: Map<WebSocket, string>
   heartbeatConnections: Set<WebSocket>
-  // Why: read lazily so a handler registered after start still reaches sockets accepted earlier.
+  // Read lazily so handlers registered after startup reach existing sockets.
   getMessageHandler: () => WebSocketMessageHandler | null
   getConnectionCloseHandler: () => WebSocketConnectionCloseHandler | null
 }): void {
   const { ws } = args
   let finalized = false
-  const onPong = (): void => args.heartbeat.noteAlive(ws)
+  const onPong = (): void => args.heartbeat.notePong(ws)
   const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
-    // Why: any inbound frame counts as proof of life, so an actively-talking client isn't reaped mid-request.
+    // Every inbound frame proves life, including frames during active requests.
     args.heartbeat.noteAlive(ws)
     const message =
       typeof data === 'string' ? data : isBinary ? toBinaryPayload(data) : data.toString()
     args.getMessageHandler()?.(
       message,
       (response) => {
-        // Why: mobile clients disconnect often; guard the write so we don't throw on a dead socket.
+        // Guard writes because phones often disconnect mid-request.
         if (ws.readyState === ws.OPEN) {
           ws.send(response)
         }
@@ -70,13 +70,13 @@ export function attachNodeWebSocketLifecycle(args: {
     args.getConnectionCloseHandler()?.(clientId, ws, hasOtherConnections)
   }
   const onError = (): void => {
-    // Why: close isn't guaranteed after every error path; finalize here too so pre-auth E2EE state and connection ids can't leak.
+    // Error paths may omit close; finalize here too to release pre-auth state and connection ids.
     finalize()
     ws.close()
   }
   const preAuthTimer = setTimeout(() => {
     if (!args.clientIds.has(ws)) {
-      // Why: a silent auto-ponging client would otherwise hold a finite mobile slot forever without starting the E2EE handshake.
+      // Silent auto-pong clients must not hold finite mobile slots without beginning E2EE.
       ws.terminate()
     }
   }, args.preAuthTimeoutMs)
@@ -84,15 +84,15 @@ export function attachNodeWebSocketLifecycle(args: {
   args.preAuthTimers.set(ws, preAuthTimer)
   ws.on('pong', onPong)
   ws.on('message', onMessage)
-  // Why: clean up connection-scoped state (e.g. mobile-fit overrides) so a dropped phone doesn't leave orphaned phone-fit on desktop.
+  // Drop connection-owned state so disconnected phones leave no fit overrides.
   ws.on('close', finalize)
   ws.on('error', onError)
-  // Why: install lifecycle ownership before periodic heartbeat ticks can observe this socket.
+  // Install ownership before heartbeat ticks can see this socket.
   args.heartbeatConnections.add(ws)
+  args.heartbeat.track(ws)
   args.heartbeat.noteAlive(ws)
   if (args.heartbeatConnections.size === 1) {
-    // Unauthenticated sockets are protected by the pre-auth timeout; heartbeat probes begin only
-    // after E2EE binds a client id, avoiding control frames during the handshake.
+    // Pre-auth timeout owns unauthenticated sockets; start probes after E2EE binds identity to avoid handshake control frames.
     args.heartbeat.start(() => args.clientIds.keys())
   }
 }
@@ -122,7 +122,7 @@ export async function stopNodeWebSocketTransport(args: {
   args.heartbeatConnections.clear()
   if (args.wss) {
     for (const client of args.wss.clients) {
-      // Why: a half-open mobile socket may never answer a close frame, which keeps httpServer.close pending.
+      // Half-open phones may never ACK close, keeping httpServer.close pending.
       client.terminate()
     }
     args.wss.close()
@@ -137,13 +137,13 @@ export async function stopNodeWebSocketTransport(args: {
         }
         resolve()
       })
-      // Why: idle keep-alive static-web connections would otherwise hold close() open.
+      // Idle static-web keep-alives can otherwise hold close open.
       httpServer.closeAllConnections()
     })
   }
 }
 
-// Why: force-terminate soon after the 1013 close since a half-open phone may never ack and would hold the descriptor past the WS cap; the 'error' listener absorbs a reset while closing.
+// Terminate soon after 1013: half-open phones may never ACK and retain WS capacity; the error listener handles closing resets.
 export function rejectNodeWebSocketOverCapacity(ws: WebSocket): void {
   ws.on('error', () => {})
   ws.close(1013, 'Maximum connections reached')

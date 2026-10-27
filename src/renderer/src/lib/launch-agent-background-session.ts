@@ -23,7 +23,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-ow
 import { retireProvider } from '@/lib/retire-unowned-background-terminal'
 import { createRuntimeAgentBackgroundTerminal } from '@/lib/runtime-agent-background-create'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { hasExtraAgentArgs } from '../../../shared/automation-extra-agent-args'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
@@ -103,8 +103,7 @@ export async function launchAgentBackgroundSession(
   const sshConnectionId = launchHost.connectionId
   let ptyId = '',
     runtimeTerminalHandle: string | null = null
-  // What the local spawn answered and later steps still need: which lifetime of `ptyId` this launch
-  // owns, and the config the host actually launched. Both absent for a runtime terminal.
+  // Capture local/SSH incarnation and actual launch config for later steps; runtime terminals supply neither.
   let spawned: { incarnationId?: string; launchConfig?: typeof startupPlan.launchConfig } = {}
   let tab: ReturnType<typeof store.createTab> | null = null
   let exitHandled = false,
@@ -126,8 +125,7 @@ export async function launchAgentBackgroundSession(
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(exitPtyId, code)
   }
-  // Why: local/SSH status facts already pass through main's authoritative
-  // scanner; remote-runtime bytes still need this renderer-side store write.
+  // Main owns local/SSH status scanning; runtime bytes still need renderer-side writes.
   const mainOwnsAgentStatusWrites = isMainTerminalSideEffectAuthorityForPty({
     settings: store.settings,
     runtimeEnvironmentId: runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null
@@ -147,8 +145,7 @@ export async function launchAgentBackgroundSession(
   }
   try {
     if (runtimeTarget.kind === 'environment') {
-      // Why: runtime environments execute on the server; using local pty.spawn
-      // would silently run automation on the client for a remote workspace.
+      // Runtime workspaces execute on their server; local pty.spawn would run automation on this client.
       const created = await createRuntimeAgentBackgroundTerminal({
         environmentId: runtimeTarget.environmentId,
         worktreeId,
@@ -225,8 +222,7 @@ export async function launchAgentBackgroundSession(
     paneKey = adopted.paneKey
     terminalOwnership = adopted.terminalOwnership
     if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
-      // Why: Command Code does not expose a prompt-start hook; seed working for
-      // hidden prompt launches so sidebar/activity surfaces do not stay idle.
+      // Command Code lacks prompt-start hooks; seed working for hidden prompt launches until real status arrives.
       const routing = agentStatusConsumer.resolveRouting()
       if (routing) {
         const observation = agentStatusConsumer.observeLaunchIngress()
@@ -251,8 +247,7 @@ export async function launchAgentBackgroundSession(
         handleData
       )
       const exitWait = new AbortController()
-      // Why: a kept-open terminal never resolves the wait, which would hold one
-      // of the server's long-wait slots for 24h after the run completes.
+      // Kept-open terminals never exit; cancel their server wait instead of retaining a 24h long-wait slot.
       releaseRuntimeObservers = () => {
         releaseRuntimeObservers = (): void => {}
         exitWait.abort()
@@ -269,17 +264,13 @@ export async function launchAgentBackgroundSession(
         .then((result) => handleExit(ptyId, runtimeWaitExitCode(result.wait)))
         .catch(() => {})
     } else {
-      // Why the incarnation: a relay-recycled id can hold the previous owner's exit, and draining
-      // that into this handler tears the agent session down seconds after it launched.
+      // Incarnation prevents recycled relay IDs from delivering the previous session’s exit.
       eagerPtyBuffer = registerEagerPtyBuffer(ptyId, handleExit, spawned.incarnationId)
       unsubscribeData = subscribeToPtyData(ptyId, handleData)
-      // Why: opening the workspace attaches a real terminal transport and disposes
-      // the eager exit handler. This sidecar keeps automation completion tracking
-      // alive regardless of whether the tab is hidden or mounted.
+      // A mounted transport disposes the eager exit handler; this sidecar preserves completion tracking across hidden/visible transitions.
       unsubscribeExit = subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
     }
-    // Why: bind the explicit PTY and ownership before mount; an earlier mount
-    // can double-spawn, while later tracking can miss user takeover.
+    // Bind PTY/ownership before mount to prevent duplicate spawn without missing user takeover.
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
 
     if (pasteDraftAfterLaunch !== null) {
@@ -295,8 +286,7 @@ export async function launchAgentBackgroundSession(
       releaseRuntimeObservers: () => releaseRuntimeObservers()
     }
   } catch (error) {
-    // Why: terminal creation and stream subscription are separate remote calls.
-    // A failure between them must not strand an invisible runtime terminal.
+    // Creation and subscription are separate RPCs; failure between them must clean up the invisible runtime terminal.
     exitHandled = true
     terminalOwnership?.release()
     const createdTab = tab

@@ -1,16 +1,6 @@
 import type { MobileClipboardImageResizer } from './mobile-clipboard-image-downscale'
 
-/**
- * The raster shrink as a `<canvas>` draw. The shell's `img-src 'self' data: https:` admits the
- * source, so the decode is one `<img>` and the encode is `toDataURL`, with no file anywhere in it.
- *
- * PNG out, as before: the caller's downscale loop measures base64 length and retries, so a format
- * that compressed differently would converge somewhere else, and the terminal paste that follows
- * assumes PNG.
- *
- * Proved in `mobile-web-app-clipboard-image-resize-render.test.mjs`, in a real browser under the
- * shipped policy against a real PNG, because a fake canvas cannot answer what a raster weighs.
- */
+// Keep PNG output: upload retries measure its base64 size and terminal paste assumes PNG. Browser tests exercise a real raster under the shipped CSP.
 
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 const RESIZED_MIME = 'image/png'
@@ -19,8 +9,7 @@ export const resizeMobileClipboardImage: MobileClipboardImageResizer = async (so
   const base64 = source.replace(CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE, '')
   const image = new Image()
   image.src = `data:${RESIZED_MIME};base64,${base64}`
-  // `decode()` rather than an `onload` race: it rejects on a source the browser cannot read, where
-  // `onload` would simply never fire and leave the paste waiting on a promise nothing settles.
+  // decode rejects unreadable sources; an onload-only promise could remain pending forever.
   await image.decode()
   const canvas = document.createElement('canvas')
   canvas.width = target.width
@@ -36,8 +25,6 @@ export const resizeMobileClipboardImage: MobileClipboardImageResizer = async (so
   if (resized.length === 0) {
     throw new Error('Failed to encode resized clipboard image')
   }
-  // Read back off the canvas rather than echoed from `target`. The two are the same number today,
-  // because a browser reflects the width it was assigned; the point is that the size and the bytes
-  // come from one element, so a caller's bookkeeping cannot describe a raster that was not encoded.
+  // Return dimensions from the encoded canvas so metadata and bytes describe the same raster.
   return { data: resized, width: canvas.width, height: canvas.height }
 }

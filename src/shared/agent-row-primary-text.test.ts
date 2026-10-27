@@ -72,12 +72,10 @@ Keep the raw preamble out of the sidebar.`
   })
 
   it('falls back to the raw prompt outside orchestration workers', () => {
-    expect(getAgentRowPrimaryText({ prompt: 'Fix checkout race' })).toBe('Fix checkout race')
+    expect(getAgentRowPrimaryText({ prompt: '  Fix checkout race\n ' })).toBe('Fix checkout race')
   })
 
-  // Why: full preambles bury === TASK === after multi-KB CLI instructions. The
-  // status normalizer must compact the field so a missing/delayed label still
-  // yields a meaningful task preview from the single-line 200-char prompt.
+  // The normalizer must preserve a meaningful task preview within 200 chars despite multi-KB dispatch preambles.
   it('derives a task preview from a normalized 200-char dispatch prompt without labels', () => {
     const longCliNoise = Array.from(
       { length: 40 },
@@ -150,9 +148,7 @@ Implement the detailed worker instructions that should not stay as the final lab
     ).toBe('')
   })
 
-  // Why: UI helpers still accept raw multi-line preambles (tests, defensive
-  // paths). Without the standalone-line marker rule, a base-drift subject that
-  // mentions `=== TASK ===` wins over Orca's real separator.
+  // Raw preambles need standalone markers so base-drift subjects mentioning === TASK === cannot win.
   it('ignores adversarial === TASK === text in raw multi-line base-drift subjects', () => {
     expect(
       getAgentRowPrimaryText({
@@ -226,12 +222,10 @@ Checkout race body`,
         }
       })
     ).toBe('Fix checkout race')
-  })
-
-  it('ignores sticky orchestration for non-dispatch generated titles', () => {
     expect(
       getAgentRowGeneratedTitleText({
-        prompt: 'Refactor the auth middleware',
+        prompt:
+          'You are working inside Orca, a multi-agent IDE. Your task ID is: task-2 === TASK === New worker body',
         orchestration: {
           taskId: 'task-1',
           dispatchId: 'ctx-1',
@@ -239,6 +233,20 @@ Checkout race body`,
           displayName: 'Stale worker label'
         }
       })
-    ).toBe('Refactor the auth middleware')
+    ).toBe('New worker body')
+  })
+
+  it('ignores sticky orchestration for non-dispatch generated titles', () => {
+    expect(
+      getAgentRowGeneratedTitleText({
+        prompt: '  Refactor the auth middleware\n ',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          taskTitle: 'Stale task',
+          displayName: 'Stale worker label'
+        }
+      })
+    ).toBe('  Refactor the auth middleware\n ')
   })
 })

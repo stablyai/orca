@@ -51,7 +51,7 @@ function assistantRow(key: string, model: string, cacheReadTokens: number): stri
   })}\n`
 }
 
-// Why: a scan only saves a resume checkpoint past MIN_RESUMABLE_PREFIX_BYTES.
+// Resume checkpoints require at least MIN_RESUMABLE_PREFIX_BYTES.
 function padding(): string {
   return `${JSON.stringify({ type: 'user', content: 'x'.repeat(4 * MIN_RESUMABLE_PREFIX_BYTES) })}\n`
 }

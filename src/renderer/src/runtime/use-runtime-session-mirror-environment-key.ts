@@ -37,16 +37,9 @@ export function selectRuntimeSessionMirrorTargetInputs(
 }
 
 export type RuntimeSessionMirrorEnvironmentKeys = {
-  /**
-   * Identity of the mirrored set. Every retained-state stamp is cut from these fields, so moving
-   * this key invalidates the mirror -- which is exactly why a flap must not move it (#19647).
-   */
+  // All retained-state stamps derive from this identity; transport flaps must not invalidate it (#19647).
   environmentKey: string
-  /**
-   * Advances when a mirrored host answers again after contact was lost. Purely an effect
-   * dependency: it reinstalls the subscriptions the dead transport took with it, and is
-   * deliberately absent from `environmentKey` so no frame can be stamped with it.
-   */
+  // Reconnect reinstalls dead-transport subscriptions without changing environmentKey or frame stamps.
   resubscribeSignal: string
 }
 
@@ -77,7 +70,7 @@ export function buildRuntimeSessionMirrorEnvironmentKeys(
 }
 
 export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEnvironmentKeys {
-  // Why: agent/tab writes are hot; scan host ownership only when one of its sources changes.
+  // Agent/tab writes are hot; rescan ownership only when its sources change.
   const inputs = useAppStore(useShallow(selectRuntimeSessionMirrorTargetInputs))
   const {
     activeRuntimeEnvironmentId,

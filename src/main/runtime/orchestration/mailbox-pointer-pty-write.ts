@@ -11,11 +11,7 @@ export type OrchestrationPointerWriteArgs = {
   controller: RuntimePtyController | null | undefined
 }
 
-/**
- * Every orchestration pointer byte, including the Enter frame, settles through here. A throw from
- * the controller cannot prove no byte left, and collapsing it into a refusal is what cleared
- * durable mailbox reservations for writes that may already have been on the wire.
- */
+/** Settle every pointer byte and Enter here; a controller throw cannot prove no bytes left and must retain reservations. */
 export function writeOrchestrationPointerWithSettlement(
   args: OrchestrationPointerWriteArgs
 ): WriteSettlement | Promise<WriteSettlement> {
@@ -24,8 +20,8 @@ export function writeOrchestrationPointerWithSettlement(
     return writeRefused('provider_cannot_settle')
   }
   try {
-    // Why driving: a pointer is input that tells a running agent to read its mail.
-    return settledWrite.call(args.controller, args.ptyId, args.data, 'driving')
+    // Pointer input tells the agent to read its mail.
+    return settledWrite.call(args.controller, args.ptyId, args.data, 'orchestration')
   } catch {
     // A partial write that then threw cannot prove the transport took nothing.
     return writeUnverifiable('provider_threw_after_handoff', true)

@@ -92,8 +92,7 @@ describe('structuredSessionBackgroundTasksView', () => {
     }
   })
 
-  // Absence of a row never reads as idle when the host says some work went unrecorded; commands
-  // and rewind still follow the records, as the host's own admission does.
+  // Unrecorded work keeps the strip visible; commands/rewind still follow listed records as host admission does.
   it('keeps the strip and its Stop when the host could not record some work', () => {
     expect(
       structuredSessionBackgroundTasksView(
@@ -114,8 +113,7 @@ describe('structuredSessionBackgroundTasksView', () => {
     expect(offers({ supportsTaskStop: false }, 'turn-1')).toBe(true)
     expect(offers({ supportsTaskStop: false, supportsStopAll: false })).toBe(false)
     expect(offers({ supportsTaskStop: true, incomplete: true })).toBe(true)
-    // Unlisted work is reached by ending the agent: no untargeted provider stop is needed, as on an
-    // ACP agent, and none is offered under a running turn the agent would end with it.
+    // Without a running turn, ending the agent reaches unlisted work even when the provider lacks untargeted Stop.
     const acp = { supportsTaskStop: true, supportsStopAll: false, incomplete: true } as const
     expect(offers(acp)).toBe(true)
     expect(offers(acp, 'turn-1')).toBe(false)

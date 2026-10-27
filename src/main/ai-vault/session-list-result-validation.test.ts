@@ -114,9 +114,6 @@ describe('parseAiVaultListResult', () => {
     })
   })
 
-  // #15036: a `kind` this build has never heard of used to fail the whole issue,
-  // and the fallback re-reported it as an unkinded entry — i.e. a newer host's
-  // whole-source failure came back to an older client as a skipped transcript.
   it('keeps an issue whose kind this build does not know, as its own kinded row', () => {
     const parsed = parseAiVaultListResult({
       sessions: [validSession()],

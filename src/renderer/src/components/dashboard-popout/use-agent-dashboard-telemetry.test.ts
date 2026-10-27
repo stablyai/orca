@@ -35,7 +35,7 @@ describe('dashboard visible-use telemetry', () => {
   let visibility: DocumentVisibilityState
 
   beforeEach(() => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ now: new Date('2026-10-22T12:00:00Z') })
     track.mockReset().mockResolvedValue(true)
     getConsentState.mockReset().mockResolvedValue({ effective: 'enabled' })
     useAppStore.setState({

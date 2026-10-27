@@ -1,30 +1,18 @@
 import { constants } from 'node:fs/promises'
-import {
-  RuntimeTerminalFileGrants,
-  type RuntimeTerminalFileGrantHost,
-  type TerminalFileGrant
-} from './file-grants'
+import { RuntimeTerminalFileGrants, type RuntimeTerminalFileGrantHost } from './file-grants'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadResult,
   RuntimeTerminalPathResolution
 } from '../../../../shared/runtime-file-contracts'
+import { canonicalPathForArtifactComparison, truncateMobileFilePreview } from './artifact-integrity'
 import {
-  canonicalPathForArtifactComparison,
-  isTerminalArtifactHardLinked,
-  truncateMobileFilePreview
-} from './artifact-integrity'
-import {
-  resolveAllowedLocalTerminalArtifactPath,
   openLocalTerminalArtifactGrant,
   readLocalTerminalArtifactFileFromHandle,
   readLocalTerminalArtifactPreviewFromHandle
 } from './local-artifact-read'
 import { statLocalTerminalArtifact } from './artifact-stat'
-import { requireReachableFilesystemRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import { assertPreviewWithinTransportBudget } from '../../files/file-preview-budget'
-import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { isMobileBinaryPath } from '../../files/mobile-file-kind'
 import { writeTerminalArtifactFile } from './artifact-write'
 
@@ -35,68 +23,36 @@ export class RuntimeTerminalArtifacts {
     this.grants = new RuntimeTerminalFileGrants(host)
   }
 
-  async resolveAllowedTerminalArtifactPath(args: {
-    absolutePath: string
-    connectionId?: string
-    worktreePath: string
-  }): Promise<string | null> {
-    if (args.connectionId) {
-      throw new SshHostNotServedError(args.connectionId)
-    }
-    return resolveAllowedLocalTerminalArtifactPath(args.absolutePath, args.worktreePath)
-  }
-
-  async resolveNativeChatArtifactPath(
-    absolutePath: string,
-    connectionId?: string
-  ): Promise<string> {
-    requireReachableFilesystemRoute(getConnectionExecutionHostId(connectionId))
-    return canonicalPathForArtifactComparison(absolutePath)
-  }
-
   async resolveAbsoluteFileGrant(args: {
     worktreeId: string
-    artifactPath: string
-    rejectedAbsolutePath?: string
+    absolutePath: string
     clientId?: string
-    readOnly?: boolean
-    provenance?: TerminalFileGrant['provenance']
   }): Promise<RuntimeTerminalPathResolution> {
-    const { stats, contentDigest } = await statLocalTerminalArtifact(args.artifactPath)
+    // Why: the grant binds the canonical path so later reads cannot be redirected through a symlink.
+    const canonicalPath = await canonicalPathForArtifactComparison(args.absolutePath)
+    const { stats, contentDigest } = await statLocalTerminalArtifact(canonicalPath)
     const isDirectory = stats.isDirectory()
-    if (!isDirectory && isTerminalArtifactHardLinked(stats)) {
-      return {
-        worktree: args.worktreeId,
-        relativePath: null,
-        absolutePath: args.rejectedAbsolutePath ?? args.artifactPath,
-        exists: false,
-        isDirectory: false
-      }
-    }
     const grant = isDirectory
       ? null
       : this.grants.createTerminalFileGrant({
           worktreeId: args.worktreeId,
-          absolutePath: args.artifactPath,
+          absolutePath: canonicalPath,
           clientId: args.clientId,
-          readOnly: args.readOnly === true,
-          provenance: args.provenance ?? 'terminal-output',
           stats,
           contentDigest
         })
     return {
       worktree: args.worktreeId,
       relativePath: null,
-      absolutePath: args.artifactPath,
+      absolutePath: canonicalPath,
       exists: true,
       isDirectory,
       openTarget: grant
         ? {
             kind: 'absolute-file',
             provider: grant.provider,
-            absolutePath: args.artifactPath,
-            grantId: grant.id,
-            ...(grant.readOnly ? { readOnly: true } : {})
+            absolutePath: canonicalPath,
+            grantId: grant.id
           }
         : undefined
     }

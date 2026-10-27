@@ -4,10 +4,6 @@ import { extractOscScanTail, scanOsc7Uris } from './osc7-uri-extraction'
 
 const OSC_SCAN_TAIL_LIMIT = 4096
 
-/** Mirror of the OSC sequences the emulator tracks outside xterm: OSC 7 cwd
- *  updates and OSC 0/2 titles. Keeps an unterminated-sequence tail so
- *  sequences split across PTY chunks still parse. Uses the bounded regex-free
- *  scanners so giant pasted chunks stay cheap. */
 export type TerminalOscCwdTitleScannerOptions = {
   pathFlavor?: 'posix' | 'win32'
   remotePosixAuthority?: boolean
@@ -25,12 +21,7 @@ export class TerminalOscCwdTitleScanner {
   }
 
   scan(data: string): void {
-    // Why the pre-filter: this runs on the daemon's per-chunk hot path; flood
-    // chunks with no OSC introducer must not pay the title/URI walks
-    // (measured share of a 2.2x ingest regression — findings log 2026-07-03).
-    // Correctness across splits: an OSC intro spanning chunks either left a
-    // non-empty scanTail or this chunk ends with a bare ESC, which
-    // extractOscScanTail retains for the next call.
+    // Skip scans on plain output while retaining a trailing ESC for a split OSC introducer.
     if (this.scanTail.length === 0 && !data.includes('\x1b]')) {
       this.scanTail = data.endsWith('\x1b') ? extractOscScanTail(data, OSC_SCAN_TAIL_LIMIT) : ''
       return

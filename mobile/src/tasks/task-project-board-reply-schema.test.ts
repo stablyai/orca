@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  PROJECT_OWNER_TYPE,
   taskProjectAccessibleListSchema,
   taskProjectAssignableUserListSchema,
   taskProjectCommentMutationSchema,
@@ -14,11 +13,8 @@ import {
   taskProjectViewTableSchema
 } from './task-project-board-reply-schema'
 
-// Pins the decisions task-project-board-reply-schema.ts documents: the one closed enum, the one
-// open-vocabulary string beside it, the row drops, and the tri-state the detail pane forwards.
-
 describe('project envelopes', () => {
-  it('reads the recorded accessible-project list whole', () => {
+  it('reads the representative accessible-project list whole', () => {
     const parsed = taskProjectAccessibleListSchema.safeParse({
       ok: true,
       projects: [
@@ -61,9 +57,7 @@ describe('project envelopes', () => {
 
 describe('ownerType is a closed enum', () => {
   it('takes both arms the host validates', () => {
-    // The arm list is pinned to GitHubProjectOwnerType in the schema module, where tsc looks; this
-    // loop proves every pinned arm parses rather than dropping the row that carries it.
-    for (const ownerType of PROJECT_OWNER_TYPE) {
+    for (const ownerType of ['organization', 'user']) {
       const parsed = taskProjectRefSchema.safeParse({ ok: true, owner: 'o', ownerType, number: 3 })
       expect(parsed.success && parsed.data).toMatchObject({ ownerType })
     }
@@ -114,7 +108,7 @@ describe('layout stays an open vocabulary', () => {
 })
 
 describe('the board table', () => {
-  it('reads the recorded table, whose project carries only id/title/number', () => {
+  it('reads the representative table, whose project carries only id/title/number', () => {
     const parsed = taskProjectViewTableSchema.safeParse({
       ok: true,
       data: {
@@ -145,7 +139,7 @@ describe('the row detail pane preserves reviewDecision as a tri-state', () => {
     expect(parsed.success && parsed.data).toMatchObject({
       details: { item: { reviewDecision: null } }
     })
-    // JSON drops an absent key and keeps an explicit null, which is the whole distinction here.
+    // JSON distinguishes explicit null from an omitted key.
     expect(JSON.stringify(parsed)).toContain('"reviewDecision":null')
   })
 
@@ -188,7 +182,7 @@ describe('the guarded reads require nothing but the container', () => {
 })
 
 describe('the comment replies', () => {
-  it('keeps the recorded numeric comment id', () => {
+  it('keeps the representative numeric comment id', () => {
     const parsed = taskProjectCommentWriteSchema.safeParse({
       ok: true,
       comment: { id: 906, author: 'You', body: 'a project comment' }
@@ -215,10 +209,7 @@ describe('the comment replies', () => {
   })
 })
 
-// The five collections and the assignee list are typed by the item half's entity schemas now, so a
-// row the pane would have crashed on drops instead of reaching a consumer as the declared type.
-// No scenario reply carries any of them non-empty, so these pins are the only thing that observes
-// the change — the goldens cannot.
+// Exercise nonempty collections directly; recorded board replies are empty and cannot verify malformed-row salvage.
 describe('the detail collections are the shared entity rows', () => {
   const details = (value: Record<string, unknown>) =>
     taskProjectRowDetailSchema.safeParse({ ok: true, details: value })
@@ -263,7 +254,7 @@ describe('the detail collections are the shared entity rows', () => {
     expect(parsed.success && parsed.data).toMatchObject({ details: { files: [{ path: 'a.ts' }] } })
   })
 
-  it('keeps an empty collection, which is what every recorded detail reply carries', () => {
+  it('keeps an empty collection, which is what every representative detail reply carries', () => {
     const parsed = details({ comments: [], checks: [], files: [], item: { reviewRequests: [] } })
     expect(parsed.success).toBe(true)
   })

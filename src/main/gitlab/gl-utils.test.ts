@@ -268,8 +268,7 @@ describe('gitlab project ref resolution', () => {
     await expect(getProjectRef('/repo')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
 
-    // Nothing watches `.git/config`, and SSH/WSL repos have no file to watch, so
-    // a remote configured after the miss is only visible once the negative ages out.
+    // Negative expiry reveals newly configured remotes without requiring local config watchers.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:fork/orca.git\n' })
     vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
 
@@ -314,8 +313,7 @@ describe('gitlab project ref resolution', () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@github.com:team/orca.git\n' })
     glabExecFileAsyncMock.mockRejectedValue(new Error('not authenticated'))
 
-    // Expiring project-ref negatives must not turn the hosted-review poll into a
-    // `glab auth status` spawn per repo per interval — the answer is per host.
+    // Per-repo identity expiry must still share one negative auth probe per host.
     for (const repoPath of ['/repo-a', '/repo-b', '/repo-c']) {
       await expect(getProjectRef(repoPath)).resolves.toBeNull()
     }
@@ -332,7 +330,6 @@ describe('gitlab project ref resolution', () => {
 describe('GitLab operation admission', () => {
   afterEach(() => {
     vi.useRealTimers()
-    // Drain any slots held by the saturation test before the next test.
     for (let i = 0; i < 4; i += 1) {
       release()
     }
@@ -548,7 +545,7 @@ describe('parseGlabJsonList', () => {
     expect(() => parseGlabJsonList(payload)).toThrow(payload)
   })
 
-  // Why: glab allows a 10MB body, and the renderer's error banner has no length guard of its own.
+  // Bound opaque bodies before a proxy's multi-megabyte response reaches the error banner.
   it.each([
     ['an opaque body', `{"data":"${'x'.repeat(50_000)}"}`],
     ['an error envelope', `{"message":"${'x'.repeat(50_000)}"}`]
@@ -562,14 +559,12 @@ describe('parseGlabJsonList', () => {
     ['message', '{"message":"403 Forbidden"}', '403 Forbidden'],
     ['error', '{"error":"insufficient_scope"}', 'insufficient_scope'],
     ['error when message is blank', '{"message":"  ","error":"real_error"}', 'real_error'],
-    // Why: GitLab sends both on some endpoints; `message` is the human-facing one.
     [
       'message when both are set',
       '{"message":"404 Project Not Found","error":"insufficient_scope"}',
       '404 Project Not Found'
     ]
   ])('reports a GitLab error envelope by its %s field', (_label, payload, reported) => {
-    // Why: an envelope is GitLab's own diagnostic, so it stays classifiable — unlike a raw body.
     expect(() => parseGlabJsonList(payload)).toThrow(`GitLab returned an error: ${reported}`)
     expect(() => parseGlabJsonList(payload)).not.toThrow(GlabNonListResponseError)
   })
@@ -577,7 +572,7 @@ describe('parseGlabJsonList', () => {
 
 describe('classifyListFetchError', () => {
   it('keeps opaque payload text away from the classifier', () => {
-    // Why: the title would otherwise substring-match as a network failure and replace the payload.
+    // Content keywords must not turn opaque payloads into classified connectivity errors.
     const payload = '{"data":[{"title":"fix network timeout"}]}'
     let thrown: unknown
     try {
@@ -644,8 +639,7 @@ describe('parseGlabPaginationHeader', () => {
     expect(parseGlabPaginationHeader('abc', 0)).toBeUndefined()
   })
 
-  // Why: the minimum is what lets issues.ts tell "x-total: 0" (derive one page) apart from an
-  // absent header (probe for a next page), and what makes x-total-pages: 0 fall through.
+  // Distinguish total 0 from missing totals while rejecting total-pages 0.
   it('rejects values below the minimum', () => {
     expect(parseGlabPaginationHeader('0', 1)).toBeUndefined()
     expect(parseGlabPaginationHeader('0', 0)).toBe(0)
@@ -677,8 +671,7 @@ describe('glabHostEnvOptions', () => {
     expect(glabHostEnvOptions({ host: '' }, 'conn-1')).toEqual({})
   })
 
-  // Why: spawn env stops at the wsl.exe boundary, so Windows has to name the
-  // variable in WSLENV or glab in the distro never sees the host.
+  // GITLAB_HOST must cross wsl.exe through WSLENV.
   it('forwards GITLAB_HOST through WSLENV on Windows', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
 

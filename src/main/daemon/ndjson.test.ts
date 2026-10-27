@@ -26,7 +26,6 @@ describe('encodeNdjson', () => {
     expect(() => encodeNdjson({ data: 'abcd' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
   })
 
-  // Why: the cap is UTF-8 bytes, not characters — a code-unit count would let a 4-byte emoji slip past.
   it('measures multibyte payloads in UTF-8 bytes, not characters', () => {
     const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
     expect(encodeNdjson({ data: '🐙' }, emptyBytes + 4)).toBe('{"data":"🐙"}\n')
@@ -153,8 +152,7 @@ describe('createNdjsonParser', () => {
     const onMessage = vi.fn()
     const parser = createNdjsonParser(onMessage)
 
-    // JSON.stringify escapes newlines as \n (two chars), so the actual
-    // newline delimiter is still unambiguous.
+    // Escaped JSON newlines must not be mistaken for record delimiters.
     const msg = { data: 'line1\nline2' }
     parser.feed(`${JSON.stringify(msg)}\n`)
 
@@ -183,7 +181,7 @@ describe('createNdjsonParser', () => {
       { maxLineBytes: 32, shouldPause: () => paused }
     )
 
-    // The first record leaves a partial line in the paused remainder.
+    // Leave an unfinished paused record to verify the size cap on later input.
     framer.feed('{}\nx')
     framer.feed(`${'y'.repeat(70_000)}\n{"good":true}\n`)
 

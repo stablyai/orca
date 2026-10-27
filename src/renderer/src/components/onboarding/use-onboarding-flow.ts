@@ -68,12 +68,11 @@ export function useOnboardingFlow(
   )
   const { yoloPermissions, yoloPermissionsChosen, setYoloPermissionsInteractive } =
     useOnboardingYoloPermissions(settings)
-  // Why: hydrate theme from saved settings so users who already chose one see it preselected.
   const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [, setError] = useState<string | null>(null)
 
-  // Why: settings hydrate async after the lazy initializers run; re-sync once before commit unless the user edited the field.
+  // Settings arrive after lazy initialization; sync before commit unless the user already edited.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
   const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
@@ -95,19 +94,16 @@ export function useOnboardingFlow(
     }
   }
 
-  // Why: track interaction so async settings hydration doesn't overwrite a value the user chose.
   const setThemeInteractive = useCallback((value: GlobalSettings['theme']) => {
     themeInteractedRef.current = true
     setTheme(value)
   }, [])
-  // `fromCollapsedSection`: whether the picked agent lived under AgentStep's `<details>` disclosure — only that call site knows.
   const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(detectedAgentIds ?? [])
   const isDetectingRef = useRef<boolean>(isDetectingAgents)
   const selectedAgentRef = useRef(selectedAgent)
-  // Why: refs let the stable `setSelectedAgentInteractive` read the freshest hydration classification at click time.
+  // Stable selection handlers need current hydration evidence at click time.
   const pathSourceRef = useRef(pathSource)
   const pathFailureReasonRef = useRef(pathFailureReason)
-  // Why: keep these mirrors fresh so stable handlers read current values at click/async time.
   selectedAgentRef.current = selectedAgent
   detectedAgentIdsRef.current = detectedAgentIds ?? []
   isDetectingRef.current = isDetectingAgents
@@ -116,13 +112,13 @@ export function useOnboardingFlow(
   const setSelectedAgentInteractive = useCallback(
     (value: TuiAgent | null, fromCollapsedSection = false) => {
       agentInteractedRef.current = true
-      // Why: de-dup re-clicks on the current agent so telemetry counts mind-changes, not idle reselection.
+      // Count changed picks, excluding repeated clicks on the current agent.
       const prev = selectedAgentRef.current
       setSelectedAgent(value)
       if (value === null || value === prev) {
         return
       }
-      // Why: emit at click time (not step completion) to capture mind-changes; payload builder extracted for coverage — see agent-picked-payload.test.ts.
+      // Track picks at click time so telemetry captures changes before step completion.
       track(
         'onboarding_agent_picked',
         buildAgentPickedPayload({
@@ -140,7 +136,7 @@ export function useOnboardingFlow(
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
-  // Why: the stepper shows only steps the user will land on; skipped optional steps are dropped, not rendered as dead dots.
+  // Omit skipped steps so the stepper shows only reachable pages.
   const progressSteps = useMemo(
     () =>
       STEPS.map((step, index) => ({ step, index })).filter(
@@ -148,17 +144,16 @@ export function useOnboardingFlow(
       ),
     [skipOptions]
   )
-  // Why: while resuming, stepIndex can briefly point at a just-skipped step; resolve forward so the count reflects the landing step.
+  // Resolve skipped resume targets forward before calculating visible progress.
   const displayedStepIndex = resolveStepIndex(stepIndex, skipOptions, 'forward')
   const progressStepIndex = Math.max(
     0,
     progressSteps.findIndex(({ index }) => index === displayedStepIndex)
   )
-  // Why: pin start time once so onboarding_completed reports a real funnel duration.
   const [initialStartTime] = useState(() => Date.now())
   const startTimeRef = useRef<number>(initialStartTime)
 
-  // Why: ref so the unmount-only revert reads the freshest theme without retriggering on each settings change.
+  // Unmount-only restoration needs the latest persisted theme without rerunning on settings changes.
   const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   persistedThemeRef.current = settings?.theme ?? 'dark'
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
@@ -176,7 +171,6 @@ export function useOnboardingFlow(
     themeStepEntryThemeRef.current = settings.theme
   }, [currentStep.id, settings])
 
-  // Apply preview when local theme changes.
   useEffect(() => {
     applyDocumentTheme(theme)
   }, [theme])
@@ -240,7 +234,7 @@ export function useOnboardingFlow(
       return
     }
     didAutoSelectRef.current = true
-    // Why: re-read PATH on mount; the session cache can be poisoned by callers that ran before shell PATH hydration, giving a false "no agents" state.
+    // Refresh PATH on mount; pre-hydration session-cache entries can falsely report no agents.
     void refreshDetectedAgents().then((ids) => {
       if (selectedAgentRef.current !== null) {
         return

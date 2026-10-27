@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraSite } from '../../../src/shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../src/shared/jira/jira-types'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { lookupJiraIssueByUrl } from './jira-mobile-url-lookup'
 
@@ -50,8 +50,7 @@ describe('lookupJiraIssueByUrl', () => {
   it('never queries a site the pasted URL does not belong to', async () => {
     const sendRequest = vi.fn()
     const client = clientReturning(issue(), sendRequest)
-    // The user is connected to `other` only; a link to acme must not be answered
-    // with `other`'s same-keyed issue.
+    // Same issue keys can exist on multiple sites; never answer an acme link with another site’s issue.
     await expect(
       lookupJiraIssueByUrl(client, 'https://acme.atlassian.net/browse/ORCA-123', [other])
     ).resolves.toBeNull()

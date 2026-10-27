@@ -104,17 +104,12 @@ type SortableTabContextMenuProps = {
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
-  /** True when this tab is an agent terminal that can switch between the terminal
-   *  and native chat views; gates the "Switch view" menu item. Structured
-   *  sessions never qualify — they have no terminal underneath. */
+  /** Only terminal-backed agent tabs can switch view; structured chats have no terminal beneath them. */
   canToggleViewMode?: boolean
-  /** True when the tab is currently showing the native chat view (drives the
-   *  item's label/icon between "chat" and "terminal"). */
+  /** Select the destination label/icon from the tab’s current chat/terminal view. */
   isChatView?: boolean
-  /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
   canSplitTerminal?: boolean
-  /** Set only for a native chat tab. */
   nativeChat?: NativeChatTabSession
 }
 
@@ -149,8 +144,7 @@ export function SortableTabContextMenu({
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
-  // Why: switching a tab into chat view is hidden while that toggle is removed; a tab already in
-  // chat view keeps its way back.
+  // Keep the route back from chat even while switching terminals into chat is disabled.
   const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
 
   return (

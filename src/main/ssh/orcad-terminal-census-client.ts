@@ -1,7 +1,4 @@
-/**
- * Asks a managed orcad, through its tunnel, how many terminals its daemon runs. Every failure,
- * including an older host without the method, reads as an unverifiable census, never as zero.
- */
+/** Unknown failures, including older hosts without census support, stay unverifiable and never mean zero live terminals. */
 import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
@@ -15,7 +12,7 @@ import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../shared/orcad-terminal-census'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime/remote-runtime-client'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { ensureOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../managed-server/lifecycle/orcad-managed-serving-verify'
@@ -26,10 +23,7 @@ export type OrcadTerminalCensusRequestOptions = {
   closeAdmissionForMs?: number
 }
 
-/**
- * The census through the server's ensured tunnel, after starting a server that idled out; a
- * tunnel that cannot open, or a server that cannot start, is unverifiable.
- */
+/** Wake idle servers behind ensured tunnels; failed wake/tunnel stays unverifiable. */
 export async function collectManagedTerminalCensus(
   userDataPath: string,
   environment: KnownRuntimeEnvironment,
@@ -45,10 +39,9 @@ export async function collectManagedTerminalCensus(
     return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
   }
   try {
-    // Why its answer, not `environment`: the tunnel may have re-paired, retiring that token.
+    // Use the tunnel's returned pairing; re-pairing may have retired the caller's token.
     const current = await ensureOrcadManagedTunnel(userDataPath, environment.id)
-    // A server that idled out behind a forward still up is started first, or it never answers.
-    // Not for a reopen: a server that stopped has no admission left to reopen.
+    // Wake before census, except for reopen: a stopped server has no admission to release.
     if (options.closeAdmissionForMs !== 0) {
       await verifyOrcadManagedServing(userDataPath, environment.id)
     }
@@ -63,7 +56,6 @@ export async function collectManagedTerminalCensus(
   }
 }
 
-/** The census over an already-open connection; any failure is unverifiable, never zero. */
 export async function requestOrcadTerminalCensus(
   connection: PairedRuntimeConnection,
   activatedAt: number,
@@ -79,7 +71,7 @@ export async function requestOrcadTerminalCensus(
         ...(options.releaseFinishedAutomationTerminals
           ? { releaseFinishedAutomationTerminals: true }
           : {}),
-        // Safe for any server: an older one drops the field, and its answer omits the fence.
+        // Older servers safely omit both unsupported admission request and reply fields.
         ...(options.closeAdmissionForMs === undefined
           ? {}
           : { closeAdmissionForMs: options.closeAdmissionForMs })

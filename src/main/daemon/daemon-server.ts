@@ -144,7 +144,7 @@ export class DaemonServer {
       onLastAuthenticatedClientDisconnected: () =>
         this.lifecycle.onLastAuthenticatedClientDisconnected(),
       onControlRequest: (socket, clientId, request) => {
-        // Why: a rejection here would be unhandled, and the daemon treats that as fatal.
+        // Unhandled request rejections are fatal to the daemon.
         this.handleRequest(socket, clientId, request).catch((error: unknown) => {
           this.log.log('client-request-failed', {
             error: error instanceof Error ? error.message : String(error)
@@ -245,7 +245,7 @@ export class DaemonServer {
 
   async start(): Promise<void> {
     await this.lifecycle.start((socket) => this.connections.accept(socket))
-    // Why after start: only the daemon that won the endpoint may judge or rewrite the marker.
+    // Only the endpoint winner may inspect or rewrite the automatic-work marker.
     this.automaticWork.start()
   }
 
@@ -277,7 +277,7 @@ export class DaemonServer {
     }
     this.streamDataBatcher.clear()
     this.historySeedTransfers.dispose()
-    // Why after host dispose: every automatic session is gone, so this exit was orderly.
+    // Clearing earlier could make a crash during PTY teardown look like orderly shutdown.
     this.automaticWork.stop()
     // Let canceled in-flight RPCs enqueue their protocol errors before transport destruction.
     await waitForImmediate()

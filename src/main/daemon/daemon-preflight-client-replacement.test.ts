@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { DaemonServer } from './daemon-server'
+import { getDaemonSocketPath } from './daemon-spawner'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION } from './types'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -73,7 +74,7 @@ describe('daemon preflight client replacement', () => {
     })
     const preparePtySpawn = vi.fn(() => preparation)
     const spawnSubprocess = vi.fn(() => createMockSubprocess())
-    const socketPath = join(dir, 'daemon.sock')
+    const socketPath = getDaemonSocketPath(dir)
     const tokenPath = join(dir, 'daemon.token')
     server = new DaemonServer({ socketPath, tokenPath, preparePtySpawn, spawnSubprocess })
     await server.start()
@@ -90,7 +91,7 @@ describe('daemon preflight client replacement', () => {
         rows: 24
       })
       .catch(() => {
-        /* replacement disconnects the original request */
+        /* Replacement disconnects this pending request. */
       })
     await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
 
@@ -112,7 +113,7 @@ describe('daemon preflight client replacement', () => {
     })
     const preparePtySpawn = vi.fn(() => preparation)
     const spawnSubprocess = vi.fn(() => createMockSubprocess())
-    const socketPath = join(dir, 'daemon.sock')
+    const socketPath = getDaemonSocketPath(dir)
     const tokenPath = join(dir, 'daemon.token')
     server = new DaemonServer({ socketPath, tokenPath, preparePtySpawn, spawnSubprocess })
     await server.start()

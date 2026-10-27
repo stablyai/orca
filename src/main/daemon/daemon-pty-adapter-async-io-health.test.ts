@@ -2,6 +2,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { DaemonClient } from './client'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 
+const { observeMock } = vi.hoisted(() => ({ observeMock: vi.fn() }))
+vi.mock('./daemon-async-io-telemetry-event', () => ({ observeDaemonAsyncIoHealth: observeMock }))
+
 afterEach(() => vi.restoreAllMocks())
 
 it.each([
@@ -42,4 +45,17 @@ it('never reconnects or restarts a daemon to read health', async () => {
   expect(await adapter.getAsyncIoHealth()).toEqual({ state: 'unverifiable' })
   expect(request).not.toHaveBeenCalled()
   expect(connect).not.toHaveBeenCalled()
+})
+
+it('reports health for the same incarnation even though identity reads return copies', async () => {
+  const identity = { pid: 7, startedAtMs: 1, launchNonce: 'n' }
+  vi.spyOn(DaemonClient.prototype, 'isConnected').mockReturnValue(true)
+  vi.spyOn(DaemonClient.prototype, 'getDaemonIdentity').mockImplementation(() => ({ ...identity }))
+  vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+    state: 'stalled',
+    pendingMs: 5000
+  })
+  const adapter = new DaemonPtyAdapter({ socketPath: '/unused', tokenPath: '/unused' })
+  await adapter.getAsyncIoHealth()
+  expect(observeMock).toHaveBeenCalledOnce()
 })

@@ -24,8 +24,7 @@ export function parseWorkspaceKey(value: string): WorkspaceScope | null {
   return null
 }
 
-/** Bare workspace id behind a session key, which may be a WorkspaceKey, a host-qualified identity
- *  (`ssh:target|repo::path`, used by visit recency), or already a bare id. */
+/** Strip WorkspaceKey or host-qualified visit-recency scope (ssh:target|repo::path); retain already-bare workspace IDs. */
 export function normalizeWorkspaceSessionKeyToWorkspaceId(value: string): string {
   if (isWorktreeHostIdentity(value)) {
     return getWorktreeIdFromHostIdentity(value)
@@ -38,8 +37,7 @@ export function isWorkspaceKey(value: string): value is WorkspaceKey {
   return parseWorkspaceKey(value) !== null
 }
 
-// Why: folder workspaces are tracked by the scoped active key, while older
-// worktree-only paths still read activeWorktreeId.
+// Folder workspaces use the scoped active key; older worktree paths still use activeWorktreeId.
 export function getActiveSidebarWorkspaceId(
   activeWorkspaceKey: string | null,
   activeWorktreeId: string | null

@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getOpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 import { prepareOpenCodePtyLaunch } from './opencode-pty-launch'
+import { resetOpenCodeSharedServiceClaimForTests } from './opencode-private-server'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
   OPENCODE_STARTUP_PROMPT_BODY_ENV,
@@ -52,16 +56,85 @@ vi.mock('./opencode-startup-prompt-installer', () => ({
   installOpenCodeStartupPromptForLaunch: install
 }))
 vi.mock('./opencode-launch-capabilities', () => ({ probeOpenCodeLaunchCapabilities: probe }))
+const managedAccounts = vi.hoisted(() => {
+  const state: { active: Record<string, string>; all: Record<string, string>[] } = {
+    active: {},
+    all: []
+  }
+  return state
+})
+vi.mock('../managed-data-accounts/service', () => ({
+  getManagedDataAccountService: () => ({
+    launchEnvironment: () => managedAccounts.active,
+    environmentForAccount: () => managedAccounts.active,
+    transcriptEnvironments: () => managedAccounts.all,
+    restoreOriginalEnvironment: () => {}
+  })
+}))
 
 beforeEach(() => {
   probe.mockReset()
   reserve.mockReset().mockReturnValue(true)
   install.mockReset()
   hookServer.endpointFilePath = '/private/endpoint.env'
+  managedAccounts.active = {}
+  managedAccounts.all = []
+  resetOpenCodeSharedServiceClaimForTests()
 })
 afterEach(() => vi.unstubAllEnvs())
 
 describe('execution-host OpenCode launch preparation', () => {
+  it('gives OpenCode 2 a private server only while another data dir holds the one-port service', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-opencode-service-'))
+    try {
+      const [user, a, b] = ['user', 'a', 'b'].map((name) => join(root, name))
+      const register = (home: string) => {
+        mkdirSync(join(home, 'opencode'), { recursive: true })
+        writeFileSync(join(home, 'opencode', 'service.json'), JSON.stringify({ pid: process.pid }))
+      }
+      const launch = async (
+        version: string,
+        command: string,
+        env: Record<string, string> = { XDG_STATE_HOME: user }
+      ) => {
+        probe.mockResolvedValue(getOpenCodeCliCapabilities(version))
+        const options = { env, envToDelete: [], isFreshLaunch: true, shell: 'posix' as const }
+        return (await prepareOpenCodePtyLaunch({ ...options, command })).command
+      }
+      managedAccounts.all = [{ XDG_STATE_HOME: a }, { XDG_STATE_HOME: b }]
+      // Commands the rewrite cannot apply to never claim the port.
+      managedAccounts.active = { XDG_STATE_HOME: b }
+      expect(await launch('2.0.16', 'opencode session list')).toBe('opencode session list')
+      managedAccounts.active = { XDG_STATE_HOME: a }
+      expect(await launch('2.0.16', 'opencode')).toBe('opencode')
+      // A's service is still starting and has not registered yet.
+      managedAccounts.active = { XDG_STATE_HOME: b }
+      expect(await launch('2.0.16', 'opencode')).toBe('opencode --standalone')
+      register(a)
+      expect(await launch('2.0.16', 'opencode --session ses_1')).toBe(
+        'opencode --standalone --session ses_1'
+      )
+      expect(await launch('2.0.16', "opencode run 'task'")).toBe("opencode run --standalone 'task'")
+      expect(await launch('1.18.32', 'opencode')).toBe('opencode')
+      managedAccounts.active = { XDG_STATE_HOME: a }
+      expect(await launch('2.0.16', 'opencode')).toBe('opencode')
+      // Daemon spawns arrive with the resumed account already applied and the request consumed.
+      const resumedB = {
+        XDG_STATE_HOME: b,
+        ORCA_DATA_ACCOUNT_PROVIDER: 'opencode',
+        ORCA_DATA_ACCOUNT_STATE_HOME: b
+      }
+      expect(await launch('2.0.16', 'opencode --session ses_b', resumedB)).toBe(
+        'opencode --standalone --session ses_b'
+      )
+      managedAccounts.active = {}
+      expect(await launch('2.0.16', 'opencode')).toBe('opencode --standalone')
+      register(user)
+      expect(await launch('2.0.16', 'opencode')).toBe('opencode')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
   it('retains fresh owned source provenance through the final provider deletion pass', async () => {
     probe.mockResolvedValue(getOpenCodeCliCapabilities('2.0.16'))
     install.mockImplementation((env) => {

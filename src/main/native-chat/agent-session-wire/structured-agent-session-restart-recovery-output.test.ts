@@ -43,7 +43,6 @@ beforeEach(async () => {
     throw new Error('ACP agent definition absent')
   }
   const definition = acpStructuredAgentDefinition(spec)
-  // The rig adapter has no compact; this recovery never compacts.
   rig.host.deps.agents = new StructuredAgentRegistry([
     {
       definition: { ...definition, capabilities: { ...definition.capabilities, compact: false } },
@@ -73,7 +72,6 @@ afterEach(async () => {
   closeTestJournalHostDatabases()
 })
 
-/** Drops the old host without an exit callback or graceful turn settlement. */
 async function restartAfterCrash(): Promise<void> {
   const old = rig.host
   old.stopDelivery()

@@ -35,7 +35,8 @@ function stateForHost(hostId: string) {
     activeWorktreeId: 'worktree-1',
     folderWorkspaces: [],
     projectGroups: [],
-    projects: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [
       {
         id: 'repo-1',
@@ -117,6 +118,24 @@ describe('useNativeChatSkills', () => {
       { cwd: '/repo/worktree', worktreeId: 'worktree-1' },
       { timeoutMs: 10_000 }
     )
+  })
+
+  it('reads no tab maps while the picker is closed', () => {
+    let tabMapReads = 0
+    const base = stateForHost('local')
+    mocks.state = Object.defineProperties(
+      { ...base },
+      {
+        tabsByWorktree: { get: () => (tabMapReads++, base.tabsByWorktree) },
+        unifiedTabsByWorktree: { get: () => (tabMapReads++, base.unifiedTabsByWorktree) }
+      }
+    )
+    const view = render(<Probe enabled={false} />)
+    view.rerender(<Probe enabled={false} />)
+
+    // Every mounted chat holds this hook; tab changes must not reach closed pickers.
+    expect(tabMapReads).toBe(0)
+    expect(mocks.snapshots.at(-1)?.status).toBe('idle')
   })
 
   it('resolves the catalog for a structured session tab', async () => {
@@ -244,8 +263,7 @@ describe('useNativeChatSkills', () => {
     })
     await waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2))
 
-    // Why: Retry is the user saying "I changed something" — without `refresh` it
-    // would be answered from the scan it is trying to get past.
+    // Explicit Retry must bypass the scan cache the user is trying to refresh.
     expect(mocks.callRuntimeRpc).toHaveBeenLastCalledWith(
       { kind: 'local' },
       'skills.discover',

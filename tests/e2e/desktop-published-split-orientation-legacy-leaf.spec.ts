@@ -22,25 +22,15 @@ import {
   waitForPaneCount
 } from './helpers/terminal'
 
-/**
- * A desktop app republishes an unmounted terminal tab's layout from its own saved tree, and
- * derives the leaf set from that tree's stable-id leaves. A leaf id that predates the stable-id
- * scheme drops out of the leaf set but stays in the tree, so the tree stopped covering the leaf
- * set exactly — and the publisher used to answer that by discarding the tree and chaining every
- * leaf with a guessed "horizontal", restacking a side-by-side split for every paired client and
- * for the record they all write back. The real direction has to survive the mismatch.
- */
+// Legacy leaves remain in saved trees but leave the stable-id leaf set; publication must preserve split direction despite that mismatch.
 
 /** Legacy pane id shape: not a stable pane UUID, so it never reaches the published leaf set. */
 const LEGACY_LEAF_ID = 'pane:9'
 
-/** Shrinks both the cold-park delay and the hot-retain window. */
 const PARK_DELAY_MS = 2_000
 const PARK_DELAY_ENV = { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS) }
 
-// Why a fixture option and not `process.env`: a Playwright worker runs many spec files in one
-// process, so a module-scope env write outlives this file and shrinks parking for every spec
-// that follows it in the same worker.
+// Scope parking overrides to this fixture; module-level process.env would leak into later specs in the same worker.
 test.use({ orcaAppExtraEnv: PARK_DELAY_ENV })
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null | undefined): string[] {
@@ -117,7 +107,6 @@ test('publishes an unmounted split with its real orientation when a legacy leaf 
       throw new Error('Headed host has no active terminal tab')
     }
 
-    // Split right: two panes side by side, the orientation the report is about.
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2, 60_000)
     const panes = await readPaneIdentitySnapshot(orcaPage)
@@ -139,7 +128,7 @@ test('publishes an unmounted split with its real orientation when a legacy leaf 
       )
       .toBe('vertical')
 
-    // Park the tab: a parked tab is republished from the saved tree, not the live DOM.
+    // Park to exercise publication from the saved tree rather than live DOM.
     await parkHiddenTabBehindDecoy(orcaPage, worktreeId, hostTabId, {
       parkDelayMs: PARK_DELAY_MS
     })
@@ -169,15 +158,13 @@ test('publishes an unmounted split with its real orientation when a legacy leaf 
       },
       { tabId: hostTabId, firstLeafId, secondLeafId, legacyLeafId: LEGACY_LEAF_ID }
     )
-    // Control: with no lingering leaf the saved tree covers the leaf set and the publisher
-    // never reaches the fallback at all, so the assertions below pass for free.
+    // Require a lingering leaf or the publisher never reaches the mismatch fallback.
     expect(collectLeafIds((await readSavedLayout(orcaPage, hostTabId))?.root)).toContain(
       LEGACY_LEAF_ID
     )
 
     const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-    // The observer inherited the same override back when it came from `process.env`; keep it so
-    // scoping the write to this file does not also change what the client does.
+    // Give the observer the same parking override to preserve its original lifecycle behavior.
     client = await launchPairedElectronClient(offer, testInfo, 'legacy-leaf-orientation-observer', {
       extraEnv: PARK_DELAY_ENV
     })
@@ -197,8 +184,7 @@ test('publishes an unmounted split with its real orientation when a legacy leaf 
       )
       .toEqual(expect.arrayContaining([firstLeafId, secondLeafId].sort()))
     const published = await readPublishedTerminalSurfaces(client, worktreeId, hostTabId)
-    // Control: the leaf set really does exclude the leaf the saved tree still carries, so the
-    // publisher reached the mismatch path instead of using the tree verbatim.
+    // Require the published leaf set to omit the saved legacy leaf, proving the mismatch path ran.
     expect(published.map((surface) => surface.leafId)).not.toContain(LEGACY_LEAF_ID)
     const publishedRoot = published.find((surface) => surface.parentLayout)?.parentLayout?.root
     expect(splitDirectionSeparating(publishedRoot, firstLeafId, secondLeafId)).toBe('vertical')

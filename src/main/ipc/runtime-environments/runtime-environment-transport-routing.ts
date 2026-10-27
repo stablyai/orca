@@ -11,7 +11,7 @@ import type {
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
-} from '../../../shared/remote-runtime-client'
+} from '../../../shared/remote-runtime/remote-runtime-client'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
@@ -59,11 +59,7 @@ export async function callRuntimeEnvironment(
     )
   }
   const environment = resolveEnvironment(userDataPath, selector)
-  // Why: connection failures reject (they don't resolve as ok:false), so the
-  // Tailscale hint is applied to the thrown error here — wrapping the resolved
-  // value would miss the in-use connect/timeout case the toast surfaces.
-  // Track the endpoint the queued closure actually used: it re-resolves the
-  // environment, so a re-pair between enqueue and dispatch can change it.
+  // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {
     return await enqueueRuntimeCall(
@@ -125,8 +121,7 @@ export async function callRuntimeEnvironment(
             signal: options?.signal
           })
         }
-        // Why: startup/control-plane RPCs use the proven one-shot path so repo
-        // hydration cannot be coupled to a stale terminal-control connection.
+        // One-shot startup/control RPCs keep repo hydration independent of stale terminal-control sockets.
         const response = await sendRemoteRuntimeRequestAbortable(
           pairedConnection,
           method,
@@ -203,8 +198,7 @@ export async function subscribeRuntimeEnvironment(
       callbacks.onClose()
     }
   }
-  // Why: an initial-connect failure rejects (mid-stream drops go through
-  // onError above), so the hint is applied to the thrown error here too.
+  // Initial connection failures reject; midstream errors use onError above.
   try {
     if (shouldRouteSubscriptionBySupport(method)) {
       return await subscribeSupportRoutedRuntimeEnvironment({

@@ -1,4 +1,5 @@
 import { Platform } from 'react-native'
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { useClipboardWriter } from '../platform/clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
@@ -13,10 +14,7 @@ import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
 import { getMobileNativeChatCliForkActions } from './mobile-native-chat-cli-fork'
-import {
-  getRepoIdFromMobileWorktreeId,
-  isTerminalPhoneDisplayMode
-} from './mobile-session-route-helpers'
+import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
@@ -72,6 +70,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     readFileTab,
     leaveSession,
     discardMarkdownLocalContent,
+    copyMarkdownPath,
     confirmDiscardMarkdown,
     handleDeleteCustomKey,
     handleManageShortcuts,
@@ -85,6 +84,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     handleCloseTerminal,
     handleCloseSessionTab,
     bulkCloseActions,
+    bulkCloseConfirm,
     closeWithBulkActions,
     createTabAgentActions,
     sendDiffNotesAgentActions,
@@ -112,7 +112,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         repoId={
           isFolderWorkspaceRoute || isFloatingWorkspaceRoute
             ? null
-            : getRepoIdFromMobileWorktreeId(worktreeId) || null
+            : getRepoIdFromWorktreeId(worktreeId) || null
         }
         repoName={worktreeName || null}
         agentPromptMaxLength={quickCommandAgentPromptMaxLength}
@@ -239,13 +239,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               const target = markdownActionTarget
               setMarkdownActionTarget(null)
               if (target) {
-                void clipboard
-                  .writeText(target.relativePath || target.filePath)
-                  .then(() => showToast('Path copied'))
-                  .catch(() => {
-                    triggerError()
-                    showToast("Couldn't copy path", 1500)
-                  })
+                void copyMarkdownPath(target)
               }
             }
           },
@@ -338,6 +332,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onConfirm={confirmDiscardMarkdown}
         onCancel={() => setDiscardMarkdownTarget(null)}
       />
+      <ConfirmModal {...bulkCloseConfirm} />
       <TextInputModal
         visible={renameTarget != null}
         title="Rename Terminal"

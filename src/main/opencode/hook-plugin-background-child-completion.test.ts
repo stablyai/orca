@@ -1,8 +1,3 @@
-/**
- * Executes the generated OpenCode plugin artifact to verify that a running
- * background child session keeps the pane working, so a root turn that ends
- * first cannot publish a false completion for the whole task tree.
- */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

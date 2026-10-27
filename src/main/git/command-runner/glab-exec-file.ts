@@ -13,7 +13,6 @@ import {
   GH_RETRY_DELAYS_MS
 } from './gh-retry-policy'
 
-// Why: cloned from the gh runner rather than abstracted behind a generic runner, to avoid touching the working gh path.
 const DEFAULT_GLAB_EXEC_TIMEOUT_MS = 30_000
 
 export type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
@@ -23,11 +22,7 @@ export type GlabExecOptions = Omit<GitExecOptions, 'cwd'> & {
   allowDefaultWslFallback?: boolean
 }
 
-/** Async glab CLI execution; drop-in for execFileAsync('glab', …). Retry policy mirrors ghExecFileAsync. */
-/**
- * glab's `--hostname` rejects host:port, so a ported self-hosted GitLab must use the GITLAB_HOST env var instead — translate it.
- * @internal exported for tests.
- */
+/** glab rejects --hostname host:port; use GITLAB_HOST for ported self-hosted instances. */
 export function redirectPortedHostnameToEnv(
   args: string[],
   options: GlabExecOptions
@@ -40,13 +35,9 @@ export function redirectPortedHostnameToEnv(
   if (!/^[^/\s]+:\d+$/.test(host)) {
     return { args, options }
   }
-  // Why WSLENV: a glab routed into a distro only sees Windows-side variables
-  // named in WSLENV, so without this the ported host silently never crosses and
-  // glab talks to gitlab.com instead (#12557). Credit: #12558.
+  // Forward GITLAB_HOST through WSLENV so distro calls cannot silently target gitlab.com.
   const env: NodeJS.ProcessEnv = { ...(options.env ?? process.env), GITLAB_HOST: host }
-  // Unguarded by platform on purpose: WSLENV is meaningless outside Windows, so
-  // the extra key is inert there, and gating it would need the test to know the
-  // platform for no behavioural gain.
+  // WSLENV is inert outside Windows.
   addWslEnvKeys(env, ['GITLAB_HOST'])
   return {
     args: [...args.slice(0, i), ...args.slice(i + 2)],
@@ -65,8 +56,7 @@ export async function glabExecFileAsync(
   let attemptedDefaultWslFallback = false
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
-      // Why to-termination: same shim chain as gh — the deadline has to reap the
-      // whole tree, not just the wrapper that spawned it (#18234).
+      // Kill the whole shim tree so descendants cannot outlive the deadline.
       const { stdout, stderr } = await execFileCaptureToTermination(
         resolved.binary,
         resolved.args,
@@ -96,7 +86,6 @@ export async function glabExecFileAsync(
       ) {
         const wslResolved = resolveDefaultWslCli('glab', args)
         if (wslResolved) {
-          // Why: mirror gh's WSL-only fallback for global GitLab project/auth calls.
           resolved = wslResolved
           attemptedDefaultWslFallback = true
           attempt = -1
@@ -104,7 +93,7 @@ export async function glabExecFileAsync(
         }
       }
       const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
-      // Why: mirror gh's write-safety gate — don't auto-retry a non-idempotent write that GitLab may already have applied.
+      // Never retry a write that GitLab may already have applied.
       const idempotent = options.idempotent ?? argsLookIdempotent(args)
       if (idempotent && !isLastAttempt && isTransientGhError(stderr)) {
         const retryAfterMs = parseRetryAfterMs(stderr)

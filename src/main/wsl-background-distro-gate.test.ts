@@ -53,8 +53,52 @@ describe('isWslDistroRunning', () => {
 
     probe = () => Promise.reject(new Error('wsl.exe wedged'))
     await expect(isWslDistroRunning('Ubuntu')).resolves.toBe(false)
-    // Inside the backoff window the cache still holds Ubuntu; the gate must not trust it.
     await expect(isWslDistroRunning('Ubuntu')).resolves.toBe(false)
+  })
+})
+
+describe('resolveRunningWslDistros startedAfter', () => {
+  it('answers from a confirmed read that started after the anchor, and reads again for a later one', async () => {
+    const probe = vi.fn(async () => ['Ubuntu'])
+    const anchor = performance.now()
+    await resolveRunningWslDistros(probe)
+    await expect(resolveRunningWslDistros(probe, { startedAfter: anchor })).resolves.toEqual([
+      'Ubuntu'
+    ])
+    expect(probe).toHaveBeenCalledTimes(1)
+    await resolveRunningWslDistros(probe, { startedAfter: performance.now() })
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
+  it('never answers an anchored caller from a failed read', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const anchor = performance.now()
+    await resolveRunningWslDistros(() => Promise.reject(new Error('wsl.exe wedged')))
+    await expect(
+      resolveRunningWslDistros(async () => ['Ubuntu'], {
+        startedAfter: anchor,
+        requireConfirmed: true
+      })
+    ).rejects.toThrow()
+  })
+})
+
+describe('deferUntilWslDistroRunning cancel', () => {
+  it('drops the task it registered, but not a newer one under the same key', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const cancelFirst = deferUntilWslDistroRunning('Ubuntu', 'k', first)
+    const cancelSecond = deferUntilWslDistroRunning('Ubuntu', 'k', second)
+    cancelFirst()
+    noteWslDistrosRunning(['Ubuntu'])
+    expect(second).toHaveBeenCalledTimes(1)
+    const third = vi.fn()
+    deferUntilWslDistroRunning('Ubuntu', 'k', third)
+    cancelSecond()
+    cancelFirst()
+    noteWslDistrosRunning(['Ubuntu'])
+    expect(third).toHaveBeenCalledTimes(1)
+    expect(first).not.toHaveBeenCalled()
   })
 })
 

@@ -2,22 +2,9 @@ import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
 import { isTransientGitProbeError, readRemoteUrl } from './remote-url-probe'
 import type { GitAdmissionTier } from './command-runner/git-exec-options'
 
-/**
- * The "is this repo mine?" probe every forge integration runs: read the remote's
- * URL once per repo/runtime, cache what the provider's parser made of it, and
- * never cache an answer a failed probe never gave.
- */
-
 const REPO_REF_CACHE_MAX_ENTRIES = 512
 
-/**
- * Why: "not this provider" only holds until someone edits the repo's remotes —
- * and a repo first probed before it had any remote answers that way too.
- * Nothing here watches `.git/config`, and a watcher cannot cover the SSH and WSL
- * runtimes this cache also serves, so negatives expire instead: one probe per
- * repo per interval is what lets a remote added mid-session be picked up without
- * a restart. Positives stay, as they did before.
- */
+// Expire negatives so newly added remotes appear without restart, including on SSH/WSL without config watchers.
 export const NEGATIVE_ENTRY_TTL_MS = 5 * 60_000
 
 type CachedRepoRef<Ref> = { value: Ref | null; expiresAt: number }
@@ -66,9 +53,7 @@ export function createRemoteRefProbeCache<Ref>(
     connectionId: string | null | undefined,
     localGitOptions: RemoteRefLocalGitOptions
   ): Promise<Ref | null> {
-    // Why: a probe abandoned as stale still runs, and its answer describes a repo
-    // state older than whatever the successor is about to store — or already has.
-    // It may still answer its own callers; it may not publish.
+    // Stale probes may answer their own callers, but cannot publish over a successor.
     const publish = (value: Ref | null): void => {
       if (ownsKey()) {
         remember(cacheKey, value)
@@ -84,7 +69,7 @@ export function createRemoteRefProbeCache<Ref>(
         },
         remoteName
       )
-      // Why: null is an SSH repo this process cannot read, not an answer about the remote.
+      // null means an SSH repo unavailable to this local reader, not a missing remote.
       if (stdout === null) {
         return null
       }
@@ -92,7 +77,7 @@ export function createRemoteRefProbeCache<Ref>(
       publish(result)
       return result
     } catch (error) {
-      // Why: a probe killed on its deadline says nothing about the remote.
+      // Transient probe failure cannot establish a negative cache entry.
       if (isTransientGitProbeError(error)) {
         return null
       }
@@ -112,9 +97,7 @@ export function createRemoteRefProbeCache<Ref>(
         }
         repoRefCache.delete(cacheKey)
       }
-      // Why: every branch of a repo resolves its forge through this probe, so a
-      // poll of the worktree list arrives as a burst of identical lookups. One
-      // young probe answers all of them instead of spawning a `git` per branch.
+      // Coalesce worktree-list bursts so each branch does not spawn the same probe.
       return runCoalescedProbe(inFlight, cacheKey, (ownsKey) =>
         probe(cacheKey, ownsKey, repoPath, remoteName, connectionId, localGitOptions)
       )

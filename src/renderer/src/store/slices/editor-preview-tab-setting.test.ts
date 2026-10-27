@@ -6,7 +6,6 @@ import { createGlobalSettingsFixture } from '../../../../shared/global-settings-
 import { getReplaceablePreviewFileId } from './editor/tabs/workspace-editor-item'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

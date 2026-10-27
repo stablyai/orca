@@ -1,10 +1,4 @@
-// What a refusal says beyond its code: one reason list and one set of facts per code.
-//
-// A code alone cannot say what to do: `agent_session_operation_invalid` covers a cleared
-// conversation (open the current one) and a busy command (wait). Each reason here is one situation
-// with its own honest words and next step; a reason two codes share is listed under each. There is
-// no catch-all: a site that cannot name its situation sends the code with no reason, the same as an
-// older host, and the reader falls back to what it does for the code.
+// Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
 import type { AgentSessionAccountKind } from './agent-session-availability'
 import type { AgentJournalResolution } from './agent-session-journal-types'
@@ -91,6 +85,11 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'agentCommandNotRunnable',
     /** The runtime Orca installs for the agent is not installed on this host. */
     'runtimeNotInstalled',
+    /** The agent refuses Full access while it runs as root. */
+    'fullAccessAsRoot',
+    /** A terminal may still be writing the chat's conversation, so its agent did not start. */
+    'conversationOpenInTerminal',
+    'conversationOpenElsewhere',
     /** The agent started, then Orca could not open the chat's conversation for it. */
     'attachFailed'
   ],
@@ -107,8 +106,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'notResumable',
     'noProviderChild',
     'conversationHeldElsewhere',
-    /** The close a stop began could not prove its child gone: that child takes no input and none
-     *  starts beside it. Sent with `ownerVerdict: 'unverifiable'`. */
+    /** A stop's close cannot prove child exit; it takes no input and no replacement starts beside it. Sent with ownerVerdict: unverifiable. */
     'previousExitUnverifiable'
   ],
   agent_session_conflict: [
@@ -206,8 +204,7 @@ type AgentSessionRefusalFactsByCode = {
   agent_session_owner_restart_failed: NoFacts
 }
 
-/** A durably failed create says whether anything still runs for it, whichever code it failed
- *  with: `exited` proves nothing does, so a new operation cannot collide with this one. */
+/** exited proves no process still runs for a failed create, regardless of refusal code, so a fresh operation cannot collide. */
 type AgentSessionRefusalCommonFacts = { ownerVerdict?: AgentSessionOwnerVerdict }
 
 export type AgentSessionRefusalFacts<C extends AgentSessionWireRefusalCode> =
@@ -220,8 +217,7 @@ export type AgentSessionRefusalDetailsByCode = {
   } & AgentSessionRefusalFacts<C>
 }
 
-/** Details as the wire and a durable record carry them. The reason is absent where the host could
- *  not name the situation; the whole object is absent from older hosts. */
+/** Persist/wire listed details; omit reason when unclassified. Older hosts omit the whole object. */
 export type AgentSessionRefusalDetails<C extends AgentSessionWireRefusalCode> = {
   reason?: AgentSessionRefusalReason<C>
 } & AgentSessionRefusalFacts<C>
@@ -291,11 +287,7 @@ export function isAgentSessionRefusalReason<C extends AgentSessionWireRefusalCod
   return typeof value === 'string' && reasons.includes(value)
 }
 
-/**
- * Details as a reader meets them: from the wire, a ledger row or a stored failure, possibly
- * written by another build. Keeps only a reason and facts this code lists, so a reason a newer
- * host added reads as none; undefined when nothing is left.
- */
+/** Read only reasons/facts listed for the code from wire/ledger/stored failures; newer reasons become absent, and an empty result becomes undefined. */
 export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusalCode>(
   code: C,
   value: unknown

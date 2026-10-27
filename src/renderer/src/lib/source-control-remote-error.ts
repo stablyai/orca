@@ -13,10 +13,7 @@ const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
 const SYNC_PUSH_STAGE_ERROR = Symbol('source-control-sync-push-stage-error')
 type SyncPushStageMarkedError = Error & { [SYNC_PUSH_STAGE_ERROR]?: true }
 
-// Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
-// server-side pre-receive hook message) should not blow up the toast. Cap the
-// detail length so the toast stays readable; the underlying error is still
-// rethrown for console/logs if a caller needs the full payload.
+// Cap toast details from unbounded git stderr; callers retain the rethrown full error for logs.
 function truncateDetail(detail: string): string {
   if (detail.length <= REMOTE_OPERATION_DETAIL_MAX_LENGTH) {
     return detail
@@ -111,8 +108,7 @@ export function isSyncPushStageError(error: unknown): boolean {
   )
 }
 
-// Why: shared patterns so unconcluded-merge vs fresh-conflict toast copy cannot
-// drift between the two branches below.
+// Share merge-error patterns so unconcluded/fresh-conflict wording stays consistent.
 const UNCONCLUDED_MERGE_ERROR_PATTERN =
   /unmerged files|needs merge|you have not concluded your merge/i
 const FRESH_MERGE_CONFLICT_ERROR_PATTERN = /automatic merge failed|CONFLICT \(|fix conflicts/i
@@ -185,11 +181,7 @@ export function resolveRemoteOperationErrorMessage(
     return `${operationLabel} blocked — ${summary.charAt(0).toLowerCase()}${summary.slice(1)}`
   }
 
-  // Why: under sync, the inner push runs *after* a successful pull, so a
-  // non-fast-forward at that point means the remote raced ahead between
-  // fetch and push — not "user forgot to pull". Saying "Pull first" would
-  // be wrong (sync just did). Branch isSync above the shared NFF path so
-  // sync gets a sync-shaped message instead of inheriting the push wording.
+  // Sync already pulled; NFF means the remote raced before its inner push. Choose sync wording before the shared push path, never misleading Pull first advice.
   if (
     options?.isSync &&
     /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
@@ -197,9 +189,7 @@ export function resolveRemoteOperationErrorMessage(
     return 'Sync failed — remote moved while syncing. Try again.'
   }
 
-  // Why: force-with-lease rejection means the remote moved since our last
-  // snapshot; telling the user to pull would defeat the explicit force-push
-  // path and can reintroduce commits they meant to replace.
+  // Lease rejection means remote changed since our snapshot; Pull first could reintroduce commits the explicit force-push meant to replace.
   if (
     options?.isForcePush &&
     /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message)
@@ -207,15 +197,12 @@ export function resolveRemoteOperationErrorMessage(
     return 'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
   }
 
-  // Why: non-fast-forward/rejected detection is shared across publish and push so
-  // both paths surface the same actionable toast regardless of operation type.
+  // Share rejected/NFF handling across publish and push for consistent actions.
   if (/non-fast-forward|fetch first|updates were rejected/i.test(error.message)) {
     return 'Push rejected — remote has changes. Pull first, then try again.'
   }
 
-  // Why: `git pull` / merge refuses to run when the working tree has changes
-  // that would be overwritten; surface a single readable line instead of the
-  // multi-line git stderr (which lists every affected path).
+  // Collapse overwritten-worktree refusal to one line instead of listing every affected path in the toast.
   if (
     /local changes.*would be overwritten|Please commit your changes or stash them/i.test(
       error.message
@@ -271,8 +258,7 @@ export function resolveRemoteOperationErrorMessage(
   }
 
   if (options?.publish) {
-    // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
-    // keeps the toast human-readable while preserving the actionable fatal reason.
+    // Unwrap publish git/IPC errors while preserving actionable fatal reasons.
     const detail = extractPublishFailureDetail(error.message)
     if (detail) {
       return `Publish Branch failed. ${detail}. Check your remote access and try again.`
@@ -282,9 +268,7 @@ export function resolveRemoteOperationErrorMessage(
   }
 
   if (options?.isSync) {
-    // Why: the user invoked Sync — surface "Sync failed" rather than leaking
-    // the inner-step name ("Push failed"). Detail extraction matches push so
-    // auth / protected-branch reasons stay actionable.
+    // Sync reports its own failure, retaining push detail extraction for auth/protected-branch guidance.
     const detail = extractPublishFailureDetail(error.message)
     if (detail) {
       return `Sync failed. ${detail}. Check your remote access and try again.`
@@ -301,8 +285,7 @@ export function resolveRemoteOperationErrorMessage(
   }
 
   if (options?.isPush) {
-    // Why: surfacing fatal/remote lines from git is more actionable than a generic
-    // connection message for auth errors, protected branches, etc.
+    // Prefer git fatal/remote detail over generic connection messages for auth/protected-branch failures.
     const detail = extractPublishFailureDetail(error.message)
     if (detail) {
       return `Push failed. ${detail}. Check your remote access and try again.`

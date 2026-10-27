@@ -63,7 +63,7 @@ export function indexDaemonOwnerInventory<T extends IPtyProvider>(
       const route = readRoute(sessionId)
       let owner = selectInventoryOwner(candidates, complete)
       if (!owner) {
-        // Only a unique incarnation can disambiguate inventory ownership.
+        // Match the recorded incarnation to disambiguate ownership.
         const exact = route?.incarnationId
           ? selectInventoryOwner(candidates, complete, route.incarnationId, true)
           : undefined

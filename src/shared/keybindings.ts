@@ -1,5 +1,4 @@
-// Public compatibility surface for the keybinding domain.
-// Implementations live beside this facade so consumers can keep the stable import path.
+// Keep the public keybinding import path stable while implementations live beside this facade.
 export * from './keybindings/types'
 export * from './keybindings/definitions'
 export * from './keybindings/parser'

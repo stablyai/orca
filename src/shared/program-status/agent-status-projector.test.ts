@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createProgramStatusProjector } from './agent-status-projector'
+import {
+  createProgramStatusProjector,
+  lapsedProgramStatusChildHold
+} from './agent-status-projector'
 
 const b64 = (text: string): string => Buffer.from(text, 'utf8').toString('base64')
 const osc = (body: string): string => `\x1b]7501;${body}\x1b\\`
@@ -118,6 +121,59 @@ describe('createProgramStatusProjector', () => {
     ])
     const [cleared] = feed(osc('state=clear:id=task_1'))
     expect(cleared.subagents).toBeUndefined()
+  })
+
+  it("keeps a finished turn working while a child runs, stamping the turn's own end for both rows", () => {
+    const { feed, tick } = projector()
+    feed(osc('state=working:app=pi') + osc('state=working:id=subagents/run1:app=pi-subagents'))
+    tick(10)
+    expect(feed(osc('state=done:app=pi'))).toMatchObject([
+      {
+        state: 'working',
+        turnCompletedAt: 1010,
+        mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 1010 },
+        subagents: [{ id: 'subagents/run1', state: 'working' }]
+      }
+    ])
+    tick(10)
+    const [settled] = feed(osc('state=done:id=subagents/run1:app=pi-subagents'))
+    expect(settled).toMatchObject({
+      state: 'done',
+      turnCompletedAt: 1010,
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 1010 }
+    })
+    expect(settled.subagents).toBeUndefined()
+  })
+
+  it("lapses a hold no child refreshed to the lead's done, keeping its completion stamp", () => {
+    const { feed } = projector()
+    feed(osc('state=working:app=pi') + osc('state=working:id=subagents/run1'))
+    const [held] = feed(osc('state=done:app=pi'))
+    expect(lapsedProgramStatusChildHold(held, 0, 999, 1000)).toBeNull()
+    const lapsed = lapsedProgramStatusChildHold(held, 0, 1000, 1000)
+    expect(lapsed).toMatchObject({
+      state: 'done',
+      turnCompletedAt: held.turnCompletedAt,
+      mainAgent: held.mainAgent
+    })
+    expect(lapsed?.subagents).toBeUndefined()
+    const [settled] = feed(osc('state=done:id=subagents/run1'))
+    expect(lapsedProgramStatusChildHold(settled, 0, 1000, 1000)).toBeNull()
+  })
+
+  it('leaves live turns, failed children and an idle root as their root reports them', () => {
+    const { feed } = projector()
+    const last = (data: string) => feed(data).at(-1)
+    expect(
+      last(osc('state=working:app=claude-code') + osc('state=blocked:kind=question:id=task'))
+    ).toMatchObject({ state: 'working', subagents: [{ state: 'waiting' }] })
+    const failedChild = last(osc('state=blocked:id=task') + osc('state=done:app=claude-code'))
+    expect(failedChild).toMatchObject({ state: 'done', subagents: [{ state: 'blocked' }] })
+    expect(failedChild?.turnCompletedAt).toBeUndefined()
+    const resumed = projector()
+    expect(
+      resumed.feed(osc('state=idle:app=pi') + osc('state=working:id=subagents/run1')).at(-1)
+    ).toMatchObject({ state: 'done', sessionBoundary: true })
   })
 
   it('reads a clear during live work as the program leaving, not a cancelled turn', () => {

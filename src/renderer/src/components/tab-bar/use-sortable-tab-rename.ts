@@ -4,9 +4,7 @@ import {
   type RenameTerminalTabDetail
 } from './terminal-tab-rename-request'
 
-/** Inline tab-title rename: snapshots the title on open so mid-edit OSC churn
- *  cannot overwrite the user's text, commits at most once, and answers the
- *  window rename request addressed to this tab. */
+/** Snapshot rename text once, commit at most once, and handle only events addressed to this tab. */
 export function useSortableTabRename({
   tabId,
   title,
@@ -62,9 +60,7 @@ export function useSortableTabRename({
     })
   }, [])
 
-  // Why the ref: keeps the listener subscribed to tabId alone, so OSC title churn can't
-  // resubscribe it mid-edit. Written from an Effect, not in render -- a render React discards
-  // must not leave a stale handler behind for the next commit to fire.
+  // Update handler refs after commit so OSC churn cannot resubscribe listeners or abandoned renders publish stale handlers.
   const handleRenameOpenRef = useRef(handleRenameOpen)
   useEffect(() => {
     handleRenameOpenRef.current = handleRenameOpen

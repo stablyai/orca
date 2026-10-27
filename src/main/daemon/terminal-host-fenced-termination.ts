@@ -32,6 +32,7 @@ export function beginTerminalHostFencedTermination(
   if (request.requireNoAgentOwner && deps.owners.listForPty(request.id).length > 0) {
     return { accepted: false, result: { outcome: 'refused', reason: 'claimed' } }
   }
+  // Current mains check viewers themselves; this guards older mains and direct callers.
   if (request.requireUnattached && session.hasAttachedClients) {
     return { accepted: false, result: { outcome: 'refused', reason: 'attached' } }
   }

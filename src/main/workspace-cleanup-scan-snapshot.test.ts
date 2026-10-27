@@ -195,7 +195,6 @@ describe('workspace cleanup scan snapshot', () => {
 
     const snapshot = await readWorkspaceCleanupScanSnapshot(userDataDirHolder.dir)
     expect(snapshot?.candidates).toEqual([rescanned, other])
-    // Snapshot freshness stays anchored to the last FULL scan.
     expect(snapshot?.scannedAt).toBe(NOW)
   })
 
@@ -271,7 +270,6 @@ describe('workspace cleanup scan snapshot', () => {
     expect(snapshot?.candidates).toEqual([kept])
     expect(snapshotWriteSpy).toHaveBeenCalledTimes(1)
 
-    // Unknown ids are a no-op.
     snapshotWriteSpy.mockClear()
     await pruneWorkspaceCleanupScanSnapshot(userDataDirHolder.dir, 'repo-1::/never-existed')
     await expect(readWorkspaceCleanupScanSnapshot(userDataDirHolder.dir)).resolves.toEqual(snapshot)

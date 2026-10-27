@@ -43,6 +43,22 @@ describe('one copy of each chat-picked flag', () => {
     }
   )
 
+  it('treats spaced Codex config model and effort as raw pins or removes them when overridden', () => {
+    const agentArgs = '-c " model = o3" -c " model_reasoning_effort = low" -c model_verbosity=low'
+    const inputs = {
+      agent: 'codex' as const,
+      agentArgs,
+      sessionOptions: { model: 'gpt-5.5', effort: 'high' }
+    }
+    expect(launch(inputs).appliedSessionOptions).toEqual({})
+    const saved = launch({ ...inputs, sessionOptionsOverrideAgentArgs: true })
+    expect(saved.appliedSessionOptions).toEqual(inputs.sessionOptions)
+    expect(saved.resumeLaunch).toEqual({
+      agentCommand: "codex '-c' 'model_verbosity=low'",
+      agentArgs: "'-c' 'model_verbosity=low'"
+    })
+  })
+
   it('sends only the configured Grok model without the picked model effort', () => {
     const result = launch({
       agent: 'grok',
@@ -135,5 +151,50 @@ describe('one copy of each chat-picked flag', () => {
     })
     expect(result.command).toBe("codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low'")
     expect(result.appliedSessionOptions).toEqual({ model: 'gpt-5.5' })
+  })
+})
+
+describe('a saved permission mode on terminals', () => {
+  it.each([
+    ['claude', 'ask', '--permission-mode auto --verbose', "'--permission-mode' 'auto' '--verbose'"],
+    // A required operand and an argument after -- do not own permission.
+    [
+      'claude',
+      'ask',
+      "--append-system-prompt '--dangerously-skip-permissions'",
+      "'--append-system-prompt' '--dangerously-skip-permissions' '--permission-mode' 'default'"
+    ],
+    [
+      'claude',
+      'ask',
+      '-- --dangerously-skip-permissions',
+      "'--permission-mode' 'default' '--' '--dangerously-skip-permissions'"
+    ],
+    ['codex', 'ask', '', "'-a' 'on-request' '-s' 'read-only' '-c' 'approvals_reviewer=user'"],
+    ['codex', 'ask', '--yolo', "'--yolo'"],
+    ['gemini', 'full-access', '--approval-mode default', "'--approval-mode' 'default'"],
+    ['opencode', 'full-access', '--print-logs', "'--print-logs'"]
+  ] as const)(
+    '%s %s follows shared permission ownership for %s',
+    (agent, permissionMode, agentArgs, expectedArgs) => {
+      const plain = launch({ agent, agentArgs: '' }).command
+      const result = launch({
+        agent,
+        agentArgs,
+        sessionOptions: { permissionMode },
+        sessionOptionsOverrideAgentArgs: true
+      })
+      expect(result.command).toBe(expectedArgs ? `${plain} ${expectedArgs}` : plain)
+    }
+  )
+
+  it('yields to a permission flag the caller keeps', () => {
+    const result = launch({
+      agent: 'claude',
+      agentArgs: '--dangerously-skip-permissions',
+      sessionOptions: { permissionMode: 'ask' }
+    })
+    expect(result.command).toBe("claude '--dangerously-skip-permissions'")
+    expect(result.appliedSessionOptions).toEqual({})
   })
 })

@@ -2,16 +2,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileWebShellReachability } from './mobile-web-shell-session-contract'
 
-/**
- * The host's connection state as the three answers a step in the shell session needs.
- *
- * `reconnecting` is unreachable, not connecting, and that is the whole point of the distinction: a
- * host whose desktop is gone never settles on `disconnected`. The client dials, fails, schedules a
- * retry and cycles `connecting` -> `reconnecting` -> `connecting` with the delay growing to a
- * minute, so treating `reconnecting` as "still dialling" leaves a phone with a perfectly good
- * cached workspace spinning forever. `connecting` alone is the first dial, which is worth the wait
- * because it usually succeeds; a scheduled retry after a failure is evidence the host is not there.
- */
+// Only the initial connecting state waits; reconnecting marks a failed dial with retries and must permit cache access even if disconnected never arrives.
 export function readMobileWebShellReachability(
   connState: ConnectionState,
   client: RpcClient | null

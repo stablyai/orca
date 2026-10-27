@@ -3,7 +3,7 @@ import { statSync } from 'node:fs'
 import path from 'node:path'
 import type { LinuxRootPackageType } from '../shared/update-status-types'
 
-// Why: an absolute but user-writable PATH entry must never be treated as a trusted package manager.
+// User-writable PATH entries cannot be trusted for privileged package installation.
 const TRUSTED_EXECUTABLE_DIRECTORIES = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
 
 const DEB_PACKAGE_MANAGERS: { name: string; args: string[] }[] = [
@@ -11,8 +11,7 @@ const DEB_PACKAGE_MANAGERS: { name: string; args: string[] }[] = [
   { name: 'dpkg', args: ['-i', '--'] }
 ]
 
-// No `--` terminator: these tools do not accept one. Safe because capture requires an absolute path,
-// so the argument can never be read as an option.
+// These tools lack -- support; absolute package paths prevent option injection.
 const RPM_PACKAGE_MANAGERS: { name: string; args: string[] }[] = [
   {
     name: 'zypper',
@@ -27,47 +26,31 @@ export type LinuxPackageInstallCommandResult =
   | { ok: true; command: string }
   | { ok: false; reason: 'no-sudo' | 'no-package-manager' | 'invalid-package-path' }
 
-/**
- * Resolves an executable strictly from the trusted system directories. A symlink inside those
- * directories is fine — its target is what `statSync` checks — but nothing outside them is consulted
- * and no shell is ever invoked for discovery.
- */
 export function resolveTrustedExecutable(name: string): string | null {
   for (const directory of TRUSTED_EXECUTABLE_DIRECTORIES) {
-    // posix.join: these are POSIX paths, and this module only ever runs on Linux.
     const candidate = path.posix.join(directory, name)
     try {
       const stats = statSync(candidate)
       if (stats.isFile() && (stats.mode & 0o111) !== 0) {
         return candidate
       }
-    } catch {
-      // Absent here; keep looking in the remaining trusted directories.
-    }
+    } catch {}
   }
   return null
 }
 
-/**
- * Whether this host has any package manager able to install the marker's format. A repackaged
- * install (AUR, Nix, a container rebuild) inherits the `package-type` marker from the .deb/.rpm it
- * was built from, so the marker alone never proves the host can act on it.
- */
+/** Repackaged installs can inherit a deb/rpm marker without a matching package manager. */
 export function hasTrustedPackageManagerFor(packageType: LinuxRootPackageType): boolean {
   const candidates = packageType === 'deb' ? DEB_PACKAGE_MANAGERS : RPM_PACKAGE_MANAGERS
   return candidates.some((candidate) => resolveTrustedExecutable(candidate.name) !== null)
 }
 
-/**
- * Builds the interactive command the user pastes into their own terminal. Every token except the
- * package path is a fixed literal, and the path is POSIX-single-quoted — Orca never runs this.
- */
+/** Produces a command for the user to run and confirm in their terminal. */
 export function buildLinuxPackageInstallCommand(
   packageType: LinuxRootPackageType,
   packagePath: string
 ): LinuxPackageInstallCommandResult {
-  // Why: several package managers accept no `--` terminator, so a relative or dash-leading path would
-  // be read as an option. Hold that property here rather than relying on a caller two modules away.
+  // Absolute paths prevent option injection in managers that lack -- support.
   if (!path.isAbsolute(packagePath)) {
     return { ok: false, reason: 'invalid-package-path' }
   }

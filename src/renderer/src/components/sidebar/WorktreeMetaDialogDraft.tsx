@@ -207,7 +207,8 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 space-y-4 overflow-y-auto scrollbar-sleek">
+        {/* Why: overflow clips the fields' 3px focus ring; -mx-1/px-1 makes room without shifting them. */}
+        <div className="-mx-1 min-h-0 space-y-4 overflow-y-auto px-1 scrollbar-sleek">
           <WorktreeDisplayNameField
             disabled={saving}
             inputRef={displayNameInputRef}
@@ -286,7 +287,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
                     event.currentTarget.dataset.imeComposing = 'true'
                   }}
                   onCompositionEnd={(event) => {
-                    commentIme.setComposing(false)
+                    commentIme.setComposing(false, event.data)
                     delete event.currentTarget.dataset.imeComposing
                   }}
                   onBlur={(event) => {

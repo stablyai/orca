@@ -10,7 +10,7 @@ import { AcpAgentError } from './acp-errors'
 
 afterEach(closeProviderTimelineRigs)
 
-// The shape Grok sends for a prompt its API refused, with the reason scrubbed to a placeholder.
+// Captured Grok API failure with a placeholder reason.
 const REASON = 'API error (status 400 Bad Request): invalid_request_error: placeholder reason'
 const session = { sessionId: 'session-1' }
 const queued = (promptId: string) => ({ ...session, entries: [], runningPromptId: promptId })
@@ -82,7 +82,6 @@ describe('a failed ACP turn says why', () => {
     const rows = await f.rig.rows()
     const failures = statusRows(rows)
     expect(failures).toHaveLength(1)
-    // The turn ran, so the row reads as Codex's turn-ending error does: no refusal sentence or fact.
     expect(failures[0]?.body).toEqual({ kind: 'status', tone: 'error', text: REASON })
     const turns = await f.rig.turns()
     expect(turns.map((turn) => [turn.state, turn.outcome])).toEqual([
@@ -187,7 +186,7 @@ describe('a failed ACP turn says why', () => {
       {
         kind: 'status',
         tone: 'warning',
-        text: 'The agent hit its usage limit. Send a message once it resets to continue.',
+        text: 'The agent hit its usage limit.',
         failure: { kind: 'usageLimitReached', detail: { text: REASON, audience: 'person' } }
       }
     ])

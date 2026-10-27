@@ -23,7 +23,6 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     }
   })
 
-  /** Builds a current database, then strips it back to the v35 shape it would have on disk. */
   function createV35Database(): { path: string; dispatchId: string; deliveryId: string } {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v36-'))
     const dbPath = join(tempDir, 'orchestration.db')
@@ -94,7 +93,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     dropDerivedDeliverySchema(raw)
     raw.pragma('user_version = 36')
     try {
-      // Why: the skew repair is the only thing that catches a partially-written v36.
+      // Only schema-skew repair detects a partially written v36.
       expect(resolveOrchestrationMigrationStartVersion(raw, 36, SCHEMA_VERSION)).toBe(6)
     } finally {
       raw.close()

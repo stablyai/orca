@@ -25,7 +25,8 @@ function harness(
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal'],
   onSubmitted?: () => void
 ) {
-  const structuredTransport = {
+  const structuredTransport: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: (text: string) =>
       dispatchStructuredAgentSessionComposerCommand(text, {
@@ -36,12 +37,18 @@ function harness(
         conversationCommands: ['clear', 'compact'],
         runConversationCommand: async () => ({ accepted: true, error: null })
       }),
+    optionsSurface: {
+      getSnapshot: () => [],
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      subscribe: () => () => {}
+    },
     optionSnapshot: [],
     onError: vi.fn(),
     runtime: 'local',
     sessionId: 'session-test',
     runtimeEnvironmentId: null
-  } as unknown as NativeChatStructuredComposerTransport
+  }
   if (threadGoal) {
     structuredTransport.threadGoal = threadGoal
   }
@@ -62,9 +69,7 @@ function harness(
   return { send: result.current, structuredTransport, setDraft }
 }
 
-// The guard exists because a host command sends no message, so its attachments
-// would be dropped without a word. A pass-through command IS the message, so the
-// attachments ride along with it.
+// Host-owned commands send no message and would drop images; pass-through commands carry their attachments.
 describe('attachment guard follows what the host claims', () => {
   it.each([
     ['claude', '/clear'],
@@ -122,8 +127,6 @@ describe('an attachment still uploading', () => {
   })
 })
 
-// The pane brings the latest into view on this: a conversation command at the press, a message
-// once admitted, and neither for a refusal or a command the chat does not run.
 describe('reports the sends that bring the latest into view', () => {
   it('reports a conversation command at the press, then not a message the transport refused', async () => {
     const onSubmitted = vi.fn()
@@ -199,6 +202,23 @@ describe("says a failed send in Orca's words, with the error it hit apart", () =
       { errorText: undefined }
     )
   })
+})
+
+it('settles captured command text without publishing obsolete notices', async () => {
+  const { send, structuredTransport } = harness('codex', { setObjective: async () => true })
+  const reply =
+    Promise.withResolvers<Awaited<ReturnType<typeof structuredTransport.dispatchCommand>>>()
+  let current = true
+  structuredTransport.capturePresentation = () => () => current
+  structuredTransport.dispatchCommand = () => reply.promise
+  updateNativeChatComposerDraft('tab-1:pane', { text: '/goal ship it' }, 'immediate')
+  const pending = send('/goal ship it', [])
+  current = false
+  updateNativeChatComposerDraft('tab-1:pane', { text: '/goal ship it next' }, 'immediate')
+  reply.resolve({ handled: true, accepted: true, error: null })
+  await pending
+  expect(readNativeChatComposerDraft('tab-1:pane').text).toBe(' next')
+  expect(structuredTransport.onError).not.toHaveBeenCalled()
 })
 
 it('checks both the picked command and its draft, and projects completed paths', async () => {

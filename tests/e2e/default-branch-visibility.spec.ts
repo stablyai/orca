@@ -1,8 +1,4 @@
-/**
- * Regression #8873: with "Hide sleeping" on, the project's main workspace must
- * stay in the sidebar — it is the only guaranteed way back into the project —
- * while a sleeping feature workspace is still swept.
- */
+// Keep the default workspace reachable under Hide sleeping while sweeping sleeping feature workspaces (#8873).
 
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'

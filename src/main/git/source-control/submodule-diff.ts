@@ -9,17 +9,14 @@ import {
   readWorkingSubmoduleHead
 } from './submodule-gitlink-oid'
 
-/**
- * Synthesize a gitlink pointer diff: Git represents submodule commit changes as a
- * one-line `Subproject commit <oid>` swap, so the old/new oids feed the text differ.
- */
+/** Feed gitlink OIDs to the text differ as Subproject commit lines. */
 export async function buildSubmodulePointerDiff(
   worktreePath: string,
   submodulePath: string,
   staged: boolean,
   compareAgainstHead: boolean,
   options: GitRuntimeOptions,
-  // Why: default to the validated resolver so every caller is guarded against path escape.
+  // Default to the validated resolver to prevent submodule path escape.
   submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
 ): Promise<GitDiffResult> {
   let leftOid = ''
@@ -45,10 +42,7 @@ export async function buildSubmodulePointerDiff(
   )
 }
 
-/**
- * Diff a file inside a submodule across two of its commits — used when the parent
- * gitlink moved but the submodule worktree is clean (change is committed).
- */
+/** Show committed inner-file changes when a clean submodule's gitlink moved. */
 export async function buildSubmoduleInnerCommitRangeDiff(
   submoduleWorktreePath: string,
   innerPath: string,
@@ -67,9 +61,7 @@ export async function buildSubmoduleInnerCommitRangeDiff(
     const right = await readGitBlobAtOidPath(submoduleWorktreePath, toOid, innerPath, options)
     modifiedContent = right.content
     modifiedIsBinary = right.isBinary
-  } catch {
-    // Fallback to empty content; a missing blob (add/delete) reads as one side.
-  }
+  } catch {}
   return buildDiffResult(
     originalContent,
     modifiedContent,

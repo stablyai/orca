@@ -38,9 +38,8 @@ export function mapPullRequestWorkItem(
   item: Record<string, unknown>,
   baseOwnerRepo: OwnerRepo | null = null
 ): MainWorkItem {
-  // Why: fork PRs are disabled in the Start-from picker; compare head owner to the selected repo's owner.
   const headOwnerLogin = extractHeadOwnerLogin(item)
-  // Why: leave isCrossRepository undefined when the head owner is unknown, rather than falsely claiming "not a fork".
+  // Unknown head ownership must not be presented as proven same-repository.
   const isCrossRepository =
     headOwnerLogin !== null && baseOwnerRepo !== null
       ? headOwnerLogin !== baseOwnerRepo.owner

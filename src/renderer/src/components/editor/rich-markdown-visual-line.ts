@@ -3,16 +3,7 @@ import type { EditorView } from '@tiptap/pm/view'
 import { writeRichMarkdownSliceToClipboard } from './rich-markdown-clipboard-write'
 import { createRichMarkdownVisibleTextMap } from './rich-markdown-visible-text-map'
 
-/**
- * Why: a paragraph that word-wraps across multiple screen lines should be cut
- * one visual line at a time when the user presses Cmd+X with an empty selection,
- * matching the expectation of per-line editing.  Uses ProseMirror's coordinate
- * helpers to detect visual line boundaries from the browser's text layout.
- *
- * Returns the document-position range of the visual line the cursor sits on,
- * or null when the paragraph fits on a single visual line (signaling the caller
- * to fall through to block-level cut).
- */
+/** Find the visual cursor line for empty-selection cuts; null defers single-line/invalid layouts to block cutting. */
 export function getVisualLineRange(
   view: EditorView,
   cursorPos: number,
@@ -29,14 +20,12 @@ export function getVisualLineRange(
     return null
   }
 
-  // Single visual line check: if paragraph start and end share a line, skip.
   const startCoords = view.coordsAtPos(paraStart)
   const endCoords = view.coordsAtPos(paraEnd)
   if (Math.abs(startCoords.top - endCoords.top) < lineHeight * 0.5) {
     return null
   }
 
-  // Get the paragraph's DOM element for horizontal bounds.
   const domInfo = view.domAtPos(paraStart)
   const paraEl = domInfo.node instanceof HTMLElement ? domInfo.node : domInfo.node.parentElement
   if (!paraEl) {
@@ -46,23 +35,19 @@ export function getVisualLineRange(
 
   const midY = (cursorCoords.top + cursorCoords.bottom) / 2
 
-  // Start of the current visual line.
   const startResult = view.posAtCoords({ left: rect.left + 1, top: midY })
   if (!startResult) {
     return null
   }
   const lineFrom = Math.max(startResult.pos, paraStart)
 
-  // End of the current visual line = start of the next visual line.
   const nextMidY = cursorCoords.bottom + lineHeight * 0.5
   const nextResult = view.posAtCoords({ left: rect.left + 1, top: nextMidY })
 
-  // Last visual line — cut to end of paragraph content.
   const lineTo =
     nextResult && nextResult.pos > lineFrom && nextResult.pos <= paraEnd ? nextResult.pos : paraEnd
 
-  // If the range covers the entire paragraph, return null so the caller
-  // falls through to block-level cut (which removes the paragraph node).
+  // Cut whole paragraphs through the block path so their container node is removed too.
   if (lineFrom <= paraStart && lineTo >= paraEnd) {
     return null
   }
@@ -70,11 +55,6 @@ export function getVisualLineRange(
   return { from: lineFrom, to: lineTo }
 }
 
-/**
- * Cuts a single visual line from a word-wrapped paragraph, writing both
- * text/plain and text/html to the clipboard and deleting the range from
- * the ProseMirror document.  Returns true if the cut was handled.
- */
 export function cutVisualLine(
   view: EditorView,
   event: Event,

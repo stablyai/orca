@@ -157,7 +157,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       )
     })
 
-    it('raises terminal attention for agent completion when OS completion notifications are disabled', async () => {
+    it('forwards agent completion to notification policy when desktop banners are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)

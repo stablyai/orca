@@ -109,8 +109,7 @@ function missing(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 }
 
-// Complete: UNC readdir results pass through the child dispatcher's dirent
-// serializer, which reads every kind flag.
+// UNC child serialization reads every Dirent kind flag.
 function dirent(name: string) {
   return {
     name,
@@ -145,8 +144,7 @@ async function expectRefusal(target: SessionFileCandidate): Promise<void> {
   await refusal
 }
 
-// A result that lands past the deadline never lifts the route quarantine, so
-// recovery waits out the back-off window the same way production does.
+// Late results cannot clear quarantine; advance through backoff before retrying.
 async function releaseAndSettle(): Promise<void> {
   releaseStall?.()
   releaseStall = undefined
@@ -154,8 +152,6 @@ async function releaseAndSettle(): Promise<void> {
 }
 
 beforeEach(() => {
-  // blockedRoutes is persistent gate state: a prior stall must not quarantine
-  // this test's route.
   resetWslTranscriptFsGateForTests()
   resetSessionParseCacheForTests()
   mocks.open.mockReset()
@@ -195,8 +191,6 @@ describe('Kimi session parse against a stalled WSL transcript', () => {
     expect(recovered?.messageCount).toBe(1)
   })
 
-  // Pins the narrowness of the parser's `instanceof WslTranscriptFsError`
-  // rethrow: widening it to every error turns this into a hard scan issue.
   it('still returns a metadata-only session when the wire file is simply missing', async () => {
     const state = uncPath('KimiMissing', ...KIMI_HOME, 'state.json')
     mocks.readFile.mockResolvedValue(KIMI_STATE)
@@ -270,8 +264,6 @@ describe('OpenCode session parse against a stalled WSL transcript', () => {
     expect(recovered?.messageCount).toBe(1)
   })
 
-  // Same guard as Kimi's: a live process mid-write must stay a parseable
-  // session, not a refusal.
   it('still returns the session when a live process left a half-written message', async () => {
     const file = sessionPath('OpenCodeHalfWritten')
     mocks.readdir.mockResolvedValue([dirent('msg-1.json')])

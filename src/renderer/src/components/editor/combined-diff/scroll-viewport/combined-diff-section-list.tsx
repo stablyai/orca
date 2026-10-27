@@ -70,7 +70,7 @@ export function CombinedDiffSectionList({
   toggleSection: (index: number) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): React.JSX.Element {
-  // Why: per-row filter() rescanned all worktree comments per visible row per render — index once, same order preserved.
+  // Index comments once by file instead of rescanning all worktree comments per visible row.
   const commentCountByFilePath = useMemo(() => {
     const counts = new Map<string, number>()
     for (const comment of diffCommentsForWorktree) {
@@ -102,7 +102,7 @@ export function CombinedDiffSectionList({
                 data-combined-diff-section-key={section.key}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 top-0 w-full"
-                // Why: position via top, not transform, so sticky file headers don't jump (transform creates a containing block).
+                // Position with top: transforms create containing blocks that make sticky headers jump.
                 style={{ top: `${virtualItem.start}px` }}
               >
                 <DiffSectionItem

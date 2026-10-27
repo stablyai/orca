@@ -13,7 +13,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
-import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat-task-list-frames'
+import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 import { projectStructuredQuestionMessages } from '../../../../shared/structured-agent-question-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -47,7 +47,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
     }
   }
 
-  /** The journal that says the turn runs and what its newest content is. */
   function journal(rows: readonly NativeChatMessage[]): AgentJournalRenderItem[] {
     return [
       {
@@ -153,7 +152,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       const { rerender } = render(list([reasoning('r-1', 'Weighing two approaches', 'running')]))
       fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
       rerender(list([reasoning('r-1', 'Weighing two approaches', 'completed')]))
-      // The line no longer discloses anything; the row does, still open.
       expect(screen.queryByRole('button', { name: /Thinking|Working/ })).toBeNull()
       expect(screen.getByRole('button', { name: 'Reasoning: Thought for 12s' })).toHaveAttribute(
         'aria-expanded',
@@ -162,8 +160,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.getByText('Weighing two approaches')).toBeInTheDocument()
     })
 
-    // The body owns its colour: inherited, it read full foreground under the line and muted in the row,
-    // so the text dimmed as the block landed.
+    // Body-owned color prevents reasoning from dimming when it moves from the live line into its row.
     it('draws the same body, in its own quieter tone, live and once landed', () => {
       const body = () =>
         screen.getByText('Weighing two approaches').closest('[data-native-chat-message-tone]')
@@ -212,7 +209,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       )
     })
 
-    // The open block can sit on a slot kept for its turn's bar or diff rollup; only the slot stays.
     it('draws no row for the open block under a diff rollup on its turn', () => {
       const edit: NativeChatMessage = {
         id: 'edit-1',
@@ -420,7 +416,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         role: 'assistant',
         timestamp: 1,
         source: 'transcript',
-        // Journalled like the frames it sits between.
         journalPosition: { sequence: 1, index: 0 },
         blocks: [
           {
@@ -457,7 +452,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       const projected = projectNativeChatTaskListFrames(messages)
       projected.forEach((message, index) => expect(message).toBe(messages[index]))
       render(transcript([truncated]))
-      // Unreadable as a list and wordless, so it is neither a checklist nor a raw row.
       expect(screen.queryByText('notification:turn/plan/updated')).toBeNull()
       expect(screen.queryByText('Tasks')).toBeNull()
     })

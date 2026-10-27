@@ -18,22 +18,17 @@ import {
 import { join } from 'node:path'
 
 export const CLAUDE_AT_REST_COMMANDS_TTL_MS = AT_REST_COMMANDS_TTL_MS
-/** Each probe starts a Claude process, so many workspaces opening at once wait their turn. */
+// Each probe starts Claude; limit concurrent workspace discovery processes.
 const MAX_PROBES_RUNNING = 2
 
 export type ClaudeAtRestCommandsDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  /** Asks Claude itself; absent, or when it fails, the folders are read instead. */
   probe?: ClaudeCommandCatalogProbe
   now?: () => number
   discover?: typeof discoverSkills
 }
 
-/**
- * The `/` surface of a Claude chat whose Claude is not running, as Claude itself lists it. When
- * Claude can't answer, the folders it reads its own from: the account's and the workspace's
- * command folders and skills, beside the commands the chat's menu always offers.
- */
+/** Probe Claude for at-rest commands; fall back to account/workspace command folders and skills. */
 export class ClaudeAtRestCommandCatalog extends AtRestCommandCatalog {
   constructor(deps: ClaudeAtRestCommandsDeps) {
     const probes = new PrioritySemaphore(MAX_PROBES_RUNNING)
@@ -88,7 +83,7 @@ async function scanClaudeAtRest(
       providerRootOverrides: { claude: join(account, 'skills') }
     })
   ])
-  // Clients that predate structuredSessionSlashCommands show only this list, so it keeps the host's.
+  // Older clients lack structuredSessionSlashCommands, so retain host built-ins in this list.
   const builtIn = structuredSlashCommands(['clear', 'compact'], 'claude').map(
     (command): AgentSessionSlashCommand => ({
       name: command.name,

@@ -1,10 +1,4 @@
-/**
- * A table row's cells, on both halves of the round trip.
- *
- * The pipe is the row's only separator and also an ordinary character a cell may contain, so a
- * backslash is what tells the two apart. The writer escapes backslashes before pipes and the
- * reader undoes both, which is the one order under which a cell holding `\` and `|` survives.
- */
+// Backslash distinguishes literal pipe from cell separator; writer escapes backslashes before pipes, reader reverses both to preserve mixed content.
 
 /** Whether the pipe ending `value` separates cells rather than belonging to one. */
 function endsWithUnescapedPipe(value: string): boolean {

@@ -7,7 +7,7 @@ export type BrowserRouteGuestState = {
   guestAuthority: symbol
   partition: string
   registration: BrowserRoutePageGuestIdentity | null
-  /** Client-local transients: no logical page, no wire surface, fenced with their opener. */
+  /** Client-local popups share the opener's lifetime and have no logical page or wire surface. */
   popups: BrowserRouteGuestPopupController | null
   isNavigationAllowed: (url: string) => boolean
   pageAuthority: symbol | null

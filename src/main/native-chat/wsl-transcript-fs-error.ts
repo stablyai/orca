@@ -38,7 +38,6 @@ export function wslTranscriptFsProcessFailureError(detail: unknown): WslTranscri
   )
 }
 
-/** Layers that only see a flattened message use this to spot a refusal. */
 export function isWslTranscriptFsRefusalMessage(message: string): boolean {
   return (
     message === WSL_TRANSCRIPT_FS_SLOW_MESSAGE ||
@@ -47,7 +46,6 @@ export function isWslTranscriptFsRefusalMessage(message: string): boolean {
   )
 }
 
-/** Narrow a caught error to a gate refusal, rethrowing anything else. */
 export function wslTranscriptFsRefusal(error: unknown): WslTranscriptFsError {
   if (error instanceof WslTranscriptFsError) {
     return error

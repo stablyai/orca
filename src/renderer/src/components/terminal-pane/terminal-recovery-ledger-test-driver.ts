@@ -5,10 +5,7 @@ import {
 } from './terminal-pane-recovery'
 import { setTerminalTabs, terminalTabs } from './terminal-recovery-ledger-test-store'
 
-// One request/settle cycle over the real recovery module, for suites driving
-// the ledger through terminal-recovery-ledger-test-store's fake store. Separate
-// from that module because the `@/store` mock factory imports it, and a factory
-// that reached back into the module under test would deadlock.
+// Keep request/settle outside the fake store: its mock factory imports that store, and importing recovery back would deadlock.
 
 /** What a mounted pane reports for the tab's current recovery attempt. */
 export function settleCurrentRecovery(
@@ -18,9 +15,7 @@ export function settleCurrentRecovery(
   settleTerminalPaneRecovery(tabId, captureTerminalPaneRecoveryGeneration(tabId), outcome)
 }
 
-/** A full cycle: request, then the pane the remount mounted reports back.
- *  Recovery gates on an observed outcome, so a caller that never reports is
- *  refused — these are the callers that DO report. */
+/** Request then report the remounted pane’s outcome; these callers exercise settled evidence rather than the silent-pending path. */
 export async function requestAndSettle(
   request: Parameters<typeof requestTerminalPaneRecovery>[0],
   outcome: 'success' | 'failed' | 'timed-out' = 'success'

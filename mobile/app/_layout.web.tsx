@@ -8,12 +8,7 @@ import { usePageBridgeClient } from '../src/transport/client-context.web'
 import { colors } from '../src/theme/mobile-theme'
 import { isOverlayPageRoute } from '../src/new-workspace/overlay-page-route'
 
-/**
- * The page's root layout, standing where the native `_layout.tsx` does. Without one expo-router
- * mounts `DefaultNavigator`, an all-edges `SafeAreaView`, which would pad each screen a second time.
- * Like the native root it pads only the sides. It supplies the insets the shell sent in `init` below
- * ExpoRoot's own provider, whose web half reads `env(safe-area-inset-*)`: 0 in both WebViews.
- */
+// Provide shell insets below ExpoRoot (WebView CSS env insets are zero); pad only sides to avoid DefaultNavigator’s duplicate all-edge SafeAreaView.
 export default function PageRootLayout() {
   const client = usePageBridgeClient()
   const insets = useSyncExternalStore(

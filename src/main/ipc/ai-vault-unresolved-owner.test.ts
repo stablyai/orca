@@ -1,8 +1,4 @@
-/**
- * #18097: conflicting owner publications leave a worktree on the `runtime:unresolved-owner`
- * sentinel. It parses as a runtime host, but no environment has that id, so AI Vault must answer
- * it as unavailable instead of dialing a paired runtime.
- */
+/** Unresolved-owner sentinels have no environment: return unavailable instead of dialing a paired runtime (#18097). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

@@ -105,8 +105,7 @@ describe('GitLab source lookup routing', () => {
       })
     ).resolves.toMatchObject({ items: [{ repoId: 'renderer-repo', number: 7 }] })
 
-    // Why (#6263): the typed query must reach the runtime RPC so GitLab search
-    // actually filters; previously the field was never threaded through.
+    // Forward the query through runtime RPC or GitLab search would return unfiltered results (#6263).
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'gitlab.listWorkItems',

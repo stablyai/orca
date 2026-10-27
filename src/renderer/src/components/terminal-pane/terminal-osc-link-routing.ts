@@ -1,7 +1,7 @@
-import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
+import { resolveTerminalFileLink } from '../../../../shared/terminal-links'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import { resolveTerminalFileUrlTarget } from '../../../../shared/terminal-file-url-target'
+import { classifyTerminalOscLinkTarget } from '../../../../shared/terminal-osc-link-target'
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
@@ -36,8 +36,7 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
   if ('button' in event && event.button !== undefined && event.button !== 0) {
     return false
   }
-  // Why: desktop xterm links must not open while the user is just placing the
-  // cursor or selecting text. Mobile URL taps use a separate WebView path.
+  // Desktop links require an intentional gesture; ordinary clicks/selecting must not open them. Mobile taps use WebView routing.
   return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
 }
 
@@ -68,49 +67,22 @@ export function handleOscLink(
     return handled
   }
 
-  const openDetectedPathLink = (): boolean => {
-    const resolved = resolveTerminalFileLinkText(
-      rawText,
-      deps.startupCwd || deps.worktreePath,
-      deps.terminalHomePath
-    )
-    if (!resolved) {
-      return false
-    }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the link handlers read only the MouseEvent fields TerminalLinkEvent picks.
+  const mouseEvent = event as MouseEvent
+  const cwd = deps.startupCwd || deps.worktreePath
+  const target = classifyTerminalOscLinkTarget(rawText, {
+    windowsPathsFirst: isWindowsAbsolutePathLike(cwd),
+    // Reject foreign file hosts except standard Windows UNC file://server/share paths.
+    allowUncHost:
+      navigator.userAgent.includes('Windows') &&
+      isWindowsAbsolutePathLike(deps.worktreePath) &&
+      !deps.runtimeEnvironmentId
+  })
+  if (target?.kind === 'url') {
     return finish(
-      handleTerminalFileLink(
-        resolved.absolutePath,
-        resolved.line,
-        resolved.column,
-        event as MouseEvent,
-        deps,
-        deps.linkActionContext,
-        rawText
-      )
-    )
-  }
-
-  if (
-    isWindowsAbsolutePathLike(rawText) &&
-    isWindowsAbsolutePathLike(deps.startupCwd || deps.worktreePath) &&
-    openDetectedPathLink()
-  ) {
-    // Why: `new URL("C:\\path\\file.ts")` succeeds with protocol `c:`;
-    // Windows OSC links need file-path routing before generic URL parsing.
-    return true
-  }
-
-  let parsed: URL
-  try {
-    parsed = new URL(rawText)
-  } catch {
-    return openDetectedPathLink()
-  }
-
-  if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-    return finish(
-      handleTerminalHttpLink(parsed.toString(), event as MouseEvent, {
+      handleTerminalHttpLink(target.url, mouseEvent, {
         worktreeId: deps.worktreeId,
+        sourceTabId: deps.sourceTabId,
         sourceOwner:
           deps.sourceOwner ??
           (deps.runtimeEnvironmentId
@@ -123,32 +95,28 @@ export function handleOscLink(
       })
     )
   }
-
-  if (parsed.protocol === 'file:') {
-    // Why: file:// URIs should open inside Orca, not via the OS default editor
-    // (shell.openPath). We extract the path from the URI and route it through
-    // the same openDetectedFilePath logic used for detected file-path links.
-    // Remote file hosts stay rejected; Windows LAN shares are the
-    // exception because their standard URI form is file://server/share/path.
-    const allowUncHost =
-      navigator.userAgent.includes('Windows') &&
-      isWindowsAbsolutePathLike(deps.worktreePath) &&
-      !deps.runtimeEnvironmentId
-    const resolved = resolveTerminalFileUrlTarget(parsed, { allowUncHost })
-    if (!resolved) {
-      return false
-    }
-    return finish(
-      handleTerminalFileLink(
-        resolved.filePath,
-        resolved.line,
-        resolved.column,
-        event as MouseEvent,
-        deps,
-        deps.linkActionContext,
-        rawText
-      )
-    )
+  const file =
+    target?.kind === 'file-url'
+      ? {
+          absolutePath: target.target.filePath,
+          line: target.target.line,
+          column: target.target.column
+        }
+      : target?.kind === 'path'
+        ? resolveTerminalFileLink(target.link, cwd, deps.terminalHomePath)
+        : null
+  if (!file) {
+    return false
   }
-  return false
+  return finish(
+    handleTerminalFileLink(
+      file.absolutePath,
+      file.line,
+      file.column,
+      mouseEvent,
+      deps,
+      deps.linkActionContext,
+      rawText
+    )
+  )
 }

@@ -1,5 +1,4 @@
-// Why: the three commit rows share one disabled-reason ladder — commit, commit+push and commit+sync
-// must never disagree about why committing is blocked.
+// Share commit blockers across Commit, Commit & Push, and Commit & Sync so disabled reasons agree.
 
 import { translate } from '@/i18n/i18n'
 import type { DropdownItem } from './source-control-dropdown-item-types'
@@ -38,7 +37,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     disabled: !canCommit
   }
 
-  // Why: compound commit labels omit counts — the commit itself changes ahead/behind, so pre-commit numbers would mislead.
+  // Committing changes divergence, so compound labels must omit pre-commit counts.
   const commitPushTitle = upstreamLoading
     ? 'Checking branch status…'
     : publishBlockedByPRLoading
@@ -61,7 +60,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     kind: 'commit_push',
     label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
     title: commitPushTitle,
-    // Why: match explicit Push — only an open linked review with a known head can commit+push without a git upstream.
+    // Match Push: without upstream, Commit & Push requires a known open-review head.
     disabled:
       globalBusy ||
       upstreamLoading ||
@@ -74,28 +73,52 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
 
   const commitSyncTitle = ((): string => {
     if (upstreamLoading) {
-      return 'Checking branch status…'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.checkingBranchStatus',
+        'Checking branch status…'
+      )
     }
     if (publishBlockedByPRLoading) {
-      return 'Checking PR status…'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleCheckingPrStatus',
+        'Checking PR status…'
+      )
     }
     if (publishBlockedByMergedPR) {
-      return 'PR is already merged'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titlePrAlreadyMerged',
+        'PR is already merged'
+      )
     }
     if (publishBlockedByDetachedHead) {
-      return 'Check out a branch before syncing commits'
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleCheckOutBranchToSync',
+        'Check out a branch before syncing commits'
+      )
     }
     if (!hasUpstream) {
-      // Why: direct the user to Publish Branch (the primary action) rather than naming a nonexistent compound action.
-      return 'Publish the branch first to sync commits'
+      // Point to the existing Publish Branch primary instead of naming a nonexistent compound action.
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titlePublishBranchFirst',
+        'Publish the branch first to sync commits'
+      )
     }
     if (shouldForcePushWithLease) {
       return (
         commitDisabledReason ??
-        'Use Commit & Force Push — remote only has older copies of local commits'
+        translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.titleUseForcePush',
+          'Use Commit & Force Push — remote only has older copies of local commits'
+        )
       )
     }
-    return commitDisabledReason ?? 'Commit, then pull and push'
+    return (
+      commitDisabledReason ??
+      translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleCommitThenPullPush',
+        'Commit, then pull and push'
+      )
+    )
   })()
   const commitSync: DropdownItem = {
     kind: 'commit_sync',

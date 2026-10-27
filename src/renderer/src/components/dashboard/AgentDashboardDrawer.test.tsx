@@ -72,6 +72,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  document.body.replaceChildren()
   useAppStore.setState(initialState, true)
 })
 
@@ -99,6 +100,28 @@ describe('AgentDashboardDrawer', () => {
     view.rerender(<AgentDashboardDrawer statusBarVisible />)
     fireEvent.keyDown(document.body, { key: 'Escape' })
     expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
+  })
+
+  it('keeps the dismissal Escape from a focused terminal but not from other fields', () => {
+    const terminalInput = document.createElement('textarea')
+    terminalInput.className = 'xterm-helper-textarea'
+    const field = document.createElement('input')
+    document.body.append(terminalInput, field)
+    const terminalKeyDown = vi.fn()
+    const fieldKeyDown = vi.fn()
+    terminalInput.addEventListener('keydown', terminalKeyDown)
+    field.addEventListener('keydown', fieldKeyDown)
+    render(<AgentDashboardDrawer statusBarVisible />)
+
+    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
+    fireEvent.keyDown(terminalInput, { key: 'Escape' })
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
+    expect(terminalKeyDown).not.toHaveBeenCalled()
+
+    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
+    expect(fieldKeyDown).toHaveBeenCalledTimes(1)
   })
 
   type RevealAgent = (args: {
@@ -130,8 +153,7 @@ describe('AgentDashboardDrawer', () => {
 
     revealFromBoard('runtime:env-1')
 
-    // Bare setActiveWorktree skips the terminal view switch, initial-terminal seeding and
-    // sleeping-session resume the shared dispatcher runs.
+    // Use the shared dispatcher to switch terminal view, seed initial terminals and resume sleeping workspaces.
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
       executionHostId: 'runtime:env-1'
     })

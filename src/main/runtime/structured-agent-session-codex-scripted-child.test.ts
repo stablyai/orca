@@ -79,6 +79,35 @@ it('attaches at spawn and holds sends until the scripted Codex handshake answers
   await vi.waitFor(() => expect(child.prompts()).toEqual(['held until Codex is ready']))
 })
 
+it('ends a running Codex child on Stop and resumes its thread for the next send', async () => {
+  const child = codexScriptedChild()
+  child.holdHandshakes = false
+  child.completeTurns = false
+  const { host, fence } = await attachedHost(child)
+  const body = hostTestMessage('first turn')
+  expect(
+    (await host.send(caller, { envelope: envelope('agentSession.send', fence, { body }), body })).ok
+  ).toBe(true)
+  await vi.waitFor(() => expect(child.prompts()).toEqual(['first turn']))
+  expect(
+    (await host.cancel(caller, { envelope: envelope('agentSession.cancel', fence, {}) })).ok
+  ).toBe(true)
+  await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
+  expect(child.closes()).toBe(1)
+  const next = hostTestMessage('next turn')
+  expect(
+    (
+      await host.send(caller, {
+        envelope: envelope('agentSession.send', fence, { body: next }),
+        body: next
+      })
+    ).ok
+  ).toBe(true)
+  await vi.waitFor(() => expect(child.prompts()).toEqual(['first turn', 'next turn']))
+  expect(child.spawns()).toBe(2)
+  expect(child.resumes()).toBe(1)
+})
+
 it('can Stop the scripted child during initialization and settle a held send as withdrawn', async () => {
   const child = codexScriptedChild()
   const { host, fence } = await attachedHost(child)

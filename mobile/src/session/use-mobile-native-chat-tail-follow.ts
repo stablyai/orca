@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 
-/** Distance from the bottom, in points, still treated as "at the tail". */
 const AT_TAIL_SLOP = 80
 
 /** The page's list is anchored at its end, so it reports the reader's distance from it itself. */
@@ -26,55 +25,33 @@ function isAtTail(event: NativeScrollEvent): boolean {
   return distanceFromTail(event) <= AT_TAIL_SLOP
 }
 
-/** What the owner uses of a transcript list: native's FlatList, or the page's. */
 export type MobileNativeChatListHandle = {
   scrollToOffset: (params: { animated: boolean; offset: number }) => void
   scrollToEnd: (params: { animated: boolean }) => void
 }
 
 export type MobileNativeChatTailFollow = {
-  /** Spread on the native list. `ref`: the hook scrolls through it alone. */
   listProps: { ref: (list: MobileNativeChatListHandle | null) => void }
-  /** Spread on the page list, which reports where each scroll leaves the reader. */
   pageListProps: {
     ref: (list: MobileNativeChatListHandle | null) => void
     isFollowing: () => boolean
-    /** `byReader`: the reader moved it, not the list's own correction. */
     onEndDistance: (fromEnd: number, byReader: boolean) => void
   }
-  /** Render flag for the jump-to-latest control. */
   showJumpToTail: boolean
-  /** Passive maintenance: re-pin after the viewport resizes. */
   pinToTail: () => void
-  /** Content-size maintenance: native uses the measured height. */
   pinToTailAfterContentResize: (_width: number, height: number) => void
-  /** Explicit jump — send, or the jump-to-latest control. Resumes following. */
   jumpToTail: () => void
   beginUserScroll: () => void
   endUserDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   beginMomentum: () => void
   endMomentum: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
-  /** Whether a scroll near the top may page in older history: a native list's own drag. */
   scrollMayLoadEarlier: () => boolean
   recordScrollMetrics: (event: NativeScrollEvent) => void
 }
 
-/** Sole owner of transcript follow intent.
- *
- *  Streaming used to have several tail-followers at once: a delayed *animated*
- *  `scrollToEnd` alongside an immediate non-animated one on content growth. The
- *  animated command eases toward the endpoint measured when it started, so while
- *  tokens kept arriving it ran backwards until the content-size pin yanked it
- *  forward — the visible drift-then-snap. One owner, never animated, removes it.
- *
- *  Intent (`following`) is kept separate from geometry (at-tail): a programmatic
- *  scroll reports metrics like any other, so letting metrics decide intent let
- *  the view argue with itself. Only the user's own gestures and explicit jumps
- *  move native intent; metrics decide where a *released* gesture leaves us. The
- *  page's list holds its end by itself; there the reader's own scroll decides.
- */
+// Use one non-animated follower: competing animated endpoints drift backward during streaming.
+// Reader gestures and explicit jumps own follow intent; correction metrics must not change it.
 export function useMobileNativeChatTailFollow(args: {
-  /** Guards `scrollToEnd` against an empty list. */
   hasItems: boolean
   /** The chat shown; another one opens following, whatever the reader did here. */
   scopeKey: string
@@ -142,7 +119,7 @@ export function useMobileNativeChatTailFollow(args: {
     [setAtTail]
   )
 
-  // A one-point step still leaves the end, so a slow drag detaches; only the reader's move counts.
+  // Detach even on one-point reader moves; programmatic corrections must not alter intent.
   const onEndDistance = useCallback(
     (fromEnd: number, byReader: boolean) => {
       setAtTail(fromEnd <= AT_TAIL_SLOP)
@@ -217,8 +194,7 @@ export function useMobileNativeChatTailFollow(args: {
 
   const isFollowing = useCallback(() => followingRef.current, [])
 
-  // The view stays mounted across chats: before paint, so the next one never shows where the reader
-  // left the last.
+  // Reset before paint on chat changes so a mounted view cannot expose the previous reader position.
   useLayoutEffect(() => {
     if (scopeKeyRef.current === scopeKey) {
       return

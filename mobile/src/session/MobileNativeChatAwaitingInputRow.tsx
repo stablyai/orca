@@ -3,25 +3,23 @@ import { MessageSquareMore } from 'lucide-react-native'
 import {
   NATIVE_CHAT_ASK_ROW_COPY,
   type NativeChatAskRowSubject
-} from '../../../src/shared/native-chat-ask-row'
+} from '../../../src/shared/native-chat/input/native-chat-ask-row'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { scaledType } from './mobile-native-chat-message-styles'
 
 const ICON_SIZE = 15
 
-/** Desktop parity: `NativeChatAwaitingInputRow`. */
 export function MobileNativeChatAwaitingInputRow({
   subject,
   pending,
   fontScale,
   listsQuestions = true
 }: {
-  /** Null when the call named no question. */
   subject: NativeChatAskRowSubject | null
   pending: boolean
   fontScale: number
-  /** False when the caller already shows each question of a grouped prompt. */
+  // Suppress duplicate question lists when the grouped prompt already renders them.
   listsQuestions?: boolean
 }): React.JSX.Element {
   const label = !pending

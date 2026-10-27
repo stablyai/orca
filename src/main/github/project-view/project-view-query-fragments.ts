@@ -1,7 +1,5 @@
 const FIELD_VALUES_PAGE_SIZE = 100
 
-// ─── GraphQL query fragments ───────────────────────────────────────────
-
 export const FIELD_CONFIG_FRAGMENT = `
 fragment FieldConfig on ProjectV2FieldConfiguration {
   __typename

@@ -21,7 +21,7 @@ vi.mock('./codex-hook-trust-derivation', async (importOriginal) =>
     await importOriginal<typeof TrustDerivation>()
   )
 )
-// Why: a Windows key source on any host, as Codex on Windows keys a managed home's hooks.json.
+// Exercise Windows trust-key sources on every test host.
 vi.mock('./config-toml-trust', async (importOriginal) => ({
   ...(await importOriginal<typeof ConfigTomlTrust>()),
   getCodexExplicitHomeHookSourcePath: (hooksJsonPath: string) =>
@@ -44,7 +44,6 @@ describe('a managed home on Windows', () => {
     const backslashTables = installed.match(/^\[hooks\.state\.'C:\\[^\n]*$/gm) ?? []
     expect(backslashTables.length).toBeGreaterThan(0)
 
-    // An older Orca's leftovers: forward-slash approvals only.
     writeFileSync(
       tomlPath,
       installed.replace(/^\[hooks\.state\.'C:\\[^\n]*\n(?:(?!\[)[^\n]*\n?)*/gm, '')

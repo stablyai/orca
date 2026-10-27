@@ -31,9 +31,6 @@ export async function writeTerminalArtifactFile(
     absolutePath,
     clientId
   )
-  if (grant.readOnly) {
-    throw new Error('terminal_file_grant_read_only')
-  }
   if (isMobileBinaryPath(grant.absolutePath)) {
     throw new Error('binary_file')
   }

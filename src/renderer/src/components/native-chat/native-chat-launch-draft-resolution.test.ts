@@ -23,8 +23,7 @@ describe('launchDraftResolvedByTranscript', () => {
   const SEEDED_AT = 100_000
 
   it('resolves on any user turn at or after the seed time, even with different text', () => {
-    // The TUI input holds one line: a later user turn means the prefill was
-    // submitted with that turn (possibly edited/concatenated) or cleared first.
+    // A later turn submitted or replaced the TUI prefill, even if the final text differs.
     const submitted = { ...userMessage('u1', 'unrelated text'), timestamp: SEEDED_AT + 5_000 }
     expect(launchDraftResolvedByTranscript({ createdAt: SEEDED_AT }, [submitted])).toBe(true)
   })

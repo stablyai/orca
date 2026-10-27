@@ -3,6 +3,7 @@ import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
+import { hostMallocTunablesDaemonEnv } from '../memory/host-malloc-tunables'
 import {
   appImageDaemonIdentityPath,
   buildAppImageDaemonCommand,
@@ -15,6 +16,9 @@ import {
 } from './daemon-appimage-generation-launch'
 import { daemonLogArgs } from './daemon-launch-paths'
 import { TERMINAL_SPAWN_ADMISSION_ARG } from './terminal-spawn-gate'
+
+// Idle terminal polling churns short-lived strings; uncapped, V8 grows the young generation to 64 MB semispaces (~120 MB resident).
+export const DAEMON_V8_FLAGS = ['--max-semi-space-size=4'] as const
 
 export type DaemonChildSpawnOptions = {
   entryPath: string
@@ -71,19 +75,7 @@ export function buildDaemonScriptArgs(
   ]
 }
 
-/**
- * The two ways the daemon's OS process comes into being: the long-standing direct `fork()`, and
- * (`useDurableScope`) the identical command line wrapped in `systemd-run --user --scope` so the
- * daemon lands in a sibling cgroup instead of the caller's — see daemon-cgroup-scope.ts. The
- * wrapper needs `spawn()` because it is not a Node script, but it takes the same `'ipc'` stdio
- * contract and the process it execs into inherits the channel, so the readiness handshake is
- * unchanged. Do not read the daemon's PID off the returned child; the daemon reports its own
- * (see daemon-ready-identity.ts).
- *
- * Both arms go through the process-host chokepoint (`@orca/process-host`), which
- * is what every caller outside that directory must use — `forkProcess` for the Node-module arm,
- * `spawnProcess` for the program arm.
- */
+/** Wrappers inherit readiness IPC; use the daemon's self-reported identity, not the wrapper PID. */
 export function spawnDaemonChildProcess(
   options: DaemonChildSpawnOptions,
   useDurableScope: boolean
@@ -97,17 +89,18 @@ export function spawnDaemonChildProcess(
     launchNonce
   } = options
   const scriptArgs = buildDaemonScriptArgs(options)
-  // Why: run as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
+  // Plain Node avoids Electron display initialization interfering with node-pty spawn-helper.
   const daemonEnv: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
-    // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
+    ...hostMallocTunablesDaemonEnv(),
+    // The detached daemon lacks AppEnvironment; rcfiles must stay outside swept temporary directories.
     ORCA_USER_DATA_PATH: userDataPath
   }
-  // Why: this env becomes the daemon's, and so every PTY's (#21119).
+  // Every PTY inherits this environment (#21119).
   removeChromiumDisabledSessionBus(daemonEnv)
-  // Why cwd: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
-  // Why detached/stdio: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
+  // Use durable cwd: detached daemons outlive their dev worktrees.
+  // Detach from Electron; ignore stdout to allow exit and pipe stderr for startup failures.
   const childOptions: Pick<ForkSpec, 'cwd' | 'detached' | 'stdio'> = {
     cwd: userDataPath,
     detached: true,
@@ -118,23 +111,26 @@ export function spawnDaemonChildProcess(
       ...childOptions,
       modulePath: forkEntryPath,
       args: scriptArgs,
-      // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
+      // Keep the byte-identical Orca.exe outside the updater's kill zone.
       ...(relocatedExecPath ? { execPath: relocatedExecPath } : {}),
+      execArgv: [...process.execArgv, ...DAEMON_V8_FLAGS],
       env: daemonEnv
     })
   }
   const scopeArgs = useDurableScope ? ['--fresh-daemon-scope'] : []
   const direct = extractedGeneration
-    ? buildAppImageGenerationDaemonCommand(
-        extractedGeneration,
-        [...scriptArgs, ...scopeArgs],
-        daemonEnv
+    ? withDaemonV8Flags(
+        buildAppImageGenerationDaemonCommand(
+          extractedGeneration,
+          [...scriptArgs, ...scopeArgs],
+          daemonEnv
+        )
       )
     : appImage
       ? buildAppImageDaemonCommand(appImage, [...scriptArgs, ...scopeArgs], daemonEnv)
       : {
           command: relocatedExecPath ?? process.execPath,
-          args: [forkEntryPath, ...scriptArgs, ...scopeArgs],
+          args: [...DAEMON_V8_FLAGS, forkEntryPath, ...scriptArgs, ...scopeArgs],
           env: daemonEnv
         }
   const scoped = useDurableScope
@@ -146,4 +142,9 @@ export function spawnDaemonChildProcess(
     args: scoped.args,
     env: scoped.env
   })
+}
+
+// The AppImage `-e` bootstrap path is left alone: AppRun owns that argv shape.
+function withDaemonV8Flags<T extends { args: string[] }>(command: T): T {
+  return { ...command, args: [...DAEMON_V8_FLAGS, ...command.args] }
 }

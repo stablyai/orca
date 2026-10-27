@@ -1,7 +1,3 @@
-// Context usage a chat surface can derive from the transcript alone: the prompt
-// the model read on the last request that reported usage, against the window of
-// the model that served it.
-
 import { contextTokensFromUsage } from './agent-session-context-usage'
 import type { NativeChatMessage } from './native-chat-types'
 import { isNativeChatContextClear } from './agent-session-context-clear'

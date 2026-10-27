@@ -90,7 +90,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
     logger: deps.logger,
     onEvent: (event) => {
       // Every exit, expected or not: the host ends that child's record.
-      if (event.type === 'ended' && 'cause' in event) {
+      if (event.type === 'options-reported' || (event.type === 'ended' && 'cause' in event)) {
         context.deliverLifecycle(event)
       }
     }
@@ -147,7 +147,6 @@ function createAcpAdapter(
     })
     return new AcpStructuredSessionAdapter({
       spec,
-      readJournal,
       resolveLaunch: composeStructuredLaunch(definition, sources, part),
       readLaunch: composeStructuredLaunchRead(definition, sources, part),
       dataDirectory: deps.stateDirectory,

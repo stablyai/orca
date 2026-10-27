@@ -1,6 +1,13 @@
+// @vitest-environment happy-dom
 import React from 'react'
+import recordings from '../../../../shared/fixtures/source-control-launch-recordings.json'
+import { normalizeSourceControlActionLaunchPreferences } from '../../../../shared/source-control-ai-actions'
+import { sourceControlActionLaunchOptions } from '../../../../shared/source-control-action-launch-preferences'
+import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
+import { describeSourceControlActionModel } from './source-control-action-model-copy'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import {
@@ -21,8 +28,10 @@ import {
 import { getCommitMessageAiPaneSearchEntries } from './commit-message-ai-search'
 import { TooltipProvider } from '../ui/tooltip'
 
-function renderPane(settings: GlobalSettings): string {
-  return renderToStaticMarkup(
+const originalState = useAppStore.getState()
+
+function renderPane(settings: GlobalSettings, renderer = renderToStaticMarkup): string {
+  return renderer(
     React.createElement(
       TooltipProvider,
       null,
@@ -51,6 +60,11 @@ function buildSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings 
 describe('CommitMessageAiPane', () => {
   beforeEach(() => {
     useAppStore.setState({ settingsSearchQuery: '' })
+  })
+
+  afterEach(() => {
+    cleanup()
+    useAppStore.setState(originalState, true)
   })
 
   it('renders only the opt-in control before the feature is enabled', () => {
@@ -88,7 +102,7 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Push failure fixes')
     expect(markup).toContain('Broken checks fixes')
     expect(markup).toContain('Conflict resolution')
-    expect(markup).toContain('CLI arguments')
+    expect(markup).toContain('Arguments')
     expect(markup).toContain('Command template')
     expect(markup).toContain('Custom command')
     expect(markup).toContain('{basePrompt}')
@@ -112,14 +126,18 @@ describe('CommitMessageAiPane', () => {
           instructionsByOperation: {},
           customAgentCommand: '',
           actions: {
-            fixChecks: {
+            commitMessage: {
               agentId: 'codex'
             }
           },
           prCreationDefaults: {},
           launchActionDefaults: {}
         }
-      })
+      }),
+      (element) => {
+        useAppStore.setState({ localDetectedAgentIdsByContext: { host: ['codex'] } })
+        return render(element).container.innerHTML
+      }
     )
 
     expect(markup).toContain('placeholder="--model gpt-5.4-mini"')
@@ -460,4 +478,26 @@ describe('CommitMessageAiPane', () => {
       )
     ).toBe('runtime:env-1')
   })
+})
+
+it('keeps the recorded Antigravity Ask action chat-only in both its hint and terminal command', () => {
+  const capture = recordings.antigravity
+  const preferences = normalizeSourceControlActionLaunchPreferences(capture.launchPreferences)
+  if (!preferences) {
+    throw new Error('Recorded Antigravity action must remain valid')
+  }
+  const plan = buildAgentStartupPlan({
+    agent: 'antigravity',
+    prompt: '',
+    cmdOverrides: {},
+    platform: 'darwin',
+    allowEmptyPromptLaunch: true,
+    agentArgs: capture.agentArgs,
+    ...sourceControlActionLaunchOptions(
+      { agentId: 'antigravity', launchPreferences: preferences },
+      'antigravity'
+    )
+  })
+  expect(plan?.launchCommand).toBe(capture.command)
+  expect(describeSourceControlActionModel('antigravity', preferences)).toContain(capture.routeHint)
 })

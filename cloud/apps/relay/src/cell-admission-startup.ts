@@ -28,8 +28,7 @@ export async function reconcileCellAdmissionAtStartup(
   // Admission is operator/director state. A new worker must not enable itself
   // before its distinct candidate has passed production preflight.
   if (config.role === 'cell') return
-  // Retries every transient failure, a lost reply included: the reconcile is upserts and
-  // limit-change deletes that converge on the same rows if a lost COMMIT had landed.
+  // Reconcile upserts/cap-only updates/bound-change deletes converge even after a lost COMMIT, so retry all transient failures.
   await retryTransientDatabaseStartup(
     async () => await assignments.reconcileCellsAtStartup(config.cells),
     STARTUP_RECONCILE_RETRY,

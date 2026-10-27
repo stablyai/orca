@@ -1,4 +1,3 @@
-// A pinned terminal tab of a server workspace: only the confirmed close asks the server to force it.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -113,6 +112,19 @@ describe('closing a pinned terminal tab of a server workspace', () => {
     expect(mocks.closeWebRuntimeSessionTab).not.toHaveBeenCalled()
   })
 
+  it("sends the close of another runtime's terminal in this workspace to that runtime", () => {
+    const state = serverWorkspaceState(false)
+    mocks.getState.mockReturnValue({
+      ...state,
+      tabsByWorktree: { 'wt-1': [{ id: 'local-tab-1', ptyId: 'remote:desktop-env@@term-9' }] }
+    })
+    closeTerminalTab('local-tab-1')
+
+    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'host-tab-1', environmentId: 'desktop-env' })
+    )
+  })
+
   it('never forces a pinned lifecycle close, even with the confirmation off', () => {
     mocks.getState.mockReturnValue(serverWorkspaceState(true, false))
     closeTerminalTab('local-tab-1', {
@@ -123,5 +135,27 @@ describe('closing a pinned terminal tab of a server workspace', () => {
     expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledTimes(1)
     expect(mocks.closeWebRuntimeSessionTab.mock.calls[0][0]).toMatchObject({ reason: 'pty-exit' })
     expect(mocks.closeWebRuntimeSessionTab.mock.calls[0][0]).not.toHaveProperty('force')
+  })
+})
+
+describe('a pinned local tab whose background process exited', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('asks first, then closes as a process exit, never a user close', () => {
+    mocks.isWebRuntimeSessionActive.mockReturnValue(false)
+    const state = { ...serverWorkspaceState(true), ...terminalOwnerRows(null) }
+    mocks.getState.mockReturnValue(state)
+
+    // What the parked watcher sends: the host reason only, so the pin guard still asks.
+    closeTerminalTab('local-tab-1', { hostCloseReason: 'pty-exit', captureRecentlyClosed: false })
+    expect(state.closeTab).not.toHaveBeenCalled()
+    state.requestPinnedTabCloseConfirm.mock.calls[0][0].onConfirm()
+
+    expect(state.closeTab).toHaveBeenCalledWith(
+      'local-tab-1',
+      expect.objectContaining({ reason: 'pty-exit' })
+    )
   })
 })

@@ -74,9 +74,8 @@ type PairedRuntimeBrowserClientHostCompositionOptions<
   ): ComposedPageExecutor
   createHost(input: Start, callbacks: ClientHostCallbacks): ComposedClientHost
   onError?: (error: Error) => void
-  /** Runs as closing begins, before teardown: the point after which this composition owns nothing. */
+  /** Runs before teardown to relinquish composition ownership. */
   onClosing?: () => void
-  /** Injected so the grace a restart depends on is drivable; production supplies the real deadline. */
   createAuthorityReplacementWait?: () => BrowserClientHostAuthorityReplacementWait
 }
 
@@ -218,8 +217,7 @@ export class PairedRuntimeBrowserClientHostComposition<
           this.routeSets.reconnect(authority)
         }
       },
-      // A replaced authority is armed rather than handled: handleHostError would close the
-      // composition and latch `errorReported`, swallowing the next genuinely fatal error.
+      // Delay replacement errors: handleHostError closes the composition and latches errorReported.
       onError: (error) => {
         const fatal = (): void => {
           if (!this.closed && this.hostGeneration === generation) {

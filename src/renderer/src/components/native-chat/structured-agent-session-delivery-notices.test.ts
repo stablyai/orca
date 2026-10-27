@@ -79,7 +79,6 @@ describe('the line under each of the chat own messages', () => {
     expect(texts(notices({ pending: [pending('a', 'sending')] }))).toEqual({
       [agentJournalSubmissionKey('a')]: SENDING
     })
-    // The host's row draws a recorded one.
     expect(texts(notices({ pending: [pending('c', 'recorded')] }))).toEqual({})
   })
 
@@ -100,6 +99,32 @@ describe('the line under each of the chat own messages', () => {
     const notice = map.get(agentJournalSubmissionKey('a'))
     expect(notice?.text).toBe('Claude does not support the image type .bmp')
     expect(notice?.onDismiss).toBeUndefined()
+  })
+
+  it("keeps the CLI's own startup words behind the rejected message unless a start row has them", () => {
+    const exited: AgentSessionFailureFact = {
+      kind: 'providerStartFailed',
+      detail: { text: '(code 1)\nclaude: unknown option --foo', audience: 'log' }
+    }
+    const submission = row('a', 'rejected', { reason: 'Written by the host.', rejection: exited })
+    expect(notices({ submissions: [submission] }).get(agentJournalSubmissionKey('a'))).toEqual({
+      text: 'Claude stopped before it finished starting. Send your message to try again.',
+      detail: '(code 1)\nclaude: unknown option --foo'
+    })
+    expect(
+      notices({ submissions: [submission], startFailures: [exited] }).get(
+        agentJournalSubmissionKey('a')
+      )?.detail
+    ).toBeUndefined()
+    // A refusal's sentence already quotes the provider's words.
+    const rejected: AgentSessionFailureFact = {
+      kind: 'providerRejected',
+      detail: { text: 'Too long', audience: 'person' }
+    }
+    const refused = row('b', 'rejected', { rejection: rejected })
+    expect(notices({ submissions: [refused] }).get(agentJournalSubmissionKey('b'))?.detail).toBe(
+      undefined
+    )
   })
 
   it('says nothing for a message a Stop withdrew: it went back to the composer', () => {
@@ -139,7 +164,14 @@ describe('the line under each of the chat own messages', () => {
       const facts = structuredAgentSessionStartFailureFacts([statusRow(startRowKey, startFailed)])
       const recorded = (id: string) =>
         row(id, 'rejected', { reason: 'Written by the host.', rejection: startFailed })
-      expect(texts(notices({ submissions: [recorded('first')], startFailures: facts }))).toEqual({
+      expect(
+        texts(
+          notices({
+            submissions: [recorded('first'), row('later', 'pending')],
+            startFailures: facts
+          })
+        )
+      ).toEqual({
         [agentJournalSubmissionKey('first')]: 'Your message was not sent.'
       })
       expect(texts(notices({ submissions: [recorded('first')] }))).toEqual({

@@ -1,4 +1,4 @@
-import { net } from 'electron'
+import { getMainHttpClient } from '../network/http-client'
 import { EmulatorError } from './emulator-errors'
 import { normalizeServeSimAxTree, type NormalizedAxNode } from './serve-sim-ax-normalization'
 
@@ -7,7 +7,7 @@ const MAX_ERROR_BODY_LENGTH = 512
 
 export async function requestServeSimAccessibilityTree(axUrl: string): Promise<NormalizedAxNode[]> {
   try {
-    const response = await net.fetch(axUrl, {
+    const response = await getMainHttpClient().fetch(axUrl, {
       signal: AbortSignal.timeout(AX_REQUEST_TIMEOUT_MS)
     })
     const body = await response.text()
@@ -32,8 +32,7 @@ export async function requestServeSimAccessibilityTree(axUrl: string): Promise<N
     ) {
       throw new EmulatorError('emulator_error', 'serve-sim AX returned an invalid tree.')
     }
-    // serve-sim reports frames in absolute pixels; normalize to 0..1 so the
-    // output feeds straight back into tap/gesture.
+    // Normalize pixels to the 0..1 coordinates accepted by tap and gesture.
     return normalizeServeSimAxTree(tree)
   } catch (error) {
     if (error instanceof EmulatorError) {

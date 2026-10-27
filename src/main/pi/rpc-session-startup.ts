@@ -24,7 +24,7 @@ import { decodePiHistoryClaim, encodePiHistoryClaim } from './rpc-history-journa
 
 export class PiRpcSessionStartup {
   commands?: AgentSessionSlashCommand[]
-  /** Set by an open that left its claim at Pi's current leaf. */
+  /** Continue capture only from a claim reconciled to Pi's current leaf. */
   historyAnchor?: PiHistoryAnchor
 
   constructor(
@@ -37,7 +37,6 @@ export class PiRpcSessionStartup {
     private readonly failedCause: () => Error | undefined
   ) {}
 
-  /** Ready once Pi reports its state: only an unknown provider fails the start. */
   async run(
     launch: PiRpcResolvedLaunch,
     signal: AbortSignal
@@ -56,7 +55,7 @@ export class PiRpcSessionStartup {
       Date.now()
     )
     this.setState(state)
-    // Only the conversation this open continues can carry the claim; a replacement starts over.
+    // Replacement sessions cannot inherit the prior conversation's history claim.
     const continued = launch.sessionFile !== undefined || launch.forkFile !== undefined
     const history = await this.wait(
       catchUpPiSession({
@@ -88,15 +87,14 @@ export class PiRpcSessionStartup {
     return { link: claimed, reportedOptions: current }
   }
 
-  /** After the open: the listing and the `/` commands reach the host as later reports, and a read
-   *  that fails only leaves the chat without them. */
+  /** Listing/command failures after open leave optional metadata unavailable. */
   async readAfterOpen(
     generation: string,
     opening: AgentSessionOptionsResult['current']
   ): Promise<void> {
     const options = await this.readListing()
     if (options && !this.failedCause() && !this.connection.closed) {
-      // What it started on names its config's default once; a later switch teaches nothing.
+      // Only the opening model establishes the configured default; later switches do not.
       const { catalogListing } = withLiveCatalogListing(
         options,
         unpickedSessionConfiguredChoice({

@@ -1,7 +1,3 @@
-/**
- * `agent.launch`'s `accountEnv` reaches only terminal agents; a structured launch keeps its
- * host-derived home and says so.
- */
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'

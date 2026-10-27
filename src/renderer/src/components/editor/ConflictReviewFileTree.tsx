@@ -23,7 +23,7 @@ type ConflictReviewTreeNode = SourceControlTreeNode<ConflictReviewTreeEntry, 'co
 const CONFLICT_REVIEW_TREE_INDENT_PX = 12
 const CONFLICT_REVIEW_DIRECTORY_PADDING_PX = 8
 const CONFLICT_REVIEW_FILE_PADDING_PX = 20
-// Why: the status badge makes file rows slightly taller than the 24px directory rows.
+// Status badges need one extra pixel beyond the directory rows’ 24px height.
 export const CONFLICT_REVIEW_ROW_HEIGHT_PX = 25
 
 function buildConflictReviewRows(
@@ -54,7 +54,7 @@ export function ConflictReviewFileTree({
     () => buildConflictReviewRows(entries, collapsedDirectoryKeys),
     [collapsedDirectoryKeys, entries]
   )
-  // Why: state, not a ref — a ref is not attached when the virtualizer first observes.
+  // Use state: a ref is unattached when the virtualizer first observes.
   const [listScrollElement, setListScrollElement] = React.useState<HTMLDivElement | null>(null)
   const toggleDirectory = React.useCallback((key: string) => {
     setCollapsedDirectoryKeys((prev) => {

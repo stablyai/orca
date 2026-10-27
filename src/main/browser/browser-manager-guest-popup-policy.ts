@@ -19,33 +19,31 @@ import { requestBrowserExternalAppLaunch } from './browser-external-app-launch'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
-    // Why: a fresh input marks a click, which bypasses the page-initiated tab budget.
     const gesture = trackBrowserGuestInputGesture(guest)
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
-      // Why: popup descendants inherit the opener's owner context but must not replace its primary registration.
+      // Popups inherit ownership without replacing the primary guest registration.
       if (!isBrowserRouteGuestPopup(window.webContents.id)) {
         this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
       }
     }
     guest.on('did-create-window', handleDidCreateWindow)
     guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features, referrer }) => {
-      // Why: as in Chrome, every open spends the click, so a popup's click cannot fund a later tab.
+      // Spend activation even on popups so it cannot fund a later tab.
       const clicked = gesture.consume()
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
       const browserTabId = ownerContext?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
-      // Why: one rule for every link and window.open; opener-dependent shapes are excluded by
-      // isNewBrowserTabPopupIntent and still get a real child window below.
+      const newTabUrl = externalUrl ?? (isLocalFileLinkFromLocalPage(guest, url) ? url : null)
+      // Opener-dependent requests retain a child window instead of becoming tabs.
       if (
         ownerContext &&
-        externalUrl &&
+        newTabUrl &&
         isNewBrowserTabPopupIntent({ url, frameName, disposition, postBody })
       ) {
-        // Why: one activation lets a page loop window.open, and each routed tab persists into
-        // workspace session state, so only opens beyond the observed clicks draw on the budget.
+        // Scripted opens persist as tabs, so opens without observed input consume a budget.
         if (!clicked && !this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
           this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(externalUrl),
+            origin: safeOrigin(newTabUrl),
             action: 'blocked'
           })
           return { action: 'deny' }
@@ -53,24 +51,23 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         if (
           this.openLinkInOrcaTab(
             ownerContext.browserTabId,
-            externalUrl,
+            newTabUrl,
             disposition !== 'background-tab'
           )
         ) {
           this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(externalUrl),
+            origin: safeOrigin(newTabUrl),
             action: 'opened-in-orca'
           })
         }
-        // Why: a recognized new-tab intent must never fall through to a native popup if its renderer vanished mid-open.
+        // A vanished renderer must not turn new-tab intent into a native popup.
         return { action: 'deny' }
       }
 
-      // Why: file URLs are fine for in-pane previews, but must not spawn native child windows targeting local paths.
+      // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
       if (browserTabId && canOpenAsChild) {
-        // Why: the OAuth rule keeps a tab-shaped GET out of tabs only to save its opener. A plain link
-        // has none and a Cmd/Ctrl+Shift-click hands over no page at all, so both are ordinary tabs.
+        // A tab-shaped GET needs no OAuth child window when it has no opener.
         const tabUrl =
           externalUrl && isBrowserTabPopupRequest({ frameName, disposition, postBody })
             ? externalUrl
@@ -95,28 +92,28 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
               this.createPopupChildWindowWithOriginBar(guest, url, options)
           })
         }
-        // Why: OAuth may request size/position, but content must not create deceptive or inescapable native chrome.
+        // Restrict page-requested chrome so native popups remain verifiable and escapable.
         return {
           action: 'allow',
           overrideBrowserWindowOptions: SAFE_POPUP_WINDOW_OPTIONS,
-          // Why: default child windows lack an address bar; host in an Orca origin-bar window so the destination is verifiable.
+          // Host child windows with an origin bar so users can verify the destination.
           createWindow: (options: PopupChildWindowOptions) =>
             openAsTabWithoutOpener(options) ??
             this.createPopupChildWindowWithOriginBar(guest, url, {
               ...options,
-              // Link-created contents have no inherited session until we bind the opener's jar.
+              // Bind link-created contents to the opener's session.
               webPreferences: { ...options.webPreferences, session: guest.session }
             })
         }
       } else if (externalUrl && !postBody) {
-        // Why: Kagi target=_blank popup URLs still contain the bearer token; redact before handing to the OS browser.
+        // Redact the Kagi bearer token before opening the OS browser.
         void shell.openExternal(redactKagiSessionToken(externalUrl))
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(externalUrl),
           action: 'opened-external'
         })
       } else if (!this.requestExternalAppLaunch(guest, url, () => referrer.url || null)) {
-        // Why: popup URLs can carry auth redirects/one-time tokens; surface only sanitized origin metadata.
+        // Report only the origin: popup URLs can contain one-time tokens.
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(url),
           action: 'blocked'
@@ -135,13 +132,12 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     }
   }
 
-  /** Every route from a page into another app ends here, so they all share one prompt. */
   requestExternalAppLaunch(
     guest: Electron.WebContents,
     rawUrl: string | undefined,
     requestingUrl: () => string | null
   ): boolean {
-    // Why: the top page's URL would credit an embedded frame's request to the site the user trusts.
+    // Credit the requesting frame, not the trusted top-level site.
     return requestBrowserExternalAppLaunch({
       requester: guest,
       target: this.resolvePagePromptTarget(guest),
@@ -150,7 +146,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     })
   }
 
-  /** The tab loads the URL itself, so Chromium's page ends before its first request. */
+  /** The tab loads the URL; discard the provisional popup before its first request. */
   private openPopupAsBrowserTab(
     opener: Electron.WebContents,
     url: string,
@@ -158,7 +154,6 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     tab: { clicked: boolean; activate: boolean }
   ): Electron.WebContents {
     const owner = this.resolvePopupOwnerContext(opener.id)
-    // Same budget as any routed tab: opens beyond the observed clicks draw on it.
     const opened =
       owner !== null &&
       (tab.clicked || this.tryConsumePageInitiatedTab(owner.rootGuestWebContentsId)) &&
@@ -168,10 +163,15 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       action: opened ? 'opened-in-orca' : 'blocked'
     })
     if (options.webContents && !options.nativeWindow) {
-      // Why: discarding directly avoids flashing an origin-bar window that would close at once.
+      // Discard directly to avoid flashing a window that would immediately close.
       discardBrowserPopupContents(options.webContents)
       return options.webContents
     }
     return openPopupWithOriginBar(options, url, () => false).contentWebContents
   }
+}
+
+// Web pages must not reach the filesystem; only a local page may link to local files.
+export function isLocalFileLinkFromLocalPage(guest: Electron.WebContents, url: string): boolean {
+  return url.startsWith('file:') && guest.getURL().startsWith('file:')
 }

@@ -1,6 +1,3 @@
-// Doubles for unit tests that drive a settlement without a journal database: a planned batch is
-// planned at once and handed to an `appendLifecycleBatch` mock as the batch it would write.
-
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
@@ -14,8 +11,7 @@ import type {
 
 const NO_CURSOR: AgentJournalCursor = { epoch: 'epoch-1', sequence: 0 }
 
-/** `appendPlannedLifecycleBatch` for a double: a plan with no row reaches no `append`, as the
- *  writer writes none. */
+/** Empty plans must not call append, matching the real writer. */
 export function plannedBatchThrough(
   append: (input: JournalLifecycleBatchInput) => Promise<AgentJournalCursor>
 ): (input: JournalPlannedLifecycleBatchInput) => Promise<AgentJournalCursor> {
@@ -35,8 +31,6 @@ export function plannedBatchThrough(
   }
 }
 
-/** An exited child's journal for a test without a database: the reads a settlement makes, with a
- *  planned batch handed to `appendLifecycleBatch` (`plannedBatchThrough`). */
 export function exitJournalDouble(fields: {
   items: () => readonly AgentJournalRenderItem[]
   appendLifecycleBatch: (input: JournalLifecycleBatchInput) => Promise<AgentJournalCursor>

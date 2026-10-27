@@ -40,11 +40,13 @@ export const fsApi = {
     access?: LocalFileAccess
     offset: number
     length: number
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('fs:readFileChunk', args),
   readDir: (args: {
     dirPath: string
     connectionId?: string
     followSymlinks?: boolean
+    wakeWslDistro?: boolean
   }): Promise<{ name: string; isDirectory: boolean; isSymlink: boolean }[]> =>
     ipcRenderer.invoke('fs:readDir', args),
   readFile: (args: {
@@ -52,6 +54,7 @@ export const fsApi = {
     connectionId?: string
     includeLocalLogMetadata?: boolean
     access?: LocalFileAccess
+    wakeWslDistro?: boolean
   }): Promise<{
     content: string
     isBinary: boolean
@@ -150,12 +153,14 @@ export const fsApi = {
       targetPath: string
       connectionId?: string
       recursive?: boolean
+      permanent?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
   stat: (args: {
     filePath: string
     connectionId?: string
     access?: LocalFileAccess
+    wakeWslDistro?: boolean
   }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
     ipcRenderer.invoke('fs:stat', args),
   pathsExist: (args: {

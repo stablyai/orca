@@ -1,5 +1,4 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
@@ -13,7 +12,9 @@ import {
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute,
-  type WorktreeOperationRoute
+  type WorktreeOperationRoute,
+  type WorktreeOperationRouteResolution,
+  type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 import {
@@ -55,27 +56,28 @@ export function captureEditorFileOperationProvenance(
   ownerHint: string | null | undefined,
   ownerHintProvided: boolean
 ): EditorFileOperationProvenance {
-  const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
-  const worktreeIsPublished = isWorktreePublished(state, worktreeId)
-  const ownershipProjection =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID || explicitResolution.kind === 'resolved'
-      ? 'explicit'
-      : 'legacy'
+  const owner = resolveEditorOwnerRoute(
+    state,
+    worktreeId,
+    state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null
+  )
+  const ownershipProjection = owner.ownershipProjection
   const hintedRuntimeEnvironmentId = ownerHint?.trim() || null
   const route =
-    getFloatingWorkspaceOperationRoute(worktreeId) ??
-    (explicitResolution.kind === 'resolved'
-      ? explicitResolution.route
-      : explicitResolution.kind === 'ambiguous'
-        ? null
-        : ownerHintProvided && worktreeIsPublished
-          ? {
-              executionHostId: hintedRuntimeEnvironmentId
-                ? (`runtime:${encodeURIComponent(hintedRuntimeEnvironmentId)}` as const)
-                : ('local' as const),
-              runtimeEnvironmentId: hintedRuntimeEnvironmentId
-            }
-          : resolveEditorOwnerRoute(state, worktreeId))
+    owner.kind === 'ambiguous'
+      ? null
+      : ownershipProjection === 'legacy' &&
+          ownerHintProvided &&
+          isWorktreePublished(state, worktreeId)
+        ? {
+            executionHostId: hintedRuntimeEnvironmentId
+              ? (`runtime:${encodeURIComponent(hintedRuntimeEnvironmentId)}` as const)
+              : ('local' as const),
+            runtimeEnvironmentId: hintedRuntimeEnvironmentId
+          }
+        : owner.kind === 'resolved'
+          ? owner.route
+          : null
   if (!route || (ownerHintProvided && (ownerHint?.trim() || null) !== route.runtimeEnvironmentId)) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
@@ -87,27 +89,40 @@ export function captureEditorFileOperationProvenance(
   }
 }
 
-function resolveEditorOwnerRoute(
-  state: EditorOwnerState,
+/** One catalog interpretation for editor identity, capture and validation; callers retain their own hint and generation policies. */
+export function resolveEditorOwnerRoute(
+  state: WorktreeOperationRouteState,
   worktreeId: string,
-  capturedHostId?: ExecutionHostId | null
-): WorktreeOperationRoute | null {
+  folderHostId?: ExecutionHostId | null
+): WorktreeOperationRouteResolution & {
+  ownershipProjection: EditorFileOperationProvenance['ownershipProjection']
+} {
+  const floatingRoute = getFloatingWorkspaceOperationRoute(worktreeId)
+  if (floatingRoute) {
+    return { kind: 'resolved', route: floatingRoute, ownershipProjection: 'explicit' }
+  }
   // Neither workspace focus nor the Active Server focus can replace a file's catalog owner.
   const ownerState = { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
-  const route = resolveWorktreeOperationRoute(ownerState, worktreeId)
   const scope = parseWorkspaceKey(worktreeId)
-  const hostId =
-    capturedHostId ??
-    (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
-  if (route || scope?.type !== 'folder' || !hostId) {
-    return route
+  const explicit: WorktreeOperationRouteResolution =
+    scope?.type === 'folder'
+      ? { kind: 'missing' }
+      : resolveExplicitWorktreeOperationRouteResult(ownerState, worktreeId)
+  if (explicit.kind !== 'missing') {
+    return { ...explicit, ownershipProjection: 'explicit' }
   }
-  // Same-id folders may use a host qualifier only when the catalog confirms that owner.
-  const folder = findFolderWorkspaceOwner(ownerState, scope.folderWorkspaceId, hostId)
-  const qualifiedRoute = folder
-    ? resolveWorktreeOperationRoute({ ...ownerState, folderWorkspaces: [folder] }, worktreeId)
-    : null
-  return qualifiedRoute?.executionHostId === hostId ? qualifiedRoute : null
+  let route = resolveWorktreeOperationRoute(ownerState, worktreeId)
+  if (!route && scope?.type === 'folder' && folderHostId) {
+    // Same-id folders may use a host qualifier only when the catalog confirms that owner.
+    const folder = findFolderWorkspaceOwner(ownerState, scope.folderWorkspaceId, folderHostId)
+    const qualifiedRoute = folder
+      ? resolveWorktreeOperationRoute({ ...ownerState, folderWorkspaces: [folder] }, worktreeId)
+      : null
+    route = qualifiedRoute?.executionHostId === folderHostId ? qualifiedRoute : null
+  }
+  return route
+    ? { kind: 'resolved', route, ownershipProjection: 'legacy' }
+    : { kind: 'missing', ownershipProjection: 'legacy' }
 }
 
 export function assertEditorFileOperationCurrent(
@@ -134,21 +149,20 @@ function resolveCurrentEditorRoute(
   worktreeId: string,
   provenance: EditorFileOperationProvenance
 ): WorktreeOperationRoute | null {
-  const floatingRoute = getFloatingWorkspaceOperationRoute(worktreeId)
-  if (floatingRoute) {
-    return floatingRoute
+  const owner = resolveEditorOwnerRoute(
+    state,
+    worktreeId,
+    provenance.generation.route.executionHostId
+  )
+  if (owner.ownershipProjection === 'explicit' && owner.kind === 'resolved') {
+    return owner.route
   }
-  const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
-  if (explicitResolution.kind === 'resolved') {
-    return explicitResolution.route
-  }
-  if (explicitResolution.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
+  if (owner.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
     return null
   }
-  // Why: ordinary folder workspaces have no published worktree row, so re-resolve their live
-  // folder owner after preserving the explicit-owner fail-closed contract above (#10251).
+  // Folder workspaces must still confirm their live owner rather than retain a published-worktree hint.
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-    return resolveEditorOwnerRoute(state, worktreeId, provenance.generation.route.executionHostId)
+    return owner.kind === 'resolved' ? owner.route : null
   }
   return isWorktreePublished(state, worktreeId) ? provenance.generation.route : null
 }

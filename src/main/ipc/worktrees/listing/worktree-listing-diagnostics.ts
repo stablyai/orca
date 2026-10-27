@@ -16,10 +16,7 @@ export function warnOnce(keySet: Set<string>, key: string, message: string, erro
 
 const SCAN_FAILURE_REASON_MAX_CHARS = 240
 
-/**
- * The cause a retained-but-unscannable repo shows the user. The first two lines carry the
- * classifier's summary plus its `Wsl/Service/WSL_E_*` code; everything after is the raw command.
- */
+/** Keep the summary and WSL service code, omitting trailing raw command output. */
 export function describeWorktreeScanFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   const summary = message

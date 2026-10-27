@@ -56,7 +56,7 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   `)
 }
 
-// Why: sqlite_master holds the table's CREATE SQL incl. the CHECK — cheapest reliable probe for whether it already allows 'heartbeat'.
+// Probe sqlite_master's CHECK to verify heartbeat support without rebuilding.
 export function messagesTypeCheckAllowsHeartbeat(this: OrchestrationDb): boolean {
   const row = this.db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'")

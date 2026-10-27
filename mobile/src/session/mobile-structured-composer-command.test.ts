@@ -39,7 +39,6 @@ function setup() {
   }
   return { input, sendRequest }
 }
-/** The fields one recorded request carried, read without asserting their shape. */
 function requestFields(call: readonly unknown[] | undefined): Record<string, unknown> {
   const params = call?.[1]
   return typeof params === 'object' && params !== null
@@ -86,7 +85,6 @@ describe('mobile structured conversation commands', () => {
     sendRequest.mockResolvedValueOnce(answer)
     expect(await dispatchMobileStructuredCommand(input)).toBe('unknown')
     expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
-    // Only the operation id differs between the two requests.
     expect(sendRequest.mock.calls[1]?.[1]).not.toEqual(sendRequest.mock.calls[0]?.[1])
   })
   it.each(['attachments', 'old host', 'arguments', 'pending work'])(
@@ -110,9 +108,21 @@ describe('mobile structured conversation commands', () => {
       expect(input.onError).toHaveBeenCalled()
     }
   )
+  it('leaves a session-reported command such as OMP /fast to an ordinary send', async () => {
+    const { input, sendRequest } = setup()
+    input.text = '/fast'
+    input.controller.agent = 'omp'
+    await dispatchMobileStructuredCommand(input)
+    expect(input.onError).toHaveBeenCalledWith(
+      expect.stringContaining('/fast is not available'),
+      undefined
+    )
+    input.controller.sessionCommands = [{ name: 'fast', kind: 'command' }]
+    expect(await dispatchMobileStructuredCommand(input)).toBeNull()
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
   it('/clear is a plain command on every host: no withdrawal fields, nothing persisted', async () => {
-    // The host carries queued cards to the replacement session itself; the
-    // client asks for nothing back and has nothing to restore.
+    // The host carries cards to replacement sessions; client restoration would duplicate them.
     const { input, sendRequest } = setup()
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('accepted')
     const fields = requestFields(sendRequest.mock.calls[0])
@@ -139,7 +149,6 @@ describe('mobile structured conversation commands', () => {
     const fields = requestFields(sendRequest.mock.calls[0])
     expect(fields).toMatchObject({ command: 'compact', delivery: 'queue-if-active' })
     expect(input.onError).not.toHaveBeenCalled()
-    // A /clear never waits: the busy check still answers it.
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(sendRequest).toHaveBeenCalledOnce()
   })
@@ -190,7 +199,7 @@ describe('mobile structured conversation commands', () => {
       "The agent is still working. Run /compact when it's done.",
       { refusedWhile: 'working' }
     )
-    // Ahead of the phone: said as any failure, so it can't go before it is read.
+    // Keep a newer host’s unreadable cause as failure rather than claiming which work blocked it.
     input.busy = () => null
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(

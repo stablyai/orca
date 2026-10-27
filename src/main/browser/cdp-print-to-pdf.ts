@@ -10,11 +10,6 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-/**
- * Translate CDP `Page.printToPDF` params into Electron `printToPDF` options.
- * Only well-formed values are forwarded so a malformed param can never smuggle
- * NaN/Infinity into Electron; omitted margin sides default to CDP's 1cm.
- */
 export function buildPrintToPdfOptions(params: Record<string, unknown>): PrintToPDFOptions {
   const options: PrintToPDFOptions = {}
 
@@ -53,8 +48,7 @@ export function buildPrintToPdfOptions(params: Record<string, unknown>): PrintTo
   const marginLeft = finiteNumber(params.marginLeft)
   const marginRight = finiteNumber(params.marginRight)
   if ([marginTop, marginBottom, marginLeft, marginRight].some((margin) => margin !== null)) {
-    // CDP and Electron printToPDF both use inches; omitted CDP sides default to 1cm.
-    // Electron 43.4 dropped marginType from PrintToPDFMargins; sides imply custom.
+    // Both APIs use inches; CDP defaults omitted sides to 1 cm. Explicit sides imply custom margins.
     options.margins = {
       top: marginTop ?? PDF_DEFAULT_MARGIN_INCHES,
       bottom: marginBottom ?? PDF_DEFAULT_MARGIN_INCHES,
@@ -87,19 +81,13 @@ export type PdfStreamChunk = {
   eof: boolean
 }
 
-/**
- * Holds the PDF buffers produced for CDP `transferMode: "ReturnAsStream"` and
- * serves them back through `IO.read` / `IO.close`, the path Playwright's
- * `page.pdf()` uses. Handles carry a per-instance random prefix so a CDP client
- * cannot forge one or collide with a real Chromium IO stream, and each buffer is
- * evicted after a TTL so an abandoned stream can never leak memory.
- */
 export class CdpPdfStreamStore {
   private readonly streams = new Map<string, PdfStream>()
+  // Random prefixes avoid collisions with Chromium streams and other store instances.
   private readonly handlePrefix = `${PDF_STREAM_HANDLE_PREFIX}${randomUUID()}-`
   private nextId = 0
 
-  /** True when `params.handle` names one of this store's streams. */
+  /** Recognizes this store’s handle prefix, including expired handles. */
   ownsHandle(params: Record<string, unknown>): boolean {
     return typeof params.handle === 'string' && params.handle.startsWith(this.handlePrefix)
   }
@@ -114,7 +102,7 @@ export class CdpPdfStreamStore {
     return handle
   }
 
-  /** Read the next chunk, or `null` if the handle is unknown/expired. */
+  /** Returns null for unknown or expired handles. */
   read(params: Record<string, unknown>): PdfStreamChunk | null {
     const handle = typeof params.handle === 'string' ? params.handle : ''
     const stream = this.streams.get(handle)
@@ -153,6 +141,7 @@ export class CdpPdfStreamStore {
   }
 
   private scheduleCleanup(handle: string): ReturnType<typeof setTimeout> {
+    // Expire abandoned streams without requiring a client close.
     const cleanupTimer = setTimeout(() => {
       this.delete(handle)
     }, PDF_STREAM_TTL_MS)

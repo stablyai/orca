@@ -1,22 +1,4 @@
-/**
- * Real-zsh proof that a worktree-scoped HISTFILE survives shell startup, and
- * that the rest of Orca's startup features arrive with it.
- *
- * macOS `/etc/zshrc` assigns `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history` with no
- * check-before-set. Orca used to fight that by keeping its own ZDOTDIR in place
- * across `/etc/zshrc` and repairing the damage afterwards (#11044). It now hands
- * ZDOTDIR back before that file runs, so the value `/etc/zshrc` derives is the
- * user's own path and the scoped one is re-applied from the deferred hook.
- *
- * Only a real zsh on a real PTY can show any of this: the wrapper text looks
- * correct either way, the whole question is what `/etc/zshrc` does between the
- * spawn env and the first prompt, and the hook is a `precmd` — which a shell
- * started with `-c` never reaches.
- *
- * These tests drive the REAL launch decision (`selectShellStartupFeatures` +
- * `getShellLaunchConfig`) rather than an inline copy of the gate, so a pane that
- * Orca would not wrap cannot pass here by construction.
- */
+/** Exercise real launch selection and a PTY prompt so system zshrc and deferred hooks can affect HISTFILE. */
 import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,14 +10,7 @@ import { hasZsh, makeZshHome, MARKERS, runZshPty, ZSH_PATH } from './zsh-startup
 
 const itWithZsh = hasZsh ? it : it.skip
 
-/**
- * True when this host's system zshrc is the thing that destroys HISTFILE.
- *
- * Why probed and not keyed off `process.platform`: macOS ships the clobber in
- * /etc/zshrc, stock Ubuntu ships no such assignment, and a hardened corporate
- * image can go either way. Assertions that only mean something under a clobber
- * are skipped where there is none rather than asserting a tautology.
- */
+/** Probe actual system config; platform alone cannot tell whether zshrc overwrites HISTFILE. */
 const systemZshrcClobbersHistfile = (() => {
   if (!hasZsh) {
     return false
@@ -57,7 +32,6 @@ const systemZshrcClobbersHistfile = (() => {
 
 const itWithClobber = systemZshrcClobbersHistfile ? itWithZsh : it.skip
 
-/** The launch config Orca produces for a pane with exactly these features. */
 function launchPane(
   home: string,
   scopedHistfile: string | null,
@@ -79,9 +53,7 @@ function launchPane(
   return {
     features,
     launch,
-    // Why ORCA_ORIG_ZDOTDIR overridden: the launch config resolves the user's
-    // config dir from the real process env, and these runs must resolve against
-    // the sandbox home instead.
+    // Resolve config against the sandbox home instead of the real launch environment.
     env: { PATH: '/usr/bin:/bin', ...env, ...launch.env, ORCA_ORIG_ZDOTDIR: home }
   }
 }
@@ -111,8 +83,6 @@ describe.skipIf(process.platform === 'win32')(
       withHome(USER_FILES, async (home) => {
         const { features, launch } = launchPane(home, join(home, 'zsh_history'))
 
-        // The whole reason wrapping widened: this pane has no overlay env and no
-        // startup command, so before #15258 nothing pointed it at a wrapper.
         expect(features).toEqual(['history'])
         expect(launch.env.ZDOTDIR).toBeTruthy()
         expect(launch.env.ORCA_SHELL_FEATURES).toBe('history')
@@ -146,7 +116,6 @@ describe.skipIf(process.platform === 'win32')(
           ]
         })
 
-        // Each user file is read from the user's own dir, exactly as unwrapped.
         expect(values.ORCA_TEST_USER_ZSHENV).toBe('1')
         expect(values.ORCA_TEST_USER_ZPROFILE).toBe('1')
         expect(values.ORCA_TEST_USER_ZSHRC).toBe('1')
@@ -162,8 +131,6 @@ describe.skipIf(process.platform === 'win32')(
 
         const { values } = await runZshPty({ env, report: ['HISTFILE'] })
 
-        // #11044's exact failure mode. It is now unreachable rather than repaired:
-        // /etc/zshrc derives HISTFILE from a ZDOTDIR that is already the user's.
         expect(values.HISTFILE).not.toContain(launch.env.ZDOTDIR)
       })
     )
@@ -179,7 +146,6 @@ describe.skipIf(process.platform === 'win32')(
           report: ['ORCA_HISTFILE', 'ORCA_SHELL_FEATURES', 'HISTFILE']
         })
 
-        // Root-cause fix for #11146: the variables no longer exist after use.
         expect(values.ORCA_HISTFILE).toBe('UNSET')
         expect(values.ORCA_SHELL_FEATURES).toBe('UNSET')
         expect(values.HISTFILE).toBe(scoped)
@@ -189,10 +155,7 @@ describe.skipIf(process.platform === 'win32')(
     itWithZsh(
       'leaves HISTFILE exactly as an unwrapped zsh would when Orca injects nothing',
       withHome(USER_FILES, async (home) => {
-        // Why compared against an unwrapped run rather than asserted non-empty:
-        // what zsh defaults to is platform-specific. macOS /etc/zshrc assigns
-        // HISTFILE, so it is always set there; a stock Ubuntu zsh leaves it EMPTY.
-        // The contract is that Orca's wrapper does not change it either way.
+        // Defaults vary by host; compare with its unwrapped shell rather than a hardcoded HISTFILE.
         const overlayEnv = { ORCA_CODEX_HOME: join(home, 'codex') }
         const features = selectShellStartupFeatures({
           shellPath: ZSH_PATH,
@@ -283,8 +246,6 @@ describe.skipIf(process.platform === 'win32')('the deferred hook delivers every 
           report: ['CODEX_HOME', 'PATH']
         })
 
-        // The point of running last: the user's .zshrc set both of these after
-        // the spawn env did, and Orca's values still win.
         expect(values.CODEX_HOME).toBe('/orca/codex')
         expect(values.PATH.startsWith('/orca/shim:')).toBe(true)
       }
@@ -295,14 +256,6 @@ describe.skipIf(process.platform === 'win32')('the deferred hook delivers every 
 describe.skipIf(process.platform === 'win32')(
   'the wrapper survives a hostile user zsh config',
   () => {
-    /**
-     * Why these three cases and not the old degrade matrix: zsh's `sourcehome()`
-     * ignores ZDOTDIR once the shell is in sh/ksh emulation, which used to hide
-     * every wrapper file after the one that entered it — so emulation from
-     * `.zshenv` or `.zprofile` cost the pane all of Orca's features. Only one
-     * wrapper file is read now, and it is read before any user file can change
-     * modes, so these are wins rather than degradations.
-     */
     it.each([
       ['.zshenv', 'emulate sh'],
       ['.zshenv', 'emulate ksh'],
@@ -341,8 +294,6 @@ describe.skipIf(process.platform === 'win32')(
         const { values } = await runZshPty({ env, report })
         expect(values.HISTFILE).toBe(scoped)
         expect(values.HISTFILE).not.toContain(launch.env.ZDOTDIR)
-        // ORCA_HISTFILE was consumed in .zshenv precisely so a dropped hook
-        // leaks nothing to the pane's children.
         expect(values.ORCA_HISTFILE).toBe('UNSET')
         expect(values.ZDOTDIR).toBe(home)
       })
@@ -360,8 +311,6 @@ describe.skipIf(process.platform === 'win32')(
             report: ['ZDOTDIR', 'ORCA_TEST_USER_ZSHRC']
           })
 
-          // A ZDOTDIR the user's own .zshenv exports is theirs by construction and
-          // needs no discovery machinery: zsh reads .zshrc through it directly.
           expect(values.ZDOTDIR).toBe(home)
           expect(values.ORCA_TEST_USER_ZSHRC).toBe('1')
         }
@@ -370,13 +319,7 @@ describe.skipIf(process.platform === 'win32')(
   }
 )
 
-/**
- * The relay writes its own variant of the hook: no OSC 133 (its bash rcfile owns
- * those on remote hosts) and a remote CLI bin dir on PATH instead of the
- * agent-teams shim. It used to have a whole second ZDOTDIR shape too, which is
- * why it drifted from the desktop template; now the only differences are the
- * spec flags, and this pins that the variant still works in a real shell.
- */
+/** Relay uses the same builder with different feature flags; exercise that variant in a real shell too. */
 
 describe.skipIf(process.platform === 'win32')('the real-zsh harness', () => {
   itWithZsh(

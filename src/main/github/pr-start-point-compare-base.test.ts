@@ -29,7 +29,6 @@ describe('resolveGitHubPrStartPoint compare base', () => {
       throw new Error("fatal: couldn't find remote ref refs/heads/main")
     })
     const fetchPullRequestHeadRef = vi.fn(async () => durablePrLocalRef)
-    // Why: durable ref for the head resolves; the compare base does not exist.
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[2] === durablePrRev) {
         return { stdout: 'fork-head-sha\n', stderr: '' }
@@ -49,7 +48,6 @@ describe('resolveGitHubPrStartPoint compare base', () => {
       resolveRemote: async () => 'origin'
     })
 
-    // Why: guards against a FETCH_HEAD regression — the head must resolve via the durable ref.
     expect(gitExec).toHaveBeenCalledWith(['rev-parse', '--verify', durablePrRev])
     expect(result).toEqual({
       baseBranch: 'fork-head-sha',
@@ -64,7 +62,6 @@ describe('resolveGitHubPrStartPoint compare base', () => {
 
   it('keeps the compare base for a fork PR when the local tracking ref still resolves', async () => {
     const fetchRemoteTrackingRef = vi.fn(async () => {
-      // Why: transient network failure — the previously-fetched base is still on disk.
       throw new Error('fatal: unable to access repo: Could not resolve host: github.com')
     })
     const fetchPullRequestHeadRef = vi.fn(async () => durablePrLocalRef)
@@ -90,7 +87,6 @@ describe('resolveGitHubPrStartPoint compare base', () => {
       resolveRemote: async () => 'origin'
     })
 
-    // Why: create-time baseRef metadata must be the compare base, not the PR head SHA.
     expect(result).toEqual({
       baseBranch: 'fork-head-sha',
       compareBaseRef: 'refs/remotes/origin/main',

@@ -94,8 +94,7 @@ export const ZH_VALUE_OVERRIDES = {
     '仓库操作方案。在此仓库自定义之前，将使用全局设置。',
   'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.':
     '为源代码管理的提交、拉取请求、分支命名和修复操作添加操作方案。',
-  // Workspace status icon and color swatch labels; siblings below are translated, so English
-  // pins here would leave the picker half-Chinese on the next catalog regeneration.
+  // Picker siblings are translated; English pins here would regenerate half-Chinese UI.
   Play: '播放',
   Flag: '标记',
   Zinc: '锌灰',

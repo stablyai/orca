@@ -1,14 +1,29 @@
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { EdgeInsets, Rect } from 'react-native-safe-area-context'
+
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   View: 'View',
   StyleSheet: { create: <T,>(styles: T) => styles }
 }))
-// The library's hooks are plain reads of its two contexts, which is all this stands in for.
 vi.mock('react-native-safe-area-context', async () => {
   const { createContext, useContext } = await import('react')
   const SafeAreaInsetsContext = createContext<EdgeInsets | null>(null)
@@ -69,3 +84,5 @@ describe('the app laid out clear of the side insets', () => {
     expect(renderInLandscape().read.modal).toEqual(WINDOW)
   })
 })
+
+afterEach(unmountRenderers)

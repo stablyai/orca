@@ -1,24 +1,4 @@
-/**
- * STA-3107: a paired client working against a remote Orca host is slept
- * (laptop closed), then woken. Every terminal tab is still open and still has a
- * live host PTY, but the sidebar shows fewer agents than there are tabs.
- *
- * Invariant under test: a mirrored pane that still has a live host PTY and had
- * an agent keeps its sidebar row across a sleep/wake reconnect. A quiet agent
- * must DECAY (buildWorktreeAgentRows already renders a stale entry as 'idle'),
- * exactly like a local pane — it must not be erased.
- *
- * Causal boundary: buildMirroredAgentStatusPatch's delete loop in
- * web-session-tabs-sync.ts. A host snapshot that carries no agentStatus for a
- * pane deletes the client's mirrored entry unless the client's own entry is
- * still FRESH. Sleeping past AGENT_STATUS_STALE_AFTER_MS makes every
- * client-owned entry stale by definition, so the first post-wake snapshot
- * erases the row of every pane whose status only the client ever wrote.
- *
- * Everything is injected at the seam: the real host-snapshot mirror and the
- * real sidebar row builder, driven by fake clocks. Elapsed time is never the
- * oracle — the row/tab inventory is.
- */
+// After sleep beyond freshness, reconnect snapshots lacking host status erased client-OSC-owned agent rows despite live PTYs (STA-3107). Preserve rows and decay to idle like local panes. Drive real mirror/sidebar builder with fake clocks; row/tab inventory, not elapsed time, is the oracle.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
@@ -44,8 +24,7 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from '../components/sidebar/worktree-card-status-inputs'
 
-// Why: web-session-tabs-sync imports the app-level store singleton; this
-// harness drives a createTestStore instance instead, like its sibling suites.
+// Mock singleton import; this harness drives createTestStore like sibling mirror suites.
 vi.mock('../store', () => ({
   useAppStore: {
     setState: vi.fn(),
@@ -301,9 +280,7 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
     const reconnected = runSleepWakeReconnect(store, LONG_SLEEP_MS)
     const evidence = `after wake:\n${JSON.stringify(reconnected, null, 2)}`
 
-    // Two independent signals prove the panes are alive, so a missing row is a
-    // sidebar defect and not an honest report of a dead pane: the tab is still
-    // in the tab bar, and the host still publishes a live PTY for it.
+    // Require tab presence and host live PTY: missing agent rows must reflect sidebar loss, not genuine pane death.
     expect(reconnected.tabIds, evidence).toHaveLength(PANES.length)
     expect(reconnected.tabsWithLivePty, evidence).toHaveLength(PANES.length)
     expect(reconnected.rowPaneKeys.sort(), evidence).toEqual(PANES.map(mirrorPaneKey).sort())
@@ -312,8 +289,7 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
   it('still cedes a pane this renderer never wrote status for', () => {
     const store = seedPairedClientStore()
     applyHostSnapshot(store, makeHostSnapshot({ snapshotVersion: 1, hostNow: T0 - 1_000 }), T0)
-    // A remote pane claims ownership at transport creation but has produced no
-    // byte-derived status, so the host stays authoritative for it.
+    // Transport claims alone lack byte-derived evidence; host remains authoritative until a client write.
     const unwritten = CLIENT_OWNED_PANES[0]!
     registerRendererOwnedAgentStatusPane(mirrorPaneKey(unwritten), ENV)
     store
