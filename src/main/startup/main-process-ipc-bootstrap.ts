@@ -76,7 +76,7 @@ export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('ui:consumePendingQuitAndStopAllSessions', (event) =>
     consumeQuitAndStopAllSessionsRequest(event.sender.id)
   )
-  ipcMain.on('ui:quitAfterStoppingAllSessions', (event) =>
+  ipcMain.handle('ui:quitAfterStoppingAllSessions', (event) =>
     quitAfterRendererStoppedAllSessions(event.sender.id)
   )
   ipcMain.handle('ui:consumePendingSkillShare', () => state.skillShareDeepLinks.consume())

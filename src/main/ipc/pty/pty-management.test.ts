@@ -561,6 +561,60 @@ describe('pty:management IPC handlers', () => {
     })
   })
 
+  describe('confirmNoDaemonSessionsRemain', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    function listsOnce(adapter: MockAdapter, sessions: DaemonSessionInfo[]): void {
+      adapter.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce(sessions.map(({ protocolVersion: _pv, ...rest }) => rest))
+        .mockResolvedValue([])
+    }
+
+    it('waits while a session is still exiting, then confirms none remain', async () => {
+      const current = makeAdapter(5, [])
+      listsOnce(current, [makeSession('exiting')])
+      const { confirmNoDaemonSessionsRemain } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current))
+
+      const confirmation = confirmNoDaemonSessionsRemain()
+      await vi.runAllTimersAsync()
+
+      await expect(confirmation).resolves.toBe(true)
+      expect(current.listSessions).toHaveBeenCalledTimes(2)
+    })
+
+    it.each([
+      [
+        'a session started after Kill all is still listed',
+        () => makeAdapter(5, [makeSession('started-later')]),
+        () => []
+      ],
+      [
+        'a daemon generation cannot list its sessions',
+        () => makeAdapter(5, []),
+        () => {
+          const legacy = makeAdapter(3, [])
+          legacy.listSessions = vi.fn().mockRejectedValue(new Error('legacy daemon gone'))
+          return [legacy]
+        }
+      ]
+    ])('refuses when %s at the end of the poll window', async (_name, current, legacy) => {
+      const { confirmNoDaemonSessionsRemain } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current(), legacy()))
+
+      const confirmation = confirmNoDaemonSessionsRemain()
+      await vi.runAllTimersAsync()
+
+      await expect(confirmation).resolves.toBe(false)
+    })
+  })
+
   describe('killOne', () => {
     it('routes to the adapter whose protocolVersion owns the session', async () => {
       const current = makeAdapter(5, [makeSession('new-1')])

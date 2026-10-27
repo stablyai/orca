@@ -81,8 +81,31 @@ async function listSessionsOfEveryAdapter(
   }
 }
 
+// With no adapter (failed startup) or a held newer-build daemon, unlisted sessions can survive.
+function listedEveryGeneration(
+  adapters: DaemonPtyAdapter[],
+  unlistedVersions: Set<number>
+): boolean {
+  return adapters.length > 0 && unlistedVersions.size === 0 && !isHoldingForNewerProtocolDaemon()
+}
+
 async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
   return (await listSessionsOfEveryAdapter(adapters)).sessions
+}
+
+// Kill all counts only its first listing; a session started since (CLI, automation) would outlive the quit.
+// Polls so the tab sweep's exact kills can settle.
+export async function confirmNoDaemonSessionsRemain(): Promise<boolean> {
+  const adapters = getDaemonAdapters()
+  const pollDeadline = Date.now() + POLL_WINDOW_MS
+  do {
+    const { sessions, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)
+    if (sessions.length === 0 && listedEveryGeneration(adapters, unlistedVersions)) {
+      return true
+    }
+    await sleep(POLL_INTERVAL_MS)
+  } while (Date.now() < pollDeadline)
+  return false
 }
 
 export function registerDaemonManagementHandlers(): void {
@@ -181,11 +204,9 @@ export function registerDaemonManagementHandlers(): void {
       const { sessions: initial, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)
       const initialIds = new Set(initial.map((s) => s.sessionId))
       const initialCount = initial.length
-      // With no adapter (failed startup) or a held newer-build daemon, unlisted sessions can survive.
-      const incomplete =
-        adapters.length > 0 && unlistedVersions.size === 0 && !isHoldingForNewerProtocolDaemon()
-          ? {}
-          : { listingIncomplete: true }
+      const incomplete = listedEveryGeneration(adapters, unlistedVersions)
+        ? {}
+        : { listingIncomplete: true }
 
       if (initialCount === 0) {
         return { killedCount: 0, remainingCount: 0, killedSessionIds: [], ...incomplete }

@@ -41,6 +41,7 @@ import {
 } from './quit-and-stop-all-sessions-prompt'
 import { isHoldingForNewerProtocolDaemon } from '../daemon/daemon-newer-protocol-hold'
 import { getDaemonProvider } from '../daemon/daemon-provider-state'
+import { confirmNoDaemonSessionsRemain } from '../ipc/pty/pty-management'
 
 // Inject the opener to avoid an actions/lifecycle import cycle.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -179,14 +180,21 @@ export function consumeQuitAndStopAllSessionsRequest(senderWebContentsId: number
   return requested
 }
 
-/** The renderer that consumed the request stopped every session; finish with a user Quit. */
-export function quitAfterRendererStoppedAllSessions(senderWebContentsId: number): void {
+/** The renderer that consumed the request stopped every session; quit unless the daemon still lists one. */
+export async function quitAfterRendererStoppedAllSessions(
+  senderWebContentsId: number
+): Promise<boolean> {
   if (stoppingAllSessionsWebContentsId !== senderWebContentsId) {
-    return
+    return false
   }
   stoppingAllSessionsWebContentsId = null
+  if (!(await confirmNoDaemonSessionsRemain())) {
+    console.warn('[quit] A terminal session is still listed after Kill all; staying open')
+    return false
+  }
   // Why reveal: the window may have been hidden while Kill all ran, and a quit-time save prompt must show.
   quitFromSystemTray()
+  return true
 }
 
 export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {

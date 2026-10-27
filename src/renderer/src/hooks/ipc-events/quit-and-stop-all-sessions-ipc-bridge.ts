@@ -65,7 +65,12 @@ async function stopAllSessionsThenQuit(): Promise<void> {
       showStopAllFailure()
       return
     }
-    window.api.ui.quitAfterStoppingAllSessions?.()
+    if ((await window.api.ui.quitAfterStoppingAllSessions?.()) === false) {
+      console.warn(
+        '[quit-and-stop-all-sessions] Main still lists a terminal session after Kill all'
+      )
+      showStopAllFailure()
+    }
   } catch (error) {
     console.error('[quit-and-stop-all-sessions] Stopping sessions failed:', error)
     showStopAllFailure()

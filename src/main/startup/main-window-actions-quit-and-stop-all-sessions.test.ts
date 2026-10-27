@@ -11,7 +11,8 @@ const prompt = vi.hoisted(() => ({
 }))
 const daemon = vi.hoisted(() => ({
   holdingNewer: vi.fn(() => false),
-  provider: vi.fn<() => object | null>(() => ({}))
+  provider: vi.fn<() => object | null>(() => ({})),
+  noSessionsRemain: vi.fn<() => Promise<boolean>>()
 }))
 
 vi.mock('electron', () => ({
@@ -26,6 +27,9 @@ vi.mock('../daemon/daemon-newer-protocol-hold', () => ({
   isHoldingForNewerProtocolDaemon: daemon.holdingNewer
 }))
 vi.mock('../daemon/daemon-provider-state', () => ({ getDaemonProvider: daemon.provider }))
+vi.mock('../ipc/pty/pty-management', () => ({
+  confirmNoDaemonSessionsRemain: daemon.noSessionsRemain
+}))
 vi.mock('../updater', () => ({ checkForUpdatesFromMenu: vi.fn(), isQuittingForUpdate: vi.fn() }))
 vi.mock('../tray/system-tray', () => ({
   createSystemTray: vi.fn(),
@@ -79,6 +83,7 @@ beforeEach(() => {
   prompt.explain.mockReset().mockResolvedValue(false)
   daemon.holdingNewer.mockReset().mockReturnValue(false)
   daemon.provider.mockReset().mockReturnValue({})
+  daemon.noSessionsRemain.mockReset().mockResolvedValue(true)
   vi.mocked(safelyRevealWindow).mockReset()
   state.isQuitting = false
   state.isServeMode = false
@@ -223,21 +228,39 @@ describe('quitAfterRendererStoppedAllSessions', () => {
     await flushPromptChain()
   })
 
-  it('quits once when the renderer that consumed the request reports every session stopped', () => {
+  it('quits once when the renderer that consumed the request reports every session stopped', async () => {
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(false)
 
-    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
-    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
+    const results = await Promise.all([
+      quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID),
+      quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
+    ])
 
+    expect(results).toEqual([true, false])
     expect(electron.quit).toHaveBeenCalledOnce()
   })
 
-  it('reveals the window before the final user Quit', () => {
+  it('stays open when the daemon still lists a session, and a later request can quit', async () => {
+    daemon.noSessionsRemain.mockResolvedValueOnce(false)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
+
+    await expect(quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)).resolves.toBe(false)
+    expect(electron.quit).not.toHaveBeenCalled()
+
+    quitAndStopAllSessionsFromUserCommand()
+    await flushPromptChain()
+    expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
+    await expect(quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)).resolves.toBe(true)
+    expect(electron.quit).toHaveBeenCalledOnce()
+  })
+
+  it('reveals the window before the final user Quit', async () => {
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
     vi.mocked(safelyRevealWindow).mockClear()
 
-    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
+    await quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
 
     expect(safelyRevealWindow).toHaveBeenCalledWith(mainWindow)
     expect(vi.mocked(safelyRevealWindow).mock.invocationCallOrder[0]).toBeLessThan(
@@ -246,33 +269,34 @@ describe('quitAfterRendererStoppedAllSessions', () => {
     expect(state.isQuitting).toBe(true)
   })
 
-  it('ignores a renderer other than the one that consumed the request', () => {
+  it('ignores a renderer other than the one that consumed the request', async () => {
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
 
-    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID + 1)
+    await expect(quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID + 1)).resolves.toBe(false)
     expect(electron.quit).not.toHaveBeenCalled()
+    expect(daemon.noSessionsRemain).not.toHaveBeenCalled()
 
     // The stray sender must not use up the consumer's authorization either.
-    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
+    await quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
     expect(electron.quit).toHaveBeenCalledOnce()
   })
 
-  it('quits even when stopping the sessions outlasts the request expiry', () => {
+  it('quits even when stopping the sessions outlasts the request expiry', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
 
     // The renderer may wait 30 s for the restored session before Kill all even starts.
     vi.setSystemTime(Date.now() + 120_000)
-    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
+    await quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
 
     expect(electron.quit).toHaveBeenCalledOnce()
   })
 
-  it('ignores a renderer that never consumed the request', () => {
+  it('ignores a renderer that never consumed the request', async () => {
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID + 1)).toBe(false)
 
-    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID + 1)
-    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
+    await quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID + 1)
+    await quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
 
     expect(electron.quit).not.toHaveBeenCalled()
   })

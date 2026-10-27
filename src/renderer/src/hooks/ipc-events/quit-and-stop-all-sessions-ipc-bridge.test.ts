@@ -38,7 +38,7 @@ let pushListener: (() => void) | null
 let unhandledRejections: unknown[] = []
 const recordUnhandledRejection = (reason: unknown): void => void unhandledRejections.push(reason)
 let pending: boolean[]
-const quitAfterStoppingAllSessions = vi.fn()
+const quitAfterStoppingAllSessions = vi.fn<() => Promise<boolean>>()
 
 function installUiApi(): void {
   Object.assign(window, {
@@ -68,7 +68,7 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
   beforeEach(() => {
     pushListener = null
     pending = []
-    quitAfterStoppingAllSessions.mockReset()
+    quitAfterStoppingAllSessions.mockReset().mockResolvedValue(true)
     mocks.runKillAll.mockReset().mockResolvedValue(CLEAN_SUMMARY)
     // Kill all closes every tab it snapshotted, so a second snapshot is empty.
     mocks.snapshotIds.mockReset().mockReturnValueOnce(['tab-1', 'tab-2']).mockReturnValue([])
@@ -206,6 +206,21 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
     expect(warn).toHaveBeenCalledWith(
       '[quit-and-stop-all-sessions] Terminal tabs opened during Kill all:',
       ['tab-new']
+    )
+  })
+
+  it('stays open when main still lists a terminal session after Kill all', async () => {
+    quitAfterStoppingAllSessions.mockResolvedValue(false)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    pending.push(true)
+
+    registerQuitAndStopAllSessionsIpcBridge([])
+    await settle()
+
+    expect(quitAfterStoppingAllSessions).toHaveBeenCalledOnce()
+    expect(mocks.toastError).toHaveBeenCalledWith(FAILURE_MESSAGE)
+    expect(warn).toHaveBeenCalledWith(
+      '[quit-and-stop-all-sessions] Main still lists a terminal session after Kill all'
     )
   })
 
