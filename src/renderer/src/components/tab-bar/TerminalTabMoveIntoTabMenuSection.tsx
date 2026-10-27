@@ -16,13 +16,16 @@ import {
   type TerminalTabIntoPaneState
 } from '@/components/terminal-pane/terminal-tab-into-pane-eligibility'
 import { describeTerminalTabIntoPaneRefusal } from '@/components/terminal-pane/terminal-tab-into-pane-reasons'
+import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 
 function selectMoveIntoTabInputs(
   state: AppState
-): TerminalTabIntoPaneState & Pick<AppState, 'tabBarOrderByWorktree'> {
+): TerminalTabIntoPaneState &
+  Pick<AppState, 'tabBarOrderByWorktree'> & { generatedTitlesEnabled: boolean } {
   return {
+    generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     tabsByWorktree: state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     pendingStartupByTabId: state.pendingStartupByTabId,
@@ -65,7 +68,9 @@ export function TerminalTabMoveIntoTabMenuSection({
     (eligibility): eligibility is Extract<TerminalTabIntoPaneEligibility, { ok: false }> =>
       !eligibility.ok && isSourceWideRefusal(eligibility.reason)
   )
-  const titles = targets.map((target) => target.customTitle ?? target.title)
+  const titles = targets.map((target) =>
+    resolveTerminalTabTitle(target, inputs.generatedTitlesEnabled, target.title)
+  )
   // Same-titled tabs look identical in a menu, so they are numbered in tab-bar order.
   const labels = titles.map((title, index) => {
     if (titles.filter((candidate) => candidate === title).length === 1) {

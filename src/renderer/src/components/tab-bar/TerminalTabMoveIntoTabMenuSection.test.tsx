@@ -246,6 +246,25 @@ describe('TerminalTabMoveIntoTabMenuSection', () => {
     )
   })
 
+  it('names each target the way the tab bar does, not by its raw shell title', () => {
+    seedState({
+      tabsByWorktree: {
+        [WT]: [
+          terminalTab(SOURCE, 'pty-a', { title: 'build' }),
+          terminalTab(TARGET, 'pty-b', { title: 'zsh', quickCommandLabel: 'Dev server' }),
+          terminalTab(OTHER, 'pty-o', { title: 'claude', generatedTitle: 'Fix login bug' })
+        ]
+      }
+    })
+    storeMock.state.settings = { tabAutoGenerateTitle: true }
+    const container = render()
+
+    const labels = Array.from(container.querySelectorAll('button')).map((b) => b.textContent)
+    expect(labels).toContain('Fix login bug')
+    expect(labels).toContain('Dev server')
+    expect(labels.some((text) => text?.startsWith('zsh') || text?.startsWith('claude'))).toBe(false)
+  })
+
   it('disables only the target that fails its own check', () => {
     seedState({
       tabsByWorktree: {
