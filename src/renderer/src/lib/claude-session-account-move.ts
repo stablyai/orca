@@ -52,8 +52,10 @@ export type ClaudeSessionMoveCandidate = {
 }
 
 // Match npm Claude by its fresh command line: generic node/python may now run user programs.
+// Why teams: `orca claude-teams` leads the foreground group while its child Claude reports the hooks.
 function isClaudeProcess(processName: string | null): boolean {
-  return recognizeAgentProcess(processName)?.agent === 'claude'
+  const agent = recognizeAgentProcess(processName)?.agent
+  return agent === 'claude' || agent === 'claude-agent-teams'
 }
 
 /** Confirm foreground identity: cached names flap to shells and native macOS binaries report version-folder names. */

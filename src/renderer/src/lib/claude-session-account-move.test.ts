@@ -302,6 +302,17 @@ describe('findMovableClaudeSessions', () => {
     expect(confirmRuntimeTerminalForegroundProcess).toHaveBeenCalledWith(ptyId(1))
   })
 
+  it('finds a Claude Agent Teams pane, whose foreground is the `orca claude-teams` wrapper', async () => {
+    seedPanes([{ n: 1, agentType: 'claude' }])
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'Orca',
+      hasChildProcesses: true
+    })
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('Orca')
+
+    expect(await movable()).toEqual([ptyId(1)])
+  })
+
   it('reports a node pane whose fresh read failed as unchecked rather than dropping it silently', async () => {
     seedPanes([{ n: 1, agentType: 'claude' }])
     vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
