@@ -1,7 +1,6 @@
 // Install lazily after Electron finalizes the profile path; runtimes without structured requests need no store. Journal-open failures install a refusal.
 
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-rest-command-context'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
@@ -11,46 +10,27 @@ import {
   tearDownRuntime,
   type InstalledRuntime
 } from './agent-session/structured-agent-session-runtime-teardown'
-import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
-import {
+import type {
   StructuredAgentSessionHost,
-  type StructuredAgentSessionHostDeps
+  StructuredAgentSessionHostDeps
 } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
-import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import {
-  installAgentSessionAttachments,
-  stopAgentSessionAttachments
-} from './structured-agent-session-attachment-wiring'
+import { stopAgentSessionAttachments } from './structured-agent-session-attachment-wiring'
 import {
   openAgentSessionRecordStoreOnce,
-  releaseAgentSessionRecordStore,
-  type OpenedAgentSessionRecordStore
+  releaseAgentSessionRecordStore
 } from './agent-session-record-store-slot'
-import {
-  createStructuredAgentSessionOwnerProbe,
-  createStructuredAgentSessionOwnerProbes
-} from './structured-agent-session-owner-probe'
 import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
-import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
-import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
-import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import {
-  modelCatalogHostDeps,
-  type RuntimeAgentAccountHomeResolver
-} from './structured-agent-model-catalog-wiring'
+import type { RuntimeAgentAccountHomeResolver } from './structured-agent-model-catalog-wiring'
 import type { ClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
 import { migrateLegacyNativeChatVisualsFolders } from '../native-chat/native-chat-scratch-folder-migration'
-import { scheduleNativeChatVisualsSweep } from '../native-chat/native-chat-visuals-sweep'
 
 export { hasPersistedStructuredAgentSessionStore } from './agent-session-record-store-slot'
 
@@ -204,124 +184,6 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   }
   // Before the host serves reads: a chat opened right after an update finds its visuals in place.
   await migrateLegacyNativeChatVisualsFolders(deps.stateDirectory, logger)
+  const { installOnJournal } = await import('./structured-agent-session-host-assembly')
   return await installOnJournal({ ...deps, logger }, recordStore)
-}
-
-async function installOnJournal(
-  deps: StructuredAgentSessionRuntimeDeps,
-  { journalDatabase, store }: OpenedAgentSessionRecordStore
-): Promise<InstalledRuntime> {
-  const envResolvers = createStructuredAgentEnvironmentResolvers(deps)
-  let host: StructuredAgentSessionHost | null = null
-  const lifecycle = createStructuredAgentSessionLifecycleDelivery({
-    handle: (event) => host?.handleAdapterEvent(event),
-    logger: deps.logger,
-    // An agent that publishes an observed exit only after its own close work drains it here.
-    drainObservedExits: async () => {
-      await Promise.all(
-        registrations.map(({ adapter }) => adapter.drainObservedExits?.() ?? Promise.resolve())
-      )
-    }
-  })
-  const context: StructuredAgentAdapterContext = {
-    deps,
-    store,
-    journalDatabase,
-    environment: envResolvers,
-    deliverLifecycle: lifecycle.deliver,
-    followUps: createStructuredAgentSessionDispatchFollowUps({
-      host: () => host,
-      logger: deps.logger
-    }),
-    host: () => host
-  }
-  const { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } =
-    await import('./structured-agent-runtime-registrations')
-  const registrations = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
-    ({ definition, createAdapter }) => ({ definition, adapter: createAdapter(context) })
-  )
-  const agents = new StructuredAgentRegistry(registrations)
-  const adapter = new StructuredAgentSessionAdapterRouter(agents, async () => {
-    await Promise.all(registrations.map((registration) => registration.adapter.closeAll()))
-  })
-  host = new StructuredAgentSessionHost({
-    store,
-    adapter,
-    agents,
-    recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
-    journalDatabase,
-    claimKeyId: deps.claimKeyId,
-    probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
-    probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
-    resolveWorkspacePath: deps.resolveWorkspacePath,
-    logger: deps.logger,
-    ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
-    ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
-    ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
-    ...(deps.conversationNaming ? { conversationNaming: deps.conversationNaming } : {}),
-    ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
-    ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
-    ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
-    ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
-    ...(await modelCatalogHostDeps({
-      store,
-      agents,
-      registrations: STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
-      deps,
-      environment: envResolvers
-    }))
-  })
-  if (deps.attentionDelivery) {
-    const installed = host
-    const delivery = deps.attentionDelivery
-    installed.subscribeTurnCompletions({
-      id: 'host-attention-delivery',
-      includePrompts: true,
-      emit: (event) => {
-        if (event.type === 'end') {
-          return
-        }
-        const sessionId =
-          event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
-        delivery.deliver(event, installed.readStatusSummary(sessionId))
-      },
-      onState: delivery.reconcile
-    })
-  }
-  // Prewarm catalogs at runtime start for local and remote hosts.
-  const modelCatalog = host.deps.modelCatalog
-  void modelCatalog?.prewarm()
-  installAgentSessionAttachments({
-    stateDirectory: deps.stateDirectory,
-    store,
-    journalDatabase,
-    logger: deps.logger
-  })
-  const stopVisualsSweep = deps.nativeChatVisuals
-    ? scheduleNativeChatVisualsSweep({
-        stateDirectory: deps.stateDirectory,
-        listHeldSessionIds: () => (store.readOnly ? null : store.listHeldSessionIds()),
-        logger: deps.logger
-      })
-    : undefined
-  const stopCommands = bindAtRestCommandContexts(
-    registrations.map(({ adapter }) => adapter.atRestCommands)
-  )
-  try {
-    setStructuredAgentSessionHost(host)
-  } catch (error) {
-    stopCommands()
-    throw error
-  }
-  return {
-    host,
-    adapter,
-    journalDatabase,
-    waitForRecovery: lifecycle.drain,
-    stopBackgroundWork: () => {
-      stopCommands()
-      stopVisualsSweep?.()
-      modelCatalog?.stop()
-    }
-  }
 }
