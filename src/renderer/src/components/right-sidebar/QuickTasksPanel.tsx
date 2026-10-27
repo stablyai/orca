@@ -1,162 +1,31 @@
 import { useMemo, useState } from 'react'
-import {
-  CircleDot,
-  ExternalLink,
-  Github,
-  Gitlab,
-  GitPullRequest,
-  LoaderCircle,
-  Plus,
-  RefreshCw
-} from 'lucide-react'
+import { CircleDot, Github, Gitlab, GitPullRequest, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useActiveRepo } from '@/store/selectors'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
+import { getJiraPresets } from '@/components/task-page/task-page-localized-options'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import {
   openComposerForGitHubWorkItem,
-  openComposerForGitLabWorkItem
+  openComposerForGitLabWorkItem,
+  openComposerForJiraIssue
 } from '@/components/task-page/work-item-workspace-composer'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import { getQuickTasksRepos } from './quick-tasks-repos'
-import { useQuickTasks, type QuickTasksKind } from './use-quick-tasks'
+import { QuickTaskRow, QuickTasksSection, QuickTasksToggle } from './QuickTasksList'
+import { useQuickTasks, type QuickTasksJiraPreset, type QuickTasksKind } from './use-quick-tasks'
 
-type QuickTaskRowProps = {
-  icon: React.ReactNode
-  /** Provider-style reference, e.g. `#12` for issues or `!7` for GitLab merge requests. */
-  reference: string
-  title: string
-  repoName: string | null
-  onOpen: () => void
-  onCreateWorkspace: () => void
-  onOpenExternal: () => void
-}
+const QUICK_TASKS_JIRA_PRESETS: readonly QuickTasksJiraPreset[] = ['assigned', 'reported', 'all']
 
-function QuickTaskRow({
-  icon,
-  reference,
-  title,
-  repoName,
-  onOpen,
-  onCreateWorkspace,
-  onOpenExternal
-}: QuickTaskRowProps): React.JSX.Element {
-  return (
-    <div className="group flex items-start gap-2 px-3 py-1.5 hover:bg-accent/50">
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-start gap-2 text-left"
-        onClick={onOpen}
-      >
-        <span className="mt-0.5 flex-none text-muted-foreground">{icon}</span>
-        <span className="min-w-0 flex-1">
-          <span className="line-clamp-2 text-sm text-foreground">{title}</span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {reference}
-            {repoName ? ` · ${repoName}` : ''}
-          </span>
-        </span>
-      </button>
-      <div className="flex flex-none items-center gap-0.5 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={translate(
-                'auto.components.rightSidebar.QuickTasksPanel.createWorkspace',
-                'Create workspace'
-              )}
-              onClick={onCreateWorkspace}
-            >
-              <Plus />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {translate(
-              'auto.components.rightSidebar.QuickTasksPanel.createWorkspace',
-              'Create workspace'
-            )}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={translate(
-                'auto.components.rightSidebar.QuickTasksPanel.openInBrowser',
-                'Open in browser'
-              )}
-              onClick={onOpenExternal}
-            >
-              <ExternalLink />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {translate(
-              'auto.components.rightSidebar.QuickTasksPanel.openInBrowser',
-              'Open in browser'
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-    </div>
-  )
-}
-
-function QuickTasksSection({
-  icon,
-  label,
-  loading,
-  failed,
-  count,
-  emptyLabel,
-  children
-}: {
-  icon: React.ReactNode
-  label: string
-  loading: boolean
-  failed: boolean
-  count: number
-  emptyLabel: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <section className="py-1">
-      <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-muted-foreground">
-        {icon}
-        <span className="flex-1">{label}</span>
-        {loading && count > 0 ? <LoaderCircle className="size-3 animate-spin" /> : null}
-      </div>
-      {loading && count === 0 ? (
-        <div
-          role="status"
-          className="flex items-center justify-center gap-2 px-3 py-6 text-xs text-muted-foreground"
-        >
-          <LoaderCircle className="size-4 animate-spin" />
-          {translate('auto.components.rightSidebar.QuickTasksPanel.loading', 'Loading…')}
-        </div>
-      ) : failed ? (
-        <div className="px-3 py-2 text-xs text-muted-foreground">
-          {translate(
-            'auto.components.rightSidebar.QuickTasksPanel.loadFailed',
-            'Could not load tasks.'
-          )}
-        </div>
-      ) : !loading && count === 0 ? (
-        <div className="px-3 py-2 text-xs text-muted-foreground">{emptyLabel}</div>
-      ) : (
-        children
-      )}
-    </section>
-  )
+function isQuickTasksJiraPreset(value: string): value is QuickTasksJiraPreset {
+  return QUICK_TASKS_JIRA_PRESETS.some((preset) => preset === value)
 }
 
 export default function QuickTasksPanel({
@@ -172,7 +41,9 @@ export default function QuickTasksPanel({
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const [refreshNonce, setRefreshNonce] = useState(0)
-  const [kind, setKind] = useState<QuickTasksKind>('issues')
+  const [githubKind, setGithubKind] = useState<QuickTasksKind>('issues')
+  const [gitlabKind, setGitlabKind] = useState<QuickTasksKind>('issues')
+  const [jiraPreset, setJiraPreset] = useState<QuickTasksJiraPreset>('assigned')
 
   const taskRepos = useMemo(
     () =>
@@ -185,19 +56,22 @@ export default function QuickTasksPanel({
       }),
     [activeRepo, activeWorkspaceKey, folderWorkspaces, projectGroups, repos]
   )
-  const { checking, github, gitlab } = useQuickTasks({
+  const { checking, github, gitlab, jira } = useQuickTasks({
     repos: taskRepos,
-    kind,
+    githubKind,
+    gitlabKind,
+    jiraPreset,
     isVisible,
     refreshNonce
   })
-  const emptyLabel =
-    kind === 'issues'
-      ? translate('auto.components.rightSidebar.QuickTasksPanel.empty', 'No open issues.')
-      : translate(
-          'auto.components.rightSidebar.QuickTasksPanel.emptyReviews',
-          'No open merge requests.'
-        )
+  const issuesLabel = translate('auto.components.rightSidebar.QuickTasksPanel.issues', 'Issues')
+  const emptyIssuesLabel = translate(
+    'auto.components.rightSidebar.QuickTasksPanel.empty',
+    'No open issues.'
+  )
+  const jiraPresetOptions = getJiraPresets().flatMap((preset) =>
+    isQuickTasksJiraPreset(preset.id) ? [{ value: preset.id, label: preset.label }] : []
+  )
   const showRepoName = taskRepos.length > 1
   const repoName = (repoId: string | undefined): string | null =>
     showRepoName && repoId
@@ -224,8 +98,12 @@ export default function QuickTasksPanel({
       )
     })
   }
+  const openJiraIssue = (issue: JiraIssue): void => {
+    openTaskPage({ taskSource: 'jira', openJiraIssue: issue })
+  }
 
-  if (taskRepos.length === 0) {
+  // Why: Jira is account-scoped, so it still has tasks to show without a git workspace.
+  if (taskRepos.length === 0 && !jira.enabled) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
         {translate(
@@ -236,31 +114,12 @@ export default function QuickTasksPanel({
     )
   }
 
-  const noSource = !checking && !github.enabled && !gitlab.enabled
+  const anyEnabled = github.enabled || gitlab.enabled || jira.enabled
+  const noSource = !checking && !anyEnabled
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2">
-        <ToggleGroup
-          type="single"
-          size="sm"
-          variant="outline"
-          spacing={0}
-          className="min-w-0 flex-1"
-          value={kind}
-          onValueChange={(value) => {
-            if (value === 'issues' || value === 'reviews') {
-              setKind(value)
-            }
-          }}
-        >
-          <ToggleGroupItem value="issues">
-            {translate('auto.components.rightSidebar.QuickTasksPanel.issues', 'Issues')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="reviews">
-            {translate('auto.components.rightSidebar.QuickTasksPanel.mergeRequests', 'MRs')}
-          </ToggleGroupItem>
-        </ToggleGroup>
+      <div className="flex items-center justify-end gap-2 border-b border-border px-4 py-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -282,7 +141,7 @@ export default function QuickTasksPanel({
       </div>
 
       <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
-        {checking && !github.enabled && !gitlab.enabled ? (
+        {checking && !anyEnabled ? (
           <div className="flex justify-center py-10">
             <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
           </div>
@@ -290,9 +149,62 @@ export default function QuickTasksPanel({
           <div className="p-6 text-center text-sm text-muted-foreground">
             {translate(
               'auto.components.rightSidebar.QuickTasksPanel.noSource',
-              'Sign in to GitHub or GitLab to see this project’s issues.'
+              'Sign in to GitHub, GitLab or Jira to see this project’s tasks.'
             )}
           </div>
+        ) : null}
+
+        {github.enabled ? (
+          <QuickTasksSection
+            icon={<Github className="size-3.5" />}
+            label="GitHub"
+            loading={github.loading}
+            failed={github.failed}
+            count={github.items.length}
+            emptyLabel={
+              githubKind === 'issues'
+                ? emptyIssuesLabel
+                : translate(
+                    'auto.components.rightSidebar.QuickTasksPanel.emptyPullRequests',
+                    'No open pull requests.'
+                  )
+            }
+            toggle={
+              <QuickTasksToggle
+                value={githubKind}
+                onChange={setGithubKind}
+                options={[
+                  { value: 'issues', label: issuesLabel },
+                  {
+                    value: 'reviews',
+                    label: translate(
+                      'auto.components.rightSidebar.QuickTasksPanel.pullRequests',
+                      'PRs'
+                    )
+                  }
+                ]}
+              />
+            }
+          >
+            {github.items.map((item) => (
+              <QuickTaskRow
+                key={`${item.repoId}:${item.id}`}
+                icon={
+                  item.type === 'pr' ? (
+                    <GitPullRequest className="size-3.5" />
+                  ) : (
+                    <CircleDot className="size-3.5" />
+                  )
+                }
+                reference={`#${item.number}`}
+                title={item.title}
+                repoName={repoName(item.repoId)}
+                onOpen={() => openGitHubItem(item)}
+                onCreateWorkspace={() => openComposerForGitHubWorkItem(repos, openModal, item)}
+                onOpenExternal={() => void window.api.shell.openUrl(item.url)}
+              />
+            ))}
+          </QuickTasksSection>
         ) : null}
 
         {gitlab.enabled ? (
@@ -302,7 +214,30 @@ export default function QuickTasksPanel({
             loading={gitlab.loading}
             failed={gitlab.failed}
             count={gitlab.items.length}
-            emptyLabel={emptyLabel}
+            emptyLabel={
+              gitlabKind === 'issues'
+                ? emptyIssuesLabel
+                : translate(
+                    'auto.components.rightSidebar.QuickTasksPanel.emptyReviews',
+                    'No open merge requests.'
+                  )
+            }
+            toggle={
+              <QuickTasksToggle
+                value={gitlabKind}
+                onChange={setGitlabKind}
+                options={[
+                  { value: 'issues', label: issuesLabel },
+                  {
+                    value: 'reviews',
+                    label: translate(
+                      'auto.components.rightSidebar.QuickTasksPanel.mergeRequests',
+                      'MRs'
+                    )
+                  }
+                ]}
+              />
+            }
           >
             {gitlab.items.map((item) => (
               <QuickTaskRow
@@ -325,31 +260,37 @@ export default function QuickTasksPanel({
           </QuickTasksSection>
         ) : null}
 
-        {github.enabled ? (
+        {jira.enabled ? (
           <QuickTasksSection
-            icon={<Github className="size-3.5" />}
-            label="GitHub"
-            loading={github.loading}
-            failed={github.failed}
-            count={github.items.length}
-            emptyLabel={emptyLabel}
+            icon={<JiraIcon className="size-3.5" />}
+            label="Jira"
+            loading={jira.loading}
+            failed={jira.failed}
+            count={jira.items.length}
+            emptyLabel={translate(
+              'auto.components.rightSidebar.QuickTasksPanel.emptyJira',
+              'No matching issues.'
+            )}
+            toggle={
+              <QuickTasksToggle
+                value={jiraPreset}
+                onChange={setJiraPreset}
+                options={jiraPresetOptions}
+              />
+            }
           >
-            {github.items.map((item) => (
+            {jira.items.map((issue) => (
               <QuickTaskRow
-                key={`${item.repoId}:${item.id}`}
-                icon={
-                  item.type === 'pr' ? (
-                    <GitPullRequest className="size-3.5" />
-                  ) : (
-                    <CircleDot className="size-3.5" />
-                  )
+                key={`${issue.siteId ?? ''}:${issue.key}`}
+                icon={<CircleDot className="size-3.5" />}
+                reference={issue.key}
+                title={issue.title}
+                repoName={null}
+                onOpen={() => openJiraIssue(issue)}
+                onCreateWorkspace={() =>
+                  openComposerForJiraIssue(openModal, issue, taskRepos[0]?.id)
                 }
-                reference={`#${item.number}`}
-                title={item.title}
-                repoName={repoName(item.repoId)}
-                onOpen={() => openGitHubItem(item)}
-                onCreateWorkspace={() => openComposerForGitHubWorkItem(repos, openModal, item)}
-                onOpenExternal={() => void window.api.shell.openUrl(item.url)}
+                onOpenExternal={() => void window.api.shell.openUrl(issue.url)}
               />
             ))}
           </QuickTasksSection>

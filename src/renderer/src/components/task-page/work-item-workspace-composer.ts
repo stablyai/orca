@@ -1,5 +1,6 @@
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
@@ -7,6 +8,7 @@ import type { AppState } from '@/store/types'
 import {
   getGitHubWorkItemWorkspaceSeed,
   getGitLabWorkItemWorkspaceSeed,
+  getJiraIssueWorkspaceSeed,
   getTaskPageRepoSourceContext
 } from './task-page-source-context'
 
@@ -58,6 +60,27 @@ export function openComposerForGitLabWorkItem(
     ),
     prefilledName: getGitLabWorkItemWorkspaceSeed(item),
     initialRepoId: item.repoId,
+    telemetrySource: 'sidebar'
+  })
+}
+
+export function openComposerForJiraIssue(
+  openModal: OpenModal,
+  issue: JiraIssue,
+  initialRepoId: string | undefined
+): void {
+  const linkedWorkItem: LinkedWorkItemSummary = {
+    provider: 'jira',
+    type: 'issue',
+    number: 0,
+    title: issue.title,
+    url: issue.url,
+    jiraIdentifier: issue.key
+  }
+  openModal('new-workspace-composer', {
+    linkedWorkItem,
+    prefilledName: getJiraIssueWorkspaceSeed(issue),
+    initialRepoId,
     telemetrySource: 'sidebar'
   })
 }
