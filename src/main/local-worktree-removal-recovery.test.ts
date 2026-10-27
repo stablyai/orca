@@ -254,7 +254,8 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
       expect(closeWatcher).toHaveBeenCalledWith('/Users/dev/orca/workspaces/feature')
       expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
         '/Users/dev/orca/workspaces/feature',
-        {}
+        {},
+        undefined
       )
       expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
         ['branch', '-d', '--', 'feature'],
