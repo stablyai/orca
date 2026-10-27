@@ -5,6 +5,7 @@ import {
   Pressable,
   ActivityIndicator,
   Linking,
+  Platform,
   type LayoutChangeEvent
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -50,6 +51,7 @@ export default function PairScanScreen() {
   const [permission, requestPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
+  const [failedSecureCode, setFailedSecureCode] = useState<string | null>(null)
   const [pasteVisible, setPasteVisible] = useState(false)
   const [cameraBounds, setCameraBounds] = useState({ width: 0, height: 0 })
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
@@ -84,7 +86,7 @@ export default function PairScanScreen() {
         return
       }
 
-      void testAndSave(offer)
+      void testAndSave(offer, data)
     },
     [router]
   )
@@ -104,7 +106,7 @@ export default function PairScanScreen() {
       return
     }
 
-    void testAndSave(offer)
+    void testAndSave(offer, input)
   }, [])
 
   const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
@@ -120,7 +122,8 @@ export default function PairScanScreen() {
     )
   }, [])
 
-  async function testAndSave(offer: PairingOffer) {
+  async function testAndSave(offer: PairingOffer, originalCode: string) {
+    setFailedSecureCode(null)
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
@@ -157,7 +160,7 @@ export default function PairScanScreen() {
         return
       }
       router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
-    } catch (err) {
+    } catch {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
@@ -167,18 +170,23 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      console.warn('[pair] connect failed', err)
+      setFailedSecureCode(
+        Platform.OS !== 'web' && offer.endpoint.toLowerCase().startsWith('wss://')
+          ? originalCode
+          : null
+      )
       setStatus('error')
       setErrorMessage(
         timedOut
           ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
+          : 'Pairing failed. Check that Orca is reachable and the pairing link is current.'
       )
       processingRef.current = false
     }
   }
 
   function retry() {
+    setFailedSecureCode(null)
     setStatus('scanning')
     setErrorMessage('')
     logsRef.current = []
@@ -205,7 +213,7 @@ export default function PairScanScreen() {
     )
   }
 
-  if (!permission.granted) {
+  if (!permission.granted && status === 'scanning') {
     const canAskAgain = permission.canAskAgain !== false
     return (
       <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
@@ -325,6 +333,20 @@ export default function PairScanScreen() {
             </View>
           )}
           <View style={styles.errorActions}>
+            {failedSecureCode ? (
+              <Pressable
+                style={styles.secondaryButton}
+                accessibilityRole="button"
+                accessibilityLabel="Configure edge authentication"
+                onPress={() => {
+                  activePairingAttemptRef.current?.dispose()
+                  activePairingAttemptRef.current = null
+                  router.replace({ pathname: '/pair-confirm', params: { code: failedSecureCode } })
+                }}
+              >
+                <Text style={styles.secondaryButtonText}>Configure edge authentication</Text>
+              </Pressable>
+            ) : null}
             <Pressable style={styles.primaryButton} onPress={retry}>
               <Text style={styles.primaryButtonText}>Try Again</Text>
             </Pressable>
