@@ -7437,6 +7437,11 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
+        },
+        "WorktreeCardChangesStripe": {
+          "changeCount_capped": "{{count}}+ uncommitted or untracked changes",
+          "changeCount_one": "1 uncommitted or untracked change",
+          "changeCount_other": "{{count}} uncommitted or untracked changes"
         }
       },
       "shared": {
@@ -10018,7 +10023,16 @@
                 "cursor": "cursor"
               }
             },
-            "matchTerminal": "match terminal"
+            "matchTerminal": "match terminal",
+            "showWorktreeUncommittedChanges": {
+              "title": "Mark workspaces with uncommitted changes",
+              "description": "Show a stripe on workspace cards whose checkout has uncommitted or untracked changes.",
+              "uncommitted": "uncommitted",
+              "changes": "changes",
+              "dirty": "dirty",
+              "git": "git",
+              "workspace": "workspace"
+            }
           }
         },
         "auto": {
