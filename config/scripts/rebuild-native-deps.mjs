@@ -91,9 +91,6 @@ let modulesToRebuild = onlyModules
 
 warnAboutNodeModulesAboveSharedStore(projectDir)
 ensureElectronPackageInstalled()
-if (!isCrossHostRebuild && osPlatform() === 'linux' && electronPackageIsUsable()) {
-  exitWhenElectronCannotStart(getElectronExecutablePath())
-}
 restoreNodePtyWindowsConptyRuntime()
 
 const patchedNodePtyRebuildReason = forceRebuild ? null : getPatchedNodePtyRebuildReason()
@@ -111,6 +108,7 @@ if (patchedNodePtyRebuildReason) {
     console.log('[rebuild] Native modules already load in Electron; skipping rebuild.')
     process.exit(0)
   }
+  exitWhenSameHostElectronCannotStart()
   console.log(`[rebuild] Rebuilding failed native modules: ${modulesToRebuild.join(', ')}`)
   for (const { result } of probes) {
     if (!result.ok && result.stderr.trim()) {
@@ -247,6 +245,7 @@ function assertNodePtyConptySourceDeniesMsysBreakaway() {
 }
 
 function buildSharedElectronModule(moduleName) {
+  exitWhenSameHostElectronCannotStart()
   const target = { platform: rebuildPlatform, arch: rebuildArch }
   // An N-API build serves Electron and Node alike, so either can vouch for it on this host.
   const executable = electronPackageIsUsable() ? getElectronExecutablePath() : process.execPath
@@ -260,6 +259,13 @@ function buildSharedElectronModule(moduleName) {
         : sharedNativeBuild.checkNativeBuildDirLoads(moduleName, dir, { executable }),
     log: (message) => console.log(`[rebuild] ${message}`)
   })
+}
+
+/** Only where Electron vouches for addons: a failed probe, or a shared build's load check. */
+function exitWhenSameHostElectronCannotStart() {
+  if (!isCrossHostRebuild && osPlatform() === 'linux' && electronPackageIsUsable()) {
+    exitWhenElectronCannotStart(getElectronExecutablePath())
+  }
 }
 
 function restoreNodePtyWindowsConptyRuntime() {

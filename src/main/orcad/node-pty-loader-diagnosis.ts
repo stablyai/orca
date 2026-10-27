@@ -1,7 +1,7 @@
 import type { RuntimeTerminalUnavailableReason } from '../../shared/runtime-types'
+import { parseMissingSharedLibrary } from '../../shared/missing-shared-library'
 import {
   parseIncompatibleArchitecture,
-  parseMissingSharedLibrary,
   parseNodeAbiMismatch,
   parseUnmetGlibcVersion
 } from './native-host-abi'
