@@ -43,6 +43,13 @@ export type GroupHeaderRow = {
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
   worktreeIds?: readonly string[]
+  /** Workspaces the collapsed-header count badge tallies, keyed like its attention set: worktrees
+   *  by host identity (`getWorktreeHostIdentity`), folder workspaces by `folderWorkspaceKey`. Kept apart from `worktreeIds`, which host sections read to
+   *  split a lane per host and which therefore stays worktrees-only. */
+  countedWorkspaceIds?: readonly string[]
+  /** Per-host slices of `countedWorkspaceIds`, so a lane split across host sections badges
+   *  each section with its own workspaces instead of the cross-host total. */
+  hostCountedWorkspaceIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
 }
 
 export type WorktreeRow = {

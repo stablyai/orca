@@ -1,37 +1,11 @@
 import React from 'react'
 import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { HostSectionHeaderMenu } from '../../HostSectionHeaderMenu'
 import { stopRepoHeaderMenuEvent } from './header-event-guards'
 import { getHostHeaderDetail } from './host-header-detail'
-
-function formatSectionActivityLabel(count: number, label: string): string {
-  return `${count} ${label}${count === 1 ? '' : 's'}`
-}
-
-function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
-  const totalLabel = formatSectionActivityLabel(count, 'workspace')
-
-  return (
-    <span
-      className="inline-flex h-4 shrink-0 overflow-hidden rounded-full border border-worktree-sidebar-border bg-worktree-sidebar-accent text-[9px] font-medium leading-none text-muted-foreground/90"
-      aria-label={totalLabel}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex h-full min-w-4 items-center justify-center px-1.5">
-            {count}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {totalLabel}
-        </TooltipContent>
-      </Tooltip>
-    </span>
-  )
-}
+import { SectionWorkspaceCountBadge } from './section-workspace-count-badges'
 
 function HostHeaderHealthIcon({
   health
@@ -115,7 +89,7 @@ export function HostSectionHeader({
               {detail.text}
             </span>
           ) : null}
-          <SectionMetricsBadge count={row.count} />
+          <SectionWorkspaceCountBadge count={row.count} />
         </div>
         <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 can-hover:opacity-0 transition-opacity group-hover/host-header:opacity-100">
           <ChevronDown

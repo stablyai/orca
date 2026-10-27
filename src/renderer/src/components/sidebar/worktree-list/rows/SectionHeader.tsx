@@ -34,6 +34,12 @@ import {
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
 import {
+  getSectionCountBadges,
+  SectionAttentionCountBadge,
+  SectionWorkspaceCountBadge
+} from './section-workspace-count-badges'
+import type { CollapsedGroupCountBadgeMode } from '../../../../../../shared/collapsed-group-count-badge'
+import {
   ProjectGroupCreateWorkspaceButton,
   ProjectGroupHeaderMenu
 } from './project-group-header-actions'
@@ -47,6 +53,7 @@ import {
   shouldIgnoreRepoHeaderToggle
 } from './header-event-guards'
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
+import { getSectionHeaderReorderState } from './section-header-reorder-state'
 import { getWorktreeOptionId } from './option-dom'
 
 export type SectionHeaderRowContext = {
@@ -64,6 +71,8 @@ export type SectionHeaderRowContext = {
     scope: 'project-group'
     projectGroupId: string
   }) => FolderWorkspacePathStatus | null
+  countBadgeMode: CollapsedGroupCountBadgeMode
+  attentionWorkspaceIds: ReadonlySet<string>
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   projectActions: RepoHeaderProjectActions
   onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
@@ -108,44 +117,21 @@ export function renderWorktreeSectionHeaderRow(args: {
     row.projectGroup && 'createdFrom' in row.projectGroup
       ? getProjectGroupHostId(row.projectGroup)
       : undefined
-  const repoHeaderIndex =
-    projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderIndexByRepoId.get(projectIdForHeader)
-      : undefined
-  const repoHeaderBucketKey =
-    projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderBucketByRepoId.get(projectIdForHeader)
-      : undefined
-  const projectGroupHeaderIndex =
-    projectGroupIdForHeader !== undefined
-      ? headerDrag.projectGroupHeaderIndexByGroupId.get(projectGroupIdForHeader)
-      : undefined
-  const projectGroupHeaderBucketKey =
-    projectGroupIdForHeader !== undefined
-      ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupIdForHeader)
-      : undefined
-  const isDraggableRepoHeader = Boolean(
-    headerDrag.canReorderRepoHeaders &&
-    isRepoHeader &&
-    projectIdForHeader &&
-    repoHeaderBucketKey &&
-    (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
-  )
-  const isDraggableProjectGroupHeader = Boolean(
-    headerDrag.canReorderProjectGroupHeaders &&
-    projectGroupIdForHeader &&
-    projectGroupHeaderBucketKey &&
-    (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-      0) > 1
-  )
-  const isDraggingThis =
-    headerDrag.canReorderRepoHeaders &&
-    headerDrag.repoDrag.state.draggingRepoId !== null &&
-    headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
-  const isDraggingThisProjectGroup =
-    headerDrag.canReorderProjectGroupHeaders &&
-    headerDrag.projectGroupDrag.state.draggingGroupId !== null &&
-    headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupIdForHeader
+  const {
+    repoHeaderIndex,
+    repoHeaderBucketKey,
+    projectGroupHeaderIndex,
+    projectGroupHeaderBucketKey,
+    isDraggableRepoHeader,
+    isDraggableProjectGroupHeader,
+    isDraggingThis,
+    isDraggingThisProjectGroup
+  } = getSectionHeaderReorderState({
+    headerDrag,
+    isRepoHeader,
+    projectIdForHeader,
+    projectGroupIdForHeader
+  })
   const headerWorkspaceStatus =
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses)
@@ -187,6 +173,11 @@ export function renderWorktreeSectionHeaderRow(args: {
   const showHeaderCollapseAffordance =
     row.count > 0 &&
     (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+  // Why only collapsed, and why not gated on the chevron: an expanded section already shows its
+  // workspaces, but "All" and PR lanes collapse on row click without ever painting a chevron.
+  const countBadges = isHeaderCollapsed
+    ? getSectionCountBadges(row, ctx.countBadgeMode, ctx.attentionWorkspaceIds)
+    : { total: null, attention: null }
   return (
     <div
       key={vItem.key}
@@ -343,6 +334,12 @@ export function renderWorktreeSectionHeaderRow(args: {
                 <RepoForkIndicator upstream={row.repo?.upstream} />
                 <FolderPathStatusIndicator status={projectGroupPathStatus} />
                 {isRepoHeader ? <RepoScanUnavailableIndicator repo={row.repo!} /> : null}
+                {countBadges.total !== null ? (
+                  <SectionWorkspaceCountBadge count={countBadges.total} />
+                ) : null}
+                {countBadges.attention !== null ? (
+                  <SectionAttentionCountBadge count={countBadges.attention} />
+                ) : null}
               </div>
             </div>
           </div>
