@@ -30,7 +30,10 @@ export function mobileLockRefusedSend(
   ptyId: string | undefined,
   client: TerminalViewportClient | undefined
 ): { send: RuntimeTerminalSend } {
-  const locked = ptyId !== undefined && isTerminalInputLockedForClient(runtime, ptyId, client)
+  const locked =
+    ptyId !== undefined &&
+    isTerminalInputLockedForClient(runtime, ptyId, client) &&
+    isSendStillBoundToPty(runtime, handle, ptyId)
   return {
     send: {
       handle,
@@ -38,6 +41,20 @@ export function mobileLockRefusedSend(
       bytesWritten: 0,
       ...(locked ? { refusedReason: 'mobile-driving' as const } : {})
     }
+  }
+}
+
+// Why: a guard also fails for a handle that moved to a new PTY; the old PTY's phone driver is not the cause.
+function isSendStillBoundToPty(
+  runtime: OrcaRuntimeService,
+  handle: string,
+  ptyId: string
+): boolean {
+  try {
+    assertTerminalSendExactPtyBinding(runtime, handle, ptyId)
+    return true
+  } catch {
+    return false
   }
 }
 

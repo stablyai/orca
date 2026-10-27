@@ -104,6 +104,31 @@ describe('terminal send mobile-lock refusal reason', () => {
     expect(result).toMatchObject({ accepted: false, refusedReason: 'permission' })
   })
 
+  it('does not blame the phone when a guarded send fails because the handle moved to a new PTY', async () => {
+    let replaced = false
+    const { runtime, send: result } = await send(
+      { kind: 'desktop' },
+      { enter: true, requireAgentStatus: 'sendable', client: { id: 'c1', type: 'desktop' } },
+      {
+        resolveLiveLeafForHandle: vi
+          .fn()
+          .mockImplementation(() => ({ ptyId: replaced ? 'pty-2' : 'pty-1' })),
+        // The replaced PTY keeps a phone driver that no longer owns this handle.
+        getDriver: vi
+          .fn()
+          .mockImplementation((ptyId: string) =>
+            replaced && ptyId === 'pty-1' ? { kind: 'mobile', clientId: 'm1' } : { kind: 'desktop' }
+          ),
+        getTerminalAgentStatus: vi.fn().mockImplementation(async () => {
+          replaced = true
+          return { handle: 'terminal-1', isRunningAgent: true, status: 'idle' }
+        })
+      }
+    )
+    expect(result).toEqual({ handle: 'terminal-1', accepted: false, bytesWritten: 0 })
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
   it('gives the phone reason, not a no-agent one, when the lock refuses a guarded send', async () => {
     const { send: result } = await send(
       { kind: 'mobile', clientId: 'm1' },
