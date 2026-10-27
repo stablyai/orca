@@ -11,6 +11,7 @@ import { openMainWindow as openMainWindowController } from './startup/main-windo
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
+import { ensureWindowsRendererRuntimeFiles } from './startup/windows-renderer-runtime-files'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -104,7 +105,8 @@ const preflightReady =
   runMainProcessPreflight({
     focusExistingWindow,
     requestDesktopActivation
-  })
+  }) &&
+  ensureWindowsRendererRuntimeFiles(state.isServeMode)
 
 // Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
