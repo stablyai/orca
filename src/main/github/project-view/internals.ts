@@ -8,6 +8,7 @@ import {
 } from '../rate-limit'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
 import { githubProjectHost } from '../../../shared/github/project-identity'
+import { projectGhLoginCommand } from '../../../shared/github/project-gh-auth-commands'
 import { isDefaultGitHubHost } from '../../../shared/github/repository-identity-key'
 import { isGitHubHostAuthenticatedForGlobalCli } from '../github-enterprise-repository'
 import {
@@ -48,7 +49,9 @@ export async function projectHostAuthenticationError(
   // Verify pasted hosts before sending ambient Enterprise credentials.
   return {
     type: 'auth_required',
-    message: `GitHub CLI is not authenticated to ${selectedHost}. Run gh auth login --hostname ${selectedHost}.`
+    reason: 'cli_not_authenticated',
+    message: `GitHub CLI is not authenticated to ${selectedHost}. Run ${projectGhLoginCommand(selectedHost)}.`,
+    host: selectedHost
   }
 }
 
@@ -222,9 +225,15 @@ export async function runRest<T>(
     try {
       return { ok: true, data: JSON.parse(stdout) as T }
     } catch {
+      const diagnostic = stderr.trim()
       return {
         ok: false,
-        error: { type: 'unknown', message: `Unexpected REST response: ${stderr.trim()}` }
+        error: {
+          type: 'unknown',
+          reason: 'unexpected_rest_response',
+          message: `Unexpected REST response: ${diagnostic}`,
+          diagnostic
+        }
       }
     }
   } catch (err) {

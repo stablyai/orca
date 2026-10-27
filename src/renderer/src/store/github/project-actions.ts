@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { translate } from '@/i18n/i18n'
 import {
   projectViewCacheKey,
   projectViewRequestKey,
@@ -118,7 +119,10 @@ export const createProjectActions = (
           ok: false,
           error: {
             type: 'unknown',
-            message: err instanceof Error ? err.message : 'Failed to fetch project view'
+            message:
+              err instanceof Error
+                ? err.message
+                : translate('projectViews.errors.fetchViewFailed', 'Failed to fetch project view')
           }
         }
       } finally {

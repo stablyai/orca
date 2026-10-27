@@ -1,5 +1,8 @@
 import type { ListAccessibleProjectsArgs } from '../../../shared/github/project-request-types'
-import type { ListAccessibleProjectsResult } from '../../../shared/github/project-result-types'
+import type {
+  GitHubProjectPartialFailure,
+  ListAccessibleProjectsResult
+} from '../../../shared/github/project-result-types'
 import type {
   GitHubProjectOwnerType,
   GitHubProjectSummary
@@ -47,7 +50,7 @@ export async function listAccessibleProjects(
   const host = githubProjectHost(args?.host)
   const viewerProjects: GitHubProjectSummary[] = []
   const orgProjects: GitHubProjectSummary[] = []
-  const partialFailures: { owner: string; message: string }[] = []
+  const partialFailures: GitHubProjectPartialFailure[] = []
   let viewerLogin: string | null = null
 
   let viewerCursor: string | null = null
@@ -143,7 +146,7 @@ export async function listAccessibleProjects(
     const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
     if (!res.ok) {
       // Preserve viewer projects and mark the organization-list failure for the partial-results banner.
-      partialFailures.push({ owner: '*', message: res.error.message })
+      partialFailures.push({ owner: '*', message: res.error.message, error: res.error })
       break
     }
     const orgs = res.data.viewer?.organizations?.nodes ?? []

@@ -156,7 +156,11 @@ export async function fetchItemsPageWithRaw(args: {
     if (!page) {
       return {
         ok: false,
-        error: { type: 'not_found', message: 'Project or view not found.' },
+        error: {
+          type: 'not_found',
+          reason: 'project_or_view_not_found',
+          message: 'Project or view not found.'
+        },
         rawErrors: [],
         stderr
       }

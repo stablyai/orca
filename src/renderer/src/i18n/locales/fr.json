@@ -21136,7 +21136,68 @@
     },
     "unsupported": {
       "switchLayout": "Basculez vers une vue Tableau, Board ou Feuille de route pour travailler avec ce projet dans Orca.",
-      "description": "Orca affiche les vues de projet de type Tableau, Board et Feuille de route. Cette vue utilise une mise en page qu'Orca ne peut pas encore restituer."
+      "description": "Orca affiche les vues de projet de type Tableau, Board et Feuille de route. Cette vue utilise une mise en page qu'Orca ne peut pas encore restituer.",
+      "layoutMessage": "Orca ne prend pas encore en charge les vues de projet {{layout}}."
+    },
+    "authHelp": {
+      "enterpriseHostSignedOut": "`gh` n'est pas connecté à {{host}}.",
+      "enterpriseHostSignedOutDetail": "Les hôtes GitHub Enterprise nécessitent leur propre connexion `gh`, distincte de celle de github.com. Exécutez la commande de connexion dans un terminal, terminez la procédure dans le navigateur sur {{host}}, puis rechargez.",
+      "ghMissing": "GitHub CLI (`gh`) n'est pas installée ou n'est pas dans le PATH.",
+      "ghMissingDetail": "Orca utilise `gh` pour communiquer avec GitHub Projects. Installez-le depuis cli.github.com, puis connectez-vous.",
+      "envTokenRemoveWindows": "Trouvez où `{{variable}}` est définie (variables d'environnement système ou utilisateur, ou votre profil PowerShell), supprimez-la, puis redémarrez Orca pour qu'il prenne en compte le nouvel environnement.",
+      "envTokenRemove": "Trouvez où `{{variable}}` est exportée (généralement `~/.zshrc`, `~/.zshenv`, `~/.bashrc`, `~/.profile` ou le gestionnaire de secrets de votre shell), supprimez-la, puis redémarrez Orca pour qu'il prenne en compte le nouvel environnement.",
+      "envTokenKeyringFallback": "Votre trousseau contient déjà une connexion `gh` qui prendra le relais une fois la variable d'environnement supprimée.",
+      "envTokenSignInAfterUnset": "Après l'avoir retirée, exécutez `gh auth login` pour vous connecter normalement, puis réessayez.",
+      "envTokenInUse": "`{{variable}}` est définie dans votre environnement, donc `gh` utilise ce token au lieu de votre connexion enregistrée dans le trousseau. `gh auth refresh` ne peut pas modifier les tokens fournis par l'environnement — c'est pourquoi l'exécuter n'a pas suffi.",
+      "inheritedEnvToken": "Orca a hérité de `{{variable}}` depuis votre shell, et `gh` utilise ce token. `gh auth refresh` ne s'applique pas aux tokens fournis par l'environnement.",
+      "inheritedEnvTokenUnsetWindows": "Retirez `{{variable}}` du shell qui lance Orca (ou de vos variables d'environnement utilisateur), puis redémarrez Orca.",
+      "inheritedEnvTokenUnset": "Retirez `{{variable}}` du shell qui lance Orca (ou du fichier rc de votre shell), puis redémarrez Orca.",
+      "signedOut": "Vous n'êtes pas connecté à GitHub via `gh`.",
+      "missingScope": "Votre token `gh` n'a pas la portée {{scopes}} requise pour GitHub Projects.",
+      "missingScopes": "Votre token `gh` n'a pas les portées {{scopes}} requises pour GitHub Projects.",
+      "missingScopesDetail": "Exécutez la commande d'actualisation dans un terminal. Elle ouvrira un navigateur pour autoriser les nouvelles portées ; revenez ensuite ici et rechargez.",
+      "accessDeniedDetail": "Votre token dispose des portées requises, mais GitHub refuse toujours l'accès. Si le projet appartient à une organisation avec SAML SSO, vous devez autoriser ce token pour l'organisation dans Settings → Developer settings → Personal access tokens → Configure SSO."
+    },
+    "picker": {
+      "pasteUnrecognized": "Format attendu : URL de projet ou propriétaire/numéro",
+      "chooseProject": "Choisir un projet",
+      "ownerProjectsFailed": "Impossible de charger les projets de {{owner}}.",
+      "organizationsFailed": "Certaines organisations n'ont pas pu être chargées ({{total}}).",
+      "organizationsLabel": "organisations",
+      "listProjectsFailed": "Impossible de lister les projets"
+    },
+    "errors": {
+      "notFoundState": "Impossible de trouver ce projet ou cette vue.",
+      "schemaDriftState": "Impossible de lire cette vue de projet.",
+      "tooLargeUnknownCount": "Cette vue contient de nombreux éléments — trop pour être affichée dans Orca. Affinez le filtre de la vue sur GitHub.",
+      "tooLarge": "Cette vue contient {{total}} éléments — trop pour être affichée dans Orca. Affinez le filtre de la vue sur GitHub.",
+      "rateLimitLow": "Limite de requêtes GitHub presque épuisée ({{remaining}}/{{limit}} restantes). Réinitialisation dans environ {{minutes}} min.",
+      "inputTooLarge": "La référence du projet est trop volumineuse pour être résolue.",
+      "projectNotFound": "Projet introuvable.",
+      "ownerNotFound": "Propriétaire introuvable.",
+      "viewNotFound": "Impossible de trouver la vue sélectionnée.",
+      "issueNotFound": "Issue introuvable.",
+      "itemNotFound": "Élément introuvable.",
+      "projectOrViewNotFound": "Projet ou vue introuvable.",
+      "rateLimitHit": "Limite de requêtes GitHub atteinte. Réessayez dans quelques minutes.",
+      "inputRequired": "Saisie requise.",
+      "inputUnparseable": "Impossible d'analyser la saisie. Format attendu : URL de projet GitHub ou `owner/number`.",
+      "cliNotAuthenticated": "GitHub CLI n'est pas authentifiée sur {{host}}. Exécutez {{command}}.",
+      "invalidRequest": "Requête invalide — {{diagnostic}}",
+      "requestFailedWithDetail": "Échec de la requête GitHub : {{diagnostic}}",
+      "requestFailed": "Échec de la requête GitHub.",
+      "unexpectedRestResponse": "Réponse REST inattendue : {{diagnostic}}",
+      "signInRequired": "Connectez-vous à GitHub pour charger les tâches du projet. Exécutez `{{command}}`.",
+      "scopeMissing": "L'accès aux projets GitHub nécessite des portées supplémentaires. Exécutez `{{command}}`.",
+      "network": "Erreur réseau — vérifiez votre connexion.",
+      "schemaDrift": "Impossible de lire cette vue de projet : {{diagnostic}}.",
+      "fetchViewFailed": "Échec de la récupération de la vue du projet"
+    },
+    "columns": {
+      "type": "Type"
+    },
+    "itemDialog": {
+      "loadDetailsFailed": "Échec du chargement des détails"
     }
   },
   "projectField": {

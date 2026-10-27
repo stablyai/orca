@@ -21078,7 +21078,68 @@
     },
     "unsupported": {
       "switchLayout": "切换到表格、看板或路线图视图以在 Orca 中处理此项目。",
-      "description": "Orca 可渲染表格、看板和路线图项目视图。此视图使用的布局尚无法渲染。"
+      "description": "Orca 可渲染表格、看板和路线图项目视图。此视图使用的布局尚无法渲染。",
+      "layoutMessage": "Orca 尚不支持 {{layout}} 项目视图。"
+    },
+    "authHelp": {
+      "enterpriseHostSignedOut": "`gh` 未登录 {{host}}。",
+      "enterpriseHostSignedOutDetail": "GitHub Enterprise 主机需要单独的 `gh` 登录，与 github.com 的登录分开。请在终端中运行登录命令，在 {{host}} 上完成浏览器中的流程，然后重新加载。",
+      "ghMissing": "GitHub CLI (`gh`) 未安装或不在 PATH 中。",
+      "ghMissingDetail": "Orca 使用 `gh` 与 GitHub Projects 通信。请从 cli.github.com 安装，然后登录。",
+      "envTokenRemoveWindows": "找到设置 `{{variable}}` 的位置（系统或用户环境变量，或您的 PowerShell 配置文件），将其删除，然后重新启动 Orca 以使新的环境生效。",
+      "envTokenRemove": "找到导出 `{{variable}}` 的位置（通常是 `~/.zshrc`、`~/.zshenv`、`~/.bashrc`、`~/.profile` 或 shell 的密钥管理器），将其删除，然后重新启动 Orca 以使新的环境生效。",
+      "envTokenKeyringFallback": "您的密钥环中已有 `gh` 登录，移除该环境变量后将改用此登录。",
+      "envTokenSignInAfterUnset": "取消设置后，运行 `gh auth login` 以正常方式登录，然后重试。",
+      "envTokenInUse": "您的环境中设置了 `{{variable}}`，因此 `gh` 正在使用该 token，而不是密钥环中的登录。`gh auth refresh` 无法修改通过环境变量提供的 token，这就是运行它没有效果的原因。",
+      "inheritedEnvToken": "Orca 从您的 shell 继承了 `{{variable}}`，`gh` 正在使用该 token。`gh auth refresh` 不适用于通过环境变量提供的 token。",
+      "inheritedEnvTokenUnsetWindows": "在启动 Orca 的 shell 中（或在用户环境变量中）取消设置 `{{variable}}`，然后重新启动 Orca。",
+      "inheritedEnvTokenUnset": "在启动 Orca 的 shell 中（或在 shell rc 文件中）取消设置 `{{variable}}`，然后重新启动 Orca。",
+      "signedOut": "您尚未通过 `gh` 登录 GitHub。",
+      "missingScope": "您的 `gh` token 缺少 GitHub Projects 所需的 {{scopes}} 作用域。",
+      "missingScopes": "您的 `gh` token 缺少 GitHub Projects 所需的 {{scopes}} 作用域。",
+      "missingScopesDetail": "请在终端中运行刷新命令。该命令会打开浏览器以授权新的作用域，完成后请回到此处重新加载。",
+      "accessDeniedDetail": "您的 token 已具有所需作用域，但 GitHub 仍拒绝访问。如果该项目位于启用了 SAML SSO 的组织中，您必须在 Settings → Developer settings → Personal access tokens → Configure SSO 中为该组织授权此 token。"
+    },
+    "picker": {
+      "pasteUnrecognized": "应为项目 URL 或所有者/号码",
+      "chooseProject": "选择一个项目",
+      "ownerProjectsFailed": "无法加载 {{owner}} 的项目。",
+      "organizationsFailed": "部分组织未能加载（{{total}}）。",
+      "organizationsLabel": "组织",
+      "listProjectsFailed": "无法列出项目"
+    },
+    "errors": {
+      "notFoundState": "找不到此项目或视图。",
+      "schemaDriftState": "无法读取此项目视图。",
+      "tooLargeUnknownCount": "此视图包含大量条目，无法在 Orca 中渲染。请在 GitHub 上缩小该视图的筛选范围。",
+      "tooLarge": "此视图包含 {{total}} 个条目，数量过多，无法在 Orca 中渲染。请在 GitHub 上缩小该视图的筛选范围。",
+      "rateLimitLow": "GitHub 速率限制即将耗尽（剩余 {{remaining}}/{{limit}}）。约 {{minutes}} 分钟后重置。",
+      "inputTooLarge": "项目引用过长，无法解析。",
+      "projectNotFound": "未找到项目。",
+      "ownerNotFound": "未找到所有者。",
+      "viewNotFound": "找不到所选视图。",
+      "issueNotFound": "未找到议题。",
+      "itemNotFound": "未找到条目。",
+      "projectOrViewNotFound": "未找到项目或视图。",
+      "rateLimitHit": "已达到 GitHub 速率限制。请几分钟后重试。",
+      "inputRequired": "请输入内容。",
+      "inputUnparseable": "无法解析输入内容。应为 GitHub 项目 URL 或 `owner/number`。",
+      "cliNotAuthenticated": "GitHub CLI 未在 {{host}} 上通过身份验证。请运行 {{command}}。",
+      "invalidRequest": "无效请求 — {{diagnostic}}",
+      "requestFailedWithDetail": "GitHub 请求失败：{{diagnostic}}",
+      "requestFailed": "GitHub 请求失败。",
+      "unexpectedRestResponse": "意外的 REST 响应：{{diagnostic}}",
+      "signInRequired": "请登录 GitHub 以加载项目任务。请运行 `{{command}}`。",
+      "scopeMissing": "访问 GitHub 项目需要额外的作用域。请运行 `{{command}}`。",
+      "network": "网络错误 — 请检查网络连接。",
+      "schemaDrift": "无法读取此项目视图：{{diagnostic}}。",
+      "fetchViewFailed": "获取项目视图失败"
+    },
+    "columns": {
+      "type": "类型"
+    },
+    "itemDialog": {
+      "loadDetailsFailed": "无法加载详细信息"
     }
   },
   "projectField": {

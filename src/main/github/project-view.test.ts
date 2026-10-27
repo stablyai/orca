@@ -59,9 +59,10 @@ describe('classifyProjectError', () => {
   })
 
   it('pins Enterprise auth and scope remediation to the selected host', () => {
-    expect(
-      classifyProjectError('gh auth login required', '', 'github.acme.test').message
-    ).toContain('gh auth login --hostname github.acme.test')
+    const authError = classifyProjectError('gh auth login required', '', 'github.acme.test')
+    expect(authError.message).toContain('gh auth login --hostname github.acme.test')
+    // The desktop rebuilds the command from `host` in the UI language.
+    expect(authError.host).toBe('github.acme.test')
     expect(
       classifyProjectError(
         'your token has not been granted the required scopes',
@@ -238,6 +239,7 @@ describe('resolveProjectRef', () => {
       ok: false,
       error: {
         type: 'validation_error',
+        reason: 'input_too_large',
         message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR
       }
     })

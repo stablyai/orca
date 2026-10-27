@@ -21355,7 +21355,68 @@
     },
     "unsupported": {
       "switchLayout": "Switch to a Table, Board, or Roadmap view to work with this project in Orca.",
-      "description": "Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet."
+      "description": "Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet.",
+      "layoutMessage": "Orca doesn't support {{layout}} project views yet."
+    },
+    "authHelp": {
+      "enterpriseHostSignedOut": "`gh` is not signed in to {{host}}.",
+      "enterpriseHostSignedOutDetail": "GitHub Enterprise hosts need their own `gh` login, separate from github.com. Run the login command in a terminal, complete the browser flow on {{host}}, then reload.",
+      "ghMissing": "GitHub CLI (`gh`) is not installed or not on PATH.",
+      "ghMissingDetail": "Orca uses `gh` to talk to GitHub Projects. Install it from cli.github.com, then sign in.",
+      "envTokenRemoveWindows": "Find where `{{variable}}` is set (System or User environment variables, or your PowerShell profile), remove it, then restart Orca so the new environment is picked up.",
+      "envTokenRemove": "Find where `{{variable}}` is exported (commonly `~/.zshrc`, `~/.zshenv`, `~/.bashrc`, `~/.profile`, or your shell's secrets manager), remove it, then restart Orca so the new environment is picked up.",
+      "envTokenKeyringFallback": "Your keyring already has a `gh` login that will take over once the env var is gone.",
+      "envTokenSignInAfterUnset": "After unsetting it, run `gh auth login` to sign in normally, then retry.",
+      "envTokenInUse": "`{{variable}}` is set in your environment, so `gh` is using that token instead of your keyring login. `gh auth refresh` cannot modify env-supplied tokens — that's why running it didn't help.",
+      "inheritedEnvToken": "Orca inherited `{{variable}}` from your shell, and `gh` is using that token. `gh auth refresh` doesn't apply to env-supplied tokens.",
+      "inheritedEnvTokenUnsetWindows": "Unset `{{variable}}` in the shell that launches Orca (or in your user environment variables), then restart Orca.",
+      "inheritedEnvTokenUnset": "Unset `{{variable}}` in the shell that launches Orca (or in your shell rc file), then restart Orca.",
+      "signedOut": "You’re not signed in to GitHub via `gh`.",
+      "missingScope": "Your `gh` token is missing the {{scopes}} scope needed for GitHub Projects.",
+      "missingScopes": "Your `gh` token is missing the {{scopes}} scopes needed for GitHub Projects.",
+      "missingScopesDetail": "Run the refresh command in a terminal. It will open a browser to authorize the new scopes, then come back here and reload.",
+      "accessDeniedDetail": "Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO."
+    },
+    "picker": {
+      "pasteUnrecognized": "Expected a project URL or owner/number",
+      "chooseProject": "Choose a project",
+      "ownerProjectsFailed": "Couldn't load projects from {{owner}}.",
+      "organizationsFailed": "Some organizations didn't load ({{total}}).",
+      "organizationsLabel": "orgs",
+      "listProjectsFailed": "Failed to list projects"
+    },
+    "errors": {
+      "notFoundState": "Could not find this project or view.",
+      "schemaDriftState": "Could not read this project view.",
+      "tooLargeUnknownCount": "This view has many items — too large to render in Orca. Narrow the view's filter on GitHub.",
+      "tooLarge": "This view has {{total}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
+      "rateLimitLow": "GitHub rate limit nearly exhausted ({{remaining}}/{{limit}} left). Resets in ~{{minutes}}m.",
+      "inputTooLarge": "Project reference is too large to resolve.",
+      "projectNotFound": "Project not found.",
+      "ownerNotFound": "Owner not found.",
+      "viewNotFound": "Could not find the selected view.",
+      "issueNotFound": "Issue not found.",
+      "itemNotFound": "Item not found.",
+      "projectOrViewNotFound": "Project or view not found.",
+      "rateLimitHit": "GitHub rate limit hit. Try again in a few minutes.",
+      "inputRequired": "Input required.",
+      "inputUnparseable": "Could not parse input. Expected a GitHub project URL or `owner/number`.",
+      "cliNotAuthenticated": "GitHub CLI is not authenticated to {{host}}. Run {{command}}.",
+      "invalidRequest": "Invalid request — {{diagnostic}}",
+      "requestFailedWithDetail": "GitHub request failed: {{diagnostic}}",
+      "requestFailed": "GitHub request failed.",
+      "unexpectedRestResponse": "Unexpected REST response: {{diagnostic}}",
+      "signInRequired": "Sign in to GitHub to load project tasks. Run `{{command}}`.",
+      "scopeMissing": "GitHub project access needs additional scopes. Run `{{command}}`.",
+      "network": "Network error — check your connection.",
+      "schemaDrift": "Could not read this project view: {{diagnostic}}.",
+      "fetchViewFailed": "Failed to fetch project view"
+    },
+    "columns": {
+      "type": "Type"
+    },
+    "itemDialog": {
+      "loadDetailsFailed": "Failed to load details"
     }
   },
   "projectField": {

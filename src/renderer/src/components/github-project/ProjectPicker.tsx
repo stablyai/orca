@@ -13,7 +13,6 @@ import type {
   GitHubProjectViewSummary
 } from '../../../../shared/github/project-types'
 import {
-  GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   hasBoundedGitHubProjectRefInputText,
   isGitHubProjectRefInputTooLarge
 } from '../../../../shared/github/project-ref-input'
@@ -25,6 +24,7 @@ import { filterGitHubProjectPickerProjects } from './github-project-picker-filte
 import { ProjectPickerBrowse } from './ProjectPickerBrowse'
 import { ProjectViewPickStep } from './ProjectPickerPanels'
 import { parseProjectInput } from './project-picker-input'
+import { projectRefInputTooLargeMessage, projectViewErrorMessage } from './project-view-error-copy'
 import {
   getProjectPickerBrowseHost,
   listProjectViewsForRuntime,
@@ -160,7 +160,7 @@ export default function ProjectPicker({
         }
         if (!result.ok) {
           setViewList([])
-          toast.error(result.error.message)
+          toast.error(projectViewErrorMessage(result.error))
           return
         }
         setViewList(result.views)
@@ -190,13 +190,15 @@ export default function ProjectPicker({
 
   const handlePaste = useCallback(async () => {
     if (isGitHubProjectRefInputTooLarge(pasteInput)) {
-      setPasteError(GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR)
+      setPasteError(projectRefInputTooLargeMessage())
       return
     }
     const input = pasteInput.trim()
     const parsed = parseProjectInput(input)
     if (!parsed) {
-      setPasteError('Expected a project URL or owner/number')
+      setPasteError(
+        translate('projectViews.picker.pasteUnrecognized', 'Expected a project URL or owner/number')
+      )
       return
     }
     setPasteError(null)
@@ -207,7 +209,7 @@ export default function ProjectPicker({
         return
       }
       if (!result.ok) {
-        setPasteError(result.error.message)
+        setPasteError(projectViewErrorMessage(result.error))
         return
       }
       setPasteInput('')
@@ -238,7 +240,7 @@ export default function ProjectPicker({
   )
   const buttonLabel = activeProject
     ? `${activeProject.owner} / ${activeProject.title ?? `#${activeProject.number}`}`
-    : 'Choose a project'
+    : translate('projectViews.picker.chooseProject', 'Choose a project')
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

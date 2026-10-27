@@ -1,4 +1,5 @@
 import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
+import type { GitHubProjectPartialFailure } from '../../../../shared/github/project-result-types'
 
 export const PROJECT_PICKER_BROWSE_CACHE_TTL_MS = 5 * 60_000
 export const PROJECT_PICKER_BROWSE_CACHE_MAX_ENTRIES = 32
@@ -6,7 +7,7 @@ export const PROJECT_PICKER_BROWSE_CACHE_MAX_ENTRIES = 32
 type ProjectPickerBrowseCacheEntry = {
   fetchedAt: number
   projects: GitHubProjectSummary[]
-  partialFailures?: { owner: string; message: string }[]
+  partialFailures?: GitHubProjectPartialFailure[]
 }
 
 const browseCacheByRuntimeScope = new Map<string, ProjectPickerBrowseCacheEntry>()

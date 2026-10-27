@@ -22,11 +22,43 @@ export type GitHubProjectViewErrorType =
   | 'rate_limited'
   | 'unknown'
 
+/** Names the Orca sentence when `type` alone does not; older hosts omit it. */
+export type GitHubProjectViewErrorReason =
+  | 'project_not_found'
+  | 'owner_not_found'
+  | 'view_not_found'
+  | 'issue_not_found'
+  | 'item_not_found'
+  | 'project_or_view_not_found'
+  | 'rate_limit_hit'
+  | 'input_required'
+  | 'input_too_large'
+  | 'input_unparseable'
+  | 'cli_not_authenticated'
+  | 'invalid_request'
+  | 'request_failed'
+  | 'unexpected_rest_response'
+
 export type GitHubProjectViewError = {
   type: GitHubProjectViewErrorType
+  /** English copy for mobile, older clients and logs; the desktop renders `type` and `reason` in the UI language. */
   message: string
+  reason?: GitHubProjectViewErrorReason
+  /** Host named by the sign-in and scope commands. */
+  host?: string
+  /** Minutes are counted on the host so the copy matches `message` despite clock skew or late rendering. */
+  rateLimit?: { remaining: number; limit: number; resetMinutes: number }
+  /** Text after the Orca prefix in `message`: GitHub's response or an internal parse failure. */
+  diagnostic?: string
   /** Classified GraphQL details only; never include tokens or full command stdout. */
   details?: { path?: (string | number)[]; code?: string }
+}
+
+/** An owner whose projects discovery could not list; `owner` is `*` for the organization list itself. */
+export type GitHubProjectPartialFailure = {
+  owner: string
+  message: string
+  error?: GitHubProjectViewError
 }
 
 export type GetProjectViewTableResult =
@@ -44,7 +76,7 @@ export type ListAccessibleProjectsResult =
       ok: true
       projects: GitHubProjectSummary[]
       /** Org discovery can partially fail; name failed owners so the picker can show incompleteness and accept pasted URLs for missing projects. */
-      partialFailures?: { owner: string; message: string }[]
+      partialFailures?: GitHubProjectPartialFailure[]
     }
   | { ok: false; error: GitHubProjectViewError }
 

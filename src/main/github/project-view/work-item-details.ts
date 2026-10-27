@@ -66,7 +66,10 @@ export async function getWorkItemDetailsBySlug(
   const raw =
     args.type === 'issue' ? result.data.repository?.issue : result.data.repository?.pullRequest
   if (!raw) {
-    return { ok: false, error: { type: 'not_found', message: 'Item not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', reason: 'item_not_found', message: 'Item not found.' }
+    }
   }
   return { ok: true, details: mapWorkItemDetails(raw, args) }
 }

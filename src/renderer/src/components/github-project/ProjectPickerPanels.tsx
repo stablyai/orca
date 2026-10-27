@@ -1,11 +1,15 @@
 import React from 'react'
 import { AlertTriangle, Loader, Pin } from 'lucide-react'
 import { GhAuthErrorHelp } from './GhAuthErrorHelp'
+import { projectViewErrorMessage } from './project-view-error-copy'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewSummary } from '../../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import type {
+  GitHubProjectPartialFailure,
+  GitHubProjectViewError
+} from '../../../../shared/github/project-result-types'
 
 export function ProjectPickerSection({
   label,
@@ -160,14 +164,29 @@ function ProjectViewPickerRow({
 export function ProjectPickerPartialFailures({
   failures
 }: {
-  failures: { owner: string; message: string }[]
+  failures: GitHubProjectPartialFailure[]
 }): React.JSX.Element {
   const summary =
     failures.length === 1 && failures[0].owner !== '*'
-      ? `Couldn't load projects from ${failures[0].owner}.`
-      : `Some organizations didn't load (${failures.length}).`
+      ? translate(
+          'projectViews.picker.ownerProjectsFailed',
+          "Couldn't load projects from {{owner}}.",
+          { owner: failures[0].owner }
+        )
+      : translate(
+          'projectViews.picker.organizationsFailed',
+          "Some organizations didn't load ({{total}}).",
+          { total: failures.length }
+        )
   const detail = failures
-    .map((failure) => `${failure.owner === '*' ? 'orgs' : failure.owner}: ${failure.message}`)
+    .map((failure) => {
+      const owner =
+        failure.owner === '*'
+          ? translate('projectViews.picker.organizationsLabel', 'orgs')
+          : failure.owner
+      const message = failure.error ? projectViewErrorMessage(failure.error) : failure.message
+      return `${owner}: ${message}`
+    })
     .join('\n')
   return (
     <div
@@ -208,7 +227,7 @@ export function ProjectPickerError({
   }
   return (
     <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-      <div>{error.message}</div>
+      <div>{projectViewErrorMessage(error)}</div>
     </div>
   )
 }

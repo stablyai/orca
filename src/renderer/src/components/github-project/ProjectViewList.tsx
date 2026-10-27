@@ -7,7 +7,12 @@ import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow from './ProjectRow'
 import { ProjectItemsEmptyState } from './ProjectViewStates'
 import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
-import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
+import {
+  getAvailableColumns,
+  loadHiddenColumns,
+  projectColumnLabel,
+  saveHiddenColumns
+} from './columns'
 import {
   ACTION_COLUMN_WIDTH,
   loadColumnWidths,
@@ -210,6 +215,7 @@ export default function ProjectViewList({
             {table.selectedView.groupByFields[0] ? (
               <ProjectGroupHeader
                 group={g}
+                groupFieldName={table.selectedView.groupByFields[0]?.name}
                 expanded={expanded}
                 onToggle={() => {
                   setCollapsed((prev) => {
@@ -312,10 +318,10 @@ function ProjectHeaderRow({
               aria-label={translate(
                 'auto.components.github.project.ProjectViewList.eddfc7a794',
                 'Sort by {{value0}}',
-                { value0: f.name }
+                { value0: projectColumnLabel(f) }
               )}
             >
-              <span className="truncate">{f.name}</span>
+              <span className="truncate">{projectColumnLabel(f)}</span>
               <Icon
                 className={cn(
                   'size-3 shrink-0 transition-opacity',
@@ -372,7 +378,7 @@ function ProjectHeaderRow({
                     onChange={() => onToggleColumn(f.id)}
                     className="size-3.5"
                   />
-                  <span className="truncate">{f.name}</span>
+                  <span className="truncate">{projectColumnLabel(f)}</span>
                 </label>
               )
             })}

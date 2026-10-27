@@ -15,6 +15,7 @@ import type {
   GitHubProjectMutationResult
 } from '../../../../../shared/github/project-result-types'
 import { translate } from '@/i18n/i18n'
+import { projectViewErrorMessage } from '../project-view-error-copy'
 
 function getRuntimeTarget(target: RuntimeClientTarget) {
   return target.kind === 'environment' ? target : null
@@ -68,7 +69,7 @@ export function CommentsList({
                   )
                 : await window.api.gh.deleteIssueCommentBySlug(args)
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
                 return
               }
               onChange(comments.filter((x) => x.id !== c.id))
@@ -91,7 +92,7 @@ export function CommentsList({
                   )
                 : await window.api.gh.updateIssueCommentBySlug(args)
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
                 return
               }
               onChange(comments.map((x) => (x.id === c.id ? { ...x, body: next } : x)))
@@ -235,7 +236,7 @@ export function NewCommentForm({
                   )
                 : await window.api.gh.addIssueCommentBySlug(args)
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
                 return
               }
               onAdded(res.comment)

@@ -2,7 +2,11 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import type {
+  GitHubProjectPartialFailure,
+  GitHubProjectViewError
+} from '../../../../shared/github/project-result-types'
+import { translate } from '@/i18n/i18n'
 import {
   getProjectPickerBrowseCacheEntry,
   peekProjectPickerBrowseCacheEntry,
@@ -18,7 +22,7 @@ export function useProjectPickerBrowse(
   browseHost: string
 ): {
   browseProjects: GitHubProjectSummary[]
-  partialFailures: { owner: string; message: string }[]
+  partialFailures: GitHubProjectPartialFailure[]
   browseLoading: boolean
   browseError: GitHubProjectViewError | null
   loadBrowse: () => Promise<void>
@@ -33,7 +37,7 @@ export function useProjectPickerBrowse(
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => cached?.projects ?? []
   )
-  const [partialFailures, setPartialFailures] = useState<{ owner: string; message: string }[]>(
+  const [partialFailures, setPartialFailures] = useState<GitHubProjectPartialFailure[]>(
     () => cached?.partialFailures ?? []
   )
   const [browseLoading, setBrowseLoading] = useState(false)
@@ -73,7 +77,10 @@ export function useProjectPickerBrowse(
       if (mountedRef.current && activeCacheKeyRef.current === cacheKey) {
         setBrowseError({
           type: 'unknown',
-          message: error instanceof Error ? error.message : 'Failed to list projects'
+          message:
+            error instanceof Error
+              ? error.message
+              : translate('projectViews.picker.listProjectsFailed', 'Failed to list projects')
         })
       }
     } finally {

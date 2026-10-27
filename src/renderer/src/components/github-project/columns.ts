@@ -1,5 +1,6 @@
 // Store per-device visibility locally without modifying GitHub’s field definition or syncing cosmetic settings.
 import type { GitHubProjectField, GitHubProjectView } from '../../../../shared/github/project-types'
+import { translate } from '@/i18n/i18n'
 
 export const TYPE_FIELD_ID = '__type__'
 export const TYPE_FIELD_DATA_TYPE = '__TYPE__'
@@ -10,6 +11,11 @@ export const TYPE_FIELD: GitHubProjectField = {
   id: TYPE_FIELD_ID,
   name: 'Type',
   dataType: TYPE_FIELD_DATA_TYPE
+}
+
+/** GitHub field names stay as GitHub sends them; only Orca's injected Type column is translated. */
+export function projectColumnLabel(field: GitHubProjectField): string {
+  return field.id === TYPE_FIELD_ID ? translate('projectViews.columns.type', 'Type') : field.name
 }
 
 export function getAvailableColumns(view: GitHubProjectView): GitHubProjectField[] {

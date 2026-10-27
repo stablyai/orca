@@ -21136,7 +21136,68 @@
     },
     "unsupported": {
       "switchLayout": "Cambia a una vista de Tabla, Tablero o Hoja de ruta para trabajar con este proyecto en Orca.",
-      "description": "Orca representa vistas de proyectos de tabla, tablero y hoja de ruta. Esta vista usa un diseño que aún no puede representar."
+      "description": "Orca representa vistas de proyectos de tabla, tablero y hoja de ruta. Esta vista usa un diseño que aún no puede representar.",
+      "layoutMessage": "Orca aún no admite vistas de proyecto {{layout}}."
+    },
+    "authHelp": {
+      "enterpriseHostSignedOut": "`gh` no ha iniciado sesión en {{host}}.",
+      "enterpriseHostSignedOutDetail": "Los hosts de GitHub Enterprise necesitan su propio inicio de sesión de `gh`, independiente del de github.com. Ejecuta el comando de inicio de sesión en una terminal, completa el flujo en el navegador en {{host}} y luego recarga.",
+      "ghMissing": "GitHub CLI (`gh`) no está instalada o no está en el PATH.",
+      "ghMissingDetail": "Orca usa `gh` para comunicarse con GitHub Projects. Instálalo desde cli.github.com y luego inicia sesión.",
+      "envTokenRemoveWindows": "Busca dónde está definida `{{variable}}` (variables de entorno del sistema o del usuario, o tu perfil de PowerShell), elimínala y luego reinicia Orca para que cargue el nuevo entorno.",
+      "envTokenRemove": "Busca dónde se exporta `{{variable}}` (normalmente `~/.zshrc`, `~/.zshenv`, `~/.bashrc`, `~/.profile` o el gestor de secretos de tu shell), elimínala y luego reinicia Orca para que cargue el nuevo entorno.",
+      "envTokenKeyringFallback": "Tu llavero ya tiene un inicio de sesión de `gh` que se usará en cuanto desaparezca la variable de entorno.",
+      "envTokenSignInAfterUnset": "Después de quitarla, ejecuta `gh auth login` para iniciar sesión de la forma habitual y vuelve a intentarlo.",
+      "envTokenInUse": "`{{variable}}` está definida en tu entorno, así que `gh` usa ese token en lugar de tu inicio de sesión del llavero. `gh auth refresh` no puede modificar tokens proporcionados por variables de entorno; por eso ejecutarlo no sirvió.",
+      "inheritedEnvToken": "Orca heredó `{{variable}}` de tu shell, y `gh` está usando ese token. `gh auth refresh` no se aplica a tokens proporcionados por variables de entorno.",
+      "inheritedEnvTokenUnsetWindows": "Quita `{{variable}}` del shell que inicia Orca (o de tus variables de entorno de usuario) y luego reinicia Orca.",
+      "inheritedEnvTokenUnset": "Quita `{{variable}}` del shell que inicia Orca (o del archivo rc de tu shell) y luego reinicia Orca.",
+      "signedOut": "No has iniciado sesión en GitHub mediante `gh`.",
+      "missingScope": "A tu token de `gh` le falta el alcance {{scopes}} necesario para GitHub Projects.",
+      "missingScopes": "A tu token de `gh` le faltan los alcances {{scopes}} necesarios para GitHub Projects.",
+      "missingScopesDetail": "Ejecuta el comando de actualización en una terminal. Se abrirá un navegador para autorizar los nuevos alcances; después vuelve aquí y recarga.",
+      "accessDeniedDetail": "Tu token tiene los alcances necesarios, pero GitHub sigue denegando el acceso. Si el proyecto pertenece a una organización con SAML SSO, debes autorizar este token para la organización en Settings → Developer settings → Personal access tokens → Configure SSO."
+    },
+    "picker": {
+      "pasteUnrecognized": "Se esperaba una URL de proyecto u owner/number",
+      "chooseProject": "Elige un proyecto",
+      "ownerProjectsFailed": "No se pudieron cargar los proyectos de {{owner}}.",
+      "organizationsFailed": "Algunas organizaciones no se cargaron ({{total}}).",
+      "organizationsLabel": "organizaciones",
+      "listProjectsFailed": "No se pudieron listar los proyectos"
+    },
+    "errors": {
+      "notFoundState": "No se encontró este proyecto o vista.",
+      "schemaDriftState": "No se pudo leer esta vista del proyecto.",
+      "tooLargeUnknownCount": "Esta vista tiene muchos elementos — demasiados para mostrarla en Orca. Acota el filtro de la vista en GitHub.",
+      "tooLarge": "Esta vista tiene {{total}} elementos — demasiados para mostrarla en Orca. Acota el filtro de la vista en GitHub.",
+      "rateLimitLow": "El límite de solicitudes de GitHub está casi agotado (quedan {{remaining}}/{{limit}}). Se restablece en unos {{minutes}} min.",
+      "inputTooLarge": "La referencia del proyecto es demasiado grande para resolverla.",
+      "projectNotFound": "No se encontró el proyecto.",
+      "ownerNotFound": "No se encontró el propietario.",
+      "viewNotFound": "No se encontró la vista seleccionada.",
+      "issueNotFound": "No se encontró el issue.",
+      "itemNotFound": "No se encontró el elemento.",
+      "projectOrViewNotFound": "No se encontró el proyecto o la vista.",
+      "rateLimitHit": "Se alcanzó el límite de solicitudes de GitHub. Vuelve a intentarlo en unos minutos.",
+      "inputRequired": "Se requiere un valor.",
+      "inputUnparseable": "No se pudo interpretar el valor. Se esperaba una URL de proyecto de GitHub o `owner/number`.",
+      "cliNotAuthenticated": "GitHub CLI no está autenticada en {{host}}. Ejecuta {{command}}.",
+      "invalidRequest": "Solicitud no válida — {{diagnostic}}",
+      "requestFailedWithDetail": "La solicitud a GitHub falló: {{diagnostic}}",
+      "requestFailed": "La solicitud a GitHub falló.",
+      "unexpectedRestResponse": "Respuesta REST inesperada: {{diagnostic}}",
+      "signInRequired": "Inicia sesión en GitHub para cargar las tareas del proyecto. Ejecuta `{{command}}`.",
+      "scopeMissing": "El acceso a los proyectos de GitHub requiere alcances adicionales. Ejecuta `{{command}}`.",
+      "network": "Error de red — comprueba tu conexión.",
+      "schemaDrift": "No se pudo leer esta vista del proyecto: {{diagnostic}}.",
+      "fetchViewFailed": "No se pudo obtener la vista del proyecto"
+    },
+    "columns": {
+      "type": "Tipo"
+    },
+    "itemDialog": {
+      "loadDetailsFailed": "No se pudieron cargar los detalles"
     }
   },
   "projectField": {

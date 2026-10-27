@@ -21140,7 +21140,68 @@
     },
     "unsupported": {
       "switchLayout": "Orca でこのプロジェクトを操作するには、テーブル、ボード、またはロードマップビューに切り替えます。",
-      "description": "Orca はテーブル、ボード、ロードマップのプロジェクトビューをレンダリングします。このビューは、まだレンダリングできないレイアウトを使用しています。"
+      "description": "Orca はテーブル、ボード、ロードマップのプロジェクトビューをレンダリングします。このビューは、まだレンダリングできないレイアウトを使用しています。",
+      "layoutMessage": "Orca は {{layout}} のプロジェクトビューにまだ対応していません。"
+    },
+    "authHelp": {
+      "enterpriseHostSignedOut": "`gh` は {{host}} にサインインしていません。",
+      "enterpriseHostSignedOutDetail": "GitHub Enterprise のホストには、github.com とは別の `gh` ログインが必要です。ターミナルでログインコマンドを実行し、{{host}} でブラウザの手順を完了してから、リロードしてください。",
+      "ghMissing": "GitHub CLI (`gh`) がインストールされていないか、PATH にありません。",
+      "ghMissingDetail": "Orca は `gh` を使って GitHub Projects と通信します。cli.github.com からインストールしてから、サインインしてください。",
+      "envTokenRemoveWindows": "`{{variable}}` を設定している場所 (システムまたはユーザーの環境変数、または PowerShell プロファイル) を探して削除し、環境の変更を反映するために Orca を再起動してください。",
+      "envTokenRemove": "`{{variable}}` をエクスポートしている場所 (多くは `~/.zshrc`、`~/.zshenv`、`~/.bashrc`、`~/.profile`、またはシェルのシークレットマネージャー) を探して削除し、環境の変更を反映するために Orca を再起動してください。",
+      "envTokenKeyringFallback": "キーリングには `gh` のログインが既にあり、環境変数を削除するとキーリングのログインが使われます。",
+      "envTokenSignInAfterUnset": "設定を解除したら、`gh auth login` を実行して通常どおりサインインし、もう一度お試しください。",
+      "envTokenInUse": "環境に `{{variable}}` が設定されているため、`gh` はキーリングのログインではなく環境変数のトークンを使っています。`gh auth refresh` は環境変数で渡されたトークンを変更できないため、実行しても解決しません。",
+      "inheritedEnvToken": "Orca はシェルから `{{variable}}` を引き継いでおり、`gh` は環境変数のトークンを使っています。`gh auth refresh` は環境変数で渡されたトークンには適用されません。",
+      "inheritedEnvTokenUnsetWindows": "Orca を起動するシェル (またはユーザーの環境変数) で `{{variable}}` の設定を解除し、Orca を再起動してください。",
+      "inheritedEnvTokenUnset": "Orca を起動するシェル (またはシェルの rc ファイル) で `{{variable}}` の設定を解除し、Orca を再起動してください。",
+      "signedOut": "`gh` で GitHub にサインインしていません。",
+      "missingScope": "`gh` のトークンに、GitHub Projects に必要な {{scopes}} スコープがありません。",
+      "missingScopes": "`gh` のトークンに、GitHub Projects に必要な {{scopes}} スコープがありません。",
+      "missingScopesDetail": "ターミナルで更新コマンドを実行してください。ブラウザが開き、追加のスコープの承認を求めます。承認したら Orca に戻って、リロードしてください。",
+      "accessDeniedDetail": "トークンには必要なスコープがありますが、GitHub がアクセスを拒否しました。プロジェクトが SAML SSO を使う組織にある場合は、Settings → Developer settings → Personal access tokens → Configure SSO で、使用中のトークンを組織に対して承認してください。"
+    },
+    "picker": {
+      "pasteUnrecognized": "プロジェクトの URL または所有者/番号を入力してください",
+      "chooseProject": "プロジェクトを選択",
+      "ownerProjectsFailed": "{{owner}} のプロジェクトを読み込めませんでした。",
+      "organizationsFailed": "一部の組織を読み込めませんでした ({{total}} 件)。",
+      "organizationsLabel": "組織",
+      "listProjectsFailed": "プロジェクトの一覧を取得できませんでした"
+    },
+    "errors": {
+      "notFoundState": "プロジェクトまたはビューが見つかりませんでした。",
+      "schemaDriftState": "プロジェクトビューを読み取れませんでした。",
+      "tooLargeUnknownCount": "ビューの項目が多すぎるため、Orca で表示できません。GitHub でビューのフィルターを絞り込んでください。",
+      "tooLarge": "ビューの項目が {{total}} 件あり、多すぎるため Orca で表示できません。GitHub でビューのフィルターを絞り込んでください。",
+      "rateLimitLow": "GitHub のレート制限の残りがわずかです ({{remaining}}/{{limit}})。約 {{minutes}} 分後にリセットされます。",
+      "inputTooLarge": "入力が長すぎるため、プロジェクトを特定できません。",
+      "projectNotFound": "プロジェクトが見つかりません。",
+      "ownerNotFound": "所有者が見つかりません。",
+      "viewNotFound": "選択したビューが見つかりませんでした。",
+      "issueNotFound": "Issue が見つかりません。",
+      "itemNotFound": "項目が見つかりません。",
+      "projectOrViewNotFound": "プロジェクトまたはビューが見つかりません。",
+      "rateLimitHit": "GitHub のレート制限に達しました。数分後にもう一度お試しください。",
+      "inputRequired": "入力してください。",
+      "inputUnparseable": "入力を解析できませんでした。GitHub プロジェクトの URL または `owner/number` を入力してください。",
+      "cliNotAuthenticated": "GitHub CLI は {{host}} で認証されていません。{{command}} を実行してください。",
+      "invalidRequest": "無効なリクエストです — {{diagnostic}}",
+      "requestFailedWithDetail": "GitHub へのリクエストに失敗しました: {{diagnostic}}",
+      "requestFailed": "GitHub へのリクエストに失敗しました。",
+      "unexpectedRestResponse": "REST の応答が想定外の形式です: {{diagnostic}}",
+      "signInRequired": "プロジェクトのタスクを読み込むには、GitHub へのサインインが必要です。`{{command}}` を実行してください。",
+      "scopeMissing": "GitHub プロジェクトへのアクセスには追加のスコープが必要です。`{{command}}` を実行してください。",
+      "network": "ネットワークエラーです。接続を確認してください。",
+      "schemaDrift": "プロジェクトビューを読み取れませんでした: {{diagnostic}}。",
+      "fetchViewFailed": "プロジェクトビューを取得できませんでした"
+    },
+    "columns": {
+      "type": "種類"
+    },
+    "itemDialog": {
+      "loadDetailsFailed": "詳細を読み込めませんでした"
     }
   },
   "projectField": {
