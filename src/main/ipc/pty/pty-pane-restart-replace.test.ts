@@ -10,6 +10,8 @@ import {
   worktreeId
 } from '../pty-pane-owner-swap.test-fixture'
 
+const pacer = vi.hoisted(() => ({ take: vi.fn(async () => {}), note: vi.fn() }))
+vi.mock('./ipc/user-resume-spawn-pacer', () => ({ userResumeSpawnPacer: pacer }))
 vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
 vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
@@ -90,6 +92,25 @@ describe('pty:spawn replacing a pane owner', () => {
     expect(shutdown.mock.invocationCallOrder[0]).toBeLessThan(
       providerSpawn.mock.invocationCallOrder[0]!
     )
+  })
+
+  it("keeps a user-resume restart's old owner running until the pacer has a token", async () => {
+    const { providerSpawn, shutdown, store, runtime } = installRestartHarness()
+    registerWithFakes(mainWindow, runtime, store)
+    let grant!: () => void
+    pacer.take.mockImplementationOnce(() => new Promise<void>((resolve) => (grant = resolve)))
+
+    const spawned = handlers.get('pty:spawn')!(null, {
+      ...restartSpawnArgs({ replacesPtyId: 'pty-old' }),
+      spawnIntent: 'user-resume'
+    })
+    await vi.waitFor(() => expect(pacer.take).toHaveBeenCalledTimes(1))
+    expect(shutdown).not.toHaveBeenCalled()
+    grant()
+
+    await expect(spawned).resolves.toMatchObject({ id: 'pty-new' })
+    expect(shutdown).toHaveBeenCalledWith('pty-old', expect.objectContaining({ immediate: true }))
+    expect(providerSpawn.mock.calls.some(([options]) => !options.attachOnly)).toBe(true)
   })
 
   it('labels the replaced owner exit so the renderer keeps the pane', async () => {

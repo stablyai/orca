@@ -17,10 +17,15 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
+import { userResumeSpawnPacer } from './user-resume-spawn-pacer'
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpcArgs) {
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
   const ctx = createPtyIpcSpawnState(deps, args)
+  const userResume = args.spawnIntent === 'user-resume'
+  if (userResume && args.replacesPtyId === undefined) {
+    userResumeSpawnPacer.note()
+  }
   const admit = () => {
     triggerPtySpawnPushTargetMaterialization(deps, args)
     return checkPtyIpcLaunchPane(ctx)
@@ -97,6 +102,10 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
     ...(args.replacesPtyId !== undefined
       ? {
           replace: async () => {
+            // Why before the stop: a token keeps this restart uncapped, so the old PTY is stopped only for a spawn the gate admits.
+            if (userResume) {
+              await userResumeSpawnPacer.take()
+            }
             ctx.replacedPaneOwner = await stopReplacedPaneOwner(deps, {
               replacesPtyId: args.replacesPtyId!,
               paneKey: resolveEarlyPaneKey(args),
