@@ -85,7 +85,7 @@ describe('ModelManager', () => {
   it('does not report x64-only local model states on Windows ARM64', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-arm64-'))
     try {
-      const manager = new ModelManager(dir)
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
       const states = await manager.getModelStates('win32', 'arm64')
 
       expect(states.map((state) => state.id)).toEqual(
