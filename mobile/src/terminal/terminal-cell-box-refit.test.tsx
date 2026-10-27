@@ -49,6 +49,7 @@ function refitHarness(cellWidth: number) {
       connState: 'connected',
       tabStripVisible: false,
       textScale: 1,
+      resizeForKeyboard: false,
       unsubscribeTerminal,
       subscribeToTerminal
     })

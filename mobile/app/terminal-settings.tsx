@@ -24,6 +24,8 @@ import {
 } from '../src/terminal/terminal-auto-restore-fit-state'
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
+import { TerminalKeyboardResizeSetting } from '../src/terminal/TerminalKeyboardResizeSetting'
+import { hostOs } from '../src/platform/host-os'
 import {
   loadTerminalAutocompleteEnabled,
   loadTerminalTextScale,
@@ -339,6 +341,8 @@ export default function TerminalSettingsScreen() {
             />
           </View>
         </View>
+
+        {hostOs() === 'android' && <TerminalKeyboardResizeSetting />}
 
         <TerminalShortcutSettings
           scrollRef={scrollRef}

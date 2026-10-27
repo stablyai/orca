@@ -10,6 +10,7 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:mobileStructuredSendOperations:v1',
   'orca:terminalTextScale',
   'orca:terminalAutocompleteEnabled',
+  'orca:terminalKeyboardResizeEnabled',
   'orca:terminalLinkOpenMode'
 ] as const
 

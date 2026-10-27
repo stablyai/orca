@@ -69,10 +69,13 @@ describe('what init primed', () => {
 })
 
 describe('a write the page makes', () => {
-  it('goes to the app, and is readable here at once', async () => {
-    await pageAsyncStorage.setItem('orca:pins:host-1', '["wt-1","wt-2"]')
-    expect(writes).toEqual([{ key: 'orca:pins:host-1', value: '["wt-1","wt-2"]' }])
-    await expect(pageAsyncStorage.getItem('orca:pins:host-1')).resolves.toBe('["wt-1","wt-2"]')
+  it.each([
+    ['orca:pins:host-1', '["wt-1","wt-2"]'],
+    ['orca:terminalKeyboardResizeEnabled', 'true']
+  ])('sends %s to the app and makes it readable here', async (key, value) => {
+    await pageAsyncStorage.setItem(key, value)
+    expect(writes).toEqual([{ key, value }])
+    await expect(pageAsyncStorage.getItem(key)).resolves.toBe(value)
   })
 
   it('removes by writing null, which is what the app then deletes', async () => {
