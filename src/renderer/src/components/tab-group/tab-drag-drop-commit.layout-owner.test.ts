@@ -32,10 +32,10 @@ vi.mock('./tab-group-layout-owner-commands', () => ({
 vi.mock('../browser-pane/host-guest/webview-registry', () => ({
   acquireWebviewsDragPassthrough: vi.fn(() => vi.fn())
 }))
-vi.mock('../../runtime/web-runtime-session', () => ({
-  isWebRuntimeSessionActive: vi.fn(() => false),
-  moveWebRuntimeSessionTab: vi.fn()
+vi.mock('../../runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: vi.fn(() => false)
 }))
+vi.mock('../../runtime/web-runtime-session-tab-move', () => ({ moveWebRuntimeSessionTab: vi.fn() }))
 
 const ownerCommand = vi.mocked(dropTabThroughLayoutOwner)
 
