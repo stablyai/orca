@@ -73,6 +73,7 @@ export type ProvisionalLaunchArgs = {
   focusIntent?: NativeChatComposerFocusIntent
   target?: AgentSessionLaunchTarget
   targetGroupId?: string
+  placementFixed?: boolean
   afterTabId?: string
   activate?: boolean
   /** Identity-only resumes publish on commit; unknown outcomes keep their recovery tab. */
@@ -218,6 +219,7 @@ function beginLocalProvisionalLaunch(
       sessionId: handle.sessionId,
       agent: args.plan.agent,
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
+      ...(args.placementFixed ? { placementFixed: true } : {}),
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
