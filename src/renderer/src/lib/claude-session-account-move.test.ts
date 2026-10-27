@@ -65,13 +65,15 @@ type SeededPane = {
   sessionId?: string | null
   /** Folder Claude writes this session's transcript under; null leaves it unreported. */
   configDir?: string | null
+  launchAgent?: TerminalTab['launchAgent']
 }
 
 const tabId = (n: number): string => `tab-${n}`
 const leafId = (n: number): string => `0195f2ce-1111-4000-8000-00000000000${n}`
 const ptyId = (n: number): string => `pty-${n}`
 
-function makeTab(n: number): TerminalTab {
+function makeTab(pane: SeededPane): TerminalTab {
+  const { n } = pane
   return {
     id: tabId(n),
     ptyId: ptyId(n),
@@ -80,7 +82,8 @@ function makeTab(n: number): TerminalTab {
     customTitle: null,
     color: null,
     sortOrder: n,
-    createdAt: n
+    createdAt: n,
+    ...(pane.launchAgent ? { launchAgent: pane.launchAgent } : {})
   }
 }
 
@@ -117,7 +120,7 @@ function seedPanes(panes: SeededPane[]): void {
       ...getDefaultSettings('/home/dev'),
       claudeManagedAccounts: [account('acct-a', FOLDER_A), account('acct-b', FOLDER_B)]
     },
-    tabsByWorktree: { wt1: panes.map((pane) => makeTab(pane.n)) },
+    tabsByWorktree: { wt1: panes.map(makeTab) },
     ptyIdsByTabId: Object.fromEntries(panes.map((pane) => [tabId(pane.n), [ptyId(pane.n)]])),
     terminalLayoutsByTabId: Object.fromEntries(
       panes.map((pane) => [
@@ -302,14 +305,18 @@ describe('findMovableClaudeSessions', () => {
     expect(confirmRuntimeTerminalForegroundProcess).toHaveBeenCalledWith(ptyId(1))
   })
 
-  it('finds a Claude Agent Teams pane, whose foreground is the `orca claude-teams` wrapper', async () => {
-    seedPanes([{ n: 1, agentType: 'claude' }])
+  it('finds a Claude Agent Teams pane, whose packaged `orca claude-teams` wrapper leads the foreground', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', launchAgent: 'claude-agent-teams' },
+      { n: 2, agentType: 'claude' }
+    ])
     vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
       foregroundProcess: 'Orca',
       hasChildProcesses: true
     })
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('Orca')
 
+    // Pane 2 is a Claude pane now running another `orca` command, such as `orca status`.
     expect(await movable()).toEqual([ptyId(1)])
   })
 
