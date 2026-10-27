@@ -34,7 +34,10 @@ async function flushPromises(): Promise<void> {
   }
 }
 
-async function render(onSelect = vi.fn()): Promise<{
+async function render(
+  onSelect = vi.fn(),
+  initialPath?: string
+): Promise<{
   container: HTMLDivElement
   input: HTMLInputElement
   root: Root
@@ -43,7 +46,14 @@ async function render(onSelect = vi.fn()): Promise<{
   document.body.appendChild(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(<RemoteFileBrowser targetId="target-1" onSelect={onSelect} onCancel={vi.fn()} />)
+    root.render(
+      <RemoteFileBrowser
+        targetId="target-1"
+        initialPath={initialPath}
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />
+    )
     await flushPromises()
   })
   const input = container.querySelector('input')
@@ -103,6 +113,12 @@ describe('RemoteFileBrowser project folders', () => {
     expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: '/srv/app' })
     // The folder being shown is not offered as a jump target.
     expect(projectFolderRows(container)).toEqual(['~/code'])
+    await act(async () => root.unmount())
+  })
+
+  it('shortens home paths even when the browser opens away from home', async () => {
+    const { container, root } = await render(vi.fn(), '/srv')
+    expect(projectFolderRows(container)).toEqual(['~/code', '/srv/app'])
     await act(async () => root.unmount())
   })
 
