@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -39,7 +40,13 @@ function install(record: AgentSessionRecord, copy = vi.fn(), journal = savedJour
   setStructuredAgentSessionHost({
     journalSnapshot: async () => journal,
     deps: {
-      store: { getRecord: () => record, listRecords: () => [record] },
+      store: {
+        getRecord: () => record,
+        listRecords: () => [record],
+        listConversations: () => [agentSessionConversationView(record)],
+        selectWritableRecord: () => ({ kind: 'writable', record }),
+        requireWritableRecord: () => record
+      },
       adapter: { copyConversation: copy },
       resolveWorkspacePath: async () => root,
       resolveLaunchEnv: () => ({})

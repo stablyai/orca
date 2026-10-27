@@ -71,3 +71,33 @@ export function orcadPosixStdioBridgeCommand(port: number): string {
     `done; echo ${quotePosixShell(ORCAD_STDIO_BRIDGE_NO_NODE)}; exit 127`
   ].join(' ')
 }
+
+/**
+ * A bash /dev/tcp relay costs ~5 MB of RSS where a Node bridge costs ~50 MB. Closing either side
+ * ends both: Node's half-close grace bought nothing, since the desktop socket never reads after
+ * its own FIN. Bash older than 4.3 (no `wait -n`), or one built without /dev/tcp, and refused
+ * dials fall through to the Node bridge, which reports the refusal sentinel.
+ */
+export function orcadBashStdioBridgeCommand(port: number): string {
+  const relay = [
+    // POSIXLY_CORRECT would make a failed `exec` redirection exit the shell before the fallback.
+    'set +o posix;',
+    'if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 3))) &&',
+    `{ exec 3<>/dev/tcp/127.0.0.1/${String(port)}; } 2>/dev/null; then`,
+    // Background jobs read /dev/null unless stdin is redirected explicitly.
+    'exec 4<&0;',
+    `echo ${quotePosixShell(ORCAD_STDIO_BRIDGE_READY)};`,
+    'cat <&3 & r=$!;',
+    'cat <&4 >&3 & w=$!;',
+    'exec 4<&-;',
+    'wait -n; kill $r $w 2>/dev/null; exit 0; fi;',
+    'eval "$1"'
+  ].join(' ')
+  // Carry the Node bridge once, as data both shells can run.
+  return [
+    `orca_node_bridge=${quotePosixShell(orcadPosixStdioBridgeCommand(port))};`,
+    'if command -v bash >/dev/null 2>&1; then unset BASH_ENV;',
+    `exec bash -c ${quotePosixShell(relay)} orca-stdio-bridge "$orca_node_bridge"; fi;`,
+    'eval "$orca_node_bridge"'
+  ].join(' ')
+}

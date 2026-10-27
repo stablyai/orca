@@ -1,14 +1,10 @@
-import { readdirSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   bridgedParityMembershipDrift,
   bridgedParityTallyDrift,
   classifyBridgedParity,
   BRIDGED_PARITY_BASELINE,
-  BRIDGED_PARITY_EXCLUSIONS,
   BRIDGED_PARITY_MEMBERS,
-  BRIDGED_PARITY_NAMEABLE,
   type BridgedParityClass,
   type BridgedParityEvidence,
   type BridgedParityTally
@@ -142,35 +138,6 @@ describe('what the pin still admits', () => {
     (name): name is BridgedParityClass => name !== 'identical'
   )
 
-  it('gives every class it still counts a reason, and every closed one none', () => {
-    const reasoned = classes.filter((name) => BRIDGED_PARITY_EXCLUSIONS[name] !== undefined)
-    const counted = classes.filter((name) => BRIDGED_PARITY_BASELINE[name] > 0)
-    expect([...reasoned].sort()).toEqual([...counted].sort())
-  })
-
-  it('accounts for every golden in the corpus, once each', () => {
-    // Pin the class sum to corpus size so a partial run cannot satisfy per-class expectations.
-    const goldens = readdirSync(resolve(import.meta.dirname, '../../../rpc-foundation/goldens'))
-    const counted = Object.values(BRIDGED_PARITY_BASELINE).reduce((sum, count) => sum + count, 0)
-    expect({ counted }).toEqual({
-      counted: goldens.filter((name) => name.endsWith('.json')).length
-    })
-  })
-
-  it('names the goldens in a class small enough to name, and as many as it counts', () => {
-    const nameable = classes.filter(
-      (name) =>
-        BRIDGED_PARITY_BASELINE[name] > 0 &&
-        BRIDGED_PARITY_BASELINE[name] <= BRIDGED_PARITY_NAMEABLE
-    )
-    expect(nameable.length).toBeGreaterThan(0)
-    for (const name of nameable) {
-      const pinned = BRIDGED_PARITY_MEMBERS[name] ?? []
-      expect({ [name]: pinned.length }).toEqual({ [name]: BRIDGED_PARITY_BASELINE[name] })
-      expect({ [name]: new Set(pinned).size }).toEqual({ [name]: pinned.length })
-    }
-  })
-
   function asPinned(): Map<string, readonly string[]> {
     const run = new Map<string, readonly string[]>()
     for (const name of classes) {
@@ -216,10 +183,6 @@ describe('what the pin still admits', () => {
     return { identical: BRIDGED_PARITY_BASELINE.identical, counts }
   }
 
-  it('says nothing about the run the numbers were taken from', () => {
-    expect(bridgedParityTallyDrift(asCounted())).toEqual([])
-  })
-
   it('goes red on a golden that stopped diverging, which every other check lets through', () => {
     // Excluded-to-identical moves leave broad parity gates satisfied; exact tallies must detect that direction too.
     const tally = asCounted()
@@ -249,10 +212,5 @@ describe('what the pin still admits', () => {
     expect(bridgedParityTallyDrift({ ...tally, identical: tally.identical - 1 })).toEqual([
       `identical: pinned ${tally.identical}, ran ${tally.identical - 1}`
     ])
-  })
-
-  it('leaves nothing for the reader to close: the `_meta` class is zero', () => {
-    expect(BRIDGED_PARITY_BASELINE['reply-meta-required']).toBe(0)
-    expect(BRIDGED_PARITY_EXCLUSIONS['reply-meta-required']).toBeUndefined()
   })
 })

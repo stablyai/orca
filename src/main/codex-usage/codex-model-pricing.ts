@@ -74,6 +74,12 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
     output: 10,
     longContext: { input: 4, cachedInput: 0.4, output: 15 }
   },
+  'gpt-6.1-sol': {
+    input: 2,
+    cachedInput: 0.1,
+    output: 10,
+    longContext: { input: 4, cachedInput: 0.2, output: 15 }
+  },
   'gpt-6-luna': {
     input: 0.1,
     cachedInput: 0.01,
@@ -183,6 +189,9 @@ export function normalizeModelForPricing(model: string | null): string | null {
   }
   if (normalized === 'gpt-6-sol' || normalized.startsWith('gpt-6-sol-')) {
     return 'gpt-6-sol'
+  }
+  if (normalized === 'gpt-6.1-sol' || normalized.startsWith('gpt-6.1-sol-')) {
+    return 'gpt-6.1-sol'
   }
   if (normalized === 'gpt-6-luna' || normalized.startsWith('gpt-6-luna-')) {
     return 'gpt-6-luna'

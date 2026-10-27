@@ -7,7 +7,8 @@ import { resolveEnvironmentPairingOffer } from '../../shared/runtime-environment
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { listWslHostDistros } from './wsl-host-distro-list'
-import type { WslHostConnector } from './wsl-host-service'
+import { resolveWslDistroName } from './wsl-distro-registry-id'
+import type { WslHostConnector, WslHostReachability } from './wsl-host-service'
 import { readWslDistroOrcadPublicKey } from './wsl-host-ssh-orcad-conflict'
 import {
   WslOrcadConnectionManager,
@@ -36,7 +37,7 @@ function transportFor(distro: string) {
   return createWslOrcadHostTransport({ target: targetFor(distro) })
 }
 
-type Reachability = 'available' | 'unreachable' | 'stopped' | 'unavailable'
+type Reachability = WslHostReachability
 
 export function createWslHostConnector(options: {
   userDataPath: string
@@ -70,6 +71,8 @@ export function createWslHostConnector(options: {
       findWslHostDeployment(options.userDataPath, environmentId)
         ? resolveEnvironmentPairingOffer(options.userDataPath, environmentId)
         : null,
+    recordedLocalPort: (environmentId) =>
+      findWslHostDeployment(options.userDataPath, environmentId)?.localPort ?? null,
     onChange: options.onChange,
     deployAndLaunch: (distro, deployOptions) =>
       options.isKnownDistro(distro)
@@ -82,6 +85,9 @@ export function createWslHostConnector(options: {
     hasUserVisibleWork: options.hasUserVisibleWork
   })
   supervisor = liveness
+  // Read right before a no-boot reconnect spawns anything in the distro (E9).
+  const requireRunning = async (distro: string): Promise<boolean> =>
+    confirmsRunning(await readConfirmedRunningWslDistros(), wslDistroHolderKey(distro))
   const coldProbes = new Map<
     string,
     {
@@ -142,19 +148,26 @@ export function createWslHostConnector(options: {
   return {
     listDistros: () => listWslHostDistros(),
     readOrcadPublicKey: (distro) => readWslDistroOrcadPublicKey(transportFor(distro)),
-    connect: (distro, connectOptions) => liveness.connect(distro, connectOptions),
+    connect: (distro, { noBoot, ...connectOptions } = {}) =>
+      liveness.connect(distro, noBoot ? { ...connectOptions, requireRunning } : connectOptions),
     forgetPairingFailures: (environmentId) => pairingRecovery.repairs.forgetFailures(environmentId),
     get: (distro) => manager.get(distro),
     isReachable: async (distro, environmentId) =>
       options.runtime.isReady?.(environmentId) ||
       (await coldReachability(distro, environmentId)) === 'available',
+    isSettling: (distro) => liveness.isSettling(distro),
+    reachability: async (distro, environmentId) =>
+      options.runtime.isReady?.(environmentId)
+        ? 'available'
+        : coldReachability(distro, environmentId),
     disconnect: (distro) => liveness.stop(distro),
     stopServer: async (distro, environmentId) => {
       const reachability = await coldReachability(distro, environmentId)
       if (reachability === 'unavailable') {
         return {
           stopped: false,
-          reason: 'The WSL service did not confirm whether the distro runs.'
+          reason: 'The WSL service did not confirm whether the distro runs.',
+          verdict: 'unverifiable'
         }
       }
       if (reachability === 'stopped') {
@@ -170,11 +183,17 @@ export function createWslHostConnector(options: {
         decommission: decommissionWslHostOrcad(target, createWslOrcadHostTransport({ target }))
       })
     },
+    resolveDistroName: (distro, distroId) => resolveWslDistroName(distro, distroId),
     releaseHolder: async (distro) => {
       await holder.release(distro)
     },
-    adoptHolders: async () => {
-      await holder.adoptHolders()
+    adoptHolders: async (isWanted) => {
+      for (const { distro } of await holder.adoptHolders()) {
+        if (!isWanted(distro)) {
+          // Verified by pid, start time and command line; an unverifiable holder is kept.
+          await holder.release(distro)
+        }
+      }
     },
     dispose: () => liveness.dispose()
   }

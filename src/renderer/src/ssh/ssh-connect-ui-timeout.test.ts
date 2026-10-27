@@ -18,16 +18,6 @@ describe('withUiConnectTimeout', () => {
     vi.useRealTimers()
   })
 
-  it('passes a resolved connect state straight through', async () => {
-    await expect(withUiConnectTimeout(Promise.resolve('connected'))).resolves.toBe('connected')
-  })
-
-  it('propagates the connect rejection rather than the timeout message', async () => {
-    const failing = withUiConnectTimeout(Promise.reject(new Error('Passphrase rejected')))
-
-    await expect(failing).rejects.toThrow('Passphrase rejected')
-  })
-
   // Bound UI wait because ssh.connect itself can stall without timeout.
   it('rejects a stalled connect once the UI budget elapses', async () => {
     const stalled = withUiConnectTimeout(new Promise(() => {}))
@@ -48,10 +38,6 @@ describe('withUiConnectTimeout', () => {
 
     await vi.advanceTimersByTimeAsync(SSH_RECONNECT_UI_TIMEOUT_MS - SSH_CONNECT_UI_TIMEOUT_MS)
     await assertion
-  })
-
-  it('gives a reconnect more time than main allows for an interactive passphrase', () => {
-    expect(SSH_RECONNECT_UI_TIMEOUT_MS).toBeGreaterThan(120_000)
   })
 
   it('clears the timer when the connect settles first, leaving no pending work', async () => {

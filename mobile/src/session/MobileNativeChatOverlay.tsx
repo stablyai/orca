@@ -1,16 +1,15 @@
-import { useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
-import { useMobileNativeChatFoldReuse } from './mobile-native-chat-fold-reuse'
 import type { MobileNativeChatImageAttachments } from './native-chat/composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
-import type { MobileNativeChatStructuredComposer } from './MobileNativeChatComposer'
+import type { MobileNativeChatStructuredComposer } from './native-chat/composer/MobileNativeChatComposer'
 import { useMobileNativeChatStreamingBubble } from './native-chat/use-mobile-native-chat-streaming-bubble'
-import { useMobileNativeChatComposerTray } from './use-mobile-native-chat-composer-tray'
+import { useMobileNativeChatComposerTray } from './native-chat/composer/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './MobileNativeChatVisual'
 import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-context'
-import { MobileNativeChatItemSourceContext } from './mobile-native-chat-item-read'
+import { MobileNativeChatRootItemSourceContext } from './mobile-native-chat-item-read'
 import { useMobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
 import {
   MobileNativeChatReplyRevealsContext,
@@ -66,12 +65,9 @@ export function MobileNativeChatOverlay({
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMobileNativeChatFoldReuse(
-    useMemo(
-      () => foldMobileNativeChatMessages(fullContent.messages, agent),
-      [fullContent.messages, agent]
-    ),
-    sendSurfaceId
+  const folded = useMemo(
+    () => foldMobileNativeChatMessages(fullContent.messages, agent),
+    [fullContent.messages, agent]
   )
   const streaming = useMobileNativeChatStreamingBubble(
     folded,
@@ -99,18 +95,43 @@ export function MobileNativeChatOverlay({
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
   const replyReveals = useMobileNativeChatReplyReveals(folded, streaming !== null, sendSurfaceId)
   const itemSource = controller.nativeChatItemSource
+  const committedDetail = useMemo(
+    () => ({ current: fullContent.detail }),
+    [itemSource?.client, itemSource?.sessionId]
+  )
+  useLayoutEffect(() => {
+    committedDetail.current = fullContent.detail
+  }, [committedDetail, fullContent.detail])
+  const load = useCallback(
+    async (id: string) => {
+      if (!committedDetail.current) {
+        throw new Error('Message unavailable')
+      }
+      await committedDetail.current.load(id)
+    },
+    [committedDetail]
+  )
   const detailSource = useMemo(
-    () => (itemSource ? { ...itemSource, messageDetail: fullContent.detail } : null),
-    [itemSource, fullContent.detail]
+    () =>
+      itemSource
+        ? {
+            ...itemSource,
+            messageDetail: fullContent.detail ? { ...fullContent.detail, load } : null
+          }
+        : null,
+    [itemSource, fullContent.detail, load]
   )
   if (!controller.showNativeChat) {
     return null
   }
   return (
-    <MobileNativeChatRowOverlaysHost conversation={{ surfaceId: sendSurfaceId, sessionId }}>
+    <MobileNativeChatRowOverlaysHost
+      conversation={{ surfaceId: sendSurfaceId, sessionId }}
+      imageClient={controller.nativeChatVisualSource?.client}
+    >
       <View style={styles.overlay}>
         <MobileNativeChatVisualContext.Provider value={visuals}>
-          <MobileNativeChatItemSourceContext.Provider value={detailSource}>
+          <MobileNativeChatRootItemSourceContext.Provider value={detailSource}>
             <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
               <MobileNativeChatView
                 messages={session.messages}
@@ -188,7 +209,7 @@ export function MobileNativeChatOverlay({
                 keyboardInset={keyboardInset}
               />
             </MobileNativeChatReplyRevealsContext.Provider>
-          </MobileNativeChatItemSourceContext.Provider>
+          </MobileNativeChatRootItemSourceContext.Provider>
         </MobileNativeChatVisualContext.Provider>
       </View>
     </MobileNativeChatRowOverlaysHost>

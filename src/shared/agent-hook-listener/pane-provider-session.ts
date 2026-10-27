@@ -1,4 +1,5 @@
 import type { AgentHookSource } from '../agent-hook-relay'
+import { readAgentEffortLevel } from '../agent-effort-level'
 import {
   extractAgentProviderSession,
   readPathFromKeys,
@@ -25,28 +26,69 @@ export function readPaneProviderSession(
   if (!providerSession) {
     return null
   }
-  const cwd = readAgentCwd(state, source, paneKey, providerSession.id, hookPayload)
-  return cwd ? { ...providerSession, cwd } : providerSession
+  const continued = continuedProviderSession(
+    state,
+    source,
+    paneKey,
+    providerSession.id,
+    hookPayload
+  )
+  const cwd = readAgentCwd(source, hookPayload, continued)
+  const effort = readClaudeEffort(source, hookPayload, continued)
+  return {
+    ...providerSession,
+    ...(cwd ? { cwd } : {}),
+    ...(effort ? { effort } : {})
+  }
 }
 
-/** The folder the pane's agent started in. Only Claude/Codex hooks are known to report it (Cursor's cwd is a shell command's). */
-function readAgentCwd(
+/** The pane's previous session when this hook continues it; /clear and compact restart Claude in the same process. */
+function continuedProviderSession(
   state: HookListenerState,
   source: AgentHookSource,
   paneKey: string,
   sessionId: string,
   hookPayload: Record<string, unknown>
-): string | undefined {
-  if (source !== 'claude' && source !== 'codex') {
-    return undefined
-  }
+): AgentProviderSessionMetadata | undefined {
   const previous = state.lastStatusByPaneKey.get(paneKey)
-  const previousCwd = previous?.source === source ? previous.providerSession?.cwd : undefined
-  // Claude's hook cwd follows its Bash tool's `cd`; /clear and compact restart in the same process.
-  const keepsPreviousFolder =
+  const continues =
     previous?.providerSession?.id === sessionId ||
     (source === 'claude' &&
       hookPayload.hook_event_name === 'SessionStart' &&
       (hookPayload.source === 'clear' || hookPayload.source === 'compact'))
-  return previousCwd && keepsPreviousFolder ? previousCwd : readPathFromKeys(hookPayload, ['cwd'])
+  return previous?.source === source && continues ? previous.providerSession : undefined
+}
+
+/** The folder the pane's agent started in. Only Claude/Codex hooks are known to report it (Cursor's cwd is a shell command's). */
+function readAgentCwd(
+  source: AgentHookSource,
+  hookPayload: Record<string, unknown>,
+  continued: AgentProviderSessionMetadata | undefined
+): string | undefined {
+  if (source !== 'claude' && source !== 'codex') {
+    return undefined
+  }
+  // Claude's hook cwd follows its Bash tool's `cd`.
+  return continued?.cwd ?? readPathFromKeys(hookPayload, ['cwd'])
+}
+
+/** Claude 2.1.133+ reports `effort.level` on tool and Stop hooks only, so other events keep the last one. */
+function readClaudeEffort(
+  source: AgentHookSource,
+  hookPayload: Record<string, unknown>,
+  continued: AgentProviderSessionMetadata | undefined
+): string | undefined {
+  if (source !== 'claude') {
+    return undefined
+  }
+  const effort = hookPayload.effort
+  // Why skip subagents: their hooks name the parent session but report the subagent's own effort.
+  const reported =
+    typeof effort === 'object' &&
+    effort !== null &&
+    'level' in effort &&
+    !readString(hookPayload, 'agent_id')
+      ? readAgentEffortLevel(effort.level)
+      : undefined
+  return reported ?? continued?.effort
 }

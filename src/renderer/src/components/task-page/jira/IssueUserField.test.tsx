@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TaskPageJiraIssueDialog } from './IssueDialog'
 import { useTaskPageJiraIssueCreation } from '../../use-task-page-jira-issue-creation'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import type { JiraCreateField } from '../../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 

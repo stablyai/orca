@@ -41,6 +41,16 @@ export const gitPushRun = bindDeferredRpcOperation(
   })
 )
 
+export const gitFastForwardRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.fast-forward-branch',
+    method: 'git.fastForward',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('fast-forward-accepted', unreadPayload)
+  })
+)
+
 export const gitBulkStageRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'git.bulk-stage',

@@ -29,21 +29,16 @@ export type ClaudeAcquisitionLaunch = ClaudeStructuredLaunch & {
   savedOptions: Omit<ClaudeStructuredSpawnOptions, 'sdkOptions'>
 }
 
-export type ClaudeAcquisitionContext = {
+export async function resolveClaudeAcquisitionLaunch(args: {
   input: StructuredAgentSessionAcquireInput
   deps: ClaudeStructuredSessionAdapterDeps
   sessions: Map<string, ClaudeSession>
   acquisitions: ClaudeAcquisitionRegistry
   exits: Map<string, ClaudeSessionExit>
   callbacks: ClaudeAcquireCallbacks
-}
-
-export async function resolveClaudeAcquisitionLaunch(
-  args: ClaudeAcquisitionContext & {
-    previous: ClaudeAcquisitionAttempt | undefined
-    attempt: ClaudeAcquisitionAttempt
-  }
-): Promise<ClaudeAcquisitionLaunch> {
+  previous: ClaudeAcquisitionAttempt | undefined
+  attempt: ClaudeAcquisitionAttempt
+}): Promise<ClaudeAcquisitionLaunch> {
   const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt } = args
   const sessionId = input.identity.sessionId
   return withAgentSessionCreatePhase('auth_settle', input.recordPhase, async () => {

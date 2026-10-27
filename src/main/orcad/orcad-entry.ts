@@ -127,6 +127,13 @@ async function startOrcadRuntime(
     console.warn('[orcad] Could not prepare the profile CLI launcher', error)
   })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
+  const { orcadSessionScannerIdleTimeoutMs } = await import('./orcad-session-scanner-idle')
+  const scannerIdleTimeoutMs = orcadSessionScannerIdleTimeoutMs()
+  if (scannerIdleTimeoutMs !== null) {
+    const { setAiVaultServiceIdleTimeoutMs } =
+      await import('../ai-vault/session-scanner-service-spawn')
+    setAiVaultServiceIdleTimeoutMs(scannerIdleTimeoutMs)
+  }
   // Initialize sealing before Store load unseals protected settings.
   await prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath)
   const { store: profileStore, authority: profileStateAuthority } =
@@ -175,16 +182,15 @@ async function startOrcadRuntime(
     clientCodexHomes: codexAccountHomes
   })
 
+  const { orcadAiVaultSessionSources, installOrcadSessionSearchService } =
+    await import('./orcad-session-search')
   const { loadAgentSessionClaimSigner } =
     await import('../runtime/agent-session/ownership/agent-session-claim-identity')
   const runtime = new OrcaRuntimeService(profileStore, stats, {
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
-    getAdditionalAiVaultCodexHomePaths: () => [
-      ...codexAccountHomes.listSessionHomes(),
-      ...(accountLaunch?.listCodexSessionHomes() ?? [])
-    ],
-    // WSL must retain desktop-pushed CODEX_HOME instead of host-selected resolvers.
+    ...orcadAiVaultSessionSources(profileStore, codexAccountHomes, accountLaunch),
+    // Why absent on a WSL host: a resolver overrides the desktop-pushed CODEX_HOME.
     ...accountLaunch?.runtimeDeps,
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
       profileStore.getSettings()
@@ -213,7 +219,6 @@ async function startOrcadRuntime(
   const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
   restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
 
-  const { installOrcadSessionSearchService } = await import('./orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({
     userDataPath: runtimeUserDataPath,
     getSettings: () => profileStore.getSettings()

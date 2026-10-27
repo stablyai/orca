@@ -1,3 +1,6 @@
+import { orderMainWorktreeFirst } from '../../../src/shared/sidebar-list/section-order'
+import { withFolderWorkspacesLast } from './folder-workspace-lane-order'
+import { prGroupOfPsLinkedPR } from '../../../src/shared/sidebar-list/workspace-review-facts'
 import {
   buildWorktreeOccurrencePlan,
   type WorktreeOccurrenceSection
@@ -14,7 +17,6 @@ import {
   getMobileWorkspaceLineageChildren
 } from './mobile-workspace-lineage'
 import {
-  getPRGroupKeyForState,
   getPRLaneKey,
   PR_GROUP_LABELS,
   PR_GROUP_ORDER
@@ -96,7 +98,11 @@ function makeSection(
 }
 
 // Idle prompts have no recent output; live terminals or unread output still count as active.
-export function isWorktreeActive(w: Worktree): boolean {
+export function isWorktreeActive(
+  w: Pick<Worktree, 'hasHostSidebarActivity' | 'status' | 'liveTerminalCount'> & {
+    unread?: boolean
+  }
+): boolean {
   if (w.hasHostSidebarActivity !== undefined) {
     return w.hasHostSidebarActivity
   }
@@ -138,14 +144,6 @@ function phoneRowFacts(
     isMainWorktree: (w) => w.isMainWorktree ?? guessDefaultBranchWorkspace(w),
     isSleeping: (w) => !isWorktreeActive(w)
   }
-}
-
-function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
-  const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
-  if (mainWorktrees.length === 0) {
-    return worktrees
-  }
-  return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
 
 export function filterWorktrees(
@@ -209,7 +207,9 @@ export function buildMobileWorkspacePlan(
       }
       if (groupMode === 'none') {
         if (canonicalGroupWorktrees.length > 0) {
-          sections.push(makeSection('all', 'All', canonicalGroupWorktrees))
+          sections.push(
+            makeSection('all', 'All', withFolderWorkspacesLast(canonicalGroupWorktrees))
+          )
         }
       } else if (groupMode === 'repo') {
         const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
@@ -257,13 +257,19 @@ export function buildMobileWorkspacePlan(
         for (const status of renderableWorkspaceStatuses) {
           const items = byStatus.get(status.id)
           if (items && items.length > 0) {
-            sections.push(makeSection(getWorkspaceStatusGroupKey(status.id), status.label, items))
+            sections.push(
+              makeSection(
+                getWorkspaceStatusGroupKey(status.id),
+                status.label,
+                withFolderWorkspacesLast(items)
+              )
+            )
           }
         }
       } else if (groupMode === 'pr-status') {
         const byGroup = new Map<string, Worktree[]>()
         for (const w of canonicalGroupWorktrees) {
-          const key = getPRGroupKeyForState(w.linkedPR?.state)
+          const key = prGroupOfPsLinkedPR(w.linkedPR)
           const list = byGroup.get(key)
           if (list) {
             list.push(w)
@@ -274,7 +280,13 @@ export function buildMobileWorkspacePlan(
         for (const groupKey of PR_GROUP_ORDER) {
           const items = byGroup.get(groupKey)
           if (items && items.length > 0) {
-            sections.push(makeSection(getPRLaneKey(groupKey), PR_GROUP_LABELS[groupKey], items))
+            sections.push(
+              makeSection(
+                getPRLaneKey(groupKey),
+                PR_GROUP_LABELS[groupKey],
+                withFolderWorkspacesLast(items)
+              )
+            )
           }
         }
       }

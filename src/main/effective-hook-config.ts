@@ -77,20 +77,6 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
-export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): string {
-  const commands = (hooks?.defaultTabs ?? [])
-    .map((tab, index) => {
-      const command = tab.command?.trim()
-      if (!command) {
-        return null
-      }
-      const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${command}`
-    })
-    .filter((entry): entry is string => entry !== null)
-  return [hooks?.scripts.setup?.trim(), ...commands].filter(Boolean).join('\n\n')
-}
-
 export function getDefaultTabsLaunch(
   hooks: OrcaHooks | null,
   repo: Repo,

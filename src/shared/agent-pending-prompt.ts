@@ -1,6 +1,6 @@
 import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
 import { hookRowAgentPhase } from './agent-transitions'
-import { parseAskFromStatus } from './native-chat-ask'
+import { parseAskFromStatus } from './native-chat/input/native-chat-ask'
 import { buildAskAnswerKeys, buildCodexAskAnswerKeys } from './native-chat-ask-answer'
 import { parseNativeChatApprovalEnvelope } from './native-chat-approval-envelope'
 import {

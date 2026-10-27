@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session-record'
 import { runProcess } from '@orca/process-host'
+import { psLocaleEnvironment } from '../../../../shared/ps-locale-environment'
 import {
   isWindowsProcessStartTimeAvailable,
   readWindowsProcessIdentityTableFresh
@@ -61,6 +62,7 @@ async function readDarwinProcessStartTimeMs(pid: number): Promise<number | null>
     const result = await runProcess({
       program: 'ps',
       args: ['-o', 'lstart=', '-p', String(pid)],
+      env: psLocaleEnvironment(),
       timeoutMs: PROCESS_START_TIME_TIMEOUT_MS
     })
     if (result.timedOut || result.code !== 0) {
@@ -84,6 +86,7 @@ async function readDarwinProcessStartTimesMs(
     const result = await runProcess({
       program: 'ps',
       args: ['-o', 'pid=,lstart=', '-p', pids.join(',')],
+      env: psLocaleEnvironment(),
       timeoutMs: PROCESS_START_TIME_TIMEOUT_MS
     })
     if (result.timedOut || result.code !== 0) {

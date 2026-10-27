@@ -26,6 +26,18 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     >
   ): ReturnType<OrcaRuntimeWithPruneMobileSessionTabGroupLayout['getTerminalHandleForPaneKey']>
 
+  /** A mounted view can drain its exited process after durable retirement removed the binding. */
+  hasTerminalPaneView(worktreeId: string, tabId: string, leafId: string): boolean {
+    const tab = this.tabs.get(tabId)
+    const leaf = this.leaves.get(this.getLeafKey(tabId, leafId))
+    return Boolean(
+      tab &&
+      leaf &&
+      worktreeIdsEqual(tab.worktreeId, worktreeId) &&
+      worktreeIdsEqual(leaf.worktreeId, worktreeId)
+    )
+  }
+
   protected resolveTerminalSplitSourceAuthority(
     worktreeId: string,
     tabId: string,

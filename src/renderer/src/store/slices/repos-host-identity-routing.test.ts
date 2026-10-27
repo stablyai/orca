@@ -314,7 +314,7 @@ describe('repo slice host identity routing', () => {
       repos: [localDuplicate, remoteDuplicate],
       activeRepoId: 'same-repo',
       filterRepoIds: ['same-repo'],
-      projects: [
+      endpointProjects: [
         {
           id: 'repo:same-repo',
           displayName: 'Same Repo',
@@ -324,7 +324,7 @@ describe('repo slice host identity routing', () => {
           updatedAt: 1
         } satisfies Project
       ],
-      projectHostSetups: [
+      endpointProjectHostSetups: [
         projectHostSetup({ id: 'local-setup', hostId: 'local' }),
         projectHostSetup({ id: 'remote-setup', hostId: 'runtime:env-1' })
       ],
@@ -354,11 +354,11 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().tabsByWorktree[remoteWorktree.id]).toEqual([
       { id: 'remote-tab', worktreeId: remoteWorktree.id }
     ])
-    expect(store.getState().projectHostSetups).toEqual([
+    expect(store.getState().endpointProjectHostSetups).toEqual([
       expect.objectContaining({ hostId: 'runtime:env-1', repoId: 'same-repo' })
     ])
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [remoteWorktree.id]: 20 })
-    expect(store.getState().projects).toEqual([
+    expect(store.getState().endpointProjects).toEqual([
       expect.objectContaining({ id: 'repo:same-repo', sourceRepoIds: ['same-repo'] })
     ])
     // Host-scope local removal or main also deletes runtime twin’s persisted row.

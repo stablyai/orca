@@ -137,7 +137,7 @@ async function judgeResumes(
     )
     return { verdict: 'unverifiable', refused: resumes[0] }
   }
-  const heads = listStructuredProviderSessionOwnership(store.listRecords()).filter(
+  const heads = listStructuredProviderSessionOwnership(store.listConversations()).filter(
     (holding) => holding.role === 'head'
   )
   const tabs = store.getVisibleSessionTabIndex()
@@ -145,7 +145,7 @@ async function judgeResumes(
     const holders = heads.filter((holding) =>
       keysOf(refused).some((key) => keysMayMatch(holding.key, key))
     )
-    if (holders.some((holding) => agentSessionLeasePossiblyWriting(holding.lease))) {
+    if (holders.some((holding) => agentSessionLeasePossiblyWriting(holding.ownerObservation))) {
       return { verdict: 'chat-writing', refused }
     }
     if (holders.length > 0 && (!tabs || !tabs.present)) {

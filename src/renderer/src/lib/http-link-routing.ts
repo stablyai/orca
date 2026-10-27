@@ -1,8 +1,7 @@
+import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import {
   localhostLabelRouteForHttpLink,
   openLabeledLocalhostLink,
-  type LocalhostLinkRepo,
-  type LocalhostLinkProject,
   type LocalhostLinkWorktree
 } from './http-link-localhost-route'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
@@ -31,8 +30,10 @@ import {
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
-  /** Terminal-only opt-in for routing a remote-owned source through its managed browser. */
+  /** Opt-in for routing a remote-owned source through its managed browser. */
   allowRemoteInApp?: boolean
+  /** Preserve a source surface's existing desktop-browser provider for remote documents. */
+  allowClientBrowserFallback?: boolean
   /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
   /** Unconditional for local sources: open inside Orca regardless of settings. */
@@ -49,30 +50,29 @@ export type HttpLinkSourceOwner =
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'unknown' }
 
-export type HttpLinkStoreState = HttpLinkBrowserTabState & {
-  unifiedTabsByWorktree?: LinkSourceState['unifiedTabsByWorktree']
-  groupsByWorktree?: AppState['groupsByWorktree']
-  layoutByWorktree?: AppState['layoutByWorktree']
-  settings?: Partial<
-    Pick<
-      GlobalSettings,
-      | 'openLinksInAppInBackground'
-      | 'openLinksInApp'
-      | 'openLinksInAppModifierInverts'
-      | 'activeRuntimeEnvironmentId'
-      | 'localhostWorktreeLabelsEnabled'
-    >
-  > | null
-  setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
-  activeWorktreeId?: string | null
-  activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  repos?: readonly LocalhostLinkRepo[]
-  projects?: readonly LocalhostLinkProject[]
-  worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
-  allWorktrees?: () => LocalhostLinkWorktree[]
-  workspacePortScan?: { result: WorkspacePortScanResult } | null
-  workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
-}
+export type HttpLinkStoreState = ProjectCatalogReadState &
+  HttpLinkBrowserTabState & {
+    unifiedTabsByWorktree?: LinkSourceState['unifiedTabsByWorktree']
+    groupsByWorktree?: AppState['groupsByWorktree']
+    layoutByWorktree?: AppState['layoutByWorktree']
+    settings?: Partial<
+      Pick<
+        GlobalSettings,
+        | 'openLinksInAppInBackground'
+        | 'openLinksInApp'
+        | 'openLinksInAppModifierInverts'
+        | 'activeRuntimeEnvironmentId'
+        | 'localhostWorktreeLabelsEnabled'
+      >
+    > | null
+    setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+    activeWorktreeId?: string | null
+    activeWorkspaceExecutionHostId?: ExecutionHostId | null
+    worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
+    allWorktrees?: () => LocalhostLinkWorktree[]
+    workspacePortScan?: { result: WorkspacePortScanResult } | null
+    workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
+  }
 
 export type HttpLinkGroupActionRequest = {
   workspaceId: string
@@ -96,6 +96,7 @@ type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
   linkContext?: BrowserLinkOpenContext
   expectedRuntimeEnvironmentId?: string
   expectedSshConnectionId?: string
+  allowClientBrowserFallback?: boolean
 }
 
 /** Resolves to the page id when the page renders on this desktop, else null. */
@@ -173,30 +174,48 @@ function reportHttpLinkBrowserOpenFailure(error: unknown): void {
   )
 }
 
+async function openSystemHttpLink(url: string): Promise<void> {
+  try {
+    await window.api.shell.openUrl(url)
+  } catch {
+    reportHttpLinkBrowserOpenFailure(null)
+  }
+}
+
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
+  // Ownerless legacy callers retain their default-server classification without asserting an owner.
+  const ownerlessRemoteActive =
+    !opts.sourceOwner && Boolean(storeAccessor?.()?.settings?.activeRuntimeEnvironmentId?.trim())
+  executeHttpLink(url, opts, ownerlessRemoteActive)
+}
+
+export function openOwnedHttpLink(
+  url: string,
+  opts: OpenHttpLinkOptions & { sourceOwner: HttpLinkSourceOwner }
+): void {
+  executeHttpLink(url, opts, false)
+}
+
+function executeHttpLink(
+  url: string,
+  opts: OpenHttpLinkOptions,
+  remoteRuntimeActive: boolean
+): void {
   if (opts.linkContext?.isCurrentRequest?.() === false) {
     return
   }
-  const {
-    worktreeId,
-    allowRemoteInApp,
-    forceSystemBrowser,
-    forceInApp,
-    modifierHeld,
-    sourceOwner
-  } = opts
+  const { worktreeId, allowRemoteInApp, forceSystemBrowser, forceInApp, sourceOwner } = opts
   if (sourceOwner?.kind === 'unknown') {
     return
   }
   const state = storeAccessor?.()
-  const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
   const effectiveSourceOwner = sourceOwner
   const sourceIsLocal = effectiveSourceOwner
     ? effectiveSourceOwner.kind === 'local'
     : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
   const modifier = resolveModifierRouting(
-    Boolean(modifierHeld),
+    Boolean(opts.modifierHeld),
     openLinksInApp,
     state?.settings?.openLinksInAppModifierInverts === true
   )
@@ -227,6 +246,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
         intent: { kind: 'url' },
         ...fields,
         linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
+        ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
@@ -279,14 +299,14 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void window.api.shell.openUrl(url)
+    void openSystemHttpLink(url)
     return
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
     if (opts.linkContext?.isCurrentRequest?.() === false) {
       return
     }
-    void window.api.shell.openUrl(labeledUrl)
+    void openSystemHttpLink(labeledUrl)
   })
 }
 

@@ -24,7 +24,7 @@ import {
 import {
   pendingStructuredSessionPrompts,
   type StructuredPromptItem
-} from './structured-agent-session-message-projection'
+} from '../../../../shared/structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
 import { useStructuredAgentSessionStop } from './use-structured-agent-session-stop'
@@ -47,7 +47,7 @@ import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
 import type { NativeChatRewindHost } from './use-native-chat-rewind'
 
-export type { StructuredPromptItem } from './structured-agent-session-message-projection'
+export type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
 
 export function useStructuredAgentSession(args: {
   sessionId: string

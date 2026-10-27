@@ -12,6 +12,7 @@ import {
 } from './workspace-list-sections'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../src/shared/workspace-statuses'
 import { getMobileWorkspaceLineageGroupKey } from './mobile-workspace-lineage'
+import { getWorktreeDotStatus } from './workspace-list-ordering'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
@@ -253,6 +254,16 @@ describe('getWorktreeStatus', () => {
   })
 })
 
+describe('getWorktreeDotStatus', () => {
+  it('shows the host’s agent verdict and keeps the phone rule for activity and unknown states', () => {
+    const row = worktree({ status: 'active', hasHostSidebarActivity: true })
+    expect(getWorktreeDotStatus({ ...row, sidebarStatus: 'failed' })).toBe('failed')
+    expect(getWorktreeDotStatus({ ...row, sidebarStatus: 'inactive' })).toBe('active')
+    expect(getWorktreeDotStatus({ ...row, sidebarStatus: 'from-a-newer-host' })).toBe('active')
+    expect(getWorktreeDotStatus(row)).toBe('active')
+  })
+})
+
 describe('buildSections', () => {
   it('keys same-id rows by host inside a section', () => {
     const worktreeId = 'repo-1::/work/orca'
@@ -366,42 +377,24 @@ describe('buildSections', () => {
     ])
   })
 
-  it('counts live terminal output as Recent activity for headless serve hosts', () => {
-    const streamingOnServe = worktree({
+  it('ranks Recent by desktop activity, not terminal output', () => {
+    const streaming = worktree({
       worktreeId: 'streaming',
       displayName: 'streaming',
       lastActivityAt: 100,
       lastOutputAt: 1_000
     })
-    const touchedOnDesktop = worktree({
+    const touched = worktree({
       worktreeId: 'touched',
       displayName: 'touched',
       lastActivityAt: 200,
       lastOutputAt: 1
     })
 
-    expect(
-      sortWorktrees([touchedOnDesktop, streamingOnServe], 'recent').map((item) => item.worktreeId)
-    ).toEqual(['streaming', 'touched'])
-  })
-
-  it('keeps desktop activity ranking in Recent when it is newest', () => {
-    const newerActivity = worktree({
-      worktreeId: 'newer-activity',
-      displayName: 'newer',
-      lastActivityAt: 2_000,
-      lastOutputAt: 1
-    })
-    const quietOlder = worktree({
-      worktreeId: 'quiet-older',
-      displayName: 'quiet',
-      lastActivityAt: 100,
-      lastOutputAt: 150
-    })
-
-    expect(
-      sortWorktrees([quietOlder, newerActivity], 'recent').map((item) => item.worktreeId)
-    ).toEqual(['newer-activity', 'quiet-older'])
+    expect(sortWorktrees([streaming, touched], 'recent').map((item) => item.worktreeId)).toEqual([
+      'touched',
+      'streaming'
+    ])
   })
 
   it('falls back to agent attention order in Smart when no desktop ranks exist', () => {
@@ -649,7 +642,8 @@ describe('buildSections', () => {
       [
         worktree({ worktreeId: 'none', linkedPR: null }),
         worktree({ worktreeId: 'open', linkedPR: { number: 1, state: 'open' } }),
-        worktree({ worktreeId: 'merged', linkedPR: { number: 2, state: 'merged' } })
+        worktree({ worktreeId: 'merged', linkedPR: { number: 2, state: 'merged' } }),
+        worktree({ worktreeId: 'uncached', linkedPR: { number: 3, state: 'unknown' } })
       ],
       'name',
       { ...NO_WORKSPACE_ROW_FILTERS },
@@ -662,6 +656,7 @@ describe('buildSections', () => {
       { key: 'pr:in-review', title: 'In review' },
       { key: 'pr:in-progress', title: 'In progress' }
     ])
+    expect(sections.at(-1)?.data.map((row) => row.worktreeId)).toEqual(['none', 'uncached'])
   })
 
   it('groups by desktop workspace status labels and order', () => {

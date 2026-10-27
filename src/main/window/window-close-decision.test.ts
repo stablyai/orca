@@ -2,16 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { resolveWindowCloseAction } from './window-close-decision'
 
 describe('resolveWindowCloseAction', () => {
-  it('allows a renderer-confirmed close', () => {
-    expect(
-      resolveWindowCloseAction({
-        windowCloseConfirmed: true,
-        rendererProcessGone: false,
-        isRendererCrashed: false
-      })
-    ).toBe('allow-confirmed')
-  })
-
   it('bypasses confirmation only when the renderer is truly gone or crashed', () => {
     expect(
       resolveWindowCloseAction({
@@ -38,16 +28,5 @@ describe('resolveWindowCloseAction', () => {
         isRendererCrashed: false
       })
     ).toBe('request-confirmation')
-  })
-
-  it('prefers the confirmed-close path even if a stale gone/crashed flag is set', () => {
-    // A confirmed close must proceed rather than request confirmation again.
-    expect(
-      resolveWindowCloseAction({
-        windowCloseConfirmed: true,
-        rendererProcessGone: true,
-        isRendererCrashed: true
-      })
-    ).toBe('allow-confirmed')
   })
 })

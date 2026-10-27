@@ -11,9 +11,9 @@ import {
 import { colors } from '../theme/mobile-theme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
-import { MobileNativeChatQueuedMessageEditor } from './MobileNativeChatQueuedMessageEditor'
+import { MobileNativeChatQueuedMessageEditor } from './native-chat/input/MobileNativeChatQueuedMessageEditor'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
-import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
+import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 
 type QueuedMessageCardRowProps = {
   card: MobileQueuedMessageCard

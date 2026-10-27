@@ -22,8 +22,8 @@ import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
 } from '../worktree/host-workspace-list-states'
-import { getWorktreeStatus } from '../worktree/workspace-list-sections'
-import { repoColor } from '../worktree/repo-color'
+import { getWorktreeDotStatus } from '../worktree/workspace-list-ordering'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { buildRepoLookById } from './host-repo-looks'
@@ -136,6 +136,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
       ) : (
         <HostWorkspaceListStates
           connState={connState}
+          connectionVerdict={controller.connectionVerdict}
           // A feed-built list is loaded once the feed installs; rows draw before worktree.ps answers.
           worktreesLoaded={
             controller.feed ? controller.feed.kind === 'ready' : state.worktreesLoaded
@@ -246,8 +247,8 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               item={item}
               isReadOnly={isReadOnly}
               now={now}
-              status={getWorktreeStatus(item)}
-              repoColor={repoLookById.get(item.repoId)?.color ?? repoColor(item.repo)}
+              status={getWorktreeDotStatus(item)}
+              repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
               repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
               hideRepo={state.view.groupBy === 'repo' && !item.showProjectName}
               cardDetails={cardDetails}

@@ -66,6 +66,45 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
                 { value0: warning.failedCookies }
               )
         case 'linux-keyring-unavailable':
+          if (warning.keyringFailure) {
+            const values = {
+              browser: warning.keyringFailure.browser,
+              count: warning.failedCookies
+            }
+            let message: string | undefined
+            switch (warning.keyringFailure.cause) {
+              case 'secret-tool-missing':
+                message = translate(
+                  'auto.lib.browser.cookie.import.toast.secretToolMissing',
+                  "Orca couldn't read {{count}} of {{browser}}'s encrypted cookies because secret-tool isn't installed. Install libsecret-tools (or your distribution's equivalent) and import again.",
+                  values
+                )
+                break
+              case 'keyring-locked':
+                message = translate(
+                  'auto.lib.browser.cookie.import.toast.cookieKeyLocked',
+                  "Orca couldn't read {{count}} of {{browser}}'s encrypted cookies because access to the system keyring was locked or denied. Unlock your login keyring, allow access if prompted, and import again.",
+                  values
+                )
+                break
+              case 'key-unavailable':
+                message = translate(
+                  'auto.lib.browser.cookie.import.toast.cookieKeyUnavailable',
+                  "Orca couldn't read {{count}} of {{browser}}'s encrypted cookies because the cookie encryption key couldn't be read. Try importing again, import cookies using “From File…”, or sign in directly in Orca.",
+                  values
+                )
+                break
+            }
+            if (message) {
+              return warning.otherFailedCookies
+                ? `${message} ${translate(
+                    'auto.lib.browser.cookie.import.toast.otherUndecryptableCookies',
+                    '{{count}} more cookies could not be decrypted for another reason.',
+                    { count: warning.otherFailedCookies }
+                  )}`
+                : message
+            }
+          }
           return warning.otherFailedCookies
             ? translate(
                 'auto.lib.browser.cookie.import.toast.undecryptableKeyringMixed',

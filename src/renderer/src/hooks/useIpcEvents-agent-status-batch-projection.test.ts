@@ -5,7 +5,10 @@ import {
   makeWorktree,
   TEST_REPO
 } from '../store/slices/store-test-helpers'
-import type { AgentStatusBatchUpdate, AgentStatusUpdate } from '../store/slices/agent-status'
+import type {
+  AgentStatusBatchUpdate,
+  AgentStatusUpdate
+} from '../store/slices/agent-status/agent-status-contract'
 import type { AppState } from '../store/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'

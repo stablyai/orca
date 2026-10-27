@@ -180,8 +180,9 @@ export function ShortcutsPane(): React.JSX.Element {
     }
     const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
     const next =
-      sameBindings(normalizedResult, defaults) ||
-      (normalizedResult.length === 0 && defaults.length === 0)
+      (sameBindings(normalizedResult, defaults) ||
+        (normalizedResult.length === 0 && defaults.length === 0)) &&
+      !hasCommonBindingOverride(keybindingSnapshot, actionId)
         ? removeBindingOverride(keybindings, actionId)
         : { ...keybindings, [actionId]: normalizedResult }
     const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {

@@ -44,6 +44,7 @@ import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-en
 import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
 import { retireMobileDesktopRelayEnvironment } from './runtime-environment-mobile-relay-hosts'
 import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
+import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
 import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
 import { resetDesktopBrowserBridgeEnvironment } from '../desktop-browser-bridge-reconcile'
 
@@ -116,7 +117,15 @@ let stopPreferenceWatch: (() => void) | undefined
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {
   stopPreferenceWatch?.()
-  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath())
+  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath(), () => {
+    // CLI and recipe removals skip the Settings path; drop their session partitions here too.
+    try {
+      reconcileOrphanedRuntimeSessions(store, getUserDataPath())
+    } catch (error) {
+      console.warn('[runtime-environments] orphaned session reconcile failed:', error)
+    }
+    publishRuntimeEnvironmentCatalogChanged()
+  })
   for (const pending of pendingSubscriptions.values()) {
     pending.close()
   }

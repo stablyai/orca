@@ -236,6 +236,7 @@ describe('WslHookRelayManager', () => {
       readBundle: () => Buffer.from('// bundle'),
       listDistros: async () => ['Ubuntu'],
       isDistroRunning: vi.fn(async () => true),
+      deferUntilRunning: vi.fn(),
       spawnRelay: vi.fn(() => fakeChild()),
       runInstall: vi.fn(async () => ({ code: 0, stderr: '' })),
       waitForSentinel: vi.fn(async () => guestTransport()),

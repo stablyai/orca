@@ -27,7 +27,11 @@ type HeldInput = {
 }
 
 /** One connect's claim on pre-bind typing; identity decides which connect may settle it. */
-export type RestoredInputExpectation = { readonly endpoint: HeldEndpoint }
+export type RestoredInputExpectation = {
+  readonly endpoint: HeldEndpoint
+  /** A brand-new pane's first create: its pre-bind typing belongs to whatever terminal it makes. */
+  readonly newTerminal?: true
+}
 
 export type RemoteRuntimeRecoveryInputHold = {
   isHolding: () => boolean
@@ -42,8 +46,17 @@ export type RemoteRuntimeRecoveryInputHold = {
   ) => Promise<boolean>
   /** Binds pre-bind typing to the terminal a connect restores; null (a fresh create) drops it. */
   expect: (endpoint: HeldEndpoint) => RestoredInputExpectation
-  /** Ends the latest connect's expectation: without a bound terminal its typing is dropped. */
-  settleExpectation: (expectation: RestoredInputExpectation, bound: boolean) => void
+  /** Keeps a brand-new pane's pre-bind typing for the terminal its first create makes. */
+  expectNewTerminal: () => RestoredInputExpectation
+  /**
+   * Ends the latest connect's expectation: without a bound terminal its typing is dropped. A
+   * new-terminal expectation keeps it only when `createdEndpoint` names the terminal it made.
+   */
+  settleExpectation: (
+    expectation: RestoredInputExpectation,
+    bound: boolean,
+    createdEndpoint?: RemoteRuntimeInputEndpoint | null
+  ) => void
   /** Delivers held input to the endpoint it was typed into, or drops it if the pane rebound elsewhere. */
   release: (
     bound: RemoteRuntimeInputEndpoint,
@@ -128,7 +141,16 @@ export function createRemoteRuntimeRecoveryInputHold(
       expected.beforeBind = true
       return expectation
     },
-    settleExpectation(expectation, bound) {
+    expectNewTerminal() {
+      const expectation: RestoredInputExpectation = { endpoint: null, newTerminal: true }
+      latestExpectation = expectation
+      if (!held?.buffer.isBuffering() || held.endpoint) {
+        discard()
+        held = newHold(null, true)
+      }
+      return expectation
+    },
+    settleExpectation(expectation, bound, createdEndpoint) {
       if (expectation !== latestExpectation) {
         return
       }
@@ -136,11 +158,14 @@ export function createRemoteRuntimeRecoveryInputHold(
       if (!held?.beforeBind) {
         return
       }
-      if (bound) {
-        held.beforeBind = false
-      } else {
+      if (!bound || (expectation.newTerminal && !createdEndpoint)) {
         discard()
+        return
       }
+      if (expectation.newTerminal) {
+        held.endpoint = createdEndpoint ?? null
+      }
+      held.beforeBind = false
     },
     release(bound, writer) {
       const current = held

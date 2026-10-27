@@ -1,6 +1,6 @@
 import type WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import {
   openRemoteRuntimeWebSocket,
@@ -10,7 +10,7 @@ import { formatSharedControlCloseMessage } from './remote-runtime-shared-control
 import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessOptions
-} from '../../remote-runtime-socket-liveness'
+} from '../remote-runtime-socket-liveness'
 import type { SharedControlSocketCloseCause } from './remote-runtime-shared-control-types'
 
 export function openSharedControlSocket(

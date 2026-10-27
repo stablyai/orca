@@ -20,6 +20,7 @@ describe('hermes startup plans', () => {
     const script = unwrapPosixShellScript(plan?.launchCommand)
     expect(script).toContain("'--provider' 'anthropic' '--yolo' '--tui'")
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe('run privately')
+    expect(plan?.launchConfig.agentArgs).toBe('--yolo')
   })
 
   it.each([

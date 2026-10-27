@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AGENT_CHAT_PERMISSION_MODES } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
@@ -44,81 +43,66 @@ function launchPermission(
     stop: vi.fn(),
     providerStarted: vi.fn()
   }
-  const deps = { agents: claudeAndCodexDeclared(), modelCatalog }
-  return { read, result: structuredAgentSessionLaunchPermission(deps, record(provider, options)) }
+  return {
+    read,
+    result: structuredAgentSessionLaunchPermission(
+      { agents: claudeAndCodexDeclared(), modelCatalog },
+      record(provider, options)
+    )
+  }
 }
 
 describe('the permission mode a chat starts with', () => {
-  it.each(AGENT_CHAT_PERMISSION_MODES)(
-    'launches saved Claude %s without consulting the catalog',
-    async (permissionMode) => {
-      const launch = launchPermission(
-        'claude',
-        { permissionMode, model: 'haiku' },
-        listing([{ id: 'haiku' }])
-      )
-      await expect(launch.result).resolves.toBe(permissionMode)
-      expect(launch.read).not.toHaveBeenCalled()
-    }
-  )
-
-  it('delegates saved own settings without consulting the catalog', async () => {
-    for (const provider of ['claude', 'codex']) {
-      const launch = launchPermission(
-        provider,
-        { permissionMode: 'own', model: 'unlisted-model' },
-        new Error('catalog unavailable')
-      )
-      await expect(launch.result).resolves.toBe('own')
-      expect(launch.read).not.toHaveBeenCalled()
-    }
+  it('launches a saved mode that needs no model as it is, without reading the catalog', async () => {
+    const claude = launchPermission('claude', { permissionMode: 'accept-edits' })
+    await expect(claude.result).resolves.toBe('accept-edits')
+    expect(claude.read).not.toHaveBeenCalled()
+    const codex = launchPermission('codex', { permissionMode: 'auto' })
+    await expect(codex.result).resolves.toBe('auto')
+    expect(codex.read).not.toHaveBeenCalled()
   })
 
-  // Captured saved choices with an alias-only host catalog.
-  it('keeps saved Haiku full-ID Auto with the captured alias-only catalog', async () => {
-    const launch = launchPermission(
-      'claude',
-      { model: 'claude-haiku-4-5-20251001', permissionMode: 'auto' },
-      listing([
-        { id: 'opus', isDefault: true, supportsAutoMode: true },
-        { id: 'fable', isDefault: false, supportsAutoMode: true },
-        { id: 'sonnet', isDefault: false, supportsAutoMode: true },
-        { id: 'haiku', isDefault: false, supportsAutoMode: true }
-      ])
-    )
-    await expect(launch.result).resolves.toBe('auto')
-    expect(launch.read).not.toHaveBeenCalled()
-  })
-
-  // #30032: a catalog saved under another account home read as none, and the chat relaunched asking.
-  it('keeps saved auto with no selected model, unlisted models, or an unavailable catalog', async () => {
-    const savedOptions: Record<string, string>[] = [{}, { model: 'claude-opus-5-5[1m]' }]
-    for (const options of savedOptions) {
-      const launch = launchPermission(
-        'claude',
-        { permissionMode: 'auto', ...options },
-        new Error('catalog unavailable')
-      )
-      await expect(launch.result).resolves.toBe('auto')
-      expect(launch.read).not.toHaveBeenCalled()
-    }
-    await expect(launchPermission('codex', { permissionMode: 'auto' }).result).resolves.toBe('auto')
-  })
-
-  it('asks for an absent or invalid saved mode, including modes the provider does not offer', async () => {
+  it('asks for a chat saved before modes existed', async () => {
     await expect(launchPermission('claude', undefined).result).resolves.toBe('ask')
+  })
+
+  it('runs Claude auto on a model the saved catalog lists as supporting it', async () => {
+    const supported = launchPermission(
+      'claude',
+      { permissionMode: 'auto', model: 'opus' },
+      listing([{ id: 'opus', supportsAutoMode: true }])
+    )
+    await expect(supported.result).resolves.toBe('auto')
+    expect(supported.read).toHaveBeenCalledWith(expect.objectContaining({ savedOnly: true }))
+  })
+
+  it('matches a chat with no model to the listed default', async () => {
     await expect(
-      launchPermission('claude', { permissionMode: 'bypassPermissions' }).result
-    ).resolves.toBe('ask')
-    await expect(
-      launchPermission('codex', { permissionMode: 'accept-edits' }).result
+      launchPermission(
+        'claude',
+        { permissionMode: 'auto' },
+        listing([
+          { id: 'sonnet', isDefault: true, supportsAutoMode: false },
+          { id: 'opus', supportsAutoMode: true }
+        ])
+      ).result
     ).resolves.toBe('ask')
   })
 
-  it('has none for an unregistered agent or one with no modes', async () => {
-    await expect(launchPermission('grok', { permissionMode: 'full-access' }).result).resolves.toBe(
-      null
-    )
+  it('asks when the catalog cannot confirm the model runs auto', async () => {
+    for (const answer of [
+      { origin: 'unknown' } as const,
+      listing([{ id: 'opus' }]),
+      listing([{ id: 'sonnet', supportsAutoMode: true }]),
+      new Error('catalog unavailable')
+    ]) {
+      await expect(
+        launchPermission('claude', { permissionMode: 'auto', model: 'opus' }, answer).result
+      ).resolves.toBe('ask')
+    }
+  })
+
+  it('has none for an agent with no modes', async () => {
     await expect(launchPermission('pi', { permissionMode: 'full-access' }).result).resolves.toBe(
       null
     )

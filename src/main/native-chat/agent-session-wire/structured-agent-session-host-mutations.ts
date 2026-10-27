@@ -73,8 +73,6 @@ export function sendStructuredAgentSessionTurn(
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
     beforeRun?: () => void
-    /** Host-local: keep the running process's choices instead of capturing saved ones. */
-    keepCurrentOptions?: true
   },
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {

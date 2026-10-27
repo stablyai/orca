@@ -166,9 +166,11 @@ describe('Sidebar', () => {
     })
 
     const markup = renderSidebar()
+    const sidebarRootTag = markup.slice(0, markup.indexOf('>'))
 
-    expect(markup).toContain('--worktree-sidebar:#101820')
-    expect(markup).toContain('--worktree-sidebar-foreground:#f0f4f8')
+    expect(sidebarRootTag).toContain('--worktree-sidebar:#101820')
+    expect(sidebarRootTag).toContain('--worktree-sidebar-foreground:#f0f4f8')
+    expect(sidebarRootTag).toMatch(/[;"]color:#f0f4f8/)
     expect(markup).toContain('data-testid="workspace-kanban-drawer"')
     expect(markup.match(/--worktree-sidebar:#101820/g)).toHaveLength(2)
   })

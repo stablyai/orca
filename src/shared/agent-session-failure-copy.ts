@@ -17,7 +17,6 @@ export const WAIT_FOR_BACKGROUND_TASKS = 'Wait for the background tasks to finis
 export const AGENT_STARTING = 'The agent is still starting.'
 export const WAIT_FOR_START = 'Wait for the agent to finish starting.'
 export const AGENT_STILL_WORKING = 'The agent is still working.'
-export const WAIT_FOR_TURN = 'Wait for the agent to finish responding, or stop it.'
 
 /** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
@@ -79,6 +78,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
   runtimeNotInstalled:
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+  fullAccessAsRoot:
+    "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
   conversationOpenElsewhere:
     'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.',
   conversationOpenInTerminal:
@@ -130,7 +131,6 @@ export const AGENT_SESSION_FAILURE_COPY = {
   agentStarting: AGENT_STARTING,
   waitForStart: WAIT_FOR_START,
   agentStillWorking: AGENT_STILL_WORKING,
-  waitForTurn: WAIT_FOR_TURN,
   runCommandWhenDone: "Run /{{command}} when it's done.",
   commandAfterAnswer: "Answer the agent's question or approval, then run /{{command}}.",
   compactionFailed: 'Compaction failed.',

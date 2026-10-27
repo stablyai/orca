@@ -2,7 +2,7 @@ import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
-import { buildEdgeWrappedHttpLogicalLineCandidates } from './edge-wrapped-terminal-http-links'
+import { buildEdgeWrappedHttpLogicalLineCandidates } from '../../../../shared/edge-wrapped-terminal-http-links'
 
 const COLS = 40
 const WIDE_GLYPH = '界'
@@ -64,6 +64,9 @@ describe('edge-wrapped terminal HTTP links', () => {
   beforeEach(() => {
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
     registerHttpLinkStoreAccessor(() => ({
+      repos: [],
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()

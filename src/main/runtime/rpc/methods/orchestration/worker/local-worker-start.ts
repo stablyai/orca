@@ -30,7 +30,6 @@ import { assertExplicitWorkerUsable } from './explicit-worker-terminal-validatio
 import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
 import { CHAT_WORKER_AUTHORITY, chatAssigneeOf, chatWorkerMode } from '../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
-import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
@@ -293,12 +292,9 @@ export async function startLocalWorker(args: {
       }
     })
   } catch (error) {
-    await tearDownFailedWorkerStart({
+    return await failWorkerStartWithReceipt({
       runtime,
       structuredSession: placed?.structuredSession ?? null,
-      dispatchId: started.dispatch.id
-    })
-    return failWorkerStartWithReceipt({
       db,
       runId: run.id,
       taskId: task.id,

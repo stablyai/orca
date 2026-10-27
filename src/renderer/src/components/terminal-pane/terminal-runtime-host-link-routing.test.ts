@@ -103,6 +103,9 @@ beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
   registerHttpLinkStoreAccessor(() => ({
+    repos: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     settings: { openLinksInApp: true, activeRuntimeEnvironmentId: null },
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock

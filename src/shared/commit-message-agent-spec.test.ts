@@ -669,29 +669,18 @@ describe('buildArgs (OpenCode 2)', () => {
 describe('buildArgs (Antigravity)', () => {
   const spec = getCommitMessageAgentSpec('antigravity')!
 
-  it('runs agy with the prompt attached to --print, then --sandbox and --model flags', () => {
-    const args = spec.buildArgs({
-      prompt: 'real commit prompt',
-      model: 'Gemini 3.5 Flash (Medium)'
-    })
-    expect(args).toEqual([
-      '--print=real commit prompt',
+  it('runs agy in stream input mode with sandbox and model flags separate', () => {
+    expect(
+      spec.buildArgs({ prompt: 'real commit prompt', model: 'Gemini 3.5 Flash (Medium)' })
+    ).toEqual([
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
       '--sandbox',
       '--model',
       'Gemini 3.5 Flash (Medium)'
     ])
-    expect(spec.promptDelivery).toBe('argv')
-  })
-
-  it('binds a leading-dash prompt to --print instead of letting it parse as an option', () => {
-    const args = spec.buildArgs({ prompt: '-fix: something', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args[0]).toBe('--print=-fix: something')
-  })
-
-  // argv construction only: agy 1.2.1 still rejects a print value equal to a flag, even --print=--sandbox; real generation prompts are not bare flags.
-  it('still glues a prompt that collides with a flag name onto --print', () => {
-    const args = spec.buildArgs({ prompt: '--sandbox', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args[0]).toBe('--print=--sandbox')
+    expect(spec.promptDelivery).toBe('stdin')
   })
 
   it('uses dynamic model discovery via agy models', () => {
@@ -704,7 +693,12 @@ describe('buildArgs (Antigravity)', () => {
     expect(spec.defaultModelId).toBe('default')
     expect(
       spec.buildArgs({ prompt: 'Generate a commit message', model: spec.defaultModelId })
-    ).toEqual(['--print=Generate a commit message', '--sandbox'])
+    ).toEqual([
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
+      '--sandbox'
+    ])
   })
 
   it('passes only a nonempty requested effort', () => {
@@ -712,7 +706,9 @@ describe('buildArgs (Antigravity)', () => {
       '--effort'
     )
     expect(spec.buildArgs({ prompt: 'P', model: 'default', thinkingLevel: 'high' })).toEqual([
-      '--print=P',
+      '--print=',
+      '--input-format=stream-json',
+      '--output-format=stream-json',
       '--sandbox',
       '--effort',
       'high'

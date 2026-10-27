@@ -1,3 +1,4 @@
+import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
@@ -7,7 +8,7 @@ import { useAiVaultPanelSessions } from './ai-vault-session-filters'
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
-} from './ai-vault-scope-paths'
+} from '../../../../shared/ai-vault-scope-paths'
 import { countAiVaultViewAdjustments } from './ai-vault-view-defaults'
 import {
   buildAiVaultProjectContext,
@@ -35,6 +36,7 @@ import { AgentSessionContinuationDialog } from '@/components/agent-session-conti
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from './use-ai-vault-search'
+import { withAiVaultHistoryPreviews } from './ai-vault-search-session'
 import { aiVaultSearchScopeIdentity } from './ai-vault-search-scope-identity'
 import { AiVaultPanelSearch } from './AiVaultPanelSearch'
 import { useAiVaultPanelSessionResume } from './use-ai-vault-panel-session-resume'
@@ -62,14 +64,15 @@ export default function AiVaultPanel({
   const {
     workspaceId: activeWorktreeId,
     worktree: activeWorktree,
-    repo: activeRepo
+    repo: activeRepo,
+    legacyProjectKey
   } = useAiVaultPanelWorkspace(workspace)
   const repos = useRepos()
   const allWorktrees = useAllWorktrees()
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const resumeTargetState = useAppStore(
     useShallow((state) => ({
-      projects: state.projects,
+      projectHostSetupProjection: getProjectHostSetupProjectionFromState(state),
       settings: state.settings,
       folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,
@@ -153,13 +156,24 @@ export default function AiVaultPanel({
       aiVaultSearchScopeIdentity({
         scope,
         activeWorktreeId: activeWorktree?.id,
-        activeProjectKey
+        activeProjectKey: legacyProjectKey
       }),
-    [activeProjectKey, activeWorktree?.id, scope]
+    [legacyProjectKey, activeWorktree?.id, scope]
   )
-  const search = useAiVaultPanelSearch(query, agents, searchWithin, executionHostScope, searchSort)
+  const search = useAiVaultPanelSearch(
+    query,
+    agents,
+    searchWithin,
+    executionHostScope,
+    searchSort,
+    activeProjectKey ?? undefined
+  )
   const { searching, searchHits } = search
-  const sessions = searching ? search.sessions : history
+  const searchSessions = useMemo(
+    () => withAiVaultHistoryPreviews(search.sessions, history),
+    [history, search.sessions]
+  )
+  const sessions = searching ? searchSessions : history
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
     includeAntigravityIdeSessions: true,
@@ -175,9 +189,10 @@ export default function AiVaultPanel({
         repos,
         worktrees: allWorktrees,
         projectHostSetupProjection,
+        settings: settings ?? undefined,
         sessions
       }),
-    [allWorktrees, projectHostSetupProjection, repos, sessions]
+    [allWorktrees, projectHostSetupProjection, repos, sessions, settings]
   )
   const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
   const {

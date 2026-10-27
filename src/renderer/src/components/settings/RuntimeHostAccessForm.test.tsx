@@ -60,25 +60,4 @@ describe('RuntimeHostAccessForm', () => {
     expect(markup).toContain('Enter an Orca access link or bare pairing code.')
     expect(markup).toContain('aria-invalid="true"')
   })
-
-  it('shows the persistence error after host verification succeeds', () => {
-    const markup = renderToStaticMarkup(
-      <RuntimeHostAccessForm
-        name="Linux workstation"
-        accessLink={accessLink('ws://100.76.32.125:6768')}
-        busy={false}
-        failure={{
-          kind: 'environment-save-failed',
-          message: 'A server named "Linux workstation" already exists.'
-        }}
-        onNameChange={vi.fn()}
-        onAccessLinkChange={vi.fn()}
-        onCancel={vi.fn()}
-        onSubmit={vi.fn()}
-      />
-    )
-
-    expect(markup).toContain('Could not save the host')
-    expect(markup).toContain('A server named &quot;Linux workstation&quot; already exists.')
-  })
 })

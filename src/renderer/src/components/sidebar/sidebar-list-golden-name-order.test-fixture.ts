@@ -41,8 +41,8 @@ export function goldenNameOrderState(): Partial<AppState> {
       [sshRepo.id]: sshWorktrees
     },
     worktreeLineageById: {},
-    projects: [],
-    projectHostSetups: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     // Equal tabOrder everywhere, so group names decide the order.
     projectGroups: [
       folderGroup('pg-zebra', 'zebra'),

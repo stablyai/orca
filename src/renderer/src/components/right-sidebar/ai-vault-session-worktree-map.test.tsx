@@ -303,6 +303,8 @@ describe('folder workspace resume targets', () => {
   }
   const folderKey = folderWorkspaceKey(folder.id)
   const targetState = {
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     folderWorkspaces: [folder],
     projectGroups: [],
     repos,

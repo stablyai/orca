@@ -127,7 +127,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/foreign-sqlite-readers/**/*.test.ts',
   'src/main/browser/*cookie*.test.ts',
   'src/main/browser/cookies/*cookie*.test.ts',
-  'src/main/browser/cookies/sources/browser-cookie-validation.test.ts',
   'src/main/browser/cookies/sources/browser-cookie-decryption.test.ts',
   'src/main/browser/cookies/sources/browser-cookie-import-undecryptable.test.ts',
   'src/main/browser/cookies/sources/browser-cookie-source-partition.test.ts',
@@ -171,7 +170,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/methods/structured-agent-session-visual.test.ts',
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
   'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
-  'src/shared/remote-runtime-client.test.ts',
+  'src/shared/remote-runtime/remote-runtime-client.test.ts',
   'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',
   // Bun's built-in ws client ignores maxPayload; the product opener only runs on Node.
   'src/shared/remote-runtime/requests/remote-runtime-request-websocket.test.ts',

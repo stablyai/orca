@@ -10,6 +10,7 @@ import {
 import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
 import type { TuiAgent } from './tui-agent'
 import { mergeOpenCodeGenerationArgs } from './opencode-generation-command'
+import { buildAntigravityGenerationInput } from './antigravity-generation-stream'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
@@ -33,7 +34,7 @@ export type CommitMessagePlan = {
   label: string
   /** Leading command assignments, applied on the execution host. */
   env?: Record<string, string>
-  outputFormat?: 'opencode-json'
+  outputFormat?: 'opencode-json' | 'antigravity-stream-json'
 }
 
 export type CommitMessagePlanResult =
@@ -56,6 +57,12 @@ function planAdditionalAgentArgs(
 }
 
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
+const ANTIGRAVITY_FORMAT_OPTIONS = [
+  '--input-format',
+  '-input-format',
+  '--output-format',
+  '-output-format'
+]
 
 function applyRecipeOptionOverride(args: {
   generatedArgs: string[]
@@ -250,18 +257,26 @@ export function planCommitMessageGeneration(
   if (!command.ok) {
     return { ok: false, error: command.error }
   }
+  const prefixArgs =
+    input.agentId === 'antigravity'
+      ? removeAllOptionOccurrences(command.prefixArgs, ANTIGRAVITY_FORMAT_OPTIONS)
+      : command.prefixArgs
+  const recipeArgs =
+    input.agentId === 'antigravity'
+      ? removeAllOptionOccurrences(agentArgs.args, ANTIGRAVITY_FORMAT_OPTIONS)
+      : agentArgs.args
   const baseArgs = spec.buildArgs({
     prompt: argvPrompt,
     model: input.model,
     thinkingLevel: input.thinkingLevel,
     strictMcp: options.strictMcp,
-    userArgs: [...command.prefixArgs, ...agentArgs.args]
+    userArgs: [...prefixArgs, ...recipeArgs]
   })
   // Replace singleton values rather than stack them: yargs arrays crash CLIs such as OpenCode model.split.
   const merged = applySingletonOptionOverrides({
     generatedArgs: baseArgs,
-    prefixArgs: command.prefixArgs,
-    recipeArgs: agentArgs.args,
+    prefixArgs,
+    recipeArgs,
     singletonOptions: spec.singletonOptions ?? DEFAULT_SINGLETON_OPTIONS
   })
   const args = insertAdditionalAgentArgs({
@@ -285,9 +300,17 @@ export function planCommitMessageGeneration(
     plan: {
       binary: command.binary,
       args: generationArgs,
-      stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
+      stdinPayload:
+        input.agentId === 'antigravity'
+          ? buildAntigravityGenerationInput(prompt)
+          : spec.promptDelivery === 'stdin'
+            ? prompt
+            : null,
       label: spec.label,
       ...(formatOption?.value === 'json' ? { outputFormat: 'opencode-json' as const } : {}),
+      ...(input.agentId === 'antigravity'
+        ? { outputFormat: 'antigravity-stream-json' as const }
+        : {}),
       ...(command.env ? { env: command.env } : {})
     }
   }

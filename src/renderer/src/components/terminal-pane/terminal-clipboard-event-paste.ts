@@ -1,4 +1,8 @@
 import { isWebClientLocation } from '@/lib/web-client-location'
+import {
+  logicalKeyTokenFromInput,
+  physicalCodeKeyTokenFromInput
+} from '../../../../shared/keybindings'
 
 // Insecure web origins lack navigator.clipboard; preserve the native paste gesture as their only clipboard path.
 export function shouldUseClipboardEventPaste(args: {
@@ -19,16 +23,20 @@ export function getClipboardEventText(event: ClipboardEvent): string {
   return event.clipboardData?.getData('text/plain') ?? ''
 }
 
-type PasteChordEvent = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+type PasteChordEvent = Pick<
+  KeyboardEvent,
+  'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+>
 
 // Only native paste chords can use ClipboardEvent on insecure web; consume remapped chords to avoid sending control characters.
 export function firesNativePasteEvent(event: PasteChordEvent, isMac: boolean): boolean {
-  const key = event.key.toLowerCase()
+  // Non-Latin layouts report the typed letter in key; Chromium still pastes on the physical V.
+  const key = logicalKeyTokenFromInput(event) ?? physicalCodeKeyTokenFromInput(event)
   if (isMac) {
-    return key === 'v' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+    return key === 'V' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
   }
   // Ctrl+V and Ctrl+Shift+V both dispatch a native paste event on Windows/Linux.
-  if (key === 'v' && event.ctrlKey && !event.metaKey && !event.altKey) {
+  if (key === 'V' && event.ctrlKey && !event.metaKey && !event.altKey) {
     return true
   }
   return (

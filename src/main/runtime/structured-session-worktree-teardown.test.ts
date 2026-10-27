@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
@@ -83,6 +84,11 @@ function installHost(options: {
     deps: {
       store: {
         listRecords: () => options.records,
+        listConversations: () => options.records.map(agentSessionConversationView),
+        getConversation: (id: string) => {
+          const row = options.records.find((entry) => entry.sessionId === id)
+          return row ? agentSessionConversationView(row) : null
+        },
         getRecord: () => null,
         getSessionTabId: (sessionId: string) => (visible.has(sessionId) ? `tab-${sessionId}` : null)
       }

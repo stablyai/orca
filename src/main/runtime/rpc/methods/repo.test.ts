@@ -10,7 +10,7 @@ import {
   RUNTIME_CAPABILITIES,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../../../../shared/ssh-target-management'
 

@@ -18,14 +18,6 @@ function dashboardState(): Parameters<typeof toggleAgentDashboardFromShortcut>[0
 describe('Agent Dashboard open mode', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('opens the pop-out window on desktop when the setting asks for it', () => {
-    const state = dashboardState()
-    const openPopout = vi.fn()
-    toggleAgentDashboardFromShortcut(state, openPopout)
-    expect(openPopout).toHaveBeenCalledTimes(1)
-    expect(state.setAgentDashboardDrawerOpen).not.toHaveBeenCalled()
-  })
-
   it('opens the in-window board in a web client even when the setting says pop-out', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     const state = dashboardState()

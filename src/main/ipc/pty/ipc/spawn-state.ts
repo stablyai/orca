@@ -1,3 +1,4 @@
+import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
@@ -47,14 +48,12 @@ export type PtyIpcSpawnState = {
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
   pendingRegistrationClaim?: PtyRegistrationClaim
-  reconciledSnapshotSeq: number | null
-  snapshotKittyFlagsCoverReconciledSeq: boolean
+  provedSnapshotSeq: number | undefined
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
   provider: IPtyProvider
   preAdoptedStablePane: AdoptStablePaneResult | null
   paneAgentLaunch: PaneAgentLaunch | null
-  exitedBeforeRegistration: boolean
   isClaudeLaunch: boolean
   claudeAuth: ClaudeRuntimeAuthPreparation | null
   terminalRuntimeOptions: {
@@ -62,7 +61,7 @@ export type PtyIpcSpawnState = {
     terminalWindowsWslDistro?: string | null
   }
   isDaemonHostSpawn: boolean
-  isMintedSessionId: boolean
+  ownsNewIncarnation: boolean
   effectiveSessionId: string | undefined
   effectiveSessionAppId: string | undefined
   expectedWslDistro: string | null
@@ -98,8 +97,7 @@ export type PtyIpcSpawnState = {
   skipCodexHomeEnv: boolean
   stripInheritedOrcaCodexHome: boolean
   codexResumeHomeSelected: boolean
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
+  provisionalPtySize: PtySpawnSizeSeed | undefined
   initiallyHidden: boolean
   preSpawnHiddenMarkId: string | null
 }
@@ -131,19 +129,17 @@ export function createPtyIpcSpawnState(
     stablePaneBindingPersisted: false,
     rejectedRegistrationCandidate: null,
     pendingRegistrationPtyId: null,
-    reconciledSnapshotSeq: null,
-    snapshotKittyFlagsCoverReconciledSeq: true,
+    provedSnapshotSeq: undefined,
     preparedProvisionalExecutionContext: false,
     releaseWorktreeSpawn: undefined,
     provider: localProvider,
     preAdoptedStablePane: null,
     paneAgentLaunch: null,
-    exitedBeforeRegistration: false,
     isClaudeLaunch: false,
     claudeAuth: null,
     terminalRuntimeOptions: {},
     isDaemonHostSpawn: false,
-    isMintedSessionId: false,
+    ownsNewIncarnation: false,
     effectiveSessionId: undefined,
     effectiveSessionAppId: undefined,
     expectedWslDistro: null,
@@ -177,8 +173,7 @@ export function createPtyIpcSpawnState(
     skipCodexHomeEnv: false,
     stripInheritedOrcaCodexHome: false,
     codexResumeHomeSelected: false,
-    hadSessionSizeBeforeAttach: false,
-    sessionSizeBeforeAttach: undefined,
+    provisionalPtySize: undefined,
     initiallyHidden: false,
     preSpawnHiddenMarkId: null
   }

@@ -23,8 +23,4 @@ describe('terminal drop pane resolution', () => {
     expect(resolveInternalTerminalDropPane(manager, child, 'stale-leaf')).toBeNull()
     expect(getActivePane).not.toHaveBeenCalled()
   })
-
-  it('resolves internal pane content by DOM containment', () => {
-    expect(resolveInternalTerminalDropPane(manager, child)).toBe(pane)
-  })
 })

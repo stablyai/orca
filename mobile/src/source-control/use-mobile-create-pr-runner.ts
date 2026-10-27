@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError } from '../platform/haptics'
 import type { MobileGitStatusResult } from './mobile-git-status'
@@ -58,6 +58,10 @@ export function useMobileCreatePrRunner({
   setCreatedPrWarning,
   recordCommitFailure
 }: Params) {
+  const commitMessageRef = useRef(commitMessage)
+  useEffect(() => {
+    commitMessageRef.current = commitMessage
+  }, [commitMessage])
   return useCallback(
     async (pushFirst: boolean) => {
       setShowActionSheet(false)
@@ -79,6 +83,7 @@ export function useMobileCreatePrRunner({
           title: branchLabel,
           status,
           commitMessage,
+          readCommitMessage: () => commitMessageRef.current,
           onProgress: (nextProgress: MobileHostedReviewCreateIntentProgress) => {
             progress = nextProgress
             setActionError(mobileHostedReviewCreateIntentProgressMessage(nextProgress))

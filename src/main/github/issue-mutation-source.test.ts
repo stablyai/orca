@@ -118,14 +118,7 @@ describe('issue mutations follow the issue source preference', () => {
     expect(resolveIssueSourceMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
       ['issue', 'close', '5', '--repo', 'fork-owner/widgets'],
-      [
-        'api',
-        '-X',
-        'PATCH',
-        'repos/fork-owner/widgets/issues/5',
-        '--raw-field',
-        'body=Origin edit'
-      ],
+      ['api', '-X', 'PATCH', 'repos/fork-owner/widgets/issues/5', '--input', '-'],
       [
         'issue',
         'edit',
@@ -138,6 +131,9 @@ describe('issue mutations follow the issue source preference', () => {
         'octo'
       ]
     ])
+    expect(ghExecFileAsyncMock.mock.calls[1][1]?.stdin).toBe(
+      JSON.stringify({ body: 'Origin edit' })
+    )
   })
 
   it('preserves local WSL execution with an explicit issue repository', async () => {

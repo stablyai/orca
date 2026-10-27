@@ -3,7 +3,7 @@ import type { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { generateKeyPair, publicKeyToBase64 } from '../../e2ee-crypto'
 import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
-import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../../remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../remote-runtime-memory-limits'
 import { WebSocketServer } from 'ws'
 
 describe('openRemoteRuntimeWebSocket', () => {

@@ -1,3 +1,9 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../../../shared/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
@@ -41,29 +47,30 @@ const ITEMS: AgentJournalRenderItem[] = [
 function installHost(options: {
   items?: AgentJournalRenderItem[]
   hasSession?: boolean
-  claimStatus?: string
-  deathEvidence?: unknown
-  record?: unknown
+  claimStatus?: AgentSessionLease['claimStatus']
+  deathEvidence?: AgentSessionLease['deathEvidence']
+  record?: null
   close?: () => Promise<void>
   setSessionTabVisibility?: () => Promise<void>
   historyThrows?: boolean
   tabListed?: boolean
 }) {
   const record =
-    options.record === undefined
-      ? {
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
+    options.record === null
+      ? null
+      : agentSessionRecordFixture(
+          agentSessionLeaseFixture({
+            sessionId: IDENTITY.sessionId,
             claimStatus: options.claimStatus ?? 'live',
             deathEvidence: options.deathEvidence ?? null,
             runtimeFence: 3
-          }
-        }
-      : options.record
+          })
+        )
   let closed = false
   hostRef.current = {
-    deps: { store: { getRecord: () => record } },
+    deps: {
+      store: { getConversation: () => (record ? agentSessionConversationView(record) : null) }
+    },
     getPersistedVisibleSessionTabIndex: () => ({
       present: true,
       sessionIds: options.tabListed ? [IDENTITY.sessionId] : []
@@ -150,7 +157,7 @@ describe('structured worker stop', () => {
     expect(close).not.toHaveBeenCalled()
   })
 
-  it.each([{ hasSession: false }, { claimStatus: 'conflicted' }])(
+  it.each([{ hasSession: false }, { claimStatus: 'conflicted' as const }])(
     'retains without positive exit evidence: %j',
     async (options) => {
       installHost({ ...options, close: async () => {} })

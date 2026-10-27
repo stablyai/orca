@@ -27,7 +27,7 @@ export function conversationFamily(agent: string): string {
 }
 
 export function recordConversationKey(
-  record: AgentSessionRecord,
+  record: Pick<AgentSessionRecord, 'provider' | 'accountHome'>,
   link: AgentSessionProviderHandleLink
 ): ConversationKey | null {
   const history = structuredAgentRuntimeMetadata(record.provider)?.sessionHistory

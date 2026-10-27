@@ -3,7 +3,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata
-} from '@/store/slices/agent-status-contract'
+} from '@/store/slices/agent-status/agent-status-contract'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindSettlePaneSerializer } from './pane-serializer-settle'

@@ -6,6 +6,7 @@ import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { warnUnreadableEnvironmentState } from './runtime-environment-store-records'
 import {
   getPreferredLoopbackRuntimePort,
+  getPreferredPairingOffer,
   KnownRuntimeEnvironmentSchema,
   type KnownRuntimeEnvironment
 } from './runtime-environments'
@@ -17,9 +18,26 @@ const WSL_HOST_DEPLOYMENTS_FILE = 'orca-wsl-host-deployments.json'
 const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 
 /** A managed orcad in a WSL distro. The environment's name is its label; runtime state lives elsewhere. */
+/** A Remove that could not prove the host's server stopped (E11); the host stays until one does. */
+export const WslHostPendingStopSchema = z.object({
+  since: z.number().finite(),
+  reason: z.string().max(4_096),
+  verdict: z.enum(['live', 'unverifiable'])
+})
+
+export type WslHostPendingStop = z.infer<typeof WslHostPendingStopSchema>
+
 export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend({
   environmentId: z.string().min(1),
-  createdAt: z.number().finite()
+  createdAt: z.number().finite(),
+  /**
+   * The paired orcad's host key, so a stale record cannot claim a server re-paired under the same
+   * id and bridge port. Optional: records written before it are bound by port only until refreshed.
+   */
+  pairingPublicKeyB64: z.string().min(1).optional(),
+  /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
+  previousPairingPublicKeyB64: z.string().min(1).optional(),
+  pendingStop: WslHostPendingStopSchema.optional()
 })
 
 export type WslHostDeploymentRecord = z.infer<typeof WslHostDeploymentRecordSchema>
@@ -183,7 +201,25 @@ export function overlayWslHostDeployments(
       if (!record) {
         return environment
       }
-      const { environmentId: _environmentId, createdAt: _createdAt, ...link } = record
+      const {
+        environmentId: _environmentId,
+        createdAt: _createdAt,
+        pendingStop: _pendingStop,
+        pairingPublicKeyB64,
+        previousPairingPublicKeyB64,
+        ...link
+      } = record
+      const pairingKey = getPreferredPairingOffer(environment).publicKeyB64
+      if (
+        pairingPublicKeyB64 !== undefined &&
+        pairingKey !== pairingPublicKeyB64 &&
+        pairingKey !== previousPairingPublicKeyB64
+      ) {
+        warnUnreadableEnvironmentState(
+          `Ignoring the WSL deployment for server ${environment.id}; it was written for a different pairing.`
+        )
+        return environment
+      }
       const overlaid = hasNonWslOwner(environment)
         ? null
         : KnownRuntimeEnvironmentSchema.safeParse({ ...environment, orcadDeployment: link })

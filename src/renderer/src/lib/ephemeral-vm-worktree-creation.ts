@@ -177,7 +177,8 @@ export async function cleanupEphemeralVmRuntimeForFailedCreate(
   request: WorktreeCreationRequest
 ): Promise<void> {
   await cleanupFailedEphemeralVmWorkspace(request, {
-    deleteProjectHostSetup: (setupId) => useAppStore.getState().deleteProjectHostSetup({ setupId }),
+    deleteProjectHostSetup: (setupId, hostId) =>
+      useAppStore.getState().deleteProjectHostSetup({ setupId, hostId }),
     cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
     reportSetupError: (error) =>
       console.error('Failed to remove provisioned-root project setup:', error),

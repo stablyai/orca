@@ -59,7 +59,7 @@ function catalogResponse(count: number, active: number): RpcResponse {
     branch: `branch-${index}`,
     displayName: `Workspace ${index}`,
     liveTerminalCount: 0,
-    status: index < active ? ('working' as const) : ('done' as const)
+    status: index < active ? ('working' as const) : ('inactive' as const)
   }))
   return { ok: true, result: { worktrees } } as RpcResponse
 }
@@ -107,6 +107,24 @@ describe('fetchHomeHostWorktreeInfo', () => {
       staleCounts: true,
       countsProvenAt: expect.any(Number)
     })
+  })
+
+  it('counts only the rows the list shows, with its activity rule', async () => {
+    const store = infoStore()
+    const host = fakeSession()
+    const row = { repo: 'orca', branch: 'b', displayName: 'w', liveTerminalCount: 0 }
+    const worktrees = [
+      { ...row, worktreeId: 'archived', isArchived: true, status: 'working' },
+      { ...row, worktreeId: 'tab-only', status: 'inactive', hasHostSidebarActivity: true },
+      { ...row, worktreeId: 'idle', status: 'inactive', hasHostSidebarActivity: false }
+    ]
+
+    const response: RpcResponse = { id: 'catalog', ok: true, result: { worktrees } }
+    const loaded = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, notDisposed)
+    host.settle(response)
+    await loaded
+
+    expect(store.current['host-1']).toMatchObject({ totalWorktrees: 2, activeCount: 1 })
   })
 
   it('stamps when the host proved the counts', async () => {

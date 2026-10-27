@@ -91,9 +91,9 @@ export function registerDocPreviewGrantHandlers(): void {
   )
 
   // Guest senders are untrusted; the policy checks a live bound grant and web URL.
-  ipcMain.on(DOC_PREVIEW_LINK_CLICK_CHANNEL, (event, url: unknown) => {
+  ipcMain.on(DOC_PREVIEW_LINK_CLICK_CHANNEL, (event, url: unknown, modifiers?: unknown) => {
     if (typeof url === 'string') {
-      reportDocPreviewLinkClick(event.sender, url)
+      reportDocPreviewLinkClick(event.sender, url, modifiers)
     }
   })
 }

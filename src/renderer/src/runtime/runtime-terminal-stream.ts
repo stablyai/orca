@@ -1,6 +1,6 @@
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { getRemoteRuntimeTerminalMultiplexer } from './remote-runtime-terminal-multiplexer'
-import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RemoteTerminalTransportCloseEvent } from './remote-runtime-terminal-multiplexer-types'
 
 const LIVE_TAIL_SUBSCRIPTION_TIMEOUT_MS = 10_000

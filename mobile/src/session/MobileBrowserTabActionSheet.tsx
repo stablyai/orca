@@ -13,7 +13,7 @@ export function MobileBrowserTabActionSheet(props: {
   onCloseTab: (target: BrowserTab) => void
   /** Rendered after Close — receives the open tab's id so the session route's
    *  bulk-close builder can resolve the anchor itself. */
-  bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
+  bulkCloseActions?: (anchorTabId: string | undefined) => ActionSheetAction[]
 }): React.JSX.Element {
   const { target, onClose, onNavigate, onCloseTab, bulkCloseActions } = props
   return (
@@ -73,7 +73,7 @@ export function MobileBrowserTabActionSheet(props: {
             }
           }
         },
-        ...(bulkCloseActions?.(target?.id, onClose) ?? [])
+        ...(bulkCloseActions?.(target?.id) ?? [])
       ]}
       onClose={onClose}
     />

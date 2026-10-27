@@ -142,6 +142,9 @@ function readPrivateKey(
   if (read.problem) {
     skipped?.set(keyPath, read.problem)
     warnSkippedIdentityFileOnce(keyPath, read.problem)
+  } else if (!EXPANDED_DEFAULT_KEY_PATHS.includes(resolveSshConfigHomePath(keyPath))) {
+    // Absent defaults are normal; a configured key that is missing explains a later password prompt.
+    skipped?.set(keyPath, 'it does not exist')
   }
   return undefined
 }

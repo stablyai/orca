@@ -1,9 +1,14 @@
+import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host'
 import type { AppState } from '@/store/types'
+import {
+  getProjectHostSetupProjectionFromState,
+  type ProjectCatalogReadState
+} from '@/store/project-host-setup-selector'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../shared/terminal-startup-cwd'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -36,6 +41,7 @@ export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['work
 
 /** A launch target may precede its workspace row; create dialogs identify the repo, runtime or host until then. */
 export type ProspectiveWorkspace = {
+  executionContext?: ProjectLaunchContext['executionContext']
   kind: ProspectiveWorkspaceKind
   repoId?: string
   worktreeId?: string
@@ -68,21 +74,26 @@ const AGENT_LAUNCH_ROUTE_KEYS = [
   'runtimeEnvironments',
   'runtimeEnvironmentCatalogHydrated',
   'removedRuntimeEnvironmentIds',
-  'activeRepoId',
-  'projects'
-] as const satisfies readonly (keyof AgentLaunchRouteStore)[]
+  'activeRepoId'
+] as const satisfies readonly (keyof AppState)[]
 type AgentLaunchRouteKey = (typeof AGENT_LAUNCH_ROUTE_KEYS)[number]
 // Completeness, not just membership: a reader input missing from the list fails to compile.
 type AssertNoMissingRouteKey<T extends never> = T
 export type AgentLaunchRouteKeysAreComplete = AssertNoMissingRouteKey<
   Exclude<keyof AgentLaunchRouteStore, AgentLaunchRouteKey>
 >
-export type AgentLaunchRouteView = { [K in AgentLaunchRouteKey]: AppState[K] }
+export type AgentLaunchRouteWatchState = Pick<AppState, AgentLaunchRouteKey> &
+  ProjectCatalogReadState
+export type AgentLaunchRouteView = Pick<AppState, AgentLaunchRouteKey> & {
+  projectHostSetupProjection: ReturnType<typeof getProjectHostSetupProjectionFromState>
+}
 
 export const agentLaunchRouteInputsChanged = (
-  next: AgentLaunchRouteView,
-  previous: AgentLaunchRouteView
-): boolean => AGENT_LAUNCH_ROUTE_KEYS.some((key) => next[key] !== previous[key])
+  next: AgentLaunchRouteWatchState,
+  previous: AgentLaunchRouteWatchState
+): boolean =>
+  AGENT_LAUNCH_ROUTE_KEYS.some((key) => next[key] !== previous[key]) ||
+  getProjectHostSetupProjectionFromState(next) !== getProjectHostSetupProjectionFromState(previous)
 
 let lastRouteView: AgentLaunchRouteView | undefined
 export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteView {
@@ -102,7 +113,7 @@ export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteVie
       runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
       removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
       activeRepoId: state.activeRepoId,
-      projects: state.projects
+      projectHostSetupProjection: getProjectHostSetupProjectionFromState(state)
     }
   }
   return lastRouteView
@@ -213,7 +224,11 @@ export function buildAgentLaunchRouteInput(
       ? { clientCapabilities: pairedHostClientCapabilities() }
       : {}),
     workspaceKind: workspace.kind,
-    projectRuntime: resolveProjectRuntime(store, workspace, executionHostId),
+    projectExecutionKind: workspace.executionContext?.kind,
+    projectRuntime:
+      workspace.executionContext?.kind === 'host'
+        ? workspace.executionContext.projectRuntime
+        : resolveProjectRuntime(store, workspace, executionHostId),
     promptDelivery: args.promptDelivery,
     launchText: args.prompt,
     nativeChatTranscriptIsLocalReadable: resolveTranscriptIsLocalReadable(

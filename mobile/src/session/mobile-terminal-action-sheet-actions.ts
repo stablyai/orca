@@ -23,7 +23,7 @@ export function getMobileTerminalActionSheetActions<
   onClose: (target: Target) => void
   /** Preferred path runs host teardown and records the local tombstone. */
   onCloseSessionTab: (tab: Tab) => void
-  bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
+  bulkCloseActions?: (anchorTabId: string | undefined) => ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args
   if (!target) {
@@ -75,6 +75,6 @@ export function getMobileTerminalActionSheetActions<
         args.onClose(target)
       }
     },
-    ...(args.bulkCloseActions?.(sessionTab?.id, args.onDismiss) ?? [])
+    ...(args.bulkCloseActions?.(sessionTab?.id) ?? [])
   ]
 }

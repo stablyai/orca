@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat-task-list-history'
+import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat/input/native-chat-task-list-history'
 import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
@@ -13,7 +13,8 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
+import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
   NativeChatLiveTurnIndicator,
@@ -44,12 +45,15 @@ import type { PendingNativeChatImage } from './native-chat/composer/mobile-nativ
 import {
   MobileNativeChatComposer,
   type MobileNativeChatStructuredComposer
-} from './MobileNativeChatComposer'
-import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
-import { NO_COMPOSER_TRAY, type ComposerTrayProps } from './use-mobile-native-chat-composer-tray'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
-import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+} from './native-chat/composer/MobileNativeChatComposer'
+import { MobileNativeChatPromptCard } from './native-chat/input/MobileNativeChatPromptCard'
+import {
+  NO_COMPOSER_TRAY,
+  type ComposerTrayProps
+} from './native-chat/composer/use-mobile-native-chat-composer-tray'
+import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
+import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatRowList } from './MobileNativeChatRowList'
 import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'
@@ -122,7 +126,7 @@ type Props = ComposerTrayProps & {
   onCollapsePrompt?: () => void
   collapsedPrompt?: { title: string; expand: () => void } | null
   question?: MobileChatQuestion | null
-  onAnswerQuestion?: (text: string) => Promise<boolean>
+  onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
   permission?: MobileChatPermission | null
   promptKey?: string | null
   onRespondPermission?: (send: string) => Promise<boolean>
@@ -263,6 +267,7 @@ export function MobileNativeChatView({
   const disclosures = useMobileNativeChatDisclosures(sendSurfaceId)
   const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(data), [data])
   const renderItem = useMobileNativeChatRowRenderer({
+    scope: sendSurfaceId,
     rowKeyOf: rowKeys.keyOf,
     runOwners: rowKeys.runOwners,
     taskListPredecessors,

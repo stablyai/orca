@@ -4,6 +4,7 @@ export type FocusFollowsMouseInput = {
   featureEnabled: boolean
   activePaneId: number | null
   hoveredPaneId: number
+  focusInOtherPane: boolean
   mouseButtons: number
   windowHasFocus: boolean
   managerDestroyed: boolean
@@ -16,7 +17,8 @@ export function shouldFollowMouseFocus(input: FocusFollowsMouseInput): boolean {
   if (input.managerDestroyed) {
     return false
   }
-  if (input.activePaneId === input.hoveredPaneId) {
+  // activePaneId is per PaneManager, so focus may sit in another manager's pane (floating vs main).
+  if (input.activePaneId === input.hoveredPaneId && !input.focusInOtherPane) {
     return false
   }
   // Any held mouse button implies selection/drag; changing pane focus would break text selection or reorder.

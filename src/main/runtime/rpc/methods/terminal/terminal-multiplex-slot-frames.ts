@@ -19,6 +19,7 @@ import {
 } from './terminal-snapshot-publication'
 import { updateViewportForClient } from './terminal-viewport-update'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
+import { answerUndeliveredYieldedQueries } from './terminal-multiplex-yielded-queries'
 import {
   isMultiplexStreamAttached,
   type MultiplexSnapshotRequest,
@@ -91,6 +92,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false
+        answerUndeliveredYieldedQueries(runtime, stream)
         if (discardsQueuedOutput) {
           notePausedOutputDropped(state, stream)
         }

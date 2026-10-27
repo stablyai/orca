@@ -223,11 +223,29 @@ describe('useWorkspaceBoardPanel', () => {
   it('still closes the board on Escape from a text field outside it', async () => {
     await renderHookProbe()
     const field = appendInput('app')
+    const fieldKeyDown = vi.fn()
+    field.addEventListener('keydown', fieldKeyDown)
 
     await updatePanel((state) => state.openWorkspaceBoard())
     await pressEscape(field)
 
     expect(panelState().workspaceBoardOpen).toBe(false)
+    expect(fieldKeyDown).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the dismissal Escape from reaching a focused terminal', async () => {
+    await renderHookProbe()
+    const terminalInput = document.createElement('textarea')
+    terminalInput.className = 'xterm-helper-textarea'
+    document.body.appendChild(terminalInput)
+    const terminalKeyDown = vi.fn()
+    terminalInput.addEventListener('keydown', terminalKeyDown)
+
+    await updatePanel((state) => state.openWorkspaceBoard())
+    await pressEscape(terminalInput)
+
+    expect(panelState().workspaceBoardOpen).toBe(false)
+    expect(terminalKeyDown).not.toHaveBeenCalled()
   })
 
   it('keeps the board open on Escape while a nested dialog is open', async () => {

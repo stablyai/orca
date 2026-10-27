@@ -106,14 +106,10 @@ export const VERIFY_CHECKS = [
     inputs: ['README.md', 'docs/readme/']
   },
   {
-    name: 'process-host imports',
-    args: ['config/scripts/check-process-host-imports.mjs'],
+    name: 'import boundaries',
+    runtime: 'bun',
+    args: ['config/scripts/check-import-boundaries.mjs'],
     inputs: [...SOURCE_ROOTS, 'config/process-host-direct-import-baseline.txt']
-  },
-  {
-    name: 'compat boundary imports',
-    args: ['config/scripts/check-compat-boundary-imports.mjs'],
-    inputs: ['src/']
   },
   {
     name: 'dead design-system classes',
@@ -174,8 +170,9 @@ export function selectTypecheckProjects(files) {
 
 function listRatchetChecks(scriptsDir) {
   const scripts = new Set(listRatchetScripts(scriptsDir))
-  // `pnpm lint` runs it although CI gives it a dedicated step outside run-ratchets.mjs.
+  // `pnpm lint` runs these although CI checks them in their own steps outside run-ratchets.mjs.
   scripts.add('check-main-sync-spawn-ratchet.mjs')
+  scripts.add('check-flaky-test-pattern-ratchet.mjs')
   return [...scripts].sort().map((script) => ({
     name: script.replace(/^check-|\.mjs$/g, ''),
     args: [`config/scripts/${script}`],

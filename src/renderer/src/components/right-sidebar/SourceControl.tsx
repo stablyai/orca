@@ -24,7 +24,7 @@ export {
   resolveSourceControlCompareBaseRef,
   resolveSourceControlPickerBaseRef,
   shouldClearBranchCompareForMissingBase
-} from './source-control/sync/base-ref-resolution'
+} from '../../../../shared/source-control-base-ref-resolution'
 export {
   normalizeSourceControlViewMode,
   readCommitDraftForWorktree,

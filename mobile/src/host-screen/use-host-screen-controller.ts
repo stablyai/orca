@@ -29,6 +29,7 @@ import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 import { useHostDisplay } from '../transport/use-host-display'
+import { classifyConnection } from '../transport/connection-health'
 
 export type HostScreenProps = {
   embedded?: boolean
@@ -62,6 +63,13 @@ export function useHostScreenController({
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
   const state = useHostScreenState(hostId)
   const settings = useHostViewSettings({ client, connState, state })
+  const connectionVerdict = classifyConnection({
+    state: connState,
+    reconnectAttempts,
+    lastConnectedAt,
+    hostName: state.hostName,
+    ...relayRecovery
+  })
   const hostDisplay = useHostDisplay(
     hostId && state.hostName
       ? { id: hostId, name: state.hostName, ...state.hostStoredDescriptor }
@@ -151,6 +159,7 @@ export function useHostScreenController({
     feed,
     projectOrderBy,
     client,
+    connectionVerdict,
     connState,
     contentMaxWidth,
     displayWorktrees,

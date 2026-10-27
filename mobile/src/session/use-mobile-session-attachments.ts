@@ -5,7 +5,7 @@ import { triggerSelection, triggerError } from '../platform/haptics'
 import { resolveMobileImageAttachmentAgent } from './mobile-image-paste-agent'
 import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
-import { useMobileNativeChatStructuredComposer } from './use-mobile-native-chat-structured-composer'
+import { useMobileNativeChatStructuredComposer } from './native-chat/composer/use-mobile-native-chat-structured-composer'
 import {
   isMobileNativeChatAgentConfirmed,
   resolveMobileNativeChatSessionId
@@ -109,11 +109,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       onError: triggerError
     })
   const nativeChatStructuredComposer = useMobileNativeChatStructuredComposer({
-    client,
-    hostId,
-    sessionId: nativeChatSessionId,
     structured: structuredNativeChat,
-    connected: connState === 'connected',
+    sessionCommands: nativeChatController.nativeChatSessionCommands,
     acceptsFiles: agentSessionHostSupport?.phoneAttachments === true,
     conversationCommands:
       nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,

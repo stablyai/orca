@@ -17,7 +17,7 @@ import {
   isMobileHostedReviewCommitFailure,
   runMobileHostedReviewCreateIntent
 } from '../../source-control/mobile-hosted-review-create-intent-runner'
-import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
+import { fetchWorktreeGitHubPRLink } from '../../source-control/mobile-pr-link'
 import { openMobilePrUrl } from '../mobile-pr-url'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
 import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
@@ -73,10 +73,10 @@ export function PrSidebarCreateEmptyState({
       setOrphanLinkedPR(null)
       return
     }
-    void fetchWorktreeLinkedPR(client, worktreeId)
-      .then((n) => {
+    void fetchWorktreeGitHubPRLink(client, worktreeId)
+      .then((link) => {
         if (!cancelled) {
-          setOrphanLinkedPR(n)
+          setOrphanLinkedPR(link.linkedPR)
         }
       })
       .catch(() => {

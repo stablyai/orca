@@ -58,7 +58,7 @@ const NON_UNIT_TEST_RUNNERS = [
       "'src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'"
     ]
   },
-  ...['push', 'relay'].map((app) => ({
+  ...['connector', 'push', 'relay'].map((app) => ({
     name: `cloud ${app}`,
     include: [`cloud/apps/${app}/src/**/*.test.ts`],
     sources: [`cloud/apps/${app}/vitest.config.ts`],
@@ -66,6 +66,8 @@ const NON_UNIT_TEST_RUNNERS = [
   })),
   ...[
     'cloud/apps/relay-fence-broker',
+    'cloud/packages/cloud-database',
+    'cloud/packages/connector-contract',
     'cloud/packages/postgres-schema',
     'cloud/packages/push-contract',
     'cloud/packages/relay-contract'

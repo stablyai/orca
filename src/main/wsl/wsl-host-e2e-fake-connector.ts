@@ -48,6 +48,32 @@ export function createFakeWslHostConnector(
   const port = offer ? Number(new URL(offer.endpoint).port) : 0
   const active = new Map<string, WslOrcadConnection>()
   const key = (distro: string): string => distro.toLowerCase()
+  const connect = async (distro: string): Promise<WslOrcadConnection> => {
+    // Same guard as the real connector: nothing starts for a host that is gone.
+    if (!options.isKnownDistro(distro)) {
+      throw new Error(`${distro} is no longer a WSL host; Orca will not start anything for it.`)
+    }
+    if (config.connectLogFile) {
+      appendFileSync(config.connectLogFile, `${distro}\n`)
+    }
+    onChange(distro, null, { state: 'connecting' })
+    const connection: WslOrcadConnection = {
+      distro,
+      environmentId: defaultWslOrcadEnvironmentId(distro),
+      localPort: port,
+      remotePort: port,
+      fullVersion: 'e2e',
+      pid: null,
+      pairingOffer: config.pairingCode,
+      deferredUpdate: null,
+      close: async () => {
+        active.delete(key(distro))
+      }
+    }
+    active.set(key(distro), connection)
+    onChange(distro, connection, { state: 'ready', census: null })
+    return connection
+  }
   return {
     listDistros: async () =>
       (config.distrosFile
@@ -58,34 +84,12 @@ export function createFakeWslHostConnector(
         id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
       })),
     readOrcadPublicKey: async () => null,
-    connect: async (distro) => {
-      // Same guard as the real connector: nothing starts for a host that is gone.
-      if (!options.isKnownDistro(distro)) {
-        throw new Error(`${distro} is no longer a WSL host; Orca will not start anything for it.`)
-      }
-      if (config.connectLogFile) {
-        appendFileSync(config.connectLogFile, `${distro}\n`)
-      }
-      onChange(distro, null, { state: 'connecting' })
-      const connection: WslOrcadConnection = {
-        distro,
-        environmentId: defaultWslOrcadEnvironmentId(distro),
-        localPort: port,
-        remotePort: port,
-        fullVersion: 'e2e',
-        pid: null,
-        pairingOffer: config.pairingCode,
-        deferredUpdate: null,
-        close: async () => {
-          active.delete(key(distro))
-        }
-      }
-      active.set(key(distro), connection)
-      onChange(distro, connection, { state: 'ready', census: null })
-      return connection
-    },
+    connect,
     get: (distro) => active.get(key(distro)) ?? null,
     isReachable: async (distro) => active.has(key(distro)),
+    isSettling: () => false,
+    // The fake distro always runs, so a missing server is reachable by a reconnect.
+    reachability: async (distro) => (active.has(key(distro)) ? 'available' : 'unreachable'),
     disconnect: async (distro) => {
       if (active.delete(key(distro))) {
         onChange(distro, null, { state: 'closed' })
@@ -93,8 +97,10 @@ export function createFakeWslHostConnector(
     },
     // Use real terminal RPCs against the headless fixture server for removal proof; fake only decommission.
     stopServer: async (distro, environmentId) => {
+      // As the real connector: the fake distro always runs, so an unbridged server is reconnected
+      // to stop it, rather than read as stopped (a re-enable connects nothing since E9).
       if (!active.get(key(distro))) {
-        return { stopped: true }
+        await connect(distro)
       }
       return stopWslHostServer({
         ...wslHostRuntimeStopSteps(options.runtime, environmentId),
@@ -110,6 +116,7 @@ export function createFakeWslHostConnector(
         })
       })
     },
+    resolveDistroName: async (distro) => distro,
     releaseHolder: async () => {},
     adoptHolders: async () => {},
     dispose: async () => {

@@ -411,29 +411,62 @@ describe('openWorkspaceBrowserTab', () => {
     expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
   })
 
-  it('does not fall back to a client browser when asserted runtime creation fails', async () => {
-    mocks.state = {
-      ...ownerState(toRuntimeExecutionHostId('hub-a')),
-      ...browserCapableRuntime('hub-a'),
-      createBrowserTab: createBrowserTabMock(),
-      defaultBrowserSessionProfileId: 'client-profile',
-      defaultBrowserSessionProfileIdByHostId: {}
-    }
-    mocks.createRemote.mockResolvedValue(false)
-
-    await expect(
-      openWorkspaceBrowserTab({
+  it.each(['runtime', 'ssh'] as const)(
+    'rejects another owner for an opted-in %s preview client provider',
+    async (kind) => {
+      const hostId =
+        kind === 'runtime' ? toRuntimeExecutionHostId('source') : toSshExecutionHostId('source')
+      const createBrowserTab = createBrowserTabMock()
+      mocks.state = {
+        ...ownerState(hostId),
+        settings: { browserSshWorkspaceRoutingEnabled: false },
+        createBrowserTab,
+        defaultBrowserSessionProfileIdByHostId: {}
+      }
+      const request = {
         workspaceId: WORKSPACE_ID,
         url: 'https://example.com/',
-        intent: { kind: 'url' },
-        expectedRuntimeEnvironmentId: 'hub-a'
-      })
-    ).rejects.toThrow('Unable to open URL.')
-    expect(mocks.createRemote).toHaveBeenCalledWith(
-      expect.objectContaining({ environmentId: 'hub-a' })
-    )
-    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
-  })
+        intent: { kind: 'url' as const },
+        allowClientBrowserFallback: true
+      }
+      const expectedOwner = (id: string) =>
+        kind === 'runtime' ? { expectedRuntimeEnvironmentId: id } : { expectedSshConnectionId: id }
+
+      await expect(
+        openWorkspaceBrowserTab({ ...request, ...expectedOwner('other') })
+      ).rejects.toThrow('Unable to open URL.')
+      expect(createBrowserTab).not.toHaveBeenCalled()
+      expect(mocks.createRemote).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([false, true])(
+    'does not fall back to a client browser when asserted runtime creation fails (client provider opt-in %s)',
+    async (allowClientBrowserFallback) => {
+      mocks.state = {
+        ...ownerState(toRuntimeExecutionHostId('hub-a')),
+        ...browserCapableRuntime('hub-a'),
+        createBrowserTab: createBrowserTabMock(),
+        defaultBrowserSessionProfileId: 'client-profile',
+        defaultBrowserSessionProfileIdByHostId: {}
+      }
+      mocks.createRemote.mockResolvedValue(false)
+
+      await expect(
+        openWorkspaceBrowserTab({
+          workspaceId: WORKSPACE_ID,
+          url: 'https://example.com/',
+          intent: { kind: 'url' },
+          expectedRuntimeEnvironmentId: 'hub-a',
+          allowClientBrowserFallback
+        })
+      ).rejects.toThrow('Unable to open URL.')
+      expect(mocks.createRemote).toHaveBeenCalledWith(
+        expect.objectContaining({ environmentId: 'hub-a' })
+      )
+      expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not route an asserted floating-terminal source to either runtime or local browser', async () => {
     const createBrowserTab = createBrowserTabMock()

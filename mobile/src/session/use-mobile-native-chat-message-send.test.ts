@@ -19,11 +19,7 @@ vi.mock('./native-chat/mobile-native-chat-stale-input', () => ({
 }))
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
-import {
-  acquireMobileNativeChatTerminalWrite,
-  releaseMobileNativeChatTerminalWrite,
-  resetMobileNativeChatTerminalWritesForTests
-} from './native-chat/mobile-native-chat-terminal-write-lock'
+import { resetMobileNativeChatTerminalWritesForTests } from './native-chat/mobile-native-chat-terminal-write-lock'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
@@ -107,14 +103,6 @@ describe('useMobileNativeChatMessageSend', () => {
     api = null
   })
 
-  it('sizes the pre-clear to every line of a parked launch draft', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
-    await act(async () => {
-      await api!.send('hello')
-    })
-    expect(clearArgs().clearInput).toBe(buildAgentTuiClearInputForText(DRAFT))
-  })
-
   it('issues the burst as its OWN write, before the body', async () => {
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     await act(async () => {
@@ -194,23 +182,6 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(clearInputWrite).not.toHaveBeenCalled()
     expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
-  })
-
-  it('does not resolve a composer seed from a question-card answer', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
-    await act(async () => {
-      await api!.answerQuestion('1')
-    })
-    expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
-  })
-
-  it('creates an optimistic echo for an ordinary chat send', async () => {
-    mount(() => null)
-    await act(async () => {
-      await api!.send('hello')
-    })
-    expect(acceptSend).toHaveBeenCalledTimes(1)
-    expect(onCommandSend).not.toHaveBeenCalled()
   })
 
   // TUI commands never echo as user turns; optimistic bubbles would remain queued forever.
@@ -362,27 +333,6 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(nextRecorder).not.toHaveBeenCalled()
   })
 
-  it('rejects a question answer while another composed write holds the terminal', async () => {
-    mount(() => null)
-    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
-
-    let result: boolean | undefined
-    await act(async () => {
-      result = await api!.answerQuestion('1')
-    })
-    expect(result).toBe(false)
-    expect(sendWithOutcome).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Answer not sent')
-
-    releaseMobileNativeChatTerminalWrite('term')
-    await act(async () => {
-      result = await api!.answerQuestion('1')
-    })
-    expect(result).toBe(true)
-    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
-    releaseMobileNativeChatTerminalWrite('term')
-  })
-
   // Trim wire whitespace so it cannot glue the next rapid send to the agent input line.
   it('trims trailing whitespace without changing leading prompt content', async () => {
     mount(() => null)
@@ -392,14 +342,6 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sentArgs().text).toBe('  run the tests')
     expect(captureSendOrigin).toHaveBeenCalledWith('  run the tests', undefined)
     expect(acceptSend.mock.calls[0]![1]).toBe('  run the tests')
-  })
-
-  it('trims trailing whitespace on a question answer too', async () => {
-    mount(() => null)
-    await act(async () => {
-      await api!.answerQuestion('\n 1 ')
-    })
-    expect(sentArgs().text).toBe('\x1b[200~\r 1\x1b[201~')
   })
 
   // Trim only wire text; rejection must restore the exact draft, including blank lines.

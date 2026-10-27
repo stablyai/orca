@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
@@ -15,7 +15,8 @@ type LaneState = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'folderWorkspaces'
-  | 'projects'
+  | 'endpointProjects'
+  | 'endpointProjectHostSetups'
   | 'repos'
   | 'runtimeEnvironments'
   | 'settings'
@@ -57,7 +58,21 @@ function laneState(args?: {
       terminalWindowsWslDistro: args?.terminalWindowsWslDistro ?? null
     },
     repos: [{ id: 'repo1', path: 'C:\\code\\app' }],
-    projects: args?.projectWslDistro
+    endpointProjectHostSetups: [
+      {
+        id: 'repo1',
+        projectId: 'proj1',
+        repoId: 'repo1',
+        hostId: 'local',
+        path: 'C:/code/app',
+        displayName: 'app',
+        setupMethod: 'legacy-repo',
+        setupState: 'ready',
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ],
+    endpointProjects: args?.projectWslDistro
       ? [
           {
             id: 'proj1',

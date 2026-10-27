@@ -93,7 +93,6 @@ export async function performSend(
     /** Persist only source kind in the submission. */
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>
-    keepCurrentOptions?: true
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -111,16 +110,13 @@ export async function performSend(
       value: { clientMessageId: input.clientMessageId, submission: { ...existing } }
     }
   }
-  const { keepCurrentOptions, ...submission } = input
-  const captured = keepCurrentOptions
-    ? { options: undefined }
-    : captureStructuredExecutionOptions(ctx, input.options)
+  const captured = captureStructuredExecutionOptions(ctx, input.options)
   if ('refusal' in captured) {
     return { ok: false, refusal: captured.refusal }
   }
   try {
     await ctx.journal.appendSubmission(
-      { ...submission, options: captured.options, fence: ctx.fence, handoverRecorded: true },
+      { ...input, options: captured.options, fence: ctx.fence, handoverRecorded: true },
       undefined,
       ctx.operationReceipt
     )
@@ -167,4 +163,14 @@ function requireSubmission(
   }
   // Return this step’s answer; later journal settlement must not mutate it.
   return { ...submission }
+}
+
+export type AgentSessionReplayContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
+> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'cursor' | 'submission' | 'submissions' | 'epoch' | 'threadGoal'
+  > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
 }

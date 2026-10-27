@@ -21,7 +21,8 @@ import {
 import {
   profileStateAccessBootIdentity,
   profileStateAccessMachineIdentity,
-  profileStateAccessProcessIdentity
+  profileStateAccessProcessIdentity,
+  profileStateAccessWrittenThisBoot
 } from './profile-state-access-identity'
 
 export class ProfileStateAccessError extends Error {
@@ -132,7 +133,7 @@ function readOwner(path: string): AccessOwner | undefined {
   throw new ProfileStateAccessError(`Profile state ownership is malformed: ${path}`)
 }
 
-function ownerExited(owner: AccessOwner): boolean {
+function ownerExited(owner: AccessOwner, path: string): boolean {
   const currentBoot = profileStateAccessBootIdentity()
   const currentMachine = profileStateAccessMachineIdentity()
   const sameBoot = Boolean(owner.bootIdentity && owner.bootIdentity === currentBoot)
@@ -154,7 +155,8 @@ function ownerExited(owner: AccessOwner): boolean {
     currentBoot &&
     owner.bootIdentity !== currentBoot
   ) {
-    return true
+    // Clones repeat machine-id and hostname; only a record older than this boot is this machine's.
+    return !profileStateAccessWrittenThisBoot(path)
   }
   // Windows/WSL and Linux PID namespaces cannot establish each other's process absence.
   if (
@@ -234,7 +236,7 @@ export function reclaimExitedOwner(path: string): void {
     if (owner === undefined) {
       continue
     }
-    if (owner.token !== token || !ownerExited(owner)) {
+    if (owner.token !== token || !ownerExited(owner, join(path, entry))) {
       throw new ProfileStateAccessError(
         `Profile state is in use or its owner is unverifiable: ${path}. Stop Orca and orcad on every host using this profile, then retry. If this remains, verify PID ${owner.pid} on ${owner.host} has exited before removing its owner entry ${join(path, entry)}.`
       )

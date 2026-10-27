@@ -211,7 +211,7 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     await flushAsyncWork()
 
     expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/package.json' })
+    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/package.json', wakeWslDistro: true })
   })
 
   it('reports a missing path but stays quiet for a bare dotted word', async () => {
@@ -260,7 +260,7 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     await flushAsyncWork()
 
     expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/foo.ts.map' })
+    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/foo.ts.map', wakeWslDistro: true })
   })
 
   it('drops a slow ambiguous probe once any other file open has started', async () => {
@@ -281,7 +281,7 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     await flushAsyncWork()
 
     expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/other.txt' })
+    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/other.txt', wakeWslDistro: true })
   })
 
   it('supersedes an earlier open still in flight as soon as an ambiguous click starts', async () => {

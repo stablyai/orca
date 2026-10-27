@@ -33,6 +33,7 @@ describe('native Antigravity credential format', () => {
         subject: 'synthetic-subject',
         email: 'test@example.invalid'
       },
+      accessToken: 'synthetic-access',
       refreshToken: 'synthetic-refresh'
     })
   })
@@ -90,6 +91,7 @@ describe('native Antigravity credential format', () => {
       contents,
       authMethod: 'future',
       identity: null,
+      accessToken: 'synthetic',
       refreshToken: null
     })
   })

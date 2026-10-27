@@ -7,7 +7,7 @@ const plan = (files) => planChangedChecks(files, { scriptsDir })
 const checkNames = (files) => plan(files).checks.map((check) => check.name)
 
 it('skips typecheck, tests, and verifiers for a docs-only change but keeps the format gate', () => {
-  expect(plan(['docs/reference/git-workflow.md'])).toEqual({
+  expect(plan(['docs/STYLEGUIDE.md'])).toEqual({
     staticAnalysis: true,
     typecheckProjects: [],
     unitTests: { related: [], colocated: [] },

@@ -29,6 +29,8 @@ type WorktreeCardStatusSlotProps = {
   newCardStyle?: boolean
   hasBranchIdentity?: boolean
   branchIdentityLabel?: string
+  /** The review status is the last known one (its WSL host is off). */
+  reviewStale?: boolean
   className?: string
 }
 
@@ -108,6 +110,7 @@ export function WorktreeCardStatusSlot({
   newCardStyle = false,
   hasBranchIdentity = false,
   branchIdentityLabel,
+  reviewStale = false,
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
@@ -140,12 +143,20 @@ export function WorktreeCardStatusSlot({
         : canShowBranchStatus
           ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
           : statusLabel
+  const reviewLabel =
+    reviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
+      ? `${passiveStatusLabel} · ${translate('workspace.links.lastKnownStatus', 'Last known status')}`
+      : passiveStatusLabel
   const passiveStatusAnnouncement =
-    newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
+    newCardStyle && isUnread ? `${reviewLabel} · Unread` : reviewLabel
   // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
-  const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
+  const reviewStatusIconClassName = cn(
+    compactReviewAndBranchStatusIconClassName,
+    // Same last-known treatment as the hover card's reference rows.
+    reviewStale && 'shimmer shimmer-duration-2400'
+  )
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
   const passiveStatus = canShowSleepingStatus ? (

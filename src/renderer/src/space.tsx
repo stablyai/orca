@@ -79,7 +79,9 @@ function SpaceWindowRoot(): React.JSX.Element {
     >
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
-          <WorkspaceSpacePage />
+          <div className="app-layout">
+            <WorkspaceSpacePage />
+          </div>
           {activeModal === 'delete-worktree' ? <DeleteWorktreeDialog /> : null}
           {activeModal === 'preserved-branch-review' ? <PreservedBranchBatchReviewModal /> : null}
         </ConfirmationDialogProvider>

@@ -354,15 +354,16 @@ describe('local filesystem watcher flush serialization', () => {
     // Fake refresh revives cleared handles; this regression needs real Node Timeout behavior.
     vi.useRealTimers()
     statMock.mockResolvedValue({ isDirectory: () => true })
-    const listener = { ...sender, id: 7, removeListener: vi.fn(), once: vi.fn() }
+    const listener = { ...sender, id: 7, removeListener: vi.fn(), on: vi.fn() }
     try {
       await subscribeLocalWatcher('/repo', listener as never)
       watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
       unsubscribeLocalWatcher('/repo', listener.id)
       await subscribeLocalWatcher('/repo', listener as never)
       watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
-      await new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_INTERVAL_MS + 50))
-      expect(sender.send).toHaveBeenCalledTimes(1)
+      await vi.waitFor(() => expect(sender.send).toHaveBeenCalledTimes(1), {
+        timeout: WATCH_BATCH_INTERVAL_MS * 20
+      })
     } finally {
       for (const teardown of watcherLifecycleState.pendingTeardowns.values()) {
         clearTimeout(teardown)

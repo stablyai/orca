@@ -1,8 +1,4 @@
-import {
-  getRepoExecutionHostId,
-  normalizeExecutionHostId,
-  type ExecutionHostId
-} from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -20,22 +16,25 @@ export type SessionSearchScopeStore = {
   })[]
   getAllWorktreeMeta(): Record<string, WorktreeMeta>
   getAllWorktreeMetaForHost?: (executionHostId: ExecutionHostId) => Record<string, WorktreeMeta>
-  getSettings(): Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>
+  getSettings(): Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
 }
 
-// The store includes other hosts’ paths; expose only the answering host’s registrations.
+// Claims need the complete catalog; filesystem eligibility is applied after projection.
 export function sessionSearchScopeCatalogFromStore(
   store: SessionSearchScopeStore,
   executionHostId: ExecutionHostId
 ): SessionSearchScopeCatalog {
   const settings = store.getSettings()
   return {
-    repos: store.getRepos().filter((repo) => getRepoExecutionHostId(repo) === executionHostId),
+    repos: store.getRepos(),
+    executionHostId,
     projects: store.getProjects(),
-    projectHostSetups: store
-      .getProjectHostSetups()
-      .filter((setup) => normalizeExecutionHostId(setup.hostId) === executionHostId),
+    projectHostSetups: store.getProjectHostSetups(),
     worktreeMeta: readAllWorktreeMetaForHost(store, executionHostId),
-    settings: { workspaceDir: settings.workspaceDir, nestWorkspaces: settings.nestWorkspaces }
+    settings: {
+      workspaceDir: settings.workspaceDir,
+      nestWorkspaces: settings.nestWorkspaces,
+      workspaceDirHistory: settings.workspaceDirHistory
+    }
   }
 }

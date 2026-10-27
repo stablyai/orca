@@ -171,6 +171,9 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
   }
 
   it('does not attempt v11 CBC decryption without a keyring, even with valid wrong-key padding', async () => {
+    runProcessSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('spawn secret-tool failed'), { code: 'ENOENT' })
+    })
     const sourceCookiesPath = seedProfile(
       encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11')
     )
@@ -186,7 +189,8 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     expect(result.summary.warning).toEqual({
       code: 'cookies-undecryptable',
       failedCookies: 1,
-      reason: 'linux-keyring-unavailable'
+      reason: 'linux-keyring-unavailable',
+      keyringFailure: { cause: 'secret-tool-missing', browser: 'Google Chrome' }
     })
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })

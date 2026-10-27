@@ -133,6 +133,7 @@ export function ConfirmationDialogProvider({
         onOpenChange={(open) => !open && settleActiveRequest(false)}
       >
         <DialogContent
+          surface={displayedRequest?.options.surface}
           showCloseButton={false}
           size={compact ? 'compact' : 'default'}
           className={cn('sm:max-w-md', Icon && 'gap-6')}

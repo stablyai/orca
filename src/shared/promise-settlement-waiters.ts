@@ -88,7 +88,16 @@ export class PromiseSettlementWaiters<T> {
             ),
           Math.max(1, options.timeoutMs)
         )
-        waiter.timer.unref?.()
+        // Mobile timers are numeric; Node timers can detach from the event loop.
+        const timer: unknown = waiter.timer
+        if (
+          typeof timer === 'object' &&
+          timer !== null &&
+          'unref' in timer &&
+          typeof timer.unref === 'function'
+        ) {
+          timer.unref()
+        }
       }
       this.waiters.add(waiter)
       options.signal?.addEventListener('abort', onAbort, { once: true })

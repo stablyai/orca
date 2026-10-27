@@ -1,4 +1,11 @@
 {
+  "agentLaunch": {
+    "opencode": {
+      "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
+      "unsupportedLaunch": "OpenCode cannot apply this model choice to this launch. Start a fresh local terminal with supported launch arguments, or omit the model choice.",
+      "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice."
+    }
+  },
   "agentsSidebarIntro": {
     "migrated": {
       "action": "Open Agents"
@@ -1415,7 +1422,10 @@
         },
         "OrchestrationPane": {
           "chatErrorEscalationKeywordChat": "chat",
-          "chatErrorEscalationKeywordError": "error"
+          "chatErrorEscalationKeywordError": "error",
+          "heartbeatKeywordHeartbeat": "heartbeat",
+          "heartbeatKeywordInterval": "interval",
+          "heartbeatKeywordStalled": "stalled"
         },
         "OrchestrationSkillAgentCoverage": {
           "fullCoverage_one": "All 1 detected agent has the skill.",
@@ -1606,7 +1616,8 @@
           "fac59213fc": "Search builtin themes"
         },
         "SourceControlAiActionRecipeDefaults": {
-          "a9359c8aa9": "Unknown error"
+          "a9359c8aa9": "Unknown error",
+          "2cb4bb7e5d": "CLI arguments"
         },
         "SparsePresetSettingsSection": {
           "2d7d45e991": "Cancel",
@@ -1976,6 +1987,8 @@
           }
         },
         "sshHostServer": {
+          "automationsLeftDisabled_one": "This host’s Orca server took over {{count}} automation but couldn’t turn it back on. Turn it on in Automations.",
+          "automationsLeftDisabled_other": "This host’s Orca server took over {{count}} automations but couldn’t turn them back on. Turn them on in Automations.",
           "linkedProjects_one": "This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automation there were not moved, and worktrees it created there show as external worktrees.",
           "linkedProjects_other": "This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automations there were not moved, and worktrees it created there show as external worktrees.",
           "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.",
@@ -2052,6 +2065,9 @@
         },
         "wslHosts": {
           "remove": "Remove"
+        },
+        "RepositorySourceControlAiActionRows": {
+          "7a3a8e431d": "CLI arguments"
         }
       },
       "shared": {
@@ -2906,6 +2922,9 @@
     "hooks": {
       "ipc": {
         "events": {
+          "browserStateIpcBridge": {
+            "docPreviewLinkFailed": "Could not open this link in Orca Browser."
+          },
           "os": {
             "markdown": {
               "file": {
@@ -2948,6 +2967,13 @@
       },
       "claudeAgentRowView": {
         "restartRequired": "Restart Claude in this pane to enable subagent navigation. Recent Claude versions with Orca hooks are required."
+      },
+      "dropFailureReason": {
+        "changed": "The file changed while it was uploading. Try again.",
+        "disconnected": "The host is disconnected.",
+        "hostUnreachable": "The connection to the host changed or dropped. Try again.",
+        "noSpace": "The host is out of disk space.",
+        "tooLarge": "Too large to upload to this host."
       },
       "dropSkipReason": {
         "missing": "No longer at its original path.",
@@ -3042,6 +3068,15 @@
   },
   "components": {
     "native-chat": {
+      "approval": {
+        "allow": "Allow",
+        "deny": "Deny",
+        "plan": {
+          "refineHint": "Refine plan closes the review so you can send what to change.",
+          "reviewTitle": "Review proposed plan"
+        },
+        "title": "Allow {{value0}}?"
+      },
       "ask": {
         "asked": "Asked:",
         "awaiting": "Awaiting user input:",
@@ -3181,6 +3216,7 @@
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+        "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
         "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
         "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
@@ -3204,6 +3240,12 @@
         "usageLimitWindowWeekly": "weekly",
         "usageLimitWindowWeeklyModel": "weekly model",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
+      },
+      "goalControl": {
+        "pauseUnconfirmed": "Codex stopped running, but its goal pause was not confirmed. Check the goal before continuing.",
+        "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
+        "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
+        "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       },
       "notices": {
         "compaction": "Context compacted",
@@ -3387,6 +3429,18 @@
         }
       }
     },
+    "tab": {
+      "bar": {
+        "bulkClose": {
+          "confirm": "Close tabs",
+          "description": "The selected tabs will be closed. Pinned tabs will stay open.",
+          "editors": "Close all editor tabs?",
+          "left": "Close tabs to the left?",
+          "others": "Close other tabs?",
+          "right": "Close tabs to the right?"
+        }
+      }
+    },
     "workspace": {
       "cleanup": {
         "browse": {
@@ -3504,6 +3558,14 @@
         "probeAgain": "Check again",
         "probeSkippedHosts": "Hosts routed without the connection check (Try anyway):",
         "title": "Browse through SSH workspace hosts"
+      }
+    },
+    "sourceControl": {
+      "actionModel": {
+        "permissionsDefaultHint": "Terminals use Agent Permissions unless this action sets its own CLI arguments."
+      },
+      "actionPermissions": {
+        "sameAsAgent": "Same as {{agent}}"
       }
     }
   },

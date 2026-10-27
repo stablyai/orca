@@ -19,7 +19,7 @@ import {
   backgroundTaskFallbackText,
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskState
-} from '../../../shared/native-chat-background-task-row'
+} from '../../../shared/native-chat/input/native-chat-background-task-row'
 import { subagentFallbackText } from '../../../shared/native-chat-subagent-items'
 import {
   isBackgroundTaskBlock,

@@ -121,6 +121,31 @@ describe('changed-code quality line matching', () => {
     expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
   })
 
+  it.each(['src/renderer/src', 'mobile/src'])(
+    'checks nested components natively and keeps the selective index-key check in %s',
+    (sourceRoot) => {
+      const root = path.resolve(import.meta.dirname, '../..')
+      const directory = mkdtempSync(path.join(root, sourceRoot, 'native-react-lint-'))
+      try {
+        const file = path.join(directory, 'List.tsx')
+        writeFileSync(
+          file,
+          `export function List({ rows }) {
+            function Row() { return <input /> }
+            return <>{rows.map((row, index) => <Row key={index} />)}</>
+          }`
+        )
+        const codes = scanFixture('code quality', file).map((diagnostic) => diagnostic.code)
+        expect(codes).toContain('react(no-unstable-nested-components)')
+        expect(scanFixture('React Doctor', file).map((diagnostic) => diagnostic.code)).toEqual([
+          'react-doctor(no-array-index-as-key)'
+        ])
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
+    }
+  )
+
   it.each([
     ['Counter.tsx', []],
     ['Counter.txt', [{ start: 1, end: 2 }]],
@@ -406,6 +431,22 @@ describe('unloaded plugin directive unused warning', () => {
       expect(isUnloadedPluginDirectiveUnusedWarning(diagnostics[0], root, 'React Doctor')).toBe(
         false
       )
+    })
+  })
+
+  it('keeps mount-time state copies covered after disabling the overlapping rule', () => {
+    const source = `
+      import { useEffect, useState } from 'react'
+      export function Title({ title }) {
+        const [value, setValue] = useState('')
+        useEffect(() => { setValue(title) }, [])
+        return value
+      }
+    `
+    withFixture(source, ({ filename }) => {
+      expect(scanFixture('React Doctor', filename).map((diagnostic) => diagnostic.code)).toEqual([
+        'react-doctor(no-derived-state-effect)'
+      ])
     })
   })
 

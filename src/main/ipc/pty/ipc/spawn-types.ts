@@ -1,3 +1,4 @@
+import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -81,6 +82,7 @@ export type AdoptStablePaneArgs = {
   tabId: string
   leafId: string
   onAdopted?: (result: PtySpawnResult) => void
+  onOutcome?: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => void
   completed?: AdoptStablePaneResult
   ownsPaneSpawnReservation?: true
   reservation?: PaneSpawnReservation
@@ -94,7 +96,9 @@ export type AdoptStablePaneArgs = {
 }
 
 export type AdoptStablePaneResult = {
+  operation?: PaneSpawnOperation
   result: PtySpawnResult
+  outcome?: PtySpawnOutcome
   owner: StablePaneOwner
   materialized?: true
 }
