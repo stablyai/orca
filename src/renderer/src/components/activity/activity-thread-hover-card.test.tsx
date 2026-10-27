@@ -64,6 +64,8 @@ function createTestThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneTh
 
 function Harness({
   thread,
+  projectLabel,
+  projectGroupLabel,
   selected = false,
   onSelect = vi.fn(),
   onJump = vi.fn(),
@@ -72,6 +74,8 @@ function Harness({
   onClear
 }: {
   thread: AgentPaneThread
+  projectLabel?: string
+  projectGroupLabel?: string
   selected?: boolean
   onSelect?: () => void
   onJump?: () => void
@@ -83,6 +87,8 @@ function Harness({
     <TooltipProvider>
       <ActivityThreadRow
         thread={thread}
+        projectLabel={projectLabel}
+        projectGroupLabel={projectGroupLabel}
         selected={selected}
         onSelect={onSelect}
         onJump={onJump}
@@ -127,6 +133,53 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     ).not.toBeNull()
     expect(card?.textContent).toContain('Audit current HEAD on m4air environment')
     expect(card?.textContent).toContain('m4air-audit')
+  })
+
+  it('prefixes a Working task with its project while keeping the task title distinct', async () => {
+    const thread = createTestThread()
+    await act(async () => {
+      root.render(<Harness thread={thread} projectLabel="Orca" />)
+    })
+
+    const card = container.querySelector('[data-worktree-card-surface="true"]')
+    expect(
+      card?.querySelector('button[aria-label="Orca: Audit current HEAD on m4air environment"]')
+    ).not.toBeNull()
+    expect(card?.textContent).toContain('Orca · Audit current HEAD on m4air environment')
+    expect(card?.textContent).toContain('m4air-audit')
+    expect(card?.querySelector('[data-slot="badge"][data-variant="outline"]')?.textContent).toBe(
+      'Orca'
+    )
+  })
+
+  it('omits a repeated project prefix under that Project group and outside Working', async () => {
+    const thread = createTestThread()
+    await act(async () => {
+      root.render(<Harness thread={thread} projectLabel="Orca" projectGroupLabel="orca" />)
+    })
+    expect(
+      container.querySelector('[data-worktree-card-surface="true"]')?.textContent
+    ).not.toContain('Orca ·')
+
+    await act(async () => {
+      root.render(
+        <Harness thread={{ ...thread, currentAgentState: 'waiting' }} projectLabel="Orca" />
+      )
+    })
+    expect(
+      container.querySelector('[data-worktree-card-surface="true"]')?.textContent
+    ).not.toContain('Orca ·')
+  })
+
+  it('keeps project context when the Project group uses a different checkout name', async () => {
+    await act(async () => {
+      root.render(
+        <Harness thread={createTestThread()} projectLabel="Orca" projectGroupLabel="local-orca" />
+      )
+    })
+    expect(container.querySelector('[data-worktree-card-surface="true"]')?.textContent).toContain(
+      'Orca · Audit current HEAD on m4air environment'
+    )
   })
 
   it('marks an unread thread as read from its bell without selecting the row', async () => {
