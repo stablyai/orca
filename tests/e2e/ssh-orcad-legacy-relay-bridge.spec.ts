@@ -1,6 +1,7 @@
 // Upgrade a live detached 1.4.224 relay to managed orcad while preserving its original tab/shell across SSH loss and explicit disconnect.
 // Retire the pane/lease only on exit; never touch another desktop’s relay. If its project already moved, keep connected without moving until the shell exits.
 // COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
+import { mkdirSync, truncateSync, writeFileSync } from 'node:fs'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { z } from 'zod'
 import { expect, test } from './helpers/orca-app'
@@ -13,7 +14,14 @@ import {
   readPersistedProfileState
 } from './helpers/persisted-profile-state'
 import { workspaceSessionStateSchema } from '../../src/shared/workspace-session-schema'
-import { makeTerminalScrollbackSnapshotRef } from '../../src/main/terminal-scrollback-snapshots'
+import {
+  getProfileTerminalScrollbackSnapshotRoot,
+  getTerminalScrollbackSnapshotPath,
+  makeTerminalScrollbackSnapshotRef
+} from '../../src/main/terminal-scrollback-snapshots'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../src/shared/terminal-scrollback-limits'
+import { getOrcaProfileDataFile } from '../../src/shared/profile-state-storage-paths'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import { toAppSshPtyId } from '../../src/shared/ssh-pty-id'
@@ -102,10 +110,23 @@ function launchUpgraded(session: ReturnType<typeof createRestartSession>) {
   })
 }
 
+function writeOverLimitScrollbackSnapshot(userDataDir: string, ref: string): void {
+  const snapshotRoot = getProfileTerminalScrollbackSnapshotRoot(
+    getOrcaProfileDataFile(DEFAULT_LOCAL_ORCA_PROFILE_ID, userDataDir)
+  )
+  const path = getTerminalScrollbackSnapshotPath(ref, { snapshotRoot })
+  if (!path) {
+    throw new Error(`Expected a valid scrollback ref, got ${ref}`)
+  }
+  mkdirSync(snapshotRoot, { recursive: true })
+  writeFileSync(path, '')
+  truncateSync(path, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT + 1)
+}
+
 async function verifyRunningRelayUpgrade(
   testRepoPath: string,
   testInfo: TestInfo,
-  missingScrollback = false
+  unreadableScrollback = false
 ): Promise<void> {
   test.setTimeout(25 * 60_000)
   host = startDockerSshHostTarget(testInfo)
@@ -140,7 +161,10 @@ async function verifyRunningRelayUpgrade(
       { targetId, relayPtyId: ours.relayPtyId }
     )
     const terminalTabId = seeded.terminalTabId!
-    if (missingScrollback) {
+    if (unreadableScrollback) {
+      const ref = makeTerminalScrollbackSnapshotRef(terminalTabId, seeded.terminalLeafId)
+      // A missing file is no history at all; an over-limit one is saved history Orca cannot read.
+      writeOverLimitScrollbackSnapshot(session.userDataDir, ref)
       mutateStoppedProfileState(session.userDataDir, (state) => {
         const partitions = z
           .record(z.string(), workspaceSessionStateSchema)
@@ -150,12 +174,7 @@ async function verifyRunningRelayUpgrade(
         if (!layout) {
           throw new Error('Expected the released terminal layout')
         }
-        layout.scrollbackRefsByLeafId = {
-          [seeded.terminalLeafId]: makeTerminalScrollbackSnapshotRef(
-            terminalTabId,
-            seeded.terminalLeafId
-          )
-        }
+        layout.scrollbackRefsByLeafId = { [seeded.terminalLeafId]: ref }
         state.workspaceSessionsByHostId = partitions
         state.sshRemotePtyLeases = [
           ...z.array(z.unknown()).parse(state.sshRemotePtyLeases),
@@ -193,11 +212,15 @@ async function verifyRunningRelayUpgrade(
       }
     )
 
-    if (missingScrollback) {
+    if (unreadableScrollback) {
       await expect
         .poll(() => managedServer(page, targetId), { timeout: 120_000 })
         .toMatchObject({ kind: 'relay', reason: 'refused', canLeaveBehind: true })
-      const move = page.getByRole('button', { name: 'Move anyway…', exact: true })
+      // The refusal toast offers it too; this is the pane's own button.
+      const move = page
+        .locator('[data-terminal-ssh-reconnect-banner]')
+        .getByRole('button', { name: 'Move anyway…', exact: true })
+        .and(page.locator(':not([data-sonner-toast] button)'))
       await expect(move).toBeVisible()
       await page.screenshot({
         path: testInfo.outputPath('unreadable-history-recovery-offered.png')

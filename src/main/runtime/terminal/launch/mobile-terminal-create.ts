@@ -8,10 +8,45 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
+import type {
+  RuntimeTerminalCreate,
+  RuntimeMobileSessionCreateTerminalResult,
+  RuntimeTerminalPresentation
+} from '../../../../shared/runtime-types'
+import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
 import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 import { MOBILE_TERMINAL_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
+
+export type OwnedMobileTerminalCreateOptions = {
+  command?: string
+  shellOverride?: string
+  cwd?: string
+  env?: Record<string, string>
+  envToDelete?: string[]
+  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+  identity?: { tabId: string; leafId: string; sessionId?: string }
+  createMutation?: { clientIdentity: string; id: string }
+  launchAgent?: TuiAgent
+  viewMode?: 'terminal' | 'chat'
+  targetGroupId?: string
+  afterDesktopTabId?: string
+  presentation?: RuntimeTerminalPresentation
+  supportsSplitGroupPlacement?: boolean
+  launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
+  resumeOrigin?: 'saved'
+  spawnIntent?: SpawnIntent
+  launchRuntime?: AgentLaunchRuntime
+  signal?: AbortSignal
+  refuseSleptWorktree?: boolean
+  resumesSleepingRecord?: true
+  /** See TerminalCreateOptions; a create that throws before it proves nothing spawned. */
+  onPtySpawnDispatched?: () => void
+  /** The PTY this create produced, reported before publication can fail. */
+  onPtyCreated?: (ptyId: string, result: RuntimeTerminalCreate) => void
+}
 
 export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithFailedStartPanes {
   protected abstract runCreateMobileSessionTerminal(

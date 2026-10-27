@@ -213,7 +213,20 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('suffixes only the path when an existing local branch checkout path already exists', async () => {
+  it.each(['remote', 'local', 'busy'])('picker allocation (%s)', async (kind) => {
+    if (kind !== 'busy') {
+      getPRForBranchMock.mockResolvedValue({ number: 42 })
+    }
+    const branchName = kind === 'busy' ? 'fix/bug-0-2' : 'fix/bug-0'
+    getBranchConflictKindMock.mockImplementation(async (_repo, branch) =>
+      kind !== 'remote' && branch === 'fix/bug-0' ? 'local' : null
+    )
+    gitExecFileAsyncMock.mockImplementation(async (argv) => {
+      if (argv.includes('refs/heads/fix/bug-0-2^{commit}')) {
+        throw new Error('missing')
+      }
+      return { stdout: 'abc123', stderr: '' }
+    })
     const mainWorktree = {
       path: '/workspace/repo',
       head: 'main',
@@ -224,42 +237,42 @@ describe('registerWorktreeHandlers', () => {
     computeWorktreePathMock.mockImplementation((sanitizedName: string) =>
       sanitizedName === 'fix-bug-0' ? process.cwd() : `/workspace/${sanitizedName}`
     )
-    listWorktreesMock
-      .mockResolvedValueOnce([mainWorktree])
-      .mockResolvedValueOnce([mainWorktree])
-      .mockResolvedValueOnce([
-        mainWorktree,
-        {
-          path: '/workspace/fix-bug-0-2',
-          head: 'abc123',
-          branch: 'refs/heads/fix/bug-0',
-          isBare: false,
-          isMainWorktree: false
-        }
+    listWorktreesMock.mockResolvedValue([
+      { path: '/workspace/fix-bug-0-2', branch: `refs/heads/${branchName}` }
+    ])
+    if (kind === 'local') {
+      listWorktreesMock.mockResolvedValueOnce([mainWorktree]).mockResolvedValueOnce([mainWorktree])
+    } else if (kind === 'busy') {
+      listWorktreesMock.mockResolvedValueOnce([
+        { path: '/workspace/busy', branch: 'refs/heads/fix/bug-0' }
       ])
+    }
 
     const result = await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'fix/bug-0',
-      baseBranch: 'fix/bug-0',
-      branchNameOverride: 'fix/bug-0'
+      baseBranch: 'origin/fix/bug-0',
+      branchNameOverride: 'fix/bug-0',
+      branchIntent: 'open-existing'
     })
 
-    expect(getBranchConflictKindMock).not.toHaveBeenCalled()
-    expect(getPRForBranchMock).not.toHaveBeenCalled()
+    expect(getBranchConflictKindMock).toHaveBeenCalledTimes(kind === 'busy' ? 3 : 1)
+    expect(getPRForBranchMock.mock.calls.map(([, branch]) => branch)).toEqual(
+      kind === 'busy' ? ['fix/bug-0-2'] : []
+    )
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
       '/workspace/fix-bug-0-2',
-      'fix/bug-0',
-      'fix/bug-0',
+      branchName,
+      'origin/fix/bug-0',
       false,
       false,
-      { checkoutExistingBranch: true }
+      kind === 'local' ? { checkoutExistingBranch: true } : {}
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
         path: '/workspace/fix-bug-0-2',
-        branch: 'refs/heads/fix/bug-0'
+        branch: `refs/heads/${branchName}`
       })
     })
   })

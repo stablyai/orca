@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import type { WslHostServerStop } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
@@ -21,18 +22,36 @@ async function removeWslHostImpl(environmentId: string): Promise<void> {
     state.setActiveWorktree(null)
   }
   state.setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
-  // Why `=== false`: an older main answered nothing here.
-  if (serverStop?.stopped === false) {
-    // Why it stays up: it names what still runs in the distro, which the user has to act on.
+  warnWslHostServerStop(serverStop)
+}
+
+/** Says what a WSL host's Remove left behind; true when it warned. Shared by every Remove entry. */
+export function warnWslHostServerStop(serverStop: WslHostServerStop | undefined): boolean {
+  if (serverStop?.stopped !== false) {
+    return false
+  }
+  if (serverStop.kept) {
+    // E11: a stop Orca couldn't prove keeps the host listed, so Remove can retry it.
     toast.warning(
       translate(
-        'auto.components.sidebar.wslHostRemoval.partial',
-        'The host was removed, but something in the distro is still running: {{value0}}',
+        'auto.components.sidebar.wslHostRemoval.pending',
+        'Orca didn’t remove the host yet: {{value0}} Remove it again to retry, or connect it to keep it.',
         { value0: serverStop.reason }
       ),
       { duration: Infinity }
     )
+    return true
   }
+  // Why it stays up: it names what still runs in the distro, which the user has to act on.
+  toast.warning(
+    translate(
+      'auto.components.sidebar.wslHostRemoval.partial',
+      'The host was removed, but something in the distro is still running: {{value0}}',
+      { value0: serverStop.reason }
+    ),
+    { duration: Infinity }
+  )
+  return true
 }
 
 export async function removeWslHost(environmentId: string): Promise<void> {

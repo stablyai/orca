@@ -133,6 +133,9 @@ export function connectPanePty(
   session.waitTeardowns = []
   // Consume startup once from this shallow-copied deps; callers must clear their separate outer reference.
   session.paneStartup = session.deps.startup ?? null
+  if (session.paneStartup?.resumeOrigin === 'saved') {
+    session.paneStartup.resumeSource ??= { cancelled: false }
+  }
   session.deps.startup = undefined
   // Hold replacement PTY retirement until main takes it in a spawn request or disposal kills it.
   session.pendingReplacedPtyId = session.deps.replacesPtyId ?? null

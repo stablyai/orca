@@ -4,8 +4,8 @@ import { buildAgentTuiClearInputForText } from '../../../../../src/shared/agent-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../../../transport/types'
-import { resetMobileNativeChatStaleInputForTests } from '../../mobile-native-chat-stale-input'
-import { resetMobileNativeChatTerminalWritesForTests } from '../../mobile-native-chat-terminal-write-lock'
+import { resetMobileNativeChatStaleInputForTests } from '../mobile-native-chat-stale-input'
+import { resetMobileNativeChatTerminalWritesForTests } from '../mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
 // Stub the media seam so direct Expo imports would expose unsupported Flow syntax and fail the transform.
@@ -292,18 +292,6 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(sendCalls).toHaveLength(2)
     expect(sendCalls[1]?.params.text).toBe('\x1b[200~/tmp/a.png\x1b[201~')
     expect(hook!.attachments).toEqual([])
-  })
-
-  it('delegates straight to baseSend when there are no attachments', async () => {
-    const client = makeClient([])
-    const baseSend = vi.fn().mockResolvedValue('accepted')
-    mount(baseArgs({ client: client as unknown as RpcClient, baseSend }))
-
-    await act(async () => {
-      await hook!.sendNativeChat('just text')
-    })
-    expect(baseSend).toHaveBeenCalledWith(...textSend('just text'))
-    expect(client.calls).toHaveLength(0)
   })
 
   it('keeps the chips and does not submit when the image paste is rejected', async () => {

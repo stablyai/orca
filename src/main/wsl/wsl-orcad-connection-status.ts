@@ -37,7 +37,13 @@ export type WslOrcadConnectionStatus =
   | { state: 'closed' }
 
 /** What a user-initiated connect asks of the host's update. */
-export type WslOrcadConnectIntent = { intent?: WslHostConnectIntent }
+export type WslOrcadConnectIntent = {
+  intent?: WslHostConnectIntent
+  /** E9: only reconnect a distro confirmed running; a runtime call must never boot one. */
+  noBoot?: boolean
+  /** How a no-boot connect confirms the distro runs (set by the connector). */
+  requireRunning?: (distro: string) => Promise<boolean>
+}
 
 /** Retain failed-connect deferrals so Update/Force remains available when nothing serves. */
 export function wslConnectFailedStatus(

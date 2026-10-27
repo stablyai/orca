@@ -11,9 +11,21 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { TerminalLaunchResult } from '../../../shared/agent-session-resume'
 import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
 import { deterministicAgentSessionUuid } from '../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../remote-runtime-terminal-create-identity'
+import type { RuntimePtyController } from '../runtime-pty-controller-contract'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { AgentSessionRecordStore } from '../agent-session-record-store'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
+import {
+  chooseSavedResumeFreshLaunch,
+  savedResumeResult
+} from '../../ipc/pty/host-env/saved-resume-admission'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const SESSION = { key: 'session_id', id: 'provider-session-1' } as const
@@ -72,7 +84,7 @@ function sessionRow(paneKey: string, receivedAt = 0): AgentStatusIpcPayload {
 function makeRuntime(
   fixture: Fixture,
   opts: {
-    spawn?: () => Promise<{ id: string }>
+    spawn?: NonNullable<RuntimePtyController['spawn']>
     rows?: () => AgentStatusIpcPayload[]
     checkHookAgentPresence?: () => Promise<'live' | 'unverifiable' | 'exited' | null>
     listProcesses?: () => Promise<PtyProcessInfo[]>
@@ -81,7 +93,7 @@ function makeRuntime(
     ) => () => void
   } = {}
 ) {
-  const spawn = vi.fn<(args: unknown) => Promise<{ id: string }>>(
+  const spawn = vi.fn<NonNullable<RuntimePtyController['spawn']>>(
     opts.spawn ?? (() => Promise.resolve({ id: 'resumed-pty' }))
   )
   const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
@@ -147,6 +159,135 @@ function storedRecord(fixture: Fixture) {
 }
 
 describe('resumeAgentSessionInWorkspace', () => {
+  it.each(['live', 'worktree-sleep'] as const)(
+    'releases a %s saved resume claim when actual admission creates a plain shell',
+    async (origin) => {
+      const fixture = makeSleptWorkspace()
+      const saved = storedRecord(fixture)
+      if (!saved) {
+        throw new Error('missing saved conversation')
+      }
+      saved.origin = origin
+      const chat = agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          claimStatus: 'released',
+          ownerProcess: null,
+          reservedSpawnToken: null,
+          deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+        })
+      )
+      chat.providerHandleChain[0]!.handle.nativeId = SESSION.id
+      let nativeOpen = true
+      const store: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
+      store.listConversations = () => [agentSessionConversationView(chat)]
+      store.getVisibleSessionTabIndex = () => ({
+        present: true,
+        sessionIds: nativeOpen ? [chat.sessionId] : []
+      })
+      const effectiveCommands: (string | undefined)[] = []
+      const { runtime, spawn, openOldPane, resume } = makeRuntime(fixture, {
+        spawn: async (args) => {
+          const admission = await chooseSavedResumeFreshLaunch(
+            { openAgentSessionRecordStore: async () => store },
+            args,
+            null,
+            args
+          )
+          effectiveCommands.push(args.command)
+          return {
+            id: effectiveCommands.length === 1 ? 'refused-shell' : 'resumed-C',
+            launchAgent: args.launchAgent,
+            launchConfig: args.launchConfig,
+            ...savedResumeResult(admission)
+          }
+        }
+      })
+      await openOldPane()
+      expect(runtime.getTerminalLaunchResult('refused-shell')).toMatchObject({
+        agentResumeRefused: 'chat-home',
+        savedResumeDecision: { agent: 'claude', providerSession: SESSION, verdict: 'chat-home' }
+      })
+      expect(runtime.getTerminalLaunchResult('refused-shell')?.launchAgent).toBeUndefined()
+      expect(effectiveCommands).toEqual([undefined])
+      nativeOpen = false
+      await expect(resume({ mutationId: 'after-native-close' })).resolves.toMatchObject({
+        ok: true,
+        ptyId: 'resumed-C'
+      })
+      expect(effectiveCommands[1]).toContain(SESSION.id)
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(runtime.getTerminalLaunchResult('refused-shell')).toBeDefined()
+    }
+  )
+
+  it('settles only fresh matching saved results and binds unproven or observed results until exit', async () => {
+    for (const kind of [
+      'matching',
+      'unverifiable',
+      'observed',
+      'other-session',
+      'other-agent',
+      'missing',
+      'contradictory',
+      'unknown'
+    ]) {
+      const fixture = makeSleptWorkspace()
+      const record = storedRecord(fixture)!
+      record.origin = 'live'
+      const matching: TerminalLaunchResult = savedResumeResult({
+        verdict: kind === 'unverifiable' ? 'unverifiable' : 'chat-home',
+        refused: { agent: 'claude', providerSession: SESSION }
+      })
+      if (!matching.savedResumeDecision) {
+        throw new Error('Saved admission must return its decision')
+      }
+      const receipt =
+        kind === 'unknown'
+          ? {}
+          : {
+              ...matching,
+              savedResumeDecision:
+                kind === 'missing'
+                  ? undefined
+                  : {
+                      ...matching.savedResumeDecision,
+                      agent: kind === 'other-agent' ? 'codex' : 'claude',
+                      providerSession: kind === 'other-session' ? { ...SESSION, id: 'D' } : SESSION,
+                      verdict:
+                        kind === 'contradictory'
+                          ? ('admitted' as const)
+                          : matching.savedResumeDecision.verdict
+                    },
+              ...(kind === 'observed' ? { isReattach: true } : {})
+            }
+      let first = true
+      const { runtime, spawn, openOldPane, resume } = makeRuntime(fixture, {
+        spawn: async (args) => {
+          if (!first) {
+            return { id: 'next-C' }
+          }
+          first = false
+          expect(args).toMatchObject({
+            launchAgent: 'claude',
+            resumeOrigin: 'saved',
+            resumeProviderSession: SESSION
+          })
+          return { id: 'result-pty', ...receipt }
+        }
+      })
+      await openOldPane()
+      const proved = kind === 'matching' || kind === 'unverifiable'
+      const action = { mutationId: `after-${kind}` }
+      if (!proved) {
+        await expect(resume(action)).resolves.toEqual({ ok: false, reason: 'held_elsewhere' })
+        expect(spawn).toHaveBeenCalledOnce()
+        runtime.onPtyExit('result-pty', 0)
+      }
+      await expect(resume(action)).resolves.toMatchObject({ ok: true, ptyId: 'next-C' })
+      expect(spawn).toHaveBeenCalledTimes(2)
+    }
+  })
+
   it('retains ownership after an ambiguous create with a running resume', async () => {
     const fixture = makeSleptWorkspace()
     const handle = deriveRemoteRuntimeTerminalCreateHandle(

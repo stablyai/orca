@@ -160,6 +160,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       launchAgent: request.agent,
       // Host-built resumes must name their session so readers can address it.
       resumeProviderSession: identity.providerSession,
+      ...(request.resumeOrigin ? { resumeOrigin: request.resumeOrigin } : {}),
       terminalImageViewerSupported: _caller.terminalImageViewerSupported,
       launchRuntime,
       terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,

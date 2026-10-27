@@ -42,7 +42,7 @@ if [[ -n "${ORCA_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
     export OPENCODE_DB="opencode.db"
   fi
 fi
-[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
+[[ -n "${ORCA_MIMOCODE_CONFIG_DIR:-}" ]] && export MIMOCODE_CONFIG_DIR="${ORCA_MIMOCODE_CONFIG_DIR}"
 # Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as `omp config` keep
 # their normal argv shape.
@@ -372,8 +372,6 @@ __orca_finish_legacy_prompt_dispatch() {
       eval "$__orca_suffix_part"
     done
   fi
-  trap '__orca_osc133_preexec' DEBUG
-  unset __orca_in_legacy_prompt_wrapper
 }
 __orca_normalize_prompt_command() {
   [[ -z "${__orca_prompt_command_normalized:-}" ]] || return 0
@@ -395,7 +393,8 @@ __orca_normalize_prompt_command() {
     __orca_prompt_status_variable="__orca_prompt_status_$$"
     __orca_prompt_status_capture_command="$__orca_prompt_status_variable=\$?"
     __orca_prompt_status_value="\${$__orca_prompt_status_variable}"
-    PROMPT_COMMAND="$__orca_prompt_status_capture_command; __orca_prompt_status=$__orca_prompt_status_value"'; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace; __orca_run_prompt_command_array; __orca_finish_legacy_prompt_dispatch'
+    # Why: a changed DEBUG trap misses the capture command, and bash <= 4.3 reverts traps set in functions.
+    PROMPT_COMMAND="$__orca_prompt_status_capture_command; __orca_in_legacy_prompt_wrapper=1; __orca_prompt_status=$__orca_prompt_status_value"'; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace; __orca_run_prompt_command_array; __orca_finish_legacy_prompt_dispatch; trap __orca_osc133_preexec DEBUG; unset __orca_in_legacy_prompt_wrapper'
   fi
 }
 __orca_prepend_prompt_command() {

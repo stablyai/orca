@@ -1,7 +1,7 @@
 import {
   normalizeNativeChatTaskList,
   type NativeChatTaskList
-} from '../../../../shared/native-chat-task-list'
+} from '../../../../shared/native-chat/input/native-chat-task-list'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat-tool-pairs'
 

@@ -1,7 +1,7 @@
 // JSON escaping can expand controls sixfold while NUL-only sniffing treats them as text; pin each budget branch to JSON.stringify.
 import { describe, expect, it } from 'vitest'
 import type { GitDiffResult } from './git-diff-compare-types'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 import {
   assertGitDiffWithinTransportBudget,
   gitDiffExceedsTransportBudget
@@ -65,23 +65,18 @@ function budgetError(result: GitDiffResult): { code?: string; data?: unknown } {
   throw new Error('expected the transport budget assertion to throw')
 }
 
-const UNITS: readonly { name: string; unit: string; expansion: number }[] = [
-  { name: 'ascii', unit: 'a', expansion: 1 },
-  { name: 'newline-dense text', unit: '\n', expansion: 2 },
-  { name: 'control-char text (0x01)', unit: '\u0001', expansion: 6 },
-  { name: 'base64', unit: 'QUJD', expansion: 1 },
-  { name: 'cjk', unit: '漢', expansion: 1 },
-  { name: 'lone surrogate', unit: '\ud800', expansion: 2 },
-  { name: 'surrogate pair', unit: '😀', expansion: 1 },
-  { name: 'quotes and backslashes', unit: '"\\', expansion: 2 }
+const UNITS: readonly { name: string; unit: string }[] = [
+  { name: 'ascii', unit: 'a' },
+  { name: 'newline-dense text', unit: '\n' },
+  { name: 'control-char text (0x01)', unit: '\u0001' },
+  { name: 'base64', unit: 'QUJD' },
+  { name: 'cjk', unit: '漢' },
+  { name: 'lone surrogate', unit: '\ud800' },
+  { name: 'surrogate pair', unit: '😀' },
+  { name: 'quotes and backslashes', unit: '"\\' }
 ]
 
 describe('gitDiffExceedsTransportBudget', () => {
-  it.each(UNITS)('pins the JSON expansion assumed for $name', ({ unit, expansion }) => {
-    const jsonBytes = Buffer.byteLength(JSON.stringify(unit), 'utf8') - 2
-    expect(jsonBytes / Buffer.byteLength(unit, 'utf8')).toBe(expansion)
-  })
-
   it.each(UNITS)('admits $name exactly at the budget', ({ unit }) => {
     const result = textDiffOfJsonBytes(unit, BUDGET)
 

@@ -1,3 +1,8 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 // Unproven close must restore previously visible tabs so running conversations remain in the durable restore index.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,24 +21,11 @@ const SESSION = 'session-1'
 const TAB_ID = 'tab-of-session-1'
 
 function record(sessionId: string): AgentSessionRecord {
+  const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))
   return {
-    sessionId,
-    provider: 'claude',
-    location: {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: 'repo_1::/tmp/wt-a',
-      workspaceKind: 'folder'
-    },
-    lease: {
-      sessionId,
-      runtimeKind: 'native',
-      claimStatus: 'live',
-      handoffStage: null,
-      runtimeFence: 1,
-      deathEvidence: null
-    }
-  } as unknown as AgentSessionRecord
+    ...record,
+    location: { ...record.location, workspaceId: 'repo_1::/tmp/wt-a', workspaceKind: 'folder' }
+  }
 }
 
 type HostOptions = {
@@ -88,7 +80,8 @@ function installHost(options: HostOptions = {}) {
     deps: {
       logger: log.logger,
       store: {
-        getRecord: (id: string) => (id === SESSION ? entry : null),
+        getConversation: (id: string) =>
+          id === SESSION ? agentSessionConversationView(entry) : null,
         getSessionTabId: (id: string) => {
           if (options.indexThrows) {
             throw new Error('visible tab index unreadable')

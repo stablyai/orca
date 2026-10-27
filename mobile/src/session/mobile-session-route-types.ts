@@ -10,7 +10,7 @@ import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
-import type { MobileNativeChatIdentity } from './mobile-native-chat-eligibility'
+import type { MobileNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 
 export type Terminal = TerminalRecord
 

@@ -15,6 +15,7 @@ import type {
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
 import type { WorkspaceStatusWarning } from './workspace-status-warning'
+import type { WorktreeStatus } from './worktree-status-rollup'
 
 export type RuntimeWorktreeSetResult = {
   worktree: RuntimeWorktreeRecord
@@ -47,6 +48,8 @@ export type RuntimeWorktreeAgentRow = {
   restoredUnconfirmed?: boolean
   /** A structured host still owns the provider child, so age alone cannot stale it. Old hosts omit this. */
   structuredHostOwned?: true
+  /** A connected PTY backs the row, so a stale row reads "No update in …" rather than idle. Old hosts omit this. */
+  hasLivePty?: true
   /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
   programStatus?: ProgramStatusFacet
 }
@@ -59,6 +62,7 @@ export type RuntimeWorktreePsSummary = {
   terminalPlatform?: NodeJS.Platform
   repo: string
   path: string
+  priorWorktreeIds?: string[]
   branch: string
   isArchived: boolean
   isMainWorktree: boolean
@@ -81,7 +85,7 @@ export type RuntimeWorktreePsSummary = {
   createdAt?: number
   creatorProvenance?: Worktree['creatorProvenance']
   linkedIssue: number | null
-  /** Host-cached PR, else linked number with unknown state; old hosts omit title/url/checks. */
+  /** The cached PR the desktop's PR lanes read, else a linked number with state UNCACHED_LINKED_PR_STATE. Old hosts omit title/url/checks. */
   linkedPR: {
     number: number
     state: string
@@ -106,6 +110,8 @@ export type RuntimeWorktreePsSummary = {
   status: RuntimeWorktreeStatus
   /** Optional discriminator for a working workspace; older clients fall back to ordinary working. */
   workingMode?: AgentWorkingMode
+  /** The desktop sidebar dot, including failed/interrupted/unconfirmed; older hosts omit it. */
+  sidebarStatus?: WorktreeStatus
   agents: RuntimeWorktreeAgentRow[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
@@ -149,6 +155,9 @@ export type RuntimeGitCheckoutResult = {
   ok: true
   branch: string
 }
+
+/** A linked PR the host has no cached state for: it shows a badge but, like desktop, sits in the In progress lane. */
+export const UNCACHED_LINKED_PR_STATE = 'unknown'
 
 export type RuntimeWorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
 

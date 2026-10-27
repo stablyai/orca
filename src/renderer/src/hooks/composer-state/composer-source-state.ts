@@ -209,6 +209,7 @@ export function useComposerSourceState(
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint
   })
   const workItemSourceActions = useWorkItemSourceActions({
+    setBranchIntent: target.workspaceIdentityState.setBranchIntent,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
     name: target.sourceContextState.name,

@@ -1,9 +1,9 @@
 import { useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
-import { DocPreviewExternalLinkConfirmation } from './components/browser-pane/workspace-doc/doc-preview-external-link-confirmation'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
@@ -95,7 +95,6 @@ function App(): React.JSX.Element {
     >
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
-          <DocPreviewExternalLinkConfirmation />
           <BrowserPagePrompts />
           <LinkRoutingPreferenceDialogProvider>
             <AppBackgroundServices />
@@ -108,7 +107,10 @@ function App(): React.JSX.Element {
             <BrowserWebAuthnAccountDialog />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
-        <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+        {createPortal(
+          <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />,
+          document.body
+        )}
         <PlainSshTerminalPanels />
       </TooltipProvider>
       <SkillFreshnessNudge />

@@ -1,3 +1,4 @@
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
 import {
   parseTerminalKeyboardAvoidanceMetrics,
   type TerminalSelectionEvents
@@ -44,7 +45,10 @@ export function dispatchTerminalWebViewNotification(
       altScreen: !!msg.altScreen,
       mouseTrackingMode,
       sgrMouseMode: !!msg.sgrMouseMode,
-      sgrMousePixelsMode: !!msg.sgrMousePixelsMode
+      sgrMousePixelsMode: !!msg.sgrMousePixelsMode,
+      applicationCursorKeysMode: !!msg.applicationCursorKeysMode,
+      kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(msg.kittyKeyboardFlags) ?? 0,
+      modifyOtherKeys: typeof msg.modifyOtherKeys === 'number' ? msg.modifyOtherKeys : 0
     })
   } else if (msg.type === 'terminal-input') {
     const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''

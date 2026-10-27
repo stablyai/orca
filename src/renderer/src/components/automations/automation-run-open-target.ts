@@ -1,6 +1,6 @@
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId

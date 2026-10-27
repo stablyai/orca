@@ -472,3 +472,53 @@ describe('quota read safety and diagnostic precedence', () => {
     expect(runCommand).toHaveBeenCalledTimes(3)
   })
 })
+
+describe("agy's own error envelope", () => {
+  beforeEach(() => resetAntigravityUsageSupportForTests())
+
+  const errorEnvelope = (error: string): string =>
+    `${JSON.stringify({ conversation_id: '', status: 'ERROR', response: '', error, num_turns: 0 })}\n`
+  const LOCATION_ERROR =
+    'Eligibility check failed: Your current account is not eligible for Antigravity, because it is not currently available in your location.'
+
+  it('shows agy’s text instead of the generic parse failure', async () => {
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stdout: errorEnvelope(LOCATION_ERROR),
+        stderr: `error: ${LOCATION_ERROR}\n`
+      })
+    }).fetch()
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
+    expect(result.error).toBe(`Antigravity usage is not available. agy reported: ${LOCATION_ERROR}`)
+  })
+
+  it('redacts identities and bounds agy’s text to one line', async () => {
+    const token = 'ya29.a0AfB_byC1234567890abcdefghijklmnopqrstuvwxyz'
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stdout: errorEnvelope(
+          `\u001b[31mDenied\u001b[0m for person@example.com\nAGY_SESSION=shortsecret\nwith ${token} ${'x '.repeat(200)}`
+        )
+      })
+    }).fetch()
+
+    const shown = result.error?.replace('Antigravity usage is not available. agy reported: ', '')
+    expect(shown).toMatch(/^Denied for \[email\] AGY_SESSION=\S+ with ya29\.\[redacted\] x x/)
+    expect(shown).not.toContain('shortsecret')
+    expect(Array.from(shown ?? '').length).toBeLessThanOrEqual(160)
+    expect(shown?.endsWith('…')).toBe(true)
+  })
+
+  it('keeps sign-in guidance ahead of agy’s text', async () => {
+    const result = await harness({
+      result: processResult({ code: 1, stdout: errorEnvelope('Not authenticated. Run agy login.') })
+    }).fetch()
+
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.error).toContain('Sign in with `agy`')
+  })
+})

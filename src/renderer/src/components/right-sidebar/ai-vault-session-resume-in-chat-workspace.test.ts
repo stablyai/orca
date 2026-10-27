@@ -35,12 +35,19 @@ const codexSession = {
   previewMessages: []
 } as unknown as AiVaultSession
 
-function resumeInChat() {
+function resumeInChat(session: AiVaultSession = codexSession) {
   return resolveAiVaultSessionResumeInChatForWorkspace({
-    session: codexSession,
+    session,
     resumeState: { blocked: true, worktreeId: null, usesSessionWorktree: false },
     activeWorkspaceId: PAIRED_WORKSPACE,
-    targetState: { folderWorkspaces: [], projectGroups: [], repos: [], worktreesByRepo: {} },
+    targetState: {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [],
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
+      worktreesByRepo: {}
+    },
     settings: {
       experimentalNativeChat: true
     }
@@ -78,5 +85,40 @@ describe('resuming a conversation from history in a chat', () => {
     mocks.localCapabilities.mockReturnValue([])
 
     expect(resumeInChat()).toEqual({ available: false, reason: 'workspace' })
+  })
+})
+
+describe('paired runtime conversation ownership', () => {
+  const remoteSession = { ...codexSession, executionHostId: 'runtime:server-1' as const }
+
+  beforeEach(() => {
+    mocks.owner.mockReturnValue('runtime:server-1')
+  })
+
+  it('offers a conversation on its recording runtime', () => {
+    expect(resumeInChat(remoteSession)).toEqual({
+      available: true,
+      workspaceId: PAIRED_WORKSPACE
+    })
+  })
+
+  it.each(['local', 'runtime:server-2', null])(
+    'refuses moving the remote conversation to %s',
+    (owner) => {
+      mocks.owner.mockReturnValue(owner)
+      expect(resumeInChat(remoteSession)).toEqual({ available: false, reason: 'workspace' })
+    }
+  )
+
+  it('requires the recording runtime to advertise history adoption', () => {
+    mocks.state.runtimeStatusByEnvironmentId = new Map([
+      ['server-1', { status: { capabilities: [] } }]
+    ])
+    expect(resumeInChat(remoteSession)).toEqual({ available: false, reason: 'workspace' })
+  })
+
+  it('refuses when runtime capabilities are not known yet', () => {
+    mocks.state.runtimeStatusByEnvironmentId = new Map()
+    expect(resumeInChat(remoteSession)).toEqual({ available: false, reason: 'workspace' })
   })
 })

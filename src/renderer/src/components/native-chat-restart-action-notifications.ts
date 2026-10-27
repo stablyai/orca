@@ -2,6 +2,7 @@ import { createElement, Fragment, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ResumeFailure } from './native-chat-resume-on-restart-grouping'
+import { INLINE_ACTION_CLASS_NAMES } from './ui/sonner'
 
 export type RestartContinuationOutcome = {
   sessionId: string
@@ -67,12 +68,6 @@ function descriptionFrom(lines: readonly string[]): ReactNode {
         null,
         ...lines.map((line) => createElement('span', { key: line, className: 'block' }, line))
       )
-}
-
-// Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
-const INLINE_ACTION_CLASS_NAMES = {
-  content: '!basis-0',
-  actionButton: '!m-0 !self-center'
 }
 
 // A lone title centres with the taller button; a description keeps the icon on the title's line.
@@ -161,27 +156,24 @@ export function announceRestartResults(
   /** Opens the dialog over a fresh read; never rejects. */
   show: () => Promise<void>
 ): void {
-  const results = restartContinuationHistory(requested, reportedResults, hostFailed)
+  const results =
+    reportedResults ?? requested.map((sessionId) => ({ sessionId, outcome: 'unknown' as const }))
   const notContinued = restartChatsNotContinued(requested, results)
   const failed = new Map(hostFailed?.map((failure) => [failure.sessionId, failure.outcome]))
-  // Count only failures still listed by the host; withdrawn failures cannot be shown in the dialog.
-  const reported =
-    hostFailed === undefined
-      ? notContinued
-      : notContinued.filter((sessionId) => failed.has(sessionId))
   const outcomes = new Map(results.map((result) => [result.sessionId, result.outcome]))
   const sentUnconfirmed = (sessionId: string): boolean =>
     outcomes.get(sessionId) === 'pending' || outcomes.get(sessionId) === 'unknown'
-  // The filed outcome is what the list shows, so the toast uses it too.
-  const unconfirmed = (sessionId: string): boolean =>
-    (failed.get(sessionId) ?? (sentUnconfirmed(sessionId) ? 'unconfirmed' : 'refused')) ===
-    'unconfirmed'
-  const unconfirmedCount = reported.filter(unconfirmed).length
+  const reported =
+    hostFailed === undefined
+      ? notContinued
+      : notContinued.filter((sessionId) => failed.has(sessionId) || sentUnconfirmed(sessionId))
+  // Only normalized action outcomes settle delivery; a host list is an observation.
+  const unconfirmedCount = reported.filter(sentUnconfirmed).length
   const continuedCount = new Set(requested).size - notContinued.length
   announceResume(
     continuedCount,
     reported.length - unconfirmedCount,
     unconfirmedCount,
-    hostFailed === undefined && continuedCount === 0 ? undefined : show
+    hostFailed === undefined && continuedCount === 0 && unconfirmedCount === 0 ? undefined : show
   )
 }

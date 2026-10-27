@@ -1,5 +1,4 @@
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
-import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
@@ -20,8 +19,8 @@ import {
   createClaudeUserMessageQueue
 } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-resolution'
-import { providerStderrForDisplay } from '../provider-process/provider-spawn-failure-report'
 import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
+import { claudeStreamJsonExitError, type ClaudeExitStatus } from './claude-stream-json-exit-error'
 
 export { ClaudeControlRequestError }
 
@@ -90,25 +89,6 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   close: () => Promise<boolean>
 }
 
-type ExitStatus = { code: number | null; signal: NodeJS.Signals | null }
-
-function exitError(stderrTail: string, status: ExitStatus | null, cause?: Error): Error {
-  const detail = providerStderrForDisplay(stderrTail).trim()
-  // Retain exit status and stderr through wrappers for refused-start diagnostics.
-  const how =
-    status?.signal !== null && status?.signal !== undefined
-      ? ` (signal ${status.signal})`
-      : status?.code !== null && status?.code !== undefined
-        ? ` (code ${status.code})`
-        : ''
-  const message = `claude stream-json exited${how}${detail ? `: ${detail}` : ''}`
-  const diagnostic = providerDiagnostic([how.trim(), detail].filter(Boolean).join('\n'), 'log')
-  return withProviderDiagnostic(
-    cause ? new Error(message, { cause }) : new Error(message),
-    diagnostic
-  )
-}
-
 export async function openClaudeStreamJsonConnection(
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers = {},
@@ -145,7 +125,7 @@ export async function openClaudeStreamJsonConnection(
   if (!child || !managed) {
     throw new Error('the claude agent SDK returned without spawning a child')
   }
-  let exitStatus: ExitStatus | null = null
+  let exitStatus: ClaudeExitStatus | null = null
   let closing = false
   let terminalError: Error | null = null
   let faultReported = false
@@ -190,7 +170,7 @@ export async function openClaudeStreamJsonConnection(
   const handleUnexpectedEnd = (cause?: Error): void => {
     resumeReading()
     if (!terminalError) {
-      const error = exitError(managed.stderrTail(), exitStatus, cause)
+      const error = claudeStreamJsonExitError(managed.stderrTail(), exitStatus, cause)
       terminalError = managed.executableMissing ? withMissingProviderExecutable(error) : error
     }
     inbox.fail(terminalError)

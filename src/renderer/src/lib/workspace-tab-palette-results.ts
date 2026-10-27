@@ -5,7 +5,7 @@ import {
   matchPaletteTabDocument,
   preparePaletteTabQuery,
   isPaletteTabQueryRejected
-} from './palette-match/tab-match'
+} from '../../../shared/palette-match/tab-match'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
@@ -13,9 +13,9 @@ import {
 import { matchWorkspaceTabAgentSnippet } from './workspace-tab-agent-snippet-match'
 import { maxAgentActivityAt } from './workspace-tab-agent-metadata'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { MatchRange } from './palette-match/normalized-text'
-import type { PaletteDocumentRank } from './palette-match/palette-document'
-import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import type { MatchRange } from '../../../shared/palette-match/normalized-text'
+import type { PaletteDocumentRank } from '../../../shared/palette-match/palette-document'
+import type { PaletteResultQualityClass } from '../../../shared/palette-match/match-quality'
 import {
   createPaletteSearchContext,
   encodePaletteIdentity,
@@ -23,7 +23,7 @@ import {
   preparePaletteActivity,
   type PaletteActivityRank,
   type PaletteSearchContext
-} from './palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { getUnifiedTabPaletteExecutionHostId } from './unified-tab-host-ownership'
 import type {

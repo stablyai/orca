@@ -73,6 +73,7 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     connStateRef: { current: 'connected' },
     liveInputRef: { current: null },
     commandInputRef: { current: null },
+    ptyModesRef: { current: new Map() },
     liveInputFocusTimerRef: { current: null },
     sendLiveTerminalInputRef: { current: async () => true },
     sessionTabActionSheetKeyboardHideSubRef: { current: null },
@@ -202,6 +203,12 @@ function pressControl(): KeyboardEvent {
   return event
 }
 
+function pressEnter(): void {
+  liveField.dispatchEvent(
+    new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertLineBreak' })
+  )
+}
+
 function holdAcknowledgement(): () => void {
   let release = (): void => {}
   const pending = new Promise<void>((resolve) => {
@@ -235,9 +242,35 @@ describe('keyboard controls through the live pending-text queue', () => {
     expect(pressControl().defaultPrevented).toBe(false)
   })
 
-  it.each(['terminal switch', 'disconnect and reconnect'] as const)(
-    'drops a queued control after %s even when the original terminal returns',
-    async (change) => {
+  it.each([
+    { key: 'Ctrl-C', press: pressControl, fieldAfter: 'hellox', expected: 'hello\x03x' },
+    { key: 'Enter', press: pressEnter, fieldAfter: 'x', expected: 'hello\rx' }
+  ])('keeps text typed right after $key behind it', async ({ press, fieldAfter, expected }) => {
+    mocks.sent.length = 0
+    const release = holdAcknowledgement()
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(createElement(LiveHarness, { session: READY }))
+    })
+    await act(async () => {
+      changeLiveText('hello')
+      press()
+      changeLiveText(fieldAfter)
+    })
+    await act(async () => {
+      release()
+    })
+    expect(mocks.sent.map((send) => send.text).join('')).toBe(expected)
+    act(() => renderer?.unmount())
+  })
+
+  it.each([
+    { key: 'Ctrl-C', press: pressControl, change: 'terminal switch' },
+    { key: 'Ctrl-C', press: pressControl, change: 'disconnect and reconnect' },
+    { key: 'Enter', press: pressEnter, change: 'terminal switch' }
+  ] as const)(
+    'drops a queued $key after $change even when the original terminal returns',
+    async ({ press, change }) => {
       mocks.sent.length = 0
       const release = holdAcknowledgement()
       let renderer: ReactTestRenderer | null = null
@@ -246,7 +279,7 @@ describe('keyboard controls through the live pending-text queue', () => {
       })
       await act(async () => {
         changeLiveText('hello')
-        pressControl()
+        press()
       })
       const changed =
         change === 'terminal switch' ? { ...READY, activeHandle: 'terminal-b' } : OFFLINE

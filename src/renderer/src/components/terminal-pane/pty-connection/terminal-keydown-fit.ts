@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -252,8 +252,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       const ptyId = session.transport.getPtyId()
       return !isRemoteExecutionHostPtyId(ptyId)
     },
-    isProcessInspectionCostly: () =>
-      isAgentProcessInspectionCostly(navigator.userAgent, session.transport.getPtyId()),
+    isProcessInspectionCostly: () => isAgentProcessInspectionCostly(session.transport.getPtyId()),
     isLive: () => {
       if (session.disposed) {
         return false

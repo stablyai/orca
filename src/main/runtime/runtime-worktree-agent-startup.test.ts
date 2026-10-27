@@ -78,8 +78,8 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
     ).toBe('orca')
   })
 
-  it('keeps the rename for a runtime host with no nested SSH target', () => {
-    expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca-ide')
+  it('uses the headless runtime CLI with no nested SSH target (#33920)', () => {
+    expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca')
   })
 
   it('uses per-launch arguments and preserves launch telemetry', () => {

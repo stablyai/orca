@@ -156,22 +156,33 @@ export function parseAntigravityUsageEnvelope(value: unknown): AntigravityUsageR
 }
 
 /** Allow CLI log noise around the JSON envelope. */
-export function parseAntigravityUsageStdout(stdout: string): AntigravityUsageReading | null {
+function findInStdoutEnvelopes<T>(stdout: string, read: (value: unknown) => T | null): T | null {
   for (const line of stdout.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('{')) {
       continue
     }
     try {
-      const reading = parseAntigravityUsageEnvelope(JSON.parse(trimmed))
-      if (reading) {
-        return reading
+      const found = read(JSON.parse(trimmed))
+      if (found !== null) {
+        return found
       }
     } catch {
       continue
     }
   }
   return null
+}
+
+export function parseAntigravityUsageStdout(stdout: string): AntigravityUsageReading | null {
+  return findInStdoutEnvelopes(stdout, parseAntigravityUsageEnvelope)
+}
+
+/** agy's own error text from a `{"status":"ERROR","error":…}` print envelope. */
+export function readAntigravityErrorEnvelope(stdout: string): string | null {
+  return findInStdoutEnvelopes(stdout, (value) =>
+    isRecord(value) && readString(value.status) === 'ERROR' ? readString(value.error) : null
+  )
 }
 
 /** Unknown slash commands can become billed model prompts; conversation/turn evidence must stop future polling. */
@@ -187,18 +198,5 @@ export function didRunModelTurn(value: unknown): boolean {
 }
 
 export function stdoutShowsModelTurn(stdout: string): boolean {
-  for (const line of stdout.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed.startsWith('{')) {
-      continue
-    }
-    try {
-      if (didRunModelTurn(JSON.parse(trimmed))) {
-        return true
-      }
-    } catch {
-      continue
-    }
-  }
-  return false
+  return findInStdoutEnvelopes(stdout, (value) => (didRunModelTurn(value) ? true : null)) !== null
 }

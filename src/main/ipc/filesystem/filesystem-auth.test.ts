@@ -205,10 +205,16 @@ describe('filesystem auth worktree roots', () => {
       return []
     })
 
-    await rebuildAuthorizedRootsCache(makeStore(repos))
-
-    expect(listRepoWorktreeGraph).toHaveBeenCalledTimes(repos.length)
-    expect(maxActive).toBeLessThanOrEqual(8)
+    vi.useFakeTimers()
+    try {
+      const rebuild = rebuildAuthorizedRootsCache(makeStore(repos))
+      await vi.runAllTimersAsync()
+      await rebuild
+      expect(listRepoWorktreeGraph).toHaveBeenCalledTimes(repos.length)
+      expect(maxActive).toBeLessThanOrEqual(8)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

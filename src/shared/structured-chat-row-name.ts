@@ -7,7 +7,7 @@ export function structuredChatDisplayName(
   return customLabel?.trim() || conversationName || fallback.trim()
 }
 
-/** Only Claude/Codex history uses chat names; other agents retain CLI conversation titles. */
-export function historyRowShowsChatName(rowAgent: string): boolean {
+/** Unnamed Claude/Codex rows use chat labels; other unnamed agents retain provider titles. */
+export function historyRowFallsBackToChatLabel(rowAgent: string): boolean {
   return rowAgent === 'claude' || rowAgent === 'codex'
 }

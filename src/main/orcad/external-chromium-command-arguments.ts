@@ -1,4 +1,5 @@
 import { BrowserError } from '../browser/browser-error'
+import { agentBrowserSetMediaArguments } from '../browser/agent-browser-set-media-arguments'
 const TARGET_OVERRIDE_FLAGS: Record<string, true> = {
   '--args': true,
   '--cdp': true,
@@ -183,7 +184,7 @@ export function externalChromiumCommandArguments(
     case 'browserSetCredentials':
       return ['set', 'credentials', text('user'), text('pass')]
     case 'browserSetMedia':
-      return ['set', 'media', ...optional('colorScheme'), ...optional('reducedMotion')]
+      return agentBrowserSetMediaArguments(params.colorScheme, params.reducedMotion)
     case 'browserClipboardRead':
       return ['clipboard', 'read']
     case 'browserClipboardWrite':

@@ -12,7 +12,10 @@ import {
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
-import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-permission-modes-capability'
+import {
+  AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-session-permission-modes-capability'
 import { AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-runtime-capabilities'
 
 export type StructuredAgentSessionHostSupport = {
@@ -35,6 +38,7 @@ export type StructuredAgentSessionHostSupport = {
   conversationStop: boolean
   /** The host applies each chat's permission mode; 1.4.225–1.4.226 do without advertising it. */
   permissionModes: boolean
+  permissionOwn?: boolean
   itemDetail: boolean
   phoneAttachments: boolean
 }
@@ -56,6 +60,7 @@ export function structuredAgentSessionHostSupport(
     quietRepeatedStop: capabilities.includes(AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY),
     sendOptions: capabilities.includes(AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY),
     conversationStop: capabilities.includes(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY),
+    permissionOwn: capabilities.includes(AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY),
     permissionModes: capabilities.includes(AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY),
     itemDetail: capabilities.includes(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY),
     phoneAttachments: capabilities.includes(AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY)

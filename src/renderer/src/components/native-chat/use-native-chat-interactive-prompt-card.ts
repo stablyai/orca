@@ -1,13 +1,12 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../store'
-import { resolveNativeChatAsk } from '../../../../shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { resolveNativeChatInteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
 import {
-  parseInteractivePrompt,
+  sayNativeChatApprovalTranslated,
   type InteractivePromptCard
 } from './native-chat-interactive-prompt'
 
-/** Prefer live approvals/questions, then unresolved transcript asks, so a parked selector cannot consume the next message as its answer. */
 export function useNativeChatInteractivePromptCard({
   paneKey,
   messages,
@@ -27,20 +26,16 @@ export function useNativeChatInteractivePromptCard({
     return entry?.interactivePrompt ? (entry.toolName ?? null) : null
   })
   const agent = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.agentType)
-  return useMemo(() => {
-    const statusCard = parseInteractivePrompt(
-      interactivePrompt,
-      interactiveToolName ?? undefined,
-      agent
-    )
-    if (statusCard?.kind === 'approval') {
-      return statusCard
-    }
-    const prompt = resolveNativeChatAsk({
-      liveAsk: statusCard?.prompt ?? null,
-      messages,
-      transcriptSettled
-    })
-    return prompt ? { kind: 'question' as const, prompt } : null
-  }, [interactivePrompt, interactiveToolName, agent, messages, transcriptSettled])
+  return useMemo(
+    () =>
+      resolveNativeChatInteractivePromptCard({
+        interactivePrompt,
+        toolName: interactiveToolName ?? undefined,
+        agent,
+        messages,
+        transcriptSettled,
+        say: sayNativeChatApprovalTranslated
+      }),
+    [interactivePrompt, interactiveToolName, agent, messages, transcriptSettled]
+  )
 }

@@ -57,9 +57,9 @@ export function createRuntimeRepoCatalogActions(
           const validRepoHostIdentities = new Set(finalizedRepos.map(getRepoHostIdentity))
           const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
             previous: {
-              projects: s.projects,
+              projects: s.endpointProjects,
               projectHostSetups: filterSetupsForPrunedRepoRows(
-                s.projectHostSetups,
+                s.endpointProjectHostSetups,
                 result.repos,
                 finalizedRepos
               )
@@ -106,7 +106,8 @@ export function createRuntimeRepoCatalogActions(
               : {}),
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
             ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
-            ...mergedProjectCompatibility,
+            endpointProjects: mergedProjectCompatibility.projects,
+            endpointProjectHostSetups: mergedProjectCompatibility.projectHostSetups,
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
             filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),

@@ -163,6 +163,7 @@ export function clearClosedWorktreeResumeRecords(
 /** The session without a workspace-sleep record whose tab it no longer lists, or null when the record is still placed. */
 export function dropStrandedSleepRecord(
   session: WorkspaceSessionState,
+  worktreeId: string,
   paneKey: string
 ): WorkspaceSessionState | null {
   const record = session.sleepingAgentSessionsByPaneKey?.[paneKey]
@@ -170,7 +171,7 @@ export function dropStrandedSleepRecord(
   const tabListed = Object.values(session.tabsByWorktree).some((tabs) =>
     tabs.some((tab) => tab.id === tabId)
   )
-  if (!record || !isWorkspaceSleepRecord(record) || tabListed) {
+  if (!record || record.worktreeId !== worktreeId || !isWorkspaceSleepRecord(record) || tabListed) {
     return null
   }
   const { [paneKey]: _dropped, ...rest } = session.sleepingAgentSessionsByPaneKey ?? {}

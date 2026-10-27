@@ -1,3 +1,5 @@
+import { publishedLegacyChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import { getClaudeAgentViewService } from '../claude/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
@@ -9,6 +11,7 @@ import {
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
+import { normalizeSourceControlGroupOrder } from '../../shared/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
@@ -35,6 +38,12 @@ import type {
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
 
+/** Which Orca cloud services this host registered; headless hosts register none. */
+export type RuntimeSharingServicePresence = {
+  artifacts(): boolean
+  skills(): boolean
+}
+
 export class RuntimeClientSettingsController {
   private reconciliationGeneration = 0
   private reconciliationTail: Promise<void> = Promise.resolve()
@@ -44,7 +53,8 @@ export class RuntimeClientSettingsController {
       RuntimeStore,
       'getSettings' | 'updateSettings' | 'runDurableMutation'
     > | null,
-    private readonly notifyReposChanged: (() => void) | undefined = undefined
+    private readonly notifyReposChanged: (() => void) | undefined = undefined,
+    private readonly sharingServices: RuntimeSharingServicePresence | undefined = undefined
   ) {}
 
   get(): RuntimeClientSettings {
@@ -62,6 +72,7 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
+      claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
@@ -84,18 +95,20 @@ export class RuntimeClientSettingsController {
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
       zcodePlanSite: settings.zcodePlanSite ?? 'zai',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
-      artifactSharingEnabled: isArtifactSharingEnabled(settings),
+      // Paired clients order their Source Control lists the way this desktop does.
+      sourceControlGroupOrder: normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder),
+      // Omitted without a service: clients treat absence as "ask the host", which names the real cause.
+      ...(this.sharingServices?.artifacts() === false
+        ? {}
+        : { artifactSharingEnabled: isArtifactSharingEnabled(settings) }),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
-      agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
+      ...(this.sharingServices?.skills() === false
+        ? {}
+        : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
       machineName: settings.machineName ?? '',
-      // Paired web Chat settings edit this host's new-chat default.
-      ...(settings.nativeChatPermissionMode
-        ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
-        : {}),
-      ...(settings.agentNativeChatPermissionModes
-        ? { agentNativeChatPermissionModes: settings.agentNativeChatPermissionModes }
-        : {}),
-      // Project per-action agent recipes so paired AI buttons honor host choices; older hosts omit them.
+      nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
+      // Why projected: a paired client's AI buttons start these actions' agents, and must honour
+      // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
       hostSettingOverrides: Object.fromEntries(
         [
@@ -126,14 +139,12 @@ export class RuntimeClientSettingsController {
               process.platform
             )
           : {}),
-        ...(updates.nativeChatPermissionMode !== undefined
-          ? { agentNativeChatPermissionModes: {} }
-          : {}),
         ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {})
       },
       { notifyListeners: true }
     )
     const settings = this.store.getSettings()
+    await getClaudeAgentViewService().reconcile(settings)
     if (updates.worktreeVisibilityDefaults !== undefined) {
       this.notifyReposChanged?.()
     }

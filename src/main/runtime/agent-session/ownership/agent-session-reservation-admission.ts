@@ -27,7 +27,6 @@ import {
   type AgentSessionRecord
 } from '../../../../shared/agent-session-record'
 import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session-launch-args'
-import { isAgentSessionSurfaceTabId } from '../../../../shared/agent-session-surface-tab-id'
 import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session-provider-handle-encoding'
 import type {
   StructuredAgentId,
@@ -37,12 +36,19 @@ import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
 } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from '../../agent-session-store-state'
+import {
+  listAgentSessionConversations,
+  selectWritableAgentSessionRecord,
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from '../../agent-session-store-state'
 import { agentSessionRecordIdentityFields } from '../../agent-session-record-founding'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session-account-home'
+import { assertReservedTabUnheld } from '../agent-session-tab-table'
+export { assertReservedTabUnheld } from '../agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
   /** Host-resolved floating directory committed with the first owner reservation. */
@@ -107,12 +113,11 @@ export function requireAgentSessionRecordForReplay(
   sessionId: string
 ): AgentSessionRecord {
   const replayedId = row.outcome.status === 'succeeded' ? row.outcome.sessionId : sessionId
-  const record = state.records.get(replayedId)
-  if (!record) {
+  if (selectWritableAgentSessionRecord(state, replayedId).kind === 'missing') {
     // Missing recorded effects cannot be replayed; running again would spawn twice.
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'recordMissing' })
   }
-  return record
+  return requireWritableAgentSessionRecord(state, replayedId)
 }
 
 export function admitPendingAgentSessionReservationReplay(
@@ -169,17 +174,18 @@ export function applyAgentSessionReservation(
   }
   // Check inside the transaction: concurrent adoptions mint different session ids, so CAS alone cannot prevent two writers on one provider conversation.
   assertAdoptedConversationUnowned(state, request)
-  const existing = state.records.get(request.sessionId)
-  if (!existing) {
-    if (state.unreadableRecords.has(request.sessionId)) {
-      throw agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
-    }
+  const selected = selectWritableAgentSessionRecord(state, request.sessionId)
+  if (selected.kind === 'unreadable') {
+    requireWritableAgentSessionRecord(state, request.sessionId)
+  }
+  if (selected.kind !== 'writable') {
     if (request.expectedFence !== null) {
       throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'recordMissing' })
     }
     assertReservedTabUnheld(state, request)
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
+  const existing = selected.record
   if (
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
@@ -210,7 +216,7 @@ export function applyAgentSessionReservation(
   })
 }
 
-/** Refuse conversations held by other records, including other branches of their root.
+/** Refuse another record's current conversation, matching the pre-commit check.
  * Run inside the transaction: distinct adoption ids evade per-record CAS and providers may permit corrupting concurrent writers.
  * Self-exemption is not replay; the operation ledger resolves replay before this guard. */
 export function assertAdoptedConversationUnowned(
@@ -222,43 +228,25 @@ export function assertAdoptedConversationUnowned(
     return
   }
   const root = agentSessionProviderHandleRoot(adopted.handle)
-  for (const record of state.records.values()) {
+  for (const record of listAgentSessionConversations(state)) {
     if (record.sessionId === request.sessionId) {
       continue
     }
-    const holdsSameConversation = record.providerHandleChain.some(
-      (link) =>
-        agentSessionProviderHandleRoot(link.handle) === root ||
+    // Only the conversation a chat continues now: an earlier link no longer holds anything.
+    const head = record.providerHandleChain.at(-1)
+    const holdsSameConversation =
+      !!head &&
+      (agentSessionProviderHandleRoot(head.handle) === root ||
         // One id from two chat agents that open the same conversations (`opencode`, `opencode2`).
-        (link.handle.transport === adopted.handle.transport &&
-          link.handle.nativeId === adopted.handle.nativeId &&
-          chatAgentsShareConversations(link.handle.agent, adopted.handle.agent))
-    )
+        (head.handle.transport === adopted.handle.transport &&
+          head.handle.nativeId === adopted.handle.nativeId &&
+          chatAgentsShareConversations(head.handle.agent, adopted.handle.agent)))
     if (holdsSameConversation) {
       throw agentSessionRefusalError('agent_session_conflict', {
         reason: 'conversationHeldElsewhere',
         owner: { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
       })
     }
-  }
-}
-
-/** Check tab-id conflicts before spawn; claim only on publication so failed creates leave no restorable tab. */
-export function assertReservedTabUnheld(
-  state: AgentSessionStoreState,
-  request: AgentSessionReserveRequest
-): void {
-  if (request.surfaceTabId === undefined) {
-    return
-  }
-  if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
-    throw agentSessionRefusalError('agent_session_operation_invalid', {
-      reason: 'requestMalformed'
-    })
-  }
-  const holder = state.sessionTabs?.sessionIdFor(request.surfaceTabId)
-  if (holder !== undefined && holder !== request.sessionId) {
-    throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
   }
 }
 

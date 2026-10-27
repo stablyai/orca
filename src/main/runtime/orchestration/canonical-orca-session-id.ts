@@ -8,7 +8,7 @@ import {
 /** Address by the /clear root to preserve Runs and mail; without records, retain the supplied id. */
 export function canonicalOrcaSessionId(
   orcaSessionId: OrcaSessionId,
-  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+  store: Pick<AgentSessionRecordReader, 'listRecords'> | null = readAgentSessionRecordStore()
 ): OrcaSessionId {
   if (!store) {
     return orcaSessionId

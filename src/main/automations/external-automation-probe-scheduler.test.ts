@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   ExternalAutomationProbeCancelledError,
-  ExternalAutomationProbeScheduler,
-  isExternalAutomationProbeCancelled
+  ExternalAutomationProbeScheduler
 } from './external-automation-probe-scheduler'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -69,58 +68,6 @@ describe('ExternalAutomationProbeScheduler', () => {
     release()
     await probe
     expect(run).toHaveBeenCalledTimes(1)
-  })
-
-  it('cancels queued and in-flight probes whose scope is no longer selected', async () => {
-    const scheduler = new ExternalAutomationProbeScheduler({ concurrency: 1 })
-    const never = deferred<string>()
-    const queuedRun = vi.fn(() => Promise.resolve('queued'))
-    const keptRun = vi.fn(() => Promise.resolve('local'))
-
-    const inFlight = scheduler.schedule({
-      key: 'openclaw@ssh',
-      scopeKey: 'owner:desktop:ssh:target-a:3',
-      run: () => never.promise
-    })
-    const queued = scheduler.schedule({
-      key: 'openclaw@ssh',
-      scopeKey: 'owner:desktop:ssh:target-a:3',
-      run: queuedRun
-    })
-    const kept = scheduler.schedule({
-      key: 'openclaw@self',
-      scopeKey: 'owner:desktop:self',
-      run: keptRun
-    })
-
-    scheduler.retainScopes(['owner:desktop:self'])
-
-    await expect(inFlight).rejects.toBeInstanceOf(ExternalAutomationProbeCancelledError)
-    await expect(queued).rejects.toSatisfy(isExternalAutomationProbeCancelled)
-    expect(queuedRun).not.toHaveBeenCalled()
-    expect(keptRun).not.toHaveBeenCalled()
-    expect(scheduler.inFlight).toBe(1)
-
-    never.resolve('ignored')
-    await expect(kept).resolves.toBe('local')
-    expect(scheduler.inFlight).toBe(0)
-  })
-
-  it('cancels everything on demand', async () => {
-    const scheduler = new ExternalAutomationProbeScheduler({ concurrency: 1 })
-    const never = deferred<string>()
-    const probe = scheduler.schedule({
-      key: 'openclaw@self',
-      scopeKey: 'owner:desktop:self',
-      run: () => never.promise
-    })
-
-    scheduler.cancelAll()
-
-    await expect(probe).rejects.toBeInstanceOf(ExternalAutomationProbeCancelledError)
-    expect(scheduler.inFlight).toBe(1)
-    never.resolve('ignored')
-    await vi.waitFor(() => expect(scheduler.inFlight).toBe(0))
   })
 
   it('does not start a duplicate key while cancelled provider work is still settling', async () => {

@@ -25,7 +25,7 @@ export function InlineUsageBars({
     useAppStore((state) => state.usagePercentageDisplay)
   )
   // Why: tick the session countdown live via one boundary-scheduled clock, not just the usage poll (#5399).
-  const now = useResetCountdownClock([limits.session?.resetsAt])
+  const now = useResetCountdownClock([limits.session?.resetsAt, limits.monthly?.resetsAt])
   const usageWindows = [
     limits.session
       ? {
@@ -47,6 +47,14 @@ export function InlineUsageBars({
           key: 'fableWeekly',
           used: clampUsedPercent(limits.fableWeekly.usedPercent),
           label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable')
+        }
+      : null,
+    // Why: matches the status bar chip; monthly is the only limit when there is no 5h/7d window.
+    limits.monthly && !limits.session && !limits.weekly
+      ? {
+          key: 'monthly',
+          used: clampUsedPercent(limits.monthly.usedPercent),
+          label: formatRateLimitWindowChipLabel(limits.monthly, now)
         }
       : null
   ].filter((window): window is { key: string; used: number; label: string } => window !== null)
@@ -89,7 +97,13 @@ export function InlineUsageBars({
 }
 
 export function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return limits?.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly
+  return (
+    limits?.status === 'error' &&
+    !limits.session &&
+    !limits.weekly &&
+    !limits.fableWeekly &&
+    !limits.monthly
+  )
 }
 
 export function InlineUsageSignInAction({

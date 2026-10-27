@@ -1,3 +1,4 @@
+import '../memory/host-malloc-tunables-claim'
 import process from 'node:process'
 import { main } from './orcad-entry'
 import { resolveOrcadExitCode } from './orcad-exit-code'

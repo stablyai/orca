@@ -1,3 +1,6 @@
+import { isFolderRepo } from '../../shared/repo-kind'
+import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-params'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
@@ -156,4 +159,28 @@ export async function refreshAgentsOnHost(host: AgentDetectionHost): Promise<Ref
     return result
   }
   return wsl ? refresh() : refreshAtRestCommandContext(refresh)
+}
+
+/** A prospective workspace uses the create route's resolved repo, never a client host guess. */
+export async function detectProjectLaunchContext(
+  store: WorkspaceAgentDetectionStore,
+  repo: Repo
+): Promise<ProjectLaunchContext> {
+  const host = getRepoExecutionHostId(repo)
+  const ssh = getSshTargetIdForExecutionHost(host)
+  if (parseExecutionHostId(host)?.kind === 'runtime') {
+    throw new Error(WORKSPACE_ON_OTHER_RUNTIME)
+  }
+  const projectRuntime = ssh ? undefined : resolveLocalWorkspaceRuntime(store, repo, repo.path)
+  if (!ssh && !projectRuntime) {
+    throw new Error('worktree_execution_host_unresolved')
+  }
+  const agents = await detectAgentsOnHost(
+    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } }
+  )
+  return {
+    agents: agents.filter(isTuiAgent),
+    workspaceKind: isFolderRepo(repo) ? 'folder' : 'git-worktree',
+    executionContext: projectRuntime ? { kind: 'host', projectRuntime } : { kind: 'ssh' }
+  }
 }

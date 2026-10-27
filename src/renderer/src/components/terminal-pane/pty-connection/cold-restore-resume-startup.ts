@@ -16,9 +16,12 @@ import {
   normalizeAgentProviderSession
 } from '../../../../../shared/agent-session-resume'
 
+import type { HeldPaneReopenOutcome } from '../newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+
+export const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
 
 type AppState = ReturnType<typeof useAppStore.getState>
 
@@ -109,10 +112,51 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       },
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: providerSession,
+      resumeOrigin: 'saved',
+      resumeSource: {
+        cancelled: false,
+        ...(sleepingRecord &&
+        sleepingRecord.agent === agent &&
+        agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)
+          ? { record: sleepingRecord }
+          : {}),
+        ...(useLiveEntry && entry
+          ? {
+              expectedStatus: {
+                paneKey: session.cacheKey,
+                receivedAt: entry.updatedAt,
+                stateStartedAt: entry.stateStartedAt
+              }
+            }
+          : {})
+      },
       launchToken: coldRestoreLaunchToken,
       useLiveEntry: Boolean(useLiveEntry),
       hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry
     }
   }
+}
+
+/** Keeps the reattach fallback's actual fresh-agent outcome with the pane's start. */
+export function reopenPaneAfterMissingReattach(
+  session: ConnectPanePtySession,
+  startup: ColdRestoreAgentResumeStartup | null,
+  resumedAgent: (ptyId: string) => boolean
+): Promise<HeldPaneReopenOutcome> {
+  let resumeUnavailable = false
+  return session
+    .startFreshColdRestoreAgentResume(startup, {
+      forceBlankRestoredViewport: true,
+      onAgentResumeUnavailable: () => {
+        resumeUnavailable = true
+      }
+    })
+    .then(
+      (ptyId: string | null) => ({
+        reopened: ptyId !== null,
+        agentResumed: ptyId !== null && resumedAgent(ptyId) && !resumeUnavailable
+      }),
+      () => NOT_REOPENED
+    )
 }

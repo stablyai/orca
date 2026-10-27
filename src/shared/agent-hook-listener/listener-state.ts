@@ -38,6 +38,8 @@ export type HookListenerState = {
   /** Read-only compatibility view. All writes pass through the isolated legacy adapter. */
   lastStatusByPaneKey: ReadonlyMap<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
+  /** Conversation that spawned in-process subagents; kept until its fully idle Stop because children outlive its turns. */
+  antigravitySubagentParentByPaneKey: Map<string, string>
   /** Journal-backed prompt for each jcode pane's current turn; see readJcodeTurnPrompt. */
   jcodeTurnPromptByPaneKey: Map<string, JcodeUserPromptEvidence | null>
   ampCompletedCacheKeys: Set<string>
@@ -65,6 +67,8 @@ export type HookListenerState = {
   codexLeadStateByPaneKey: Map<string, CodexLeadTurnState>
   /** Ephemeral forked Codex threads (/side) per pane; they never own the pane's status. */
   codexEphemeralForkSessionsByPaneKey: Map<string, string[]>
+  /** A rollout-less Codex start held until its prompt shows a new conversation or the hidden title thread. */
+  codexHeldEphemeralStartByPaneKey: Map<string, string>
   /** Newest Grok turn per pane, used to reject end reports that arrive after a replacement prompt. */
   grokActiveTurnByPaneKey: Map<string, GrokActiveTurn>
   /** The Grok main agent's own state as last published, so its clock keeps continuity across events. */
@@ -121,6 +125,7 @@ export function createHookListenerState(
     lastToolByPaneKey: new Map(),
     lastStatusByPaneKey: adapter.view,
     antigravityCompletedTranscriptByPaneKey: new Map(),
+    antigravitySubagentParentByPaneKey: new Map(),
     jcodeTurnPromptByPaneKey: new Map(),
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
@@ -135,6 +140,7 @@ export function createHookListenerState(
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map(),
     codexEphemeralForkSessionsByPaneKey: new Map(),
+    codexHeldEphemeralStartByPaneKey: new Map(),
     grokActiveTurnByPaneKey: new Map(),
     grokMainAgentStatusByPaneKey: new Map(),
     musePaneStateByPaneKey: new Map(),
@@ -216,6 +222,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
     }
   }
   deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.antigravitySubagentParentByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   deletePaneScopedCacheEntry(state.claudeConsumedCompactPromptIdByPaneKey, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
@@ -229,6 +236,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
   state.codexEphemeralForkSessionsByPaneKey.delete(paneKey)
+  state.codexHeldEphemeralStartByPaneKey.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
   state.musePaneStateByPaneKey.delete(paneKey)
@@ -264,6 +272,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
   moveLegacyAgentStatuses(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.antigravitySubagentParentByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.jcodeTurnPromptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
@@ -278,6 +287,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexEphemeralForkSessionsByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.codexHeldEphemeralStartByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokActiveTurnByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokMainAgentStatusByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.musePaneStateByPaneKey, fromPaneKey, toPaneKey)
@@ -290,6 +300,7 @@ export function clearPaneTurnCacheState(state: HookListenerState, paneKey: strin
   state.lastPromptByPaneKey.delete(paneKey)
   state.lastToolByPaneKey.delete(paneKey)
   state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+  state.antigravitySubagentParentByPaneKey.delete(paneKey)
   state.jcodeTurnPromptByPaneKey.delete(paneKey)
   state.ampCompletedCacheKeys.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
@@ -301,6 +312,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastToolByPaneKey.clear()
   clearLegacyAgentStatuses(state)
   state.antigravityCompletedTranscriptByPaneKey.clear()
+  state.antigravitySubagentParentByPaneKey.clear()
   state.jcodeTurnPromptByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()
   state.claudeConsumedCompactPromptIdByPaneKey.clear()
@@ -317,6 +329,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.codexSubagentTranscriptByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()
   state.codexEphemeralForkSessionsByPaneKey.clear()
+  state.codexHeldEphemeralStartByPaneKey.clear()
   state.grokActiveTurnByPaneKey.clear()
   state.grokMainAgentStatusByPaneKey.clear()
   state.musePaneStateByPaneKey.clear()

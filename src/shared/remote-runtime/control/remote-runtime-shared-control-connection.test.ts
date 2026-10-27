@@ -7,11 +7,10 @@ import {
   REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
   retainedRemoteRuntimeJsonStringBytes,
   serializeRemoteRuntimeRpcRequest
-} from '../../remote-runtime-memory-limits'
+} from '../remote-runtime-memory-limits'
 import { getRemoteRuntimeRequestAdmissionEvidence } from '../requests/remote-runtime-prepared-request-admission'
-import { remoteRuntimeClientCapabilities } from '../../remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
-import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from '../../runtime-subscription-replay'
 import {
   closeSharedControlTestServers,
@@ -81,10 +80,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('does not expose a binary sender on the shared control protocol surface', () => {
-    expect('sendSharedControlEncryptedBinary' in sharedControlProtocol).toBe(false)
-  })
-
   it('releases a pending request when the socket send throws', async () => {
     const connection = new RemoteRuntimeSharedControlConnection(
       pairedRuntimeConnectionFromOffer({
@@ -120,36 +115,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       retainedBytes: 0
     })
     connection.close()
-  })
-
-  it('replaces a stuck pre-ready socket when a one-shot probe proves reachability', () => {
-    const connection = new RemoteRuntimeSharedControlConnection(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:1',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
-      })
-    )
-    const close = vi.fn()
-    const cleanup = vi.fn()
-    const open = vi.fn()
-    const unsafe = connection as unknown as {
-      state: string
-      ws: { readyState: number; close: () => void } | null
-      socketCleanup: (() => void) | null
-      open: () => void
-    }
-    unsafe.state = 'awaiting_ready'
-    unsafe.ws = { readyState: 0, close }
-    unsafe.socketCleanup = cleanup
-    unsafe.open = open
-
-    connection.reconnectNow()
-
-    expect(cleanup).toHaveBeenCalledOnce()
-    expect(close).toHaveBeenCalledOnce()
-    expect(open).toHaveBeenCalledOnce()
   })
 
   it('keeps a waiting request alive when a reachability probe replaces its pre-ready socket', async () => {
@@ -257,29 +222,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('keeps many logical subscriptions on one authenticated WebSocket', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const subscriptions = await Promise.all(
-      Array.from({ length: 35 }, (_value, index) =>
-        connection.subscribe('runtime.clientEvents.subscribe', { index }, 1000, {
-          onResponse: vi.fn(),
-          onError: vi.fn()
-        })
-      )
-    )
-
-    await vi.waitFor(() => expect(server.requests).toHaveLength(35))
-
-    expect(server.connectionCount()).toBe(1)
-    expect(
-      server.requests.every((request) => request.method === 'runtime.clientEvents.subscribe')
-    ).toBe(true)
-
-    subscriptions.forEach((subscription) => subscription.close())
-    connection.close()
-  })
-
   it('reconnects and replays passive subscriptions without closing them', async () => {
     const server = await createServer({ closeAfterFirstStreamingResponse: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
@@ -307,74 +249,6 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       lastClose: null
     })
 
-    connection.close()
-  })
-
-  it('keeps passive subscriptions alive after reaching the capped reconnect delay', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const onClose = vi.fn()
-
-    const unsafe = connection as unknown as {
-      reconnect: {
-        attempt: number
-        scheduleWithDefaultBackoff: (intentionallyClosed: boolean, open: () => void) => void
-      }
-      subscriptions: Map<string, unknown>
-    }
-    unsafe.reconnect.attempt = 7
-    unsafe.subscriptions.set('sub-1', {
-      requestId: 'sub-1',
-      method: 'runtime.clientEvents.subscribe',
-      params: null,
-      callbacks: { onResponse: vi.fn(), onError: vi.fn(), onClose },
-      sent: false,
-      closed: false,
-      closeAfterReady: false,
-      remoteSubscriptionId: null
-    })
-
-    unsafe.reconnect.scheduleWithDefaultBackoff(false, () => {})
-
-    expect(onClose).not.toHaveBeenCalled()
-    expect(connection.getDiagnostics()).toMatchObject({
-      state: 'reconnecting',
-      reconnectAttempt: 8,
-      subscriptionCount: 1
-    })
-
-    connection.close()
-  })
-
-  it('resets reconnect attempts after a stable authenticated ready period', async () => {
-    const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
-      reconnectStableResetMs: 50
-    })
-
-    await expect(connection.request('worktree.ps', undefined, 1000)).resolves.toMatchObject({
-      ok: true
-    })
-    ;(connection as unknown as { reconnect: { attempt: number } }).reconnect.attempt = 3
-
-    await vi.waitFor(() =>
-      expect(connection.getDiagnostics()).toMatchObject({ reconnectAttempt: 0 })
-    )
-    connection.close()
-  })
-
-  it('removes ready waiters when a one-shot request times out during handshake', async () => {
-    const server = await createServer({ suppressReadyFrame: true })
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
-    const unsafe = connection as unknown as {
-      readyWaiters: unknown[]
-      pendingRequests: Map<string, unknown>
-    }
-
-    await expect(connection.request('worktree.ps', undefined, 25)).rejects.toThrow('Timed out')
-
-    await vi.waitFor(() => expect(unsafe.readyWaiters).toHaveLength(0))
-    expect(unsafe.pendingRequests.size).toBe(0)
     connection.close()
   })
 

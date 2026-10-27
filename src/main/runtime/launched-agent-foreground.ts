@@ -13,6 +13,23 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
 
+export type LaunchedAgentHost = {
+  remote: boolean
+  windows: boolean
+  /** Only a local non-WSL Windows pane can prove its shell alone in its job; wsl.exe and SSH reads stay unknown. */
+  shellAloneProvable: boolean
+}
+
+export function describeLaunchedAgentHost(
+  pty: { connectionId: string | null; isWsl: boolean | null } | undefined,
+  remotePathFlavor: () => 'posix' | 'win32'
+): LaunchedAgentHost {
+  const remote = !!pty?.connectionId
+  // A local WSL pane still runs on a Windows host, whose process reads cannot see into it.
+  const windows = remote ? remotePathFlavor() === 'win32' : process.platform === 'win32'
+  return { remote, windows, shellAloneProvable: windows && !remote && pty?.isWsl === false }
+}
+
 function isLaunchShell(processName: string): boolean {
   return isShellProcess(processName.replace(/^-/, ''))
 }

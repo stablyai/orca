@@ -1,3 +1,8 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hostRef: { current: unknown } = { current: null }
@@ -30,10 +35,12 @@ function registerStructuredWorker(): string {
   hostRef.current = {
     deps: {
       store: {
-        getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: { runtimeKind: 'native', claimStatus: 'live', runtimeFence: 1 }
-        })
+        getConversation: () =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(
+              agentSessionLeaseFixture({ sessionId: SESSION_ID, runtimeFence: 1 })
+            )
+          )
       }
     }
   }

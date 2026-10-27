@@ -94,7 +94,8 @@ export class RuntimeFileWatches {
     if (leases) {
       await Promise.all(Array.from(leases, (lease) => lease.suspend()))
     }
-    if (!connectionId) {
+    // Windows watches in-process, so only the leases above exist; Git may already have revoked the path.
+    if (!connectionId && process.platform !== 'win32') {
       // Failed setup may still own a child without having published a lease-release callback.
       const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)

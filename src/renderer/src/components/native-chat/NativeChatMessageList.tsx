@@ -1,3 +1,4 @@
+import { copyChatMathSelection } from '../sidebar/chat-markdown-math-selection'
 import {
   nativeChatTranscriptOuterClass,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
@@ -11,7 +12,7 @@ import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
 import { structuredQuestionTranscript } from '../../../../shared/structured-agent-question-projection'
-import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat-task-list-history'
+import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
@@ -352,6 +353,7 @@ export function NativeChatMessageList({
           <div
             ref={scrollRef}
             onScroll={onScroll}
+            onCopy={copyChatMathSelection}
             {...readerInput.scrollerProps}
             // Measurement finds this named scroll root independently of utility classes.
             data-native-chat-scroll

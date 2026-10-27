@@ -12,6 +12,9 @@ export type UserOpenedPathStat = {
   escapesWorktree: boolean
 }
 
+// Opening a path is a user act, so its stat may start a stopped WSL distro.
+const USER_ACT = { wakeWslDistro: true }
+
 /** Stat user-opened local paths inside the project boundary first. If only user-named access succeeds, open externally: symlinks can lead outside despite lexical containment. */
 export async function statUserOpenedPath(
   context: RuntimeFileOperationArgs,
@@ -24,11 +27,11 @@ export async function statUserOpenedPath(
     !isRemoteRuntimeFileOperation(context, filePath) &&
     Boolean(context.worktreePath && isPathInsideWorktree(filePath, context.worktreePath))
   if (!insideLocalWorktree) {
-    const stat = await statRuntimePath(context, filePath, userNamedFileAccess())
+    const stat = await statRuntimePath(context, filePath, userNamedFileAccess(), USER_ACT)
     return { isDirectory: stat.isDirectory, escapesWorktree: false }
   }
   try {
-    const stat = await statRuntimePath(context, filePath)
+    const stat = await statRuntimePath(context, filePath, undefined, USER_ACT)
     return { isDirectory: stat.isDirectory, escapesWorktree: false }
   } catch (containedError) {
     // Why only this refusal: a missing file or a dropped connection is not a link out of the project.
@@ -37,7 +40,7 @@ export async function statUserOpenedPath(
     }
     let stat: Awaited<ReturnType<typeof statRuntimePath>>
     try {
-      stat = await statRuntimePath(context, filePath, userNamedFileAccess())
+      stat = await statRuntimePath(context, filePath, userNamedFileAccess(), USER_ACT)
     } catch {
       throw containedError
     }

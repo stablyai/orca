@@ -1,4 +1,4 @@
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 export function getTerminalIncarnationHandle(ptyId: string, environmentId: string): string | null {
   const terminal = parseRemoteRuntimePtyId(ptyId)
   if (terminal?.handle && terminal.environmentId === environmentId) {

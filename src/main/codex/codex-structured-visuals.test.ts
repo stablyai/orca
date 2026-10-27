@@ -19,7 +19,7 @@ import {
   CODEX_VISUALS_SETUP_BUDGET_MS,
   prepareCodexThreadForVisuals
 } from './codex-structured-visuals'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 
 const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/chat-scratch/abc',

@@ -1,4 +1,4 @@
-import { removePaneKeys } from './agent-status-pane-keyed-records'
+import { removePaneKeys } from './agent-status/agent-status-pane-keyed-records'
 import type { AppState } from '../types'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
@@ -7,10 +7,11 @@ import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-deliver
 import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { forgetNativeChatPromptDismissalsForTab } from '@/components/native-chat/native-chat-prompt-dismissals'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
+import './agent-status/agent-status'
 import {
   buildAgentStatusTabPrefixDropPatch,
   type AgentStatusTabPrefixDropState
-} from './agent-status'
+} from './agent-status/agent-status-drop-reducer'
 import { buildPaneForegroundAgentTabPrefixClearPatch } from './pane-foreground-agent'
 
 export type RetiredTerminalTabSweepActions = Pick<

@@ -8,7 +8,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { SourceControlUncommittedSections } from './uncommitted-sections'
-import type { SourceControlDisplaySection, SourceControlDisplaySectionId } from './section-order'
+import type {
+  SourceControlDisplaySection,
+  SourceControlDisplaySectionId
+} from '../../../../../../shared/source-control-section-order'
 
 afterEach(cleanup)
 

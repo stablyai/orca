@@ -5,6 +5,8 @@ import type {
   TerminalOutputMeta
 } from '../../terminal-output-frame-chunks'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
+import type { TerminalReplyQueryScanState } from '../../../../../shared/terminal-reply-query-scan'
+import type { YieldedTerminalQuery } from './terminal-multiplex-yielded-queries'
 
 export type SnapshotFrameOptions = {
   kind: 'scrollback' | 'resized'
@@ -83,6 +85,8 @@ export type TerminalMultiplexStream = {
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
   ackRecoverySnapshotInFlight: boolean
+  yieldedQueries: YieldedTerminalQuery[]
+  yieldedQueryScan: TerminalReplyQueryScanState
   /** A recovery went out screen-only while the link was saturated; history follows once it drains. */
   ackRecoveryHistoryOwed: boolean
   pendingOutput: TerminalOutputChunk[]

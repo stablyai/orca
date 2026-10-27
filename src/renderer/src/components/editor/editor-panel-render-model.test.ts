@@ -163,7 +163,8 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
       editorDrafts: { '/repo/README.md': '[example]: https://example.com' }
     })
 
-    expect(model.canExportMarkdownToPdf).toBe(false)
+    expect(model.inlineMarkdownRenderState?.renderMode).toBe('preview')
+    expect(model.canExportMarkdownToPdf).toBe(true)
   })
 
   it('disables rich export when a multibyte character crosses the byte limit', () => {

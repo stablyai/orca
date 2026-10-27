@@ -113,7 +113,8 @@ export { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 export {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
-  trustedOrcaHooksWithSetupApproval,
+  persistSetupHookTrustApproval,
+  readRepoHooksSetupCommand,
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
 export { colors, radii, spacing, typography } from '../theme/mobile-theme'

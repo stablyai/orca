@@ -22,6 +22,7 @@ export function workspaceSettingsMounts(
       const model = observableModel(context, {
         client: context.client,
         hostId: 'host-1',
+        repos: [],
         tasksSupported: true,
         taskStateHydrated: true,
         runtimeTaskSettings: { disabledTuiAgents: ['claude'] },
@@ -80,6 +81,7 @@ export function workspaceSettingsMounts(
       >('mobile/src/components/use-new-workspace-create-submit.ts').useNewWorkspaceCreateSubmit
       const model = observableModel(context, {
         client: context.client,
+        repos: [],
         selectedRepo: { id: 'repo-1', displayName: 'Repo' },
         selectedAgent: { id: 'claude', label: 'Claude' },
         runtimeSettings: { disabledTuiAgents: ['claude'] },

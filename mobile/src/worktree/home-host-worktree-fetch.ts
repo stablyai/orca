@@ -7,10 +7,10 @@ import {
   type HostWorktreeInfo
 } from './home-worktree-info'
 import { pickResumeWorktree } from './resume-worktree'
+import { isWorktreeActive } from './workspace-list-sections'
 import { worktreeCatalogRead } from './worktree-catalog-operations'
 import { WORKTREE_PS_FULL_LIMIT } from './worktree-catalog-snapshot-client'
 
-const ACTIVE_STATUSES = new Set(['working', 'active', 'permission'])
 // Cutover may stay connected, so retry reads without waiting for the connect gate; cap migration-loop retries.
 const CUTOVER_RETRY_LIMIT = 2
 
@@ -47,15 +47,16 @@ export function fetchHomeHostWorktreeInfo(
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktrees` is a salvaged member, so the `?? []` is what makes it an array; the rows stay opaque because three screens project a row differently. This card reads `status` and the resume pick, both through their own guards, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
         const worktrees = (catalog.value.worktrees ?? []) as HomeWorktreeSummary[]
         setCachedWorktrees(hostId, worktrees, { proven: true })
-        const active = worktrees.filter((w) => w.status && ACTIVE_STATUSES.has(w.status))
+        // Count what the list shows: archived rows are hidden, and active is the sleeping filter's rule.
+        const listed = worktrees.filter((w) => w.isArchived !== true)
         // Mirror the desktop's focused workspace (see pickResumeWorktree).
         const lastActive = pickResumeWorktree(worktrees)
         setInfo((prev) => ({
           ...prev,
           [hostId]: {
             hostId,
-            totalWorktrees: worktrees.length,
-            activeCount: active.length,
+            totalWorktrees: listed.length,
+            activeCount: listed.filter(isWorktreeActive).length,
             lastActiveWorktree: lastActive,
             countsProvenAt: Date.now()
           }

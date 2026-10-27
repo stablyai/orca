@@ -11,7 +11,7 @@ import {
   getDiscardAllPaths,
   runDiscardAllForArea,
   type DiscardAllArea
-} from './discard-all-sequence'
+} from '../../../../../../shared/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import {
@@ -19,7 +19,7 @@ import {
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
 import type { PendingDiscardConfirmation } from './discard-dialog'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 export function useSourceControlDiscardConfirmation({
   activeRepoTarget,

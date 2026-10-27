@@ -15,6 +15,7 @@ import {
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../terminal/terminal-send-request'
 import { normalizeTerminalTextInput } from '../terminal/terminal-text-input-normalization'
+import { encodeTerminalKeyForModes } from '../terminal/terminal-key-mode-encoding'
 import { useTerminalTextFieldSubmitBinding } from '../terminal/use-terminal-text-field-submit-binding'
 import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismissal'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -37,6 +38,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     connStateRef,
     liveInputRef,
     commandInputRef,
+    ptyModesRef,
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
     sessionTabActionSheetKeyboardHideSubRef,
@@ -154,7 +156,12 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       return
     }
     const targetHandle = activeHandle
-    const accessoryCommit = await handleLiveInputAccessoryBytes(input)
+    // Encode first so the live-input commit sees the bytes the PTY will receive.
+    const encoded = {
+      ...input,
+      bytes: encodeTerminalKeyForModes(input.bytes, ptyModesRef.current.get(targetHandle))
+    }
+    const accessoryCommit = await handleLiveInputAccessoryBytes(encoded)
     if (accessoryCommit.kind !== 'allow-raw') {
       return
     }
@@ -164,14 +171,17 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       activeHandle: activeHandleRef.current,
       activeSessionTabType: activeSessionTabTypeRef.current,
       connState: connStateRef.current,
-      bytes: input.bytes,
+      bytes: encoded.bytes,
       deviceToken: deviceTokenRef.current
     })
   }
 
   const sendLiveTerminalInput = useCallback(
     async (handle: string, bytes: string): Promise<boolean> => {
-      const text = normalizeTerminalTextInput(bytes)
+      const text = encodeTerminalKeyForModes(
+        normalizeTerminalTextInput(bytes),
+        ptyModesRef.current.get(handle)
+      )
       if (text.length === 0) {
         return false
       }

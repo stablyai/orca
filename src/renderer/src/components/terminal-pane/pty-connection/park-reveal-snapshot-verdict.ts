@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { RESET_GRAPHIC_RENDITION } from '../../../../../shared/terminal-mode-reset-profiles'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'

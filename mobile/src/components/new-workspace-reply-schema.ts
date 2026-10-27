@@ -28,6 +28,7 @@ export const newWorkspaceRepoHooksSchema = z.looseObject({
   ),
   source: z.string().nullable(),
   setupRunPolicy: salvagedOptional('setupRunPolicy', z.enum(SETUP_RUN_POLICIES)),
+  setupConfig: salvagedOptional('setupConfig', z.looseObject({ command: z.string() }).nullable()),
   setupTrust: salvagedOptional(
     'setupTrust',
     z.looseObject({ contentHash: z.string(), scriptContent: z.string() }).nullable()

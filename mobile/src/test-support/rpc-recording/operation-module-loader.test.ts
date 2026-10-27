@@ -9,7 +9,7 @@ import { operationModuleLoader } from './operation-module-loader'
 // Use synthetic trees so loader properties do not depend on current product imports.
 const roots: string[] = []
 function sourceTree(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'rpc-loader-'))
+  const root = mkdtempSync(join(tmpdir(), 'pr-31602-rpc-loader-'))
   roots.push(root)
   for (const [name, source] of Object.entries(files)) {
     mkdirSync(join(root, 'mobile/src'), { recursive: true })
@@ -93,10 +93,10 @@ describe('the mounted module loader', () => {
     const root = sourceTree({ 'value.ts': source })
     const path = 'mobile/src/value.ts'
     const baseline = operationModuleLoader(root).load<{ read: () => number }>(path)
-    const mutation = { name: 'value', file: 'value.ts', before: '= 1', after: '= 2' }
+    const mutation = { name: 'value', file: 'mobile\\src\\value.ts', before: '= 1', after: '= 2' }
     for (let index = 0; index < 2; index++) {
       const mutated = operationModuleLoader(root, mutation, [
-        ['value.ts', '\nexports.exposed = () => value + 10']
+        ['mobile\\src\\value.ts', '\nexports.exposed = () => value + 10']
       ])
       const result = mutated.load<{ read: () => number; exposed: () => number }>(path)
       expect(result.read()).toBe(2)

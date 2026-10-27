@@ -89,6 +89,10 @@ function testsEnter(text) {
 }
 
 function createImeEnterGuardRule(context) {
+  // Reports need an Enter test; empty visitors avoid JS AST deserialization.
+  if (!testsEnter(context.sourceCode.text)) {
+    return {}
+  }
   const localFunctionTexts = new Map()
   const textElementNames = new Set()
   const candidates = []

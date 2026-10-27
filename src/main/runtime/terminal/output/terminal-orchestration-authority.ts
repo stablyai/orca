@@ -10,8 +10,7 @@ import {
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from '../../recent-pty-output-buffer'
-import { appendRecentPtyPathCandidates } from '../../terminal-output-path-candidates'
+import { RecentPtyOutputBuffer } from '../../recent-pty-output-buffer'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
@@ -178,60 +177,13 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     return ptyId ? (this.terminalFileUriHostnameByPtyId.get(ptyId) ?? null) : null
   }
 
-  protected recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void {
+  protected recordRecentPtyOutput(ptyId: string, data: string): void {
     let recentOutputBuffer = this.recentPtyOutputById.get(ptyId)
     if (!recentOutputBuffer) {
-      // Boundaries are only owed to the one-time activation backfill; once
-      // tracking is live, new buffers keep the read-collapsing hot path.
-      recentOutputBuffer = new RecentPtyOutputBuffer({
-        preserveChunkBoundaries: !this.recentPtyPathCandidateTrackingActive
-      })
+      recentOutputBuffer = new RecentPtyOutputBuffer()
       this.recentPtyOutputById.set(ptyId, recentOutputBuffer)
     }
     recentOutputBuffer.append(data)
-    if (
-      this.recentPtyPathCandidateTrackingActive ||
-      // Extract over-window chunks intact before slicing; later backfill cannot reconstruct them.
-      data.length > RECENT_PTY_OUTPUT_LIMIT
-    ) {
-      this.recentPtyPathCandidatesById.set(
-        ptyId,
-        appendRecentPtyPathCandidates(this.recentPtyPathCandidatesById.get(ptyId), data)
-      )
-    }
-  }
-
-  activateRecentPtyPathCandidateTracking(): void {
-    if (this.recentPtyPathCandidateTrackingActive) {
-      return
-    }
-    this.recentPtyPathCandidateTrackingActive = true
-    // Backfill synchronously with original chunk boundaries; trimming/joining changes candidate semantics. Output evicted before first connection remains unavailable.
-    for (const [ptyId, buffer] of this.recentPtyOutputById) {
-      let candidates = this.recentPtyPathCandidatesById.get(ptyId)
-      const { chunks, headChunkIsPartial } = buffer.retainedChunks()
-      for (let index = 0; index < chunks.length; index += 1) {
-        if (index === 0 && headChunkIsPartial) {
-          // Oversized chunks were extracted intact at append; replaying truncated remnants could change the candidate set.
-          continue
-        }
-        candidates = appendRecentPtyPathCandidates(candidates, chunks[index]!)
-      }
-      if (candidates) {
-        this.recentPtyPathCandidatesById.set(ptyId, candidates)
-      }
-      // Chunk boundaries were owed only to this one-time backfill; return
-      // the buffer to the compact read-collapsing steady state.
-      buffer.compact()
-    }
-  }
-
-  resolveTerminalContext(
-    handle: string
-  ): { worktreeId: string; connectionId: string | null } | null {
-    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    const pty = ptyId ? this.ptysById.get(ptyId) : null
-    return pty ? { worktreeId: pty.worktreeId, connectionId: pty.connectionId } : null
   }
 
   // Why: remote clients cannot resolve this runtime's WSL project preference,

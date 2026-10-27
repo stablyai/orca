@@ -100,23 +100,6 @@ describe('AgentBrowserBridge', () => {
     expect(holdPaintForCapture).not.toHaveBeenCalled()
   })
 
-  it('gives the helper proxy a paint hold scoped to its page', async () => {
-    const release = vi.fn()
-    const holdPaintForCapture = vi.fn(() => release)
-    const b = new AgentBrowserBridge(
-      mockBrowserManager(undefined, undefined, { holdPaintForCapture })
-    )
-    b.setActiveTab(100)
-    webContentsFromIdMock.mockReturnValue(mockWebContents(100))
-
-    succeedWith({ snapshot: 'tree' })
-    await b.snapshot()
-
-    const holdPaint = CdpWsProxyMock.mock.calls[0]?.[1]
-    expect(holdPaint()).toBe(release)
-    expect(holdPaintForCapture).toHaveBeenCalledWith(100)
-  })
-
   it('captures full-page screenshots directly through CDP using CSS layout bounds', async () => {
     const wc = mockWebContents(100)
     wc.debugger.sendCommand.mockImplementation((method: string) => {

@@ -43,7 +43,7 @@ import {
   paneSpawnReservationsByOwnerKey
 } from './pane/spawn-reservation'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { CALLER_LAUNCH_CASES, OPENCODE_MODEL } from '../pty-launch-parity-caller.test-cases'
+import { CALLER_LAUNCH_CASES } from '../pty-launch-parity-caller.test-cases'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../runtime/rpc/rpc-caller-identity'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../desktop-renderer-runtime-capabilities'
@@ -51,10 +51,7 @@ import { TERMINAL_LIFECYCLE_METHODS } from '../../runtime/rpc/methods/terminal/t
 import { AGENT_SESSION_METHODS } from '../../runtime/rpc/methods/agent-session'
 import { applyManagedDataAccountEnvironment } from '../../managed-data-accounts/launch-environment'
 import { probeOpenCodeLaunchCapabilities } from '../../opencode/opencode-launch-capabilities'
-import {
-  probeOpenCodeModelAvailability,
-  resolveOpenCodeDirectModelExecutable
-} from '../../opencode/opencode-model-availability'
+import { resolveOpenCodeDirectModelExecutable } from '../../opencode/opencode-model-executable'
 import { probeOpenCodeLaunchModelContext } from '../../opencode/opencode-launch-model-context'
 import { readOpenSshDefaultShell } from '../../../shared/openssh-default-shell'
 
@@ -108,9 +105,8 @@ vi.mock('../../managed-data-accounts/launch-environment', () => ({
 vi.mock('../../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: vi.fn()
 }))
-vi.mock('../../opencode/opencode-model-availability', () => ({
-  resolveOpenCodeDirectModelExecutable: vi.fn(),
-  probeOpenCodeModelAvailability: vi.fn()
+vi.mock('../../opencode/opencode-model-executable', () => ({
+  resolveOpenCodeDirectModelExecutable: vi.fn()
 }))
 vi.mock('../../opencode/opencode-launch-model-context', () => ({
   probeOpenCodeLaunchModelContext: vi.fn()
@@ -176,19 +172,9 @@ function stubOpenCodeV2(): void {
   vi.mocked(probeOpenCodeLaunchCapabilities)
     .mockReset()
     .mockResolvedValue({ version: '2.0.16', pluginApi: 'v2', promptMode: 'prefill' })
-  vi.mocked(probeOpenCodeModelAvailability).mockReset().mockResolvedValue(true)
   vi.mocked(probeOpenCodeLaunchModelContext)
     .mockReset()
-    .mockResolvedValueOnce({
-      primaryAgent: 'build',
-      availableModels: [OPENCODE_MODEL],
-      primaryModel: 'opencode/big-pickle'
-    })
-    .mockResolvedValue({
-      primaryAgent: 'build',
-      availableModels: [OPENCODE_MODEL],
-      primaryModel: OPENCODE_MODEL
-    })
+    .mockResolvedValue({ primaryAgent: 'build' })
 }
 
 async function runHostCall(lanes: ParityLanes, c: HostLaunchCase): Promise<unknown> {

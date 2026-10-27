@@ -4,26 +4,13 @@ import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host
 import { findProjectSetups, setupHostId } from './project-selector'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
+import { getPresentStringFlag } from './flags'
 
 export type ProjectCreateTarget = {
   repoSelector: string
   /** Repo ids can be shared across hosts. */
   repoHostId: string
   setup: ProjectHostSetup
-}
-
-function getPresentStringFlag(
-  flags: Map<string, string | boolean>,
-  name: string
-): string | undefined {
-  if (!flags.has(name)) {
-    return undefined
-  }
-  const value = flags.get(name)
-  if (typeof value === 'string' && value.length > 0) {
-    return value
-  }
-  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
 }
 
 export function hasWorkspaceProjectTarget(flags: Map<string, string | boolean>): boolean {

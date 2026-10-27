@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  resolveCreatePrIntentRemoteStep,
   resolveCreateReviewIntentEligibility,
   type CreateReviewIntentKind
 } from './source-control-create-review-intent'
@@ -162,4 +163,68 @@ describe('resolveCreateReviewIntentEligibility', () => {
       ).toEqual({ eligible: true, kind: blockedKind })
     }
   )
+})
+
+describe('resolveCreatePrIntentRemoteStep', () => {
+  it('resolves safe remote steps for publish, push, and patch-equivalent force-push', () => {
+    expect(
+      resolveCreatePrIntentRemoteStep({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 2,
+        hasCurrentBranch: true,
+        hostedReviewCreation: { canCreate: false, blockedReason: 'no_upstream' }
+      })
+    ).toBe('publish')
+
+    expect(
+      resolveCreatePrIntentRemoteStep({
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+        hasCurrentBranch: true,
+        hostedReviewCreation: { canCreate: false, blockedReason: 'needs_push' }
+      })
+    ).toBe('push')
+
+    expect(
+      resolveCreatePrIntentRemoteStep({
+        upstreamStatus: {
+          hasUpstream: true,
+          ahead: 3,
+          behind: 2,
+          behindCommitsArePatchEquivalent: true
+        },
+        branchCommitsAhead: 3,
+        hasCurrentBranch: true,
+        hostedReviewCreation: { canCreate: false, blockedReason: 'needs_sync' }
+      })
+    ).toBe('force_push')
+  })
+
+  it('fast-forwards behind-only branches, blocks diverged and unpublished-without-commits branches', () => {
+    // Diverged branches require an explicit stop; automatic merge would reconcile without consent.
+    expect(
+      resolveCreatePrIntentRemoteStep({
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 1 },
+        hasCurrentBranch: true,
+        hostedReviewCreation: { canCreate: false, blockedReason: 'needs_sync' }
+      })
+    ).toBe('blocked')
+
+    // Behind with no local commits: pure --ff-only (never plain merge sync).
+    expect(
+      resolveCreatePrIntentRemoteStep({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 },
+        hasCurrentBranch: true,
+        hostedReviewCreation: { canCreate: false, blockedReason: 'needs_sync' }
+      })
+    ).toBe('fast_forward')
+
+    expect(
+      resolveCreatePrIntentRemoteStep({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 0,
+        hasCurrentBranch: true,
+        hostedReviewCreation: { canCreate: false, blockedReason: 'no_upstream' }
+      })
+    ).toBe('blocked')
+  })
 })

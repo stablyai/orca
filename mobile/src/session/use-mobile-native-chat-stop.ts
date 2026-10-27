@@ -4,7 +4,7 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
-import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
+import { openMobileNativeChatSendBudget } from './native-chat/mobile-native-chat-send'
 
 export function useMobileNativeChatStop(args: {
   client: RpcClient | null

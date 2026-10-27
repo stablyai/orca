@@ -1,3 +1,4 @@
+import { isRepoBackedProjectHostSetup } from '../persistence/tracking-repos/project-host-compatibility'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
@@ -219,16 +220,12 @@ export function writeSerializedProfileState(
   }
 }
 
-function isRepoBackedProjectHostSetup(
-  setup: ProjectHostSetup,
-  currentRepoIds: ReadonlySet<string>
-): boolean {
-  return Boolean(setup.repoId && currentRepoIds.has(setup.repoId))
-}
-
 export function rebuildRepoBackedProjectState(state: TransferProfileState): TransferProfileState {
   const projection = projectHostSetupProjectionFromRepos(state.repos)
-  const succession = carryProjectStateThroughIdentityChange(projection.projects, state.projects)
+  const succession = carryProjectStateThroughIdentityChange(projection.projects, state.projects, {
+    previous: state.projectHostSetups,
+    current: projection.setups
+  })
   const currentRepoIds = new Set(state.repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))

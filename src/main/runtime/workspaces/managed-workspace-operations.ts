@@ -270,7 +270,7 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
   async retireStrandedSleepRecord(worktreeId: string, paneKey: string): Promise<void> {
     await this.commitWorkspaceSessionEdit(
       this.getWorkspaceSessionHostIdForWorktree(worktreeId),
-      (session) => dropStrandedSleepRecord(session, paneKey)
+      (session) => dropStrandedSleepRecord(session, worktreeId, paneKey)
     )
   }
 

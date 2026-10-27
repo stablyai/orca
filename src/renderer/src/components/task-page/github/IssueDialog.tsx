@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,7 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
-import { resolveUserRepoSwitchReset } from '@/components/task-page-new-issue-draft'
+import { resolveUserRepoSwitchReset } from '@/components/task-page/task-page-new-issue-draft'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { Input } from '@/components/ui/input'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'

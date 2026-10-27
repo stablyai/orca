@@ -78,8 +78,22 @@ export function launchSleepingAgentSession(
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: record.providerSession,
+      resumeOrigin: 'saved',
+      resumeSource: {
+        cancelled: false,
+        record,
+        ...(state.agentStatusByPaneKey[record.paneKey]
+          ? {
+              expectedStatus: {
+                paneKey: record.paneKey,
+                receivedAt: state.agentStatusByPaneKey[record.paneKey].updatedAt,
+                stateStartedAt: state.agentStatusByPaneKey[record.paneKey].stateStartedAt
+              }
+            }
+          : {})
+      },
       launchAgent: record.agent,
-      ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
+      ...(launchConfig ? { agentArgsOverride: startupPlan.launchConfig.agentArgs } : {}),
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),

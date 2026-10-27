@@ -21,6 +21,8 @@ import {
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+import type { AgentStatusSlice } from '@/store/slices/agent-status/agent-status-slice-contract'
+import { normalizeLaunchConfigRegistrationMetadata } from '@/store/slices/agent-status/agent-status-launch-config'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
@@ -216,6 +218,17 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const launchConfig = { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+      const registerLaunchConfig: AgentStatusSlice['registerAgentLaunchConfig'] = (
+        key,
+        config,
+        metadata
+      ) => {
+        mockStoreState.agentLaunchConfigByPaneKey[key] = {
+          launchConfig: config,
+          identity: normalizeLaunchConfigRegistrationMetadata(key, metadata)
+        }
+      }
+      mockStoreState.registerAgentLaunchConfig.mockImplementation(registerLaunchConfig)
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },

@@ -13,7 +13,8 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async (original) =
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
 }))
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
@@ -97,6 +98,7 @@ function renderNewChat(args: {
   agent: AgentType
   target?: RuntimeClientTarget
   seedOptions?: Record<string, string>
+  explicitOptions?: Record<string, string>
   sessionId?: string
 }) {
   const frames: Pill[] = []
@@ -116,6 +118,7 @@ function renderNewChat(args: {
         kind: 'new',
         heldOptions: {},
         worktree: 'id:wt-1',
+        ...(args.explicitOptions ? { explicitOptions: args.explicitOptions } : {}),
         ...(args.seedOptions ? { seedOptions: args.seedOptions } : {})
       }
     })
@@ -146,6 +149,21 @@ describe('a new chat picker’s first frame', () => {
     mocks.call.mockReset()
     mocks.coherent = false
     resetHostModelCatalogSnapshotsForTests()
+  })
+
+  it('shows the unlisted action model rather than a saved or listed replacement on every pending frame', async () => {
+    catalogAnswers(() => Promise.resolve(CLAUDE_LIST))
+    await preloadHostModelCatalogSnapshots(LOCAL_TARGET, ['claude'])
+    const view = renderNewChat({
+      agent: 'claude',
+      seedOptions: { model: 'opus[1m]', effort: 'high' },
+      explicitOptions: { model: 'unlisted-action' }
+    })
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(
+      view.frames.every((frame) => frame.model === 'unlisted-action' && frame.effort !== 'high')
+    ).toBe(true)
+    view.unmount()
   })
 
   it('names a saved Claude pick and its effort from the saved list on the first frame', async () => {

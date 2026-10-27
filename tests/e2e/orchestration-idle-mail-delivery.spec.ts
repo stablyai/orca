@@ -488,6 +488,64 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     ])
   })
 
+  // STA-11980: an unacked batch defers the nudge for newer mail instead of dropping it.
+  test('points newer mail once behind an unacked Delivery, after a turn that started in the Enter delay', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    // Agent launch, two idle edges and two settle windows.
+    test.setTimeout(180_000)
+    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
+    const reminder = 'which you have not acknowledged'
+    const pane = await openAgentPane({
+      titleOnStdin: { needle: reminder, title: CODEX_WORKING_TITLE }
+    })
+    pane.agent.setTitle(CODEX_WORKING_TITLE)
+    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+    const mailbox = await createRunMailbox(client, pane, 'Unacked Delivery')
+    await sendMail(client, mailbox, { subject: 'Held batch' })
+    const held = await client.call<WaitingCheck['result']>('orchestration.check', {
+      terminal: pane.handle
+    })
+    const heldId = held.result.deliveryId!
+    const newerId = await sendMail(client, mailbox, { subject: 'Newer mail' })
+
+    // The fake starts working as the reminder lands, inside the Enter delay.
+    pane.agent.setTitle(CODEX_IDLE_TITLE)
+    await expect
+      .poll(() => countOccurrences(pane.agent.readStdin(), reminder), {
+        timeout: DELIVERY_TIMEOUT_MS,
+        message: 'held-batch reminder never reached the agent'
+      })
+      .toBe(1)
+    expect(pane.agent.readStdin()).toContain(`--ack ${heldId}`)
+    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
+    // ast-grep-ignore: test-no-real-time-wait -- outlast the Enter delay; a withheld Enter has no signal
+    await orcaPage.waitForTimeout(1_000)
+    expect(countOccurrences(pane.agent.readStdin(), '\r')).toBe(0)
+
+    pane.agent.setTitle(CODEX_IDLE_TITLE)
+    await expectSubmitted(pane)
+    await expect
+      .poll(() => mailDisposition(readMailRow(userDataDir, newerId)), {
+        timeout: DELIVERY_TIMEOUT_MS
+      })
+      .toBe('pushed')
+
+    // A later idle edge with nothing newer stays quiet.
+    await driveToLiveIdle(client, pane)
+    // ast-grep-ignore: test-no-real-time-wait -- absence of a second pointer needs the delivery chain's window
+    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
+    expect(countOccurrences(pane.agent.readStdin(), reminder)).toBe(1)
+    expect(countOccurrences(pane.agent.readStdin(), '\r')).toBe(1)
+
+    const acked = await client.call<WaitingCheck['result']>('orchestration.check', {
+      terminal: pane.handle,
+      ack: heldId
+    })
+    expect(acked.result.messages.map((message) => message.subject)).toEqual(['Newer mail'])
+  })
+
   test('never points direct Run A mail after the pane binds Run B', async ({
     orcaPage,
     electronApp

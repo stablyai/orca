@@ -101,6 +101,7 @@ function listProps(worktrees: Worktree[]) {
     actions: { openWorktreeSession: noop, openNewWorktreeModal: noop },
     activeWorktreeScroll: { sectionListRef: stable.ref, onScrollToIndexFailed: noop },
     catalog: { refreshing: false, onRefresh: noop },
+    connectionVerdict: { kind: 'normal', label: 'Connected' },
     connState: 'connected',
     displayWorktrees: polled,
     embedded: true,

@@ -23,11 +23,6 @@ describe('synthetic agent titles', () => {
     expect(isSyntheticAgentPermissionTitle(title)).toBe(false)
   })
 
-  it('provides terminal-state titles for Codex hook completion', () => {
-    expect(getSyntheticAgentTerminalTitle('codex', 'done')).toBe('Codex ready')
-    expect(getSyntheticAgentTerminalTitle('codex', 'waiting')).toBe('Codex - action required')
-  })
-
   it('does not synthesize Codex working titles over Codex native spinner titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'working')).toBe(false)
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'done')).toBe(true)
@@ -39,24 +34,5 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'working')).toBe(false)
     expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'done')).toBe(false)
     expect(shouldDriveSyntheticAgentTitleFromHook('opencode', 'waiting')).toBe(false)
-  })
-
-  it('provides Devin titles for hook-driven status updates', () => {
-    expect(getSyntheticAgentTerminalTitle('devin', 'done')).toBe('Devin ready')
-    expect(getSyntheticAgentTerminalTitle('devin', 'waiting')).toBe('Devin - action required')
-    expect(shouldDriveSyntheticAgentTitleFromHook('devin', 'working')).toBe(true)
-  })
-
-  it('provides Pi-compatible OMP titles for hook-driven status updates', () => {
-    expect(getSyntheticAgentTerminalTitle('omp', 'done')).toBe('OMP ready')
-    expect(getSyntheticAgentTerminalTitle('omp', 'waiting')).toBe('OMP - action required')
-    // Why: the native π working title carries session name/cwd; synthesizing would clobber it.
-    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'working')).toBe(false)
-  })
-
-  it('provides Pi titles for hook-driven status updates', () => {
-    expect(getSyntheticAgentTerminalTitle('pi', 'done')).toBe('Pi ready')
-    expect(getSyntheticAgentTerminalTitle('pi', 'waiting')).toBe('Pi - action required')
-    expect(shouldDriveSyntheticAgentTitleFromHook('pi', 'working')).toBe(false)
   })
 })

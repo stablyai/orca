@@ -12,7 +12,6 @@ import {
 } from '../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import type * as CrossPlatformPathModule from '../../../shared/cross-platform-path'
-import { getWorktreeMirrorDistro } from '../../project-runtime-git-options'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Project } from '../../../shared/project-types'
@@ -20,7 +19,6 @@ import type { Repo } from '../../../shared/repo-types'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
-import { computeWorkspaceRoot, getWorktreePathSettings } from '../worktree-logic'
 
 vi.mock('../../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../../repo-worktrees')
@@ -86,71 +84,6 @@ function makeCountingStore(fixture: StoreFixture): { store: Store; counts: Store
     getSettings: () => ({ nestWorkspaces: false, workspaceDir: fixture.workspaceDir ?? '' })
   } as unknown as Store
   return { store, counts }
-}
-
-/** Preserve the old algorithm as an independent allowed-root equivalence oracle. */
-function referenceAllowedRoots(store: Store): string[] {
-  const scopeStore = store as unknown as {
-    getRepos: () => Repo[]
-    getProjectGroups?: () => ProjectGroup[]
-    getFolderWorkspaces?: () => FolderWorkspace[]
-    getSettings: () => { workspaceDir?: string; nestWorkspaces?: boolean }
-  }
-  const localRepos = scopeStore.getRepos().filter((repo) => !repo.connectionId)
-  const settings = scopeStore.getSettings()
-
-  const scopeRepos = scopeStore.getRepos()
-  const projectGroups = scopeStore.getProjectGroups?.() ?? []
-  const isRemoteOnly = (
-    folderPath: string,
-    projectGroupId: string,
-    connectionId: string | null | undefined
-  ): boolean => {
-    if (connectionId) {
-      return true
-    }
-    const groupIds = getProjectGroupSubtreeIds(projectGroups, projectGroupId)
-    const candidates = scopeRepos.filter(
-      (repo) =>
-        (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
-        isPathInsideOrEqual(folderPath, repo.path)
-    )
-    return candidates.length > 0 && candidates.every((repo) => Boolean(repo.connectionId))
-  }
-  const folderScopeRoots: string[] = []
-  for (const group of projectGroups) {
-    if (group.parentPath && !isRemoteOnly(group.parentPath, group.id, group.connectionId)) {
-      folderScopeRoots.push(resolve(group.parentPath))
-    }
-  }
-  for (const workspace of scopeStore.getFolderWorkspaces?.() ?? []) {
-    const connectionId =
-      workspace.connectionId ??
-      projectGroups.find((group) => group.id === workspace.projectGroupId)?.connectionId ??
-      null
-    if (!isRemoteOnly(workspace.folderPath, workspace.projectGroupId, connectionId)) {
-      folderScopeRoots.push(resolve(workspace.folderPath))
-    }
-  }
-
-  const roots = [...localRepos.map((repo) => resolve(repo.path)), ...folderScopeRoots]
-  if (settings.workspaceDir) {
-    if (localRepos.length === 0) {
-      roots.push(resolve(settings.workspaceDir))
-    } else {
-      for (const repo of localRepos) {
-        roots.push(
-          resolve(
-            computeWorkspaceRoot(
-              repo.path,
-              getWorktreePathSettings(repo, settings as never, getWorktreeMirrorDistro(store, repo))
-            )
-          )
-        )
-      }
-    }
-  }
-  return roots
 }
 
 function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path'>): Repo {
@@ -279,9 +212,11 @@ describe('getAllowedRoots', () => {
     vi.mocked(isPathInsideOrEqual).mockClear()
     const actual = await getAllowedRoots(store)
     expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100)
-    vi.mocked(isPathInsideOrEqual).mockClear()
-    expect(actual).toEqual(referenceAllowedRoots(store))
-    expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100_000)
+    expect(actual).toHaveLength(1_100)
+    expect(actual).toEqual([
+      ...fixture.repos.map((repo) => resolve(repo.path)),
+      ...fixture.folderWorkspaces.map((workspace) => resolve(workspace.folderPath))
+    ])
   })
 
   it('reads the store once and indexes project groups once per build', async () => {

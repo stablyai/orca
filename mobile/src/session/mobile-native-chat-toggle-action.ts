@@ -1,6 +1,9 @@
 import { MessageSquare, SquareTerminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
-import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import {
+  resolveMobileNativeChat,
+  type MobileNativeChatTab
+} from './native-chat/mobile-native-chat-eligibility'
 
 type ToggleTab = MobileNativeChatTab & {
   id: string

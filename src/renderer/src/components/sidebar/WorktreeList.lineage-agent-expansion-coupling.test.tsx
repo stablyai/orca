@@ -307,6 +307,8 @@ function setAgentLineageState(options: {
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [repo],
     retainedAgentsByPaneKey: {},
     revealWorktreeInSidebar: vi.fn(),
@@ -348,6 +350,8 @@ function setAgentLineageState(options: {
     dismissRetainedAgent: vi.fn(),
     sendPromptToSidebarAgentTarget: vi.fn(),
     tabsByWorktree: { parent: [makeParentTab()] },
+    unifiedTabsByWorktree: {},
+    structuredChatSleptAtByPaneKey: {},
     agentStatusByPaneKey
   }
 }

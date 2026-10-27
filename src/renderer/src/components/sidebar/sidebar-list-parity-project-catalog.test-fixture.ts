@@ -51,7 +51,10 @@ export function windowCatalogFromServerAnswers(base: Partial<AppState>): Partial
     SAVED_REPO_ORDER
   )
   const rows = mergeFetchedHostProjectCatalog({
-    previous: { projects: base.projects ?? [], projectHostSetups: base.projectHostSetups ?? [] },
+    previous: {
+      projects: base.endpointProjects ?? [],
+      projectHostSetups: base.endpointProjectHostSetups ?? []
+    },
     // An older server answers no project.list, so both sides derive its projection.
     fetched: projectHostSetupProjectionFromRepos(fetched),
     repos,
@@ -59,8 +62,8 @@ export function windowCatalogFromServerAnswers(base: Partial<AppState>): Partial
   })
   return {
     repos,
-    projects: [...rows.projects],
-    projectHostSetups: [...rows.projectHostSetups],
+    endpointProjects: [...rows.projects],
+    endpointProjectHostSetups: [...rows.projectHostSetups],
     manualRepoOrder: SAVED_REPO_ORDER,
     projectGroups: [
       ...(base.projectGroups ?? []),
@@ -98,10 +101,10 @@ export async function projectCatalogFromWindowState(state: AppState) {
     {
       repos: own(state.repos),
       projectGroups: own(state.projectGroups ?? []),
-      projects: (state.projects ?? []).filter((project) =>
+      projects: (state.endpointProjects ?? []).filter((project) =>
         project.sourceRepoIds.some((id) => own(state.repos).some((entry) => entry.id === id))
       ),
-      setups: (state.projectHostSetups ?? []).filter((setup) => !isServerHost(setup.hostId))
+      setups: (state.endpointProjectHostSetups ?? []).filter((setup) => !isServerHost(setup.hostId))
     },
     [server],
     { manualRepoOrder: state.manualRepoOrder, projectOrderBy: state.projectOrderBy }

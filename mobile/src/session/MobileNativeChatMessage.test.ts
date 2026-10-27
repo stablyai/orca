@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalStatusItem } from '../../../src/shared/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../src/shared/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
@@ -16,9 +17,10 @@ import { agentSessionFailureWords } from '../../../src/shared/agent-session-fail
 import { structuredQuestionTranscript } from '../../../src/shared/structured-agent-question-projection'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { colors, typography } from '../theme/mobile-theme'
-import { ANSWERED_PROMPT_ITEMS } from './mobile-native-chat-answered-prompts.test-fixture'
+import { ANSWERED_PROMPT_ITEMS } from './native-chat/input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { styles } from './mobile-native-chat-message-styles'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -80,6 +82,9 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+
+const PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
 
 function userMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'u1', role: 'user', blocks, timestamp: null, source: 'transcript' }
@@ -333,43 +338,51 @@ describe('MobileNativeChatMessage', () => {
       body
     })!
 
-  it.each([false, true])('draws an OpenCode usage warning with supplied reset: %s', (hasReset) => {
-    const resetsAt = new Date(2026, 9, 15, 15, 42).getTime()
-    const now = vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 9, 15, 12).getTime())
-    try {
-      const host = agentSessionFailureWords(
-        agentSessionFailureFact('usageLimitReached', {
-          detail: {
-            text: 'Internal error: Rate limit exceeded. Please try again later.',
-            audience: 'person'
-          },
-          ...(hasReset ? { usageLimit: { resetsAt } } : {})
-        }),
-        { surface: 'row', agentName: 'OpenCode' }
-      )
-      expect(host.text).toBe(
-        'OpenCode hit its usage limit. Send a message once it resets to continue.'
-      )
-      const tree = render(statusRow({ kind: 'status', tone: 'warning', ...host }))
-      const text = tree.root.find(
-        (node) => String(node.type) === 'Text' && node.props.selectable === true
-      )
-      expect(text.props.children).toEqual(
-        hasReset
-          ? expect.stringMatching(
-              /^OpenCode hit its usage limit\. Send a message once it resets to continue\. It resets at (3:42\sPM|15:42)\.$/
-            )
-          : host.text
-      )
-      expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
-      expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
-        colors.statusAmber
-      )
-      expect(markdownIn(tree.root)).toEqual([])
-    } finally {
-      now.mockRestore()
+  it.each(['without reset', 'with reset', 'from an old host'] as const)(
+    'draws an OpenCode usage warning %s',
+    (source) => {
+      const hasReset = source === 'with reset'
+      const resetsAt = new Date(2026, 9, 15, 15, 42).getTime()
+      const now = vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 9, 15, 12).getTime())
+      try {
+        const host = agentSessionFailureWords(
+          agentSessionFailureFact('usageLimitReached', {
+            detail: {
+              text: 'Internal error: Rate limit exceeded. Please try again later.',
+              audience: 'person'
+            },
+            ...(hasReset ? { usageLimit: { resetsAt } } : {})
+          }),
+          { surface: 'row', agentName: 'OpenCode' }
+        )
+        expect(host.text).toBe('OpenCode hit its usage limit.')
+        const hostText =
+          source === 'from an old host'
+            ? 'OpenCode hit its usage limit. Send a message once it resets to continue.'
+            : host.text
+        const body: unknown = { kind: 'status', tone: 'warning', ...host, text: hostText }
+        if (!isAdmissibleAgentJournalItemBody(body) || body.kind !== 'status') {
+          throw new Error('Status fixture was not admitted')
+        }
+        const tree = render(statusRow(body))
+        const text = tree.root.find(
+          (node) => String(node.type) === 'Text' && node.props.selectable === true
+        )
+        expect(text.props.children).toEqual(
+          hasReset
+            ? expect.stringMatching(/^OpenCode hit its usage limit\. It resets at \S.*\.$/u)
+            : hostText
+        )
+        expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
+        expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
+          colors.statusAmber
+        )
+        expect(markdownIn(tree.root)).toEqual([])
+      } finally {
+        now.mockRestore()
+      }
     }
-  })
+  )
 
   it.each<readonly [string, NativeChatMessage, string]>([
     [
@@ -623,6 +636,43 @@ describe('MobileNativeChatMessage', () => {
     expect(findAllByHostType(tree.root, 'Image')).toHaveLength(0)
     const texts = findAllByHostType(tree.root, 'Text').map((node) => String(node.children.join('')))
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
+  })
+
+  // An older host refuses the read; the row keeps today's placeholder.
+  it.each([
+    [
+      { ok: true, result: { content: PNG, isBinary: true, isImage: true, mimeType: 'image/png' } },
+      [`data:image/png;base64,${PNG}`]
+    ],
+    [{ ok: false, error: { code: 'forbidden', message: 'not available to mobile clients' } }, []]
+  ] as const)('reads a stored image from the chat host: %j', async (reply, thumbnails) => {
+    const path = '/home/me/.orca/agent-session-attachments/6f1c2a4e/shot.png'
+    const sendRequest = vi.fn(async () => ({ id: '1', ...reply }))
+    await act(async () => {
+      renderer = create(
+        createElement(
+          MobileNativeChatRowOverlaysContext.Provider,
+          {
+            value: {
+              openImage: vi.fn(),
+              openActions: vi.fn(),
+              imageClient: stubRpcClient({ sendRequest })
+            }
+          },
+          createElement(MobileNativeChatMessage, {
+            message: userMessage([{ type: 'image-ref', path, alt: 'shot' }])
+          })
+        )
+      )
+    })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'agentSessionAttachment.read',
+      { path },
+      expect.anything()
+    )
+    expect(
+      findAllByHostType(renderer!.root, 'Image').map((image) => image.props.source.uri)
+    ).toEqual(thumbnails)
   })
 
   it('draws your message as selectable Markdown in the bubble’s dark-on-light colours', () => {

@@ -49,8 +49,11 @@ async function setupMultiplexStream(): Promise<{
     return { data: snapshot.data, cols: 80, rows: 24, seq: snapshot.seq }
   })
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
     serializeTerminalBuffer: serializeSnapshot,
@@ -59,6 +62,7 @@ async function setupMultiplexStream(): Promise<{
     getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
     getLayout: vi.fn().mockReturnValue({ seq: 1 }),
     registerRemoteTerminalViewSubscriber: vi.fn(() => () => {}),
+    isSoleRemoteTerminalQueryOwner: () => false,
     subscribeToTerminalData: vi.fn(
       (_ptyId: string, cb: (data: string, meta?: OutputMeta) => void) => {
         emitOutput = cb

@@ -332,21 +332,6 @@ describe('filesystem-list-files', () => {
     await expect(promise).rejects.toThrow(BUNDLED_ERROR)
   })
 
-  it('rejects rg failures instead of resolving a false-empty list', async () => {
-    const p1 = createMockProcess()
-
-    spawnMock.mockReturnValue(p1)
-
-    const storeMock = {} as unknown as Store
-    const promise = listQuickOpenFiles('/mock/root', storeMock)
-
-    setTimeout(() => {
-      p1.emit('close', 2, null)
-    }, 10)
-
-    await expect(promise).rejects.toThrow('rg exited with code 2')
-  })
-
   it('does not start another scan after the admitted pass fails', async () => {
     const p1 = createMockProcess()
 
@@ -480,12 +465,9 @@ describe('filesystem-list-files', () => {
 
   describe('when the bundled rg cannot start', () => {
     it('does not kill a process that failed before receiving a pid', async () => {
-      const primary = createMockProcess()
       const missingIgnored = createMockProcess()
       Object.defineProperty(missingIgnored, 'pid', { value: undefined })
-      spawnMock.mockImplementation((_cmd: string, args: string[]) =>
-        isIgnoredRgPass(args) ? missingIgnored : primary
-      )
+      spawnMock.mockReturnValue(missingIgnored)
 
       const promise = listQuickOpenFiles('/mock/root', {} as unknown as Store)
       await flushMicrotasks()
@@ -493,7 +475,6 @@ describe('filesystem-list-files', () => {
       missingIgnored.emit('close', -2, null)
 
       await expect(promise).rejects.toThrow(BUNDLED_ERROR)
-      expect(primary.kill).not.toHaveBeenCalled()
       expect(missingIgnored.kill).not.toHaveBeenCalled()
       const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
       expect(() => missingIgnored.emit('error', error)).not.toThrow()

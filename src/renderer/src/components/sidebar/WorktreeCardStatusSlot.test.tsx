@@ -297,6 +297,30 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('data-tooltip-root')
   })
 
+  it('marks the review status as last known while its WSL host is off (E9)', () => {
+    const render = (reviewStale: boolean) =>
+      renderToStaticMarkup(
+        <WorktreeCardStatusSlot
+          worktreeId="wt-1"
+          showStatus
+          showUnreadAction={false}
+          isUnread={false}
+          unreadTooltip="Mark as unread"
+          onPointerDown={vi.fn()}
+          onToggleUnread={vi.fn()}
+          prDisplay={review}
+          newCardStyle
+          reviewStale={reviewStale}
+        />
+      )
+    const stale = render(true)
+    expect(stale).toContain('PR checks: Failed · Last known status')
+    expect(stale).toContain('shimmer')
+    // The cached badge is kept, not dropped.
+    expect(stale).toContain('text-rose-500/85')
+    expect(render(false)).not.toContain('Last known status')
+  })
+
   it('uses the unified compact review glyph for GitLab MR status', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot

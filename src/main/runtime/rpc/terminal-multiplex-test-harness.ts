@@ -25,9 +25,13 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({}),
+    getTerminalLaunchResult: () => undefined,
     subscribeToPtyExit: vi.fn(() => vi.fn()),
     // View registration suppresses competing query responders (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
+    isSoleRemoteTerminalQueryOwner: () => false,
+    answerYieldedTerminalQueries: vi.fn(),
     // Default guarded handle lookup to live PTY for legacy harness stubs; null/stale cases override it (#7718).
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({ rpc: vi.fn() }))
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.rpc
 }))
 vi.mock(
@@ -25,6 +26,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
+import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
 import type { SessionOptionDescriptor } from '../../src/shared/native-chat-session-options'
 import { createClaudeModelCatalogProbe } from '../../src/main/claude/claude-model-catalog-probe'
@@ -111,6 +113,7 @@ async function hostCatalog(listingLands: Promise<void>) {
   const modelCatalog = createAgentModelCatalogService({
     store,
     getRecord: () => record,
+    getConversation: () => agentSessionConversationView(record),
     drivesRecord: () => true,
     resolveAccountHome: async () => record.accountHome,
     recordWorkspacePath: async () => join(dir, 'project'),
@@ -147,7 +150,10 @@ async function hostCatalog(listingLands: Promise<void>) {
     deps: {
       adapter: {},
       agents: claudeAndCodexDeclared(),
-      store: { getRecord: () => record },
+      store: {
+        getRecord: () => record,
+        getConversation: () => agentSessionConversationView(record)
+      },
       modelCatalog
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),

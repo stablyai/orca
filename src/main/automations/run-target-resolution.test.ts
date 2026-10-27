@@ -147,15 +147,6 @@ describe('resolveAutomationRunTarget projectId drift', () => {
     expect(result).toMatchObject({ ok: true, cwd: '/repo' })
   })
 
-  it('resolves when the snapshot is at the git: tier and the setup climbed to github:', () => {
-    const store = makeStore([makeSetup()], [makeRepo()])
-    const automation = makeAutomation(makeRunContext({ projectId: 'git:github.com/o/r' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({ ok: true, cwd: '/repo' })
-  })
-
   it('still blocks when the repoId no longer matches the setup', () => {
     const store = makeStore([makeSetup({ repoId: 'repo-2' })], [makeRepo()])
     const automation = makeAutomation(makeRunContext({ repoId: 'repo-1' }))

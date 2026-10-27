@@ -95,7 +95,6 @@ jobs:
           config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
           config/scripts/computer-use-smoke.test.mjs
           src/main/computer/computer-provider-lifecycle.test.ts
-          src/main/computer/computer-provider-unavailable-message.test.ts
           src/main/computer/sidecar-client.test.ts
           src/main/computer/macos-native-provider-client.test.ts
           src/main/computer/macos-native-provider-socket.test.ts
@@ -121,7 +120,7 @@ jobs:
           src/main/runtime/rpc/methods/computer.test.ts
           src/main/runtime/rpc/methods/computer-actions.test.ts
           src/cli/runtime/envelope-schema.test.ts
-          src/shared/remote-runtime-client.test.ts
+          src/shared/remote-runtime/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel

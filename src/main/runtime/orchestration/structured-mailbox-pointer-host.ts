@@ -45,7 +45,7 @@ async function readPointerSessionFacts(
     return null
   }
   const host = getStructuredAgentSessionHost()
-  const boundary = host?.deps.store.getRecord(sessionId)?.providerContextBoundary
+  const boundary = host?.deps.store.getConversation(sessionId)?.providerContextBoundary
   return {
     submissions: boundary
       ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
@@ -80,14 +80,18 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return getStructuredAgentSessionHost()?.currentWork(sessionId)?.hasActionablePrompt() ?? null
     },
 
+    isWorkingNow(sessionId) {
+      return getStructuredAgentSessionHost()?.currentWork(sessionId)?.working() ?? false
+    },
+
     currentFence(sessionId) {
       return (
-        getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
+        getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.currentFence ?? null
       )
     },
 
     currentContextClearOperationId(sessionId) {
-      return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
+      return getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
         ?.providerContextBoundary?.operationId
     },
 
@@ -112,9 +116,10 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             operationId: input.operationId,
             expectedRuntimeFence: input.expectedRuntimeFence,
             beforeRun: () => {
+              const work = host.currentWork(input.sessionId)
               if (
                 input.body.from?.orchestration?.message === 'mail-notice' &&
-                host.currentWork(input.sessionId)?.hasActionablePrompt()
+                (work?.hasActionablePrompt() || (input.holdWhileWorking && work?.working()))
               ) {
                 throw new StructuredMailHeldError()
               }

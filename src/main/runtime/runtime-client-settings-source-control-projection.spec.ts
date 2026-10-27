@@ -50,3 +50,12 @@ describe('RuntimeClientSettingsController source control launch recipes', () => 
     ])
   })
 })
+
+describe('RuntimeClientSettingsController source control list order', () => {
+  it('publishes the group order so paired clients list changes the same way', () => {
+    expect(projectionOf({ sourceControlGroupOrder: 'staged-first' }).sourceControlGroupOrder).toBe(
+      'staged-first'
+    )
+    expect(projectionOf({}).sourceControlGroupOrder).toBe('changes-first')
+  })
+})

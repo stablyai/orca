@@ -14,6 +14,10 @@ export function isAntigravityFeedbackTool(toolName: string | undefined): boolean
   return toolName === 'ask_question' || toolName === 'ask_permission'
 }
 
+function isAntigravitySubagentTool(toolName: string | undefined): boolean {
+  return toolName === 'invoke_subagent' || toolName === 'send_message'
+}
+
 export function normalizeAntigravityEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -22,6 +26,15 @@ export function normalizeAntigravityEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
+  const conversationId = readFirstString(hookPayload, ['conversationId', 'conversation_id'])
+  const subagentParent = state.antigravitySubagentParentByPaneKey.get(paneKey)
+  if (subagentParent && conversationId && conversationId !== subagentParent) {
+    // Subagents run inside the parent agy under their own conversationId and never carry user input.
+    if (!readFirstString(hookPayload, ['lastUserInput'])) {
+      return null
+    }
+    state.antigravitySubagentParentByPaneKey.delete(paneKey)
+  }
   if (eventName === 'PreInvocation') {
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
   } else if (
@@ -34,7 +47,17 @@ export function normalizeAntigravityEvent(
   }
 
   const toolName = readAntigravityToolCall(hookPayload).toolName
+  if (
+    conversationId &&
+    (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
+    isAntigravitySubagentTool(toolName)
+  ) {
+    state.antigravitySubagentParentByPaneKey.set(paneKey, conversationId)
+  }
+
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
+  // agy ends the parent's turn with fullyIdle=false while its helpers run; they hold the pane open.
+  const heldOpenByHelpers = stopStillBusy && state.antigravitySubagentParentByPaneKey.has(paneKey)
   const stateName =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
       ? 'waiting'
@@ -75,11 +98,15 @@ export function normalizeAntigravityEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    mainAgent: heldOpenByHelpers ? { state: 'done', stateStartedAt: Date.now() } : undefined
   })
   // Stop between tools can report fullyIdle=false; only an idle Stop is terminal.
-  if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
-    state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
+  if (eventName === 'Stop' && !stopStillBusy) {
+    state.antigravitySubagentParentByPaneKey.delete(paneKey)
+    if (transcriptPath) {
+      state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
+    }
   }
   return payload
 }

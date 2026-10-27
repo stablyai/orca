@@ -1,3 +1,4 @@
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
 import {
@@ -71,9 +72,11 @@ export type DashboardSnapshotState = Pick<
       Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
   >
 
+export type DashboardSnapshotInput = DashboardSnapshotState & { chatNames: StructuredChatTabNames }
+
 /** Reuse sidebar row/index derivation for serializable cards; fold terminal-less subagents into their spawning card. */
 export function buildDashboardSnapshot(
-  state: DashboardSnapshotState,
+  state: DashboardSnapshotInput,
   now: number,
   options: {
     launchRouteStore?: AgentLaunchRouteView
@@ -239,7 +242,9 @@ export function buildDashboardSnapshot(
             row,
             generatedTitlesEnabled,
             terminalLayoutsByTabId[row.tab.id],
-            paneTitlesByTabId[row.tab.id]
+            paneTitlesByTabId[row.tab.id],
+            state.chatNames,
+            state.unifiedTabsByWorktree
           )
         ),
         ...(terminalInput ? { terminalInput } : {})

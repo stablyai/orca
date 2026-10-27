@@ -1,6 +1,6 @@
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { basename } from '@/lib/path'
-import type { SourceControlSectionArea } from './section-order'
+import type { SourceControlSectionArea } from '../../../../../../shared/source-control-section-order'
 import type { SourceControlTreeNode } from '../../source-control-tree'
 import type { FlatEntry } from './use-selection'
 

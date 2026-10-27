@@ -56,7 +56,7 @@ export function createPurgeStaleRuntimeHostState(
 
           // Why: a repoId-less setup on the removed host can still split a surviving project group, so drop every setup it owns.
           const survivingSetups: ProjectHostSetup[] = []
-          for (const setup of s.projectHostSetups) {
+          for (const setup of s.endpointProjectHostSetups) {
             if (isRemovedRuntimeHostId(setup.hostId, removed)) {
               if (setup.repoId) {
                 repoIdsWithRemovedOwners.add(setup.repoId)
@@ -68,7 +68,7 @@ export function createPurgeStaleRuntimeHostState(
               }
             }
           }
-          const setupsChanged = survivingSetups.length !== s.projectHostSetups.length
+          const setupsChanged = survivingSetups.length !== s.endpointProjectHostSetups.length
           const projectGroups = dropRuntimeHostedCatalogRows(s.projectGroups, removed)
           const folderWorkspaces = dropRuntimeHostedCatalogRows(s.folderWorkspaces, removed)
           const groupsChanged =
@@ -278,7 +278,7 @@ export function createPurgeStaleRuntimeHostState(
           return {
             ...purgeState,
             ...(reposChanged ? { repos: survivingRepos } : {}),
-            ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
+            ...(setupsChanged ? { endpointProjectHostSetups: survivingSetups } : {}),
             ...(groupsChanged ? { projectGroups, folderWorkspaces } : {}),
             ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
             ...(detectedChanged ? { detectedWorktreesByRepo } : {}),

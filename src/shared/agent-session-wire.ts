@@ -223,6 +223,7 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
+  runtimePermission?: { fence: number; mode: string | null } | null
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string
@@ -257,9 +258,20 @@ export type AgentSessionStatusSummary = {
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = { message: string; failedAt: number }
 
+export type AgentSessionConversationName = {
+  sessionId: string
+  conversationName: string | null
+  namingError?: AgentSessionNamingError
+}
+
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
 export type AgentSessionStatusEvent =
-  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[]; namingActiveSessionIds?: string[] }
+  | {
+      type: 'snapshot'
+      sessions: AgentSessionStatusSummary[]
+      namingActiveSessionIds?: string[]
+      conversationNames?: AgentSessionConversationName[]
+    }
   | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
 

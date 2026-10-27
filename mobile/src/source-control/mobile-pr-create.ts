@@ -1,3 +1,4 @@
+import { isHostedReviewCreateEligibilityConfirmable } from '../../../src/shared/hosted-review-create-confirmation'
 import { hostedReviewCopy } from './hosted-review-copy'
 import {
   buildMobileHostedReviewCreateParams,
@@ -42,12 +43,23 @@ export function getMobilePrCreateSuccessWarning(
 
 export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string | null {
   const copy = hostedReviewCopy(prefill.provider)
-  if (prefill.canCreate !== false || shouldPushBeforeMobileHostedReviewCreate(prefill)) {
-    // Only accepted not_found proves no review exists; missing, found or unavailable must block both Create and Push & Create.
-    if (prefill.reviewLookupOutcome !== 'not_found') {
-      return `Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Try again in a moment.`
-    }
+  // Hosts older than reviewLookupOutcome cannot prove no review exists, and mobile has no lookup of its own.
+  const reviewLookupKnown = prefill.reviewLookupOutcome !== undefined
+  if (
+    reviewLookupKnown &&
+    isHostedReviewCreateEligibilityConfirmable({
+      eligibility: prefill,
+      reviewLookup: 'unknown',
+      hasHardRefreshError: false
+    })
+  ) {
     return null
+  }
+  if (
+    prefill.reviewLookupOutcome === 'unavailable' ||
+    (!reviewLookupKnown && (prefill.canCreate === true || prefill.blockedReason === 'needs_push'))
+  ) {
+    return `Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Try again in a moment.`
   }
   switch (prefill.blockedReason) {
     case 'dirty':

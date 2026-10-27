@@ -58,7 +58,7 @@ async function mount(initial: Props) {
       enabled: true,
       fence: props.fence,
       mutate,
-      hostSupport: { permissionModes: true, coherentModelCatalog: true }
+      hostSupport: { permissionModes: true, coherentModelCatalog: true, statusFeed: false }
     })
     latest = options
     frames.push(modelChoices(options.optionSnapshot))

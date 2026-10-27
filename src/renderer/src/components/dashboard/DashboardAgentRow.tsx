@@ -1,5 +1,8 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { useClaudeAgentRowView } from './use-claude-agent-row-view'
+import { ClaudeAgentViewIndicator } from '@/components/ClaudeAgentViewIndicator'
 import {
   AgentStateDot,
   agentStateLabel,
@@ -105,6 +108,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  const view = useClaudeAgentRowView(agent)
+  const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
@@ -117,10 +122,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      // Why: subagent rows have no pane of their own, so focus the spawning parent's pane.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+      void viewClaudeAgentFromRow(agent)
     },
-    [onActivate, agent.tab.id, agent.activationPaneKey, agent.paneKey]
+    [onActivate, agent]
   )
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
@@ -218,7 +223,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
-      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
+      data-focused-agent-pane={highlighted ? 'true' : undefined}
+      data-current={view?.current ? 'true' : undefined}
+      aria-current={view?.current ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
@@ -285,12 +292,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
             isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
             // Why: the selected-row fill washes out muted text — keep it readable.
-            isFocusedPane && !isUnvisited && 'text-foreground/90'
+            highlighted && !isUnvisited && 'text-foreground/90'
           )}
           title={displayLabel}
         >
           {displayLabel}
         </span>
+        <ClaudeAgentViewIndicator view={view} showChild={!childAgentsExpanded} />
         {model && (
           <span
             className={cn(

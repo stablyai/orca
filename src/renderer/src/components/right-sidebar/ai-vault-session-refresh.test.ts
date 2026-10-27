@@ -274,52 +274,39 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(lastCallArgs()).toMatchObject({ limit: 250, scopePaths: ['/repo'] })
   })
 
-  it('reuses a loaded larger depth when lowering and raising within its coverage', async () => {
+  it('shows cached coverage while revalidating each selected depth', async () => {
     const loaded = {
       ...EMPTY_RESULT,
       sessions: Array.from({ length: 600 }, (_, index) => makeVaultSession(index))
     }
-    listSessionsMock.mockResolvedValueOnce(loaded)
+    listSessionsMock.mockImplementation(async (args) => ({
+      ...loaded,
+      sessions: loaded.sessions.slice(0, args.limit)
+    }))
     await renderHook([], 'ssh:dev-box', 1000)
     await flushMicrotasks()
-
     await rerenderHook([], 'ssh:dev-box', 250)
     await flushMicrotasks()
     expect(latest?.sessions).toHaveLength(250)
-
     await rerenderHook([], 'ssh:dev-box', 500)
     await flushMicrotasks()
     expect(latest?.sessions).toHaveLength(500)
-    expect(listSessionsMock).toHaveBeenCalledTimes(1)
+    expect(listSessionsMock).toHaveBeenCalledTimes(3)
+    expect(listSessionsMock.mock.calls.every(([args]) => args.force === false)).toBe(true)
   })
 
-  it('reuses the rendered result after the panel remounts on a tab switch', async () => {
-    const loaded = { ...EMPTY_RESULT, sessions: [makeVaultSession(1)] }
-    listSessionsMock.mockResolvedValueOnce(loaded)
-    await renderHook(['/repo'], 'ssh:dev-box', 250)
-    await flushMicrotasks()
-
-    roots.splice(0).forEach((root) => act(() => root.unmount()))
-    await renderHook(['/repo'], 'ssh:dev-box', 250)
-    await flushMicrotasks()
-
-    expect(listSessionsMock).toHaveBeenCalledTimes(1)
-    expect(latest?.sessions).toEqual(loaded.sessions)
-  })
-
-  it('reuses each workspace result when switching back across tabs', async () => {
-    listSessionsMock
-      .mockResolvedValueOnce({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
-      .mockResolvedValueOnce({ ...EMPTY_RESULT, sessions: [makeVaultSession(2)] })
+  it('revalidates each workspace when switching back across tabs', async () => {
+    listSessionsMock.mockImplementation(async (args) => ({
+      ...EMPTY_RESULT,
+      sessions: [makeVaultSession(args.scopePaths?.[0] === '/repo-a' ? 1 : 2)]
+    }))
     await renderHook(['/repo-a'], 'ssh:dev-box', 250)
     await flushMicrotasks()
-
     await rerenderHook(['/repo-b'], 'ssh:dev-box', 250)
     await flushMicrotasks()
     await rerenderHook(['/repo-a'], 'ssh:dev-box', 250)
     await flushMicrotasks()
-
-    expect(listSessionsMock).toHaveBeenCalledTimes(2)
+    expect(listSessionsMock).toHaveBeenCalledTimes(3)
     expect(latest?.sessions[0]?.id).toBe('session-1')
   })
 
@@ -432,7 +419,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     await flushMicrotasks()
     const firstResult = latest?.scanResult
 
-    // Same scannedAt = the snapshot already on screen was replayed.
+    // Repeated stamp and equal content reuse the snapshot already on screen.
     listSessionsMock.mockResolvedValueOnce({ ...EMPTY_RESULT })
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()
@@ -448,7 +435,9 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.scanResult).toBe(firstResult)
   })
 
-  // Merged stamps use the newest host clock; lagging-host changes require structural reconciliation.
+  // An 'all' result is a merge of legs on independent clocks, stamped with the
+  // newest leg. A paired host whose clock lags the desktop can return new
+  // sessions while the merged stamp repeats; final content decides publication.
   it('applies a changed all-host result whose merged scannedAt stood still', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
     listSessionsMock.mockResolvedValueOnce({
@@ -472,7 +461,8 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.sessions[1]?.id).toBe('session-2')
   })
 
-  // Empty/unknown scopes also use the main-process all-host merge and cannot trust its stamp.
+  // The main process routes an empty or unrecognized scope to the same all-host
+  // merge; its changed content must also reach reconciliation.
   it('treats a scope that normalizes to all-host as merged', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
     listSessionsMock.mockResolvedValueOnce({
@@ -508,7 +498,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     const applied = latest?.scanResult
     const appliedSessions = latest?.sessions
 
-    // Structural reconciliation must still skip identical IPC clones after bypassing the all-host stamp guard.
+    // Reconciliation recognises an independently cloned identical body.
     listSessionsMock.mockResolvedValueOnce(structuredClone(first))
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()

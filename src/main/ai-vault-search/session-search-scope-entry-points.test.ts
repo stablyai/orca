@@ -7,12 +7,13 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AI_VAULT_METHODS } from '../runtime/rpc/methods/ai-vault'
 import {
   installSessionSearchScopeCatalogSource,
-  resetSessionSearchScopeCatalogForTests
+  resetSessionSearchScopeCatalogForTests,
+  type SessionSearchScopeCatalog
 } from './session-search-scope-catalog'
 import { searchSessionService, setSessionSearchService } from './session-search-service-registry'
 
-const CATALOG = {
-  repos: [{ id: 'repo-1', path: '/work/app' }],
+const CATALOG: SessionSearchScopeCatalog = {
+  repos: [{ id: 'repo-1', path: '/work/app', displayName: 'app', badgeColor: '', addedAt: 0 }],
   projects: [],
   projectHostSetups: [],
   worktreeMeta: {},

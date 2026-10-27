@@ -15,7 +15,7 @@ import {
   type FileWriteResult
 } from '../../shared/file-write-disk-precondition'
 import { utf8ByteLength } from '../../shared/mobile-markdown-document'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { assertFileMutationOwnershipCapability } from '../../shared/file-mutation-ownership'
 import type { PersistedOpenFile } from '../../shared/workspace-session-state-types'
 import { readLocalRuntimeFilePrefix } from './files/file-reads'

@@ -3,7 +3,7 @@ import { createElement, useRef } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import type * as NativeChatSendError from './use-mobile-native-chat-send-error'
+import type * as NativeChatSendError from './native-chat/use-mobile-native-chat-send-error'
 
 const seen = vi.hoisted(() => ({
   toasts: new Array<string>(),
@@ -33,7 +33,7 @@ vi.mock('../platform/haptics', () => ({
 }))
 
 // Stub off-path native chat dependencies to keep Expo out of this mic test.
-vi.mock('./use-mobile-native-chat-send-error', async (importOriginal) => ({
+vi.mock('./native-chat/use-mobile-native-chat-send-error', async (importOriginal) => ({
   ...(await importOriginal<typeof NativeChatSendError>()),
   useMobileNativeChatSendError: () => ({
     message: null,
@@ -46,7 +46,7 @@ vi.mock('./use-mobile-native-chat-send-error', async (importOriginal) => ({
 vi.mock('./use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
-vi.mock('./use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },

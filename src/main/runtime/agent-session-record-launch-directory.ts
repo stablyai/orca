@@ -14,6 +14,8 @@ export function pinAgentSessionRecordLaunchDirectory(
 }
 
 /** Only floating ids need pinned paths; worktree/folder ids already name durable places. */
-export function agentSessionPinnedLaunchDirectory(record: AgentSessionRecord): string | undefined {
+export function agentSessionPinnedLaunchDirectory(
+  record: Pick<AgentSessionRecord, 'launchDirectory' | 'location'>
+): string | undefined {
   return isFloatingWorkspaceId(record.location.workspaceId) ? record.launchDirectory : undefined
 }

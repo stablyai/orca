@@ -12,15 +12,21 @@ import { isAgentPromptStalledError } from '../agent-prompt-submission-verificati
 /** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */
 export type TaskDispatchResult = 'dispatched' | 'dispatched-unobserved' | 'stale-base-refused'
 
-// Warn after two 5-minute heartbeat periods.
-const HUNG_THRESHOLD_MS = 10 * 60 * 1000
-
 // Warn only: automatically failing a slow but healthy worker is worse than retaining a hung slot.
-export function warnStaleDispatches(db: OrchestrationDb, onLog: (msg: string) => void): void {
-  const thresholdIso = new Date(Date.now() - HUNG_THRESHOLD_MS).toISOString()
+export function warnStaleDispatches(
+  db: OrchestrationDb,
+  onLog: (msg: string) => void,
+  heartbeatIntervalMinutes: number | null
+): void {
+  // Workers told not to send heartbeats cannot miss one.
+  if (heartbeatIntervalMinutes === null) {
+    return
+  }
+  // Warn after two missed heartbeat periods.
+  const minutes = heartbeatIntervalMinutes * 2
+  const thresholdIso = new Date(Date.now() - minutes * 60 * 1000).toISOString()
   const stale = db.getStaleDispatches(thresholdIso)
   for (const ctx of stale) {
-    const minutes = Math.round(HUNG_THRESHOLD_MS / 60000)
     onLog(
       `Warning: worker ${ctx.assignee_handle ?? '<unknown>'} on task ${ctx.task_id} has not sent a heartbeat in ~${minutes} min (dispatch ${ctx.id})`
     )
@@ -72,6 +78,7 @@ export async function dispatchTaskToWorker(params: {
   // Return circuit breaks to the coordinator that owns the failed-task list.
   onCircuitBroken: (taskId: string) => void
   nestedWorkerMaxDepth: number
+  heartbeatIntervalMinutes: number | null
 }): Promise<TaskDispatchResult> {
   const { db, runtime, task, targetHandle, baseDrift, onLog } = params
   // Refuse stale bases before creating dispatch context so recoverable drift cannot consume circuit-breaker budget.
@@ -114,6 +121,7 @@ export async function dispatchTaskToWorker(params: {
     taskId: task.id,
     dispatchId: dispatch.id,
     canDispatchSubWorkers: dispatch.depth < params.nestedWorkerMaxDepth,
+    heartbeatIntervalMinutes: params.heartbeatIntervalMinutes,
     taskSpec: strippedSpec,
     coordinatorHandle: params.coordinatorHandle,
     workerHandle: targetHandle,

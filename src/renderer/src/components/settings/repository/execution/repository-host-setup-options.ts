@@ -45,11 +45,16 @@ export function getSetupStateLabel(setupState: ProjectHostSetupState): string {
 
 export function buildSetupHostOptions({
   projectHostSetups,
+  outclaimed = false,
   hostOptions
 }: {
+  outclaimed?: boolean
   projectHostSetups: ProjectHostSetup[]
   hostOptions: readonly ExecutionHostRegistryEntry[]
 }): SetupHostOption[] {
+  if (outclaimed) {
+    return []
+  }
   const setupHostIds = new Set(projectHostSetups.map((setup) => setup.hostId))
   return pickerExecutionHosts(hostOptions)
     .filter(

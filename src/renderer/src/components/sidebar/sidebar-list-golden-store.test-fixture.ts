@@ -150,8 +150,8 @@ export function buildGoldenStoreState(
       // Cross-project lineage: a lab workspace spawned from orca's feat-a.
       [lMr.id]: lineage(lMr, oA)
     },
-    projects,
-    projectHostSetups: [setup(orca, 'local'), setup(orcaSsh, 'ssh:gpu-vm')],
+    endpointProjects: projects,
+    endpointProjectHostSetups: [setup(orca, 'local'), setup(orcaSsh, 'ssh:gpu-vm')],
     projectGroups: [
       group('pg-work', 'Work', { tabOrder: 0 }),
       group('pg-nested', 'Nested', { parentGroupId: 'pg-work', tabOrder: 0 }),

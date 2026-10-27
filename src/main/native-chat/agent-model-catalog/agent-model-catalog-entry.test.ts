@@ -39,3 +39,26 @@ describe('the effort menu of a model whose configured effort one listing lacks',
     expect(merged).not.toHaveProperty('defaultEffort')
   })
 })
+
+const unknownChat = (at: number): AgentModelCatalogListing => ({
+  ...listing('live-session', at, []),
+  models: [
+    { id: 'openai/gpt-6', label: 'GPT-6', isDefault: false, efforts: [], effortsKnown: false }
+  ]
+})
+
+describe('a model whose newer chat listing does not know its efforts', () => {
+  it('takes the menu the older listing supplies', () => {
+    const merged = model(listing('probe', 1, menu('off', 'high')), unknownChat(2))
+    expect(merged?.efforts).toEqual(menu('off', 'high'))
+    expect(merged).not.toHaveProperty('effortsKnown')
+  })
+
+  it('keeps an older listing’s explicit empty menu', () => {
+    expect(model(listing('probe', 1, []), unknownChat(2))).not.toHaveProperty('effortsKnown')
+  })
+
+  it('stays unknown when no listing knows its menu', () => {
+    expect(model(unknownChat(1), unknownChat(2))).toMatchObject({ effortsKnown: false })
+  })
+})

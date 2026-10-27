@@ -35,7 +35,7 @@ export {
 
 export function listEnvironments(
   userDataPath: string,
-  options: { requireStoreFile?: boolean } = {}
+  options: Parameters<typeof readEnvironmentStore>[1] = {}
 ): KnownRuntimeEnvironment[] {
   return readEnvironmentStore(userDataPath, options).environments
 }
@@ -79,7 +79,7 @@ function saveEnvironmentFromPairingCode(
 ): AddEnvironmentOutcome {
   const offer = parseRemotePairingCode(userDataPath, args.pairingCode)
   const now = args.now ?? Date.now()
-  const store = readPersistedEnvironmentStore(userDataPath)
+  const store = readPersistedEnvironmentStore(userDataPath, { recoverBlankStore: true })
   const samePersisted = findEnvironmentWithHostKey(store.environments, offer.publicKeyB64)
   // Why the overlaid entry: SSH access or a deployment lives only there, and the guard reads it.
   const samePaired =

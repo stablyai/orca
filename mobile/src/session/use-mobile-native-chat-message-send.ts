@@ -6,18 +6,18 @@ import {
   sendMobileNativeChatMessageWithOutcome,
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
-} from './mobile-native-chat-send'
+} from './native-chat/mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
 import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
-import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
-import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
+import { healMobileNativeChatStaleInput } from './native-chat/mobile-native-chat-stale-input'
+import { classifyMobileNativeChatSend } from './native-chat/mobile-native-chat-send-classification'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from './mobile-native-chat-terminal-write-lock'
-import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
-import { UNCONFIRMED_SEND_MESSAGE } from './use-mobile-native-chat-unconfirmed-sends'
-import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+} from './native-chat/mobile-native-chat-terminal-write-lock'
+import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
+import { UNCONFIRMED_SEND_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
+import type { MobileNativeChatLaunchDraftSeed } from './native-chat/composer/use-mobile-native-chat-launch-draft-seed'
 import {
   AGENT_TUI_CLEAR_INPUT_LINE,
   buildAgentTuiClearInputForText
@@ -35,7 +35,6 @@ export type MobileNativeChatMessageSend = {
     _attachments?: readonly unknown[],
     sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
-  answerQuestion: (text: string) => Promise<boolean>
   dispatchCommand: (
     text: string,
     options?: { delivery?: CatalogCommandDelivery }
@@ -85,7 +84,6 @@ export function useMobileNativeChatMessageSend(args: {
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number,
-      requireWriteSettlement?: true,
       sentAt?: number
     ): Promise<MobileNativeChatSendOutcome> => {
       // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
@@ -154,7 +152,6 @@ export function useMobileNativeChatMessageSend(args: {
             client,
             terminal: handle,
             command: text,
-            ...(requireWriteSettlement ? { requireWriteSettlement } : {}),
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             ...(mobileClient ? { mobileClient } : {}),
             deadline
@@ -163,7 +160,6 @@ export function useMobileNativeChatMessageSend(args: {
             client,
             terminal: handle,
             text: buildNativeChatPasteBytes(text),
-            ...(requireWriteSettlement ? { requireWriteSettlement } : {}),
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             deadline,
             ...(mobileClient ? { mobileClient } : {})
@@ -216,7 +212,7 @@ export function useMobileNativeChatMessageSend(args: {
       deadline?: number,
       _attachments?: readonly unknown[],
       sentAt?: number
-    ) => sendMessage(text, images, true, true, deadline, undefined, sentAt),
+    ) => sendMessage(text, images, true, true, deadline, sentAt),
     [sendMessage]
   )
 
@@ -224,25 +220,6 @@ export function useMobileNativeChatMessageSend(args: {
     async (text: string, images?: string[]): Promise<boolean> =>
       (await sendWithOutcome(text, images)) !== 'rejected',
     [sendWithOutcome]
-  )
-
-  // Question answers leave drafts alone but claim the terminal lock to avoid interleaving with image sequences.
-  const answerQuestion = useCallback(
-    async (text: string): Promise<boolean> => {
-      const terminal = handleRef.current
-      if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
-        onSendError('Answer not sent')
-        return false
-      }
-      try {
-        return (await sendMessage(text, undefined, false, true, undefined, true)) === 'accepted'
-      } finally {
-        if (terminal) {
-          releaseMobileNativeChatTerminalWrite(terminal)
-        }
-      }
-    },
-    [handleRef, onSendError, sendMessage]
   )
 
   // Lock option commands against send body/Enter spacing or they can become part of the user prompt.
@@ -292,5 +269,5 @@ export function useMobileNativeChatMessageSend(args: {
     [client, deviceTokenRef, enabled, handleRef, sendMessage]
   )
 
-  return { send, sendWithOutcome, answerQuestion, dispatchCommand }
+  return { send, sendWithOutcome, dispatchCommand }
 }

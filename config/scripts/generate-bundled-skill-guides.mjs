@@ -149,6 +149,11 @@ function composeFullMarkdown(markdown, references) {
   return `${markdown.trimEnd()}${packageHeader}${documents}`
 }
 
+function serializeMarkdown(markdown) {
+  const lines = markdown.split('\n').map((line) => `  ${JSON.stringify(line)},`)
+  return `[\n${lines.join('\n')}\n].join('\\n')`
+}
+
 function serializeEmbeddedModule(guides) {
   const referenceConstants = guides.flatMap((guide) =>
     guide.references.map((reference) => referenceConstantName(guide.name, reference.name))
@@ -160,16 +165,16 @@ function serializeEmbeddedModule(guides) {
   const markdownConstants = guides
     .flatMap((guide) => {
       const constants = [
-        `// oxfmt-ignore\nconst ${constantName(guide.name)} = ${JSON.stringify(guide.markdown)}`
+        `// oxfmt-ignore\nconst ${constantName(guide.name)} = ${serializeMarkdown(guide.markdown)}`
       ]
       if (guide.fullMarkdown !== guide.markdown) {
         constants.push(
-          `// oxfmt-ignore\nconst ${fullConstantName(guide.name)} = ${JSON.stringify(guide.fullMarkdown)}`
+          `// oxfmt-ignore\nconst ${fullConstantName(guide.name)} = ${serializeMarkdown(guide.fullMarkdown)}`
         )
       }
       for (const reference of guide.references) {
         constants.push(
-          `// oxfmt-ignore\nconst ${referenceConstantName(guide.name, reference.name)} = ${JSON.stringify(reference.markdown)}`
+          `// oxfmt-ignore\nconst ${referenceConstantName(guide.name, reference.name)} = ${serializeMarkdown(reference.markdown)}`
         )
       }
       return constants

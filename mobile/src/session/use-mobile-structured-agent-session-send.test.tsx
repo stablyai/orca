@@ -23,7 +23,7 @@ import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-jou
 import {
   useMobileNativeChatSendError,
   type MobileNativeChatSendErrorDetails
-} from './use-mobile-native-chat-send-error'
+} from './native-chat/use-mobile-native-chat-send-error'
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -532,21 +532,6 @@ describe('mobile structured send actions', () => {
       expect(await hook!.sendWithOutcome('again')).toBe('accepted')
     })
     expect(new Set(sentIds()).size).toBe(2)
-  })
-
-  it('never reads an old phone journal, even when storage is full or unreadable', async () => {
-    asyncStorage.getItem.mockRejectedValue(new Error('unreadable old journal'))
-    asyncStorage.setItem.mockRejectedValue(new Error('disk full'))
-    sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
-    )
-    await mountSession()
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('new action')).toBe('accepted')
-    })
-    expect(asyncStorage.getItem).not.toHaveBeenCalled()
-    expect(asyncStorage.setItem).not.toHaveBeenCalled()
-    expect(onSendError).not.toHaveBeenCalled()
   })
 
   it('sends nothing once the action budget expires', async () => {

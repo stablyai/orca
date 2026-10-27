@@ -129,7 +129,7 @@ export async function initializeAcpStructuredSession(
   options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig
-  if (mode) {
+  if (mode && acquire.permissionMode !== 'own') {
     // Fail startup rather than silently use a different permission mode.
     const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
     const configId = options.modeConfigId()
@@ -193,7 +193,7 @@ export async function initializeAcpStructuredSession(
   }
   return {
     link,
-    reportedOptions: options.read().current,
+    reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
     catalogListing: options.startListing()
   }
 }

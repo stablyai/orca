@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import {
   readFileSyncMock,
   recordCodexPaneAccountMock,
-  forgetCodexPaneAccountMock
+  forgetCodexPaneAccountMock,
+  noChatsRuntimeMembers
 } from '../pty-ipc-mock-registry'
 import { TEST_CODEX_HOME, TEST_CODEX_AUTH_JSON, TEST_MANAGED_ROOT } from '../pty-ipc-test-constants'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
@@ -287,6 +288,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const runtime = {
       setPtyController: vi.fn(),
+      ...noChatsRuntimeMembers(),
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
@@ -357,6 +359,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const runtime = {
       setPtyController: vi.fn(),
+      ...noChatsRuntimeMembers(),
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),

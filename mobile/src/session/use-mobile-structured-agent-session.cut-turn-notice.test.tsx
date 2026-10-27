@@ -7,7 +7,7 @@ import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-sessi
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import { ANSWERED_PROMPT_ITEMS } from './mobile-native-chat-answered-prompts.test-fixture'
+import { ANSWERED_PROMPT_ITEMS } from './native-chat/input/mobile-native-chat-answered-prompts.test-fixture'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null), setItem: vi.fn(), removeItem: vi.fn() }
@@ -61,7 +61,9 @@ describe('useMobileStructuredAgentSession transcript', () => {
 
   async function mount(agent: string, items: AgentJournalRenderItem[]) {
     let listener: ((value: unknown) => void) | null = null
-    const client: Pick<RpcClient, 'sendRequest' | 'subscribe'> = {
+    const client: Pick<RpcClient, 'sendRequest' | 'subscribe' | 'getState' | 'onStateChange'> = {
+      getState: () => 'connected',
+      onStateChange: () => () => {},
       sendRequest: vi.fn(async (): Promise<RpcResponse> => ({
         id: 'response-1',
         ok: true,
@@ -78,7 +80,7 @@ describe('useMobileStructuredAgentSession transcript', () => {
     }
     function Harness(): null {
       rendered.hook = useMobileStructuredAgentSession({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook calls only sendRequest and subscribe, both provided.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook's request, subscription and connection members are provided.
         client: client as RpcClient,
         sessionId: 'session-1',
         enabled: true,

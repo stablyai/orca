@@ -10,7 +10,7 @@ import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
-} from './mobile-native-chat-stale-input'
+} from './native-chat/mobile-native-chat-stale-input'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
 
 function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
@@ -319,18 +319,8 @@ describe('useMobileDiffReviewSendActions', () => {
       target: { kind: 'existing', worktree: 'id:wt-1' },
       prompt: {
         delivery: 'submit',
-        text: [
-          'You are reviewing the current worktree. Address the following mobile review notes.',
-          '',
-          'File: src/a.ts',
-          'Line: 3',
-          'User comment: "rename this"',
-          '',
-          'After applying fixes:',
-          '1. Summarize changed files.',
-          '2. Run relevant tests.',
-          '3. Tell me if anything remains risky.'
-        ].join('\n')
+        // Desktop sends the formatted notes alone.
+        text: ['File: src/a.ts', 'Line: 3', 'User comment: "rename this"'].join('\n')
       },
       launchSource: 'notes_send'
     })

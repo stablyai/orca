@@ -34,6 +34,7 @@ import { withRuntimeStoreLock, type HeldRuntimeStoreLock } from './remote-node-r
 import {
   assertRemoteNodeRuntimePromoted,
   assertRemoteNodeRuntimeStoreExecutable,
+  assertWindowsHostCanInstallNodeRuntime,
   REMOTE_NODE_RUNTIME_EXIT_PREFIX,
   REMOTE_NODE_RUNTIME_NOEXEC,
   REMOTE_NODE_RUNTIME_MISSING,
@@ -254,6 +255,9 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
   )
   if (probe.trim() === REMOTE_NODE_RUNTIME_READY) {
     return { executable, transfer: 'cached' }
+  }
+  if (windows) {
+    assertWindowsHostCanInstallNodeRuntime(probe)
   }
   const cleanupStage = windows
     ? windowsNodeRuntimeStageCleanupCommand(stageDir)

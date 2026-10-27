@@ -65,9 +65,9 @@ function readAgent(name: string): Record<string, unknown> {
 const USER_STOP_HOOK = { command: 'say done' }
 
 describe('KiroHookService', () => {
-  it('reports the built-in default agent gap when no custom agents exist', () => {
+  it("reports the V2 default agent's gap as partial when no custom agents exist", () => {
     const result = new KiroHookService().install()
-    expect(result.state).toBe('not_installed')
+    expect(result.state).toBe('partial')
     expect(result.detail).toContain('kiro-cli agent create')
     expect(result.detail).toContain(agentsDir())
     // The launcher is still laid down so the refresher can keep it current.
@@ -254,7 +254,7 @@ describe('KiroHookService', () => {
   it('ignores non-JSON files such as the shipped example config', () => {
     mkdirSync(agentsDir(), { recursive: true })
     writeFileSync(join(agentsDir(), 'agent_config.json.example'), '{}')
-    expect(new KiroHookService().install().state).toBe('not_installed')
+    expect(new KiroHookService().install().state).toBe('partial')
     expect(readFileSync(join(agentsDir(), 'agent_config.json.example'), 'utf-8')).toBe('{}')
   })
 })

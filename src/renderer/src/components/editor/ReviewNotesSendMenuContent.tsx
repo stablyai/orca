@@ -2,6 +2,10 @@ import React, { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import {
+  useStructuredChatTabNames,
+  getStructuredChatTabNames
+} from '@/runtime/structured-chat-name-observation'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
@@ -66,6 +70,7 @@ export function ReviewNotesSendMenuContent({
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const agentRows = useWorktreeAgentRows(worktreeId)
   const now = useNow(30_000)
+  const chatNames = useStructuredChatTabNames()
   const sendTargets = useMemo(() => {
     void agentStatusEpoch
     return deriveNotesSendAgentTargets(
@@ -77,11 +82,13 @@ export function ReviewNotesSendMenuContent({
         ptyIdsByTabId,
         runtimePaneTitlesByTabId
       },
-      worktreeId
+      worktreeId,
+      chatNames
     )
   }, [
     // Freshness timers can change eligibility through this epoch without replacing the status map.
     agentStatusEpoch,
+    chatNames,
     agentStatusByPaneKey,
     tabsByWorktree,
     unifiedTabsByWorktree,
@@ -219,9 +226,11 @@ function resolveCurrentSendTargetEligibility(
       ? 'Terminal is no longer available'
       : 'Chat is no longer open'
   const state = useAppStore.getState()
-  const currentTarget = deriveNotesSendAgentTargets(state, worktreeId).find(
-    (candidate) => candidate.paneKey === target.paneKey
-  )
+  const currentTarget = deriveNotesSendAgentTargets(
+    state,
+    worktreeId,
+    getStructuredChatTabNames()
+  ).find((candidate) => candidate.paneKey === target.paneKey)
   if (currentTarget) {
     return currentTarget.status === 'eligible'
       ? { status: 'eligible' }

@@ -242,7 +242,8 @@ async function finishLocalWorktreeRemoval({
         localWorktreeGitOptions,
         registeredWorktree: refreshedRegisteredWorktree,
         deleteBranch,
-        closeWatcher: (worktreePath) => runtime.closeFileWatchersForRemoval(worktreePath)
+        closeWatcher: (worktreePath) => runtime.closeFileWatchersForRemoval(worktreePath),
+        signal: checkoutDeleteSignal
       })
       if (recoveredRemovalResult) {
         removalResult = recoveredRemovalResult

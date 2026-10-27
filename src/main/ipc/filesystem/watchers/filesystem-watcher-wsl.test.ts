@@ -191,6 +191,22 @@ describe('createWslWatcher', () => {
     expect(deps.watchedRoots.has(ROOT_KEY)).toBe(false)
   })
 
+  it('reports an exit with its distro before scheduling the overflow refresh that reads the root', async () => {
+    const onUnexpectedStop = vi.fn()
+    const deps = { ...makeDeps(), onUnexpectedStop }
+    deps.scheduleBatchFlush.mockImplementation(() => {
+      // The refresh must follow the stop signal, or its read could boot the stopped distro.
+      expect(onUnexpectedStop).toHaveBeenCalled()
+    })
+    const { child, promise } = startWatcher(deps)
+    const root = await resolveInitialSnapshot(child, promise)
+
+    child.emit('close', null, 'SIGTERM')
+
+    expect(deps.scheduleBatchFlush).toHaveBeenCalledOnce()
+    expect(onUnexpectedStop).toHaveBeenCalledExactlyOnceWith(root, 'Ubuntu')
+  })
+
   it('kills the WSL child on unsubscribe without emitting a shutdown refresh', async () => {
     const scheduleBatchFlush = vi.fn()
     const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))

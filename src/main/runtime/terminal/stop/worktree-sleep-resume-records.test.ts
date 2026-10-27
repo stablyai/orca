@@ -44,14 +44,15 @@ function session(
 describe('dropStrandedSleepRecord', () => {
   it("drops a workspace sleep's record once no tab holds its pane", () => {
     expect(
-      dropStrandedSleepRecord(session([]), slept.paneKey)?.sleepingAgentSessionsByPaneKey
+      dropStrandedSleepRecord(session([]), 'wt-1', slept.paneKey)?.sleepingAgentSessionsByPaneKey
     ).toEqual({})
   })
 
   // A window must not discard a record main still resumes when its tab opens.
-  it('keeps a record whose tab is still listed, and window-owned records', () => {
-    expect(dropStrandedSleepRecord(session(['tab-1']), slept.paneKey)).toBeNull()
+  it("keeps a listed tab's record, window-owned records, and another worktree's record", () => {
+    expect(dropStrandedSleepRecord(session(['tab-1']), 'wt-1', slept.paneKey)).toBeNull()
     const quit = { ...slept, origin: 'quit' as const }
-    expect(dropStrandedSleepRecord(session([], quit), quit.paneKey)).toBeNull()
+    expect(dropStrandedSleepRecord(session([], quit), 'wt-1', quit.paneKey)).toBeNull()
+    expect(dropStrandedSleepRecord(session([]), 'wt-2', slept.paneKey)).toBeNull()
   })
 })

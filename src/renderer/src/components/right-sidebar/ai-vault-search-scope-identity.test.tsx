@@ -20,7 +20,11 @@ const AGENTS = ['codex' as const]
 const WORKSPACE = { kind: 'workspace', worktreeId: 'repo-1::/work/app' } as const
 const searchSessions =
   vi.fn<
-    (request: AiVaultSearchRequest, scope?: ExecutionHostScope) => Promise<AiVaultSearchResponse>
+    (
+      request: AiVaultSearchRequest,
+      scope?: ExecutionHostScope,
+      isCurrent?: () => boolean
+    ) => Promise<AiVaultSearchResponse>
   >()
 
 beforeEach(() => {
@@ -90,9 +94,13 @@ describe('the panel hook under a scope identity', () => {
     await debounce()
     expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
       { query: 'needle', filters: { agents: ['codex'] }, within, cursor: undefined },
-      'ssh:build-box'
+      'ssh:build-box',
+      expect.any(Function)
     )
+    const isCurrent = searchSessions.mock.calls[0][2]
+    expect(isCurrent?.()).toBe(true)
     unmount()
+    expect(isCurrent?.()).toBe(false)
   })
 
   it('does not restart the search while the identity holds', async () => {

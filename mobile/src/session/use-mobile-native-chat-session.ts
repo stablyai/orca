@@ -11,7 +11,7 @@ import { nativeChatSessionPageRead } from './mobile-session-read-operations'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
-} from './mobile-native-chat-stream-frame'
+} from './native-chat/mobile-native-chat-stream-frame'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
 
@@ -141,7 +141,7 @@ export function useMobileNativeChatSession(args: {
         limit: limitRef.current,
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
-        capabilities: { transcriptPending: 1 },
+        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
         ...(transcriptPath ? { transcriptPath } : {})
       },
       (raw) => {
@@ -224,6 +224,7 @@ export function useMobileNativeChatSession(args: {
           agent,
           sessionId,
           limit: beforeOffset === null ? nextLimit : pageLimit,
+          capabilities: { transcriptSourceOrder: 1 },
           ...(beforeOffset === null ? {} : { beforeOffset }),
           ...(transcriptPath ? { transcriptPath } : {})
         },

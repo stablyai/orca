@@ -161,7 +161,10 @@ describe('fetchWorktrees', () => {
       })
     )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo['same-repo']).toEqual([remote, local])
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([
+      remote,
+      { ...local, projectId: 'repo:same-repo', projectHostSetupId: 'same-repo' }
+    ])
     expect(store.getState().detectedWorktreesByRepo['same-repo']?.worktrees).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: remote.id, hostId: 'runtime:env-1' }),
@@ -207,7 +210,12 @@ describe('fetchWorktrees', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     // Why: SSH worktrees are fetched via local IPC but belong to the SSH host, so they carry the repo's ssh host id.
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
-      { ...sshWorktree, hostId: 'ssh:ssh-1' }
+      {
+        ...sshWorktree,
+        hostId: 'ssh:ssh-1',
+        projectId: 'repo:repo-ssh',
+        projectHostSetupId: 'repo-ssh'
+      }
     ])
   })
 
@@ -252,7 +260,9 @@ describe('fetchWorktrees', () => {
       })
     )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([
+      { ...localWorktree, projectId: 'repo:same-repo', projectHostSetupId: 'same-repo' }
+    ])
   })
 
   it('honors an explicit runtime owner before the repo catalog is hydrated', async () => {
@@ -287,7 +297,11 @@ describe('fetchWorktrees', () => {
     })
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-missing']).toEqual([
-      { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
+      {
+        ...remote,
+        hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1'
+      }
     ])
   })
 
@@ -435,7 +449,13 @@ describe('fetchWorktrees', () => {
     await store.getState().fetchWorktrees('repo-remote', { forceLocalOwner: true })
 
     expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
-      { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
+      {
+        ...remote,
+        hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        projectId: 'repo:repo-remote',
+        projectHostSetupId: 'repo-remote'
+      }
     ])
   })
 
@@ -496,7 +516,13 @@ describe('fetchWorktrees', () => {
 
     await expect(staleRefresh).resolves.toBe(false)
     expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
-      { ...fresh, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
+      {
+        ...fresh,
+        hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        projectId: 'repo:repo-remote',
+        projectHostSetupId: 'repo-remote'
+      }
     ])
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
@@ -521,7 +547,17 @@ describe('fetchWorktrees', () => {
           executionHostId: 'runtime:env-1'
         }
       ],
-      projectHostSetups: [
+      endpointProjects: [
+        {
+          id: 'github:stablyai/orca',
+          displayName: 'orca',
+          badgeColor: '#000',
+          sourceRepoIds: ['repo-remote'],
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      endpointProjectHostSetups: [
         {
           id: 'repo-remote',
           projectId: 'github:stablyai/orca',
@@ -535,7 +571,7 @@ describe('fetchWorktrees', () => {
           updatedAt: 1
         }
       ]
-    } as Partial<AppState>)
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-runtime-worktree',
       ok: true,

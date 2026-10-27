@@ -7,7 +7,7 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId
 } from '../../../../../shared/terminal-surface-id'
-import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalResolvePane } from '../../../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'

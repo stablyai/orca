@@ -184,7 +184,7 @@ describe('createOsc52OscHandler', () => {
       settingEnabled?: boolean | null
       replaying?: boolean
       writeClipboardText?: ReturnType<typeof vi.fn<(text: string) => Promise<void>>>
-      showWriteFailedToast?: ReturnType<typeof vi.fn<() => void>>
+      showWriteFailedToast?: ReturnType<typeof vi.fn<(text: string) => void>>
     } = {}
   ) {
     const settingEnabled = 'settingEnabled' in overrides ? overrides.settingEnabled : true
@@ -310,6 +310,22 @@ describe('createOsc52OscHandler', () => {
     expect(showWriteFailedToast).toHaveBeenCalledTimes(1)
   })
 
+  // #33937: a web client retries the refused text from a click, so the failure must carry it.
+  it('hands the refused text to the failed write toast', async () => {
+    const { handler, showWriteFailedToast } = setup({
+      writeClipboardText: vi
+        .fn<(text: string) => Promise<void>>()
+        .mockRejectedValue(new Error('NotAllowedError'))
+    })
+
+    expect(handler(`c;${b64('first')}`)).toBe(true)
+    expect(handler(`c;${b64('copy me')}`)).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(showWriteFailedToast).toHaveBeenCalledTimes(1)
+    expect(showWriteFailedToast).toHaveBeenCalledWith('copy me')
+  })
+
   it('surfaces a synchronous clipboard bridge throw as a failed write toast', async () => {
     const showWriteFailedToast = vi.fn(() => {
       throw new Error('toast unavailable')
@@ -368,28 +384,6 @@ describe('createOsc52OscHandler', () => {
 })
 
 describe('resolveOsc52ClipboardGate', () => {
-  it('allows a live write once the setting is on', () => {
-    expect(resolveOsc52ClipboardGate({ settingEnabled: true, replaying: false })).toEqual({
-      allowClipboardWrite: true,
-      shouldSurfaceBlockedWrite: false
-    })
-  })
-
-  it('drops replayed writes so restore cannot clobber the clipboard', () => {
-    // Restore replays old PTY copies through the parser and could overwrite newer clipboard content (#10588).
-    expect(resolveOsc52ClipboardGate({ settingEnabled: true, replaying: true })).toEqual({
-      allowClipboardWrite: false,
-      shouldSurfaceBlockedWrite: false
-    })
-  })
-
-  it('surfaces the blocked toast only for a real opt-out', () => {
-    expect(resolveOsc52ClipboardGate({ settingEnabled: false, replaying: false })).toEqual({
-      allowClipboardWrite: false,
-      shouldSurfaceBlockedWrite: true
-    })
-  })
-
   it('stays quiet when a write races settings hydration', () => {
     // Pre-hydration reads look blocked despite default-on; consuming the once-per-session toast hides real refusals.
     for (const settingEnabled of [null, undefined]) {

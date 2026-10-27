@@ -28,6 +28,10 @@ export const MANUAL_ONLY_E2E_SPECS = ['tests/e2e/ssh-orcad-phone-feed-list.spec.
 const MANAGED_SSH_HARNESS =
   /^tests\/e2e\/helpers\/(?:orcad-managed-workspace|orcad-convert-(?:flow|host|teardown)|orcad-template-variant|orcad-upgrade-(?:profile|retained-state)|docker-ssh-host-target|reserve-local-port|ssh-remote-only-browser-fixture|windows-host-orcad-processes)\.ts$/
 
+// An enabled SSH automation moves with its host and is re-enabled on the server (#29083).
+const ENABLED_AUTOMATION_MOVE =
+  /^src\/(?:main\/(?:persistence\/(?:migrating-orcad-catalog\/orcad-(?:source-automation-state|source-dormant-state|source-dependency-census|destination-automation-state)|scheduling-automations\/automation-schedule-operations)|automations\/(?:run-target-resolution|automation-dispatch-request|orcad-fenced-automation)|ssh\/orcad-migration-(?:moved-automations|source-retention))|shared\/orcad-migration\/orcad-migration-(?:dormant-automation-validation|source-cutover))\.ts$/
+
 export const PR_E2E_SOURCE_ROUTES = [
   {
     id: 'ssh.orcad-editor-ownership',
@@ -141,6 +145,32 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
         /^src\/main\/(?:ipc\/(?:ssh\/)?ssh-host-server-|(?:ssh|managed-server\/[a-z-]+)\/(?:ssh-host-server-|orcad-runtime-conversion|orcad-migration-|orcad-retained-source|orcad-runtime-deployment))/.test(
+          file
+        ))
+  },
+  {
+    id: 'ssh.orcad-connect-failure',
+    specs: [
+      'tests/e2e/ssh-orcad-ssh-failure-reason.spec.ts',
+      'tests/e2e/ssh-orcad-move-anyway-inline.spec.ts',
+      'tests/e2e/ssh-orcad-enabled-automation-move.spec.ts'
+    ],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      ENABLED_AUTOMATION_MOVE.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/(?:ipc\/ssh\/(?:ssh-connect-flow|ssh-host-server-)|ssh\/(?:ssh-session-start-failure|ssh-host-server-|connection\/ssh-connection-manager|orcad-migration-refusal-reason|targets\/ssh-target-orcad-preflight)|managed-server\/lifecycle\/orcad-runtime-conversion|persistence\/migrating-orcad-catalog\/orcad-source-(?:automation-state|leave-behind-view))|renderer\/src\/(?:ssh\/(?:ssh-host-server-status-copy|ssh-connect-failure-toast)|components\/settings\/(?:SshTargetServerStatus|SshHostMoveAnywayAction|SshTargetCard)))/.test(
+          file
+        ))
+  },
+  {
+    id: 'ssh.orcad-identity-file-tokens',
+    specs: ['tests/e2e/ssh-orcad-identity-file-tokens.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      /^tests\/e2e\/helpers\/ssh-config-host-picker\.ts$/.test(file) ||
+      (isProductSource(file) &&
+        /^src\/main\/ssh\/(?:config\/(?:ssh-g-config-resolution|ssh-identity-file-tokens|ssh-config-path-expansion)|ssh-auth-resolution|ssh-identity-file-read)\.ts$/.test(
           file
         ))
   },
@@ -283,6 +313,18 @@ export const PR_E2E_SOURCE_ROUTES = [
       ) ||
       (isProductSource(file) &&
         /^src\/(?:main\/(?:ssh|managed-server\/[a-z-]+)\/orcad-managed-|main\/ipc\/(?:ssh\/)?ssh-port-forward|main\/(?:ipc\/(?:(?:ssh\/)?ssh-(?:connect-flow|connection-handlers|host-user-disconnect|session-teardown)|(?:runtime-environments\/)?runtime-environment-(?:connectivity-handlers|manual-disconnect))|ssh\/(?:connection\/ssh-connection-manager|ssh-user-disconnect))\.ts$|renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts$|renderer\/src\/runtime\/(?:web-runtime-session|web-session-close-|runtime-terminal-artifact-read\.ts$)|renderer\/src\/components\/terminal-pane\/(?:remote-runtime-|terminal-host-(?:workspace-file|file-link-existence)\.ts$))/.test(
+          file
+        ))
+  },
+  {
+    // A Claude chat a managed host's CLI refuses to start names why (#33768).
+    id: 'ssh.orcad-claude-chat-start-failure',
+    specs: ['tests/e2e/ssh-orcad-claude-chat-start-failure.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      file === 'tests/e2e/fixtures/structured-claude-stub.cjs' ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/(?:claude\/claude-(?:stream-json-connection|stream-json-exit-error|structured-session-exit-lifecycle)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
           file
         ))
   },
@@ -495,6 +537,17 @@ export const PR_E2E_SOURCE_ROUTES = [
       isProductSource(file) &&
       (file === 'src/main/runtime/browser/browser-commands.ts' ||
         /^src\/.*(?:[Cc]lient-?[Hh]osted|browser-host-(?:lease|page|client-page)|browser-client-(?:host|page)|runtime-browser-(?:client-)?page|session-tabs-sync|host-session-snapshot-authority|orca-runtime\.ts|\/runtime-(?:status|types)\.ts)/.test(
+          file
+        ))
+  },
+  {
+    // Connector code only: the shared launcher, writer and hook store it reuses already have their own routes.
+    id: 'connectors.headless-serve-conversation',
+    specs: ['tests/e2e/connector-headless-serve.spec.ts'],
+    matches: (file) =>
+      file === 'tests/e2e/helpers/connector-fake-claude.ts' ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/external-conversations\/|main\/runtime\/rpc\/methods\/connector\.ts$|cli\/(?:handlers|specs)\/connector\.ts$|shared\/rpc-contract\/connector-params\.ts$)/.test(
           file
         ))
   }

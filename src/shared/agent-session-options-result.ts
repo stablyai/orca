@@ -35,6 +35,8 @@ export type AgentSessionOptionsResult = {
     serviceTier?: string
     /** The permission mode a start runs now; absent from a host or agent with no picker. */
     permissionMode?: string
+    /** Current startup report or accepted fresh-turn policy: null means reported but not a named Orca mode. */
+    reportedPermissionMode?: string | null
     /** Provider-reported effective routing, distinct from the next-turn preference. */
     fastModeState?: AgentSessionFastModeState
     /** Values actually reported by the provider, beyond acceptance alone. Older hosts omit this, preserving unconfirmed values. */

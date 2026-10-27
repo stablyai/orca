@@ -1,5 +1,9 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -21,17 +25,10 @@ function installRecord(): void {
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) =>
-          ({
-            sessionId,
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: {
-              runtimeKind: 'native',
-              claimStatus: 'live',
-              runtimeFence: 1,
-              deathEvidence: null
-            }
-          }) as unknown as AgentSessionRecord
+        getConversation: (sessionId: string) =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))
+          )
       }
     },
     hasSession: () => true

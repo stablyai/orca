@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react'
 import { terminalDisplayModeSet } from './mobile-session-write-operations'
-import { useMobileNativeChatTerminalStream } from './use-mobile-native-chat-terminal-stream'
+import { useMobileNativeChatTerminalStream } from './native-chat/use-mobile-native-chat-terminal-stream'
 import type { MobileSessionTerminalSubscriptionModel } from './use-mobile-session-terminal-subscription'
 
 export function useMobileSessionTerminalStreamDisplay(

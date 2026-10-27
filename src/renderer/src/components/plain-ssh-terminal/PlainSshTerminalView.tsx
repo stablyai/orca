@@ -13,7 +13,7 @@ import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
-import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { syncPreviewTerminalLigatures } from '@/components/dashboard-popout/preview-terminal-ligatures'
 import {
   buildPreviewAppearanceOptions,

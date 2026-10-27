@@ -24,6 +24,7 @@ import {
   canOpenMobileGitStatusEntry,
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
+  isMobileGitUnstageableEntry,
   type MobileGitFileStatus,
   type MobileGitStatusEntry
 } from './mobile-git-status'
@@ -53,6 +54,7 @@ export type MobileGitStatusEntryView = MobileGitStatusEntry & {
   canDiscard: boolean
   canOpen: boolean
   canStage: boolean
+  canUnstage: boolean
   discardActionId: string
   stageActionId: string
   unstageActionId: string
@@ -67,6 +69,7 @@ export function buildMobileGitStatusEntryViews(
     canDiscard: isMobileGitDiscardableEntry(entry),
     canOpen: canOpenMobileGitStatusEntry(entry),
     canStage: isMobileGitStageableEntry(entry),
+    canUnstage: isMobileGitUnstageableEntry(entry),
     discardActionId: `discard:${entry.path}`,
     stageActionId: `stage:${entry.path}`,
     unstageActionId: `unstage:${entry.path}`

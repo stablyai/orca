@@ -13,7 +13,8 @@ import {
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
 } from './remote-managed-hook-installers'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
-import { awaitExplicitPiOmpGuestReadiness } from './wsl-pi-omp-guest-readiness'
+import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../../shared/claude-agent-view'
+import { awaitExplicitAgentPluginGuestReadiness } from './wsl-agent-plugin-readiness'
 import { FAILURE_COOLDOWN_BASE_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
@@ -179,6 +180,7 @@ describe('WslHookRelayManager', () => {
       registerInstallPlugins?: boolean
       detectedAgents?: string[]
       claudeVersion?: string
+      claudePluginDir?: string
     } = {}
   ): MultiplexerTransport {
     const { registerInstallPlugins = true, detectedAgents = ['codex'], claudeVersion } = options
@@ -194,13 +196,16 @@ describe('WslHookRelayManager', () => {
     }))
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
-      harness.guestDispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => ({
+      harness.guestDispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => ({
         installed: { opencode: true, opencode2: true, pi: false, omp: false },
         overlayDirs: {
           opencode: opencodeOverlayDir,
           opencode2: opencode2OverlayDir,
           pi: `${home}/.pi/agent`,
-          omp: `${home}/.omp/agent/extensions/orca-agent-status.ts`
+          omp: `${home}/.omp/agent/extensions/orca-agent-status.ts`,
+          ...(options.claudePluginDir && params?.claudeAgentViewSource
+            ? { claudeAgentView: options.claudePluginDir, claudeConfig: `${home}/.claude` }
+            : {})
         }
       }))
     }
@@ -231,6 +236,7 @@ describe('WslHookRelayManager', () => {
       readBundle: () => Buffer.from('// bundle'),
       listDistros: async () => ['Ubuntu'],
       isDistroRunning: vi.fn(async () => true),
+      deferUntilRunning: vi.fn(),
       spawnRelay: vi.fn(() => fakeChild()),
       runInstall: vi.fn(async () => ({ code: 0, stderr: '' })),
       waitForSentinel: vi.fn(async () => guestTransport()),
@@ -304,10 +310,32 @@ describe('WslHookRelayManager', () => {
     }
   })
 
+  it('forwards Claude view requests from the guest only while hooks are enabled', async () => {
+    let enabled = true
+    const receive = vi.fn(() => ({ registered: true }))
+    const { manager, deps } = createManager({
+      receiveClaudeAgentView: receive,
+      managedHookSettings: () => ({ agentStatusHooksEnabled: enabled })
+    })
+    await manager.ensureForDistro('Ubuntu', codexHome)
+    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledOnce())
+    const guest = harnesses[0].guestDispatcher
+    harnesses[0].mux.dispose()
+    const body = { action: 'register', paneKey: 'pane', sessionId: 'session' }
+    expect(await guest.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body })).toEqual({
+      registered: true
+    })
+    expect(receive).toHaveBeenCalledWith(body)
+    enabled = false
+    expect(await guest.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body })).toEqual({})
+    expect(receive).toHaveBeenCalledOnce()
+    manager.disposeAll()
+  })
+
   it('waits for guest materialization when an explicit Pi or OMP launch needs it', async () => {
     const { manager } = createManager({})
     await expect(
-      awaitExplicitPiOmpGuestReadiness({
+      awaitExplicitAgentPluginGuestReadiness({
         isWsl: true,
         distro: 'Ubuntu',
         codexHomePath: codexHome,
@@ -319,6 +347,42 @@ describe('WslHookRelayManager', () => {
     manager.disposeAll()
   })
 
+  it.each([
+    { settings: {}, expected: true },
+    { settings: { claudeSubagentNavigationEnabled: false }, expected: false },
+    { settings: { agentStatusHooksEnabled: false }, expected: false },
+    { settings: { disabledTuiAgents: ['claude' as const] }, expected: false }
+  ])(
+    'prepares Claude guest navigation automatically and honors opt-outs: %j',
+    async ({ settings, expected }) => {
+      const pluginDir = `${home}/.orca-relay/claude-agent-view/version/orca-agent-view`
+      const { manager, deps } = createManager({
+        pluginSources: () => ({ claudeAgentViewSource: 'export function register() {}' }),
+        managedHookSettings: () => settings,
+        waitForSentinel: vi.fn(async () => guestTransport({ claudePluginDir: pluginDir }))
+      })
+      try {
+        await expect(
+          awaitExplicitAgentPluginGuestReadiness({
+            isWsl: true,
+            distro: 'Ubuntu',
+            launchAgent: 'claude',
+            settings,
+            manager
+          })
+        ).resolves.toBe(true)
+        expect(manager.getClaudeAgentView('Ubuntu')).toEqual(
+          expected ? { pluginDir, configDir: `${home}/.claude` } : null
+        )
+        if (!expected) {
+          expect(deps.spawnRelay).not.toHaveBeenCalled()
+        }
+      } finally {
+        manager.disposeAll()
+      }
+    }
+  )
+
   it('does not treat the endpoint as ready before guest install completes', async () => {
     let releaseInstall!: () => void
     const installGate = new Promise<void>((resolve) => {
@@ -327,7 +391,7 @@ describe('WslHookRelayManager', () => {
     const { manager } = createManager({
       installHooks: vi.fn(async () => installGate.then(() => []))
     })
-    const readiness = awaitExplicitPiOmpGuestReadiness({
+    const readiness = awaitExplicitAgentPluginGuestReadiness({
       isWsl: true,
       distro: 'Ubuntu',
       launchAgent: 'pi',
@@ -347,7 +411,7 @@ describe('WslHookRelayManager', () => {
       })
     })
     await expect(
-      awaitExplicitPiOmpGuestReadiness({
+      awaitExplicitAgentPluginGuestReadiness({
         isWsl: true,
         distro: 'Ubuntu',
         launchAgent: 'omp',
@@ -363,7 +427,7 @@ describe('WslHookRelayManager', () => {
       waitForSentinel: vi.fn(() => new Promise<MultiplexerTransport>(() => {}))
     })
     await expect(
-      awaitExplicitPiOmpGuestReadiness({
+      awaitExplicitAgentPluginGuestReadiness({
         isWsl: true,
         distro: 'Ubuntu',
         launchAgent: 'pi',
@@ -377,7 +441,7 @@ describe('WslHookRelayManager', () => {
   it('does not wait or start a relay for a bare shell', async () => {
     const { manager } = createManager({})
     await expect(
-      awaitExplicitPiOmpGuestReadiness({
+      awaitExplicitAgentPluginGuestReadiness({
         isWsl: true,
         distro: 'Ubuntu',
         launchCommand: 'bash',

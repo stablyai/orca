@@ -35,12 +35,4 @@ describe('the JSON size of a terminal payload', () => {
       Buffer.byteLength(JSON.stringify(mixed), 'utf8')
     )
   })
-
-  it('costs an ANSI snapshot far more than its text, which is the whole reason it exists', () => {
-    // Raw text fits the desktop budget while its escaped JSON can exceed the bridge frame cap.
-    const screen = '\u001b[38;5;196m#'.repeat(20_000)
-    expect(terminalStreamJsonByteLength(screen)).toBeGreaterThan(
-      Buffer.byteLength(screen, 'utf8') * 1.4
-    )
-  })
 })

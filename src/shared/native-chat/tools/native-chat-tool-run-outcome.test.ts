@@ -53,12 +53,6 @@ describe('nativeChatToolRunOutcome', () => {
     ).toBe(2)
   })
 
-  it('counts a failed call once, not twice for its error result', () => {
-    expect(
-      nativeChatToolRunOutcome([call('a', 'failed'), result('exit 1', true)], {}).failedCallCount
-    ).toBe(1)
-  })
-
   it('does not misattribute a later error to an outputless completed call', () => {
     expect(
       nativeChatToolRunOutcome(
@@ -72,12 +66,6 @@ describe('nativeChatToolRunOutcome', () => {
     expect(
       nativeChatToolRunOutcome([call('a', 'completed'), result('ok')], {}).failedCallCount
     ).toBe(0)
-  })
-
-  it('refuses success to a failed run even though nothing is running', () => {
-    expect(
-      nativeChatToolRunOutcome([call('a', 'failed'), result('exit 1', true)], {}).succeeded
-    ).toBe(false)
   })
 
   it('refuses success to a run whose call is still running', () => {

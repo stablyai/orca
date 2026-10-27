@@ -4,16 +4,16 @@ import type { ConnectionState } from '../transport/types'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
+import type { MobileNativeChatResolution } from './native-chat/mobile-native-chat-eligibility'
+import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
 
 // Run both hooks in fixed order and starve the inactive lane’s identity so flips preserve cached transcripts.
 export function useMobileNativeChatSessionLane({
   client,
+  hostId,
   structured,
-  agent,
-  resolvedAgent,
-  transcriptPath,
-  sessionId,
+  resolution,
   sourceIdentity,
   hostSupport,
   appendComposerTextRef,
@@ -23,11 +23,9 @@ export function useMobileNativeChatSessionLane({
   onActionResolved
 }: {
   client: RpcClient | null
+  hostId: string
   structured: boolean
-  agent: string | null
-  resolvedAgent: string | null
-  transcriptPath: string | null
-  sessionId: string | null
+  resolution: MobileNativeChatResolution | null
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
   hostSupport: StructuredAgentSessionHostSupport | null
   // Defer Edit through the composer ref because drafts mount after this lane.
@@ -39,17 +37,27 @@ export function useMobileNativeChatSessionLane({
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
+  sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
 } {
   const appendComposerText = useCallback(
     (text: string) => appendComposerTextRef.current(text),
     [appendComposerTextRef]
   )
+  const agent = resolution?.agent ?? null
+  const sessionId = resolution?.sessionId ?? null
+  // One read serves both send-side ownership and the composer's `/` menu.
+  const sessionCommands = useMobileStructuredSessionCommands({
+    client,
+    hostId,
+    sessionId: structured ? sessionId : null,
+    enabled: connState === 'connected'
+  })
   const bridgeSession = useMobileNativeChatSession({
     client,
     sourceIdentity,
-    agent: structured ? null : resolvedAgent,
+    agent: structured ? null : agent,
     sessionId: structured ? null : sessionId,
-    transcriptPath: structured ? null : transcriptPath
+    transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
   })
   const structuredSession = useMobileStructuredAgentSession({
     client,
@@ -62,11 +70,13 @@ export function useMobileNativeChatSessionLane({
     // reacquire the provider without clearing the cached transcript.
     connected: connState === 'connected',
     agent: structured ? agent : null,
+    sessionCommands: sessionCommands.commands,
     onSendError,
     ...(onActionResolved ? { onActionResolved } : {})
   })
   return {
     structuredSession,
-    session: structured ? structuredSession.session : bridgeSession
+    session: structured ? structuredSession.session : bridgeSession,
+    sessionCommands
   }
 }

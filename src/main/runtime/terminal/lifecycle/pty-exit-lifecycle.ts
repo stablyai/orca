@@ -65,6 +65,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       providerExitObserved?: boolean
       /** A window's view of the pane was showing when it ended (layout-owner build). */
       viewShown?: boolean
+      /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
+      hostLost?: boolean
     } = {}
   ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
@@ -170,7 +172,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.recentPtyOutputById.delete(ptyId)
       this.setupCompletionTokenByPtyId.delete(ptyId)
       this.clearWaitBlockedCheckState(ptyId)
-      this.recentPtyPathCandidatesById.delete(ptyId)
       this.ptyOutputSequenceById.delete(ptyId)
       this.providerSequenceInitializedPtys.delete(ptyId)
       this.providerSequenceOffsetByPtyId.delete(ptyId)
@@ -226,6 +227,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.terminalDrivers.clear(ptyId)
       this.remoteDesktopFloor.clearPty(ptyId)
       this.disposeHeadlessTerminal(ptyId)
+      this.trustDialogStatus.forget(ptyId)
       if (processDeathCertified) {
         // The bounded verdict register also fences late graphs after the PTY record was pruned.
         this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
@@ -242,7 +244,11 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         this.resolvePtyExitWaiters(pty, ptyId)
         this.pruneDisconnectedPtyTranscript(pty)
       }
-      if (preservesIntentionallyStoppedSurface || preservesAbnormalSshSurface) {
+      if (
+        preservesIntentionallyStoppedSurface ||
+        preservesAbnormalSshSurface ||
+        options.hostLost === true
+      ) {
         // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
         this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
       } else {

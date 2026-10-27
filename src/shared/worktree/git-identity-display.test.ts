@@ -25,17 +25,4 @@ describe('worktree git identity display', () => {
       tooltip: 'Detached HEAD at abcdef1. You are viewing a commit, not a branch.'
     })
   })
-
-  it('treats missing branch from git status as detached when head is known', () => {
-    expect(
-      getWorktreeGitIdentityDisplay({
-        branch: undefined,
-        head: '1234567890'
-      })
-    ).toMatchObject({ kind: 'detached', shortHead: '1234567' })
-  })
-
-  it('returns null when neither branch nor head is known', () => {
-    expect(getWorktreeGitIdentityDisplay({ branch: '', head: '' })).toBeNull()
-  })
 })

@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/native-chat/tools/native-chat-tool-run-sentence'
 import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 import { NATIVE_CHAT_DIFF_CARD_COPY } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
-import { NATIVE_CHAT_TASK_LIST_COPY } from '../../../../shared/native-chat-task-list'
+import { NATIVE_CHAT_TASK_LIST_COPY } from '../../../../shared/native-chat/input/native-chat-task-list'
 
 // Shared mobile copy and desktop catalog fallbacks must match byte-for-byte to prevent silent platform drift.
 const catalog = en as unknown as {
@@ -60,6 +60,8 @@ describe('native-chat shared copy matches the English catalog', () => {
     ['runFileChangeMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.fileChange.many],
     ['runWebSearchOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.webSearch.one],
     ['runWebSearchMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.webSearch.many],
+    ['runBrowserOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.browser.one],
+    ['runBrowserMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.browser.many],
     ['runIntegrationOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.mcpToolCall.one],
     ['runIntegrationMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.mcpToolCall.many],
     ['runAgentOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.subAgentActivity.one],
@@ -69,7 +71,8 @@ describe('native-chat shared copy matches the English catalog', () => {
     ['runToolOne', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.other.one],
     ['runToolMany', NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY.other.many],
     ['runPair', NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.pair],
-    ['runList', NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.list]
+    ['runList', NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.list],
+    ['runListSeparator', NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS.separator]
   ])('tool.%s matches the shared run sentence copy', (key, value) => {
     expect(catalog.components['native-chat'].tool[key]).toBe(value)
   })
@@ -87,6 +90,8 @@ describe('native-chat shared copy matches the English catalog', () => {
     ['runLiveFileChangeMany', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.fileChange.many],
     ['runLiveWebSearchOne', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.webSearch.one],
     ['runLiveWebSearchMany', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.webSearch.many],
+    ['runLiveBrowserOne', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.browser.one],
+    ['runLiveBrowserMany', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.browser.many],
     ['runLiveIntegrationOne', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.mcpToolCall.one],
     ['runLiveIntegrationMany', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.mcpToolCall.many],
     ['runLiveAgentOne', NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY.subAgentActivity.one],

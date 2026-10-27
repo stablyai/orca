@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import { layoutCoversLeaves, resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
+import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 
 const verticalSplit: TerminalPaneLayoutNode = {
   type: 'split',
@@ -8,21 +8,6 @@ const verticalSplit: TerminalPaneLayoutNode = {
   first: { type: 'leaf', leafId: 'a' },
   second: { type: 'leaf', leafId: 'b' }
 }
-
-describe('layoutCoversLeaves', () => {
-  it('is true when the tree has exactly the leaves', () => {
-    expect(layoutCoversLeaves(verticalSplit, ['a', 'b'])).toBe(true)
-  })
-  it('is false when a leaf is missing from the tree', () => {
-    expect(layoutCoversLeaves({ type: 'leaf', leafId: 'a' }, ['a', 'b'])).toBe(false)
-  })
-  it('is false when the tree has an extra leaf', () => {
-    expect(layoutCoversLeaves(verticalSplit, ['a'])).toBe(false)
-  })
-  it('is false for a null tree', () => {
-    expect(layoutCoversLeaves(null, ['a'])).toBe(false)
-  })
-})
 
 describe('resolveTerminalLayoutRoot', () => {
   it('uses the authoritative tree verbatim — direction is preserved', () => {
@@ -43,28 +28,6 @@ describe('resolveTerminalLayoutRoot', () => {
       leafIds: ['a', 'b']
     })
     expect(root).toBe(verticalSplit)
-  })
-
-  it('never invents a split direction: synthesis only fires (and is reported) when no tree covers the leaves', () => {
-    const onSynthesize = vi.fn()
-    resolveTerminalLayoutRoot({
-      authoritativeRoot: undefined,
-      existingRoot: undefined,
-      leafIds: ['a', 'b'],
-      onSynthesize
-    })
-    expect(onSynthesize).toHaveBeenCalledWith(2)
-  })
-
-  it('does not report synthesis for a single leaf (direction is irrelevant)', () => {
-    const onSynthesize = vi.fn()
-    const root = resolveTerminalLayoutRoot({ leafIds: ['a'], onSynthesize })
-    expect(root).toEqual({ type: 'leaf', leafId: 'a' })
-    expect(onSynthesize).not.toHaveBeenCalled()
-  })
-
-  it('returns null for no leaves', () => {
-    expect(resolveTerminalLayoutRoot({ leafIds: [] })).toBeNull()
   })
 
   it('prunes a superset tree to the live leaves instead of re-guessing its directions', () => {
@@ -136,22 +99,6 @@ describe('resolveTerminalLayoutRoot', () => {
       first: verticalSplit,
       second: { type: 'leaf', leafId: 'c' }
     })
-  })
-
-  it('still degenerates when no known tree places any of the leaves', () => {
-    const onSynthesize = vi.fn()
-    const root = resolveTerminalLayoutRoot({
-      authoritativeRoot: verticalSplit,
-      leafIds: ['x', 'y'],
-      onSynthesize
-    })
-    expect(root).toEqual({
-      type: 'split',
-      direction: 'horizontal',
-      first: { type: 'leaf', leafId: 'x' },
-      second: { type: 'leaf', leafId: 'y' }
-    })
-    expect(onSynthesize).toHaveBeenCalledWith(2)
   })
 
   it('prefers authoritative over an also-covering existing tree', () => {

@@ -101,8 +101,10 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleDidStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
+    // Main-frame starts include same-URL reloads; did-start-loading also fires for iframe loads.
     if (event.isMainFrame && event.url) {
       invalidateBrowserAnnotationDocumentRef.current()
+      setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
     }
     if (!isPageDocumentNavigationStart(event) || !event.url) {
       return

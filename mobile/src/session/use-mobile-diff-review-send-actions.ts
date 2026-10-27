@@ -4,12 +4,12 @@ import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useClipboardWriter } from '../platform/clipboard'
 import { triggerSuccess } from '../platform/haptics'
-import { formatDiffComments, formatMobileDiffReviewPrompt } from './mobile-diff-comments'
+import { formatDiffComments } from '../../../src/shared/diff-comments-format'
 import { clearSentMobileDiffComments, markMobileDiffCommentsSent } from './mobile-diff-comment-edit'
 import { reviewTerminalListRead, reviewTerminalSendRun } from './mobile-review-terminal-operations'
 import { launchAgentWithPrompt } from './pr-ai-triage-launch'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import { healMobileNativeChatStaleInput } from './native-chat/mobile-native-chat-stale-input'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 
@@ -97,7 +97,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       }
       const response = await reviewTerminalSendRun.request(client, {
         terminal,
-        text: formatMobileDiffReviewPrompt(comments),
+        text: formatDiffComments(comments),
         enter: true
       })
       let accepted
@@ -138,7 +138,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
           client,
           hostCapabilities,
           worktreeId,
-          prompt: formatMobileDiffReviewPrompt(comments),
+          prompt: formatDiffComments(comments),
           actionId: null,
           launchSource: 'notes_send'
         })

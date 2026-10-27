@@ -49,7 +49,8 @@ export async function readIncrementalTranscriptMessages(
   onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
   const end = (await transcriptFileStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
@@ -130,7 +131,11 @@ export async function readIncrementalTranscriptMessages(
     if (!message) {
       return
     }
-    const ordered = inTranscriptFileOrder(message, state.latestTimestamp)
+    const ordered = inTranscriptFileOrder(
+      message,
+      state.latestTimestamp,
+      sourceOrder ? state.pendingStart : undefined
+    )
     state.latestTimestamp = ordered.latest
     messages.push(ordered.message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {

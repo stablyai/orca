@@ -84,36 +84,6 @@ describe('fs:importExternalPaths', () => {
     })
   }
 
-  function mockSourceDir(dirPath: string, entries: { name: string; isDir: boolean }[]): void {
-    const resolvedDir = path.resolve(dirPath)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === resolvedDir) {
-        return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
-      }
-      const entry = entries.find((e) => path.join(resolvedDir, e.name) === p)
-      if (entry) {
-        return {
-          size: entry.isDir ? 0 : 12,
-          ino: entry.isDir ? 2 : 3,
-          dev: 1,
-          mtimeMs: 1700000000000,
-          isFile: () => !entry.isDir,
-          isDirectory: () => entry.isDir,
-          isSymbolicLink: () => false
-        }
-      }
-      throw enoent()
-    })
-    readdirMock.mockImplementation(async () => {
-      return entries.map((e) => ({
-        name: e.name,
-        isDirectory: () => e.isDir,
-        isSymbolicLink: () => false,
-        isFile: () => !e.isDir
-      }))
-    })
-  }
-
   function mockSymlinkSource(filePath: string): void {
     const resolvedPath = path.resolve(filePath)
     lstatMock.mockImplementation(async (p: string) => {
@@ -242,22 +212,41 @@ describe('fs:importExternalPaths', () => {
   })
 
   it('imports a directory recursively', async () => {
-    const sourcePath = '/tmp/dropped/assets'
-    mockSourceDir(sourcePath, [
-      { name: 'icon.png', isDir: false },
-      { name: 'fonts', isDir: true }
-    ])
-    readdirMock
-      .mockResolvedValueOnce([
-        {
-          name: 'icon.png',
-          isDirectory: () => false,
-          isSymbolicLink: () => false,
-          isFile: () => true
-        },
-        { name: 'fonts', isDirectory: () => true, isSymbolicLink: () => false, isFile: () => false }
-      ])
-      .mockResolvedValue([])
+    const sourcePath = path.resolve('/tmp/dropped/assets')
+    const fontsPath = path.join(sourcePath, 'fonts')
+    const iconPath = path.join(sourcePath, 'icon.png')
+    const fontPath = path.join(fontsPath, 'font.woff')
+    lstatMock.mockImplementation(async (p: string) => {
+      const directory = p === sourcePath || p === fontsPath
+      if (!directory && p !== iconPath && p !== fontPath) {
+        throw enoent()
+      }
+      return {
+        size: directory ? 0 : 12,
+        ino: 1,
+        dev: 1,
+        isDirectory: () => directory,
+        isFile: () => !directory,
+        isSymbolicLink: () => false
+      }
+    })
+    readdirMock.mockImplementation(async (p: string) => {
+      const entries =
+        p === sourcePath
+          ? [
+              { name: 'icon.png', directory: false },
+              { name: 'fonts', directory: true }
+            ]
+          : p === fontsPath
+            ? [{ name: 'font.woff', directory: false }]
+            : []
+      return entries.map(({ name, directory }) => ({
+        name,
+        isDirectory: () => directory,
+        isFile: () => !directory,
+        isSymbolicLink: () => false
+      }))
+    })
 
     const result = (await handlers.get('fs:importExternalPaths')!(null, {
       sourcePaths: [sourcePath],
@@ -270,7 +259,21 @@ describe('fs:importExternalPaths', () => {
       kind: 'directory',
       renamed: false
     })
-    expect(mkdirMock).toHaveBeenCalled()
+    expect(mkdirMock).toHaveBeenCalledWith(path.join(destDir, 'assets'), { recursive: false })
+    expect(mkdirMock).toHaveBeenCalledWith(path.join(destDir, 'assets', 'fonts'), {
+      recursive: false
+    })
+    expect(openMock).toHaveBeenCalledWith(
+      fontPath,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
+    )
+    expect(openMock).toHaveBeenCalledWith(path.join(destDir, 'assets', 'fonts', 'font.woff'), 'wx')
+    const outputs = await Promise.all(openMock.mock.results.map((call) => call.value))
+    expect(
+      outputs
+        .filter((handle) => handle.written)
+        .map((handle) => Buffer.concat(handle.written).toString())
+    ).toEqual(['file-content', 'file-content'])
   })
 
   it('deconflicts top-level filename collisions', async () => {

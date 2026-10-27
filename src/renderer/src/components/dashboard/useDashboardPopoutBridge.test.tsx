@@ -37,6 +37,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
+vi.mock('@/runtime/structured-chat-name-observation', () => ({
+  subscribeStructuredChatTabNames: () => () => {},
+  getStructuredChatTabNames: () => new Map()
+}))
+
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
@@ -90,7 +95,8 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     activeWorktreeId: null,
     activeWorkspaceExecutionHostId: null,
     activeRepoId: null,
-    projects: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     removedRuntimeEnvironmentIds: new Set()
   }
 }
@@ -281,6 +287,8 @@ describe('useDashboardPopoutBridge', () => {
       // A folder workspace is not a git worktree; its host resolves through these.
       { folderWorkspaces: [] },
       { projectGroups: [] },
+      { endpointProjects: [] },
+      { endpointProjectHostSetups: [] },
       { restoredRuntimeHostIdByWorkspaceSessionKey: {} },
       { runtimeEnvironments: [] },
       { runtimeEnvironmentCatalogHydrated: true },

@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -78,7 +79,8 @@ export async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promi
 
 /** Boots a real daemon server over a temp socket plus a lazily-connecting adapter. */
 export async function startDaemonAdapterHarness(
-  spawnSubprocess: SpawnSubprocess
+  spawnSubprocess: SpawnSubprocess,
+  adapterOptions: Pick<DaemonPtyAdapterOptions, 'readRunningWslDistros' | 'historyPath'> = {}
 ): Promise<DaemonAdapterHarness> {
   const dir = createTestDir()
   const socketPath = getDaemonSocketPath(dir)
@@ -90,6 +92,6 @@ export async function startDaemonAdapterHarness(
   }
   const server = new DaemonServer({ socketPath, tokenPath, log: daemonLog, spawnSubprocess })
   await server.start()
-  const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+  const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, ...adapterOptions })
   return { dir, socketPath, tokenPath, server, adapter, daemonLog, daemonLogEvents }
 }

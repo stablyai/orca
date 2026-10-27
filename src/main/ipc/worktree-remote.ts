@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 
+import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
 import { worktreeCreateGit } from '../git/worktree-create-git-executor'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 import type { BrowserWindow } from 'electron'
@@ -998,6 +999,7 @@ async function performLocalWorktreeCreate(
       : {})
   })
 
+  const branchSeed = selectWorktreeCreateBranchSeed(args, settings.autoRenameBranchFromWork)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
@@ -1143,11 +1145,46 @@ async function performLocalWorktreeCreate(
   let resolved = false
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
+  let selectedRemoteBranchName: string | null = null
   let lastBranchConflictKind: 'local' | 'remote' | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
   let lastExistingReviewNumber: number | null = null
   const shouldRetireGeneratedName =
     args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
+  if (
+    args.branchIntent === 'open-existing' &&
+    args.branchNameOverride &&
+    !args.pushTarget &&
+    getSelectedReviewBranch(args) === null
+  ) {
+    branchName = await resolveCreateBranchName(
+      repo.path,
+      args.branchNameOverride,
+      sanitizedName,
+      settings,
+      username,
+      localWorktreeGitOptions
+    )
+    const conflict = await getBranchConflictKind(
+      repo.path,
+      branchName,
+      baseBranch,
+      localWorktreeGitOptions
+    )
+    if (conflict === null) {
+      selectedRemoteBranchName = branchName
+    }
+  }
+  const pathIsAvailable = (): boolean => {
+    worktreePath = ensurePathWithinWorkspace(
+      computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings, workspaceRoot),
+      workspaceRoot
+    )
+    // Pending removals still own paths Git may already have deleted; skip them until teardown settles.
+    return (
+      !existsSync(worktreePath) && !findPendingWorktreeRemovalConflict(repo.path, { worktreePath })
+    )
+  }
   await timing.time('resolve_name', async () => {
     const retiredNameRegistry = shouldRetireGeneratedName
       ? await getRetiredNameRegistryForRepo(store, repo, store.getRepos(), settings)
@@ -1175,6 +1212,13 @@ async function performLocalWorktreeCreate(
         continue
       }
       attempts += 1
+      if (selectedRemoteBranchName) {
+        if (pathIsAvailable()) {
+          resolved = true
+          break
+        }
+        continue
+      }
       lastExistingReviewNumber = null
 
       branchName = await resolveCreateBranchName(
@@ -1182,7 +1226,7 @@ async function performLocalWorktreeCreate(
         selectedExistingLocalBranchName
           ? selectedExistingLocalBranchName
           : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-        effectiveSanitizedName,
+        branchSeed ? getWorktreeCreateCandidate(branchSeed, suffix) : effectiveSanitizedName,
         settings,
         username,
         localWorktreeGitOptions
@@ -1274,15 +1318,7 @@ async function performLocalWorktreeCreate(
         }
       }
 
-      worktreePath = ensurePathWithinWorkspace(
-        computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings, workspaceRoot),
-        workspaceRoot
-      )
-      // Pending removals still own paths Git may already have deleted; skip them until teardown settles.
-      if (
-        existsSync(worktreePath) ||
-        findPendingWorktreeRemovalConflict(repo.path, { worktreePath })
-      ) {
+      if (!pathIsAvailable()) {
         continue
       }
 
@@ -1405,17 +1441,6 @@ async function performLocalWorktreeCreate(
               addProjectGitOptions(existingBranchOption)
             )
           }
-          if (suggestLocalBaseRefUpdate) {
-            return addSparseWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              sparseDirectories,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
-            )
-          }
           return addSparseWorktree(
             repo.path,
             worktreePath,
@@ -1423,7 +1448,7 @@ async function performLocalWorktreeCreate(
             sparseDirectories,
             baseBranch,
             settings.refreshLocalBaseRefOnWorktreeCreate,
-            addProjectGitOptions(remoteTrackingBaseOption)
+            preparedWorktreeOptions
           )
         }
 
@@ -1438,17 +1463,6 @@ async function performLocalWorktreeCreate(
             addProjectGitOptions(existingBranchOption)
           )
         }
-        if (suggestLocalBaseRefUpdate) {
-          return addWorktree(
-            repo.path,
-            worktreePath,
-            branchName,
-            baseBranch,
-            settings.refreshLocalBaseRefOnWorktreeCreate,
-            false,
-            addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
-          )
-        }
         return addWorktree(
           repo.path,
           worktreePath,
@@ -1456,7 +1470,7 @@ async function performLocalWorktreeCreate(
           baseBranch,
           settings.refreshLocalBaseRefOnWorktreeCreate,
           false,
-          addProjectGitOptions(remoteTrackingBaseOption)
+          preparedWorktreeOptions
         )
       })) ?? {}
   } catch (error) {

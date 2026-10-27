@@ -1,5 +1,6 @@
 import { stripLeadingAgentTitleDecorationOrEmpty } from '../../../src/shared/agent-title-decoration'
-import { resolveExplicitTerminalTitleAgentType } from '../../../src/shared/terminal-title-agent-type'
+import { agentTypeToIconAgent } from '../../../src/shared/agent-type-icon-agent'
+import { resolveTabAgentFromSignalSnapshot } from '../../../src/shared/tab-agent-from-signals'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isBlankBrowserUrl } from '../browser/browser-url'
@@ -7,7 +8,10 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 
 type MobileTerminalTabAgentIdentity = {
   title: string
-  agentStatus?: { agentType?: AgentStatusEntry['agentType'] | null } | null
+  agentStatus?: {
+    agentType?: AgentStatusEntry['agentType'] | null
+    state?: AgentStatusEntry['state']
+  } | null
   launchAgent?: TuiAgent | null
 }
 
@@ -21,14 +25,21 @@ export function getMobileTerminalTabHostAgentIdentity(
   return terminals.find((terminal) => terminal.handle === tab.terminal)?.agentIdentity
 }
 
-// Cursor imports Claude hooks, so its host identity corrects that hook misattribution.
+// Cursor imports Claude hooks; older hosts still report them as claude, so the host identity corrects that.
+function correctCursorImportedHookAgent(
+  hookAgentType: string | null | undefined,
+  hostAgentIdentity: string | null | undefined
+): string | null | undefined {
+  return hookAgentType === 'claude' && hostAgentIdentity === 'cursor' ? 'cursor' : hookAgentType
+}
+
 export function resolveMobileTerminalTabOwnedAgentId(
   tab: MobileTerminalTabAgentIdentity,
   hostAgentIdentity?: string | null
 ): string | null {
   const hookAgentType = tab.agentStatus?.agentType?.trim()
   if (hookAgentType && hookAgentType !== 'unknown') {
-    return hookAgentType === 'claude' && hostAgentIdentity === 'cursor' ? 'cursor' : hookAgentType
+    return correctCursorImportedHookAgent(hookAgentType, hostAgentIdentity) ?? null
   }
   if (tab.launchAgent) {
     return tab.launchAgent
@@ -36,18 +47,25 @@ export function resolveMobileTerminalTabOwnedAgentId(
   return null
 }
 
+// Phones get no process, sleeping-session or sibling signals; host Cursor identity stands in for an unowned pane's process, since terminal.list can keep it after the pane is reused.
 export function resolveMobileTerminalTabAgentId(
   tab: MobileTerminalTabAgentIdentity,
   hostAgentIdentity?: string | null
 ): string | null {
-  const ownedAgent = resolveMobileTerminalTabOwnedAgentId(tab, hostAgentIdentity)
-  if (ownedAgent) {
-    return ownedAgent
-  }
-  if (hostAgentIdentity === 'cursor') {
-    return 'cursor'
-  }
-  return resolveExplicitTerminalTitleAgentType(tab.title)
+  const status = tab.agentStatus
+  const hookAgent = agentTypeToIconAgent(
+    correctCursorImportedHookAgent(status?.agentType, hostAgentIdentity)
+  )
+  return resolveTabAgentFromSignalSnapshot({
+    title: tab.title,
+    hookAgent: status?.state === 'done' ? null : hookAgent,
+    focusedCompletedHookAgent: status?.state === 'done' ? hookAgent : null,
+    processAgent:
+      hostAgentIdentity === 'cursor' && !resolveMobileTerminalTabOwnedAgentId(tab)
+        ? 'cursor'
+        : null,
+    launchAgent: tab.launchAgent ?? undefined
+  })
 }
 
 export function getMobileSessionTabTitle(

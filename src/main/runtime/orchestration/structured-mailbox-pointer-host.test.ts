@@ -1,3 +1,8 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
@@ -83,7 +88,7 @@ describe('structured mailbox pointer host', () => {
   it("reads what the session's sends settled as", async () => {
     const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
     hostRef.current = {
-      deps: { store: { getRecord: () => null } },
+      deps: { store: { getConversation: () => null } },
       journalSnapshot: () => ({ items: [], submissions }),
       currentWork: () => null
     }
@@ -110,7 +115,11 @@ describe('structured mailbox pointer host', () => {
     hostRef.current = {
       deps: {
         store: {
-          getRecord: () => ({ providerContextBoundary: { operationId: 'clear-1', afterFence: 2 } })
+          getConversation: () =>
+            agentSessionConversationView({
+              ...agentSessionRecordFixture(),
+              providerContextBoundary: { operationId: 'clear-1', afterFence: 2, clearedAt: 1_000 }
+            })
         }
       },
       journalSnapshot: () => ({
@@ -131,7 +140,11 @@ describe('structured mailbox pointer host', () => {
     hostRef.current = {
       deps: {
         store: {
-          getRecord: () => ({ providerContextBoundary: { operationId: 'clear-1', afterFence: 2 } })
+          getConversation: () =>
+            agentSessionConversationView({
+              ...agentSessionRecordFixture(),
+              providerContextBoundary: { operationId: 'clear-1', afterFence: 2, clearedAt: 1_000 }
+            })
         }
       },
       journalSnapshot: () => ({
@@ -211,7 +224,8 @@ describe('structured mailbox pointer host', () => {
         dispatchId: 'd1',
         operationId: 'op1',
         expectedRuntimeFence: 1,
-        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE }
+        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
+        holdWhileWorking: false
       })
     ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
     expect(send.mock.calls[0]![1]).toMatchObject({ body: { from: NOTICE_SOURCE } })
@@ -280,9 +294,18 @@ describe('structured mailbox pointer host', () => {
   })
 
   it('reads the runtime fence off the durable record', () => {
-    hostRef.current = { deps: { store: { getRecord: () => ({ lease: { runtimeFence: 9 } }) } } }
+    hostRef.current = {
+      deps: {
+        store: {
+          getConversation: () =>
+            agentSessionConversationView(
+              agentSessionRecordFixture(agentSessionLeaseFixture({ runtimeFence: 9 }))
+            )
+        }
+      }
+    }
     expect(createStructuredMailboxPointerHost().currentFence('s1')).toBe(9)
-    hostRef.current = { deps: { store: { getRecord: () => null } } }
+    hostRef.current = { deps: { store: { getConversation: () => null } } }
     expect(createStructuredMailboxPointerHost().currentFence('s1')).toBeNull()
   })
 })

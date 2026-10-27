@@ -12,6 +12,9 @@ import type { EditorPanelDiffContentLoader } from './useEditorPanelDiffContentLo
 import type { EditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
 import { useQuickOpenHistoryVisit } from './use-quick-open-history-visit'
 
+// Showing a tab is a user act: its first load may start a stopped WSL distro.
+const ACTIVE_TAB_LOAD = { wakeWslDistro: true }
+
 type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree']
 
 type UseEditorPanelActiveTabContentLoadParams = {
@@ -122,8 +125,20 @@ export function useEditorPanelActiveTabContentLoad({
         // Why the view's own owner: another workspace's view must load as it would, never re-owned.
         if (view ? needsFileRead(view.id) : needsFileRead(absolutePath)) {
           void (view
-            ? loadFileContent(view.filePath, view.id, view.worktreeId, view.relativePath)
-            : loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path))
+            ? loadFileContent(
+                view.filePath,
+                view.id,
+                view.worktreeId,
+                view.relativePath,
+                ACTIVE_TAB_LOAD
+              )
+            : loadFileContent(
+                absolutePath,
+                absolutePath,
+                activeFile.worktreeId,
+                entry.path,
+                ACTIVE_TAB_LOAD
+              ))
         }
       }
       return
@@ -142,7 +157,8 @@ export function useEditorPanelActiveTabContentLoad({
           fileToLoad.filePath,
           fileToLoad.id,
           fileToLoad.worktreeId,
-          fileToLoad.relativePath
+          fileToLoad.relativePath,
+          ACTIVE_TAB_LOAD
         )
       }
       if (isChangesMode && needsDiffRead(fileToLoad.id)) {

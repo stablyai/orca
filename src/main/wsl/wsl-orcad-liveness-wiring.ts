@@ -12,9 +12,11 @@ import {
   readConfirmedRunningWslDistros
 } from '../wsl-background-distro-gate'
 import type { WslDistroHolder } from './wsl-distro-holder'
+import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { readWslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection, WslOrcadConnectionManager } from './wsl-orcad-connection'
 import { defaultWslOrcadEnvironmentId } from './wsl-orcad-deploy'
+import { confirmsRunning } from './wsl-orcad-liveness-evidence'
 import { WslOrcadLivenessSupervisor } from './wsl-orcad-liveness-supervisor'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { openWslOrcadWatch } from './wsl-orcad-watch'
@@ -50,6 +52,8 @@ export function createWslOrcadLivenessSupervisor(options: {
     collectCensus: collectWslOrcadCensus,
     hasUserVisibleWork: options.hasUserVisibleWork,
     deferUntilRunning: deferUntilWslDistroRunning,
+    requireRunning: async (distro) =>
+      confirmsRunning(await readConfirmedRunningWslDistros(), wslDistroHolderKey(distro)),
     ensureHolder: (distro) => options.holder.ensureHeld(distro),
     subscribePower: subscribeSystemPowerLifecycle
   })

@@ -118,11 +118,11 @@
       "reason": "Not an RN Web API gap but a transport one that exists only in the page. A terminal's first frame is its scrollback snapshot, which the desktop trims to 512 KiB of raw terminal text while the bridge measures the serialized event against BRIDGE_MAX_MESSAGE_BYTES. An ANSI snapshot is mostly ESC bytes and JSON spends six on each, so a colour-dense 80-column screen comes back at 669,268 bytes against a 655,360-byte cap and the stream ends with overflow before a live byte is painted. This file derives the budget the page sends in terminal.subscribe from the cap less the event envelope; the native sibling sends nothing, because a socket frame has no ceiling above it and a budget there would shrink a phone's scrollback for a limit that does not exist."
     },
     {
-      "file": "src/session/MobileNativeChatComposerField.web.tsx",
+      "file": "src/session/native-chat/composer/MobileNativeChatComposerField.web.tsx",
       "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll."
     },
     {
-      "file": "src/session/mobile-native-chat-input-styles.web.ts",
+      "file": "src/session/native-chat/composer/mobile-native-chat-input-styles.web.ts",
       "reason": "The chat's composer and its question field render one point above the app's body size, which is 15 and under the floor below which iOS zooms the page on focus. keyboard-occlusion.web.ts reads a scale other than 1 as 'no keyboard' and answers 0, and on this screen that lift is the terminal's only feedback that its hidden input has focus, so one focus of the composer would cost the rest of the session. This file puts both fields on TEXT_INPUT_FONT_SIZE; the native sibling keeps the question field at 15 and the composer at 16."
     },
     {
@@ -140,6 +140,10 @@
     {
       "file": "src/platform/dictation-capture.web.ts",
       "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio, which a browser does not have; this one asks the shell for it over native.audio.start|read|stop, draining the shell's ring on a timer and raising each reply as the events the engine emits directly, and taking the utterance's tail off the stop's own reply. The screen an open microphone holds awake is not in this seam at all: the device module that opens the mic takes it and gives it back on both hosts. The flow above the seam is one file on both hosts."
+    },
+    {
+      "file": "src/platform/pdf-opener.web.ts",
+      "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
     },
     {
       "file": "src/platform/media-picker.web.ts",

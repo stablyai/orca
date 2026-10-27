@@ -1,8 +1,12 @@
 import { getLineText } from './cell-geometry'
 import type { TerminalDocumentScope, TerminalDocumentSelection } from './document-scope'
 import type { TerminalDocumentLine } from './document-terminal-shape'
+import { isTerminalWordSeparator } from '../../../../src/shared/terminal-word-separator'
 
-const WORD_RE = /[\p{L}\p{N}_./:@~+=?&#%-]/u
+// Match xterm double-click: a space grows over spaces, anything else over non-separators.
+function joinsPressedWord(pressed: string, text: string) {
+  return pressed === ' ' ? text === ' ' : !isTerminalWordSeparator(text)
+}
 
 type SelectionUnit = { text: string; start: number; end: number }
 
@@ -43,15 +47,14 @@ function wordCellRange(line: TerminalDocumentLine | undefined, col: number, cols
   if (!units || index < 0) {
     return null
   }
+  const pressed = units[index].text
   let start = index
   let end = index
-  if (WORD_RE.test(units[index].text)) {
-    while (start > 0 && WORD_RE.test(units[start - 1].text)) {
-      start--
-    }
-    while (end + 1 < units.length && WORD_RE.test(units[end + 1].text)) {
-      end++
-    }
+  while (start > 0 && joinsPressedWord(pressed, units[start - 1].text)) {
+    start--
+  }
+  while (end + 1 < units.length && joinsPressedWord(pressed, units[end + 1].text)) {
+    end++
   }
   return { start: units[start].start, end: units[end].end }
 }
@@ -85,11 +88,11 @@ export function seedWordSelection(scope: TerminalDocumentScope, col: number, abs
   }
   let s = col
   let e = col
-  if (col >= 0 && col < line.length && WORD_RE.test(line[col])) {
-    while (s > 0 && WORD_RE.test(line[s - 1])) {
+  if (col >= 0 && col < line.length) {
+    while (s > 0 && joinsPressedWord(line[col], line[s - 1])) {
       s--
     }
-    while (e < line.length - 1 && WORD_RE.test(line[e + 1])) {
+    while (e < line.length - 1 && joinsPressedWord(line[col], line[e + 1])) {
       e++
     }
   }
