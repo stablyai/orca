@@ -4,7 +4,10 @@ import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compat
 import { WORKTREE_REFRESH_CONCURRENCY } from './worktrees'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
+import { makeDetectedResult, qualifyDetectedResult } from './worktrees-detected-listing-fixtures'
+import { purgeHydratedWorktrees } from './worktrees/listing/hydrated-worktree-purge'
+import { worktreeCatalogVersionKey } from './worktrees/listing/worktree-catalog-version-state'
+import { makeTab } from './store-session-test-harness'
 import { makeFolderWorkspace, makeLineage, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
@@ -56,6 +59,60 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     badgeColor: '#111',
     addedAt: 0
   }
+
+  it.each(['unchanged', 'newer catalog', 'new owner', 'unloaded runtime'])(
+    'reuses startup scan evidence after session restoration: %s',
+    async (change) => {
+      const store = createTestStore()
+      const live = makeWorktree({ id: 'repoA::/a/live', repoId: 'repoA', path: '/a/live' })
+      mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+        qualifyDetectedResult(
+          args,
+          makeDetectedResult(repoA.id, [live], {
+            catalogVersion: { epoch: 'startup', sequence: 1 }
+          })
+        )
+      )
+      store.setState({
+        repos: [repoA],
+        hydrationSucceeded: false,
+        workspaceSessionReady: false
+      })
+      const results = await store.getState().fetchAllWorktrees({
+        visibilityOwnerHostId: 'local',
+        hydrationPurge: 'defer'
+      })
+      expect(store.getState().hasHydratedWorktreePurge).toBe(false)
+      store.setState({
+        hydrationSucceeded: true,
+        workspaceSessionReady: true,
+        tabsByWorktree: {
+          'repoA::/a/stale': [makeTab({ id: 'saved', worktreeId: 'repoA::/a/stale' })]
+        }
+      })
+      if (change === 'newer catalog') {
+        store.setState({
+          worktreeCatalogVersionByRepoHost: {
+            [worktreeCatalogVersionKey(repoA.id, 'local')]: { epoch: 'startup', sequence: 2 }
+          }
+        })
+      } else if (change === 'new owner') {
+        store.setState({ repos: [repoA, repoB] })
+      } else if (change === 'unloaded runtime') {
+        store.setState({
+          restoredRuntimeHostIdByWorkspaceSessionKey: {
+            'remote-repo::/remote/saved': 'runtime:offline'
+          }
+        })
+      }
+      purgeHydratedWorktrees(store.setState, store.getState, results)
+      expect(store.getState().hasHydratedWorktreePurge).toBe(change === 'unchanged')
+      expect(store.getState().tabsByWorktree['repoA::/a/stale'] === undefined).toBe(
+        change === 'unchanged'
+      )
+      expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it.each([false, true])(
     'hydrates connecting SSH worktrees with hydration purge completed=%s',

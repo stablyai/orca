@@ -16814,6 +16814,99 @@
                     }
                   }
                 }
+              },
+              "step": {
+                "copy": {
+                  "workspace": {
+                    "board": {
+                      "plan": {
+                        "title": "ボードで作業を計画する",
+                        "body": "プロジェクト別ではなく状態別にワークスペースを見たいときはボードを使います。"
+                      },
+                      "lanes": {
+                        "title": "レーン間で作業を動かす",
+                        "body": "状態が変わったら、ワークスペースをレーン間にドラッグします。"
+                      }
+                    },
+                    "creation": {
+                      "project": {
+                        "title": "プロジェクトを選ぶ",
+                        "body": "Orca は各タスクをベースブランチから分岐した専用のワークツリーに分離します。"
+                      },
+                      "name": {
+                        "title": "名前を付けるか、既存の作業から始める",
+                        "body": "リンクされたタスクから始めると、短い issue 名や PR 名が使われます。空欄のままにすると、最初の Agent メッセージから自動で名前が付きます。"
+                      },
+                      "agent": {
+                        "title": "作業を開始する Agent を選ぶ",
+                        "body": "このワークツリーが作成されたときに開く Agent を選びます。"
+                      }
+                    }
+                  },
+                  "agent": {
+                    "sessions": {
+                      "split": {
+                        "title": "ターミナルペインを分割する",
+                        "body": "{terminal.splitRight} で 2 つ目のターミナルペインを開くか、ペインを右クリックして分割オプションを表示します。",
+                        "action": "ターミナルを分割"
+                      },
+                      "parallel": {
+                        "title": "別のタスクを並行して始める",
+                        "body": "ワークツリーごとに専用のブランチがあるため、並行して進める作業が混ざりません。"
+                      }
+                    }
+                  },
+                  "browser": {
+                    "grab": {
+                      "title": "Agent 向けにページのコンテキストを取得する",
+                      "body": "grab ツールでページ要素のコンテキストをコピーして Agent に渡します。"
+                    },
+                    "annotate": {
+                      "title": "デザインのフィードバックをその場で残す",
+                      "body": "要素に注釈を付けて、そのメモを Agent に送ります。"
+                    },
+                    "logins": {
+                      "title": "ログイン状態を保つ",
+                      "body": "既存のログイン情報を Orca に取り込んで、すぐにログイン状態を保ちます。"
+                    }
+                  },
+                  "tasks": {
+                    "source": {
+                      "title": "作業のソースを選ぶ",
+                      "body": "ページを移動せずに、接続済みのプロバイダーとプロジェクトフィルターを切り替えます。"
+                    },
+                    "filter": {
+                      "title": "必要な作業だけに絞り込む",
+                      "body": "プリセットと検索で issues、レビュー、merge requests、タスクを絞り込みます。"
+                    },
+                    "start": {
+                      "title": "作業アイテムから始める",
+                      "body": "タスク、issue、レビュー、merge request で開始または開くを押すと、そのコンテキストをワークスペースに取り込めます。"
+                    }
+                  },
+                  "floating": {
+                    "workspace": {
+                      "repos": {
+                        "title": "すべてのリポジトリで Agent を実行する",
+                        "body": "ここの Agent は選んだ任意のフォルダーで実行されます。サービスの 1 つ上のディレクトリを指定すれば、すべてのリポジトリをまとめて扱えます。"
+                      },
+                      "scratchpad": {
+                        "title": "スクラッチパッドとしても使える",
+                        "body": "集中しているワークツリーを散らかさずに、Agent、一時的なターミナル、ノート、ブラウザタブを開けます。"
+                      }
+                    }
+                  },
+                  "client": {
+                    "hosted": {
+                      "browser": {
+                        "intro": {
+                          "action": "了解",
+                          "secondaryAction": "ブラウザ設定"
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -20292,6 +20385,31 @@
       "stopped": "停止",
       "failed": "失敗",
       "finished": "完了"
+    },
+    "bell": {
+      "attentionRequested": "対応が必要です",
+      "title": "{{worktree}} でベルが鳴りました"
+    },
+    "test": {
+      "title": "Orca の通知はオンです",
+      "body": "これは Orca からのテスト通知です。"
+    },
+    "workspaceFallback": "ワークスペース",
+    "agentTool": {
+      "usingWithInput": "{{tool}} を使用中: {{input}}",
+      "using": "{{tool}} を使用中",
+      "input": "ツール入力: {{input}}"
+    },
+    "taskComplete": {
+      "title": "{{worktree}} のタスクが完了しました",
+      "body": "コーディング Agent が作業を終えました。"
+    },
+    "permissionProbe": {
+      "body": "Agent が完了したときや、ターミナルで対応が必要なときに Orca がお知らせします。"
+    },
+    "startupRegistration": {
+      "title": "Orca の通知の準備ができました",
+      "body": "通知を許可すると、Agent が完了したときや、ターミナルで対応が必要なときに Orca がお知らせします。"
     }
   },
   "sidebar": {

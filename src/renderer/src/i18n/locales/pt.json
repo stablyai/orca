@@ -84,6 +84,31 @@
       "stopped": "parado",
       "finished": "concluído",
       "failed": "falhou"
+    },
+    "bell": {
+      "attentionRequested": "Atenção solicitada",
+      "title": "Sinal sonoro em {{worktree}}"
+    },
+    "test": {
+      "title": "As notificações do Orca estão ativadas",
+      "body": "Esta é uma notificação de teste do Orca."
+    },
+    "workspaceFallback": "espaço de trabalho",
+    "agentTool": {
+      "usingWithInput": "Usando {{tool}}: {{input}}",
+      "using": "Usando {{tool}}",
+      "input": "Entrada da ferramenta: {{input}}"
+    },
+    "taskComplete": {
+      "title": "Tarefa concluída em {{worktree}}",
+      "body": "Um agente de programação terminou o trabalho."
+    },
+    "permissionProbe": {
+      "body": "O Orca avisará você quando os agentes terminarem ou os terminais precisarem de atenção."
+    },
+    "startupRegistration": {
+      "title": "O Orca está pronto para enviar notificações",
+      "body": "Permita as notificações para que o Orca avise você quando os agentes terminarem ou os terminais precisarem de atenção."
     }
   },
   "app": {
@@ -18488,6 +18513,99 @@
                         "intro": {
                           "title": "Esta página é renderizada no seu desktop",
                           "body": "As abas do navegador remoto agora são renderizadas neste dispositivo. O tráfego de rede ainda passa pelo host remoto."
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "step": {
+                "copy": {
+                  "workspace": {
+                    "board": {
+                      "plan": {
+                        "title": "Planeje o trabalho no quadro",
+                        "body": "Use o quadro quando quiser ver os espaços de trabalho por status em vez de por projeto."
+                      },
+                      "lanes": {
+                        "title": "Mova o trabalho entre as colunas",
+                        "body": "Arraste os espaços de trabalho entre as colunas conforme o status deles muda."
+                      }
+                    },
+                    "creation": {
+                      "project": {
+                        "title": "Escolha um projeto",
+                        "body": "O Orca isola cada tarefa em seu próprio worktree, criado a partir da sua branch base."
+                      },
+                      "name": {
+                        "title": "Dê um nome ou comece de um trabalho existente",
+                        "body": "Comece de uma tarefa vinculada para usar um nome curto de issue ou PR. Ou deixe em branco para nomeá-lo automaticamente a partir da sua primeira mensagem ao agente."
+                      },
+                      "agent": {
+                        "title": "Escolha qual agente inicia o trabalho",
+                        "body": "Escolha o agente que deve ser aberto quando este worktree for criado."
+                      }
+                    }
+                  },
+                  "agent": {
+                    "sessions": {
+                      "split": {
+                        "title": "Divida um painel de terminal",
+                        "body": "Abra um segundo painel de terminal com {terminal.splitRight} ou clique com o botão direito no painel para ver as opções de divisão.",
+                        "action": "Dividir terminal"
+                      },
+                      "parallel": {
+                        "title": "Comece outra tarefa em paralelo",
+                        "body": "Cada worktree tem sua própria branch, então o trabalho em paralelo fica separado."
+                      }
+                    }
+                  },
+                  "browser": {
+                    "grab": {
+                      "title": "Capture o contexto da página para os agentes",
+                      "body": "Use a ferramenta de captura para copiar o contexto de um elemento da página para os agentes."
+                    },
+                    "annotate": {
+                      "title": "Marque o feedback de design no lugar",
+                      "body": "Anote elementos e envie essas notas para um agente."
+                    },
+                    "logins": {
+                      "title": "Continue conectado",
+                      "body": "Traga seus logins existentes para o Orca e continue conectado imediatamente."
+                    }
+                  },
+                  "tasks": {
+                    "source": {
+                      "title": "Escolha a origem do trabalho",
+                      "body": "Alterne entre provedores conectados e filtros de projeto sem mudar de página."
+                    },
+                    "filter": {
+                      "title": "Filtre o trabalho de que você precisa",
+                      "body": "Use predefinições e a busca para restringir issues, revisões, merge requests ou tarefas."
+                    },
+                    "start": {
+                      "title": "Comece a partir dos itens de trabalho",
+                      "body": "Use Iniciar ou Abrir em uma tarefa, issue, revisão ou merge request para levar o contexto dela a um espaço de trabalho."
+                    }
+                  },
+                  "floating": {
+                    "workspace": {
+                      "repos": {
+                        "title": "Execute um agente em todos os repositórios",
+                        "body": "Os agentes aqui são executados em qualquer pasta que você escolher. Aponte um para o diretório acima dos seus serviços para trabalhar em todos os seus repositórios de uma vez."
+                      },
+                      "scratchpad": {
+                        "title": "Ou use como rascunho",
+                        "body": "Abra agentes, terminais temporários, notas e abas do navegador sem bagunçar o worktree em que você está focado."
+                      }
+                    }
+                  },
+                  "client": {
+                    "hosted": {
+                      "browser": {
+                        "intro": {
+                          "action": "Entendi",
+                          "secondaryAction": "Configurações do navegador"
                         }
                       }
                     }

@@ -39,6 +39,10 @@ import {
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
+import {
+  finishStartupWorktreeHydration,
+  refreshStartupWorktrees
+} from '../startup/startup-worktree-refresh'
 
 async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
   try {
@@ -195,6 +199,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             )
           })
           restoreStructuredLaunchSurfaces()
+          // Discovery must not wait for terminal or SSH restoration.
+          const startupWorktreeRefresh = refreshStartupWorktrees(actions, () => cancelled)
           await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
             window.api.app.prepareTerminalStartupRestoration()
           )
@@ -267,6 +273,11 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           // Unlock writes only after all hydration/dependent steps succeed; never save partially restored state (#1158).
           actions.setHydrationSucceeded(true)
           actions.setTerminalStartupRestorationReady(true)
+          void startupWorktreeRefresh.then((results) => {
+            if (!cancelled) {
+              finishStartupWorktreeHydration(results)
+            }
+          })
           // Require opt-in dev seeding so empty profiles can exercise onboarding without selection hijacking.
           if (
             import.meta.env.DEV &&
@@ -279,40 +290,6 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })
-          void (async () => {
-            try {
-              try {
-                // Wait for owner visibility defaults before exposing remote rows under fallback policy.
-                await timeRendererStartupStep('owner-visibility-defaults', () =>
-                  actions.awaitOwnerWorktreeVisibilityDefaultsHydration()
-                )
-                await timeRendererStartupStep('remote-catalog-refresh', async () => {
-                  await actions.fetchReposForAllHosts()
-                  await actions.fetchProjectGroupsForAllHosts()
-                  await actions.fetchFolderWorkspacesForAllHosts()
-                })
-              } catch (err) {
-                console.warn('Remote startup catalog refresh failed:', err)
-              }
-              if (!cancelled) {
-                try {
-                  await timeRendererStartupStep('remote-worktree-refresh', async () => {
-                    // Full scans are unnecessary for recovery; defer them past startup.
-                    await actions.fetchAllWorktrees()
-                    // Prune from deferred authoritative scans too; retain disconnected SSH visits because absence remains unproven.
-                    actions.pruneLastVisitedTimestamps()
-                    await actions.fetchWorktreeLineage()
-                  })
-                } catch (err) {
-                  console.warn('Deferred startup worktree refresh failed:', err)
-                }
-              }
-            } finally {
-              if (!cancelled) {
-                useAppStore.setState({ startupWorktreeRefreshCompleted: true })
-              }
-            }
-          })()
         }
       } catch (error) {
         await recoverFromDegradedStartup({

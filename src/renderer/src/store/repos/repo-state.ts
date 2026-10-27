@@ -118,6 +118,10 @@ export type AllHostCatalogFetchOptions = {
   remoteHosts?: 'include' | 'skip'
 }
 
+export type AllHostRepoCatalogFetchOptions = AllHostCatalogFetchOptions & {
+  onHostLoaded?: (hostId: ExecutionHostId) => Promise<void>
+}
+
 export type ProjectRemovalFailure = {
   projectId: string
   reason: string
@@ -171,7 +175,7 @@ export type RepoSlice = {
   pendingSshRepoReadoptions: readonly SshRepoReadoption[]
   recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
   fetchRepos: (options: RuntimeCatalogFetchOptions) => Promise<void>
-  fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
+  fetchReposForAllHosts: (options?: AllHostRepoCatalogFetchOptions) => Promise<void>
   awaitLocalRepoCatalogSettlement: () => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
   fetchProjectGroups: (options: RuntimeCatalogFetchOptions) => Promise<void>

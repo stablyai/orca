@@ -274,12 +274,10 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
       join(bin, 'cat'),
       '#!/bin/sh\n' +
         `trap 'kill $c 2>/dev/null; sleep 0.3; : > "${join(dir, 'killed')}"; exit 0' TERM\n` +
-        `: > "${join(dir, 'trap')}.$$"\n` +
-        `${realCat()} "$@" & c=$!\nwait $c\n` +
-        // The relay's socket is fd 3: its reader (stdin is fd 3) ends with orcad; the stdin reader
-        // stays blocked, as on a real host where the desktop keeps its pipe open, until killed.
-        '[ /dev/fd/0 -ef /dev/fd/3 ] && exit 0\n' +
-        'sleep 30 & c=$!\nwait $c\n',
+        // POSIX gives a background job /dev/null as stdin even under `<&0`, so hand it over on fd 5
+        // as the relay does: the socket reader ends with orcad, the stdin reader blocks until killed.
+        `exec 5<&0\n${realCat()} "$@" <&5 & c=$!\nexec 5<&-\n` +
+        `: > "${join(dir, 'trap')}.$$"\nwait $c\n`,
       { mode: 0o755 }
     )
     const trapsSet = (): number =>

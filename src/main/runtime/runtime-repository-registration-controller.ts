@@ -48,26 +48,16 @@ export class RuntimeRepositoryRegistrationController {
     }
     // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.
     const repoPath = gitInfo?.rootPath ?? path
-    const sameHostRepos = store
-      .getRepos()
-      .filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
+    const sameHostRepos = (): Repo[] =>
+      store.getRepos().filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
     // Resolved toplevel lets symlink aliases find existing registrations.
-    const existing =
-      sameHostRepos.find(
+    const findAtPath = (): Repo | undefined =>
+      sameHostRepos().find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
-      ) ?? (await findProjectAtSameRealPath(sameHostRepos, repoPath))
+      )
+    const existing = findAtPath() ?? (await findProjectAtSameRealPath(sameHostRepos(), repoPath))
     if (existing) {
-      if (
-        existing.executionHostId == null &&
-        parseExecutionHostId(executionHostId)?.kind === 'runtime'
-      ) {
-        const adopted =
-          store.updateRepo(existing, { executionHostId }) ??
-          ({ ...existing, executionHostId } as Repo)
-        this.invalidate(existing.id)
-        return adopted
-      }
-      return existing
+      return this.reuseExisting(store, existing, executionHostId)
     }
     // This controller validated/read the path locally; runtime: is the paired-client address, not another machine.
     const detected = await detectRepoIconAndUpstream({
@@ -75,6 +65,11 @@ export class RuntimeRepositoryRegistrationController {
       kind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+    // A concurrent add of the same folder can finish while the awaits above are pending.
+    const raceWinner = findAtPath()
+    if (raceWinner) {
+      return this.reuseExisting(store, raceWinner, executionHostId)
+    }
     const repo: Repo = {
       id: randomUUID(),
       path: repoPath,
@@ -90,6 +85,24 @@ export class RuntimeRepositoryRegistrationController {
     await prepareLocalWorktreeRootForRepo(store, repo)
     this.invalidate(repo.id)
     return store.getRepo(repo.id) ?? repo
+  }
+
+  private reuseExisting(
+    store: RuntimeStore,
+    existing: Repo,
+    executionHostId: ExecutionHostId | null | undefined
+  ): Repo {
+    if (
+      existing.executionHostId == null &&
+      parseExecutionHostId(executionHostId)?.kind === 'runtime'
+    ) {
+      const adopted =
+        store.updateRepo(existing, { executionHostId }) ??
+        ({ ...existing, executionHostId } as Repo)
+      this.invalidate(existing.id)
+      return adopted
+    }
+    return existing
   }
 
   async create(

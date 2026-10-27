@@ -16975,6 +16975,99 @@
                     }
                   }
                 }
+              },
+              "step": {
+                "copy": {
+                  "workspace": {
+                    "board": {
+                      "plan": {
+                        "title": "Planifiez le travail sur le tableau",
+                        "body": "Utilisez le tableau pour voir les espaces de travail par statut plutôt que par projet."
+                      },
+                      "lanes": {
+                        "title": "Faites avancer le travail entre les colonnes",
+                        "body": "Faites glisser les espaces de travail d’une colonne à l’autre à mesure que leur statut change."
+                      }
+                    },
+                    "creation": {
+                      "project": {
+                        "title": "Choisissez un projet",
+                        "body": "Orca isole chaque tâche dans son propre worktree, créé à partir de votre branche de base."
+                      },
+                      "name": {
+                        "title": "Nommez-le, ou partez d’un travail existant",
+                        "body": "Partez d’une tâche liée pour obtenir un nom court d’issue ou de PR. Ou laissez le champ vide pour le nommer automatiquement à partir de votre premier message à l’agent."
+                      },
+                      "agent": {
+                        "title": "Choisissez l’agent qui démarre le travail",
+                        "body": "Choisissez l’agent à ouvrir lors de la création de ce worktree."
+                      }
+                    }
+                  },
+                  "agent": {
+                    "sessions": {
+                      "split": {
+                        "title": "Scindez un volet de terminal",
+                        "body": "Ouvrez un second volet de terminal avec {terminal.splitRight}, ou faites un clic droit sur le volet pour afficher les options de division.",
+                        "action": "Scinder le terminal"
+                      },
+                      "parallel": {
+                        "title": "Lancez une autre tâche en parallèle",
+                        "body": "Chaque worktree a sa propre branche, ce qui garde le travail en parallèle séparé."
+                      }
+                    }
+                  },
+                  "browser": {
+                    "grab": {
+                      "title": "Récupérez le contexte de la page pour les agents",
+                      "body": "Utilisez l’outil de capture pour copier le contexte d’un élément de la page pour les agents."
+                    },
+                    "annotate": {
+                      "title": "Annotez vos retours de design sur place",
+                      "body": "Annotez des éléments et envoyez ces notes à un agent."
+                    },
+                    "logins": {
+                      "title": "Restez connecté",
+                      "body": "Importez vos connexions existantes dans Orca pour rester connecté immédiatement."
+                    }
+                  },
+                  "tasks": {
+                    "source": {
+                      "title": "Choisissez la source du travail",
+                      "body": "Passez d’un fournisseur connecté ou d’un filtre de projet à l’autre sans changer de page."
+                    },
+                    "filter": {
+                      "title": "Filtrez le travail dont vous avez besoin",
+                      "body": "Utilisez les préréglages et la recherche pour affiner les issues, revues, merge requests ou tâches."
+                    },
+                    "start": {
+                      "title": "Partez des éléments de travail",
+                      "body": "Utilisez Démarrer ou Ouvrir sur une tâche, une issue, une revue ou une merge request pour importer son contexte dans un espace de travail."
+                    }
+                  },
+                  "floating": {
+                    "workspace": {
+                      "repos": {
+                        "title": "Lancez un agent sur tous vos dépôts",
+                        "body": "Ici, les agents s’exécutent dans le dossier de votre choix. Pointez-en un vers le dossier parent de vos services pour travailler sur tous vos dépôts à la fois."
+                      },
+                      "scratchpad": {
+                        "title": "Ou utilisez-le comme brouillon",
+                        "body": "Ouvrez des agents, des terminaux temporaires, des notes et des onglets de navigateur sans encombrer le worktree sur lequel vous êtes concentré."
+                      }
+                    }
+                  },
+                  "client": {
+                    "hosted": {
+                      "browser": {
+                        "intro": {
+                          "action": "Compris",
+                          "secondaryAction": "Paramètres du navigateur"
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -20354,6 +20447,31 @@
       "stopped": "arrêté",
       "failed": "échoué",
       "finished": "terminé"
+    },
+    "bell": {
+      "attentionRequested": "Attention requise",
+      "title": "Sonnerie dans {{worktree}}"
+    },
+    "test": {
+      "title": "Les notifications d'Orca sont activées",
+      "body": "Ceci est une notification de test d'Orca."
+    },
+    "workspaceFallback": "espace de travail",
+    "agentTool": {
+      "usingWithInput": "Utilise {{tool}} : {{input}}",
+      "using": "Utilise {{tool}}",
+      "input": "Entrée de l'outil : {{input}}"
+    },
+    "taskComplete": {
+      "title": "Tâche terminée dans {{worktree}}",
+      "body": "Un agent de code a fini de travailler."
+    },
+    "permissionProbe": {
+      "body": "Orca vous préviendra quand les agents auront terminé ou que des terminaux demanderont votre attention."
+    },
+    "startupRegistration": {
+      "title": "Orca est prêt à vous envoyer des notifications",
+      "body": "Autorisez les notifications pour qu'Orca vous prévienne quand les agents ont terminé ou que des terminaux demandent votre attention."
     }
   },
   "sidebar": {

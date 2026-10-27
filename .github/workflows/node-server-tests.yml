@@ -153,9 +153,10 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
-    # Keep platform keys stable for slot names and Windows cross-compilation.
+    # Keep platform keys stable for slot names and Windows cross-compilation. Hosted Windows x64 is free and
+    # still finishes before the windows-11-arm and macos-15-intel lanes that set wall time.
     runs-on: >-
-      ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","macos-15-intel":"macos-15-intel","windows-2022":"blacksmith-8vcpu-windows-2025","windows-11-arm":"windows-11-arm"}')[matrix.os] || matrix.os }}
+      ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","macos-15-intel":"macos-15-intel","windows-2022":"windows-2022","windows-11-arm":"windows-11-arm"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'

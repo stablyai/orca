@@ -95,6 +95,18 @@ describe('subscribeRuntimeClientEvents', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  it("forwards a host's workspaceViewChanged so its board columns refresh", async () => {
+    const { subscribe, respond } = recordRuntimeSubscription()
+    const onEvent = vi.fn()
+    stubRuntimeEnvironmentBridge({ subscribe })
+
+    await subscribeRuntimeClientEvents('env-1', onEvent, vi.fn())
+
+    respond({ ok: true, result: { type: 'workspaceViewChanged' } })
+
+    expect(onEvent).toHaveBeenCalledWith({ type: 'workspaceViewChanged' })
+  })
+
   it('signals a replay-tagged response so event-derived state can resync after a reconnect', async () => {
     const { subscribe, respond } = recordRuntimeSubscription()
     const onEvent = vi.fn()
