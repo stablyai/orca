@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
+import { GUEST_TREE_KILL_RESOURCE_DIR } from '../../shared/guest-tree-kill-artifacts'
 
 /** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
 export const daemonHostExeName = (execPath: string): string => winPath.basename(execPath)
@@ -80,6 +81,12 @@ function isRuntimeProcessHostPath(packageRel: string): boolean {
     packageRel === 'package.json' ||
     packageRel === 'dist' ||
     packageRel.startsWith('dist/')
+  )
+}
+
+export function missingProcessTreeFiles(packageDir: string): boolean {
+  return WINDOWS_PROCESS_TREE_REQUIRED.some(
+    (relative) => !existsSync(join(packageDir, ...relative.split('/')))
   )
 }
 
@@ -182,6 +189,12 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     filter: isRuntimeNodePtyPath
   })
 
+  const guestHelperDir = join(resourcesPath, GUEST_TREE_KILL_RESOURCE_DIR)
+  ops.push({
+    sourcePath: guestHelperDir,
+    destRel: toPosixRelative(appDir, guestHelperDir),
+    kind: 'dir'
+  })
   return ops
 }
 

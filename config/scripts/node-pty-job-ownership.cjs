@@ -4,7 +4,13 @@ const { existsSync, readFileSync } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { PE_MACHINE, describePeMachine, readPeMachine } = require('./windows-pe-machine.cjs')
 
-const NODE_PTY_JOB_EXPORTS = ['listJobProcessIds', 'terminateJob', 'assignCurrentProcessToJob']
+const NODE_PTY_JOB_EXPORTS = [
+  'listJobProcessIds',
+  'terminateJob',
+  'assignCurrentProcessToJob',
+  'getShellCreationTime'
+]
+const ROOT_IDENTITY_MARKER = Buffer.from('getShellCreationTime', 'utf8')
 
 // Inspect usesCygwinRuntime’s UTF-16 marker: job exports predate MSYS breakaway denial and pass on builds that leak Git Bash children.
 // See docs/reference/windows-msys-job-breakaway.md; windows-process-table.ts uses the same binary-marker strategy.
@@ -25,8 +31,15 @@ function assertNodePtySourceDeniesMsysBreakaway({ nodePtyDir }) {
   if (!existsSync(sourcePath)) {
     return
   }
-  if (readFileSync(sourcePath, 'utf8').includes(`L"${CYGWIN_BREAKAWAY_MARKER_TEXT}"`)) {
-    return
+  const source = readFileSync(sourcePath, 'utf8')
+  if (source.includes(`L"${CYGWIN_BREAKAWAY_MARKER_TEXT}"`)) {
+    if (source.includes('exports.Set("getShellCreationTime",')) {
+      return
+    }
+    throw new Error(
+      `node-pty's source at ${sourcePath} lacks the stable shell-handle identity reader. ` +
+        'Run `pnpm install` to apply the current node-pty patch before rebuilding.'
+    )
   }
   throw new Error(
     [
@@ -76,6 +89,7 @@ function assertRebuiltConptyDeniesMsysBreakaway({
   if (existsSync(addonPath)) {
     assertRebuiltConptyMatchesArch(addonPath, rebuildArch)
     assertCygwinBreakawayDenied(addonPath, { dir: addonPath })
+    assertConptyRootIdentityAvailable(addonPath)
     return
   }
   if (crossHost || !existsSync(nodePtyDir)) {
@@ -108,13 +122,23 @@ function assertNodePtyJobOwnership({ nativeName, native, addonPath, platform = p
       [
         `node-pty's conpty native is missing ${missing.join(', ')}.`,
         `Resolved from: ${native?.dir ?? 'unknown'}`,
-        'That build cannot own a PTY tree, so terminatePtyJob degrades to "unavailable"',
-        'and pane teardown falls back to guessing by PID ancestry.',
+        'That build lacks required PTY ownership or stable root-identity support.',
+        'Teardown cannot safely use PID-addressed fallback without native identity.',
         'Rebuild node-pty from source so config/patches/node-pty@1.1.0.patch applies.'
       ].join(' ')
     )
   }
   assertCygwinBreakawayDenied(addonPath, native)
+}
+
+/** Cross-architecture gates cannot load the addon, but its export name remains in the binary. */
+function assertConptyRootIdentityAvailable(addonPath) {
+  if (!readFileSync(addonPath).includes(ROOT_IDENTITY_MARKER)) {
+    throw new Error(
+      `node-pty's conpty native at ${addonPath} lacks getShellCreationTime. ` +
+        'Rebuild node-pty from the current patch so PID fallback can verify the owned root.'
+    )
+  }
 }
 
 // Fail closed on unreadable addon: loadNativeModule already loaded it, so a missing path means the gate cannot inspect its subject.
@@ -155,6 +179,8 @@ function staleConptySourceBuildError(addonPath) {
 }
 
 module.exports = {
+  ROOT_IDENTITY_MARKER,
+  assertConptyRootIdentityAvailable,
   CYGWIN_BREAKAWAY_MARKER,
   CYGWIN_BREAKAWAY_MARKER_TEXT,
   assertNodePtyJobOwnership,

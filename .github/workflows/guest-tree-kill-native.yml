@@ -1,0 +1,61 @@
+name: Guest tree cleanup native helper
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'config/electron-builder.config.cjs'
+      - 'config/scripts/build-native-for-platform*'
+      - 'config/scripts/electron-builder-native-rebuild*'
+      - 'config/scripts/build-orcad*'
+      - 'src/main/daemon/daemon-host-manifest*'
+      - 'src/main/daemon/daemon-host-relocation*'
+      - 'native/linux-guest-tree-kill/**'
+      - 'config/scripts/*guest-tree-kill*'
+      - 'src/shared/guest-tree-kill*'
+      - 'src/shared/node-bounded-file-reader*'
+      - 'src/main/daemon/wsl-guest-tree-kill*'
+      - 'src/main/pty/bundled-guest-tree-kill*'
+      - '.github/workflows/guest-tree-kill-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: guest-tree-kill-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Build and validate both static guest architectures
+        run: |
+          pnpm build:guest-tree-kill
+          node config/scripts/build-guest-tree-kill.mjs --check
+      - name: Execute the packaged native-host helper
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_GUEST_TREE_KILL_TEST_BINARY: ${{ github.workspace }}/resources/guest-tree-kill/linux-${{ matrix.arch }}/orca-guest-tree-kill
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          src/main/daemon/wsl-guest-tree-kill-native.test.ts
+          src/main/daemon/wsl-guest-tree-kill.test.ts
+          src/shared/guest-tree-kill-artifacts.test.ts
+          src/shared/node-bounded-file-reader-filetypes.test.ts
+          config/scripts/guest-tree-kill-build-contract.test.mjs
+          src/main/pty/bundled-guest-tree-kill.test.ts
+          src/main/daemon/daemon-host-relocation.test.ts

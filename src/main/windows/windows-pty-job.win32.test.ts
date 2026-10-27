@@ -4,10 +4,12 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IPty } from 'node-pty'
 import { runProcess } from '@orca/process-host'
+import { readWindowsProcessCreationTime } from './windows-process-table'
 import {
   isPtyJobOwnershipAvailable,
   killConptyNow,
   listPtyJobProcessIds,
+  readPtyRootCreationTimeMs,
   terminatePtyJob
 } from './windows-pty-job'
 import { watchConptyStartup } from '../daemon/pty-subprocess/conpty-startup-input-reader'
@@ -128,6 +130,24 @@ describeOnWindows('ConPTY job ownership', () => {
   it('reports this build as able to own pty trees', () => {
     // Require patched job support or fallback would let ownership assertions pass vacuously.
     expect(isPtyJobOwnershipAvailable()).toBe(true)
+  })
+
+  it('reads the original shell creation time and refuses after its native handle closes', async () => {
+    const nodePty = await import('node-pty')
+    const proc = nodePty.spawn('cmd.exe', [], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      useConptyDll: true
+    })
+    spawned.push(proc)
+    const baseline = readPtyRootCreationTimeMs(proc)
+    expect(baseline).toBeGreaterThan(0)
+    expect(baseline).toBe(readWindowsProcessCreationTime(proc.pid))
+    const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
+    proc.write('exit\r')
+    await exited
+    expect(readPtyRootCreationTimeMs(proc)).toBeUndefined()
   })
 
   it('keeps the native table intact while shell cleanup overlaps new terminals', async () => {

@@ -133,6 +133,11 @@ export class Session {
     return this.subprocess.pid
   }
 
+  /** Spawn-captured tree-kill identity; undefined where never captured. */
+  get spawnIdentity() {
+    return this.subprocess.spawnIdentity
+  }
+
   /** A PTY job result of unavailable does not prove child exit. */
   terminateOwnedTree(): JobTerminationOutcome {
     return this.subprocess.terminateOwnedTree()

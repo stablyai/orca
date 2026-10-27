@@ -3,12 +3,16 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } 
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
+  hasGuestTreeKillArtifacts,
+  GUEST_TREE_KILL_RESOURCE_DIR
+} from '../../shared/guest-tree-kill-artifacts'
+import {
   buildDaemonHostManifest,
   daemonHostFitsPathBudget,
   destPath,
   executeManifest,
   toPosixRelative,
-  WINDOWS_PROCESS_TREE_REQUIRED,
+  missingProcessTreeFiles,
   type DaemonHostSources
 } from './daemon-host-manifest'
 import {
@@ -115,12 +119,6 @@ function processTreeRelDir(sources: DaemonHostSources): string {
   return toPosixRelative(sources.appDir, sources.windowsProcessTreeDir)
 }
 
-function missingProcessTreeFiles(packageDir: string): boolean {
-  return WINDOWS_PROCESS_TREE_REQUIRED.some(
-    (relative) => !existsSync(join(packageDir, ...relative.split('/')))
-  )
-}
-
 // Keep profile roots separate from legacy pruners; this profile cannot prove another profile's daemon dead.
 const PROFILE_HOST_SUBDIR = 'daemon-host-profiles'
 
@@ -198,7 +196,8 @@ function findRelocatedDaemonHost(
     if (
       !existsSync(execPath) ||
       !existsSync(entryPath) ||
-      missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))
+      missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources))) ||
+      !hasGuestTreeKillArtifacts(join(dest, 'resources', GUEST_TREE_KILL_RESOURCE_DIR))
     ) {
       continue
     }
@@ -222,12 +221,15 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     return existing
   }
   // Reject incomplete sources before copying a runtime the mirror check would refuse anyway.
-  if (!inventory || missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
+  if (
+    !inventory ||
+    missingProcessTreeFiles(sources.windowsProcessTreeDir) ||
+    !hasGuestTreeKillArtifacts(join(sources.resourcesPath, GUEST_TREE_KILL_RESOURCE_DIR))
+  ) {
     return null
   }
   const version = getAppEnvironment().getVersion()
-  const root = getDaemonHostRootDir()
-  const versionRoot = join(root, version)
+  const versionRoot = join(getDaemonHostRootDir(), version)
   const nonce = randomBytes(6).toString('hex')
   // Keep the unique name short for conpty; the marker carries the fingerprint.
   const dest = join(versionRoot, `build-${nonce}`)

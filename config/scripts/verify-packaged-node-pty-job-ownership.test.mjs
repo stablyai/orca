@@ -20,7 +20,8 @@ const fixtureDir = mkdtempSync(join(tmpdir(), 'packaged-node-pty-job-'))
 function conptyImage({ arch = 'x64', cygwinBreakawayDenied = true } = {}) {
   return Buffer.concat([
     peImage({ arch }),
-    cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+    cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+    Buffer.from('getShellCreationTime')
   ])
 }
 
@@ -50,7 +51,8 @@ const PATCHED = {
   module: {
     listJobProcessIds: () => [],
     terminateJob: () => true,
-    assignCurrentProcessToJob: () => true
+    assignCurrentProcessToJob: () => true,
+    getShellCreationTime: () => 1234
   }
 }
 

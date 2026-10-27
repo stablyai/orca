@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   ORCA_SCRUB_SAFE_PANE_ENV,
   ORCA_SCRUB_SAFE_LAUNCH_ENV
@@ -22,6 +23,42 @@ import {
 import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from '../ipc/pty/host-env/codex-terminal-clipboard'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
+
+/**
+ * Guest-side tree marker: stamped on every WSL session spawn and inherited
+ * by all guest descendants. Daemon shutdown kills the marked guest tree
+ * from inside the distro, which the Windows job object cannot reach.
+ */
+export const ORCA_PTY_TREE_ID_ENV = 'ORCA_PTY_TREE_ID'
+
+/**
+ * Whether a tree marker is safe to pass across the WSL command boundary.
+ */
+export function isUsablePtyTreeMarker(value: string | undefined): value is string {
+  if (!value || value.length === 0 || value.length > 512) {
+    return false
+  }
+  // Reject delimiters without a no-control-regex exception.
+  return !value.includes('\0') && !value.includes('\n') && !value.includes('\r')
+}
+
+/**
+ * Stamp the guest tree marker for a WSL spawn. False (marker skipped) when
+ * the id is missing or unusable — callers then degrade to Windows-side
+ * cleanup alone. Session ids are renderer-influenced, so validate here.
+ */
+export function stampPtyTreeIdMarker(
+  env: Record<string, string>,
+  sessionId: string | undefined
+): boolean {
+  delete env[ORCA_PTY_TREE_ID_ENV]
+  if (!isUsablePtyTreeMarker(sessionId)) {
+    return false
+  }
+  // A reused session id must never let an old cleanup target a newer spawn.
+  env[ORCA_PTY_TREE_ID_ENV] = randomUUID()
+  return true
+}
 
 function parseWslenvEntries(value: string | undefined): string[] {
   return value ? value.split(WSLENV_ENTRY_SEPARATOR).filter(Boolean) : []
@@ -75,6 +112,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // wsl.exe imports only selected variables; publish pane identity and hook/wrapper coordinates.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
+    // Why /u: the marker is an opaque id, never a path; the guest killer
+    // matches it byte-for-byte, so translation would corrupt it.
+    `${ORCA_PTY_TREE_ID_ENV}/u`,
     'ORCA_USER_DATA_PATH/p',
     // Guests cannot derive the content hash; translate the resolved host wrapper root.
     'ORCA_SHELL_READY_ROOT/p',

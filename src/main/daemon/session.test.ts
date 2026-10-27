@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
+import type { killWithDescendantSweep } from '../pty-descendant-termination'
+import type { SpawnTreeIdentity } from './session-subprocess-handle'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
@@ -9,12 +11,13 @@ import {
   setPtyOwnerHostColors
 } from '../../shared/pty-owner-color-query-colors'
 
-const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+const killWithDescendantSweepMock = vi.hoisted(() => vi.fn<typeof killWithDescendantSweep>())
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-function createMockSubprocess() {
+// Stub the subprocess — Session talks to it via an interface, not child_process directly.
+function createMockSubprocess(spawnIdentity?: SpawnTreeIdentity) {
   const written: string[] = []
   const signals: string[] = []
   let onData: ((data: string) => void) | null = null
@@ -41,6 +44,7 @@ function createMockSubprocess() {
       return resumeCalls
     },
     foregroundProcess: null as string | null,
+    spawnIdentity,
     getForegroundProcess(): string | null {
       return this.foregroundProcess
     },
@@ -675,6 +679,14 @@ describe('Session', () => {
 
       expect(attempts).toBe(2)
       expect(session.isTerminating).toBe(true)
+    })
+
+    it('agent graceful close anchors the sweep to the spawn-captured root creation time', () => {
+      createSession({ launchAgent: 'claude' })
+      subprocess.spawnIdentity = { rootCreationTimeMs: 555 }
+      void gracefulClose()
+      const [, , deps = {}] = killWithDescendantSweepMock.mock.calls[0]
+      expect(deps.expectedRootCreationTimeMs).toBe(555)
     })
 
     it('notifies attached clients on exit after kill', async () => {

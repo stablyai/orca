@@ -1,13 +1,18 @@
 import { execFile } from 'node:child_process'
-import type { JobTerminationOutcome } from './windows/windows-pty-job'
-import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
+import { matchingSignalTargets } from './pty-descendant-signal-targets'
 import {
-  verifyWindowsTreeKillTarget,
-  type WindowsTreeKillTarget
-} from './windows-pty-root-identity'
+  readProcessTableBeforeDeadline,
+  readProcessTableWithRetries
+} from './pty-process-table-deadline'
+export { readProcessTableBeforeDeadline } from './pty-process-table-deadline'
 import { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
 
 export { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
+export {
+  hasUnambiguousStartIdentity,
+  hasUnambiguousStartTime
+} from './pty-descendant-signal-targets'
+import { runWindowsSweepWithDeadline, type WindowsSweepDeps } from './pty-descendant-sweep-budget'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
@@ -97,33 +102,6 @@ export function createProcessTableSnapshotReader(
 
 export const readProcessTable = createProcessTableSnapshotReader(readFreshProcessTable)
 
-export function readProcessTableBeforeDeadline(
-  readTable: ProcessTableReader,
-  timeoutMs: number
-): Promise<ProcessTableCapture | null> {
-  return new Promise((resolve) => {
-    let settled = false
-    const finish = (capture: ProcessTableCapture | null): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      resolve(capture)
-    }
-    const timer = setTimeout(() => finish(null), timeoutMs)
-    timer.unref?.()
-    try {
-      void readTable(timeoutMs).then(
-        (rows) => finish(rows),
-        () => finish(null)
-      )
-    } catch {
-      finish(null)
-    }
-  })
-}
-
 export function collectDescendantRows(
   rootPid: number,
   table: ProcessTableRow[],
@@ -199,19 +177,23 @@ export async function captureDescendantSnapshot(
   return collectDescendantRows(rootPid, capture.rows, capture.capturedAtMs)
 }
 
-type KillSweepDeps = SnapshotDeps &
-  TerminateDeps & {
-    ownsRoot?: () => boolean
-    /** Shutdown can retain the owner until descendant escalation finishes. */
-    terminateDescendants?: (snapshot: DescendantSnapshot) => void | Promise<unknown>
-    awaitEscalation?: boolean | (() => boolean)
-    /** unavailable means no owned job exists, not that the tree exited. */
-    terminateOwnedTree?: () => JobTerminationOutcome
-    killWindowsTree?: WindowsTreeKiller
-    verifyTreeKillTarget?: (rootPid: number) => Promise<WindowsTreeKillTarget>
-  }
+type KillSweepDeps = Omit<SnapshotDeps & TerminateDeps & WindowsSweepDeps, 'awaitEscalation'> & {
+  /** Shutdown can retain the owner until descendant verification finishes. */
+  terminateDescendants?: (snapshot: DescendantSnapshot) => void | Promise<unknown>
+  awaitEscalation?: boolean | (() => boolean)
+}
 
-/** Call before killing the root: POSIX needs live ancestry; Windows prefers an owned job, then an identity-gated PID walk. */
+/**
+ * Standard agent-session kill sequencing.
+ * - POSIX: snapshot the descendant tree, signal members, then killRoot.
+ * - Windows: see runWindowsSweepWithDeadline — the PTY's job object first
+ *   (exact, no probe), else the identity-gated `taskkill /T /F` fallback.
+ * Callers must not signal the root before this runs on POSIX — a dead root's
+ * descendants reparent to pid 1 and become unfindable. Snapshot failure
+ * degrades to killRoot alone on POSIX. The default sweep kills the root after
+ * identity-checked SIGTERM, before grace. A custom shutdown verifier with
+ * awaitEscalation retains the root until its descendant proof finishes.
+ */
 export async function killWithDescendantSweep(
   rootPid: number,
   killRoot: () => void,
@@ -219,56 +201,40 @@ export async function killWithDescendantSweep(
 ): Promise<void> {
   const platform = deps.platform ?? process.platform
   if (platform === 'win32') {
-    try {
-      if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
-        // Owned jobs survive PID reuse and include descendants reparented away from the shell.
-        if (deps.terminateOwnedTree?.() === 'terminated') {
-          return
-        }
-        // ConPTY closes the shell handle before JS sees exit; require OS identity to reject recycled PIDs.
-        const verify = deps.verifyTreeKillTarget ?? verifyWindowsTreeKillTarget
-        const target = await verify(rootPid).catch((): WindowsTreeKillTarget => 'unknown')
-        // Re-check ownership: the identity query awaits, so exit can land meanwhile.
-        if (target === 'own' && (deps.ownsRoot?.() ?? true)) {
-          const killTree =
-            deps.killWindowsTree ??
-            ((pid: number) => terminateWindowsProcessTree(pid, { site: 'pty-descendant-sweep' }))
-          // A taskkill failure must not skip root termination.
-          await killTree(rootPid).catch(() => {})
-        }
-      }
-    } finally {
-      killRoot()
-    }
+    // Why dispatched out: the Windows fallback carries probe scaling, an
+    // escalation race, and a killRoot deadline that do not fit this module's
+    // line budget. POSIX needs none of that — its snapshot, grace window,
+    // and re-read are already constant-bounded.
+    await runWindowsSweepWithDeadline(rootPid, killRoot, deps)
     return
   }
 
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
-  let descendants: void | Promise<unknown> = undefined
+  let escalation: Promise<void> = Promise.resolve()
   const awaitEscalation =
     typeof deps.awaitEscalation === 'function' ? deps.awaitEscalation() : deps.awaitEscalation
-  if (awaitEscalation) {
-    try {
-      if (snapshot && (deps.ownsRoot?.() ?? true)) {
-        descendants = deps.terminateDescendants
-          ? deps.terminateDescendants(snapshot)
-          : terminateDescendantSnapshot(snapshot, deps)
-      }
-      await descendants
-    } finally {
-      killRoot()
-    }
-    return
-  }
   try {
     // Signal descendants before root death creates a reparent/PID-reuse window.
     if (snapshot && (deps.ownsRoot?.() ?? true)) {
-      descendants = deps.terminateDescendants
-        ? deps.terminateDescendants(snapshot)
-        : terminateDescendantSnapshot(snapshot, deps)
+      if (deps.terminateDescendants) {
+        const descendants = deps.terminateDescendants(snapshot)
+        if (awaitEscalation) {
+          await descendants
+        }
+      } else {
+        const started = await startDescendantTermination(
+          snapshot,
+          { ...deps, awaitEscalation },
+          deps.ownsRoot
+        )
+        escalation = started.escalation
+      }
     }
   } finally {
     killRoot()
+  }
+  if (awaitEscalation) {
+    await escalation
   }
 }
 
@@ -282,66 +248,82 @@ export type TerminateDeps = {
   readTable?: ProcessTableReader
   sendSignal?: SignalSender
   graceMs?: number
+  /** Independent budget for each signal phase, including transient-read retries. */
   timeoutMs?: number
+  /**
+   * On POSIX (consumed directly by terminateDescendantSnapshot): await the
+   * grace-window SIGKILL escalation before resolving, instead of leaving it
+   * on its own unref'd timer. A caller that force-exits the process right
+   * after this resolves (daemon shutdown) would otherwise drop that timer
+   * mid-flight and leave SIGTERM-ignoring descendants alive. Off by default
+   * because it adds up to ~DESCENDANT_KILL_GRACE_MS + DESCENDANT_SNAPSHOT_TIMEOUT_MS
+   * of latency, which a long-lived process's fire-and-forget close
+   * (interactive tab close) does not need to pay.
+   *
+   * Also keeps both identity-read deadlines and the grace-window timer
+   * ref'd instead of unref'd: an awaiting caller needs Node's event loop to
+   * actually stay alive for these to fire, not just a promise nobody's loop
+   * is obligated to keep pending. Fire-and-forget callers must leave this
+   * unset so an otherwise-idle long-lived process isn't held open by it.
+   *
+   * On Windows (consumed by killWithDescendantSweep via this same field):
+   * keep deadline timers alive while awaiting bounded tree termination. The
+   * Windows root remains alive until that termination completes or times out.
+   */
+  awaitEscalation?: boolean
 }
 
-export function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
-  return hasUnambiguousStartTime(row.startedAt, capturedAtMs)
-}
-
-export function hasUnambiguousStartTime(startedAt: string, capturedAtMs: number): boolean {
-  const startedAtMs = Date.parse(startedAt)
-  if (!Number.isFinite(startedAtMs)) {
-    return false
-  }
-  // lstart cannot distinguish PID reuse within the capture second.
-  return startedAtMs < Math.floor(capturedAtMs / 1_000) * 1_000
-}
-
-/** Reach detached descendants with SIGTERM, then escalate only survivors whose identity excludes same-second PID reuse. */
-export function terminateDescendantSnapshot(
+/** Revalidate before both signals; the promise includes the grace-window escalation. */
+export async function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
   deps: TerminateDeps = {}
-): void {
+): Promise<void> {
+  const { escalation } = await startDescendantTermination(snapshot, deps)
+  await escalation
+}
+
+// Box the escalation promise so callers can kill the root after SIGTERM, before grace.
+async function startDescendantTermination(
+  snapshot: DescendantSnapshot,
+  deps: TerminateDeps,
+  ownsRoot?: () => boolean
+): Promise<{ escalation: Promise<void> }> {
+  const skip = { escalation: Promise.resolve() }
+  if (snapshot.descendants.length === 0) {
+    return skip
+  }
   const sendSignal = deps.sendSignal ?? sendDescendantSignal
   const readTable = deps.readTable ?? readProcessTable
-  for (const row of snapshot.descendants) {
+  const keepAlive = deps.awaitEscalation ?? false
+  const timeoutMs = deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
+  const graceMs = deps.graceMs ?? DESCENDANT_KILL_GRACE_MS
+  // Daemon shutdown supplies its own verifier; interactive escalation gets a full fresh-read budget.
+  const initial = await readProcessTableWithRetries(readTable, timeoutMs, keepAlive, ownsRoot)
+  if (!initial || !(ownsRoot?.() ?? true)) {
+    return skip
+  }
+  const descendants = matchingSignalTargets(snapshot, initial.rows)
+  if (descendants.length === 0) {
+    return skip
+  }
+  for (const row of descendants) {
     sendSignal(row.pid, 'SIGTERM')
   }
-  if (snapshot.descendants.length === 0) {
-    return
-  }
-  const timer = setTimeout(() => {
-    void readProcessTableBeforeDeadline(
-      readTable,
-      deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
-    ).then((capture) => {
-      if (!capture) {
-        return
-      }
-      const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
-      const liveTargets = new Map<number, ProcessTableRow | null>()
-      // Index only the small set of signal targets, not the whole process table.
-      for (const live of capture.rows) {
-        if (expectedPids.has(live.pid)) {
-          // Duplicate PID rows make identity ambiguous, so never escalate them.
-          liveTargets.set(live.pid, liveTargets.has(live.pid) ? null : live)
+  const validatedSnapshot = { ...snapshot, descendants }
+  const escalation = new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      void readProcessTableWithRetries(readTable, timeoutMs, keepAlive).then((capture) => {
+        if (capture) {
+          for (const row of matchingSignalTargets(validatedSnapshot, capture.rows)) {
+            sendSignal(row.pid, 'SIGKILL')
+          }
         }
-      }
-      for (const row of snapshot.descendants) {
-        const live = liveTargets.get(row.pid)
-        if (
-          hasUnambiguousStartIdentity(
-            row,
-            snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
-          ) &&
-          live?.startedAt === row.startedAt &&
-          live.pgid === row.pgid
-        ) {
-          sendSignal(row.pid, 'SIGKILL')
-        }
-      }
-    })
-  }, deps.graceMs ?? DESCENDANT_KILL_GRACE_MS)
-  timer.unref?.()
+        resolve()
+      })
+    }, graceMs)
+    if (!keepAlive) {
+      timer.unref?.()
+    }
+  })
+  return { escalation }
 }

@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, win32 as winPath } from 'node:path'
+import {
+  GUEST_TREE_KILL_RESOURCE_DIR,
+  guestTreeKillSha256
+} from '../../shared/guest-tree-kill-artifacts'
+import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
 import { hashDaemonHostFile } from './daemon-host-file-hash-cache'
 import {
   buildDaemonHostManifest,
@@ -36,6 +41,16 @@ function runtimeVersion(): string {
 
 function fingerprintInventory(inventory: Omit<DaemonHostBuildInventory, 'fingerprint'>): string {
   return createHash('sha256').update(JSON.stringify(inventory)).digest('hex')
+}
+
+function hashInventoryFile(root: string, relativePath: string): string {
+  const filePath = destPath(root, relativePath)
+  if (relativePath.endsWith(`/${GUEST_TREE_KILL_RESOURCE_DIR}/manifest.json`)) {
+    return guestTreeKillSha256(
+      readNodeFileSyncWithinLimit(filePath, 64 * 1024, { regularFileOnly: true }).buffer
+    )
+  }
+  return hashDaemonHostFile(filePath)
 }
 
 function collectCodeFiles(sourcePath: string, destRel: string): DaemonHostBuildFile[] {
@@ -112,6 +127,15 @@ export function collectDaemonHostBuildInventory(
       ...collectCodeFiles(join(processHostDir, 'package.json'), `${packageRel}/package.json`)
     )
     files.push(...collectCodeFiles(join(processHostDir, 'dist'), `${packageRel}/dist`))
+    // The verified manifest's digests bind both helpers without unbounded native-binary reads.
+    const guestManifestRel = toPosixRelative(
+      sources.appDir,
+      join(sources.resourcesPath, GUEST_TREE_KILL_RESOURCE_DIR, 'manifest.json')
+    )
+    files.push({
+      path: guestManifestRel,
+      sha256: hashInventoryFile(sources.appDir, guestManifestRel)
+    })
     const registryDir = daemonHostWindowsRegistryDir(sources)
     const registryRel = toPosixRelative(sources.appDir, registryDir)
     for (const relative of WINDOWS_REGISTRY_REQUIRED) {
@@ -184,9 +208,7 @@ export function daemonHostBuildInventoryMatches(
   inventory: DaemonHostBuildInventory
 ): boolean {
   try {
-    return inventory.files.every(
-      (file) => hashDaemonHostFile(destPath(root, file.path)) === file.sha256
-    )
+    return inventory.files.every((file) => hashInventoryFile(root, file.path) === file.sha256)
   } catch {
     return false
   }

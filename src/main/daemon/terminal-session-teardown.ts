@@ -123,6 +123,7 @@ export class TerminalSessionTeardown {
     await killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
       terminateOwnedTree: () => session.terminateOwnedTree(),
+      expectedRootCreationTimeMs: session.spawnIdentity?.rootCreationTimeMs,
       terminateDescendants: terminateShutdownDescendants,
       awaitEscalation: true
     })
@@ -172,6 +173,7 @@ export class TerminalSessionTeardown {
             // Captured descendants are authoritative only while this exact Session owns the live root.
             ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
             terminateOwnedTree: () => session.terminateOwnedTree(),
+            expectedRootCreationTimeMs: session.spawnIdentity?.rootCreationTimeMs,
             terminateDescendants: (snapshot) => {
               entry.descendantVerification = terminateShutdownDescendants(
                 session.launchAgent || entry.immediate
