@@ -136,17 +136,17 @@ export function VaultScopeSwitch({
         disabled={!workspaceAvailable}
         className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}
       >
-        {workspaceLabel}
+        <span className="truncate">{workspaceLabel}</span>
       </ToggleGroupItem>
       <ToggleGroupItem
         value="project"
         disabled={!projectAvailable}
         className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}
       >
-        {projectLabel}
+        <span className="truncate">{projectLabel}</span>
       </ToggleGroupItem>
       <ToggleGroupItem value="all" className={VAULT_SCOPE_TOGGLE_ITEM_CLASS}>
-        {allLabel}
+        <span className="truncate">{allLabel}</span>
       </ToggleGroupItem>
     </ToggleGroup>
   )
