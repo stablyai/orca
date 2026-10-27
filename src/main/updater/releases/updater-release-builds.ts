@@ -119,7 +119,8 @@ function readAssetNames(assets: unknown): string[] {
 function parseReleaseEntry(
   entry: GitHubReleaseEntry,
   repo: string,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  arch: string
 ): ReleaseBuild | null {
   if (typeof entry.tag_name !== 'string' || entry.draft === true) {
     return null
@@ -132,10 +133,10 @@ function parseReleaseEntry(
   }
   // Platform release legs publish independently; offer only artifacts that actually exist.
   const assetNames = readAssetNames(entry.assets)
-  if (!hasInstallableArtifactForPlatform(platform, assetNames)) {
+  if (!hasInstallableArtifactForPlatform(platform, assetNames, arch)) {
     return null
   }
-  const installerAsset = findInstallerAssetName(platform, assetNames)
+  const installerAsset = findInstallerAssetName(platform, assetNames, arch)
   const name = typeof entry.name === 'string' ? entry.name.trim() : ''
   return {
     tag,
@@ -156,7 +157,8 @@ function parseReleaseEntry(
 // REST exposes older builds the short Atom feed omits; use only for explicit picker requests.
 export async function listReleaseBuilds(
   channel: ReleaseChannel,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch
 ): Promise<ReleaseBuild[]> {
   const repo = getReleaseRepoForChannel(channel)
   // Skip a known-exhausted token bucket and try the separate per-IP quota.
@@ -188,7 +190,7 @@ export async function listReleaseBuilds(
     throw new UpdaterCodedError('releaseListUnreadable', { channel })
   }
   const builds = payload
-    .map((entry) => parseReleaseEntry(entry as GitHubReleaseEntry, repo, platform))
+    .map((entry) => parseReleaseEntry(entry as GitHubReleaseEntry, repo, platform, arch))
     .filter((build): build is ReleaseBuild => build !== null)
     .filter((build) => build.channel === channel)
   return sortReleaseBuildsNewestFirst(builds)

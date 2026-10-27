@@ -130,6 +130,8 @@ describe('release channel', () => {
       expect(isChannelSupportedOnPlatform(channel, 'darwin')).toBe(true)
       expect(isChannelSupportedOnPlatform(channel, 'win32')).toBe(true)
       expect(isChannelSupportedOnPlatform(channel, 'linux')).toBe(false)
+      expect(isChannelSupportedOnPlatform(channel, 'win32', 'x64')).toBe(true)
+      expect(isChannelSupportedOnPlatform(channel, 'win32', 'arm64')).toBe(false)
     }
   })
 
@@ -171,6 +173,9 @@ describe('release channel', () => {
   it('detects an installable artifact from the platform update manifest', () => {
     expect(hasInstallableArtifactForPlatform('win32', ['latest.yml'])).toBe(true)
     expect(hasInstallableArtifactForPlatform('win32', ['latest-mac.yml'])).toBe(false)
+    expect(hasInstallableArtifactForPlatform('win32', ['latest.yml'], 'arm64')).toBe(false)
+    expect(hasInstallableArtifactForPlatform('win32', ['latest-arm64.yml'], 'arm64')).toBe(true)
+    expect(hasInstallableArtifactForPlatform('win32', ['latest-arm64.yml'], 'x64')).toBe(false)
     expect(hasInstallableArtifactForPlatform('darwin', ['latest-mac.yml'])).toBe(true)
     expect(hasInstallableArtifactForPlatform('darwin', ['latest.yml'])).toBe(false)
     expect(hasInstallableArtifactForPlatform('linux', ['latest-linux-arm64.yml'])).toBe(true)
@@ -190,6 +195,12 @@ describe('release channel', () => {
     expect(findInstallerAssetName('darwin', assets)).toBe('orca-macos-arm64.dmg')
     expect(findInstallerAssetName('linux', assets)).toBe('orca-linux.AppImage')
     expect(findInstallerAssetName('win32', ['latest.yml'])).toBeNull()
+    // The ARM64 installer must not match the x64 suffix shipped clients search for.
+    expect(findInstallerAssetName('win32', ['orca-windows-setup-arm64.exe'], 'x64')).toBeNull()
+    expect(
+      findInstallerAssetName('win32', [...assets, 'orca-windows-setup-arm64.exe'], 'arm64')
+    ).toBe('orca-windows-setup-arm64.exe')
+    expect(findInstallerAssetName('win32', assets, 'arm64')).toBeNull()
     expect(findInstallerAssetName('freebsd', assets)).toBeNull()
   })
 

@@ -40,8 +40,14 @@ function createWindowsArchitectureResources(env = process.env) {
   return resources
 }
 
+// Why: shipped x64 clients pick installers by /windows-setup\.exe$/, so the arm64 name must not match it.
 function getWindowsInstallerArtifactName(env = process.env) {
-  return isWindowsArm64Build(env) ? 'orca-windows-arm64-setup.${ext}' : 'orca-windows-setup.${ext}'
+  return isWindowsArm64Build(env) ? 'orca-windows-setup-arm64.${ext}' : 'orca-windows-setup.${ext}'
+}
+
+// Why: electron-updater reads latest.yml on every Windows arch; arm64 installs need their own manifest.
+function getWindowsUpdateChannelPublishOptions(env = process.env) {
+  return isWindowsArm64Build(env) ? { channel: 'latest-arm64' } : {}
 }
 
 module.exports = {
@@ -49,6 +55,7 @@ module.exports = {
   createWindowsArchitectureResources,
   getWindowsInstallerArtifactName,
   getWindowsSpeechNativePackage,
+  getWindowsUpdateChannelPublishOptions,
   isWindowsArm64Build,
   validateWindowsPackageArchitecture
 }

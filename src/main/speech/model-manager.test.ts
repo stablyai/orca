@@ -148,8 +148,7 @@ describe('ModelManager', () => {
         })
       const verifyMock = vi.spyOn(internals, 'verifyFileSha256').mockResolvedValue()
 
-      // Why: exercise installation independently of the ARM64 platform guard.
-      await manager.downloadModel(manifest.id, 'win32', 'x64')
+      await manager.downloadModel(manifest.id)
 
       const modelDir = manager.getModelDir(manifest.id)
       expect(downloadMock).toHaveBeenCalledTimes(manifest.downloadFiles?.length ?? 0)
@@ -286,8 +285,7 @@ describe('ModelManager', () => {
       netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
 
-      // Why: pin x64 so cancellation is tested even on Windows ARM64 hosts.
-      const download = manager.downloadModel(manifest.id, 'win32', 'x64')
+      const download = manager.downloadModel(manifest.id)
       manager.cancelDownload(manifest.id)
       await expect(download).resolves.toBeUndefined()
 

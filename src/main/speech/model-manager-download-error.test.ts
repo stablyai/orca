@@ -58,11 +58,7 @@ describe('ModelManager download failures', () => {
       netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
 
-      // Why: pin a supported platform so the download-error path is exercised
-      // even when the test host itself is Windows ARM64.
-      await expect(manager.downloadModel(manifest.id, 'win32', 'x64')).rejects.toThrow(
-        'network down'
-      )
+      await expect(manager.downloadModel(manifest.id)).rejects.toThrow('network down')
 
       expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
       expect(errorHandlers).toHaveLength(0)

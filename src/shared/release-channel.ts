@@ -57,13 +57,25 @@ const DEV_CHANNEL_PLATFORMS: Readonly<Record<DedicatedRepoChannel, readonly Node
 /** Shared availability copy must stay aligned with the platform table. */
 export const DEV_CHANNEL_PLATFORM_LABEL = 'macOS and Windows'
 
+/** electron-builder publish channel for native Windows ARM64; x64 (including under ARM emulation) keeps `latest`. */
+export const WINDOWS_ARM64_UPDATE_CHANNEL = 'latest-arm64'
+
+function isWindowsArm64Build(platform: NodeJS.Platform, arch: string | undefined): boolean {
+  return platform === 'win32' && arch === 'arm64'
+}
+
 /** Share platform gating across picker and update checks. */
 export function isChannelSupportedOnPlatform(
   channel: ReleaseChannel,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  arch?: string
 ): boolean {
   if (!hasDedicatedReleaseRepo(channel)) {
     return true
+  }
+  // Dev workflows build Windows x64 only.
+  if (isWindowsArm64Build(platform, arch)) {
+    return false
   }
   return DEV_CHANNEL_PLATFORMS[channel].includes(platform)
 }
@@ -191,16 +203,23 @@ const PLATFORM_UPDATE_MANIFESTS: Partial<Record<NodeJS.Platform, readonly string
   linux: ['latest-linux.yml', 'latest-linux-arm64.yml']
 }
 
-export function getUpdateManifestNamesForPlatform(platform: NodeJS.Platform): readonly string[] {
+export function getUpdateManifestNamesForPlatform(
+  platform: NodeJS.Platform,
+  arch?: string
+): readonly string[] {
+  if (isWindowsArm64Build(platform, arch)) {
+    return [`${WINDOWS_ARM64_UPDATE_CHANNEL}.yml`]
+  }
   return PLATFORM_UPDATE_MANIFESTS[platform] ?? []
 }
 
 /** True when the release carries an artifact this platform's updater can install. */
 export function hasInstallableArtifactForPlatform(
   platform: NodeJS.Platform,
-  assetNames: readonly string[]
+  assetNames: readonly string[],
+  arch?: string
 ): boolean {
-  const manifests = getUpdateManifestNamesForPlatform(platform)
+  const manifests = getUpdateManifestNamesForPlatform(platform, arch)
   // Unknown platforms should fail with a download explanation rather than an empty picker.
   if (manifests.length === 0) {
     return true
@@ -215,11 +234,17 @@ const PLATFORM_INSTALLER_PATTERNS: Partial<Record<NodeJS.Platform, RegExp>> = {
   linux: /\.AppImage$/i
 }
 
+/** Kept off the x64 `windows-setup.exe` suffix so shipped x64 pickers never match it. */
+const WINDOWS_ARM64_INSTALLER_PATTERN = /windows-setup-arm64\.exe$/i
+
 export function findInstallerAssetName(
   platform: NodeJS.Platform,
-  assetNames: readonly string[]
+  assetNames: readonly string[],
+  arch?: string
 ): string | null {
-  const pattern = PLATFORM_INSTALLER_PATTERNS[platform]
+  const pattern = isWindowsArm64Build(platform, arch)
+    ? WINDOWS_ARM64_INSTALLER_PATTERN
+    : PLATFORM_INSTALLER_PATTERNS[platform]
   if (!pattern) {
     return null
   }

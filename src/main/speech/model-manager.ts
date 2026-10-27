@@ -8,10 +8,7 @@ import type {
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
-import {
-  assertLocalSpeechRecognitionSupported,
-  getSupportedSpeechModels
-} from './speech-platform-support'
+import { getSupportedSpeechModels } from './speech-platform-support'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
@@ -152,7 +149,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     })
   }
 
-  async downloadModel(modelId: string, os = process.platform, cpu = process.arch): Promise<void> {
+  async downloadModel(modelId: string): Promise<void> {
     // Do not await migration: downloads cannot race it, and cancellation needs synchronous setup.
     if (this.activeDownloads.has(modelId)) {
       return
@@ -165,7 +162,6 @@ export class ModelManager extends SpeechModelDownloadTransport {
     if (!isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support downloads: ${modelId}`)
     }
-    assertLocalSpeechRecognitionSupported(os, cpu)
     if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {
       throw new Error(`Model download metadata missing: ${modelId}`)
     }

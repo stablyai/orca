@@ -11,9 +11,6 @@ import {
 } from '../worker-threads/worker-thread-entry-path'
 import { supportsLocalSpeechRecognition } from './speech-platform-support'
 
-/** Mobile maps voice_model_not_ready: to host-supported model setup, including hosts with no recognizer. */
-export const LOCAL_SPEECH_UNAVAILABLE_ERROR = 'voice_model_not_ready:unavailable'
-
 export function getSttWorkerPath(): string {
   return resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), 'stt-worker.js')
 }

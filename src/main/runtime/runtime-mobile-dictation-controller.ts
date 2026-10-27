@@ -2,10 +2,8 @@ import { getDefaultVoiceSettings } from '../../shared/constants'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../shared/rpc-contract/speech-params'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../speech/model-catalog'
-import {
-  hasLocalSpeechRecognizer,
-  LOCAL_SPEECH_UNAVAILABLE_ERROR
-} from '../speech/stt-worker-paths'
+import { hasLocalSpeechRecognizer } from '../speech/stt-worker-paths'
+import { LOCAL_SPEECH_UNAVAILABLE_ERROR } from '../../shared/speech-types'
 import {
   MobileDictationChunkOrder,
   type MobileDictationChunk
