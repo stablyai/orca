@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
@@ -64,6 +65,7 @@ async function probeGuestEnvironment(
   const captured = buildWslCapturedLoginShellCommand(script)
   const result = await runProcess({
     program: resolveWslExecutablePath(),
+    cwd: resolveWslInteropSpawnCwd(),
     args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
     // This path spawns wsl.exe directly; request UTF-8 or its UTF-16 errors corrupt the NUL-delimited payload (#9010).
     env: { ...process.env, WSL_UTF8: '1' },
