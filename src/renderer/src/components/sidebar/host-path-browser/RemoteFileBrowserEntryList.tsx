@@ -15,6 +15,8 @@ type RemoteFileBrowserEntryListProps = {
   entries: DirEntry[]
   displayEntries: readonly DirEntry[]
   activeIndex: number
+  projectFolders: readonly string[]
+  activeProjectFolderIndex: number
   listboxId: string
   filter: string
   preview: PreviewState | null
@@ -22,7 +24,19 @@ type RemoteFileBrowserEntryListProps = {
   inputRef: RefObject<HTMLInputElement | null>
   handleRowClick: (entry: DirEntry) => void
   handleRowDoubleClick: (entry: DirEntry) => void
+  handlePathClick: (dirPath: string) => void
+  handlePathDoubleClick: (dirPath: string) => void
 }
+
+export function remoteFileBrowserProjectFolderOptionId(listboxId: string, index: number): string {
+  return `${listboxId}-folder-${index}`
+}
+
+const ROW_CLASS_NAME = cn(
+  // Why `jump-palette-item`: flat accent is invisible as a keyboard cursor on light dialogs.
+  'jump-palette-item w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors cursor-pointer',
+  'hover:bg-accent/60'
+)
 
 export function RemoteFileBrowserEntryList({
   loading,
@@ -30,24 +44,33 @@ export function RemoteFileBrowserEntryList({
   entries,
   displayEntries,
   activeIndex,
+  projectFolders,
+  activeProjectFolderIndex,
   listboxId,
   filter,
   preview,
   isPreviewActive,
   inputRef,
   handleRowClick,
-  handleRowDoubleClick
+  handleRowDoubleClick,
+  handlePathClick,
+  handlePathDoubleClick
 }: RemoteFileBrowserEntryListProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (activeIndex < 0) {
+    const selector =
+      activeIndex >= 0
+        ? `[data-entry-index="${activeIndex}"]`
+        : activeProjectFolderIndex >= 0
+          ? `[data-project-folder-index="${activeProjectFolderIndex}"]`
+          : null
+    if (selector === null) {
       return
     }
     // Optional call: happy-dom has no scrollIntoView.
-    scrollRef.current
-      ?.querySelector(`[data-entry-index="${activeIndex}"]`)
-      ?.scrollIntoView?.({ block: 'nearest' })
-  }, [activeIndex, displayEntries])
+    scrollRef.current?.querySelector(selector)?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeIndex, activeProjectFolderIndex, displayEntries, projectFolders])
+  const projectFoldersLabelId = `${listboxId}-folders-label`
 
   const noMatchesFilter = isPreviewActive ? preview!.filter : filter
   const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
@@ -73,6 +96,54 @@ export function RemoteFileBrowserEntryList({
         )}
         className="h-[240px] overflow-y-auto scrollbar-sleek"
       >
+        {projectFolders.length > 0 && (
+          <div
+            role="group"
+            aria-labelledby={projectFoldersLabelId}
+            className="border-b border-border pb-1"
+          >
+            <div
+              id={projectFoldersLabelId}
+              className="px-3 pt-2 pb-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
+              {translate(
+                'auto.components.sidebar.RemoteFileBrowserEntryList.projectFolders',
+                'Project folders'
+              )}
+            </div>
+            {projectFolders.map((folderPath, index) => {
+              const isActive = index === activeProjectFolderIndex
+              return (
+                <button
+                  key={folderPath}
+                  id={remoteFileBrowserProjectFolderOptionId(listboxId, index)}
+                  role="option"
+                  aria-selected={isActive}
+                  data-selected={isActive}
+                  data-project-folder-index={index}
+                  tabIndex={-1}
+                  type="button"
+                  title={folderPath}
+                  onClick={() => handlePathClick(folderPath)}
+                  onDoubleClick={() => handlePathDoubleClick(folderPath)}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    inputRef.current?.focus()
+                  }}
+                  className={ROW_CLASS_NAME}
+                >
+                  <FolderIcon
+                    folderPath={folderPath}
+                    open={false}
+                    className="size-3.5 text-muted-foreground shrink-0"
+                  />
+                  <span className="truncate flex-1 min-w-0">{folderPath}</span>
+                  <ChevronRight className="size-3.5 text-muted-foreground/60 shrink-0" />
+                </button>
+              )
+            })}
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
@@ -95,7 +166,12 @@ export function RemoteFileBrowserEntryList({
             </p>
           </div>
         ) : !isPreviewActive && entries.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
+          <div
+            className={cn(
+              'flex items-center justify-center',
+              projectFolders.length > 0 ? 'py-8' : 'h-full'
+            )}
+          >
             <p className="text-xs text-muted-foreground">
               {translate('auto.components.sidebar.RemoteFileBrowser.51001182e3', 'Empty directory')}
             </p>
@@ -124,11 +200,7 @@ export function RemoteFileBrowserEntryList({
                   e.preventDefault()
                   inputRef.current?.focus()
                 }}
-                className={cn(
-                  // Why `jump-palette-item`: flat accent is invisible as a keyboard cursor on light dialogs.
-                  'jump-palette-item w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors cursor-pointer',
-                  'hover:bg-accent/60'
-                )}
+                className={ROW_CLASS_NAME}
               >
                 {entry.isDirectory ? (
                   <FolderIcon

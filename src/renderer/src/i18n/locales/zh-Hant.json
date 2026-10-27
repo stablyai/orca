@@ -7049,7 +7049,8 @@
           "underDistro": "此主機只能新增 \\\\wsl.localhost\\{{value0}} 下的資料夾。"
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "{{path}} 中沒有內容"
+          "pathEmpty": "{{path}} 中沒有內容",
+          "projectFolders": "專案資料夾"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "無法讓偵測到的工作樹保持隱藏。請再試一次。",

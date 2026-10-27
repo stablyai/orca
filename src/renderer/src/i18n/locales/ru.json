@@ -7560,7 +7560,8 @@
           "expiresIn": "Срок действия кэша запросов истекает через {{time}}"
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "Папка {{path}} пуста"
+          "pathEmpty": "Папка {{path}} пуста",
+          "projectFolders": "Папки проектов"
         },
         "addRepoBusyLabels": {
           "chooseFolder": "Выбрать папку…",
