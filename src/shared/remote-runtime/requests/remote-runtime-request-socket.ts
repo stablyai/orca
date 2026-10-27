@@ -124,7 +124,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       clearTimeout(timeout)
       try {
         cleanupSocketListeners()
-        ws?.close()
+        // Why: a finished one-shot request must not wait 30s for an unresponsive peer's close frame.
+        ws?.terminate()
       } catch {
         // ignore best-effort close
       }

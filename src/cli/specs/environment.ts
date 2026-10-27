@@ -24,6 +24,7 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
       'Commands that take --host also accept any name this list prints, such as --host "this machine" or --host <ssh-target-name>. A name two hosts share is refused with the exact flag for each.',
       'SSH rows include the detected remote platform after that target has connected (linux, darwin, or win32); disconnected or older targets report platform unknown.',
       'SSH rows also include whether the target is currently connected and its lifecycle status when known.',
+      'Paired-server rows include the last explicit probe and lastSeenAt without dialing those servers. Refresh one with `orca environment show --environment <name> --probe`.',
       'Paired-server rows come from the pairing store and report platform unknown; ask one server directly with `orca host name --environment <name>`.',
       "SSH targets are read from this machine's own Orca runtime, so this lists that machine's targets and not another server's. Run `orca host list` on the other machine to see the targets registered there.",
       '--environment and --pairing-code are rejected rather than ignored: paired servers come from this machine\u2019s pairing store, so a routed answer would describe two machines at once.'
@@ -43,14 +44,20 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca environment list [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
+      'Includes the last explicit reachability probe and lastSeenAt without contacting paired servers. Use `orca environment show --environment <name> --probe` to refresh one.',
       'Answers from this machine\u2019s pairing store. --environment and --pairing-code are rejected rather than ignored, because there is no other host that could answer.'
     ]
   },
   {
     path: ['environment', 'show'],
     summary: 'Show one saved Orca runtime environment',
-    usage: 'orca environment show --environment <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
+    usage: 'orca environment show --environment <selector> [--probe] [--timeout-ms <ms>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'probe', 'timeout-ms'],
+    notes: [
+      'Without --probe, reports saved connection details and the last explicit reachability observation without contacting the server.',
+      '--probe makes one authenticated status check of the saved endpoint. It does not start a runtime or SSH tunnel. Timeout defaults to 5000ms and may be set to 1–30000ms.',
+      'Reachability is an observation with checkedAt, not a continuous monitor. lastSeenAt retains the last successful explicit probe of this pairing/endpoint; unreachable does not mean the machine is powered off.'
+    ]
   },
   {
     path: ['environment', 'rm'],

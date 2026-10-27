@@ -3,6 +3,7 @@ import {
   type PairedRuntimeConnection
 } from '../paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
+import { Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
 import { encodePairingOffer, parsePairingCode } from '../pairing'
@@ -315,7 +316,7 @@ describe('sendRemoteRuntimeRequest', () => {
     async (mode) => {
       const observed = Promise.withResolvers<void>()
       const requests = vi.fn((_request: Record<string, unknown>) => observed.resolve())
-      const close = vi.spyOn(WebSocketClient.prototype, 'close')
+      const terminate = vi.spyOn(WebSocketClient.prototype, 'terminate')
       const server = await createOneShotServer({
         onRequest: requests,
         keepalive: false,
@@ -359,7 +360,7 @@ describe('sendRemoteRuntimeRequest', () => {
           method: 'agentSession.restartContinue',
           params: { sessionIds: ['a'] }
         })
-        expect(close).toHaveBeenCalled()
+        expect(terminate).toHaveBeenCalled()
         const timeoutIndex = timers.mock.calls.findIndex(([, delay]) => delay === 600_000)
         expect(timeoutIndex).toBeGreaterThanOrEqual(0)
         expect(clearTimer).toHaveBeenCalledWith(timers.mock.results[timeoutIndex].value)
@@ -367,36 +368,30 @@ describe('sendRemoteRuntimeRequest', () => {
         timers.mockRestore()
         clearTimer.mockRestore()
         vi.useRealTimers()
-        close.mockRestore()
+        terminate.mockRestore()
       }
     }
   )
 
-  it('aborts and closes an in-flight one-shot socket', async () => {
+  it('preserves AbortError when an in-flight mutation request is cancelled', async () => {
     let requestObserved: () => void = () => {}
     const observed = new Promise<void>((resolve) => {
       requestObserved = resolve
     })
     const server = await createOneShotServer({ onRequest: requestObserved })
-    const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close')
     const controller = new AbortController()
-    try {
-      const request = sendRemoteRuntimeRequest(
-        server.pairing,
-        'skills.install',
-        {},
-        60_000,
-        undefined,
-        controller.signal
-      )
-      await observed
+    const request = sendRemoteRuntimeRequest(
+      server.pairing,
+      'skills.install',
+      {},
+      60_000,
+      undefined,
+      controller.signal
+    )
+    await observed
 
-      controller.abort()
-      await expect(request).rejects.toMatchObject({ name: 'AbortError' })
-      expect(closeSpy).toHaveBeenCalled()
-    } finally {
-      closeSpy.mockRestore()
-    }
+    controller.abort()
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
   })
 
   it('preserves structured failure data for remote computer-use recovery hints', async () => {
@@ -480,6 +475,72 @@ describe('sendRemoteRuntimeRequest', () => {
     expect(receivedRequest).not.toHaveProperty('orchestrationCapability')
     expect(receivedRequest).not.toHaveProperty('orchestrationContractVersion')
     expect(receivedRequest).not.toHaveProperty('orchestrationRequestId')
+  })
+
+  it('detaches one-shot socket listeners after a successful response', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createOneShotServer()
+
+      await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
+        server.pairing,
+        'terminal.wait',
+        { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
+        300
+      )
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+    } finally {
+      offSpy.mockRestore()
+    }
+  })
+
+  it('destroys the actual one-shot socket on cancellation when its peer cannot complete a close handshake', async () => {
+    const admitted = Promise.withResolvers<WebSocket>()
+    const server = await createOneShotServer({
+      stallAfterRequest: true,
+      onRequest: (_request, socket) => admitted.resolve(socket)
+    })
+    const on = vi.spyOn(WebSocketClient.prototype, 'on')
+    const controller = new AbortController()
+    const pending = sendRemoteRuntimeRequest(
+      server.pairing,
+      'status.get',
+      undefined,
+      5000,
+      undefined,
+      controller.signal
+    )
+    const outcome = pending.then(
+      () => ({ ok: true }),
+      (error) => ({ ok: false, error })
+    )
+    const peer = await admitted.promise
+    try {
+      const client = on.mock.contexts.find(
+        (socket) =>
+          socket instanceof WebSocketClient && socket.url === new URL(server.pairing.endpoint).href
+      )
+      if (
+        !(client instanceof WebSocketClient) ||
+        !('_socket' in client) ||
+        !(client._socket instanceof Socket)
+      ) {
+        throw new Error('Expected the real client transport socket')
+      }
+      controller.abort(new Error('Probe cancelled'))
+      expect(await outcome).toMatchObject({
+        ok: false,
+        error: expect.objectContaining({ message: 'Probe cancelled' })
+      })
+      expect(client._socket.destroyed).toBe(true)
+    } finally {
+      controller.abort(new Error('Probe cancelled'))
+      await outcome
+      on.mockRestore()
+      peer.terminate()
+    }
   })
 })
 
@@ -644,7 +705,8 @@ async function createOneShotServer(
   options: {
     response?: (requestId: string) => unknown
     onAuth?: (auth: Record<string, unknown>) => void
-    onRequest?: (request: Record<string, unknown>) => void
+    onRequest?: (request: Record<string, unknown>, socket: WebSocket) => void
+    stallAfterRequest?: boolean
     sendUndecryptableResponse?: boolean
     keepalive?: boolean
     responseDelayMs?: number | null
@@ -685,7 +747,11 @@ async function createOneShotServer(
       }
 
       const request = JSON.parse(plaintext) as { id: string } & Record<string, unknown>
-      options.onRequest?.(request)
+      options.onRequest?.(request, ws)
+      if (options.stallAfterRequest) {
+        ws.pause()
+        return
+      }
       if (options.sendUndecryptableResponse) {
         ws.send('not-an-encrypted-frame')
         return
