@@ -49,6 +49,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsHookEnvironmentGuardLines(),
       // Drain pre_tool input before POST so jcode cannot block writing a payload larger than the pipe.
       `if "%JCODE_HOOK_EVENT%"=="pre_tool" ${WINDOWS_HOOK_STDIN_DRAIN_COMMAND}`,
+      'if not defined JCODE_HOOK_PAYLOAD exit /b 0',
       `set "ORCA_JCODE_PAYLOAD_FILE=%TEMP%\\orca-jcode-hook-%RANDOM%%RANDOM%.json"`,
       `>"${payloadFile}" echo(!JCODE_HOOK_PAYLOAD!`,
       // Input redirection avoids spawning cmd's extra pipeline shells on every event.
@@ -78,6 +79,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'fi',
     // Forward jcode's JSON payload verbatim; rebuilding arbitrary text in shell is unsafe.
     'payload="$JCODE_HOOK_PAYLOAD"',
+    'if [ -z "$payload" ]; then',
+    '  exit 0',
+    'fi',
     'orca_post_jcode_event() {',
     ...buildPosixAgentHookPostCommand('jcode').map((line) => `  ${line}`),
     '}',

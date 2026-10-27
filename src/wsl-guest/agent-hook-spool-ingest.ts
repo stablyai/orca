@@ -11,6 +11,7 @@ import {
 } from '../shared/agent-hook-spool'
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
+import { ingestRelayJcodeHook } from './agent-hook-jcode-ingress'
 
 export function ingestRelayHookSpoolRecord(
   record: SpoolRecord,
@@ -24,8 +25,10 @@ export function ingestRelayHookSpoolRecord(
       event: AgentHookEventPayload,
       source: AgentHookSource,
       env?: string,
-      version?: string
-    ) => void
+      version?: string,
+      options?: { isReplay?: boolean; onCommitted?: () => void }
+    ) => AgentHookEventPayload | undefined | void
+    isCanonicalPane?: (paneKey: string) => boolean
     isPaneSurfaceRetired: (paneKey: string) => boolean
     getAgentLaunchToken: (paneKey: string) => string | undefined
   }
@@ -41,6 +44,15 @@ export function ingestRelayHookSpoolRecord(
     if (!isAgentHookSource(record.source)) {
       return
     }
+    if (record.source === 'jcode') {
+      ingestRelayJcodeHook(
+        state,
+        env,
+        { body, receivedAt: record.receivedAt, isReplay: true },
+        host
+      )
+      return
+    }
     const options: Parameters<typeof normalizeHookPayload>[4] = {
       admitOpenCodeTui: (identity) => admitRelayOpenCodeTui(host, identity),
       deferCompactOwnershipToClient: true
@@ -49,7 +61,7 @@ export function ingestRelayHookSpoolRecord(
       ? host.providerNormalization.normalize(state, record.source, body, env, options)
       : normalizeHookPayload(state, record.source, body, env, options)
     if (event) {
-      host.apply(event, record.source, hookBodyEnv(body), hookBodyVersion(body))
+      host.apply(event, record.source, hookBodyEnv(body), hookBodyVersion(body), { isReplay: true })
     }
   }
   const pending = host.checkAgentPresence

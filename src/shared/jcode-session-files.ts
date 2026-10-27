@@ -1,15 +1,33 @@
 // jcode hooks lack prompts: read the authoritative live journal first, then consolidated session JSON.
 // Bound reads like Grok/Command Code so multi-MB transcripts cannot stall hook handling.
 import { createHash } from 'node:crypto'
-import { readFileSync, statSync } from 'node:fs'
+import { closeSync, fstatSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import {
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_TYPE_MAX_LENGTH,
+  normalizeOptionalField
+} from './agent-status-field-normalization'
 import { scanFileRegionsBackward } from './agent-hook-listener/reverse-file-region-scan'
+import {
+  metadataCacheEntries,
+  type JcodeSessionMetadata,
+  type JcodeSessionMetadataCache
+} from './jcode-session-metadata-cache'
+export {
+  createJcodeSessionMetadataCache,
+  type JcodeSessionMetadata,
+  type JcodeSessionMetadataCache
+} from './jcode-session-metadata-cache'
 
 const JCODE_SESSION_ID_MAX_LENGTH = 512
 const JCODE_SESSION_SCAN_BYTES = 4 * 1024 * 1024
 const JCODE_JOURNAL_CHUNK_BYTES = 64 * 1024
 const JCODE_JSON_DOC_MAX_PARSE_BYTES = 8 * 1024 * 1024
+const JCODE_METADATA_CACHE_TTL_MS = 1_000
+const JCODE_METADATA_MISS_TTL_MS = 250
+const JCODE_METADATA_CACHE_MAX_ENTRIES = 256
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -23,7 +41,7 @@ export function resolveJcodeSessionsDir(
   return explicit ? join(explicit, 'sessions') : join(homeDir, '.jcode', 'sessions')
 }
 
-function isSafeJcodeSessionId(value: unknown): value is string {
+export function isSafeJcodeSessionId(value: unknown): value is string {
   if (typeof value !== 'string') {
     return false
   }
@@ -41,6 +59,88 @@ function sessionFilePath(sessionId: string): string {
 
 function sessionJournalPath(sessionId: string): string {
   return join(resolveJcodeSessionsDir(), `${sessionId}.journal.jsonl`)
+}
+
+function readSessionMetadataFile(path: string, sessionId: string): JcodeSessionMetadata | null {
+  let fd: number | undefined
+  try {
+    fd = openSync(path, 'r')
+    const stat = fstatSync(fd)
+    if (!stat.isFile() || stat.size <= 0 || stat.size > JCODE_JSON_DOC_MAX_PARSE_BYTES) {
+      return null
+    }
+    // One extra byte detects growth without an unbounded read after the size check.
+    const bytes = Buffer.alloc(stat.size + 1)
+    let length = 0
+    while (length < bytes.length) {
+      const count = readSync(fd, bytes, length, bytes.length - length, length)
+      if (count === 0) {
+        break
+      }
+      length += count
+    }
+    if (length > stat.size) {
+      return null
+    }
+    const parsed: unknown = JSON.parse(bytes.toString('utf8', 0, length))
+    if (
+      !isRecord(parsed) ||
+      Array.isArray(parsed) ||
+      !isSafeJcodeSessionId(parsed.id) ||
+      parsed.id.trim() !== sessionId ||
+      (parsed.parent_id !== null && !isSafeJcodeSessionId(parsed.parent_id))
+    ) {
+      return null
+    }
+    return {
+      id: sessionId,
+      parentId: parsed.parent_id === null ? null : parsed.parent_id.trim(),
+      shortName: normalizeOptionalField(parsed.short_name, AGENT_TYPE_MAX_LENGTH),
+      title: normalizeOptionalField(parsed.title, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
+      closed:
+        parsed.status === 'Closed' || (isRecord(parsed.status) && isRecord(parsed.status.Crashed))
+    }
+  } catch {
+    return null
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd)
+      } catch {
+        // Cleanup failure must not replace the metadata result.
+      }
+    }
+  }
+}
+
+export function readJcodeSessionMetadata(
+  sessionId: string,
+  cache: JcodeSessionMetadataCache,
+  now: number = Date.now()
+): JcodeSessionMetadata | null {
+  if (!isSafeJcodeSessionId(sessionId)) {
+    return null
+  }
+  sessionId = sessionId.trim()
+  const path = resolve(resolveJcodeSessionsDir(), `${sessionId}.json`)
+  const entries = cache[metadataCacheEntries]
+  const cached = entries.get(path)
+  if (cached && now < cached.expiresAt) {
+    return cached.metadata
+  }
+  const metadata = readSessionMetadataFile(path, sessionId)
+  entries.delete(path)
+  entries.set(path, {
+    metadata,
+    expiresAt: now + (metadata ? JCODE_METADATA_CACHE_TTL_MS : JCODE_METADATA_MISS_TTL_MS)
+  })
+  if (entries.size > JCODE_METADATA_CACHE_MAX_ENTRIES) {
+    const oldest = entries.keys().next().value
+    if (oldest !== undefined) {
+      entries.delete(oldest)
+    }
+  }
+  return metadata
 }
 
 /** Text of one jcode stored message: string content or `[{type:'text',text}]`. */

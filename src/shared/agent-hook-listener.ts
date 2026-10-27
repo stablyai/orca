@@ -1,13 +1,13 @@
 import { readHookAgentProcess } from './agent-process-presence'
-import { resolveAgentStatusIdentity } from './agent-status-identity'
-import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
-import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
+import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
 } from './claude-compact-completion'
+import type { HookNormalizationOptions } from './agent-hook-listener/hook-normalization-options'
+import { inheritsActiveHookPaneIdentity } from './agent-hook-listener/hook-pane-identity'
 import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
@@ -20,6 +20,7 @@ import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
+import { prepareJcodeHookPayload } from './agent-hook-listener/jcode-hook-preparation'
 import {
   isOpenCodeSharedServerPost,
   resolveOpenCodeSharedServerEnvelope,
@@ -29,6 +30,13 @@ import {
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
 import { readPaneProviderSession } from './agent-hook-listener/pane-provider-session'
+
+export {
+  prepareJcodeHookPayload,
+  prepareJcodeRootSettlement,
+  type PreparedJcodeHook
+} from './agent-hook-listener/jcode-hook-preparation'
+
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
   'prompt_input_exit',
@@ -42,17 +50,11 @@ export function normalizeHookPayload(
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: {
-    deferCompactOwnershipToClient?: boolean
-    previousOpenCodeMainAgent?: AgentMainAgentStatus
-    admitOpenCodeTui?: (
-      identity: Pick<
-        AgentHookEventPayload,
-        'paneKey' | 'launchToken' | 'hookEventName' | 'hasExplicitPrompt'
-      >
-    ) => boolean | 'preserve-poster'
-  } = {}
+  options: HookNormalizationOptions = {}
 ): AgentHookEventPayload | null {
+  if (source === 'jcode') {
+    return prepareJcodeHookPayload(state, body, expectedEnv)?.event ?? null
+  }
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
   if (!envelope) {
     return null
@@ -71,9 +73,7 @@ export function normalizeHookPayload(
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
-    hookPayloadRecord.hookEventName ??
-    // Only jcode posts lifecycle under event; other providers may use that field for unrelated data.
-    (source === 'jcode' ? hookPayloadRecord.event : undefined)
+    hookPayloadRecord.hookEventName
   const providerSession = readPaneProviderSession(state, source, stampedPaneKey, hookPayloadRecord)
   if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
     return null
@@ -143,33 +143,15 @@ export function normalizeHookPayload(
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
   const agentProcess = readHookAgentProcess(source, record.agentProcess)
-  const previousReceivedAt =
-    previousStatus &&
-    'receivedAt' in previousStatus &&
-    typeof previousStatus.receivedAt === 'number'
-      ? previousStatus.receivedAt
-      : previousStatus?.hostEvidenceObservedAt
   // Reject before provider folds mutate the pane's prompt, tool and child caches.
   if (
-    previousStatus &&
-    previousReceivedAt !== undefined &&
-    sameAgentStatusTerminalOwner(
-      { connectionId: previousStatus.connectionId ?? null, worktreeId: previousStatus.worktreeId },
-      { connectionId: null, worktreeId }
-    ) &&
-    resolveAgentStatusIdentity({
-      existing: {
-        agentType: previousStatus.payload.agentType,
-        state: previousStatus.payload.state,
-        updatedAt: previousReceivedAt,
-        restoredUnconfirmed: previousStatus.restoredUnconfirmed,
-        agentPresence: previousStatus.providerSessionOnly ? undefined : previousStatus.agentPresence
-      },
-      incoming: source,
-      incomingProcess: agentProcess,
-      incomingSession: providerSession?.id,
-      now: Date.now()
-    }).inheritedFromActivePane
+    inheritsActiveHookPaneIdentity(
+      previousStatus,
+      source,
+      worktreeId,
+      agentProcess,
+      providerSession?.id
+    )
   ) {
     return null
   }
@@ -251,7 +233,7 @@ export function normalizeHookPayload(
     previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
   })
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent' || source === 'jcode') &&
+    (source === 'pi' || source === 'prime-agent') &&
     eventName === 'session_start' &&
     providerSession !== null
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.

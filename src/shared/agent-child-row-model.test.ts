@@ -9,6 +9,7 @@ import {
   type AgentChildRowModel
 } from './agent-child-row-model'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
+import { dolphinHooks } from './agent-hook-listener-jcode-swarm-fixtures'
 
 const FRESH: AgentChildRowContext = {
   parentEvidenceFresh: true,
@@ -144,6 +145,11 @@ describe('buildAgentChildRowModels: the display vocabulary', () => {
       { displayState: 'idle', detail: { kind: 'role', agentType: 'general-purpose' } }
     ],
     [
+      'a parked live view keeps its role despite a retained message',
+      [view('a', { state: 'idle', lastMessage: 'Previous turn finished' })],
+      { displayState: 'idle', detail: { kind: 'role', agentType: 'general-purpose' } }
+    ],
+    [
       'a host-reported unverifiable child reports its silence',
       [view('a', { state: 'unverifiable' })],
       { displayState: 'unverifiable', detail: { kind: 'no-update' } }
@@ -231,6 +237,56 @@ describe('buildAgentChildRowModels: the display vocabulary', () => {
 })
 
 describe('buildLegacyAgentChildRowModels', () => {
+  it.each(['working', 'waiting', 'blocked'] as const)(
+    'keeps the role for a %s legacy child with a retained report',
+    (state) => {
+      const { message } = JSON.parse(dolphinHooks[4].tool_input)
+      const [row] = buildLegacyAgentChildRowModels(
+        [
+          {
+            id: dolphinHooks[4].session_id,
+            state,
+            startedAt: 10,
+            description: 'Reply with exactly: w4-ok',
+            agentType: 'octopus',
+            lastAssistantMessage: message
+          }
+        ],
+        FRESH
+      )
+      expect(row).toMatchObject({
+        displayState: state,
+        detail: { kind: 'role', agentType: 'octopus' }
+      })
+    }
+  )
+
+  it('shows an idle worker report under its session title and short name', () => {
+    const { message } = JSON.parse(dolphinHooks[4].tool_input)
+    const { prompt } = JSON.parse(dolphinHooks[2].tool_input)
+    const [row] = buildLegacyAgentChildRowModels(
+      [
+        {
+          id: dolphinHooks[4].session_id,
+          state: 'idle',
+          startedAt: 10,
+          description: prompt,
+          agentType: 'octopus',
+          model: dolphinHooks[3].model,
+          lastAssistantMessage: message
+        }
+      ],
+      FRESH
+    )
+    expect(row).toMatchObject({
+      name: prompt,
+      agentType: 'octopus',
+      model: 'claude-haiku-5-5',
+      displayState: 'idle',
+      detail: { kind: 'message', text: 'w4 lane complete. Replied with requested sentinel.' }
+    })
+  })
+
   it('reads a legacy snapshot as before: no clock of its own, no outcome, no operation', () => {
     const rows = buildLegacyAgentChildRowModels(
       [

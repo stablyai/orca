@@ -1,7 +1,8 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { normalizeHookPayload, prepareJcodeHookPayload } from '../../../shared/agent-hook-listener'
+import { ingestPreparedJcodeHooks } from '../../../shared/agent-hook-listener/jcode-hook-ingress'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
   bindOpenCodeTuiSession,
@@ -12,6 +13,62 @@ import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  protected ingestJcodeHook(body: unknown, isReplay = false, receivedAt = Date.now()): void {
+    const generation = this.statusHookGeneration
+    ingestPreparedJcodeHooks(
+      this.state,
+      { body, isReplay, receivedAt, generation },
+      (input) => prepareJcodeHookPayload(this.state, input.body, this.env, input),
+      (prepared, input) => {
+        const identity = prepared.admission
+        if (
+          !this.statusHooksEnabled ||
+          this.statusHookGeneration !== generation ||
+          (input.generation !== undefined && input.generation !== this.statusHookGeneration) ||
+          this.canonicalSubjectsByPane.has(identity.paneKey)
+        ) {
+          return
+        }
+        const exit = this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(identity.paneKey))
+        if (input.isReplay && exit && input.receivedAt + 1000 <= exit.at) {
+          return
+        }
+        const disposition = this.getAgentStatusDisposition(identity.paneKey, {
+          ...identity,
+          source: 'jcode'
+        })
+        if (disposition === 'suppress') {
+          return
+        }
+        if (!prepared.event) {
+          prepared.commit()
+          return
+        }
+        const event =
+          disposition === 'restart' ? { ...prepared.event, launchToken: undefined } : prepared.event
+        if (disposition === 'restart') {
+          this.observations.rebind(event.paneKey)
+        }
+        const enriched = this.applyNormalizedStatus(
+          event,
+          undefined,
+          'hook',
+          undefined,
+          undefined,
+          false,
+          prepared.commit
+        )
+        if (enriched) {
+          this.recordCurrentAuthorityObservation(event)
+          this.checkAgentPresenceAfterHook(event, enriched)
+        }
+        if (input.isReplay && event.payload.state !== 'done') {
+          this.withdrawReplayObservation(event.paneKey)
+        }
+      }
+    )
+  }
+
   protected setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,
@@ -114,6 +171,10 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
 
   private applySpoolHook(record: SpoolRecord, body: unknown): void {
     if (!isAgentHookSource(record.source)) {
+      return
+    }
+    if (record.source === 'jcode') {
+      this.ingestJcodeHook(body, true, record.receivedAt)
       return
     }
     const normalized = this.normalizeLocalHookPayload(record.source, body, true)

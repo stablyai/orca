@@ -12,6 +12,64 @@ import {
 
 describe('agent process recognition', () => {
   it.each([
+    ['/home/user/.jcode/builds/versions/0.99.0/jcode-linux-x86_64.bin', 'jcode-linux-x86_64.bin'],
+    ['jcode-linux-x86_64.bin', 'jcode-linux-x86_64.bin'],
+    ['jcode', 'jcode'],
+    ['jcode.exe', 'jcode'],
+    [String.raw`C:\Users\dev\.jcode\jcode.exe`, 'jcode'],
+    [String.raw`C:\Users\dev\.jcode\jcode-windows-x86_64.exe`, 'jcode-windows-x86_64'],
+    ['jcode-darwin-aarch64.bin', 'jcode-darwin-aarch64.bin'],
+    ['jcode-darwin-x86_64', 'jcode-darwin-x86_64'],
+    ['jcode-macos-arm64.bin', 'jcode-macos-arm64.bin'],
+    ['jcode-windows-x86_64.exe', 'jcode-windows-x86_64']
+  ])('recognizes Jcode executable %s', (processName, normalized) => {
+    expect(recognizeAgentProcess(processName)).toEqual({ agent: 'jcode', processName: normalized })
+    expect(isExpectedAgentProcess(processName, 'jcode')).toBe(true)
+  })
+
+  it.each([
+    'jcode-macos-aarc',
+    'jcode-macos-arm6',
+    'jcode-macos-x86_',
+    'jcode-darwin-aar',
+    'jcode-darwin-arm',
+    'jcode-darwin-x86'
+  ])('recognizes macOS p_comm truncation %s', (processName) => {
+    expect(recognizeAgentProcess(processName)).toEqual({ agent: 'jcode', processName })
+    expect(isExpectedAgentProcess(processName, 'jcode')).toBe(true)
+  })
+
+  it.each([
+    'jcode-something-else',
+    'jcode-linux-helper',
+    'jcode-linux-x86_64.bin.backup',
+    'jcode-linux-x86',
+    'jcode-linux-x86_',
+    'jcode-linux-aarc',
+    'jcode-windows-x8',
+    'jcode-macos-help',
+    'jcode-darwin-foo',
+    'jcode-macos-aar',
+    'jcode-macos-aarch',
+    'jcode-freebsd-x86_64.bin',
+    'other-jcode-linux-x86_64.bin',
+    'not-jcode'
+  ])('rejects unrelated or incomplete Jcode executable %s', (processName) => {
+    expect(recognizeAgentProcess(processName)).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine(processName)).toBeNull()
+    expect(isExpectedAgentProcess(processName, 'jcode')).toBe(false)
+  })
+
+  it('recognizes packaged Jcode only at the command entrypoint', () => {
+    const executable = '/home/user/.jcode/builds/versions/0.99.0/jcode-linux-x86_64.bin'
+    expect(recognizeAgentProcessFromCommandLine(`${executable} --resume session`)).toEqual({
+      agent: 'jcode',
+      processName: 'jcode-linux-x86_64.bin'
+    })
+    expect(recognizeAgentProcessFromCommandLine(`echo ${executable}`)).toBeNull()
+  })
+
+  it.each([
     '/usr/local/bin/dsb',
     '/usr/bin/deepseek-build',
     'C:\\Users\\dev\\bin\\dsb.cmd',

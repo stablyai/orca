@@ -213,7 +213,10 @@ export function normalizeProviderEvent(input: {
       payload = normalizeZCodeEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'jcode': {
-      const transcriptPrompt = readJcodeTurnPrompt(state, eventName, paneKey, hookPayload)
+      const transcriptPrompt =
+        eventName === 'session_start' || eventName === 'session_end'
+          ? null
+          : readJcodeTurnPrompt(state, eventName, paneKey, hookPayload)
       // Why: the reader returns null (not undefined) when no journal prompt is
       // recoverable; only a real transcript hit counts as prompt evidence.
       hasTranscriptPromptEvidence = transcriptPrompt !== null

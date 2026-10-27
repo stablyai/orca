@@ -9,6 +9,7 @@ import {
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+import { seedJcodeStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/jcode-roster-state'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
 import type { EnrichedAgentHookEventPayload, LastStatusFile } from './server-types'
@@ -130,6 +131,8 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
               entry.payload.subagents
             )
           }
+        } else if (entry.payload.agentType === 'jcode' && !entry.connectionId) {
+          seedJcodeStateFromSnapshot(this.state, resolvedPaneKey, entry)
         }
         hydrated += 1
       } else {

@@ -14,6 +14,7 @@ import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
 import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
 import { CLAUDE_AGENT_VIEW_PATH } from '../shared/claude-agent-view'
+import { ingestRelayJcodeHook } from './agent-hook-jcode-ingress'
 
 export async function handleRelayHookRequest(
   req: IncomingMessage,
@@ -27,12 +28,14 @@ export async function handleRelayHookRequest(
     checkAgentPresence: (paneKey: string) => Promise<void>
     providerNormalization: RelayProviderHookNormalization
     isPaneSurfaceRetired: (paneKey: string) => boolean
+    isCanonicalPane?: (paneKey: string) => boolean
     getAgentLaunchToken: (paneKey: string) => string | undefined
     applyEvent: (
       event: AgentHookEventPayload,
       source: AgentHookSource,
       env?: string,
-      version?: string
+      version?: string,
+      options?: { isReplay?: boolean; onCommitted?: () => void }
     ) => AgentHookEventPayload | undefined
     ingestTmuxHook?: (source: AgentHookSource, body: unknown) => Promise<boolean>
     retryScheduler: AgentHookResultRetryScheduler
@@ -90,6 +93,17 @@ export async function handleRelayHookRequest(
       options.checkAgentPresence
     )
     if (!options.isCurrent()) {
+      res.writeHead(204)
+      res.end()
+      return
+    }
+    if (source === 'jcode') {
+      ingestRelayJcodeHook(
+        options.state,
+        options.env,
+        { body: hookBody, receivedAt: Date.now() },
+        { ...options, apply: options.applyEvent }
+      )
       res.writeHead(204)
       res.end()
       return

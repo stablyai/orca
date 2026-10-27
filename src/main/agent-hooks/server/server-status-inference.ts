@@ -17,14 +17,14 @@ import {
 import { AGENT_STATUS_STALE_AFTER_MS, type AgentType } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
-import { AgentHookServerRowOwnership } from './server-row-ownership'
+import { AgentHookServerJcodeTitleSettle } from './server-jcode-title-settle'
 import { foldMainAgentWithRowChildWork } from './server-row-child-work-fold'
 import {
   ClaudeTerminalInterruptTracker,
   type ClaudeTerminalEvidence
 } from '../../../shared/claude-terminal-interrupt'
 
-export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
+export abstract class AgentHookServerStatusInference extends AgentHookServerJcodeTitleSettle {
   private remoteInterruptListeners = new Set<(command: RemoteAgentInterruptDispatch) => void>()
 
   subscribeRemoteInterruptRequests(

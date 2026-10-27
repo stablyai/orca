@@ -11,6 +11,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       return
     }
     this.statusHookGeneration += 1
+    this.clearJcodeTitleInference()
     if (!enabled) {
       this.claudeAgentViews.clear()
       this.flushStatusPersistSync()

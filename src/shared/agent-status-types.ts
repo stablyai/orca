@@ -11,6 +11,7 @@ import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { TerminalAgent } from './terminal-agent'
 import {
   AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   normalizeInteractivePromptField,
@@ -28,6 +29,7 @@ import {
 
 export {
   AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH
@@ -227,8 +229,6 @@ export function pickParsedAgentStatusPayload(
 /** Hook set/snapshot IPC shares one shape so renderers use one setAgentStatus path. */
 /** Maximum character length for the toolName field. */
 export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
-/** 8KB preserves paragraph summaries while bounding per-pane cache growth. */
-export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
 /** Keep full question JSON/options, with a cap to bound cache; preview cuts would corrupt it. */
 export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 // Re-exported here because every consumer reaches for the entry type and its freshness gate

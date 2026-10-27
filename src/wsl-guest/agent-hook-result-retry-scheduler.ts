@@ -16,6 +16,7 @@ import {
 } from '../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../shared/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../shared/claude-owed-notification-expiry-timers'
+import { JcodeSubagentExpiryTimers } from '../shared/jcode-subagent-expiry-timers'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -34,6 +35,7 @@ export type AgentHookResultRetryHost = {
   env: string
   /** Why: must be read live — a retry armed before stop() must not resurrect on a downed server. */
   isListening: () => boolean
+  getAgentLaunchToken?: (paneKey: string) => string | undefined
   applyEvent: (
     event: AgentHookEventPayload,
     source: AgentHookSource,
@@ -47,10 +49,12 @@ export class AgentHookResultRetryScheduler {
   private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
   private host: AgentHookResultRetryHost
   private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
+  private jcodeSubagentExpiry: JcodeSubagentExpiryTimers
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
     this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
+    this.jcodeSubagentExpiry = new JcodeSubagentExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
       (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
@@ -64,6 +68,23 @@ export class AgentHookResultRetryScheduler {
     this.assistantMessageRetryTimers.clear()
     this.transcriptPollScheduler.clearAll()
     this.claudeOwedNotificationExpiry.clearAll()
+    this.jcodeSubagentExpiry.clearAll()
+  }
+
+  armJcodeSubagentExpiry(
+    event: AgentHookEventPayload | undefined,
+    env?: string,
+    version?: string
+  ): void {
+    if (!event) {
+      return
+    }
+    this.jcodeSubagentExpiry.arm(event.paneKey, (row) => {
+      const token = this.host.getAgentLaunchToken?.(row.paneKey)
+      if (this.host.isListening() && (!token || token === row.launchToken?.trim())) {
+        this.host.applyEvent(row, 'jcode', env, version)
+      }
+    })
   }
 
   /** No hook fires when Claude never sends an owed task notification; restate the row ourselves. */

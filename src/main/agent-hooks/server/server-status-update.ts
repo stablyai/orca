@@ -1,13 +1,11 @@
+import { resolveStatusRowAgentIdentity } from './server-status-identity'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
   reconcileRemoteCodexState,
   markCodexLeadTurnInterrupted
 } from '../../../shared/agent-hook-listener/providers/codex-state'
-import {
-  resolveAgentStatusIdentity,
-  shouldSuppressInheritedTerminalStatus
-} from '../../../shared/agent-status-identity'
+import { shouldSuppressInheritedTerminalStatus } from '../../../shared/agent-status-identity'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
@@ -51,7 +49,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload,
-    newRun = false
+    newRun = false,
+    onCommitted?: () => void
   ): EnrichedAgentHookEventPayload | undefined {
     const transitioned = transitionHookPresence(
       incoming,
@@ -108,23 +107,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       (connectionClearWatermark ?? -1) + 1,
       (restoredStatusWatermark ?? -1) + 1
     )
-    const identity = resolveAgentStatusIdentity({
-      existing:
-        previous && this.sameTerminalOwner(previous, terminalOwnedPayload)
-          ? {
-              agentType: previous.payload.agentType,
-              state: previous.payload.state,
-              updatedAt: previous.receivedAt,
-              restoredUnconfirmed: previous.restoredUnconfirmed,
-              agentPresence: previous.providerSessionOnly ? undefined : previous.agentPresence
-            }
-          : undefined,
-      incoming: terminalOwnedPayload.payload.agentType,
-      // Relay presence is the execution host's owner verdict, not the sender's identity.
-      incomingProcess: payload.connectionId ? undefined : incoming.agentPresence?.process,
-      incomingSession: terminalOwnedPayload.providerSession?.id,
-      now
-    })
+    const identity = resolveStatusRowAgentIdentity(
+      previous,
+      terminalOwnedPayload,
+      now,
+      incoming.agentPresence?.process
+    )
     if (
       previous &&
       shouldSuppressInheritedTerminalStatus({
@@ -159,6 +147,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       if (!this.writeLegacyStatusRow(enriched)) {
         return undefined
       }
+      onCommitted?.()
       this.commitStatusRowMutation(rowBefore, enriched)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
@@ -303,6 +292,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!this.writeLegacyStatusRow(enriched)) {
       return undefined
     }
+    onCommitted?.()
     this.commitStatusRowMutation(rowBefore, enriched)
     // Structured rows serialize nothing; skip the persistence walk for streaming chat updates.
     if (!enriched.structuredHost) {
