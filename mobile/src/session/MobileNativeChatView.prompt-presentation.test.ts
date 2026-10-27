@@ -1,3 +1,4 @@
+import './MobileNativeChatView.harness.test-fixture'
 import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable } from 'react-native'
@@ -6,6 +7,7 @@ import { MobileNativeChatView } from './MobileNativeChatView'
 import { MobileNativeChatAsk } from './native-chat/input/MobileNativeChatAsk'
 import { useMobileNativeChatPromptPresentation } from './native-chat/input/use-mobile-native-chat-prompt-presentation'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import { setMobileNativeChatDraftText } from './native-chat/composer/mobile-native-chat-draft-store'
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
@@ -76,6 +78,7 @@ vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
 let tree: ReactTestRenderer | null = null
+setMobileNativeChatDraftText('terminal-1', 'no, do X instead')
 const props = {
   messages: [],
   folded: [],
@@ -86,7 +89,7 @@ const props = {
   sendSurfaceId: 'terminal-1',
   getSendCompletionGeneration: () => 0,
   getComposerEditGeneration: () => 0,
-  composerText: 'no, do X instead',
+  draftKey: 'terminal-1',
   onComposerTextChange: vi.fn()
 }
 const permission: MobileChatPermission = {

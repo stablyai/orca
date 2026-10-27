@@ -3,7 +3,7 @@ import { MessageSquareMore } from 'lucide-react-native'
 import {
   NATIVE_CHAT_ASK_ROW_COPY,
   type NativeChatAskRowSubject
-} from '../../../src/shared/native-chat-ask-row'
+} from '../../../src/shared/native-chat/input/native-chat-ask-row'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { scaledType } from './mobile-native-chat-message-styles'

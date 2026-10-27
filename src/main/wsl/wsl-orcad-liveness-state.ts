@@ -15,7 +15,10 @@ export const WSL_ORCAD_HEARTBEAT_MS = 120_000
 export type WslOrcadTimer = { cancel(): void }
 
 export type WslOrcadLivenessDependencies = {
-  manager: Pick<WslOrcadConnectionManager, 'ensure' | 'get' | 'publish' | 'close'>
+  manager: Pick<
+    WslOrcadConnectionManager,
+    'ensure' | 'get' | 'publish' | 'close' | 'retireListener'
+  >
   readRunning: () => Promise<WslRunningDistrosRead>
   readIdentity: (distro: string, orcadPid: number | null) => Promise<WslGuestIdentity | null>
   openWatch: (connection: WslOrcadConnection) => Promise<WslOrcadWatch>

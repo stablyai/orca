@@ -377,42 +377,24 @@ describe('buildSections', () => {
     ])
   })
 
-  it('counts live terminal output as Recent activity for headless serve hosts', () => {
-    const streamingOnServe = worktree({
+  it('ranks Recent by desktop activity, not terminal output', () => {
+    const streaming = worktree({
       worktreeId: 'streaming',
       displayName: 'streaming',
       lastActivityAt: 100,
       lastOutputAt: 1_000
     })
-    const touchedOnDesktop = worktree({
+    const touched = worktree({
       worktreeId: 'touched',
       displayName: 'touched',
       lastActivityAt: 200,
       lastOutputAt: 1
     })
 
-    expect(
-      sortWorktrees([touchedOnDesktop, streamingOnServe], 'recent').map((item) => item.worktreeId)
-    ).toEqual(['streaming', 'touched'])
-  })
-
-  it('keeps desktop activity ranking in Recent when it is newest', () => {
-    const newerActivity = worktree({
-      worktreeId: 'newer-activity',
-      displayName: 'newer',
-      lastActivityAt: 2_000,
-      lastOutputAt: 1
-    })
-    const quietOlder = worktree({
-      worktreeId: 'quiet-older',
-      displayName: 'quiet',
-      lastActivityAt: 100,
-      lastOutputAt: 150
-    })
-
-    expect(
-      sortWorktrees([quietOlder, newerActivity], 'recent').map((item) => item.worktreeId)
-    ).toEqual(['newer-activity', 'quiet-older'])
+    expect(sortWorktrees([streaming, touched], 'recent').map((item) => item.worktreeId)).toEqual([
+      'touched',
+      'streaming'
+    ])
   })
 
   it('falls back to agent attention order in Smart when no desktop ranks exist', () => {

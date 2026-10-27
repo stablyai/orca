@@ -11,7 +11,7 @@ import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
-import { withoutNativeChatVisualDirectiveLines } from './native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from './native-chat/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
   isStructuredAgentSessionCommandEntry,

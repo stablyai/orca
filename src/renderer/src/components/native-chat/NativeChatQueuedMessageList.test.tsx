@@ -365,7 +365,9 @@ describe('NativeChatQueuedMessageList', () => {
         returnedReason: 'host_restarted_before_delivery'
       })
     ])
+    owner.reorder = { scope: 'test', pending: false, move: vi.fn(async () => {}) }
     renderList(owner)
+    expect(screen.getByText('Your message was not sent.').querySelector('svg')).not.toBeNull()
     expect(screen.getByRole('listitem').textContent).toContain('Your message was not sent.')
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(owner.steer).toHaveBeenCalledWith('refused')
@@ -591,45 +593,14 @@ describe('NativeChatQueuedMessageList', () => {
         .getByRole('button', { name: 'Steer' })
         .querySelector('.lucide-corner-down-right')
     ).not.toBeNull()
-    expect(
-      waiting!.firstElementChild?.firstElementChild?.classList.contains('lucide-list-end')
-    ).toBe(true)
+    expect(waiting!.querySelector(':scope > div > :first-child svg.lucide-list-end')).not.toBeNull()
     expect(
       within(failed!).getByRole('button', { name: 'Send' }).querySelector('.lucide-send')
     ).not.toBeNull()
     expect(
-      failed!.firstElementChild?.firstElementChild?.classList.contains('lucide-circle-alert')
-    ).toBe(true)
+      failed!.querySelector(':scope > div > :first-child svg.lucide-circle-alert')
+    ).not.toBeNull()
     expect(container.querySelectorAll('.lucide-list-end')).toHaveLength(1)
-  })
-
-  it('one bordered box holds the header and every card, rows divided, cards unbordered', () => {
-    renderList(
-      controller(
-        [
-          card({ messageId: 'waiting', hold: 'queue-paused' }),
-          card({ messageId: 'refused', state: 'returned', hold: 'returned', position: 2 }),
-          card({ messageId: 'failed', hold: 'paused', pausedReason: 'send_failed', position: 3 })
-        ],
-        { reason: 'stopped' }
-      )
-    )
-    const list = screen.getByRole('list')
-    const box = list.parentElement!
-    expect(box.className.split(' ')).toEqual(
-      expect.arrayContaining(['rounded-md', 'border', 'border-border', 'bg-card', 'divide-y'])
-    )
-    expect(box.children).toHaveLength(2)
-    expect(box.firstElementChild?.textContent).toContain('Paused·3')
-    expect(box.lastElementChild).toBe(list)
-    expect(list.className.split(' ')).toContain('divide-y')
-    const rows = within(list).getAllByRole('listitem')
-    expect(rows).toHaveLength(3)
-    for (const row of rows) {
-      expect(row.className.split(' ')).not.toContain('border')
-      expect(row.className.split(' ')).not.toContain('rounded-md')
-    }
-    expect(rows[2]?.textContent).toContain("Couldn't send — press Send to retry.")
   })
 
   it('Clear all deletes every card; the chevron folds only the cards, and an emptied queue opens again', () => {
@@ -863,5 +834,32 @@ describe('NativeChatQueuedMessageList', () => {
       </TooltipProvider>
     )
     expect(screen.getByRole('list', { name: 'Queued messages' }).scrollTop).toBe(0)
+  })
+
+  it('preserves scroll through reorder, settlement and placeholder handoff but reveals a real append', () => {
+    const first = ['a', 'b', 'c'].map((messageId, at) => card({ messageId, position: at + 1 }))
+    const view = renderList(controller(first))
+    const list = screen.getByRole('list', { name: 'Queued messages' })
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 800 })
+    list.scrollTop = 30
+    const show = (cards: QueuedMessageCard[]) =>
+      view.rerender(
+        <TooltipProvider delayDuration={0}>
+          <NativeChatQueuedMessageList chatWorktreeId={null} controller={controller(cards)} />
+        </TooltipProvider>
+      )
+    const optimistic = [first[2]!, first[0]!, first[1]!]
+    show(optimistic)
+    expect(list.scrollTop).toBe(30)
+    show(optimistic.map((entry, at) => ({ ...entry, position: at + 1 })))
+    expect(list.scrollTop).toBe(30)
+    show(first)
+    expect(list.scrollTop).toBe(30)
+    const placeholder = card({ messageId: 'd', position: Number.MAX_SAFE_INTEGER, hold: 'sending' })
+    show([first[1]!, first[2]!, placeholder])
+    expect(list.scrollTop).toBe(800)
+    list.scrollTop = 40
+    show([first[1]!, first[2]!, { ...placeholder, position: 4, hold: 'turn' }])
+    expect(list.scrollTop).toBe(40)
   })
 })

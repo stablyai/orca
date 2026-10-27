@@ -74,7 +74,8 @@ describe('browserManager popup child policies', () => {
       setWindowOpenHandler: childSetWindowOpenHandlerMock,
       on: childOnMock,
       off: childOffMock,
-      openDevTools: childOpenDevToolsMock
+      openDevTools: childOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://identity.example.com/login')
     }
     const guest = {
       id: 404,

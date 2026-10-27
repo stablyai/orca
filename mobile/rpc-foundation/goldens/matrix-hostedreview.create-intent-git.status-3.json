@@ -137,60 +137,6 @@
         "startedAt": 0
       }
     },
-    "1325f8e894d3": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "committed": true,
-        "error": "outer refused",
-        "ok": false,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": {
-                "$rpc": "undefined"
-              },
-              "area": "staged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": {
-                "$rpc": "undefined"
-              },
-              "status": "modified"
-            }
-          ],
-          "head": "abc1234",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
-    },
     "1858779f58e9": {
       "name": "git.status#1",
       "ordinal": 1,
@@ -568,60 +514,6 @@
         }
       }
     },
-    "45e49471a27c": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "committed": true,
-        "error": "Unknown method",
-        "ok": false,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": {
-                "$rpc": "undefined"
-              },
-              "area": "staged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": {
-                "$rpc": "undefined"
-              },
-              "status": "modified"
-            }
-          ],
-          "head": "abc1234",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
-    },
     "49a4ef454656": {
       "name": "git.generateCommitMessage#1",
       "ordinal": 10,
@@ -631,57 +523,6 @@
       "name": "progress",
       "ordinal": 25,
       "value": "creating_review"
-    },
-    "50eda8efe42e": {
-      "outcome": {
-        "committed": true,
-        "error": "outer refused",
-        "ok": false,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": {
-                "$rpc": "undefined"
-              },
-              "area": "staged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": {
-                "$rpc": "undefined"
-              },
-              "status": "modified"
-            }
-          ],
-          "head": "abc1234",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
     },
     "570c09f158bd": {
       "name": "git.status#4",
@@ -724,10 +565,130 @@
         }
       }
     },
+    "6217d4394624": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "committed": true,
+        "error": "Unable to refresh source control",
+        "ok": false,
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": {
+                "$rpc": "undefined"
+              },
+              "area": "staged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": {
+                "$rpc": "undefined"
+              },
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "abc1234",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
     "682fbd1f6b74": {
       "name": "progress",
       "ordinal": 11,
       "value": "committing"
+    },
+    "6961420be1af": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "committed": true,
+        "error": "Unknown method",
+        "ok": false,
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": {
+                "$rpc": "undefined"
+              },
+              "area": "staged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": {
+                "$rpc": "undefined"
+              },
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "abc1234",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
     },
     "6a9e29548c49": {
       "name": "hostedReview.getCreationEligibility#2",
@@ -945,6 +906,66 @@
         }
       }
     },
+    "85b15c0581b5": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "committed": true,
+        "error": "outer refused",
+        "ok": false,
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": {
+                "$rpc": "undefined"
+              },
+              "area": "staged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": {
+                "$rpc": "undefined"
+              },
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "abc1234",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
     "8601995022f5": {
       "name": "git.status#1",
       "ordinal": 1,
@@ -1115,57 +1136,6 @@
       "status": "pending",
       "startedAt": 0
     },
-    "9299e1dff33e": {
-      "outcome": {
-        "committed": true,
-        "error": "Unknown method",
-        "ok": false,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": {
-                "$rpc": "undefined"
-              },
-              "area": "staged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": {
-                "$rpc": "undefined"
-              },
-              "status": "modified"
-            }
-          ],
-          "head": "abc1234",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
-        }
-      }
-    },
     "962b56dc8acd": {
       "name": "git.bulkStage#1",
       "ordinal": 4,
@@ -1234,28 +1204,10 @@
         }
       }
     },
-    "9df18368de2c": {
-      "name": "git.status#2",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "afd6b6f3573f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
+    "987cba4bfe1c": {
+      "outcome": {
         "committed": true,
-        "error": "Unable to refresh source control",
+        "error": "outer refused",
         "ok": false,
         "status": {
           "branch": "feature",
@@ -1282,7 +1234,13 @@
               "removed": {
                 "$rpc": "undefined"
               },
-              "status": "modified"
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
             }
           ],
           "head": "abc1234",
@@ -1301,6 +1259,21 @@
             }
           }
         }
+      }
+    },
+    "9df18368de2c": {
+      "name": "git.status#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
       }
     },
     "b2ae4b8e30b7": {
@@ -1422,10 +1395,124 @@
         }
       }
     },
+    "ddb39c21fa42": {
+      "outcome": {
+        "committed": true,
+        "error": "Unable to refresh source control",
+        "ok": false,
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": {
+                "$rpc": "undefined"
+              },
+              "area": "staged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": {
+                "$rpc": "undefined"
+              },
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "abc1234",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    },
     "ddee63fd3bf5": {
       "name": "git.status#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "dfdf5e4c7b8d": {
+      "outcome": {
+        "committed": true,
+        "error": "Unknown method",
+        "ok": false,
+        "status": {
+          "branch": "feature",
+          "conflictOperation": "unknown",
+          "entries": [
+            {
+              "added": {
+                "$rpc": "undefined"
+              },
+              "area": "staged",
+              "conflictKind": {
+                "$rpc": "undefined"
+              },
+              "conflictStatus": {
+                "$rpc": "undefined"
+              },
+              "conflictStatusSource": {
+                "$rpc": "undefined"
+              },
+              "oldPath": {
+                "$rpc": "undefined"
+              },
+              "path": "src/app.ts",
+              "removed": {
+                "$rpc": "undefined"
+              },
+              "status": "modified",
+              "submodule": {
+                "$rpc": "undefined"
+              },
+              "submoduleRoot": {
+                "$rpc": "undefined"
+              }
+            }
+          ],
+          "head": "abc1234",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "behindCommitsArePatchEquivalent": {
+              "$rpc": "undefined"
+            },
+            "hasConfiguredPushTarget": {
+              "$rpc": "undefined"
+            },
+            "hasUpstream": true,
+            "upstreamName": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
     },
     "e20a71f63f51": {
       "name": "git.bulkStage#1",
@@ -1510,57 +1597,6 @@
           "category": "Error",
           "message": "",
           "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "f4cca647443e": {
-      "outcome": {
-        "committed": true,
-        "error": "Unable to refresh source control",
-        "ok": false,
-        "status": {
-          "branch": "feature",
-          "conflictOperation": "unknown",
-          "entries": [
-            {
-              "added": {
-                "$rpc": "undefined"
-              },
-              "area": "staged",
-              "conflictKind": {
-                "$rpc": "undefined"
-              },
-              "conflictStatus": {
-                "$rpc": "undefined"
-              },
-              "conflictStatusSource": {
-                "$rpc": "undefined"
-              },
-              "oldPath": {
-                "$rpc": "undefined"
-              },
-              "path": "src/app.ts",
-              "removed": {
-                "$rpc": "undefined"
-              },
-              "status": "modified"
-            }
-          ],
-          "head": "abc1234",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "behindCommitsArePatchEquivalent": {
-              "$rpc": "undefined"
-            },
-            "hasConfiguredPushTarget": {
-              "$rpc": "undefined"
-            },
-            "hasUpstream": true,
-            "upstreamName": {
-              "$rpc": "undefined"
-            }
-          }
         }
       }
     },
@@ -2356,9 +2392,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "1325f8e894d3"
+            "run": "85b15c0581b5"
           },
-          "state": "50eda8efe42e",
+          "state": "987cba4bfe1c",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2382,9 +2418,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "1325f8e894d3"
+            "run": "85b15c0581b5"
           },
-          "state": "50eda8efe42e",
+          "state": "987cba4bfe1c",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2408,9 +2444,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "1325f8e894d3"
+            "run": "85b15c0581b5"
           },
-          "state": "50eda8efe42e",
+          "state": "987cba4bfe1c",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2434,9 +2470,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "1325f8e894d3"
+            "run": "85b15c0581b5"
           },
-          "state": "50eda8efe42e",
+          "state": "987cba4bfe1c",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2460,9 +2496,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "afd6b6f3573f"
+            "run": "6217d4394624"
           },
-          "state": "f4cca647443e",
+          "state": "ddb39c21fa42",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2486,9 +2522,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "afd6b6f3573f"
+            "run": "6217d4394624"
           },
-          "state": "f4cca647443e",
+          "state": "ddb39c21fa42",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2512,9 +2548,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "afd6b6f3573f"
+            "run": "6217d4394624"
           },
-          "state": "f4cca647443e",
+          "state": "ddb39c21fa42",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2538,9 +2574,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "afd6b6f3573f"
+            "run": "6217d4394624"
           },
-          "state": "f4cca647443e",
+          "state": "ddb39c21fa42",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2564,9 +2600,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "45e49471a27c"
+            "run": "6961420be1af"
           },
-          "state": "9299e1dff33e",
+          "state": "dfdf5e4c7b8d",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2590,9 +2626,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "45e49471a27c"
+            "run": "6961420be1af"
           },
-          "state": "9299e1dff33e",
+          "state": "dfdf5e4c7b8d",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2616,9 +2652,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "45e49471a27c"
+            "run": "6961420be1af"
           },
-          "state": "9299e1dff33e",
+          "state": "dfdf5e4c7b8d",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },
@@ -2642,9 +2678,9 @@
             "201cece6e0bb"
           ],
           "settlements": {
-            "run": "45e49471a27c"
+            "run": "6961420be1af"
           },
-          "state": "9299e1dff33e",
+          "state": "dfdf5e4c7b8d",
           "effects": ["e83dca631c9c", "b2ae4b8e30b7", "682fbd1f6b74"]
         }
       },

@@ -48,6 +48,8 @@ export type RuntimeWorktreeAgentRow = {
   restoredUnconfirmed?: boolean
   /** A structured host still owns the provider child, so age alone cannot stale it. Old hosts omit this. */
   structuredHostOwned?: true
+  /** A connected PTY backs the row, so a stale row reads "No update in …" rather than idle. Old hosts omit this. */
+  hasLivePty?: true
   /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
   programStatus?: ProgramStatusFacet
 }

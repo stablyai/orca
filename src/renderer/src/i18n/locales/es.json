@@ -1088,8 +1088,6 @@
         "cookie": {
           "import": {
             "toast": {
-              "restartFallbackUnavailableNone": "No se pudo cargar ninguna de las {{value0}} cookies ni recurrir al reinicio. Se reemplazaron las cookies anteriores de este perfil. Vuelve a intentar la importación.",
-              "restartFallbackUnavailablePartial": "Se importaron {{value0}} de {{value1}} cookies. No se pudo cargar el resto ni recurrir al reinicio. Vuelve a intentar la importación.",
               "googleCookiesSkipped": "Las cookies de Google no se han importado. Abre un navegador en Orca en {{value0}} con este perfil y, a continuación, inicia sesión en Google.",
               "undecryptableAppBound": "Orca no puede descifrar {{value0}} de las cookies de este navegador porque utilizan cifrado vinculado a la aplicación. Puede importar cookies de un archivo utilizando \"De archivo...\".",
               "undecryptableAppBoundMixed": "Orca no puede descifrar {{value0}} de las cookies de este navegador porque usan cifrado vinculado a la aplicación; {{value1}} más no se pudo descifrar por otra razón. Puede importar cookies de un archivo utilizando \"De archivo...\".",
@@ -1098,7 +1096,8 @@
               "undecryptableUnknown": "No se han podido descifrar las {{value0}} cookies y se han omitido. Cierre el navegador de origen por completo y vuelva a intentar la importación.",
               "unrecognizedWarning": "La importación de cookies finalizó con una advertencia que esta versión de Orca no reconoce. Actualice Orca para ver los detalles, luego revise este perfil antes de confiar en sus cookies.",
               "undecryptableUnrecognizedReason": "Las cookies {{value0}} no se pudieron descifrar y se omitieron por una razón que esta versión de Orca no reconoce. Actualiza Orca para ver los detalles y vuelve a intentar la importación.",
-              "partitionSkippedBreakdown": "Cookies con particiones de sitio ilegibles: {{value0}}. Cookies relacionadas que no se importaron para proteger las sesiones existentes: {{value1}}. Las cookies existentes de estos sitios no se modificaron. Comprueba estos sitios en este perfil antes de volver a iniciar sesión.",
+              "cookiesSkipped": "Se omitieron {{value0}} cookies.",
+              "partitionSkippedCounts": "Cookies con particiones de sitio ilegibles: {{value0}}. Cookies relacionadas también omitidas: {{value1}}. Comprueba estos sitios en este perfil antes de volver a iniciar sesión.",
               "partitionSkipped": "No se importaron {{value0}} cookies porque no se pudo leer su partición de sitio. Vuelve a iniciar sesión en esos sitios en Orca.",
               "locationClientHosted": "Lee desde este dispositivo y guárdalo aquí para el espacio de trabajo {{value0}}.",
               "locationRemoteHost": "Lee desde los navegadores en {{value0}} y guárdalo allí.",
@@ -20239,7 +20238,8 @@
       "streamedDetail": "La página se ejecuta en el host remoto y se transmite a este dispositivo."
     },
     "remote": {
-      "findUnavailable": "Buscar en la página no está disponible mientras esta página se transmite desde el host remoto."
+      "findUnavailable": "Buscar en la página no está disponible mientras esta página se transmite desde el host remoto.",
+      "selectionTooLargeToCopy": "La selección es demasiado grande para copiarla desde una página transmitida desde el host remoto."
     },
     "userAgentMigration": {
       "degradedDescription": "No se pudo inspeccionar una elección antigua de identidad del navegador. Elige Limpiada o Nativa en los ajustes del navegador; los cambios surten efecto tras reiniciar.",
@@ -20384,6 +20384,12 @@
       "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "No se pudo mover '{{name}}' a la Papelera de reciclaje. ¿Eliminarlo permanentemente?",
+      "titleTrash": "No se pudo mover '{{name}}' a la Papelera. ¿Eliminarlo permanentemente?",
+      "description": "Esto no se puede deshacer.",
+      "confirm": "Eliminar permanentemente"
     }
   },
   "sparsePreset": {

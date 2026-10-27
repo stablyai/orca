@@ -9,6 +9,10 @@ import {
 /** UI fields that name a repo, worktree, pane or path. Everything else in the UI state is global. */
 export const UI_STATE_DISPOSITIONS = {
   lastActiveRepoId: notApplicableDisposition(38, 'repoId is kept.'),
+  pendingRuntimeRepoRemovals: notApplicableDisposition(
+    38,
+    'Owed to a paired server; a WSL move only moves local projects.'
+  ),
   lastActiveWorktreeId: moveDisposition(38, { rewriteDesktopCopy: true }),
   manualRepoOrder: moveDisposition(38, {
     rewriteDesktopCopy: true,

@@ -1,6 +1,6 @@
 import { nativeChatContinuationSendText } from '../../../../shared/native-chat-continuation-send'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat/native-chat-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,

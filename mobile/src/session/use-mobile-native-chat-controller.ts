@@ -89,7 +89,7 @@ export function useMobileNativeChatController(args: {
   })
   const { structuredSession: structuredNativeChat, session: nativeChatSession } = nativeChatLane
   const {
-    composerText: chatComposerText,
+    draftKey: chatDraftKey,
     setComposerText: setChatComposerText,
     getComposerEditGeneration: getChatComposerEditGeneration,
     appendComposerText,
@@ -261,7 +261,7 @@ export function useMobileNativeChatController(args: {
     showNativeChat,
     showNativeChatRef,
     nativeChatAgent: activeChatResolution?.agent ?? null,
-    chatComposerText,
+    chatDraftKey,
     setChatComposerText,
     getChatComposerEditGeneration,
     chatPending,

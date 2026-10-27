@@ -3,7 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WslRelayRecovery, type WslRelayRecoveryState } from './wsl-hook-relay-recovery'
 import type { WslRelayDistroState, WslRelayRestartSetup } from './wsl-hook-relay-state'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
-import { captureWslRelaySetup, restartWslRelay } from './wsl-hook-relay-state-machine'
+import {
+  captureWslRelaySetup,
+  markWslRelayFailed,
+  restartWslRelay
+} from './wsl-hook-relay-state-machine'
+
+const { noteWslDistroMayHaveStoppedMock } = vi.hoisted(() => ({
+  noteWslDistroMayHaveStoppedMock: vi.fn()
+}))
+vi.mock('../wsl/wsl-unc-access-gate', () => ({
+  noteWslDistroMayHaveStopped: noteWslDistroMayHaveStoppedMock
+}))
 
 beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }))
 
@@ -338,5 +349,20 @@ describe('restartWslRelay', () => {
     expect(states.get(wslHookRelayStateKey('Ubuntu'))).toBe(live)
     expect(live.codexHomePath).toBe('/new')
     expect(ensure.mock.calls).toEqual([['Ubuntu'], ['Ubuntu', undefined, 'pi']])
+  })
+})
+
+describe('markWslRelayFailed', () => {
+  it('marks the distro as possibly stopped so the next UNC read re-checks before touching it', () => {
+    const scheduleRestart = vi.fn()
+    markWslRelayFailed(
+      { distro: 'Ubuntu', phase: 'running', failures: 0, cooldownUntil: 0 },
+      'relay link mux disposed (connection_lost)',
+      { cooldownBaseMs: 1_000 },
+      { warn: vi.fn() },
+      { scheduleRestart }
+    )
+    expect(noteWslDistroMayHaveStoppedMock).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+    expect(scheduleRestart).toHaveBeenCalledOnce()
   })
 })

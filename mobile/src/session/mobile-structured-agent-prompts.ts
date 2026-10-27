@@ -6,11 +6,6 @@ import {
 import { chatApprovalFromJournal } from '../../../src/shared/native-chat-interactive-prompt'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
-import {
-  groupedQuestionPromptKey,
-  projectGroupedQuestion,
-  type GroupedQuestionDraft
-} from './mobile-structured-grouped-question'
 
 export type StructuredApprovalItem = AgentJournalRenderItem & {
   body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' }>
@@ -149,19 +144,20 @@ export function projectStructuredPermission(
 }
 
 export function projectStructuredQuestion(
-  prompt: StructuredQuestionItem | null,
-  groupedDraft: GroupedQuestionDraft | null = null
+  prompt: StructuredQuestionItem | null
 ): MobileChatQuestion | null {
   if (prompt?.body.kind !== 'question') {
     return null
   }
   if (prompt.body.questions) {
-    return projectGroupedQuestion(
-      prompt.body.questions,
-      groupedDraft,
-      groupedQuestionPromptKey(prompt.itemId, prompt.revision),
-      { itemId: prompt.itemId, expectedRevision: prompt.revision }
-    )
+    return {
+      question: prompt.body.question,
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
+      options: [],
+      multiSelect: false,
+      optionTokens: [],
+      questions: prompt.body.questions
+    }
   }
   const [question] = agentSessionPromptQuestions(prompt.body)
   if (!question) {

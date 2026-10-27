@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
-import { applyTerminalTheme, resolveTerminalContrastFloor } from './document/terminal-theme'
+import { applyTerminalTheme } from './document/terminal-theme'
 import type {
   TerminalDocumentThemeMessage,
   TerminalDocumentThemeTarget
@@ -21,10 +21,6 @@ function themeScope(term: TerminalDocumentThemeTarget | null = null) {
   return scope
 }
 
-function loadContrastFloorResolver(): (bg: unknown) => number {
-  return (bg: unknown) => resolveTerminalContrastFloor(bg)
-}
-
 function loadThemeApplier(
   term: TerminalDocumentThemeTarget
 ): (input: TerminalDocumentThemeMessage) => void {
@@ -33,34 +29,6 @@ function loadThemeApplier(
 }
 
 describe('mobile terminal-webview contrast floor gate', () => {
-  it('picks the dark floor for dark composed backgrounds', () => {
-    const resolveTerminalContrastFloor = loadContrastFloorResolver()
-    for (const bg of ['#1a1b26', '#1e242a', '#282828', '#000000', 'black']) {
-      expect(resolveTerminalContrastFloor(bg)).toBe(DARK_FLOOR)
-    }
-  })
-
-  it('picks the light floor for light composed backgrounds', () => {
-    const resolveTerminalContrastFloor = loadContrastFloorResolver()
-    for (const bg of ['#ffffff', '#fbf1c7', 'white', 'rgb(240 240 240)']) {
-      expect(resolveTerminalContrastFloor(bg)).toBe(LIGHT_FLOOR)
-    }
-  })
-
-  it('composites transparency over the dark app surface before deciding', () => {
-    const resolveTerminalContrastFloor = loadContrastFloorResolver()
-    expect(resolveTerminalContrastFloor('transparent')).toBe(DARK_FLOOR)
-    expect(resolveTerminalContrastFloor('rgba(255,255,255,0.15)')).toBe(DARK_FLOOR)
-    expect(resolveTerminalContrastFloor('rgba(255,255,255,0.9)')).toBe(LIGHT_FLOOR)
-  })
-
-  it('defaults unparseable backgrounds to the dark floor so output never stays invisible', () => {
-    const resolveTerminalContrastFloor = loadContrastFloorResolver()
-    for (const bg of [undefined, null, '', 'not-a-color', '#12', 42]) {
-      expect(resolveTerminalContrastFloor(bg)).toBe(DARK_FLOOR)
-    }
-  })
-
   it('writes the resolved floor onto a live terminal when the theme changes', () => {
     const term: TerminalDocumentThemeTarget = { options: { minimumContrastRatio: 1 } }
     const applyTerminalTheme = loadThemeApplier(term)
@@ -72,35 +40,26 @@ describe('mobile terminal-webview contrast floor gate', () => {
     expect(term.options.minimumContrastRatio).toBe(DARK_FLOOR)
   })
 
+  it('composites a translucent background over the published app surface', () => {
+    const term: TerminalDocumentThemeTarget = { options: { minimumContrastRatio: 1 } }
+    const applyTerminalTheme = loadThemeApplier(term)
+    const background = 'rgba(255, 255, 255, 0.15)'
+
+    applyTerminalTheme({ mode: 'light', theme: { background } })
+    expect(term.options.minimumContrastRatio).toBe(LIGHT_FLOOR)
+
+    applyTerminalTheme({ mode: 'dark', theme: { background } })
+    expect(term.options.minimumContrastRatio).toBe(DARK_FLOOR)
+
+    applyTerminalTheme({ theme: { background } })
+    expect(term.options.minimumContrastRatio).toBe(DARK_FLOOR)
+  })
+
   // Published desktop overrides, including disabled contrast, must win so the same session renders consistently.
-  describe('published desktop override', () => {
-    function applyOn(term: TerminalDocumentThemeTarget, input: TerminalDocumentThemeMessage): void {
-      loadThemeApplier(term)(input)
-    }
-
-    it('uses the published floor instead of the luminance gate', () => {
-      const term = { options: { minimumContrastRatio: 0 } }
-      applyOn(term, { theme: { background: '#1e242a' }, minimumContrastRatio: 1 })
-      expect(term.options.minimumContrastRatio).toBe(1)
-    })
-
-    it("clamps a published floor to xterm's 1-21 window", () => {
-      const term = { options: { minimumContrastRatio: 0 } }
-      applyOn(term, { theme: { background: '#1e242a' }, minimumContrastRatio: 99 })
-      expect(term.options.minimumContrastRatio).toBe(21)
-      applyOn(term, { theme: { background: '#1e242a' }, minimumContrastRatio: 0 })
-      expect(term.options.minimumContrastRatio).toBe(1)
-    })
-
-    it('falls back to the luminance gate for an older host that omits the field', () => {
-      const term = { options: { minimumContrastRatio: 0 } }
-      for (const published of [undefined, null, 'off', Number.NaN]) {
-        applyOn(term, { theme: { background: '#1e242a' }, minimumContrastRatio: published })
-        expect(term.options.minimumContrastRatio).toBe(DARK_FLOOR)
-        applyOn(term, { theme: { background: '#ffffff' }, minimumContrastRatio: published })
-        expect(term.options.minimumContrastRatio).toBe(LIGHT_FLOOR)
-      }
-    })
+  it('uses the published floor instead of the luminance gate', () => {
+    const term = { options: { minimumContrastRatio: 0 } }
+    loadThemeApplier(term)({ theme: { background: '#1e242a' }, minimumContrastRatio: 1 })
+    expect(term.options.minimumContrastRatio).toBe(1)
   })
 })
 

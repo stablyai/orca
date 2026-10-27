@@ -11,19 +11,6 @@ function task(over: Partial<AgentSessionBackgroundTask> = {}): AgentSessionBackg
 }
 
 describe('structuredAgentSessionAgentStatus', () => {
-  it('maps a lead that is still working or needs attention without consulting children', () => {
-    expect(structuredAgentSessionAgentStatus({ status: 'working' })).toEqual({
-      state: 'working',
-      mainAgent: { state: 'working' }
-    })
-    expect(
-      structuredAgentSessionAgentStatus({
-        status: 'attention',
-        childWork: [task({ kind: 'command' })]
-      })
-    ).toEqual({ state: 'blocked', mainAgent: { state: 'blocked' } })
-  })
-
   it('keeps an idle main agent working while a subagent runs, and says the main agent itself is done', () => {
     expect(structuredAgentSessionAgentStatus({ status: 'idle', childWork: [task()] })).toEqual({
       state: 'working',

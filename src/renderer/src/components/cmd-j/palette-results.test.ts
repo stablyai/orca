@@ -13,7 +13,7 @@ import {
   type CmdJSettingsResult
 } from './palette-results'
 import { hasCmdJProjectSearchCandidates, searchCmdJProjectResults } from './palette-project-results'
-import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'

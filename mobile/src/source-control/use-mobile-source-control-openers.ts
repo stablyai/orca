@@ -19,6 +19,7 @@ import type { MobileBranchCompareState } from './mobile-source-control-screen-st
 type Params = {
   client: RpcClient | null
   connState: ConnectionState
+  diffShowWhitespace: boolean
   hostId: string
   worktreeId: string
   name: string
@@ -38,6 +39,7 @@ export function useMobileSourceControlOpeners(params: Params) {
   const {
     client,
     connState,
+    diffShowWhitespace,
     hostId,
     worktreeId,
     name,
@@ -188,6 +190,7 @@ export function useMobileSourceControlOpeners(params: Params) {
     useMobileBranchDiffPreview({
       client,
       connState,
+      diffShowWhitespace,
       hostId,
       worktreeId,
       origin,

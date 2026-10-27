@@ -1,9 +1,11 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AskPrompt } from '../../../../../src/shared/native-chat-ask-types'
-import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat-question-auto-advance'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat/input/native-chat-question-auto-advance'
+import { encodeAgentSessionQuestionAnswers } from '../../../../../src/shared/agent-session-question-answer'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
+import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
 
 vi.mock('react-native', () => ({
   Keyboard: { dismiss: () => {} },
@@ -47,10 +49,10 @@ function press(label: string): void {
   act(() => row.props.onPress())
 }
 
-async function submit(): Promise<void> {
+async function submit(label = 'Submit'): Promise<void> {
   const button = tree.root.find(
     (node) =>
-      isHost(node, 'Pressable') && node.findAll((n) => n.props.children === 'Submit').length > 0
+      isHost(node, 'Pressable') && node.findAll((n) => n.props.children === label).length > 0
   )
   expect(button.props.disabled).toBe(false)
   await act(async () => button.props.onPress())
@@ -130,6 +132,30 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }])
   })
 
+  it('sends the answered questions when the last one is skipped', async () => {
+    const onAnswer = render({ questions: [indent, fruit] })
+
+    press('Tabs')
+    await passAutoAdvanceBeat()
+    await submit('Skip')
+
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }, { indices: [] }])
+  })
+
+  it('cancels the prompt when every question is skipped', async () => {
+    const onCancel = vi.fn(async () => true)
+    const onAnswer = render(
+      { questions: [indent] },
+      vi.fn(async () => true),
+      onCancel
+    )
+
+    await submit('Skip')
+
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+
   it('sends nothing when the question is cancelled before the pick moves on', async () => {
     const onCancel = vi.fn(async () => true)
     const onAnswer = render(
@@ -148,5 +174,54 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     await passAutoAdvanceBeat()
 
     expect(onAnswer).not.toHaveBeenCalled()
+  })
+})
+
+describe('MobileNativeChatStructuredAsk', () => {
+  it('lets an earlier question change before the whole set is sent', async () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn(async () => true)
+    const options = (id: string, labels: string[]) =>
+      labels.map((label, i) => ({ id: `${id}:${i}`, label }))
+    act(() => {
+      tree = create(
+        createElement(MobileNativeChatStructuredAsk, {
+          questions: [
+            {
+              id: 'q1',
+              question: 'Tabs or spaces?',
+              multiSelect: false,
+              options: options('q1', ['Tabs', 'Spaces'])
+            },
+            {
+              id: 'q2',
+              question: 'Which fruit?',
+              multiSelect: false,
+              options: options('q2', ['Apple', 'Banana'])
+            }
+          ],
+          onAnswer
+        })
+      )
+    })
+
+    press('Tabs')
+    await passAutoAdvanceBeat()
+    const firstTab = tree.root.find(
+      (node) =>
+        isHost(node, 'Pressable') && node.findAll((n) => n.props.children === 'Step 1').length > 0
+    )
+    act(() => firstTab.props.onPress())
+    press('Spaces')
+    await passAutoAdvanceBeat()
+    press('Banana')
+    await passAutoAdvanceBeat()
+
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith(
+      encodeAgentSessionQuestionAnswers([
+        { questionId: 'q1', optionIds: ['q1:1'] },
+        { questionId: 'q2', optionIds: ['q2:1'] }
+      ])
+    )
   })
 })

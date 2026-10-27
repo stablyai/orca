@@ -221,6 +221,28 @@ describe('Claude chat catch-up', () => {
     }
   )
 
+  it('never leaves a turn it imports running when its reply was already saved', async () => {
+    // An update killed the chat after Claude saved its reply but before the prompt's echo.
+    const c = await chat()
+    await c.live({ interrupted: true })
+    const saved = new Set(c.journal.snapshot().items.map((item) => item.itemId))
+    await c.write([
+      prompt('leaf', null, 'earlier request', 0),
+      prompt('unechoed', 'leaf', 'ask 1', 1),
+      reply('a1', 'unechoed', 'msg_a', { type: 'text', text: 'answer 1' }, 2)
+    ])
+    expect(await c.open('leaf')).toBe(true)
+    const imported = c.journal
+      .snapshot()
+      .items.filter((item) => item.body.kind === 'turn' && !saved.has(item.itemId))
+    expect(imported).toHaveLength(1)
+    // It ends where it opened: in the thread, not inside the saved turn its reply matched.
+    expect(imported[0]).toMatchObject({
+      body: { state: 'completed' },
+      turnScope: { kind: 'thread' }
+    })
+  })
+
   it('completes interrupted text and a result-only tool once at their original positions', async () => {
     const c = await chat()
     await c.live({

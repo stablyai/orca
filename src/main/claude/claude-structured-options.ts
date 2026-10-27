@@ -7,11 +7,34 @@ import {
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 import { beginClaudeOptionMutation } from './claude-structured-execution-observations'
 
 const OPTION_ORDER = ['model', 'effort', 'fastMode'] as const
+
+/** Approval mode is fixed at startup: a fallback mode is dropped only by reopening for a newly picked model.
+ *  Compares with what Orca itself launched, so the reopened child never matches again. */
+export function claudeModelTransitionRestart(
+  sessions: ReadonlyMap<string, ClaudeSession>
+): NonNullable<StructuredAgentSessionAdapter['requiresModelTransitionRestart']> {
+  return (input) => {
+    const session = sessions.get(input.sessionId)
+    const model = input.executionOptions?.model
+    const opened = session?.firstRootInit?.permissionMode
+    const requested = session?.launchIntent?.permissionMode
+    return Boolean(
+      session?.fence === input.fence &&
+      model !== undefined &&
+      model !== session.launchIntent?.model &&
+      requested !== undefined &&
+      opened !== undefined &&
+      opened !== null &&
+      opened !== requested
+    )
+  }
+}
 
 export function restoredClaudeStructuredSessionOptions(
   options: Readonly<Record<string, string>> | undefined

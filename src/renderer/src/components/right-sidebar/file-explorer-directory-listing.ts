@@ -96,7 +96,8 @@ export function clearFailedOpenedDirectoryLink(
 export async function readFileExplorerDirectory(
   activeWorktreeId: string | null | undefined,
   worktreePath: string | null,
-  dirPath: string
+  dirPath: string,
+  options: { wakeWslDistro?: boolean } = {}
 ): Promise<FileExplorerDirectoryListing> {
   const operationOwner = getFileExplorerOperationOwner(activeWorktreeId)
   const route = getFileExplorerOperationRoute(operationOwner)
@@ -111,9 +112,12 @@ export async function readFileExplorerDirectory(
       connectionId: route.connectionId
     },
     dirPath,
-    useAppStore.getState().settings?.followSymlinkedDirectories
-      ? { followSymlinks: true }
-      : undefined
+    {
+      ...(useAppStore.getState().settings?.followSymlinkedDirectories
+        ? { followSymlinks: true }
+        : {}),
+      ...options
+    }
   )
   // Older remote hosts may return lexical order; adaptive sorting keeps already-sorted local listings cheap.
   return {

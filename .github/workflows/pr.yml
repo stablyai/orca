@@ -80,6 +80,7 @@ jobs:
             /config/scripts/pr-package-test-paths.mjs
             /config/scripts/pr-layout-oracle-route.mjs
             /config/scripts/pr-e2e-source-routing.mjs
+            /config/scripts/pr-browser-e2e-source-routes.mjs
             /config/scripts/ci-e2e-job-selection.mjs
             /config/scripts/pr-ready-check-reuse.mjs
           sparse-checkout-cone-mode: false

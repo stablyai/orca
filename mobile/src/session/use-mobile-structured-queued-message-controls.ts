@@ -1,3 +1,5 @@
+import type { DragReorderMove } from '../components/drag-reorder-positions'
+import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
 // The host owns queued drafts; render its published cards even when it cannot queue new sends.
 
 import { useCallback, useMemo } from 'react'
@@ -40,6 +42,7 @@ export type MobileStructuredQueuedMessageControls = {
   clear: (messageIds: string[]) => Promise<boolean>
   edit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
+  move?: (move: DragReorderMove) => Promise<boolean>
   pause: MobileQueuePause
   resume: () => Promise<boolean>
   sessionKey: string
@@ -52,6 +55,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   chatActive: boolean
   enabled: boolean
   editCapable: boolean | null
+  reorderCapable?: boolean
   agentName?: string
   journalItems?: readonly AgentJournalRenderItem[]
   queuedMessages: MobileQueuedMessageFeed
@@ -74,17 +78,23 @@ export function useMobileStructuredQueuedMessageControls(args: {
     sessionKey,
     submissions
   } = args
+  const composerActions = useMobileQueuedMessageComposerActions({
+    ...args,
+    messages: queuedMessages,
+    reorderCapable: args.reorderCapable === true
+  })
+  const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
   const cards = useMemo(
     () =>
-      mobileQueuedMessageCards(queuedMessages, submissions, {
+      mobileQueuedMessageCards(orderedMessages, submissions, {
         agentWorking,
         agentName: args.agentName,
         statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
           ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
           : []
       }),
-    [agentWorking, args.agentName, args.journalItems, queuedMessages, submissions]
+    [agentWorking, args.agentName, args.journalItems, orderedMessages, queuedMessages, submissions]
   )
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({
     ...args,
@@ -224,6 +234,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     clear,
     edit: args.editCapable === null ? undefined : edit,
     editor,
+    move: composerActions.move,
     pause,
     resume,
     sessionKey

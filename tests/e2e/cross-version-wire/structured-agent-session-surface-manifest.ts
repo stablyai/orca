@@ -148,6 +148,10 @@ export function paramsFor(method: string): unknown {
       const fields = { messageId: 'queued-1' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.queuedMessageMove': {
+      const fields = { messageId: 'queued-1', beforeMessageId: null }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.queuedMessagesResume':
       return { envelope: envelope({ method, fields: {}, fence }) }
     case 'agentSession.queuedMessageUpdate': {

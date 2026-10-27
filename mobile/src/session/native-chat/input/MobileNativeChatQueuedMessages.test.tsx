@@ -4,8 +4,26 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActionSheetAction } from '../../../components/ActionSheetModal'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
+import { mobileQueuedMessageCards } from '../../mobile-structured-queued-message-cards'
+import { useMobileQueuedMessageComposerActions } from '../../use-mobile-queued-message-composer-actions'
+import type { MobileStructuredAgentMutate } from '../../use-mobile-structured-agent-mutation'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuedMessageMoveResult
+} from '../../../../../src/shared/agent-session-wire'
+import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
 
 let fontScale = 1
+vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
+
 vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ fontScale }),
   ActivityIndicator: 'ActivityIndicator',
@@ -730,5 +748,96 @@ describe('MobileNativeChatQueuedMessages', () => {
     )
     await act(async () => scroll.props.onContentSizeChange(0, 2444))
     expect(scrollToEnd).not.toHaveBeenCalled()
+  })
+
+  it('admits one queue move synchronously, preserves unrelated actions and releases after settlement', async () => {
+    const messages: AgentSessionQueuedMessage[] = ['a', 'b', 'c', 'd'].map(
+      (messageId, position) => ({
+        messageId,
+        position,
+        state: 'waiting',
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: messageId }] }
+      })
+    )
+    messages[2]!.body.from = { kind: 'agent', senders: [], orchestration: null }
+    type MoveReply = StructuredAgentSessionMutationResult<AgentSessionQueuedMessageMoveResult>
+    const first = Promise.withResolvers<MoveReply>()
+    const second = Promise.withResolvers<MoveReply>()
+    const mutate = vi
+      .fn<(...args: Parameters<MobileStructuredAgentMutate>) => Promise<MoveReply>>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const send = vi.fn(async () => true)
+    function Harness({ published = messages }: { published?: AgentSessionQueuedMessage[] }) {
+      const queue = useMobileQueuedMessageComposerActions({
+        messages: published,
+        sessionId: 's',
+        sessionKey: 's',
+        reorderCapable: true,
+        enabled: true,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Vitest erases the generic result signature; this hook only requests queuedMessageMove, and both deferred replies are checked as MoveReply.
+        mutate: mutate as MobileStructuredAgentMutate,
+        onSendError: () => {}
+      })
+      return createElement(MobileNativeChatQueuedMessages, {
+        cards: mobileQueuedMessageCards(queue.messages, []),
+        onMove: queue.move,
+        onSend: send
+      })
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    const list = () => renderer!.root.find((node) => String(node.type) === 'DragReorderList')
+    const ids = () => list().props.items.map((entry: MobileQueuedMessageCard) => entry.messageId)
+    const queuedMove = list().props.onMove
+    act(() => {
+      expect(queuedMove({ movedId: 'c', beforeId: 'a' })).toBe(true)
+      expect(queuedMove({ movedId: 'b', afterId: 'd' })).toBe(false)
+    })
+    expect(mutate).toHaveBeenCalledTimes(1)
+    expect(ids()).toEqual(['c', 'a', 'b', 'd'])
+    expect(list().props.canMove).toBeUndefined()
+    expect(list().props.items[0].automatic).toBe(true)
+    expect(
+      list().props.items.every((entry: MobileQueuedMessageCard) =>
+        list().props.isMoveDisabled(entry)
+      )
+    ).toBe(true)
+    const movedRow = list().props.renderRow(list().props.items[0])
+    act(() => movedRow.props.onSend())
+    expect(send).not.toHaveBeenCalled()
+    const otherRow = list().props.renderRow(list().props.items[1])
+    await act(async () => otherRow.props.onSend())
+    expect(send).toHaveBeenCalledExactlyOnceWith('a')
+    await act(async () => {
+      first.resolve({
+        status: 'accepted',
+        value: { messageId: 'c', status: 'stale' },
+        sameFence: true
+      })
+      await first.promise
+    })
+    expect(ids()).toEqual(['a', 'b', 'c', 'd'])
+    expect(
+      list().props.items.every(
+        (entry: MobileQueuedMessageCard) => !list().props.isMoveDisabled(entry)
+      )
+    ).toBe(true)
+    act(() => expect(list().props.onMove({ movedId: 'b', afterId: 'd' })).toBe(true))
+    const published = [messages[0]!, messages[2]!, messages[3]!, messages[1]!]
+    await act(async () => renderer!.update(createElement(Harness, { published })))
+    expect(ids()).toEqual(['a', 'c', 'd', 'b'])
+    await act(async () => renderer!.unmount())
+    renderer = null
+    await act(async () => {
+      second.resolve({
+        status: 'accepted',
+        value: { messageId: 'b', status: 'moved' },
+        sameFence: true
+      })
+      await second.promise
+    })
+    expect(mutate).toHaveBeenCalledTimes(2)
   })
 })

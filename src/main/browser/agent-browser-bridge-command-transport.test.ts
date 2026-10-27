@@ -54,7 +54,7 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
-  createFakeAgentBrowserChild,
+  answerAgentBrowserCommands,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -103,19 +103,15 @@ describe('AgentBrowserBridge', () => {
 
   it('maps in-flight CDP discovery failures to tab not found after the session disappears', async () => {
     let releaseSnapshot: (() => void) | null = null
-    const activeChild = createFakeAgentBrowserChild({ kill: vi.fn() })
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('snapshot')) {
-          releaseSnapshot = () => {
-            cb(null, JSON.stringify({ success: false, error: CDP_DISCOVERY_FAILURE }), '')
-          }
-          return activeChild
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'snapshot') {
+        releaseSnapshot = () => {
+          cb(null, JSON.stringify({ success: false, error: CDP_DISCOVERY_FAILURE }), '')
         }
-        cb(null, JSON.stringify({ success: true, data: null }), '')
-        return createFakeAgentBrowserChild({ kill: vi.fn() })
+        return
       }
-    )
+      cb(null, JSON.stringify({ success: true, data: null }), '')
+    })
 
     const snapshotPromise = bridge.snapshot()
 
@@ -161,15 +157,13 @@ describe('AgentBrowserBridge', () => {
 
   it('returns browser_timeout for timed conditional waits without recycling the session', async () => {
     const killedError = Object.assign(new Error('timeout'), { killed: true })
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('wait')) {
-          cb(killedError, '', '')
-          return
-        }
-        cb(null, JSON.stringify({ success: true, data: { snapshot: 'fresh' } }), '')
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'wait') {
+        cb(killedError, '', '')
+        return
       }
-    )
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'fresh' } }), '')
+    })
 
     for (let i = 0; i < 3; i++) {
       await expect(bridge.wait({ selector: '.missing', timeout: 1200 })).rejects.toThrow(

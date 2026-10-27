@@ -23,7 +23,7 @@ import {
   HostWorkspaceListStates
 } from '../worktree/host-workspace-list-states'
 import { getWorktreeDotStatus } from '../worktree/workspace-list-ordering'
-import { repoColor } from '../worktree/repo-color'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { buildRepoLookById } from './host-repo-looks'
@@ -248,7 +248,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               isReadOnly={isReadOnly}
               now={now}
               status={getWorktreeDotStatus(item)}
-              repoColor={repoLookById.get(item.repoId)?.color ?? repoColor(item.repo)}
+              repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
               repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
               hideRepo={state.view.groupBy === 'repo' && !item.showProjectName}
               cardDetails={cardDetails}

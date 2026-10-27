@@ -32,7 +32,7 @@ beforeAll(async () => {
   }
   // Import behind dependency gate: transforming mobile/ reads Expo tsconfig absent from root-only shards.
   ;({ buildNativeChatVisualDocument, NATIVE_CHAT_VISUAL_PONG_TYPE: pongType } =
-    await import('../../../src/shared/native-chat-visual-shell'))
+    await import('../../../src/shared/native-chat/native-chat-visual-shell'))
   ;({ buildMobileNativeChatVisualHostDocument } =
     await import('../../../mobile/src/session/mobile-native-chat-visual-host-document'))
   const header = await readShellCsp()

@@ -1,11 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../src/shared/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
+import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import { MobileNativeChatPromptStrip } from './MobileNativeChatPromptStrip'
 
@@ -41,7 +42,7 @@ export function MobileNativeChatPromptCard({
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
   question?: MobileChatQuestion | null
-  onAnswerQuestion?: (text: string) => Promise<boolean>
+  onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
 }): React.JSX.Element | null {
   const card =
     ask && requiresTerminal ? (
@@ -86,6 +87,13 @@ export function MobileNativeChatPromptCard({
         onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
         onCancel={onCancelPrompt}
         onCollapse={onCollapsePrompt}
+      />
+    ) : question?.questions ? (
+      <MobileNativeChatStructuredAsk
+        key={mobileChatQuestionKey(question)}
+        questions={question.questions}
+        onAnswer={async (answers) => (await onAnswerQuestion?.(answers, question.prompt)) ?? false}
+        onCancel={onCancelPrompt && (() => onCancelPrompt(question.prompt))}
       />
     ) : question ? (
       <MobileNativeChatQuestion

@@ -1088,8 +1088,6 @@
         "cookie": {
           "import": {
             "toast": {
-              "restartFallbackUnavailableNone": "{{value0}} 个 Cookie 均无法加载，且重启回退不可用。此配置文件的旧 Cookie 已被替换。请重试导入。",
-              "restartFallbackUnavailablePartial": "已导入 {{value1}} 个 Cookie 中的 {{value0}} 个。其余无法加载，且重启回退不可用。请重试导入。",
               "googleCookiesSkipped": "未导入 Google cookie。使用此配置文件在 {{value0}} 上的 Orca 中打开浏览器，然后登录 Google。",
               "undecryptableAppBound": "Orca 无法解密此浏览器 cookie 的 {{value0}}，因为它们使用应用程序绑定加密。您可以使用“从文件...”从文件导入 cookie。",
               "undecryptableAppBoundMixed": "Orca 无法解密该浏览器 cookie 的 {{value0}}，因为它们使用应用程序绑定加密；由于其他原因，{{value1}} more 无法解密。您可以使用“从文件...”从文件导入 cookie。",
@@ -1098,7 +1096,8 @@
               "undecryptableUnknown": "{{value0}} cookie 无法解密并被跳过。完全关闭源浏览器并再次尝试导入。",
               "unrecognizedWarning": "cookie 导入结束时出现此版本的 Orca 无法识别的警告。更新 Orca 以查看详细信息，然后在依赖其 cookie 之前检查此配置文件。",
               "undecryptableUnrecognizedReason": "{{value0}} cookies 无法解密并被跳过，原因是此版本的 Orca 无法识别。更新 Orca 以查看详细信息，然后再次尝试导入。",
-              "partitionSkippedBreakdown": "无法读取网站分区的 Cookie：{{value0}}。为保护现有会话而未导入的相关 Cookie：{{value1}}。这些网站现有的 Cookie 保持不变。再次登录前，请在此配置文件中检查这些网站。",
+              "cookiesSkipped": "已跳过 {{value0}} 个 Cookie。",
+              "partitionSkippedCounts": "无法读取网站分区的 Cookie：{{value0}}。同时跳过的相关 Cookie：{{value1}}。再次登录前，请在此配置文件中检查这些网站。",
               "partitionSkipped": "{{value0}} cookie 未导入，因为无法读取其站点分区。在 Orca 中再次登录这些网站。",
               "locationClientHosted": "从此设备读取并存储在此处以供 {{value0}} 工作区使用。",
               "locationRemoteHost": "从 {{value0}} 上的浏览​​器读取并存储在那里。",
@@ -20239,7 +20238,8 @@
       "streamedDetail": "该页面在远程主机上运行并流式传输到该设备。"
     },
     "remote": {
-      "findUnavailable": "当此页面从远程主机流式传输时，在页面中查找不可用。"
+      "findUnavailable": "当此页面从远程主机流式传输时，在页面中查找不可用。",
+      "selectionTooLargeToCopy": "所选内容太大，无法从远程主机流式传输的页面中复制。"
     },
     "userAgentMigration": {
       "degradedDescription": "无法检查旧的浏览器身份选择。在浏览器设置中选择 Cleaned 或 Native；更改在重新启动后生效。",
@@ -20555,6 +20555,12 @@
       "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "无法将“{{name}}”移到回收站。是否永久删除？",
+      "titleTrash": "无法将“{{name}}”移到废纸篓。是否永久删除？",
+      "description": "此操作无法撤销。",
+      "confirm": "永久删除"
     }
   },
   "sparsePreset": {

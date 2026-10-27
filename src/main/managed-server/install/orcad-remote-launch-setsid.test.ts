@@ -64,6 +64,25 @@ describe('the WSL launch (setsid)', () => {
     ).toThrow('orcad_launch_env_name_invalid')
   })
 
+  it('applies a keep-existing host fact only where the launching shell has none', () => {
+    const command = orcadLaunchCommand(host, spec('/d/orcad-1'), 'setsid', [
+      ['GLIBC_TUNABLES', 'glibc.malloc.mmap_threshold=16384', 'keep-existing']
+    ])
+    const assignment = 'GLIBC_TUNABLES="${GLIBC_TUNABLES:-glibc.malloc.mmap_threshold=16384}"'
+    expect(command).toContain(`${assignment} sh -c`)
+    const seen = (preset: string | undefined): string => {
+      const { GLIBC_TUNABLES: _drop, ...env } = process.env
+      return execFileSync('sh', ['-c', `${assignment} sh -c 'printf %s "$GLIBC_TUNABLES"'`], {
+        env: preset === undefined ? env : { ...env, GLIBC_TUNABLES: preset }
+      }).toString()
+    }
+    expect(seen(undefined)).toBe('glibc.malloc.mmap_threshold=16384')
+    expect(seen('glibc.malloc.arena_max=2')).toBe('glibc.malloc.arena_max=2')
+    expect(() =>
+      orcadLaunchCommand(host, spec('/d/orcad-1'), 'setsid', [['X', "a'b", 'keep-existing']])
+    ).toThrow('orcad_launch_env_default_invalid')
+  })
+
   it('keeps the SSH launch byte-for-byte when no detach is named', () => {
     const ssh = orcadLaunchCommand(host, spec('/d/orcad-1'))
     expect(ssh).toBe(orcadLaunchCommand(host, spec('/d/orcad-1'), 'nohup'))

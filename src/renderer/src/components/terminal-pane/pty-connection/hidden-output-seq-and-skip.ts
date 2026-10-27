@@ -111,7 +111,6 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
 
   bindHiddenStartupRendererQueryWrite(session)
   bindHiddenOutputRestoreChunk(session)
-  /** Scan snapshot screen selection before owner-proven flags; only demote when the owner supplies evidence, preserving live-tracked state for older hosts. */
   session.applySnapshotKittyKeyboardModes = function (
     snapshotData: string,
     snapshot: { kittyKeyboardFlags?: number; snapshotSeq?: number }
@@ -120,17 +119,10 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       snapshot.snapshotSeq === undefined
         ? undefined
         : parseTerminalKittyKeyboardFlags(snapshot.kittyKeyboardFlags)
+    session.kittyKeyboardModes.adoptSnapshot(snapshotData, proven)
     if (proven === undefined) {
-      // Fresh mirrors’ initial zero proves nothing about reattached PTYs; demote it before downstream serialization can claim known-inactive flags.
-      if (!session.kittyKeyboardModes.hasProvenBaseline) {
-        session.kittyKeyboardModes.resetForSnapshot()
-      }
-      session.kittyKeyboardModes.scanReplay(snapshotData)
       return
     }
-    session.kittyKeyboardModes.resetForSnapshot()
-    session.kittyKeyboardModes.scanReplay(snapshotData)
-    session.kittyKeyboardModes.restoreSnapshotFlags(proven)
     // Publish the baseline atomically with flags so quiet panes can serialize coherently without waiting for more output.
     session.recordRendererOrderedSeq({ seq: snapshot.snapshotSeq })
   }

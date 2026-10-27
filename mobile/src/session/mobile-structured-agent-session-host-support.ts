@@ -7,6 +7,7 @@ import {
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
@@ -28,6 +29,7 @@ export type StructuredAgentSessionHostSupport = {
   queuedCommands: boolean
   /** Absent on older hosts: queued Edit uses the legacy composer copy there. */
   queuedMessageEdit?: boolean
+  queuedMessageReorder?: boolean
   // Older hosts edit queued text only.
   queuedMessageImageEdit?: boolean
   // Hosts predating mobile access refuse this feed even if they implement it.
@@ -53,6 +55,9 @@ export function structuredAgentSessionHostSupport(
     queuedMessages: capabilities.includes(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY),
     queuedCommands: capabilities.includes(AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY),
     queuedMessageEdit: capabilities.includes(AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY),
+    queuedMessageReorder: capabilities.includes(
+      AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY
+    ),
     queuedMessageImageEdit: capabilities.includes(
       AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY
     ),

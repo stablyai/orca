@@ -55,6 +55,10 @@ export function structuredHostStub(
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     queuedMessageSend: vi.fn(async () => ({ ok: true, replayed: false })),
     queuedMessageDelete: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageMove: vi.fn(async () => ({
+      ok: true,
+      value: { messageId: 'queued-1', status: 'moved' }
+    })),
     queuedMessagesResume: vi.fn(async () => ({ ok: true, replayed: false })),
     queuedMessageUpdate: vi.fn(async () => ({ ok: true, replayed: false })),
     queuedMessageEditHold: vi.fn(async () => ({

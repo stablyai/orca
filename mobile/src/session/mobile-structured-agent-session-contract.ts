@@ -37,7 +37,7 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     permission: MobileChatPermission | null
     question: MobileChatQuestion | null
     respondPermission: (optionId: string) => Promise<boolean>
-    respondQuestion: (answer: string) => Promise<boolean>
+    respondQuestion: (answer: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
     queued: MobileStructuredQueuedMessageControls
     commandRefusalCauses: MobileNativeChatCommandRefusalCauses

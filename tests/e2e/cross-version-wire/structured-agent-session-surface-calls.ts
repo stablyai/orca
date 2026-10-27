@@ -53,6 +53,11 @@ export const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
+    method: 'agentSession.queuedMessageMove',
+    hostMethod: 'queuedMessageMove',
+    result: { ok: true, value: { messageId: 'queued-1', status: 'moved' } }
+  },
+  {
     method: 'agentSession.queuedMessagesResume',
     hostMethod: 'queuedMessagesResume',
     result: { ok: true, replayed: false }

@@ -1,6 +1,6 @@
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../shared/terminal-links'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'

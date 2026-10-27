@@ -144,6 +144,15 @@ async function waitForAgentStart(
   return false
 }
 
+export const AGENT_HOOKS_REVIEW_BLOCKED_ERROR =
+  'The agent is waiting for someone to review new or changed hooks ("Hooks need review"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.'
+
+function describeBlockedAgent(blockedReason: string): string {
+  return blockedReason === 'agent-hooks-review-prompt'
+    ? AGENT_HOOKS_REVIEW_BLOCKED_ERROR
+    : `Automation agent is blocked: ${blockedReason}.`
+}
+
 async function readTerminalSnapshot(
   runtime: AutomationRunTerminalHost,
   handle: string
@@ -171,7 +180,7 @@ async function buildObservation(
     status: 'dispatch_failed',
     outputSnapshot,
     error: wait.blockedReason
-      ? `Automation agent is blocked: ${wait.blockedReason}.`
+      ? describeBlockedAgent(wait.blockedReason)
       : 'Automation agent did not report completion.'
   }
 }

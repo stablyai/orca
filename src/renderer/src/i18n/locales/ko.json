@@ -1088,8 +1088,6 @@
         "cookie": {
           "import": {
             "toast": {
-              "restartFallbackUnavailableNone": "{{value0}} 쿠키를 로드할 수 없으며 다시 시작 폴백을 사용할 수 없습니다. 이 프로필의 이전 쿠키가 대체되었습니다. 가져오기를 다시 시도하세요.",
-              "restartFallbackUnavailablePartial": "{{value1}} 쿠키 중 {{value0}}을(를) 가져왔습니다. 나머지는 로드할 수 없으며 다시 시작 폴백을 사용할 수 없습니다. 가져오기를 다시 시도하세요.",
               "googleCookiesSkipped": "Google 쿠키를 가져오지 못했습니다. 이 프로필을 사용하여 {{value0}}의 Orca에서 브라우저를 열고 Google에 로그인하세요.",
               "undecryptableAppBound": "Orca는 앱 바인딩 암호화를 사용하기 때문에 이 브라우저 쿠키의 {{value0}}을(를) 해독할 수 없습니다. \"파일에서...\"를 사용하여 파일에서 쿠키를 가져올 수 있습니다.",
               "undecryptableAppBoundMixed": "Orca는 앱 바인딩 암호화를 사용하기 때문에 이 브라우저 쿠키의 {{value0}}을(를) 해독할 수 없습니다. 다른 이유로 인해 {{value1}} more을(를) 해독할 수 없습니다. \"파일에서...\"를 사용하여 파일에서 쿠키를 가져올 수 있습니다.",
@@ -1098,7 +1096,8 @@
               "undecryptableUnknown": "{{value0}} 쿠키를 해독할 수 없어 건너뛰었습니다. 소스 브라우저를 완전히 닫고 가져오기를 다시 시도하세요.",
               "unrecognizedWarning": "이 버전의 Orca가 인식하지 못한다는 경고와 함께 쿠키 가져오기가 완료되었습니다. Orca를 업데이트하여 세부 정보를 확인한 다음 쿠키를 사용하기 전에 이 프로필을 확인하세요.",
               "undecryptableUnrecognizedReason": "{{value0}} 쿠키는 이 버전의 Orca가 인식하지 못하는 이유로 해독할 수 없으며 건너뛰었습니다. Orca를 업데이트하여 세부정보를 확인한 후 가져오기를 다시 시도하세요.",
-              "partitionSkippedBreakdown": "사이트 파티션을 읽을 수 없는 쿠키: {{value0}}. 기존 세션을 보호하기 위해 가져오지 않은 관련 쿠키: {{value1}}. 해당 사이트의 기존 쿠키는 변경되지 않았습니다. 다시 로그인하기 전에 이 프로필에서 해당 사이트를 확인하세요.",
+              "cookiesSkipped": "쿠키 {{value0}}개를 건너뛰었습니다.",
+              "partitionSkippedCounts": "사이트 파티션을 읽을 수 없는 쿠키: {{value0}}. 함께 건너뛴 관련 쿠키: {{value1}}. 다시 로그인하기 전에 이 프로필에서 해당 사이트를 확인하세요.",
               "partitionSkipped": "{{value0}} 쿠키는 사이트 파티션을 읽을 수 없기 때문에 가져오지 못했습니다. Orca에서 해당 사이트에 다시 로그인합니다.",
               "locationClientHosted": "이 기기에서 읽고 {{value0}} 워크스페이스를 위해 여기에 저장됩니다.",
               "locationRemoteHost": "{{value0}}의 브라우저에서 읽고 거기에 저장됩니다.",
@@ -20217,7 +20216,8 @@
       "streamedDetail": "페이지는 원격 호스트에서 실행되고 이 기기로 스트리밍됩니다."
     },
     "remote": {
-      "findUnavailable": "이 페이지가 원격 호스트에서 스트리밍되는 동안에는 페이지에서 찾기를 사용할 수 없습니다."
+      "findUnavailable": "이 페이지가 원격 호스트에서 스트리밍되는 동안에는 페이지에서 찾기를 사용할 수 없습니다.",
+      "selectionTooLargeToCopy": "선택 영역이 너무 커서 원격 호스트에서 스트리밍되는 페이지에서 복사할 수 없습니다."
     },
     "userAgentMigration": {
       "degradedDescription": "이전 브라우저 ID 선택을 검사할 수 없습니다. 브라우저 설정에서 정리됨 또는 기본을 선택하십시오. 변경 사항은 다시 시작한 후에 적용됩니다.",
@@ -20554,6 +20554,12 @@
       "findInFolder": "{{path}}에서 찾기",
       "folderLoadError": "이 폴더를 불러오지 못했습니다:",
       "emptyFolder": "이 폴더에 파일이 없습니다"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
+      "titleTrash": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
+      "description": "이 작업은 되돌릴 수 없습니다.",
+      "confirm": "영구 삭제"
     }
   },
   "sparsePreset": {

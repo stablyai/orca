@@ -1,6 +1,6 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
-import { RepositoryPane } from './RepositoryPane'
+import { RepositoryPane } from './repository/RepositoryPane'
 import { SettingsSection } from './SettingsSection'
 import { getSettingsEntryHostSelection, getSettingsProjectHostRepo } from './settings-project-list'
 import { translate } from '@/i18n/i18n'

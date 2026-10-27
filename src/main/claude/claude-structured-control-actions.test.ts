@@ -287,6 +287,7 @@ describe('answerClaudePrompt', () => {
     session.translator = {
       handle: vi.fn(),
       openTurnInLiveProviderCycle: false,
+      openTurnHasInputWork: false,
       journalPrompts: {
         resolve: resolvePrompt,
         handOver: () => () => {},

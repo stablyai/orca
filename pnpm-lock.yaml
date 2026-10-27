@@ -180,14 +180,14 @@ patchedDependencies:
   '@xterm/addon-search@0.17.0-beta.301': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.301': b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f
   '@xterm/addon-webgl@0.20.0-beta.300': 5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9
-  '@xterm/xterm@6.1.0-beta.304': 87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156
+  '@xterm/xterm@6.1.0-beta.304': 4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
   node-pty@1.1.0: afb111afc31f8b97431dafce9833a989d7dbd7d525228dade858d520bcb6ec76
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
   sprintf-js@1.1.3: 05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08
-  vitest@5.0.5: e53d360918437da97f766d322f487aabfbe10d1450ed98543491573b4d500cd2
+  vitest@5.0.5: a8c4c8af3636bf5cc481bd7ebcaa39c47a6dcc3d12fb3f66559953fe3e8671e3
   ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
 
 importers:
@@ -211,13 +211,13 @@ importers:
         version: 2.5.6
       '@xterm/addon-serialize':
         specifier: 0.15.0-beta.301
-        version: 0.15.0-beta.301(patch_hash=b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.15.0-beta.301(patch_hash=b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))
       '@xterm/headless':
         specifier: 6.1.0-beta.303
         version: 6.1.0-beta.303
       agent-browser:
-        specifier: ~0.27.0
-        version: 0.27.0
+        specifier: ~0.27.3
+        version: 0.27.3
       electron-updater:
         specifier: ^6.8.10
         version: 6.8.10(electron@43.8.1(supports-color@7.2.0))(supports-color@7.2.0)
@@ -326,7 +326,7 @@ importers:
         version: 3.14.13(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
       '@testing-library/jest-dom':
         specifier: ^6.9.1
-        version: 6.9.1(vitest@5.0.5(patch_hash=e53d360918437da97f766d322f487aabfbe10d1450ed98543491573b4d500cd2)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))
+        version: 6.9.1(vitest@5.0.5(patch_hash=a8c4c8af3636bf5cc481bd7ebcaa39c47a6dcc3d12fb3f66559953fe3e8671e3)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
@@ -407,28 +407,28 @@ importers:
         version: 1.18.0
       '@xterm/addon-fit':
         specifier: 0.12.0-beta.301
-        version: 0.12.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.12.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))
       '@xterm/addon-image':
         specifier: 0.10.0-beta.301
-        version: 0.10.0-beta.301(patch_hash=f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.10.0-beta.301(patch_hash=f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))
       '@xterm/addon-ligatures':
         specifier: 0.11.0-beta.301
-        version: 0.11.0-beta.301(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.11.0-beta.301(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))
       '@xterm/addon-search':
         specifier: 0.17.0-beta.301
-        version: 0.17.0-beta.301(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.17.0-beta.301(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))
       '@xterm/addon-unicode11':
         specifier: 0.10.0-beta.301
-        version: 0.10.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.10.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))
       '@xterm/addon-web-links':
         specifier: 0.13.0-beta.301
-        version: 0.13.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.13.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.300
-        version: 0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))
+        version: 0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))
       '@xterm/xterm':
         specifier: 6.1.0-beta.304
-        version: 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+        version: 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
       bun:
         specifier: 1.4.4
         version: 1.4.4
@@ -623,7 +623,7 @@ importers:
         version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(patch_hash=e53d360918437da97f766d322f487aabfbe10d1450ed98543491573b4d500cd2)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(patch_hash=a8c4c8af3636bf5cc481bd7ebcaa39c47a6dcc3d12fb3f66559953fe3e8671e3)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       vscode-oniguruma:
         specifier: ^2.0.1
         version: 2.0.1
@@ -684,7 +684,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(patch_hash=e53d360918437da97f766d322f487aabfbe10d1450ed98543491573b4d500cd2)(@opentelemetry/api@1.9.1)(@types/node@18.19.130)(happy-dom@21.0.4)(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.5(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(patch_hash=a8c4c8af3636bf5cc481bd7ebcaa39c47a6dcc3d12fb3f66559953fe3e8671e3)(@opentelemetry/api@1.9.1)(@types/node@18.19.130)(happy-dom@21.0.4)(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.5(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
 packages:
 
@@ -4396,8 +4396,9 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  agent-browser@0.27.0:
-    resolution: {integrity: sha512-mmHzVsYFVA6nshNNGJzg83aVMgKpf4h98ytY3pvtJB1Cot0ZyA2bfnkbSngGD56Azkj+GlhVH6qx9DfKOVE0yg==}
+  agent-browser@0.27.3:
+    resolution: {integrity: sha512-isQ1xWoYOnfR8BigYRlYmkFOrqw71tKEmUEMmFJGStQFOyCrLSsKoOAZEu8TjPZdmjD1nPQ/hLLYlxTwdHnA0Q==}
+    engines: {node: '>=24.0.0', pnpm: '>=11.0.0'}
     hasBin: true
 
   ajv-formats@3.0.1:
@@ -10437,7 +10438,7 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/jest-dom@6.9.1(vitest@5.0.5(patch_hash=e53d360918437da97f766d322f487aabfbe10d1450ed98543491573b4d500cd2)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))':
+  '@testing-library/jest-dom@6.9.1(vitest@5.0.5(patch_hash=a8c4c8af3636bf5cc481bd7ebcaa39c47a6dcc3d12fb3f66559953fe3e8671e3)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))':
     dependencies:
       '@adobe/css-tools': 4.5.0
       '@types/aria-query': 5.0.4
@@ -10447,7 +10448,7 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
     optionalDependencies:
-      vitest: 5.0.5(patch_hash=e53d360918437da97f766d322f487aabfbe10d1450ed98543491573b4d500cd2)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 5.0.5(patch_hash=a8c4c8af3636bf5cc481bd7ebcaa39c47a6dcc3d12fb3f66559953fe3e8671e3)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   '@testing-library/react@16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)':
     dependencies:
@@ -11042,43 +11043,43 @@ snapshots:
 
   '@xmldom/xmldom@0.8.15': {}
 
-  '@xterm/addon-fit@0.12.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-fit@0.12.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      '@xterm/xterm': 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
 
-  '@xterm/addon-image@0.10.0-beta.301(patch_hash=f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-image@0.10.0-beta.301(patch_hash=f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      '@xterm/xterm': 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
 
-  '@xterm/addon-ligatures@0.11.0-beta.301(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-ligatures@0.11.0-beta.301(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      '@xterm/xterm': 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
       lru-cache: 11.5.1
       opentype.js: 2.0.0
 
-  '@xterm/addon-search@0.17.0-beta.301(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-search@0.17.0-beta.301(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      '@xterm/xterm': 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
 
-  '@xterm/addon-serialize@0.15.0-beta.301(patch_hash=b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-serialize@0.15.0-beta.301(patch_hash=b35533fe252e7e45433150170348889f4e08a6c17f7017ac34ea694d831fec7f)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      '@xterm/xterm': 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
 
-  '@xterm/addon-unicode11@0.10.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-unicode11@0.10.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      '@xterm/xterm': 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
 
-  '@xterm/addon-web-links@0.13.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-web-links@0.13.0-beta.301(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      '@xterm/xterm': 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
 
-  '@xterm/addon-webgl@0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156))':
+  '@xterm/addon-webgl@0.20.0-beta.300(patch_hash=5349718f2c19d9319a81552580bf9618ded9b00f3707a5c6cdbbae1910849cd9)(@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      '@xterm/xterm': 6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)
 
   '@xterm/headless@6.1.0-beta.303': {}
 
-  '@xterm/xterm@6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)': {}
+  '@xterm/xterm@6.1.0-beta.304(patch_hash=4542f9cd2e9ac646c0f58575d9dc7308009d49bba04dee45e12fd8437c266b7e)': {}
 
   abbrev@4.0.0: {}
 
@@ -11096,7 +11097,7 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  agent-browser@0.27.0: {}
+  agent-browser@0.27.3: {}
 
   ajv-formats@3.0.1:
     dependencies:
@@ -15155,7 +15156,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/picomatch'
 
-  vitest@5.0.5(patch_hash=e53d360918437da97f766d322f487aabfbe10d1450ed98543491573b4d500cd2)(@opentelemetry/api@1.9.1)(@types/node@18.19.130)(happy-dom@21.0.4)(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.5(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@5.0.5(patch_hash=a8c4c8af3636bf5cc481bd7ebcaa39c47a6dcc3d12fb3f66559953fe3e8671e3)(@opentelemetry/api@1.9.1)(@types/node@18.19.130)(happy-dom@21.0.4)(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.5(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.5(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.5(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -15180,7 +15181,7 @@ snapshots:
       - '@types/picomatch'
       - msw
 
-  vitest@5.0.5(patch_hash=e53d360918437da97f766d322f487aabfbe10d1450ed98543491573b4d500cd2)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@5.0.5(patch_hash=a8c4c8af3636bf5cc481bd7ebcaa39c47a6dcc3d12fb3f66559953fe3e8671e3)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.5(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))

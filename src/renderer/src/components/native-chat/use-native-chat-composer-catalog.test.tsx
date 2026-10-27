@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildNativeChatPickerItems,
   classifyPickerCommands
-} from '../../../../shared/native-chat-picker-items'
+} from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'

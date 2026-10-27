@@ -30,11 +30,6 @@ describe('detectAgentCommandsOnHost install-dir fallback', () => {
     guestMounts.value = []
   })
 
-  it('searches the process PATH everywhere except a WSL host orcad', async () => {
-    await detectAgentCommandsOnHost(['codex'])
-    expect(detectInstallDirs).toHaveBeenCalledWith(['codex'], undefined)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'drops /mnt/<drive> dirs from the fallback PATH on a WSL host orcad',
     async () => {

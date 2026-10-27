@@ -3,11 +3,8 @@
 import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { useState, type KeyboardEventHandler } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  applyPickerSuggestion,
-  deriveComposerAutocomplete,
-  type ComposerAutocomplete
-} from './native-chat-composer-state'
+import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
+import { deriveComposerAutocomplete, type ComposerAutocomplete } from './native-chat-composer-state'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { useNativeChatRecallPosition } from './use-native-chat-composer-recall'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'

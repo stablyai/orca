@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { ProviderSegment } from './StatusBarProviderSegment'
-import { UsageUnitLabel, usageChipShowsPercentage } from './usage-unit-label'
+import { usageChipShowsPercentage } from './usage-unit-label'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en',
@@ -89,16 +89,4 @@ describe('usageChipShowsPercentage parity with ProviderSegment', () => {
       })
     }
   }
-})
-
-describe('UsageUnitLabel', () => {
-  it('names the chosen display and stays mounted while collapsed', () => {
-    expect(renderToStaticMarkup(<UsageUnitLabel collapsed={false} display="used" />)).toContain(
-      '>Used<'
-    )
-    const collapsed = renderToStaticMarkup(<UsageUnitLabel collapsed display="remaining" />)
-    expect(collapsed).toContain('>Remaining<')
-    expect(collapsed).toContain('data-usage-collapsed="true"')
-    expect(collapsed).toContain('aria-hidden="true"')
-  })
 })

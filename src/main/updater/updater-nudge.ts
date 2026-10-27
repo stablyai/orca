@@ -38,7 +38,7 @@ export abstract class UpdaterNudge extends UpdaterBuildSelection {
       ) {
         this.awaitingNudgeCheckOutcome = true
         this._setPendingUpdateNudgeId?.(nudge.id)
-        this.mainWindowRef?.webContents.send('updater:clearDismissal')
+        this.sendToMainWindow('updater:clearDismissal')
         this.runBackgroundUpdateCheck(nudge.id)
       }
     } finally {

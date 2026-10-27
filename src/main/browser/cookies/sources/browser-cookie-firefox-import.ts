@@ -119,7 +119,6 @@ export async function importCookiesFromFirefox(
       validated,
       rows.length,
       cookieImportTarget(targetPartition),
-      'replace-imported-domains',
       options
     )
   } catch (err) {

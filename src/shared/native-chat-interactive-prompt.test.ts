@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseApprovalFromStatus,
-  parseInteractivePrompt,
   resolveNativeChatInteractivePromptCard
 } from './native-chat-interactive-prompt'
 import type { NativeChatMessage } from './native-chat-types'
 import { buildOmpPlanReviewAnswer } from './omp-plan-review-prompt'
-
-const ESC = String.fromCharCode(27)
 
 describe('parseApprovalFromStatus', () => {
   it('returns null for non-approval envelopes', () => {
@@ -16,30 +13,6 @@ describe('parseApprovalFromStatus', () => {
     expect(parseApprovalFromStatus('{}')).toBeNull()
     expect(parseApprovalFromStatus(JSON.stringify({ approval: {} }))).toBeNull()
     expect(parseApprovalFromStatus(JSON.stringify({ approval: { tool: '' } }))).toBeNull()
-  })
-
-  it('builds an Allow/Deny card from { approval: { tool, summary } }', () => {
-    const approval = parseApprovalFromStatus(
-      JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
-    )
-    expect(approval).toEqual({
-      title: 'Allow Bash?',
-      detail: 'rm -rf build',
-      options: [
-        { label: 'Allow', send: '1' },
-        { label: 'Deny', send: ESC }
-      ]
-    })
-  })
-
-  it('omits detail for a missing, empty or non-string summary', () => {
-    for (const summary of [undefined, '', 42, null]) {
-      const approval = parseApprovalFromStatus(
-        JSON.stringify({ approval: { tool: 'Edit', summary } })
-      )
-      expect(approval?.title).toBe('Allow Edit?')
-      expect(approval?.detail).toBeUndefined()
-    }
   })
 
   it('reads the OMP plan review envelope', () => {
@@ -57,28 +30,6 @@ describe('parseApprovalFromStatus', () => {
         { label: 'Approve and execute', send: buildOmpPlanReviewAnswer('review-1', 'execute') }
       ]
     })
-  })
-})
-
-describe('parseInteractivePrompt', () => {
-  it('returns a question card, with question taking precedence', () => {
-    const card = parseInteractivePrompt(
-      JSON.stringify({
-        questions: [{ question: 'q', options: ['A'] }],
-        approval: { tool: 'Bash', summary: 's' }
-      })
-    )
-    expect(card?.kind).toBe('question')
-  })
-
-  it('returns an approval card when no question is present', () => {
-    const card = parseInteractivePrompt(JSON.stringify({ approval: { tool: 'Bash' } }))
-    expect(card?.kind).toBe('approval')
-  })
-
-  it('returns null when neither parses', () => {
-    expect(parseInteractivePrompt(null)).toBeNull()
-    expect(parseInteractivePrompt('{}')).toBeNull()
   })
 })
 

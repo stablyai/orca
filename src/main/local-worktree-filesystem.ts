@@ -5,6 +5,7 @@ import { quotePosixShell } from '../shared/shell-argument-quoting'
 import { removeHostTree } from './host-tree-removal'
 import { toLinuxPath } from './wsl'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
+import { describeWslProcessFailure } from './wsl/wsl-process-failure'
 import type { ReadPath, StatPath } from './worktree-orphan-gitdir-proof'
 
 export { toHostFilesystemPath, toHostRemovalPath } from './host-tree-removal'
@@ -37,7 +38,7 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
     throw new Error(`WSL filesystem command timed out after ${WSL_FILE_OPERATION_TIMEOUT_MS}ms`)
   }
   if (result.code !== 0) {
-    throw Object.assign(new Error(result.stderr.trim() || `wsl.exe exited ${result.code}`), {
+    throw Object.assign(new Error(describeWslProcessFailure(result)), {
       exitCode: result.code,
       stderr: result.stderr
     })

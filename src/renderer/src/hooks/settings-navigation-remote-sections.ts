@@ -3,7 +3,7 @@ import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
 import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
-import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
 import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
 import { translate } from '@/i18n/i18n'

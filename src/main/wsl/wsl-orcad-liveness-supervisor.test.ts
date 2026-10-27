@@ -75,12 +75,16 @@ function harness(options: { visible?: boolean } = {}) {
   const readIdentity = vi.fn(async () => state.identity)
   const collectCensus = vi.fn(async () => CENSUS)
   const ensureHolder = vi.fn(async () => {})
+  const retireListener = vi.fn(async () => {
+    connection = null
+  })
   const supervisor = new WslOrcadLivenessSupervisor({
     manager: {
       ensure,
       get: () => connection,
       publish: (_distro, status) => statuses.push(status),
-      close: async () => {}
+      close: async () => {},
+      retireListener
     },
     readRunning,
     readIdentity,
@@ -158,6 +162,7 @@ function harness(options: { visible?: boolean } = {}) {
     readIdentity,
     collectCensus,
     ensureHolder,
+    retireListener,
     advance,
     settle,
     power: () => power,
@@ -187,6 +192,8 @@ describe('WslOrcadLivenessSupervisor', () => {
     ])
     expect(h.readIdentity).toHaveBeenCalledTimes(1) // never exec'd into the stopped distro
     expect(h.ensure).toHaveBeenCalledTimes(1)
+    // Parked with visible work too: a dial to a kept listener would boot the distro.
+    expect(h.retireListener).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     expect(h.deferred).toHaveLength(1)
     // Started by someone else: relaunch into the running distro.
     h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
@@ -250,9 +257,17 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.readIdentity).toHaveBeenCalledTimes(identityReads)
   })
 
+  it('re-ensures the holder once a connect is armed', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    // An earlier orcad's idle release may have ended the holder the launch adopted.
+    expect(h.ensureHolder).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+  })
+
   it('never boots a stopped distro for background work; the gate resumes it once running', async () => {
     const h = harness({ visible: false })
     await h.supervisor.connect('Ubuntu')
+    h.ensureHolder.mockClear()
     h.state.running = { status: 'confirmed', distros: [] }
     h.lastWatch().exit(1)
     await h.advance(60_000)
@@ -261,6 +276,8 @@ describe('WslOrcadLivenessSupervisor', () => {
     ])
     expect(h.ensure).toHaveBeenCalledTimes(1)
     expect(h.ensureHolder).not.toHaveBeenCalled()
+    // A dial to a kept listener would spawn wsl.exe and boot the stopped distro.
+    expect(h.retireListener).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     expect(h.deferred).toHaveLength(1)
     // The user started it some other way: the distro restarted, so relaunch into it.
     h.state.running = { status: 'confirmed', distros: ['Ubuntu'] }
@@ -327,6 +344,25 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.statuses.at(-1)).toEqual({ state: 'ready', census: null })
   })
 
+  it('never reports ready or holds the distro on a wake after the listener was retired', async () => {
+    const h = harness({ visible: false })
+    // No pid file at arm: the port is the only liveness evidence.
+    h.state.identity = { distroInstance: 'boot:1', orcad: null }
+    await h.supervisor.connect('Ubuntu')
+    h.state.watchSignal = 'refused'
+    h.lastWatch().exit(0)
+    await h.advance(60_000)
+    expect(h.retireListener).toHaveBeenCalledOnce()
+    // Before the fix, a missing connection read as a port that answered.
+    h.state.watchSignal = 'ready'
+    const holds = h.ensureHolder.mock.calls.length
+    h.power()?.onResume()
+    await h.advance(60_000)
+    expect(h.statuses.filter((status) => status.state === 'ready')).toEqual([])
+    expect(h.ensureHolder).toHaveBeenCalledTimes(holds)
+    expect(h.ensure).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves an orcad nobody uses stopped instead of undoing its idle exit', async () => {
     const h = harness({ visible: false })
     await h.supervisor.connect('Ubuntu')
@@ -335,6 +371,7 @@ describe('WslOrcadLivenessSupervisor', () => {
     await h.advance(60_000)
     expect(h.statuses).toEqual([{ state: 'idle', terminals: 'unverifiable' }])
     expect(h.ensure).toHaveBeenCalledTimes(1)
+    expect(h.retireListener).toHaveBeenCalledExactlyOnceWith('Ubuntu')
   })
 
   it('reattaches the watch when orcad is still the same process', async () => {

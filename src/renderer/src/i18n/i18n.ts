@@ -19,7 +19,10 @@ import { advanceTranslationResourceVersion } from './translation-resource-versio
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import { isPluginUiLanguage, type UiLanguage } from '../../../shared/ui-language'
-import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
+import {
+  isCatalogObject,
+  type PluginLanguagePackRegistration
+} from '../../../shared/plugins/plugin-language-pack-artifact'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 export const i18n: I18nInstance = i18next.createInstance()
@@ -90,6 +93,13 @@ void i18n
 i18n.store.on('added', advanceTranslationResourceVersion)
 i18n.store.on('removed', advanceTranslationResourceVersion)
 
+// Synthetic plugin<hex> tags would get English plurals; plugin-pack-plurals.test.ts guards i18next upgrades.
+const pluralLocaleByResourceLanguage = new Map<string, string>()
+const pluralResolver = i18n.services.pluralResolver
+const getPluralRule = pluralResolver.getRule.bind(pluralResolver)
+pluralResolver.getRule = (code: string, options?: { ordinal?: boolean }) =>
+  getPluralRule(pluralLocaleByResourceLanguage.get(code) ?? code, options)
+
 export function translate(key: string, fallback: string, options?: TOptions): string {
   const value = i18n.t(key, { defaultValue: fallback, ...options })
   return isPseudoLocalizationLocale(i18n.language) ? pseudoLocalizeString(value) : value
@@ -127,10 +137,16 @@ let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
 export function getIntlLocale(): string {
   const active = i18n.language
   const pack = pluginLanguagePacks.find((entry) => entry.resourceLanguage === active)
-  const candidate = pack?.locale ?? active
+  return supportedIntlLocale(pack?.locale ?? active, Intl.DateTimeFormat)
+}
+
+function supportedIntlLocale(
+  locale: string,
+  intl: { supportedLocalesOf(locale: string): string[] }
+): string {
   try {
     // An unsupported tag would silently use the runtime locale; explicitly fall back to the default.
-    return Intl.DateTimeFormat.supportedLocalesOf(candidate)[0] ?? DEFAULT_LOCALE
+    return intl.supportedLocalesOf(locale)[0] ?? DEFAULT_LOCALE
   } catch {
     return DEFAULT_LOCALE
   }
@@ -140,6 +156,24 @@ export function resolveRendererResourceLanguage(language: string): string {
   return pluginLanguagePacks.find((pack) => pack.id === language)?.resourceLanguage ?? language
 }
 
+// Packs translated from English often ship only _one/_other; reuse _other so few/many stay in-language.
+function withPluralCategoriesFromOther(
+  catalog: Record<string, unknown>,
+  categories: readonly string[]
+): Record<string, unknown> {
+  const filled: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(catalog)) {
+    filled[key] = isCatalogObject(value) ? withPluralCategoriesFromOther(value, categories) : value
+    if (typeof value === 'string' && key.endsWith('_other')) {
+      const base = key.slice(0, -'_other'.length)
+      for (const category of categories) {
+        filled[`${base}_${category}`] ??= value
+      }
+    }
+  }
+  return filled
+}
+
 export function setRendererPluginLanguagePacks(
   packs: readonly PluginLanguagePackRegistration[]
 ): void {
@@ -147,9 +181,19 @@ export function setRendererPluginLanguagePacks(
     i18n.removeResourceBundle(language, 'translation')
   }
   registeredPluginLanguages.clear()
+  pluralLocaleByResourceLanguage.clear()
   pluginLanguagePacks = packs
   for (const pack of packs) {
-    i18n.addResourceBundle(pack.resourceLanguage, 'translation', pack.catalog, true, true)
+    const pluralLocale = supportedIntlLocale(pack.locale, Intl.PluralRules)
+    pluralLocaleByResourceLanguage.set(pack.resourceLanguage, pluralLocale)
+    const categories = new Intl.PluralRules(pluralLocale).resolvedOptions().pluralCategories
+    i18n.addResourceBundle(
+      pack.resourceLanguage,
+      'translation',
+      withPluralCategoriesFromOther(pack.catalog, categories),
+      true,
+      true
+    )
     registeredPluginLanguages.add(pack.resourceLanguage)
   }
 }

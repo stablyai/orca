@@ -19,7 +19,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  set offline               Toggle offline mode (--state on|off)',
   '  set headers               Set HTTP headers (--headers \'{"key":"val"}\')',
   '  set credentials           Set HTTP auth (--user <u> --pass <p>)',
-  '  set media                 Set color scheme (--color-scheme dark|light)',
+  '  set media                 Set --color-scheme dark|light and --reduced-motion reduce|no-preference',
   '  clipboard read            Read clipboard contents',
   '  clipboard write           Write --text to clipboard',
   '  dialog accept             Accept browser dialog (--text for prompt response)',

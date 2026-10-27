@@ -114,7 +114,7 @@ const onLocalLogTailChanged = vi.fn(() => () => {})
 const fsApi = { onLocalLogTailChanged }
 let latestFileContents: Record<string, FileContent> = {}
 let latestDiffContents: Record<string, DiffContent> = {}
-let latestReloadContent: (file: OpenFile) => void = () => {}
+let latestReloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void = () => {}
 const EMPTY_GIT_STATUS_BY_WORKTREE: Record<string, GitStatusEntry[]> = {}
 
 function HookProbe({
@@ -182,6 +182,30 @@ describe('useEditorPanelContentState', () => {
     container?.remove()
     container = null
     root = null
+  })
+
+  it('lets the active tab load and its Retry start a stopped WSL distro, but not other reloads', async () => {
+    const activeFile = createOpenFile()
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'text', isBinary: false })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('text'))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ wakeWslDistro: true })
+    )
+
+    await act(async () => latestReloadContent(activeFile))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ wakeWslDistro: true })
+    )
+    await act(async () => latestReloadContent(activeFile, { wakeWslDistro: true }))
+    expect(mocks.readRuntimeFileContent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ wakeWslDistro: true })
+    )
   })
 
   it('loads folder workspace files through the path-specific SSH connection', async () => {

@@ -115,6 +115,14 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  liveTurnId = (sessionId: string): string | null | undefined =>
+    this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
+
+  requiresModelTransitionRestart: NonNullable<
+    StructuredAgentSessionAdapter['requiresModelTransitionRestart']
+  > = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.requiresModelTransitionRestart?.(input) ?? false
+
   capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.capturePendingOutput?.(input)
 

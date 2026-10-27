@@ -22,6 +22,7 @@ import {
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { settleUnheldStructuredAgentSessionTurns } from './structured-agent-session-unheld-turns'
 import {
   applyStructuredRewindRecovery,
   readStructuredRewindRecovery,
@@ -38,6 +39,8 @@ export type StructuredAgentSessionProviderStartedContext = {
     startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'ready' | 'onClock' | 'readiness'>
     acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   }
+  /** Commits the child's buffered lifecycle events. */
+  flushLifecycle?: (sessionId: string) => Promise<unknown>
   /** Release startup’s delivery barrier and drain all currently handable sends. */
   wakeDelivery: (sessionId: string) => Promise<void>
   stopStartingChild: (sessionId: string, child: StructuredAgentSessionProviderChildIdentity) => void
@@ -56,6 +59,8 @@ export async function settleStructuredAgentSessionProviderStarted(
 ): Promise<void> {
   // Read provider state outside serialization so sends can still be accepted.
   const rewind = await readRewindAtStart(context, event, signal)
+  // Restored history is committed and the child's own events drained before its turns are judged.
+  await context.flushLifecycle?.(event.sessionId)
   // Follow attach publication so its proven lease has committed.
   await context.serialize(event.sessionId, async () => {
     signal?.throwIfAborted()
@@ -84,6 +89,19 @@ export async function settleStructuredAgentSessionProviderStarted(
     ) {
       return null
     }
+    await settleUnheldStructuredAgentSessionTurns(
+      session.journal,
+      event.sessionId,
+      child.fence,
+      event.acquisitionGeneration,
+      context.deps.adapter.liveTurnId?.(event.sessionId)
+    ).catch((error: unknown) =>
+      context.deps.logger.warn('settling turns the agent is not running failed', {
+        scope: 'unheld-turns',
+        sessionId: event.sessionId,
+        error
+      })
+    )
     context.runtimeState.startupAttempts.ready(event.sessionId, child)
     noteStructuredAgentSessionRuntimePermission(session.child, event.reportedOptions, true)
     context.publishStatus?.(event.sessionId)

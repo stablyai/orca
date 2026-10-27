@@ -26,8 +26,7 @@ import {
   clearMobileNativeChatDraftForSend,
   editMobileNativeChatDraft,
   readMobileNativeChatDraftEditGeneration,
-  setMobileNativeChatDraftText,
-  useMobileNativeChatDraft
+  setMobileNativeChatDraftText
 } from './mobile-native-chat-draft-store'
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
@@ -48,7 +47,8 @@ export function useMobileNativeChatDrafts(args: {
   // Only settled own-session history makes an empty list a real send boundary.
   transcriptSettled: boolean
 }): {
-  composerText: string
+  // Subscribe where the text is drawn; a subscriber here redraws the session screen per keystroke.
+  draftKey: string | null
   setComposerText: Dispatch<SetStateAction<string>>
   appendComposerText: (text: string) => boolean
   getComposerEditGeneration: () => number
@@ -81,7 +81,6 @@ export function useMobileNativeChatDrafts(args: {
   } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
-  const composerText = useMobileNativeChatDraft(draftKey)
   const [pendingBySession, setPendingBySession] = useState<
     Record<string, MobileNativeChatPendingMessage[]>
   >({})
@@ -249,7 +248,7 @@ export function useMobileNativeChatDrafts(args: {
   }, [messages, pending, pendingKey, transcriptSettled])
 
   return {
-    composerText,
+    draftKey,
     setComposerText,
     appendComposerText,
     getComposerEditGeneration,

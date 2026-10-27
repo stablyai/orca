@@ -1269,7 +1269,6 @@
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-partition-rollback.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-partition-success.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-partition.electron.test.ts
-2 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-replace-partition-rollback.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-validated-partition.electron.test.ts
 5 test-timeout-needs-reason:src/main/claude-usage/scanner-incremental-reader.test.ts
 4 test-timeout-needs-reason:src/main/claude/claude-agent-sdk-exit-proof.test.ts
@@ -1405,7 +1404,6 @@
 1 test-timeout-needs-reason:src/renderer/src/components/terminal-pane/issue-4631-terminal-hover-link-provider.repro.test.ts
 1 test-timeout-needs-reason:src/renderer/src/hooks/agent-hook-completion-notifications.test.ts
 1 test-timeout-needs-reason:src/renderer/src/lib/check-run-details-log-normalization-performance.test.ts
-1 test-timeout-needs-reason:src/renderer/src/lib/terminal-links.test.ts
 1 test-timeout-needs-reason:src/renderer/src/web/web-preload-api-keybindings.test.ts
 2 test-timeout-needs-reason:src/renderer/src/web/web-preload-api-settings.test.ts
 1 test-timeout-needs-reason:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
@@ -1413,6 +1411,7 @@
 1 test-timeout-needs-reason:src/shared/check-job-log-text-performance.test.ts
 1 test-timeout-needs-reason:src/shared/dsh-real-cli.test.ts
 1 test-timeout-needs-reason:src/shared/setup-agent-sequencing.windows.test.ts
+1 test-timeout-needs-reason:src/shared/terminal-links.test.ts
 2 test-timeout-needs-reason:src/shared/workspace-space-entry-traversal.test.ts
 2 test-timeout-needs-reason:src/shared/wsl-login-shell-command.test.ts
 1 test-timeout-needs-reason:src/wsl-guest/agent-hook-server.test.ts

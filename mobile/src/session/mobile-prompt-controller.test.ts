@@ -2,7 +2,7 @@ import { act } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import type { AskPrompt } from '../../../src/shared/native-chat-ask'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import {
   visible,
   handleRef,

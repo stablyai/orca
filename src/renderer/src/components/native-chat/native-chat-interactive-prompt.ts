@@ -4,26 +4,6 @@ import {
   type NativeChatApprovalSay
 } from '../../../../shared/native-chat-interactive-prompt'
 
-export {
-  buildAskAnswerKeys,
-  buildCodexAskAnswerKeys,
-  formatAskAnswer,
-  hasAskAnswer,
-  parseAskFromStatus,
-  registerQuestionTool,
-  type AskAnswerKeyGroup,
-  type AskAnswerSelection,
-  type AskOption,
-  type AskPrompt,
-  type AskQuestion,
-  type InteractiveQuestionParser
-} from '../../../../shared/native-chat-ask'
-export {
-  chatApprovalFromJournal,
-  type ChatApproval,
-  type InteractivePromptCard
-} from '../../../../shared/native-chat-interactive-prompt'
-
 const PIECES: Record<keyof typeof COPY, (values?: { value0: string }) => string> = {
   title: (values) => translate('components.native-chat.approval.title', COPY.title, values),
   allow: () => translate('components.native-chat.approval.allow', COPY.allow),

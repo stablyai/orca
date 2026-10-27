@@ -1,3 +1,4 @@
+import './MobileNativeChatView.harness.test-fixture'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -40,7 +41,7 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('./native-chat/composer/MobileNativeChatComposer', () => ({
-  MobileNativeChatComposer: 'Composer'
+  MobileNativeChatDraftComposer: 'Composer'
 }))
 // The queue's action sheet pulls in the animation runtime, which this react-native mock can't host.
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
@@ -96,7 +97,7 @@ function renderView(
         getSendCompletionGeneration: () => 0,
         getComposerEditGeneration: () => 0,
         pending: [],
-        composerText: '',
+        draftKey: null,
         onComposerTextChange: vi.fn(),
         structuredActivityUi: true,
         agentWorking: true,

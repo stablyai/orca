@@ -8,7 +8,7 @@ import {
   type MobileNativeChatSendOutcome
 } from './native-chat/mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
-import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
+import { isSlashCommandDraft } from '../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from './native-chat/mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from './native-chat/mobile-native-chat-send-classification'
 import {

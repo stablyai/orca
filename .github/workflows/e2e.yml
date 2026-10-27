@@ -382,6 +382,9 @@ jobs:
             exit 0
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
+          if printf '%s\n' "${TEST_FILES[@]}" | grep -Fxq 'tests/e2e/browser-image-link-focus.spec.ts'; then
+            E2E_ENV+=(ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_BROWSER_NATIVE_XVFB=1)
+          fi
           E2E_PROJECT_ARGS=()
           if [ -n "$LAYOUT_OWNER" ]; then
             test -f out/main/ORCA_LAYOUT_OWNER_MAIN

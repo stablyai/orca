@@ -16,6 +16,7 @@ export { DSH_WHALE, isDshTerminalTitle } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
+  getPiCompatibleTitleBrand,
   isLegacyPiCompatibleTitle
 } from './pi-compatible-synthetic-title'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
@@ -148,6 +149,11 @@ function computeAgentLabel(title: string): string | null {
     title.startsWith('* ')
   ) {
     return 'Claude Code'
+  }
+  // The π/Pi/OMP brand owns identity; its session label may name other agents.
+  const piBrand = getPiCompatibleTitleBrand(title)
+  if (piBrand) {
+    return piBrand
   }
   // Why before Gemini: see isDshTerminalTitle — the two share the `✦` glyph.
   if (isDshTerminalTitle(title)) {

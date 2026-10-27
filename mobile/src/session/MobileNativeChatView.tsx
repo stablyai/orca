@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
-import type { AskPrompt } from '../../../src/shared/native-chat-ask-types'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
   NativeChatLiveTurnIndicator,
@@ -43,7 +43,7 @@ import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'
 import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'
 import {
-  MobileNativeChatComposer,
+  MobileNativeChatDraftComposer,
   type MobileNativeChatStructuredComposer
 } from './native-chat/composer/MobileNativeChatComposer'
 import { MobileNativeChatPromptCard } from './native-chat/input/MobileNativeChatPromptCard'
@@ -94,7 +94,7 @@ type Props = ComposerTrayProps & {
   pending: MobileNativeChatPendingItem[]
   // Retain local preview URIs after authoritative image messages replace optimistic rows.
   imagePreviewsByMessageId?: Record<string, string[]>
-  composerText: string
+  draftKey: string | null
   onComposerTextChange: (text: string) => void
   onAttachImage?: () => void
   attachments?: PendingNativeChatImage[]
@@ -126,7 +126,7 @@ type Props = ComposerTrayProps & {
   onCollapsePrompt?: () => void
   collapsedPrompt?: { title: string; expand: () => void } | null
   question?: MobileChatQuestion | null
-  onAnswerQuestion?: (text: string) => Promise<boolean>
+  onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
   permission?: MobileChatPermission | null
   promptKey?: string | null
   onRespondPermission?: (send: string) => Promise<boolean>
@@ -161,7 +161,7 @@ export function MobileNativeChatView({
   getComposerEditGeneration,
   pending,
   imagePreviewsByMessageId,
-  composerText,
+  draftKey,
   onComposerTextChange,
   onAttachImage,
   attachments,
@@ -373,9 +373,9 @@ export function MobileNativeChatView({
       ) : null}
       {}
       {trayContent}
-      <MobileNativeChatComposer
+      <MobileNativeChatDraftComposer
         structured={structuredActivityUi ? structuredComposer : null}
-        value={composerText}
+        draftKey={draftKey}
         onChangeText={onComposerTextChange}
         onSend={handleSend}
         sendSurfaceId={sendSurfaceId}

@@ -6,7 +6,7 @@ import {
 import { FENCED_TERMINATION_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
-import { isWslBridgeDistroLost, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
+import { checkWslBridgeDistro, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
 import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
@@ -243,13 +243,17 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
     wslDistro: string,
     exitAt: number
   ): Promise<void> {
-    const lost = await isWslBridgeDistroLost(wslDistro, exitAt, this.readRunningWslDistros)
+    const verdict = await checkWslBridgeDistro(wslDistro, exitAt, this.readRunningWslDistros)
+    // Only 'lost' keeps the tab; a reboot (or slow wsl.exe) racing the probe reads as an exit.
+    console.info(
+      `[pty] WSL bridge exit: ${verdict} (distro ${wslDistro}, probe ${Math.round(performance.now() - exitAt)}ms)`
+    )
     // A spawn that replaced this incarnation meanwhile owns the session now.
     const current = this.sessionIncarnations.get(sessionId)
     if (current !== undefined && current !== exit.incarnationId) {
       return
     }
-    if (!lost) {
+    if (verdict !== 'lost') {
       this.finishExit(sessionId, exit)
       return
     }

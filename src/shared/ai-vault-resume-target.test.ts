@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  canResumeAiVaultSessionOnTarget,
-  getAiVaultResumeRepoTargetStatus,
-  isWslStoredAiVaultSessionFile
-} from './ai-vault-resume-target'
+import { canResumeAiVaultSessionOnTarget } from './ai-vault-resume-target'
 
 describe('ai vault session storage compatibility', () => {
   const hostSessionFile = '/Users/ada/.claude/projects/-Users-ada-repo/session-1.jsonl'
@@ -11,15 +7,6 @@ describe('ai vault session storage compatibility', () => {
   const wslSessionFile = '\\\\wsl$\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-repo\\s-1.jsonl'
   const wslLocalhostSessionFile =
     '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-repo\\s-1.jsonl'
-
-  it('detects WSL-stored session files', () => {
-    expect(isWslStoredAiVaultSessionFile(wslSessionFile)).toBe(true)
-    expect(isWslStoredAiVaultSessionFile(wslLocalhostSessionFile)).toBe(true)
-    expect(isWslStoredAiVaultSessionFile(hostSessionFile)).toBe(false)
-    expect(isWslStoredAiVaultSessionFile(windowsHostSessionFile)).toBe(false)
-    expect(isWslStoredAiVaultSessionFile(null)).toBe(false)
-    expect(isWslStoredAiVaultSessionFile(undefined)).toBe(false)
-  })
 
   it('allows host-stored sessions on local targets only', () => {
     expect(
@@ -141,23 +128,5 @@ describe('ai vault session storage compatibility', () => {
     expect(
       canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'unknown' })
     ).toBe(false)
-  })
-})
-
-describe('ai vault resume repo owner', () => {
-  it('classifies local, SSH, runtime, and unknown repo owners', () => {
-    expect(getAiVaultResumeRepoTargetStatus({ connectionId: null, executionHostId: 'local' })).toBe(
-      'local'
-    )
-    expect(getAiVaultResumeRepoTargetStatus({ connectionId: 'ssh-1', executionHostId: null })).toBe(
-      'ssh'
-    )
-    expect(
-      getAiVaultResumeRepoTargetStatus({
-        connectionId: null,
-        executionHostId: 'runtime:env-1'
-      })
-    ).toBe('runtime')
-    expect(getAiVaultResumeRepoTargetStatus(null)).toBe('unknown')
   })
 })

@@ -10,6 +10,16 @@ import { structuredSessionBackgroundTasksView } from '../../../../../src/shared/
 import { useMobileNativeChatComposerTray } from './use-mobile-native-chat-composer-tray'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
 
+vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
+
 vi.mock('react-native', () => ({
   Dimensions: { get: () => ({ width: 430, height: 900 }) },
   useWindowDimensions: () => ({ fontScale: 1 }),

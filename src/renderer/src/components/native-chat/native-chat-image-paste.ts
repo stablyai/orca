@@ -1,5 +1,5 @@
 import { isImageDropPath } from '../terminal-pane/terminal-drop-image-path'
-import { NATIVE_CHAT_PASTE_FOLDER } from '../../../../shared/native-chat-paste-folder'
+import { NATIVE_CHAT_PASTE_FOLDER } from '../../../../shared/native-chat/input/native-chat-paste-folder'
 export {
   getAgentImageHandling,
   type AgentImageHandling

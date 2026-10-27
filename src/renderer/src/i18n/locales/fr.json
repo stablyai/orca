@@ -143,7 +143,8 @@
       "streamedDetail": "La page s'exécute sur l'hôte distant et est diffusée sur cet appareil."
     },
     "remote": {
-      "findUnavailable": "Rechercher dans la page n'est pas disponible pendant la diffusion de cette page à partir de l'hôte distant."
+      "findUnavailable": "Rechercher dans la page n'est pas disponible pendant la diffusion de cette page à partir de l'hôte distant.",
+      "selectionTooLargeToCopy": "La sélection est trop volumineuse pour être copiée depuis une page diffusée par l’hôte distant."
     },
     "userAgentMigration": {
       "degradedDescription": "Un ancien choix d'identité de navigateur n'a pas pu être inspecté. Choisissez Nettoyé ou Natif dans les paramètres du navigateur ; les modifications prennent effet après un redémarrage.",
@@ -1228,8 +1229,6 @@
         "cookie": {
           "import": {
             "toast": {
-              "restartFallbackUnavailableNone": "Aucun des {{value0}} cookies n'a pu être chargé, et la solution de repli par redémarrage était indisponible. Les cookies précédents de ce profil ont été remplacés. Réessayez l'importation.",
-              "restartFallbackUnavailablePartial": "{{value0}} cookies sur {{value1}} ont été importés. Le reste n'a pas pu être chargé, et la solution de repli par redémarrage était indisponible. Réessayez l'importation.",
               "googleCookiesSkipped": "Les cookies Google n'ont pas été importés. Ouvrez un navigateur dans Orca sur {{value0}} avec ce profil, puis connectez-vous à Google.",
               "undecryptableAppBound": "Orca ne peut pas déchiffrer {{value0}} cookies de ce navigateur car ils utilisent un chiffrement lié à l'application. Vous pouvez importer des cookies depuis un fichier avec « Depuis un fichier… ».",
               "undecryptableAppBoundMixed": "Orca ne peut pas déchiffrer {{value0}} cookies de ce navigateur car ils utilisent un chiffrement lié à l'application ; {{value1}} autres n'ont pas pu être déchiffrés pour une autre raison. Vous pouvez importer des cookies depuis un fichier avec « Depuis un fichier… ».",
@@ -1238,7 +1237,8 @@
               "undecryptableUnknown": "{{value0}} cookies n'ont pas pu être déchiffrés et ont été ignorés. Fermez complètement le navigateur source, puis réessayez l'importation.",
               "unrecognizedWarning": "L'importation des cookies s'est terminée avec un avertissement que cette version d'Orca ne reconnaît pas. Mettez Orca à jour pour voir les détails, puis vérifiez ce profil avant de vous fier à ses cookies.",
               "undecryptableUnrecognizedReason": "{{value0}} cookies n'ont pas pu être déchiffrés et ont été ignorés pour une raison que cette version d'Orca ne reconnaît pas. Mettez Orca à jour pour voir les détails, puis réessayez l'importation.",
-              "partitionSkippedBreakdown": "Cookies dont la partition de site est illisible : {{value0}}. Cookies associés non importés pour protéger les sessions existantes : {{value1}}. Les cookies existants de ces sites n’ont pas été modifiés. Vérifiez ces sites dans ce profil avant de vous reconnecter.",
+              "cookiesSkipped": "{{value0}} cookies ignorés.",
+              "partitionSkippedCounts": "Cookies dont la partition de site est illisible : {{value0}}. Cookies associés également ignorés : {{value1}}. Vérifiez ces sites dans ce profil avant de vous reconnecter.",
               "partitionSkipped": "{{value0}} cookies n'ont pas été importés car leur partition de site n'a pas pu être lue. Connectez-vous à nouveau à ces sites dans Orca.",
               "locationClientHosted": "Lire à partir de cet appareil et stocké ici pour l'espace de travail {{value0}}.",
               "locationRemoteHost": "Lire à partir des navigateurs sur {{value0}} et y être stockée.",
@@ -20555,6 +20555,12 @@
       "findInFolder": "Rechercher dans {{path}}",
       "folderLoadError": "Impossible de charger ce dossier :",
       "emptyFolder": "Aucun fichier dans ce dossier"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
+      "titleTrash": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
+      "description": "Cette action est irréversible.",
+      "confirm": "Supprimer définitivement"
     }
   },
   "sparsePreset": {

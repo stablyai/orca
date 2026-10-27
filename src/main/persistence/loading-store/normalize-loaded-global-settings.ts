@@ -8,7 +8,7 @@ import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
-import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
+import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import {
   savedChatUiWithTerminalDefaultView,

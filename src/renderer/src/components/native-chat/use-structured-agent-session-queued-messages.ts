@@ -1,3 +1,7 @@
+import {
+  useStructuredAgentSessionQueuedReorder,
+  type QueuedMessageReorder
+} from './use-structured-agent-session-queued-reorder'
 // Host owns durable queued drafts; this pane routes card/header actions and holds only open-edit typing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -34,6 +38,7 @@ import type {
 
 export type StructuredAgentSessionQueuedMessagesController = {
   cards: QueuedMessageCard[]
+  reorder?: QueuedMessageReorder
   /** Cards can show unsent messages without host queue support; queue settings/steer then have no effect. */
   queueCapable: boolean
   /** Clear all waits for sends/actions so it cannot silently clear fewer cards than shown. */
@@ -110,6 +115,11 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       )
     ],
     [isWorking, sending, queuePause, queuedMessages, submissions]
+  )
+  const reordered = useStructuredAgentSessionQueuedReorder(
+    cards,
+    args.editTransport,
+    capturePresentation
   )
   const cardsRef = useRef(cards)
   useEffect(() => {
@@ -260,7 +270,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   }, [admit, capturePresentation, clearCapable, run])
 
   return {
-    cards,
+    cards: reordered.cards,
+    reorder: reordered.reorder,
     queueCapable: enabled,
     clearCapable,
     pause,

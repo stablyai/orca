@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
+import type { MobileSourceControlSettings } from '../transport/settings-read-operations'
+import { useMobileSourceControlSettings } from './mobile-source-control-settings'
 import { useFocusEffect } from 'expo-router'
 import { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
@@ -50,11 +52,15 @@ export type MobileSourceControlLoaders = {
   mountedRef: MutableRefObject<boolean>
   setRootRef: (node: View | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
+  settings: MobileSourceControlSettings
 }
 
 export function useMobileSourceControlLoaders(params: Params): MobileSourceControlLoaders {
   const { client, connState, statusIdentityKey, worktreeId, setActionError, onStatusLoadSuccess } =
     params
+  // Desktop's settings decide the compare base here and the list order and diffs upstream.
+  const { settings, reload: reloadSettings } = useMobileSourceControlSettings(client, connState)
+  const compareAgainstUpstream = settings.compareAgainstUpstream
   const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' })
   const [branchCompareState, setBranchCompareState] = useState<MobileBranchCompareState>({
     kind: 'idle'
@@ -92,7 +98,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   )
 
   const loadBranchCompare = useCallback(
-    async (options?: { preserveReadyOnFailure?: boolean }) => {
+    // The compare base can be the branch's upstream, so it follows the status read that triggered it.
+    async (options: { preserveReadyOnFailure: boolean; upstreamName: string | undefined }) => {
       // Each compare refresh owns a fresh reply; retire first so only the newest attempt can publish.
       branchCompare.reset()
       if (!worktreeId || !client || connState !== 'connected') {
@@ -106,7 +113,10 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
 
       setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
       const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, (currency) =>
-        readBranchCompareOutcome(client, worktreeId, currency)
+        readBranchCompareOutcome(client, worktreeId, currency, {
+          compareAgainstUpstream,
+          upstreamName: options.upstreamName
+        })
       )
       // Mount liveness belongs to the view; a current reply still cannot publish after detach.
       if (!loaded || !mountedRef.current) {
@@ -117,15 +127,18 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       }
       const outcome = loaded.value
       setBranchCompareState((prev) =>
-        nextBranchCompareState(outcome, prev, options?.preserveReadyOnFailure === true)
+        nextBranchCompareState(outcome, prev, options.preserveReadyOnFailure)
       )
       return outcome.kind === 'ready'
     },
-    [branchCompare, client, connState, statusIdentityKey, worktreeId]
+    [branchCompare, client, compareAgainstUpstream, connState, statusIdentityKey, worktreeId]
   )
 
   const loadStatus = useCallback(
     async (options?: LoadStatusOptions) => {
+      if (options?.rereadSettings) {
+        reloadSettings()
+      }
       const loadKey = statusIdentityKey
       const inFlight = statusLoadInFlightRef.current
       if (inFlight && !options?.force && inFlight.key === loadKey && inFlight.client === client) {
@@ -172,7 +185,10 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             if (!refusal) {
               const result = gitStatusHostPayloadRead.interpret(reply)
               setScreenState({ kind: 'ready', status: result })
-              void loadBranchCompare({ preserveReadyOnFailure: true })
+              void loadBranchCompare({
+                preserveReadyOnFailure: true,
+                upstreamName: result.upstreamStatus?.upstreamName
+              })
               if (options?.clearActionErrorOnSuccess !== false) {
                 setActionError(null)
               }
@@ -230,6 +246,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       connState,
       loadBranchCompare,
       onStatusLoadSuccess,
+      reloadSettings,
       statusIdentityKey,
       worktreeId,
       setActionError
@@ -249,6 +266,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     setBranchCompareState,
     mountedRef,
     setRootRef,
-    loadStatus
+    loadStatus,
+    settings
   }
 }

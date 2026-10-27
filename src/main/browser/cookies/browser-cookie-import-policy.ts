@@ -1,7 +1,6 @@
 import { isIP } from 'node:net'
-import type { Cookie, Cookies } from 'electron'
+import type { Cookie } from 'electron'
 import { parse as parseDomain } from 'tldts'
-import type { CookieClearIdentity } from './browser-cookie-import-clear'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   'SIDCC',
@@ -10,8 +9,6 @@ const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   '__Secure-STRP',
   'AEC'
 ])
-
-export type CookieImportMode = 'merge' | 'replace-imported-domains'
 
 export function normalizeCookieDomain(domain: string): string | null {
   const candidate = domain.trim().replace(/^\.+/, '')
@@ -179,95 +176,4 @@ export function cookieRemovalUrl(cookie: Cookie, normalizedDomain: string): stri
   const url = new URL(`${cookie.secure ? 'https' : 'http'}://${normalizedDomain}/`)
   url.pathname = cookie.path?.startsWith('/') ? cookie.path : '/'
   return url.toString()
-}
-
-// Restore through CDP identities; Electron cookies.set cannot retain partition keys.
-export type ImportedDomainReplaceStore = Pick<Cookies, 'get' | 'remove'> & {
-  snapshotClearIdentities(
-    cookies: readonly { cookie: Cookie; url: string }[]
-  ): Promise<CookieClearIdentity[]>
-  restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
-}
-
-export type ReplacedImportedDomainCookies = {
-  removed: Cookie[]
-  identities: CookieClearIdentity[]
-}
-
-function replaceRemovalKey(url: string, name: string): string {
-  return JSON.stringify([url, name])
-}
-
-function assertIdentitiesCoverRemovable(
-  removable: readonly { cookie: Cookie; url: string }[],
-  identities: readonly CookieClearIdentity[]
-): void {
-  const covered = new Set(
-    identities.map((identity) => replaceRemovalKey(identity.url, identity.name))
-  )
-  for (const item of removable) {
-    if (!covered.has(replaceRemovalKey(item.url, item.cookie.name))) {
-      throw new Error('Could not replace existing cookies; the session was left unchanged')
-    }
-  }
-}
-
-export async function replaceCookiesForImportedDomains(
-  store: ImportedDomainReplaceStore,
-  importedDomains: readonly string[]
-): Promise<ReplacedImportedDomainCookies> {
-  const scope = importedDomainScope(importedDomains)
-  if (scope.exact.size === 0) {
-    return { removed: [], identities: [] }
-  }
-
-  // Freeze the removal plan so every mutation is covered by the rollback snapshot.
-  const existingCookies = await store.get({})
-  const removable: { cookie: Cookie; url: string }[] = []
-  for (const cookie of existingCookies) {
-    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
-    if (!domain || !domainIsInImportedScope(scope, domain, cookie.hostOnly === true)) {
-      continue
-    }
-    removable.push({ cookie, url: cookieRemovalUrl(cookie, domain) })
-  }
-  if (removable.length === 0) {
-    return { removed: [], identities: [] }
-  }
-
-  // Abort before removal if the snapshot cannot restore every coordinate.
-  const identities = await store.snapshotClearIdentities(removable)
-  assertIdentitiesCoverRemovable(removable, identities)
-  const identitiesByKey = new Map<string, CookieClearIdentity[]>()
-  for (const identity of identities) {
-    const key = replaceRemovalKey(identity.url, identity.name)
-    const group = identitiesByKey.get(key) ?? []
-    group.push(identity)
-    identitiesByKey.set(key, group)
-  }
-
-  const removed: Cookie[] = []
-  // remove(url, name) also deletes partitioned twins; track rollback by coordinate.
-  const attemptedKeys = new Set<string>()
-  const attemptedIdentities: CookieClearIdentity[] = []
-  for (const { cookie, url } of removable) {
-    const key = replaceRemovalKey(url, cookie.name)
-    if (!attemptedKeys.has(key)) {
-      attemptedKeys.add(key)
-      attemptedIdentities.push(...(identitiesByKey.get(key) ?? []))
-    }
-    try {
-      await store.remove(url, cookie.name)
-      removed.push(cookie)
-    } catch (err) {
-      try {
-        // A rejected removal may already have deleted its coordinate; restore it too.
-        await store.restoreClearIdentities(attemptedIdentities.toReversed())
-      } catch (restoreError) {
-        throw new AggregateError([err, restoreError], 'Cookie replacement and rollback failed')
-      }
-      throw err
-    }
-  }
-  return { removed, identities }
 }

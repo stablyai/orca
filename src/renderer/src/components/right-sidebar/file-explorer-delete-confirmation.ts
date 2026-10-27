@@ -1,29 +1,5 @@
 import type { ConfirmationDialogOptions } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import type { TreeNode } from './file-explorer-types'
-
-export function fileExplorerDeleteConfirmation(
-  node: Pick<TreeNode, 'name' | 'isDirectory'>
-): ConfirmationDialogOptions {
-  return {
-    title: translate(
-      'auto.components.right.sidebar.useFileDeletion.d979a4fbb5',
-      "Permanently delete '{{value0}}'?",
-      { value0: node.name }
-    ),
-    description: node.isDirectory
-      ? translate(
-          'auto.components.right.sidebar.useFileDeletion.7fb9435c86',
-          'This permanently deletes the directory and its contents on the remote host. This cannot be undone.'
-        )
-      : translate(
-          'auto.components.right.sidebar.useFileDeletion.23e98f192f',
-          'This permanently deletes the file on the remote host. This cannot be undone.'
-        ),
-    confirmLabel: translate('auto.components.right.sidebar.useFileDeletion.92276aceb7', 'Delete'),
-    confirmVariant: 'destructive'
-  }
-}
 
 export function fileExplorerBatchDeleteConfirmation({
   count,

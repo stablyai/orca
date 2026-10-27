@@ -203,7 +203,8 @@ export function useEditorPanelFileContentLoader({
           !restoredOpenFile?.isDirty &&
           (!/\.(csv|tsv)$/i.test(filePath) || useAppStore.getState().editorDrafts[id] === undefined)
         // Keep file authorization and editable drafts isolated between concurrent reads.
-        const key = `${inFlightReadKey(readScope, filePath)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}`
+        // A background read refused for a stopped distro must not answer a user's waking read.
+        const key = `${inFlightReadKey(readScope, filePath)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}${options?.wakeWslDistro ? '::wake' : ''}`
         const registeredRead = inFlightFileReads.get(key)
         if (
           options?.force &&
@@ -227,7 +228,8 @@ export function useEditorPanelFileContentLoader({
               access,
               terminalArtifactGrantId: readGrantId,
               expectedEnvironmentPairingRevision: readGrantPairing,
-              pageOversizedBinary: true
+              pageOversizedBinary: true,
+              ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
             },
             allowPagedPreview
           )

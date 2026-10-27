@@ -8,7 +8,7 @@ import {
   sessionReportedSkills,
   type NativeChatSessionSkill,
   type SlashCommandSuggestion
-} from '../../../../shared/native-chat-slash-commands'
+} from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import { structuredSessionSlashCommands } from '../../../../shared/structured-agent-session-composer'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'

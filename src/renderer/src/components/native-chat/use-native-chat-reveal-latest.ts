@@ -1,5 +1,5 @@
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
-import { hasAskAnswer } from './native-chat-interactive-prompt'
+import { hasAskAnswer } from '../../../../shared/native-chat-ask-answer'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'

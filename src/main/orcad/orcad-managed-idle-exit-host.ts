@@ -17,6 +17,11 @@ import {
   writeOrcadIdleStopRecord
 } from './orcad-idle-stop-record'
 import type { OrcadShutdownTrigger } from './orcad-lifecycle'
+import {
+  idleStopMayReleaseWslHolder,
+  requestOrcadWslHolderRelease,
+  withdrawOrcadWslHolderRelease
+} from './orcad-wsl-holder-release'
 import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
@@ -42,6 +47,7 @@ export function beginOrcadIdleExit(userDataPath: string): {
   previousIdleStop: OrcadIdleStopRecord | null | undefined
   start: (ports: OrcadIdleExitRuntimePorts) => Promise<void>
 } {
+  withdrawOrcadWslHolderRelease(userDataPath)
   const config = resolveOrcadManagedIdleExit(process.env)
   if (!config) {
     return { previousIdleStop: undefined, start: async () => {} }
@@ -133,6 +139,13 @@ async function startOrcadManagedIdleExit(
         idleRecord.requestShutdown(requestIdleShutdown)
         return true
       }
+      if (idleStopMayReleaseWslHolder(process.env, outcome)) {
+        try {
+          requestOrcadWslHolderRelease(input.userDataPath)
+        } catch (error) {
+          console.error('[orcad] could not release the WSL distro holder:', error)
+        }
+      }
       idleRecord.requestShutdown(requestIdleShutdown)
       return true
     }
@@ -149,7 +162,11 @@ export function createIdleStopRecordOwnership(userDataPath: string): {
   onShutdown(): void
 } {
   let idleOwnsStop = false
-  const discard = (): void => discardOrcadIdleStopRecord(userDataPath)
+  // The holder release rides on the idle stop: a stop that is not idle must not end the distro.
+  const discard = (): void => {
+    discardOrcadIdleStopRecord(userDataPath)
+    withdrawOrcadWslHolderRelease(userDataPath)
+  }
   return {
     requestShutdown: (request) => {
       // Cleanup may run before the trigger returns, so establish ownership first.

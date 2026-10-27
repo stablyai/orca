@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { ImeInput } from '@/lib/ime-text-field'
 
 // Remap privileged ports to avoid EACCES when binding locally without root.
 function safeLocalPort(remotePort: number): number {
@@ -218,7 +219,7 @@ function PortForwardForm({
           <span className="text-[11px] text-muted-foreground">
             {translate('auto.components.right.sidebar.PortsPanel.9e5a4118b0', 'Remote Port')}
           </span>
-          <input
+          <ImeInput
             type="text"
             inputMode="numeric"
             value={remotePort}
@@ -243,7 +244,7 @@ function PortForwardForm({
           <span className="text-[11px] text-muted-foreground">
             {translate('auto.components.right.sidebar.PortsPanel.b950b1948b', 'Local Port')}
           </span>
-          <input
+          <ImeInput
             type="text"
             inputMode="numeric"
             value={localPort}
@@ -260,7 +261,7 @@ function PortForwardForm({
           <span className="text-[11px] text-muted-foreground">
             {translate('auto.components.right.sidebar.PortsPanel.a3721a50b0', 'Remote Host')}
           </span>
-          <input
+          <ImeInput
             type="text"
             value={remoteHost}
             onChange={(e) => setRemoteHost(e.target.value)}
@@ -276,7 +277,7 @@ function PortForwardForm({
           <span className="text-[11px] text-muted-foreground">
             {translate('auto.components.right.sidebar.PortsPanel.8dfed0a15c', 'Label (optional)')}
           </span>
-          <input
+          <ImeInput
             type="text"
             value={label}
             onChange={(e) => setLabel(e.target.value)}

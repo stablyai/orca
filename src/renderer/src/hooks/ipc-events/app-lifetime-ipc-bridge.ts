@@ -1,4 +1,5 @@
 import { observeJiraImageHostStatus } from '@/runtime/runtime-jira-image-cache'
+import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
@@ -59,6 +60,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   if (statusApi?.onStatusChanged) {
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
+      observeRuntimeHostStatusForPendingRemovals(snapshot)
       remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)
       observeJiraImageHostStatus(snapshot)
     }

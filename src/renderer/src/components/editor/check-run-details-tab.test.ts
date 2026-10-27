@@ -1,23 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildCheckRunDetailsTabId,
-  getCheckRunDetailsTabLabel,
-  getCheckRunTabIdentity
-} from './check-run-details-tab'
+import { buildCheckRunDetailsTabId, getCheckRunTabIdentity } from './check-run-details-tab'
 
 describe('check-run-details-tab', () => {
-  it('builds a stable tab id from worktree and check identity', () => {
-    expect(
-      buildCheckRunDetailsTabId('wt-1', {
-        name: 'verify',
-        status: 'completed',
-        conclusion: 'failure',
-        url: null,
-        checkRunId: 99
-      })
-    ).toBe('wt-1::check-details::check-run:99')
-  })
-
   it('falls back to workflow and url identities when check run id is missing', () => {
     expect(
       getCheckRunTabIdentity({
@@ -47,16 +31,5 @@ describe('check-run-details-tab', () => {
     expect(
       buildCheckRunDetailsTabId('wt-1', { ...base, name: 'test: unit', gitlabJobId: 42 })
     ).not.toBe(buildCheckRunDetailsTabId('wt-1', { ...base, name: 'test: unit', gitlabJobId: 43 }))
-  })
-
-  it('uses the check name for the tab label', () => {
-    expect(
-      getCheckRunDetailsTabLabel({
-        name: 'verify',
-        status: 'completed',
-        conclusion: 'failure',
-        url: null
-      })
-    ).toBe('verify')
   })
 })

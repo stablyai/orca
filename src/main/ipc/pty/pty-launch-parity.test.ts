@@ -102,6 +102,9 @@ vi.mock('../../codex/codex-pane-account-registry', () =>
 vi.mock('../../managed-data-accounts/launch-environment', () => ({
   applyManagedDataAccountEnvironment: vi.fn()
 }))
+vi.mock('../../managed-data-accounts/service', () => ({
+  getManagedDataAccountService: () => ({ transcriptEnvironments: () => [] })
+}))
 vi.mock('../../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: vi.fn()
 }))

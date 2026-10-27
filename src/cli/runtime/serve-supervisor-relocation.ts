@@ -1,20 +1,18 @@
 /** Copy supervisors outside the app so updates cannot mix lazily loaded modules from two releases. */
 import { createHash } from 'node:crypto'
 import { constants, readFileSync, rmSync, statSync } from 'node:fs'
-import { cp, mkdir, stat } from 'node:fs/promises'
+import { cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { cloneMacTree } from '../../main/macos-tree-clone'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
-import {
-  publishClaimedSnapshot,
-  removeUnusedSnapshots,
-  snapshotUsersDir
-} from './claimed-snapshot-store'
 
 /** Relocated supervisors can no longer derive the app root from __dirname. */
 export const SERVE_SUPERVISOR_APP_ROOT_ENV = 'ORCA_SERVE_SUPERVISOR_APP_ROOT'
 
 const PACKAGED_APP_ROOT_NAME = 'app.asar.unpacked'
+const COMPLETE_MARKER = '.complete'
+const USERS_DIR = '.users'
+const TEMPORARY_PREFIX = '.tmp-'
 
 export type SupervisorRelocationDeps = {
   env: NodeJS.ProcessEnv
@@ -57,6 +55,9 @@ async function exists(path: string): Promise<boolean> {
   )
 }
 
+/** Keep PID claims outside snapshots so they cannot block publication. */
+const usersDir = (root: string, id: string): string => join(root, USERS_DIR, id)
+
 async function copyTree(source: string, destination: string): Promise<void> {
   // macOS cp -c clones a tree faster than fs.cp’s per-file cloning.
   if (process.platform === 'darwin') {
@@ -70,15 +71,70 @@ async function copyTree(source: string, destination: string): Promise<void> {
   })
 }
 
-function buildSnapshot(resources: string, root: string, id: string, pid: number): Promise<string> {
-  return publishClaimedSnapshot(root, id, pid, async (directory) => {
+async function buildSnapshot(
+  resources: string,
+  root: string,
+  id: string,
+  pid: number
+): Promise<void> {
+  // Claim before checking so concurrent cleanup preserves this snapshot.
+  await mkdir(usersDir(root, id), { recursive: true })
+  await writeFile(join(usersDir(root, id), String(pid)), '')
+  const snapshotDir = join(root, id)
+  if (await exists(join(snapshotDir, COMPLETE_MARKER))) {
+    return
+  }
+  const temporary = join(root, `${TEMPORARY_PREFIX}${pid}-${id}`)
+  await rm(temporary, { recursive: true, force: true })
+  try {
+    await mkdir(temporary)
     // Bare requires from out/ resolve through Resources/node_modules.
     for (const name of [PACKAGED_APP_ROOT_NAME, 'node_modules']) {
       if (await exists(join(resources, name))) {
-        await copyTree(join(resources, name), join(directory, name))
+        await copyTree(join(resources, name), join(temporary, name))
       }
     }
-  })
+    await writeFile(join(temporary, COMPLETE_MARKER), '')
+  } catch (error) {
+    // Failed copies must not retain disk space for the service’s lifetime.
+    await rm(temporary, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
+  try {
+    await rename(temporary, snapshotDir)
+  } catch (error) {
+    // Another supervisor of this profile finished the same release first.
+    await rm(temporary, { recursive: true, force: true })
+    if (!(await exists(join(snapshotDir, COMPLETE_MARKER)))) {
+      throw error
+    }
+  }
+}
+
+function isLivePidName(name: string, isProcessAlive: (pid: number) => boolean): boolean {
+  const pid = Number(name)
+  return Number.isSafeInteger(pid) && pid > 0 && isProcessAlive(pid)
+}
+
+async function removeUnusedSnapshots(
+  root: string,
+  keep: string,
+  isProcessAlive: (pid: number) => boolean
+): Promise<void> {
+  for (const name of await readdir(root).catch(() => [])) {
+    if (name === keep || name === USERS_DIR) {
+      continue
+    }
+    const inUse = name.startsWith(TEMPORARY_PREFIX)
+      ? isLivePidName(name.slice(TEMPORARY_PREFIX.length).split('-')[0], isProcessAlive)
+      : (await readdir(usersDir(root, name)).catch(() => [])).some((pid) =>
+          isLivePidName(pid, isProcessAlive)
+        )
+    if (!inUse) {
+      await rm(join(root, name), { recursive: true, force: true }).catch(() => undefined)
+      await rm(usersDir(root, name), { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
 }
 
 /** AppImages keep stable files; re-exec would close their keepalive pipe and release the mount. */
@@ -138,9 +194,7 @@ export async function relocateServeSupervisor(
 /** Releases `pid`'s claim on the copy it runs `cliEntry` from, so cleanup can remove that copy. */
 export function releaseServeSupervisorSnapshot(cliEntry: string, pid: number): void {
   const snapshotDir = resolve(cliEntry, '..', '..', '..', '..')
-  rmSync(join(snapshotUsersDir(dirname(snapshotDir), basename(snapshotDir)), String(pid)), {
-    force: true
-  })
+  rmSync(join(usersDir(dirname(snapshotDir), basename(snapshotDir)), String(pid)), { force: true })
 }
 
 export function execveThisProcess(file: string, args: string[], env: NodeJS.ProcessEnv): void {

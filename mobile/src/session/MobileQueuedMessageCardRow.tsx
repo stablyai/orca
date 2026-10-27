@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import {
@@ -16,6 +17,7 @@ import { MobileQueuedCardText } from './MobileQueuedCardText'
 import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 
 type QueuedMessageCardRowProps = {
+  dragHandle?: ReactNode
   card: MobileQueuedMessageCard
   editor?: MobileQueuedMessageInlineEditor
   busy: boolean
@@ -54,7 +56,8 @@ function QueuedMessageCardContents({
   steerHeld,
   onSend,
   onDelete,
-  onMore
+  onMore,
+  dragHandle
 }: Omit<QueuedMessageCardRowProps, 'editor' | 'onEditorLayout'>): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const returned = card.state === 'returned'
@@ -62,6 +65,7 @@ function QueuedMessageCardContents({
   return (
     <View testID="queued-card-row" style={[styles.card, styles.divided]}>
       <View style={styles.row}>
+        {dragHandle}
         {card.needsAttention ? (
           <AlertCircle size={14} color={colors.statusRed} strokeWidth={2} />
         ) : (

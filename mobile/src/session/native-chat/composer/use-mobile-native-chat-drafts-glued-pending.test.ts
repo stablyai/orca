@@ -4,9 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { buildMobileNativeChatTransientData } from '../../mobile-native-chat-render-data'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  useMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
 
-type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
+type DraftState = ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
 type TestRenderer = {
   unmount(): void
   update(element: ReturnType<typeof createElement>): void
@@ -71,7 +74,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     transcriptLoading?: boolean
     transcriptSettled?: boolean
   }): null {
-    state = useMobileNativeChatDrafts({
+    const drafts = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId: 'tab',
@@ -80,6 +83,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       transcriptLoading,
       transcriptSettled
     })
+    state = { ...drafts, composerText: useMobileNativeChatDraft(drafts.draftKey) }
     return null
   }
 

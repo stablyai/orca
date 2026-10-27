@@ -40,6 +40,7 @@ export type ClaudeJournalTranslator = {
   commandInterruptRequested: (turnId: string) => void
   /** Root work since cycle init makes the open turn eligible for folded sends. */
   readonly openTurnInLiveProviderCycle: boolean
+  readonly openTurnHasInputWork: boolean
   flush: () => void
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']

@@ -110,7 +110,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
 vi.mock('./native-chat/composer/use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: () => {
     return {
-      composerText: '',
+      draftKey: null,
       setComposerText: vi.fn(),
       pending: [],
       imagePreviewsByMessageId: {},

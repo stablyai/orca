@@ -1,5 +1,5 @@
-import { normalizePaletteText } from '@/lib/palette-match/normalized-text'
-import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+import { normalizePaletteText } from '../../../../shared/palette-match/normalized-text'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 
 // Unicode spaces are already folded; only ASCII control whitespace remains to collapse.
 function isCmdJPaletteWhitespace(code: number): boolean {

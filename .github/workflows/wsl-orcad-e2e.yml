@@ -34,6 +34,7 @@ on:
       - '!**/*.test.ts'
       - '!**/*.test.tsx'
       - 'src/main/wsl/wsl-orcad-real-distro-lane.test.ts'
+      - 'src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts'
       - '.github/workflows/wsl-orcad-e2e.yml'
       - 'config/ci/wsl-lifecycle/**'
       - 'config/ci/windows-lifecycle-receipt.ps1'
@@ -340,6 +341,16 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'survive.log')
           if ($global:LASTEXITCODE -ne 0) { throw "survive phase failed: $global:LASTEXITCODE" }
+      # R40: with no terminal left, orcad idle-exits and the holder lets the distro stop on its own.
+      - name: 'Phase 3: idle orcad releases the distro'
+        timeout-minutes: 15
+        env:
+          ORCA_RUN_WSL_ORCAD_LANE: '1'
+          ORCA_WSL_ORCAD_LANE_PHASE: idle-release
+          ORCA_ORCAD_TEMPLATE_PATH: ${{ runner.temp }}/orcad-template
+        run: |
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'idle-release.log')
+          if ($global:LASTEXITCODE -ne 0) { throw "idle-release phase failed: $global:LASTEXITCODE" }
       - name: Real desktop agent configuration is unchanged
         if: always()
         run: |
@@ -379,7 +390,7 @@ jobs:
         run: |
           $dir = $env:ORCA_WSL_ORCAD_LANE_RECEIPTS
           $lines = @("### WSL orcad lane (${{ matrix.family }}) — $env:ImageOS $env:ImageVersion", '')
-          foreach ($phase in 'launch', 'survive') {
+          foreach ($phase in 'launch', 'survive', 'idle-release') {
             $file = Join-Path $dir "$phase.json"
             if (Test-Path $file) { $lines += "#### $phase", '```json', (Get-Content $file -Raw), '```' }
           }

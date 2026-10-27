@@ -174,7 +174,8 @@
       "streamedDetail": "The page runs on the remote host and streams to this device."
     },
     "remote": {
-      "findUnavailable": "Find in page is not available while this page streams from the remote host."
+      "findUnavailable": "Find in page is not available while this page streams from the remote host.",
+      "selectionTooLargeToCopy": "The selection is too large to copy from a page streamed from the remote host."
     },
     "userAgentMigration": {
       "degradedDescription": "An old browser identity choice could not be inspected. Choose Cleaned or Native in Browser settings; changes take effect after a restart.",
@@ -941,7 +942,11 @@
           "wslFilesystemBoundaryTitle": "This project is stored on a Windows drive",
           "wslFilesystemBoundaryDescription": "Git for this project runs in {{distro}}, which reaches Windows drives over the WSL filesystem bridge. Expect git to be roughly 20x slower than it would be on a copy stored inside {{distro}}.",
           "moveToGroupOtherHost": "Could not move project to group",
-          "moveToGroupOtherHostDesc": "The computer this project runs on does not have this group. A project can only join groups saved on its own computer."
+          "moveToGroupOtherHostDesc": "The computer this project runs on does not have this group. A project can only join groups saved on its own computer.",
+          "pendingRemovalRefused": "The server kept a project you removed while it was offline",
+          "removeProjectHostUnreachable": "Its server can’t be reached. Remove it from this desktop now, and Orca removes it from the server when it reconnects.",
+          "removeProjectLocallyNow": "Remove from this desktop now",
+          "removeProjectHostDisconnected": "Its server is disconnected. Remove it from this desktop now, and Orca removes it from the server when you reconnect."
         },
         "settings": {
           "e12dab333b": "Failed to switch servers",
@@ -1376,8 +1381,6 @@
         "cookie": {
           "import": {
             "toast": {
-              "restartFallbackUnavailableNone": "None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.",
-              "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.",
               "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.",
               "undecryptableAppBound": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”.",
               "undecryptableAppBoundMixed": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption; {{value1}} more could not be decrypted for another reason. You can import cookies from a file using “From File…”.",
@@ -1390,7 +1393,8 @@
               "undecryptableUnknown": "{{value0}} cookies could not be decrypted and were skipped. Close the source browser completely and try the import again.",
               "unrecognizedWarning": "The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.",
               "undecryptableUnrecognizedReason": "{{value0}} cookies could not be decrypted and were skipped for a reason this version of Orca does not recognize. Update Orca to see the details, then try the import again.",
-              "partitionSkippedBreakdown": "Cookies with unreadable site partitions: {{value0}}. Related cookies left unimported to protect existing sessions: {{value1}}. Existing cookies for these sites were left unchanged. Check these sites in this profile before signing in again.",
+              "cookiesSkipped": "{{value0}} cookies skipped.",
+              "partitionSkippedCounts": "Cookies with unreadable site partitions: {{value0}}. Related cookies also skipped: {{value1}}. Check these sites in this profile before signing in again.",
               "partitionSkipped": "{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.",
               "locationClientHosted": "Read from this device and stored here for the {{value0}} workspace.",
               "locationRemoteHost": "Read from browsers on {{value0}} and stored there.",
@@ -17647,7 +17651,8 @@
           "51a470b966": "ssh",
           "b09b2384fd": "Paused",
           "eaa02014f8": "Enabled",
-          "29baf8f4c2": "Source"
+          "29baf8f4c2": "Source",
+          "lastRunFailed": "Last run failed."
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -17836,7 +17841,8 @@
           "tableLastRun": "Last run",
           "noListMatches": "No automations match.",
           "destinationProjectUnavailable": "Choose a project owned by the selected automation destination.",
-          "ownerChanged": "This automation changed hosts. Refresh and try again."
+          "ownerChanged": "This automation changed hosts. Refresh and try again.",
+          "runError": "Error:"
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "Loading automations"
@@ -19861,6 +19867,9 @@
         "sendHint": "Send this message now",
         "delete": "Delete",
         "moreActions": "More actions",
+        "moveChanged": "The queue changed before this move. Try dragging the message again.",
+        "reorderHint": "Drag to reorder, or use the Up and Down arrow keys.",
+        "reorderMessage": "Reorder message",
         "editMessage": "Edit message",
         "showFullMessage": "Show full message",
         "showLess": "Show less",
@@ -20977,7 +20986,6 @@
     },
     "deleteFailed": "Failed to delete '{{name}}'.",
     "recycleFailed": "Failed to move '{{name}}' to Recycle Bin.",
-    "trashFailed": "Failed to move '{{name}}' to Trash.",
     "recycleBin": "Recycle Bin",
     "trash": "Trash",
     "import": {
@@ -20988,6 +20996,13 @@
       "skippedFiles_one": "Skipped {{count}} file.",
       "skippedFiles_other": "Skipped {{count}} files.",
       "failed": "Failed to import files."
+    },
+    "trashFailed": {
+      "message": "Failed to move '{{name}}' to Trash.",
+      "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
+      "titleTrash": "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
+      "description": "This cannot be undone.",
+      "confirm": "Delete Permanently"
     }
   },
   "sparsePreset": {

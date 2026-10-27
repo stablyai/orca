@@ -4,8 +4,8 @@ import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat
 import {
   buildNativeChatPickerItems,
   type NativeChatPickerItem
-} from '../../../../../src/shared/native-chat-picker-items'
-import { sessionReportedSkills } from '../../../../../src/shared/native-chat-slash-commands'
+} from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
+import { sessionReportedSkills } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { structuredSessionSlashCommands } from '../../../../../src/shared/structured-agent-session-composer'
 import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classification'
 

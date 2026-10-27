@@ -1,3 +1,4 @@
+import { killWslChannelsInCloseGrace } from '../wsl/wsl-command-channel'
 import { app, type Event } from 'electron'
 import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
@@ -177,6 +178,8 @@ function installWillQuitHandler(): void {
         : Promise.resolve()
     // Dispose relay timers and wsl.exe children explicitly rather than rely on pipe teardown.
     wslHookRelayManager.disposeAll()
+    // A closed WSL-host channel still in its EOF grace must not outlive the app.
+    killWslChannelsInCloseGrace()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {

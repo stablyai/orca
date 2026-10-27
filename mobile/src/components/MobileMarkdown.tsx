@@ -6,7 +6,7 @@ import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-block
 import { MarkdownText } from './mobile-markdown-text'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
 import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
-import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 
 type Props = {
   content?: string

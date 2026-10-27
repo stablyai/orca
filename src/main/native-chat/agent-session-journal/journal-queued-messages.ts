@@ -1,7 +1,11 @@
 // Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessageUpdateResult } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionQueuedMessageMoveAnchor,
+  AgentSessionQueuedMessageMoveResult,
+  AgentSessionQueuedMessageUpdateResult
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import {
   journalQueueRowBuilder,
@@ -28,6 +32,7 @@ import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { QueuedMessageEditLeases } from './queued-message-edit-leases'
 import { queuedMessageUpdateDecision, type QueuedMessageUpdate } from './queued-message-update'
 import type { JournalReducerState } from './journal-reducer'
+import { queuedMessageMovePlan } from './queued-message-move'
 
 export type JournalQueuePlan = {
   rows: ((seq: number, ts: number) => JournalQueueRow)[]
@@ -184,6 +189,13 @@ export class JournalQueuedMessages {
         result: cards.map((card) => ({ ...card, state: 'withdrawn', holdReason: null }))
       }
     }, receipt)
+  }
+
+  move(
+    input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor,
+    receipt?: JournalOperationReceipt
+  ): Promise<AgentSessionQueuedMessageMoveResult> {
+    return this.write(() => queuedMessageMovePlan(this.list(), input), receipt)
   }
 
   /** Plan on the journal lane; adopt/delete legacy cards in the same transaction before changing them. */

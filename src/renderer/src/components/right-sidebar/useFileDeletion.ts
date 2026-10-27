@@ -13,6 +13,7 @@ import {
   type FileExplorerDeletionEditor
 } from './file-explorer-deletion-editors'
 import {
+  confirmRemoteDelete,
   getFileDeleteErrorMessage,
   isLocalDeleteNode,
   needsRemoteDeleteConfirmation
@@ -27,12 +28,10 @@ import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
 } from '../../../../shared/file-write-disk-precondition'
+import { deleteWithPermanentFallback } from './file-explorer-trash-fallback'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
-import {
-  fileExplorerBatchDeleteConfirmation,
-  fileExplorerDeleteConfirmation
-} from './file-explorer-delete-confirmation'
+import { fileExplorerBatchDeleteConfirmation } from './file-explorer-delete-confirmation'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -80,7 +79,7 @@ export function useFileDeletion({
         )
         // Remote deletes bypass Trash and may be unrecoverable; batches confirm once up front.
         if (isRemote && !options?.skipConfirmation) {
-          const confirmed = await confirm(fileExplorerDeleteConfirmation(node))
+          const confirmed = await confirmRemoteDelete(confirm, node)
           if (!confirmed) {
             return false
           }
@@ -134,7 +133,19 @@ export function useFileDeletion({
         }
 
         operationGuard.assertCurrent()
-        await deleteRuntimePath(fileContext, node.path, node.isDirectory)
+        const deletion = await deleteWithPermanentFallback({
+          name: node.name,
+          isRemote,
+          isWindows,
+          confirm,
+          deletePath: (deleteOptions) =>
+            deleteRuntimePath(fileContext, node.path, node.isDirectory, deleteOptions),
+          beforePermanentDelete: () => operationGuard.assertCurrent()
+        })
+        if (!deletion) {
+          return false
+        }
+        const { permanent } = deletion
 
         if (undoContent !== undefined) {
           commitFileExplorerOp({
@@ -165,7 +176,8 @@ export function useFileDeletion({
                   connectionId: currentRoute.connectionId
                 },
                 node.path,
-                node.isDirectory
+                node.isDirectory,
+                { permanent }
               )
               await refreshDir(parentDir)
             }
@@ -217,9 +229,13 @@ export function useFileDeletion({
                     "Failed to move '{{name}}' to Recycle Bin.",
                     { name: node.name }
                   )
-                : translate('fileExplorer.trashFailed', "Failed to move '{{name}}' to Trash.", {
-                    name: node.name
-                  })
+                : translate(
+                    'fileExplorer.trashFailed.message',
+                    "Failed to move '{{name}}' to Trash.",
+                    {
+                      name: node.name
+                    }
+                  )
         )
         return false
       } finally {

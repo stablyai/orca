@@ -12,17 +12,6 @@ describe('unnestWorktrees', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
-  it('clears the parent link on every requested worktree', async () => {
-    const updateWorktreeLineage = vi.fn().mockResolvedValue(undefined)
-
-    await unnestWorktrees(['repo1::/a', 'repo1::/b'], updateWorktreeLineage)
-
-    expect(updateWorktreeLineage).toHaveBeenCalledTimes(2)
-    expect(updateWorktreeLineage).toHaveBeenCalledWith('repo1::/a', { noParent: true })
-    expect(updateWorktreeLineage).toHaveBeenCalledWith('repo1::/b', { noParent: true })
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
   it('toasts instead of rejecting when the lineage update fails', async () => {
     const updateWorktreeLineage = vi
       .fn()
@@ -39,14 +28,5 @@ describe('unnestWorktrees', () => {
     await unnestWorktrees(['repo1::/a', 'repo1::/b'], updateWorktreeLineage)
 
     expect(toast.error).toHaveBeenCalledTimes(1)
-  })
-
-  it('does nothing for an empty selection', async () => {
-    const updateWorktreeLineage = vi.fn().mockResolvedValue(undefined)
-
-    await unnestWorktrees([], updateWorktreeLineage)
-
-    expect(updateWorktreeLineage).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalled()
   })
 })

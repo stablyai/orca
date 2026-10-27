@@ -454,19 +454,28 @@ module.exports = {
     assertPackagedWebClient(resourcesDir)
     assertPackagedServeSelectionEntry(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
-    await finalizePackagedOrcadTemplate(resourcesDir, {
-      platform: context.electronPlatformName,
-      signMacBinary: (path) =>
-        signMacStandaloneHelper(path, 'orcad template binary', context.packager)
-    })
-    chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
       }
       // Upstream executable bits vary (notably darwin-x64); restore them so packaged execFile works.
       chmodSync(join(resourcesDir, filename), 0o755)
+      // The orcad template hashes this exact file next, so app signing must not rewrite it later.
+      if (context.electronPlatformName === 'darwin') {
+        await signMacStandaloneHelper(
+          join(resourcesDir, filename),
+          filename,
+          context.packager,
+          resolve(__dirname, '../resources/build/entitlements.mac.plist')
+        )
+      }
     }
+    await finalizePackagedOrcadTemplate(resourcesDir, {
+      platform: context.electronPlatformName,
+      signMacBinary: (path) =>
+        signMacStandaloneHelper(path, 'orcad template binary', context.packager)
+    })
+    chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
@@ -564,6 +573,8 @@ module.exports = {
     signIgnore: [
       ...bundledRipgrepMacSignIgnore,
       ...orcadTemplateMacSignIgnore,
+      // afterPack signs it before the orcad template hashes it.
+      '/Contents/Resources/agent-browser-darwin-[^/]+$',
       ...macTerminalHostSignIgnore
     ],
     extendInfo: macUsageDescriptions,

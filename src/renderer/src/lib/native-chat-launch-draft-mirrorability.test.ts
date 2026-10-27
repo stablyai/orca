@@ -11,7 +11,7 @@ vi.mock('@/store', () => ({
 }))
 
 import { seedNativeChatLaunchDraftForAgentTab } from './agent-launch-prompt-delivery'
-import { canMirrorLaunchDraftToNativeChat } from './native-chat-launch-draft-mirrorability'
+import { canMirrorLaunchDraftToNativeChat } from '../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
 import { AGENT_TUI_CLEAR_MAX_LINES } from '../../../shared/agent-tui-input-clear'
 
 const maxLineDraft = Array.from({ length: AGENT_TUI_CLEAR_MAX_LINES }, () => 'line').join('\n')

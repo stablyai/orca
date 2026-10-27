@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { extractPendingMessageReplyAsk, formatAskAnswer } from '../../../../shared/native-chat-ask'
+import { extractPendingMessageReplyAsk } from '../../../../shared/native-chat/input/native-chat-ask'
+import { formatAskAnswer } from '../../../../shared/native-chat-ask-answer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'

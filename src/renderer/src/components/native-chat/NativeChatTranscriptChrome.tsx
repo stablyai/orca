@@ -7,7 +7,7 @@ import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat/native-chat-provider-frame-summary'
-import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import {
   getLocalImageCacheKey,

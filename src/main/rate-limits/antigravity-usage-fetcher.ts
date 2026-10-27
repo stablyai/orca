@@ -6,7 +6,7 @@ import type { ProviderRateLimits, UsageRateLimitFailureKind } from '../../shared
 import {
   ANTIGRAVITY_MIN_USAGE_VERSION,
   ANTIGRAVITY_PROBE_ENV,
-  ANTIGRAVITY_SIGN_IN_PROMPT_COOLDOWN_MS,
+  ANTIGRAVITY_SIGN_IN_HOLD_RETRY_AT_MS,
   ANTIGRAVITY_USAGE_ARGS,
   ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
   ANTIGRAVITY_USAGE_TIMEOUT_MS,
@@ -164,24 +164,23 @@ export async function fetchAntigravityRateLimits(
   }
 
   const reading = parseAntigravityUsageStdout(result.stdout)
-  // Why: a completed browser sign-in still yields a reading; only a failed read cools down.
+  // A completed browser sign-in still yields a reading; only a failed read holds future polls.
   if (
     !reading &&
     (result.timedOut || result.code !== 0) &&
     stderrShowsInteractiveSignIn(result.stderr)
   ) {
-    const at = now()
     return {
       ...unavailable(
-        'Antigravity usage is not available. Sign in with `agy`; Orca checks again within an hour, or when you refresh.',
+        'Antigravity usage is not available. Sign in with `agy`, then refresh usage.',
         'missing-credentials',
-        at
+        now()
       ),
       usageMetadata: {
         source: 'cli',
         attemptedSources: ['cli'],
         failureKind: 'missing-credentials',
-        retryAtMs: at + ANTIGRAVITY_SIGN_IN_PROMPT_COOLDOWN_MS
+        retryAtMs: ANTIGRAVITY_SIGN_IN_HOLD_RETRY_AT_MS
       }
     }
   }
@@ -224,6 +223,14 @@ export async function fetchAntigravityRateLimits(
     return failed(
       `Antigravity usage is not available. The Antigravity CLI did not report a quota${exitDetail}.`,
       'parse',
+      now()
+    )
+  }
+
+  if (reading.buckets.length === 0) {
+    return unavailable(
+      'Antigravity usage is not available. agy reported no quota for this account.',
+      'usage-unavailable',
       now()
     )
   }

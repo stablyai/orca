@@ -124,7 +124,14 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                     {
                       label: 'Delete',
                       destructive: true,
-                      onPress: () => state.setConfirmDelete(actionTarget)
+                      onPress: () => state.setConfirmDelete(actionTarget),
+                      // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
+                      ...(actionTarget.isMainWorktree === true
+                        ? {
+                            disabled: true,
+                            hint: "Primary worktree — can't be deleted. Remove the project instead."
+                          }
+                        : {})
                     }
                   ]
                 : []

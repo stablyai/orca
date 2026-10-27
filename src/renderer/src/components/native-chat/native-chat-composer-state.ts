@@ -1,35 +1,20 @@
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import type { NativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
-import {
-  filterSlashCommands,
-  isSlashCommandDraft,
-  applySlashSuggestion,
-  slashCommandDispatchText,
-  type NativeChatSessionSkill,
-  type SlashCommandSuggestion
-} from '../../../../shared/native-chat-slash-commands'
+import type {
+  NativeChatSessionSkill,
+  SlashCommandSuggestion
+} from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import {
   buildNativeChatPickerItems,
+  type NativeChatPickerItem,
+  type NativeChatSkillDiscoverySnapshot
+} from '../../../../shared/native-chat/input/native-chat-picker-items'
+import {
   LEADING_SLASH_TRIGGER,
   MID_PROMPT_SLASH_TRIGGER,
-  matchSkillSigil,
-  type NativeChatPickerItem,
-  type NativeChatSkillDiscoverySnapshot
-} from '../../../../shared/native-chat-picker-items'
-
-export type { SlashCommandSuggestion }
-export { filterSlashCommands, isSlashCommandDraft, applySlashSuggestion, slashCommandDispatchText }
-export {
-  classifyNativeChatSend,
-  type NativeChatSendClassification
-} from '../../../../shared/native-chat-slash-commands'
-export {
-  applyPickerSuggestion,
-  buildNativeChatPickerItems,
-  type NativeChatPickerItem,
-  type NativeChatSkillDiscoverySnapshot
-} from '../../../../shared/native-chat-picker-items'
+  matchSkillSigil
+} from '../../../../shared/native-chat/input/native-chat-picker-triggers'
 
 type PickerAutocomplete = {
   query: string

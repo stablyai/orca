@@ -8,7 +8,7 @@ import {
   classifyNativeChatSend,
   type NativeChatSendClassification,
   type SlashCommandSuggestion
-} from '../../../../src/shared/native-chat-slash-commands'
+} from '../../../../src/shared/native-chat/input/native-chat-slash-commands'
 
 // Terminal mobile chat lacks desktop-owned command answers and reply rows.
 export function getMobileNativeChatCommands(agent: string): readonly SlashCommandSuggestion[] {

@@ -11,7 +11,7 @@ import {
   AGENT_SESSION_HOST_STATUS_COPY,
   isAgentSessionHostStatusPresentation
 } from '../../../src/shared/agent-session-host-status-rows'
-import { withoutPendingNativeChatVisualDirectiveTail } from '../../../src/shared/native-chat-visual-directive'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { isAgentSessionAttachmentStorePath } from '../../../src/shared/agent-session-attachments'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { isRenderableImageUri, readStoredChatImage } from './mobile-native-chat-image-preview'

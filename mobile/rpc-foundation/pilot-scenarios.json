@@ -18796,7 +18796,7 @@
             },
             "prompt": {
               "delivery": "submit",
-              "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+              "text": "File: src/app.ts\nLine: 4\nUser comment: \"needs a test\""
             },
             "launchSource": "notes_send"
           },

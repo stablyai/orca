@@ -9,7 +9,7 @@ import {
 } from '../../../../../../shared/hosted-review-refs'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { summarizeCommitFailure } from '../commit/commit-failure-summary'
-import { getStageAllPaths } from '../commit/discard-all-sequence'
+import { getStageAllPaths } from '../../../../../../shared/source-control-discard-all-sequence'
 
 export type CreatePrIntentRunToken = {
   repoId: string

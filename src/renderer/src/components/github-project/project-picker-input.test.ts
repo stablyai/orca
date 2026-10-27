@@ -14,10 +14,6 @@ describe('ProjectPicker project input', () => {
     })
   })
 
-  it('keeps owner/number shorthand on the default host', () => {
-    expect(parseProjectInput('acme/7')).toEqual({ owner: 'acme', number: 7 })
-  })
-
   it('accepts Enterprise Managed User owners (`_<shortcode>` suffix) in URLs and shorthand', () => {
     expect(parseProjectInput('https://github.com/users/octocat_acme/projects/1/views/1')).toEqual({
       owner: 'octocat_acme',

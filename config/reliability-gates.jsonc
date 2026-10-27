@@ -6013,7 +6013,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/lib/file-preview-action-visibility.test.tsx src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-session-partition-policies.test.ts src/main/browser/doc-preview-protocol.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-download-block-notice.test.ts src/main/browser/browser-session-partition-policies.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/window/main-window-webview-security.test.ts src/main/browser/doc-preview-guest-policy.test.ts",
@@ -6081,7 +6081,6 @@
         "src/shared/doc-preview-scheme.test.ts",
         "src/renderer/src/lib/doc-preview-grants.test.ts",
         "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
-        "src/renderer/src/lib/file-preview-action-visibility.test.tsx",
         "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
         "src/main/ipc/doc-preview-grant-ipc.test.ts",
@@ -6230,12 +6229,6 @@
         {
           "file": "src/main/browser/doc-preview-failure-notice.test.ts",
           "assertions": ["413 and 415 map to distinct reasons and everything else stays generic"]
-        },
-        {
-          "file": "src/renderer/src/lib/file-preview-action-visibility.test.tsx",
-          "assertions": [
-            "the Explorer row predicate and the preview plan return one answer for the same file"
-          ]
         },
         {
           "file": "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts",
@@ -6452,7 +6445,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/lib/file-preview-action-visibility.test.tsx src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
           "result": "passed",
           "durationSeconds": 1.63,
-          "summary": "189/189 over the grant, reader, protocol, guest-policy, scheme-admission, plan-routing, action-visibility, failure-message, external-link and terminal-row contracts. This replaces the 2026-08-27 record of the same command at 174/174, whose thirteenth file was the deleted doc-preview-external-link-bridge.test.ts: the STA-5758 hardening moved that behavior into the reader-facing confirmation (doc-preview-external-link-confirmation.test.ts), which now proves the exact destination is shown and nothing opens on cancel, alongside everything the retired run carried — the stale-mint rejection that must not evict a reopened preview tab, the CSP header and session request filter, the SSH symlink refusal, subframe containment, truncated and over-cap reads, the unservable-asset and empty-file split, the out-of-worktree paired refusal, and the guest deny-only navigation sinks. The count also carries the entry-only rule added on top of the hardening: a grant whose document directory is its own request base — a workspace-root or out-of-workspace document — reads nothing but the entry file until the reader approves a directory, at both the lexical and the canonical containment pass, because that directory is where secrets live and a DNS-prefetch beacon needs no click."
+          "summary": "189/189 over the grant, reader, protocol, guest-policy, scheme-admission, plan-routing, action-visibility, failure-message, external-link and terminal-row contracts. This replaces the 2026-08-27 record of the same command at 174/174, whose thirteenth file was the deleted doc-preview-external-link-bridge.test.ts: the STA-5758 hardening moved that behavior into the reader-facing confirmation (doc-preview-external-link-confirmation.test.ts), which now proves the exact destination is shown and nothing opens on cancel, alongside everything the retired run carried — the stale-mint rejection that must not evict a reopened preview tab, the CSP header and session request filter, the SSH symlink refusal, subframe containment, truncated and over-cap reads, the unservable-asset and empty-file split, the out-of-worktree paired refusal, and the guest deny-only navigation sinks. The count also carries the entry-only rule added on top of the hardening: a grant whose document directory is its own request base — a workspace-root or out-of-workspace document — reads nothing but the entry file until the reader approves a directory, at both the lexical and the canonical containment pass, because that directory is where secrets live and a DNS-prefetch beacon needs no click.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts"
         },
         {
           "date": "2026-08-27",
@@ -8220,14 +8214,13 @@
       "invariant": "A current remote browser stream that closes must retry transient failures on one counted, capped backoff chain. Cancellation, pane or runtime supersession, missing pages, and permanent failures stop that chain without stale state mutation. A stream that stays healthy refills the budget; a silent or flapping stream cannot retry forever. Exhaustion and every non-retrying failure leave an actionable Reconnect control, and manual reconnect creates a fresh stream without resurrecting stale subscriptions.",
       "oracle": "With one fake clock and exact pane, operation, stream, page, and runtime identities, drop a confirmed stream and require the counted delay sequence, one active chain, stale-token rejection, exact cancellation, full cleanup, and either a new live subscription or one stopped state with Reconnect after exhaustion. Inject transport error without close, close racing rejection, never-ready subscriptions, ready-then-end flapping, viewport supersession, missing pages, and permanent failures. In a separate paired client against an isolated headless Orca host, paint one remote frame, disconnect the owning runtime, require the bounded-retry notice and Reconnect control, reconnect, click once, and require a different frame object URL from the recovered stream.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
         "pnpm exec playwright test tests/e2e/paired-remote-browser-stream-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts",
         "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts",
         "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
-        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
         "tests/e2e/paired-remote-browser-stream-reconnect.spec.ts"
       ],
       "assertionRefs": [
@@ -8264,6 +8257,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
           "result": "passed",
           "durationSeconds": 0.36,
           "summary": "Four focused files passed 61 deterministic error, status, scheduler, lifecycle, in-flight ownership, stale-rejection, liveness, and cleanup tests."

@@ -8,6 +8,7 @@ import { remainingDaemonRequestTimeoutMs, teardownReadBudgetMs } from './daemon-
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { readDaemonWslSleepCwd } from './daemon-wsl-sleep-cwd'
+import * as unlistedSession from './daemon-unlisted-session'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/pty-provider-contract'
@@ -91,6 +92,18 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     } catch {
       return null
     }
+  }
+
+  /** Whether this daemon lists the session at all, alive or not; null when it can't answer. */
+  listsSession(id: string): Promise<boolean | null> {
+    return unlistedSession.readDaemonSessionListing(this.client, id, LIVENESS_PROBE_TIMEOUT_MS)
+  }
+
+  /** The daemons that share this history dir and can answer for it; a router widens this. */
+  private listingDaemons: () => readonly unlistedSession.SessionListingDaemon[] = () => [this]
+
+  shareSessionListingWith(daemons: () => readonly unlistedSession.SessionListingDaemon[]): void {
+    this.listingDaemons = daemons
   }
 
   async shutdown(
@@ -194,12 +207,20 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
         remainingDaemonRequestTimeoutMs(opts.deadlineMs)
       )
     } catch (error) {
-      // Only a session this adapter turned into host loss is known gone; any other id may still
-      // live in a legacy daemon sharing the history dir, so its history must not be removed.
+      // Gone is known for a session this adapter lost, or (after a relaunch forgot that) one whose
+      // history is unended and that no daemon sharing the history dir may still run.
       if (
         opts.keepHistory ||
         !(error instanceof SessionNotFoundError) ||
-        !this.hostLossSessionIds.has(id)
+        !(
+          this.hostLossSessionIds.has(id) ||
+          (await unlistedSession.isUnlistedLostSession(
+            id,
+            this.historyReader,
+            this.runtimeDir,
+            this.listingDaemons()
+          ))
+        )
       ) {
         throw error
       }

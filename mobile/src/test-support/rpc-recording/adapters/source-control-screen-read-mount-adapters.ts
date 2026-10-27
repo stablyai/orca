@@ -134,6 +134,7 @@ export function sourceControlScreenReadMountAdapters(
         openers = useOpeners({
           client,
           connState: 'connected',
+          diffShowWhitespace: false,
           hostId: HOST,
           worktreeId: WORKTREE,
           name: 'orca',

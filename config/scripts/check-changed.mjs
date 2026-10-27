@@ -293,6 +293,8 @@ export async function main(root, argv) {
   const env = {
     ...process.env,
     ORCA_BACKGROUND_LAUNCH: '1',
+    // Why: spawned gates that read the base themselves (flaky-test ratchet) must use --base too.
+    ORCA_CODE_QUALITY_BASE: mergeBase,
     ...(process.stdout.isTTY ? { FORCE_COLOR: '1' } : {})
   }
   if (

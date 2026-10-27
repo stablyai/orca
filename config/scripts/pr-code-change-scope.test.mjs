@@ -346,7 +346,7 @@ describe('per-job path classification', () => {
       'mobile/app/h/[hostId]/index.tsx',
       'mobile/src/transport/client-context.web.tsx',
       'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift',
-      'src/shared/native-chat-visual-shell.ts',
+      'src/shared/native-chat/native-chat-visual-shell.ts',
       // The vendored Expo module the page resolves a .web.ts out of.
       'mobile/packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts'
     ]) {

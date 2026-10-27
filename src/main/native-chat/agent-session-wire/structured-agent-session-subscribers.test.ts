@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
@@ -21,6 +21,9 @@ import {
   openTestJournalHostDatabase,
   insertTestJournalRow
 } from '../agent-session-journal/journal-host-database-test-support'
+import * as journalReducer from '../agent-session-journal/journal-reducer'
+import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { StructuredAgentSessionJournalProjections } from './structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { MAX_RETAINED_SESSION_ACTIVITIES } from './structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
@@ -45,6 +48,82 @@ afterEach(async () => {
 })
 
 describe('AgentSessionSubscribers', () => {
+  it('renders history once per source for N/10N items and one/three readers', async () => {
+    const render = vi.spyOn(journalReducer, 'renderJournalState')
+    try {
+      for (const size of [100, 1000]) {
+        for (const readers of [1, 3]) {
+          const journal = await journals.open({
+            identity: {
+              sessionId: SESSION,
+              workspaceId: 'workspace-1',
+              hostId: 'local',
+              agent: 'codex',
+              providerHandle: codexProviderHandle('thread-1')
+            },
+            stateDirectory: join(root, `${size}-${readers}`)
+          })
+          const options = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          const identity = (ordinal: number) => ({
+            provider: 'codex' as const,
+            threadId: 'thread-1',
+            turnId: 'turn',
+            ordinal
+          })
+          const body = (text: string) => ({
+            kind: 'message' as const,
+            role: 'assistant' as const,
+            blocks: [{ type: 'text' as const, text }]
+          })
+          for (let index = 0; index < size; index++) {
+            await journal.appendItem(identity(index), body('initial'), options)
+          }
+          const projections = new StructuredAgentSessionJournalProjections()
+          const events: AgentSessionSubscribeEvent[] = []
+          const subscribers = new AgentSessionSubscribers({
+            readCurrentWork: () => new StructuredAgentSessionCurrentWork(journal, 1, 0),
+            onJournalPublished: () => {
+              projections.read(journal, null)
+            }
+          })
+          for (let index = 0; index < readers; index++) {
+            subscribers.open({
+              id: String(index),
+              sessionId: SESSION,
+              journal,
+              fence: 1,
+              boundedFrames: index === 1,
+              emit: (event) => events.push(event)
+            })
+          }
+          subscribers.publish(SESSION, journal)
+          for (const text of ['streamed', 'newer']) {
+            const prior = journal.snapshot()
+            await journal.appendItem(identity(size - 1), body(text), options)
+            render.mockClear()
+            events.length = 0
+            subscribers.publish(SESSION, journal)
+            expect(render).toHaveBeenCalledTimes(1)
+            const current = journal.snapshot()
+            expect(current).not.toBe(prior)
+            expect(current.items).toHaveLength(size)
+            expect(current.items.at(-1)?.body).toEqual(body(text))
+            expect(journal.publicRead().snapshot).toBe(current)
+            expect(events.filter((event) => event.type === 'batch')).toHaveLength(2 * readers)
+            expect(
+              events
+                .flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
+                .map((item) => item.body)
+            ).toEqual(Array.from({ length: readers }, () => body(text)))
+            expect(render).toHaveBeenCalledTimes(1)
+          }
+        }
+      }
+    } finally {
+      render.mockRestore()
+    }
+  })
+
   it('bounds retained turn activity across session churn', async () => {
     const journal = await journals.open({
       identity: {

@@ -39,12 +39,17 @@ export function assertRemoteWriteFitsOneRequest(content: string): void {
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
   dirPath: string,
-  options: { followSymlinks?: boolean } = {}
+  { wakeWslDistro, ...options }: { followSymlinks?: boolean; wakeWslDistro?: boolean } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId, ...options })
+    return window.api.fs.readDir({
+      dirPath,
+      connectionId: context.connectionId,
+      ...options,
+      ...(wakeWslDistro ? { wakeWslDistro } : {})
+    })
   }
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
@@ -203,7 +208,8 @@ export async function copyRuntimePath(
 export async function deleteRuntimePath(
   context: RuntimeFileOperationArgs,
   targetPath: string,
-  recursive?: boolean
+  recursive?: boolean,
+  options?: { permanent?: boolean }
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, targetPath)
   if (!remoteArgs) {
@@ -212,7 +218,8 @@ export async function deleteRuntimePath(
       withSshMutationExpectation(context, {
         targetPath,
         connectionId: context.connectionId,
-        recursive
+        recursive,
+        ...(options?.permanent === true ? { permanent: true } : {})
       })
     )
     return

@@ -191,7 +191,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat-visual-shell'
+  'src/shared/native-chat/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {

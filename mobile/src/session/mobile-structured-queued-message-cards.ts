@@ -21,6 +21,7 @@ import { agentMessageAttribution } from './mobile-agent-message-attribution'
 
 export type MobileQueuedMessageCard = {
   messageId: string
+  automatic?: true
   text: string
   state: 'waiting' | 'returned'
   paused: boolean
@@ -125,6 +126,7 @@ export function mobileQueuedMessageCards(
             : null
     cards.push({
       messageId: draft.messageId,
+      ...(draft.body.from !== undefined ? { automatic: true as const } : {}),
       text: queuedMessageBodyText(draft.body),
       state: draft.state,
       paused,

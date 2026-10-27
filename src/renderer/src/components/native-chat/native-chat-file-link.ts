@@ -4,7 +4,7 @@ import {
   parseExplicitFileLinkTarget,
   resolveExplicitFileLinkTarget,
   resolveExplicitFileLinkTargetPath
-} from '@/lib/explicit-file-link-target'
+} from '../../../../shared/explicit-file-link-target'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'

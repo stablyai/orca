@@ -7,7 +7,7 @@ import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-
 import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion
-} from './native-chat-slash-commands'
+} from './native-chat/input/native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from './agent-session-wire'
 

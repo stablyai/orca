@@ -1,4 +1,7 @@
-import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-session-journal-types'
+import type {
+  AgentJournalFreeTextInput,
+  AgentJournalQuestion
+} from '../../../../../src/shared/agent-session-journal-types'
 
 export type MobileChatQuestion = {
   question: string
@@ -14,6 +17,8 @@ export type MobileChatQuestion = {
   /** Opaque prefix used when free-text answers must target a specific prompt. */
   freeTextToken?: string
   freeTextInput?: AgentJournalFreeTextInput
+  /** A grouped structured prompt, answered on the stepped ask card. */
+  questions?: readonly AgentJournalQuestion[]
 }
 
 export function mobileChatQuestionKey(question: MobileChatQuestion): string {

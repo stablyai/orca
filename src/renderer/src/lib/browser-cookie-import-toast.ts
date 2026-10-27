@@ -9,7 +9,6 @@ type UndecryptableReason = Extract<CookieImportWarning, { code: 'cookies-undecry
 
 // RPC can carry newer reason/code values; guard at runtime and use union-keyed Records to make newly known values fail typecheck (#14683).
 const HANDLED_WARNING_CODES: Record<CookieImportWarningCode, true> = {
-  'restart-fallback-unavailable': true,
   'cookies-undecryptable': true
 }
 
@@ -28,21 +27,6 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
     )
   }
   switch (warning.code) {
-    case 'restart-fallback-unavailable':
-      return warning.loadedCookies === 0
-        ? translate(
-            'auto.lib.browser.cookie.import.toast.restartFallbackUnavailableNone',
-            'None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.',
-            { value0: warning.failedCookies }
-          )
-        : translate(
-            'auto.lib.browser.cookie.import.toast.restartFallbackUnavailablePartial',
-            'Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.',
-            {
-              value0: warning.loadedCookies,
-              value1: warning.loadedCookies + warning.failedCookies
-            }
-          )
     case 'cookies-undecryptable': {
       const reason: unknown = warning.reason
       if (!isHandledWireDiscriminant(reason, HANDLED_UNDECRYPTABLE_REASONS)) {
@@ -198,8 +182,8 @@ function emitPartitionSkippedImportWarning(summary: BrowserCookieImportSummary):
   ) {
     toast.warning(
       translate(
-        'auto.lib.browser.cookie.import.toast.partitionSkippedBreakdown',
-        'Cookies with unreadable site partitions: {{value0}}. Related cookies left unimported to protect existing sessions: {{value1}}. Existing cookies for these sites were left unchanged. Check these sites in this profile before signing in again.',
+        'auto.lib.browser.cookie.import.toast.partitionSkippedCounts',
+        'Cookies with unreadable site partitions: {{value0}}. Related cookies also skipped: {{value1}}. Check these sites in this profile before signing in again.',
         { value0: breakdown.unreadableCookies, value1: breakdown.preservedRelatedCookies }
       ),
       { duration: 12000 }
@@ -226,11 +210,25 @@ export function emitBrowserCookieImportToast(
   if (warning) {
     toast.warning(formatCookieImportWarning(warning))
   } else {
+    const skipped = Math.max(
+      0,
+      summary.skippedCookies -
+        (summary.googleCookiesSkipped ?? 0) -
+        (summary.partitionSkippedCookies ?? 0)
+    )
+    const message =
+      skipped > 0
+        ? `${successMessage} ${translate(
+            'auto.lib.browser.cookie.import.toast.cookiesSkipped',
+            '{{value0}} cookies skipped.',
+            { value0: skipped }
+          )}`
+        : successMessage
     const description = cookieImportLocationDescription(execution)
     if (description) {
-      toast.success(successMessage, { description })
+      toast.success(message, { description })
     } else {
-      toast.success(successMessage)
+      toast.success(message)
     }
   }
   emitGoogleCookieImportWarning(summary, execution)

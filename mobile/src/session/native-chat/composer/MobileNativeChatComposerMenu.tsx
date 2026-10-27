@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { FileText, Package, Terminal } from 'lucide-react-native'
-import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 
 export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }

@@ -1,3 +1,4 @@
+import { compareFileNames } from '../../../src/shared/file-name-sort'
 import type {
   MobileGitBranchChangeEntry,
   MobileGitBranchCompareReply,
@@ -21,10 +22,7 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
     return null
   }
   const data = [...entries]
-  if (data.length > 1) {
-    const collator = new Intl.Collator(undefined, { numeric: true })
-    data.sort((a, b) => collator.compare(a.path, b.path))
-  }
+  data.sort((a, b) => compareFileNames(a.path, b.path))
   return {
     title: 'Committed on Branch',
     data

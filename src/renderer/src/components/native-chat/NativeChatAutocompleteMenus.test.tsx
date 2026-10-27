@@ -3,8 +3,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
-import { buildNativeChatPickerItems } from '../../../../shared/native-chat-picker-items'
-import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
+import { buildNativeChatPickerItems } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import type { ComposerAutocomplete } from './native-chat-composer-state'
 
 function autocomplete(

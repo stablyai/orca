@@ -1,7 +1,8 @@
+import { agentNoUpdateLabel } from '../../../src/shared/agent-row-decay-state'
 import { memo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { colors, spacing } from '../theme/mobile-theme'
 import {
   agentDisplayLabel,
@@ -48,7 +49,13 @@ function WorktreeAgentRowComponent({
   )
   const childText = childRow ? mobileAgentChildRowText(childRow, now) : null
   const timeAt = childRow ? childRow.firstObservedAt : agentRowTimeAt(agent)
-  const ts = childRow && timeAt <= 0 ? '' : formatTimeAgo(timeAt, now)
+  // Like desktop, a silent row reports how long since its last update, not when its turn began.
+  const ts =
+    childRow && timeAt <= 0
+      ? ''
+      : !childRow && dotState === 'unverifiable'
+        ? agentNoUpdateLabel(agent, now)
+        : formatTimeAgo(timeAt, now)
 
   const content = (
     <View style={[styles.row, { paddingLeft: depth * INDENT_PER_DEPTH }]}>

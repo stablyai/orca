@@ -1,5 +1,5 @@
 import { createContext, type ReactNode } from 'react'
-import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 
 export type MobileNativeChatVisualRender = (
   directive: NativeChatVisualDirective,

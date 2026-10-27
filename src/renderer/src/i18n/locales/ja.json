@@ -1088,8 +1088,6 @@
         "cookie": {
           "import": {
             "toast": {
-              "restartFallbackUnavailableNone": "{{value0}} 件の Cookie をいずれも読み込めず、再起動によるフォールバックも利用できませんでした。このプロファイルの以前の Cookie は置き換えられています。もう一度インポートしてください。",
-              "restartFallbackUnavailablePartial": "{{value1}} 件中 {{value0}} 件の Cookie をインポートしました。残りは読み込めず、再起動によるフォールバックも利用できませんでした。もう一度インポートしてください。",
               "googleCookiesSkipped": "Google Cookie はインポートされませんでした。このプロファイルを使用して {{value0}} に Orca でブラウザを開き、Google にサインインします。",
               "undecryptableAppBound": "Orca は、このブラウザの Cookie の {{value0}} を復号化できません。アプリバインド暗号化が使用されているためです。 「ファイルから…」を使用して、ファイルから Cookie をインポートできます。",
               "undecryptableAppBoundMixed": "Orca は、このブラウザの Cookie の {{value0}} を解読できません。このブラウザの Cookie はアプリバインドの暗号化を使用しているためです。 {{value1}} 件以上は別の理由で復号化できませんでした。 「ファイルから…」を使用して、ファイルから Cookie をインポートできます。",
@@ -1098,7 +1096,8 @@
               "undecryptableUnknown": "{{value0}} Cookie を復号化できなかったため、スキップされました。ソースブラウザを完全に閉じて、インポートを再試行してください。",
               "unrecognizedWarning": "Cookie のインポートは、このバージョンの Orca が認識しない警告とともに終了しました。 Orca を更新して詳細を確認し、Cookie に依存する前にこのプロファイルを確認してください。",
               "undecryptableUnrecognizedReason": "{{value0}} Cookie は復号化できず、このバージョンの Orca が認識しない理由でスキップされました。 Orca を更新して詳細を確認し、インポートを再試行してください。",
-              "partitionSkippedBreakdown": "サイト パーティションを読み取れない Cookie: {{value0}}。既存のセッションを保護するためにインポートしなかった関連 Cookie: {{value1}}。これらのサイトの既存の Cookie は変更されていません。再度ログインする前に、このプロファイルでこれらのサイトを確認してください。",
+              "cookiesSkipped": "{{value0}} 件の Cookie をスキップしました。",
+              "partitionSkippedCounts": "サイト パーティションを読み取れない Cookie: {{value0}}。同時にスキップされた関連 Cookie: {{value1}}。再度ログインする前に、このプロファイルでこれらのサイトを確認してください。",
               "partitionSkipped": "{{value0}} Cookie は、サイトパーティションを読み取れなかったため、インポートされませんでした。 Orca でこれらのサイトに再度サインインします。",
               "locationClientHosted": "このデバイスから読み取り、{{value0}} ワークスペース用にここに保存されます。",
               "locationRemoteHost": "{{value0}} 上のブラウザから読み取り、そこに保存されます。",
@@ -3579,7 +3578,7 @@
             "openLink": "リンクを開く",
             "openFile": "ファイルを開く",
             "switchWorkspace": "ワークスペースを切り替える",
-            "openInFinder": "ファインダーで開く",
+            "openInFinder": "Finderで開く",
             "openFolder": "フォルダーを開く",
             "openWithDefaultApp": "デフォルトのアプリで開く",
             "switchTerminal": "スイッチ端子",
@@ -13304,7 +13303,7 @@
             "e887fa4b2e": "ターミナルで開く",
             "1d8e182c32": "ファイルを表示",
             "clipboardStagingUnavailable": "Orca の一時ストレージが利用できないため、ファイルをコピーできませんでした",
-            "revealInFinder": "ファインダーで表示",
+            "revealInFinder": "Finderで表示",
             "openContainingFolder": "含まれているフォルダーを開く",
             "revealInFileExplorer": "ファイルエクスプローラーで表示"
           },
@@ -20218,7 +20217,8 @@
       "streamedDetail": "ページはリモートホスト上で実行され、このデバイスにストリーミングされます。"
     },
     "remote": {
-      "findUnavailable": "このページがリモートホストからストリーミングされている間は、ページ内検索は利用できません。"
+      "findUnavailable": "このページがリモートホストからストリーミングされている間は、ページ内検索は利用できません。",
+      "selectionTooLargeToCopy": "選択範囲が大きすぎるため、リモートホストからストリーミングされているページからコピーできません。"
     },
     "userAgentMigration": {
       "degradedDescription": "古いブラウザ ID の選択を検査できませんでした。ブラウザ設定でクリーンまたはネイティブを選択します。変更は再起動後に有効になります。",
@@ -20555,6 +20555,12 @@
       "findInFolder": "{{path}} 内を検索",
       "folderLoadError": "このフォルダーを読み込めませんでした：",
       "emptyFolder": "このフォルダーにはファイルがありません"
+    },
+    "trashFailed": {
+      "titleRecycleBin": "「{{name}}」をごみ箱に移動できませんでした。完全に削除しますか？",
+      "titleTrash": "「{{name}}」をごみ箱に移動できませんでした。完全に削除しますか？",
+      "description": "この操作は取り消せません。",
+      "confirm": "完全に削除"
     }
   },
   "sparsePreset": {

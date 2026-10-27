@@ -17,7 +17,7 @@ import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
-import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
+import { isSlashCommandDraft } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'

@@ -1,7 +1,8 @@
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
+import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type {
@@ -28,7 +29,7 @@ export type MobileNativeChatController = {
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
   nativeChatAgent: string | null
-  chatComposerText: string
+  chatDraftKey: string | null
   setChatComposerText: Dispatch<SetStateAction<string>>
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
@@ -78,7 +79,11 @@ export type MobileNativeChatController = {
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
-  handleNativeChatQuestionAnswer?: (text: string) => Promise<boolean>
+  /** A grouped structured answer names the prompt it was rendered for. */
+  handleNativeChatQuestionAnswer?: (
+    text: string,
+    prompt?: MobileChatQuestion['prompt']
+  ) => Promise<boolean>
   handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>
   // Preserve unknown outcomes to heal orphaned image pastes; share their deadline with text and retain the original pre-paste sentAt.
   handleNativeChatSendWithOutcome: (

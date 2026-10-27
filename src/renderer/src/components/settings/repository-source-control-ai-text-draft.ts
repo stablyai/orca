@@ -12,9 +12,9 @@ import { liftActionPermissionArgs } from '../../../../shared/source-control-acti
 import {
   readActionRecipeTextDraft,
   type ActionRecipeTextDraft
-} from './repository-source-control-ai-draft'
+} from './repository/source-control/repository-source-control-ai-draft'
 import { retireActionLaunchPreferences } from './source-control-ai-action-recipe-draft'
-import { readInheritedCommandTemplate } from './repository-source-control-ai-labels'
+import { readInheritedCommandTemplate } from './repository/source-control/repository-source-control-ai-labels'
 
 export function resetActionDraftLaunchPreferences(
   current: Partial<Record<SourceControlActionId, ActionRecipeTextDraft>>,

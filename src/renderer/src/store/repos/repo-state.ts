@@ -276,6 +276,8 @@ export type RepoSlice = {
       errorFeedback?: 'toast' | 'silent'
       automaticCleanup?: boolean
       confirmedDiscards?: ConfirmedUnsavedDiscards
+      /** Paired servers only: skip the unreachable server now and replay its repo.rm on reconnect. */
+      localOnly?: boolean
     }
   ) => Promise<void>
   updateProject: (

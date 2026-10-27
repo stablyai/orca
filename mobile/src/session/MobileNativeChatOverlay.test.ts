@@ -64,7 +64,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
     chatPending: [],
     chatImagePreviewsByMessageId: {},
-    chatComposerText: '',
+    chatDraftKey: null,
     setChatComposerText: vi.fn(),
     nativeChatQueued: {
       cards: [],

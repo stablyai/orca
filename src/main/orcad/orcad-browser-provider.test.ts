@@ -3,13 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
+import { agentBrowserCommandOf } from '../browser/agent-browser-bridge-test-harness'
 import { ExternalChromiumBrowserProcess } from './external-chromium-browser-process'
 import {
   installedElectronCandidates,
   resolveInstalledElectronExecutable,
   resolveOrcadBrowserProvider
 } from './orcad-browser-provider'
-import { orcadAgentBrowserNativeName } from './orcad-agent-browser-binary'
+import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 import {
   runtimeBrowserUnavailableCause,
   setRuntimeBrowserUnavailableCause
@@ -31,14 +32,6 @@ let root: string
 let screenshotPath: string
 let browserState: BrowserState
 
-function commandFromArgs(args: readonly string[]): string[] {
-  let index = 0
-  while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {
-    index += 2
-  }
-  return args.slice(index, -1)
-}
-
 function success(data: unknown) {
   return Promise.resolve({
     code: 0,
@@ -51,7 +44,7 @@ function success(data: unknown) {
 
 function installAgentBrowserMock(): void {
   runProcessMock.mockImplementation(async (spec) => {
-    const command = commandFromArgs(spec.args ?? [])
+    const command = agentBrowserCommandOf(spec.args ?? [], spec.input)
     if (command[0] === 'open') {
       const active = browserState.tabs.find((tab) => tab.tabId === browserState.activeTabId)!
       active.url = command[1]

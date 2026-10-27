@@ -3,6 +3,7 @@ import type { WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import type { WslRelayDistroState, WslRelayRestartSetup } from './wsl-hook-relay-state'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { FAILURE_COOLDOWN_MAX_MS } from './wsl-hook-relay-deps'
+import { noteWslDistroMayHaveStopped } from '../wsl/wsl-unc-access-gate'
 
 type RelayFailureState = {
   distro: string
@@ -40,6 +41,8 @@ export function markWslRelayFailed(
   state.cooldownUntil =
     Date.now() + Math.min(options.cooldownBaseMs * state.failures, FAILURE_COOLDOWN_MAX_MS)
   deps.warn(`[agent-hooks] WSL hook relay: ${message}`)
+  // A dead link is the earliest sign the distro stopped; UNC reads must re-check before touching it.
+  noteWslDistroMayHaveStopped(state.distro)
   recovery.scheduleRestart(state)
 }
 

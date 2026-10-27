@@ -21,7 +21,7 @@ export function terminalDocumentDouble() {
     get element() {
       return openedOn
     },
-    unicode: { activeVersion: '6' },
+    unicode: { activeVersion: '6', versions: [], register() {} },
     write(_data: string, callback?: () => void) {
       callback?.()
     },

@@ -13,6 +13,7 @@ import { getWslHomeAsync, listRunningWslDistrosAsync } from '../wsl'
 import { ensureWslPinnedRuntime } from '../wsl/wsl-pinned-runtime'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
+import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
 import { claudeProfileMarkerPath, type ClaudeProfileDescriptor } from './claude-profile-paths'
 import type { ClaudeProfileRouterSettings } from './claude-profile-router'
 import { claudeProfileMissing, claudeProfileSetupFailed } from './claude-profile-launch-errors'
@@ -262,9 +263,7 @@ async function writePointer(distro: string, pointer: string, home: string): Prom
 async function runGuest(distro: string, spec: WslSpec, timeoutMs = 15_000): Promise<string> {
   const result = await runWslProcess({ ...spec, distro, timeoutMs, maxOutputBytes: 256 * 1024 })
   if (result.code !== 0 || result.timedOut) {
-    throw new Error(
-      `WSL ${distro}: ${result.stderr.trim() || (result.timedOut ? 'timed out' : 'command failed')}`
-    )
+    throw new Error(`WSL ${distro}: ${describeWslProcessFailure(result)}`)
   }
   return result.stdout.trim()
 }

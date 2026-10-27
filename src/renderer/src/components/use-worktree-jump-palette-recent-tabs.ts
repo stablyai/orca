@@ -22,7 +22,7 @@ import {
   getPaletteWorktreeExecutionHostId,
   getPaletteWorktreeIdentity
 } from '@/lib/palette-repo-resolution'
-import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import { encodePaletteIdentity } from '../../../shared/palette-match/palette-ranking'
 
 type WorktreeJumpPaletteRecentTabsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteOpenTabs &

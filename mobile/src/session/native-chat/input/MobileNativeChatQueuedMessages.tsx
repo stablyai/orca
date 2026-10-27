@@ -1,3 +1,5 @@
+import { DragReorderList } from '../../../components/DragReorderList'
+import type { DragReorderMove } from '../../../components/drag-reorder-positions'
 import { useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-native'
@@ -15,6 +17,7 @@ import { queuedMessageStyles as styles } from './mobile-native-chat-queued-messa
 // Use NUL-prefixed header keys because message ids cannot contain NUL.
 const RESUME_KEY = '\u0000resume'
 const CLEAR_KEY = '\u0000clear'
+const MOVE_KEY = '\u0000move'
 
 export type MobileNativeChatQueuedMessagesProps = {
   cards?: MobileQueuedMessageCard[]
@@ -24,6 +27,7 @@ export type MobileNativeChatQueuedMessagesProps = {
   // Older hosts cannot edit inline; copy their draft to the composer.
   onEdit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
+  onMove?: (move: DragReorderMove) => Promise<boolean>
   pause?: MobileQueuePause
   onResume?: () => Promise<boolean>
   steerHeld?: boolean
@@ -36,6 +40,7 @@ export function MobileNativeChatQueuedMessages({
   onClearAll,
   onEdit,
   editor,
+  onMove,
   pause,
   onResume,
   steerHeld = false
@@ -52,18 +57,26 @@ export function MobileNativeChatQueuedMessages({
     }
     return null
   }
-  const run = async (messageId: string, action?: (id: string) => Promise<boolean>) => {
-    if (inFlightRef.current.has(messageId) || !action) {
-      return
+  const run = (
+    messageId: string,
+    action?: (id: string) => Promise<boolean>,
+    resource?: string
+  ): boolean => {
+    const keys = resource ? [messageId, resource] : [messageId]
+    if (keys.some((key) => inFlightRef.current.has(key)) || !action) {
+      return false
     }
-    inFlightRef.current.add(messageId)
+    keys.forEach((key) => inFlightRef.current.add(key))
     setBusyIds(new Set(inFlightRef.current))
-    try {
-      await action(messageId)
-    } finally {
-      inFlightRef.current.delete(messageId)
-      setBusyIds(new Set(inFlightRef.current))
-    }
+    void (async () => {
+      try {
+        await action(messageId)
+      } finally {
+        keys.forEach((key) => inFlightRef.current.delete(key))
+        setBusyIds(new Set(inFlightRef.current))
+      }
+    })()
+    return true
   }
   const resuming = busyIds.has(RESUME_KEY)
   const clearing = busyIds.has(CLEAR_KEY)
@@ -164,25 +177,36 @@ export function MobileNativeChatQueuedMessages({
             messageIds={cards.map((card) => card.messageId)}
             newestIsPersons={!cards.at(-1)?.attribution}
           >
-            {(reveal) =>
-              cards.map((card) => {
-                const busy = busyIds.has(card.messageId)
-                return (
-                  <MobileQueuedMessageCardRow
-                    key={card.messageId}
-                    card={card}
-                    editor={editor?.messageId === card.messageId ? editor : undefined}
-                    busy={busy}
-                    editBlocked={busy || editor !== undefined || !onEdit}
-                    steerHeld={steerHeld}
-                    onSend={() => void run(card.messageId, onSend)}
-                    onDelete={() => void run(card.messageId, onDelete)}
-                    onMore={() => setMenuFor(card.messageId)}
-                    onEditorLayout={reveal}
-                  />
-                )
-              })
-            }
+            {(reveal, drag) => {
+              const renderRow = (card: MobileQueuedMessageCard, handle?: React.ReactNode) => (
+                <MobileQueuedMessageCardRow
+                  key={card.messageId}
+                  card={card}
+                  dragHandle={handle}
+                  editor={editor?.messageId === card.messageId ? editor : undefined}
+                  busy={busyIds.has(card.messageId)}
+                  editBlocked={busyIds.has(card.messageId) || editor !== undefined || !onEdit}
+                  steerHeld={steerHeld}
+                  onSend={() => void run(card.messageId, onSend)}
+                  onDelete={() => void run(card.messageId, onDelete)}
+                  onMore={() => setMenuFor(card.messageId)}
+                  onEditorLayout={reveal}
+                />
+              )
+              return onMove && !editor ? (
+                <DragReorderList
+                  items={cards}
+                  itemKey={(card) => card.messageId}
+                  isMoveDisabled={(card) => busyIds.has(MOVE_KEY) || busyIds.has(card.messageId)}
+                  rowPresentation="plain"
+                  renderRow={renderRow}
+                  onMove={(move) => run(move.movedId, () => onMove(move), MOVE_KEY)}
+                  {...drag}
+                />
+              ) : (
+                cards.map((card) => renderRow(card))
+              )
+            }}
           </MobileQueuedMessageScrollList>
         ) : null}
       </View>

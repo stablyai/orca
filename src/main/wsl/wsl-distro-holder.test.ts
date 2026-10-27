@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WindowsProcessEvidence } from '../daemon/daemon-incarnation-evidence-types'
 import {
   buildWslDistroHolderArgs,
+  buildWslDistroHolderScript,
   isWslDistroHolderCommandLine,
   WSL_DISTRO_HOLDER_MARKER
 } from './wsl-distro-holder-command'
@@ -112,9 +113,12 @@ describe('holder command line', () => {
       '--exec',
       '/bin/sh',
       '-c',
-      'while :; do sleep 3600; done',
+      buildWslDistroHolderScript(),
       WSL_DISTRO_HOLDER_MARKER
     ])
+    // A holder that slept an hour between looks would keep an idle distro up that long.
+    expect(buildWslDistroHolderScript()).toContain('sleep 15\n')
+    expect(buildWslDistroHolderScript()).not.toContain('infinity')
   })
 
   it('matches only our holder for the same distro', () => {

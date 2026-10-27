@@ -1,26 +1,22 @@
 import { accessSync, constants, existsSync } from 'node:fs'
 import { arch, platform } from 'node:os'
 import { dirname, join } from 'node:path'
-import { ORCAD_AGENT_BROWSER_DRIVER_ENV } from '../../shared/orcad-agent-browser-name'
+import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 
-export function orcadAgentBrowserNativeName(
-  platformName: NodeJS.Platform,
-  architecture: string
-): string {
-  const ext = platformName === 'win32' ? '.exe' : ''
-  return `agent-browser-${platformName}-${architecture}${ext}`
+/** A slot carries only its own target's driver, so trying both libc names needs no libc probe. */
+function hostDriverNames(): string[] {
+  const names = [orcadAgentBrowserNativeName(platform(), arch())]
+  if (platform() === 'linux') {
+    names.push(orcadAgentBrowserNativeName('linux', arch(), 'musl'))
+  }
+  return names
 }
 
-export function resolveOrcadAgentBrowserBinary(
-  environment: NodeJS.ProcessEnv = process.env
-): string | null {
-  const name = orcadAgentBrowserNativeName(platform(), arch())
-  const appDriver = environment[ORCAD_AGENT_BROWSER_DRIVER_ENV]
-  const candidates = [
+export function resolveOrcadAgentBrowserBinary(): string | null {
+  const candidates = hostDriverNames().flatMap((name) => [
     join(dirname(process.argv[1] ?? __filename), name),
-    join(process.cwd(), 'node_modules', 'agent-browser', 'bin', name),
-    ...(appDriver ? [appDriver] : [])
-  ]
+    join(process.cwd(), 'node_modules', 'agent-browser', 'bin', name)
+  ])
   for (const candidate of candidates) {
     if (!existsSync(candidate)) {
       continue

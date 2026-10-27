@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType } from '../../../../shared/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
-import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+import { buildPaletteTabDocument } from '../../../../shared/palette-match/tab-document'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 import {
   buildSearchableBrowserPageDocument,
   type SearchableBrowserPage
@@ -21,7 +21,7 @@ import {
   type OpenTabSearchInput,
   type OpenTabSearchResult
 } from './open-tab-search'
-import { createPaletteSearchContext } from '@/lib/palette-match/palette-ranking'
+import { createPaletteSearchContext } from '../../../../shared/palette-match/palette-ranking'
 
 const worktree: Worktree = {
   id: 'wt-1',

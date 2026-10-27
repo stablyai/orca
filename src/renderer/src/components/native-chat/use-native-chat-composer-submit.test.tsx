@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { NativeChatPickerItem } from '../../../../shared/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'

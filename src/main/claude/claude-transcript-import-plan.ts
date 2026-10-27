@@ -88,7 +88,8 @@ export function createClaudeTranscriptImportPlan(input: {
     const identity = aliases.get(agentJournalItemKey(rawIdentity)) ?? rawIdentity
     const key = agentJournalItemKey(identity)
     const existing = saved(key)
-    if (projected.kind === 'turn' && (existing || historicalScope)) {
+    // A turn this import opened is history too: it must also take its end, never stay running.
+    if (projected.kind === 'turn' && (existing || (historicalScope && !mutations.has(key)))) {
       return { accepted: true } as const
     }
     let body = projected
@@ -98,7 +99,7 @@ export function createClaudeTranscriptImportPlan(input: {
       body = untimed
     }
     let turnScope =
-      projected.kind === 'message' && projected.role === 'user'
+      projected.kind === 'turn' || (projected.kind === 'message' && projected.role === 'user')
         ? options.turnScope
         : (historicalScope ?? options.turnScope)
     if (existing) {

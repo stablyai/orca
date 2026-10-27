@@ -9,7 +9,7 @@ import {
   normalizeRepoAiDraft,
   readCompleteRecipeForDraft,
   setActionOverride
-} from './repository-source-control-ai-draft'
+} from './repository/source-control/repository-source-control-ai-draft'
 
 type RepoActionRecipe = NonNullable<
   NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
