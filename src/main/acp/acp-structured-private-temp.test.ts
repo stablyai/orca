@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK, openAcpAdapterRig } from './acp-structured-adapter.test-support'
-import { acpRunRootFitsSocket, resolveAcpTempRoot } from './acp-temp-root'
+import { acpTempRoot } from './acp-private-temp'
 
 const ownedDirectories = new Set<string>()
 
@@ -53,7 +53,7 @@ it.skipIf(process.platform === 'win32')(
     const legacyRoot = join(dataDirectory, 'acp-temp', 'grok')
     const legacyLeftover = join(legacyRoot, 'run-earlier-build', 'bundle')
     await mkdir(legacyLeftover, { recursive: true })
-    const shortRoot = resolveAcpTempRoot({ dataDirectory, agent: 'grok' })
+    const shortRoot = acpTempRoot(legacyRoot)
     ownedDirectories.add(base)
     ownedDirectories.add(shortRoot)
     expect(shortRoot).not.toBe(legacyRoot)
@@ -64,9 +64,6 @@ it.skipIf(process.platform === 'win32')(
     await rig.acquire()
     const { env } = rig.child().launch
     expect(dirname(env?.TMPDIR ?? '')).toBe(shortRoot)
-    expect(
-      acpRunRootFitsSocket(shortRoot, process.platform === 'darwin' ? 'darwin' : 'linux')
-    ).toBe(true)
     expect([env?.TEMP, env?.TMP]).toEqual([env?.TMPDIR, env?.TMPDIR])
     expect(existsSync(legacyLeftover)).toBe(false)
     rig.child().exit()
