@@ -61,7 +61,8 @@
       "voice": "Voice",
       "notifications": "Notifications",
       "troubleshooting": "Troubleshooting",
-      "about": "About"
+      "about": "About",
+      "appIcon": "App icon"
     },
     "nativeChatSettingsScreen": {
       "title": "Chat UI",
@@ -145,6 +146,13 @@
       "speechModelHeading": "SPEECH MODEL",
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
+    },
+    "appIconScreen": {
+      "title": "App icon",
+      "back": "Back",
+      "description": "Choose the icon Orca shows on your home screen.",
+      "unsupported": "This device cannot change the app icon.",
+      "changeFailed": "Could not change the app icon. Try again."
     },
     "agents": {
       "permissionOwnAll": "Agents' own settings"

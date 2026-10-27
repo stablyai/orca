@@ -148,6 +148,27 @@
             "usesCleartextTraffic": true
           }
         }
+      ],
+      [
+        "expo-alternate-app-icons",
+        [
+          {
+            "name": "Watercolor",
+            "ios": "./assets/app-icons/watercolor.png",
+            "android": {
+              "foregroundImage": "./assets/app-icons/watercolor-android.png",
+              "backgroundColor": "#578AA8"
+            }
+          },
+          {
+            "name": "Blue",
+            "ios": "./assets/app-icons/blue.png",
+            "android": {
+              "foregroundImage": "./assets/app-icons/blue-android.png",
+              "backgroundColor": "#2B7AC2"
+            }
+          }
+        ]
       ]
     ]
   }
